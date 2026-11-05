@@ -382,50 +382,71 @@ public class PowerAutomationService : IDisposable
             CpuBoostMode targetBoost = (isGame && activeGame != null) ? activeGame.TargetCpuBoost : _savedCpuBoostBeforeDc;
             FanMode targetFan = (isGame && activeGame != null) ? activeGame.TargetFanMode : _savedFanModeBeforeDc;
 
+            bool modeAppliedThisRun = false;
+            bool boostAppliedThisRun = false;
+            bool fanAppliedThisRun = false;
+
             if (_pendingAcModeRestore)
             {
                 bool ok = false;
                 try { ok = await _agentClient.SetOperatingModeAsync(targetMode); } catch { ok = false; }
-                if (ok) _pendingAcModeRestore = false;
+                if (ok)
+                {
+                    _pendingAcModeRestore = false;
+                    modeAppliedThisRun = true;
+                }
             }
 
             if (_pendingAcCpuRestore)
             {
                 bool ok = false;
                 try { ok = await _cpuPowerService.SetBoostModeAsync(targetBoost); } catch { ok = false; }
-                if (ok) _pendingAcCpuRestore = false;
+                if (ok)
+                {
+                    _pendingAcCpuRestore = false;
+                    boostAppliedThisRun = true;
+                }
             }
 
             if (_pendingAcFanRestore)
             {
                 bool ok = false;
                 try { ok = await _agentClient.SetFanModeAsync(targetFan); } catch { ok = false; }
-                if (ok) _pendingAcFanRestore = false;
+                if (ok)
+                {
+                    _pendingAcFanRestore = false;
+                    fanAppliedThisRun = true;
+                }
             }
 
             if (!HasPendingAcRestore)
             {
                 _isDcEcoActive = false;
+            }
 
-                // Fire event so MainWindow updates _currentMode, boost UI, and fan display.
-                // Track per-step success via whether the pending flags were cleared.
-                bool modeWasApplied = !_pendingAcModeRestore;
-                bool boostWasApplied = !_pendingAcCpuRestore;
-                bool fanWasApplied = !_pendingAcFanRestore;
+            // Fire event whenever at least one command was actually sent and succeeded in this retry run,
+            // even if another step remains pending (partial success). Only mark *Applied = true for
+            // commands that were genuinely executed and verified in this run.
+            if (modeAppliedThisRun || boostAppliedThisRun || fanAppliedThisRun)
+            {
+                string message = !HasPendingAcRestore
+                    ? "Adaptör ayarları başarıyla yeniden uygulandı."
+                    : "Adaptör ayarları kısmen uygulandı.";
+
                 PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                 {
                     IsAc = true,
-                    Message = "Adaptör ayarları başarıyla yeniden uygulandı.",
-                    ModeApplied = modeWasApplied,
-                    VerifiedMode = modeWasApplied ? targetMode : (GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default),
-                    BoostApplied = boostWasApplied,
-                    VerifiedBoost = boostWasApplied ? targetBoost : _cpuPowerService.CurrentMode,
-                    FanApplied = fanWasApplied,
-                    VerifiedFan = fanWasApplied ? targetFan : (GetCurrentFanMode?.Invoke() ?? FanMode.Auto)
+                    Message = message,
+                    ModeApplied = modeAppliedThisRun,
+                    VerifiedMode = modeAppliedThisRun ? targetMode : (GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default),
+                    BoostApplied = boostAppliedThisRun,
+                    VerifiedBoost = boostAppliedThisRun ? targetBoost : _cpuPowerService.CurrentMode,
+                    FanApplied = fanAppliedThisRun,
+                    VerifiedFan = fanAppliedThisRun ? targetFan : (GetCurrentFanMode?.Invoke() ?? FanMode.Auto)
                 });
-                return true;
             }
-            return false;
+
+            return !HasPendingAcRestore;
         }
         finally
         {

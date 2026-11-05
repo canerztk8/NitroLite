@@ -92,9 +92,11 @@ public partial class MainWindow : Window
         OperatingMode savedMode = OperatingMode.Default,
         CpuBoostMode savedCpu = CpuBoostMode.Aggressive,
         FanMode savedFan = FanMode.Auto,
-        int savedMouse = 1)
+        int savedMouse = 1,
+        bool? hasGameBaselineCaptured = null)
     {
         _hasPendingDesktopRestore = hasPending;
+        _hasGameBaselineCaptured = hasGameBaselineCaptured ?? hasPending;
         _pendingModeRestore = pendingMode;
         _pendingCpuBoostRestore = pendingCpu;
         _pendingFanRestore = pendingFan;
@@ -2046,8 +2048,11 @@ public partial class MainWindow : Window
                             }
                             _savedMouseProfileBeforeGame = _atkMouseService.CurrentActiveProfile > 0 ? _atkMouseService.CurrentActiveProfile : 1;
                             _hasGameBaselineCaptured = true;
-                            _hasPendingDesktopRestore = true;
                         }
+
+                        // Mark that this game session requires a desktop restore upon exit,
+                        // separated from the one-time desktop baseline capture.
+                        _hasPendingDesktopRestore = true;
                         _isGameSessionActive = true;
                         _batteryService.IsGameSessionActive = true;
                         UpdateTrayRetryMenuItemState();
@@ -2535,6 +2540,7 @@ public partial class MainWindow : Window
 
                 if (allSucceeded)
                 {
+                    _hasGameBaselineCaptured = false;
                     if (TxtGameStatus != null)
                     {
                         TxtGameStatus.Text = _gameService.AutoGameModeEnabled 

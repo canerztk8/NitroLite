@@ -1794,5 +1794,180 @@ function global:Disable-ScheduledTask {
         });
     }
 
+    // Scenario 1: Game A exit has failed mode restore -> Retry succeeds -> Game B starts and ends.
+    // Verifies that Game B exit does NOT skip desktop restore and restores the true desktop baseline.
+    [Fact]
+    public async Task TestCase_RetrySuccess_SubsequentGame_RestoresDesktopCorrectly()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+            mockCpu.CurrentMode = CpuBoostMode.Aggressive;
+
+            var gameA = new GameProfile
+            {
+                DisplayName = "GameA",
+                ExeName = "gameA.exe",
+                TargetMode = OperatingMode.Extreme,
+                TargetCpuBoost = CpuBoostMode.Disabled,
+                TargetFanMode = FanMode.Max
+            };
+
+            // Start Game A
+            await window.HandleGameStartedAsync(gameA);
+            Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+
+            // End Game A with failure on mode command
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+            await window.HandleGameEndedAsync(gameA);
+            Assert.True(window.HasPendingDesktopRestore);
+            Assert.True(window.PendingModeRestore);
+
+            // Now retry desktop restore and let it succeed
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            bool retryOk = await window.RetryPendingDesktopRestoreAsync();
+            Assert.True(retryOk);
+            Assert.False(window.HasPendingDesktopRestore);
+            Assert.False(window.HasGameBaselineCaptured);
+            Assert.Equal(OperatingMode.Default, window.CurrentMode);
+
+            // Start Game B
+            var gameB = new GameProfile
+            {
+                DisplayName = "GameB",
+                ExeName = "gameB.exe",
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Disabled,
+                TargetFanMode = FanMode.Max
+            };
+
+            await window.HandleGameStartedAsync(gameB);
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+            Assert.True(window.HasGameBaselineCaptured);
+            Assert.Equal(OperatingMode.Default, window.SavedModeBeforeGame);
+
+            // End Game B
+            await window.HandleGameEndedAsync(gameB);
+            Assert.False(window.HasPendingDesktopRestore);
+            Assert.Equal(OperatingMode.Default, window.CurrentMode);
+            Assert.Equal(CpuBoostMode.Aggressive, mockCpu.CurrentMode);
+            Assert.Equal(FanMode.Auto, window.CurrentFanMode);
+        });
+    }
+
+    // Scenario 2: AC retry with partial success: mode succeeds, fan fails.
+    // UI must update the mode to Default and not remain stuck at Quiet.
+    [Fact]
+    public async Task TestCase_AcRetry_PartialSuccess_UpdatesOnlySuccessfulStepsInUi()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+
+            // Unplug AC -> Eco (Quiet)
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Reconnect AC: fail both mode and fan
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(false);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+            Assert.True(window.PowerAutomation!.HasPendingAcRestore);
+
+            // Retry: mode succeeds, fan still fails
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(false);
+
+            bool retryOk = await window.PowerAutomation!.RetryPendingAcRestoreAsync();
+            Assert.False(retryOk); // Fan still pending
+            Assert.True(window.PowerAutomation!.HasPendingAcRestore);
+
+            // UI must have updated to Default for the succeeded mode step!
+            Assert.Equal(OperatingMode.Default, window.CurrentMode);
+        });
+    }
+
+    // Scenario 3: Only fan pending during AC restore. User manually switches mode to Turbo.
+    // When fan retry succeeds, mode was not in retry scope, so UI and hardware must stay at Turbo (not overwritten with Default).
+    [Fact]
+    public async Task TestCase_AcRetry_OnlyFanPending_DoesNotOverwriteUserSelectedMode()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+
+            // Unplug AC -> Eco (Quiet)
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Reconnect AC: mode succeeds, fan fails
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(false);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+            Assert.True(window.PowerAutomation!.HasPendingAcRestore);
+            Assert.Equal(OperatingMode.Default, window.CurrentMode);
+
+            // User manually changes mode to Turbo while fan is still pending
+            window.SetCurrentModeForTesting(OperatingMode.Turbo);
+            mockAgent.CurrentMode = OperatingMode.Turbo;
+
+            // Now fan retry runs and succeeds
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            bool retryOk = await window.PowerAutomation!.RetryPendingAcRestoreAsync();
+            Assert.True(retryOk);
+            Assert.False(window.PowerAutomation!.HasPendingAcRestore);
+
+            // Mode command was never sent during retry -> CurrentMode must still be Turbo!
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+        });
+    }
+
     #endregion
 }
