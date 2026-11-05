@@ -1969,5 +1969,219 @@ function global:Disable-ScheduledTask {
         });
     }
 
+    // Manual Selection Overwrites Adapter Retry Targets: Mode
+    [Fact]
+    public async Task TestCase_ManualModeSelection_UpdatesAcPendingTarget_NotOverwrittenByRetry()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+
+            // Unplug AC -> Eco
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Reconnect AC: mode fails -> PendingAcModeRestore = true, saved target is Default
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+            Assert.True(window.PowerAutomation!.PendingAcModeRestore);
+
+            // User makes a manual choice using real SetManualModeAsync: Turbo
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            bool modeOk = await window.SetManualModeAsync(OperatingMode.Turbo);
+            Assert.True(modeOk);
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+            Assert.False(window.PowerAutomation!.PendingAcModeRestore);
+            Assert.Equal(OperatingMode.Turbo, window.PowerAutomation!.SavedOperatingMode);
+
+            // Now retry runs
+            bool retryOk = await window.PowerAutomation!.RetryPendingAcRestoreAsync();
+            Assert.True(retryOk);
+
+            // Must NOT have reset to Default — must remain Turbo!
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+        });
+    }
+
+    // Manual Selection Overwrites Adapter Retry Targets: CPU Boost
+    [Fact]
+    public async Task TestCase_ManualCpuBoostSelection_UpdatesAcPendingTarget_NotOverwrittenByRetry()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            // Unplug AC -> Eco (Disabled boost)
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Reconnect AC: CPU boost restore fails -> PendingAcCpuRestore = true, saved target is Aggressive
+            mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(false);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+            Assert.True(window.PowerAutomation!.PendingAcCpuRestore);
+
+            // User makes a manual choice using real SetManualCpuBoostAsync: Efficient
+            mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(true);
+            bool boostOk = await window.SetManualCpuBoostAsync(CpuBoostMode.Efficient);
+            Assert.True(boostOk);
+            Assert.Equal(CpuBoostMode.Efficient, mockCpu.CurrentMode);
+            Assert.False(window.PowerAutomation!.PendingAcCpuRestore);
+            Assert.Equal(CpuBoostMode.Efficient, window.PowerAutomation!.SavedCpuBoost);
+
+            // Now retry runs
+            bool retryOk = await window.PowerAutomation!.RetryPendingAcRestoreAsync();
+            Assert.True(retryOk);
+
+            // Must NOT have reset to Aggressive — must remain Efficient!
+            Assert.Equal(CpuBoostMode.Efficient, mockCpu.CurrentMode);
+        });
+    }
+
+    // Manual Selection Overwrites Adapter Retry Targets: Fan
+    [Fact]
+    public async Task TestCase_ManualFanSelection_UpdatesAcPendingTarget_NotOverwrittenByRetry()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            // Unplug AC -> Eco
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Reconnect AC: fan fails -> PendingAcFanRestore = true, saved target is Auto
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(false);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+            Assert.True(window.PowerAutomation!.PendingAcFanRestore);
+
+            // User makes a manual choice using real SetManualFanModeAsync: Max
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            bool fanOk = await window.SetManualFanModeAsync(FanMode.Max);
+            Assert.True(fanOk);
+            Assert.Equal(FanMode.Max, window.CurrentFanMode);
+            Assert.False(window.PowerAutomation!.PendingAcFanRestore);
+            Assert.Equal(FanMode.Max, window.PowerAutomation!.SavedFanMode);
+
+            // Now retry runs
+            bool retryOk = await window.PowerAutomation!.RetryPendingAcRestoreAsync();
+            Assert.True(retryOk);
+
+            // Must NOT have reset to Auto — must remain Max!
+            Assert.Equal(FanMode.Max, window.CurrentFanMode);
+        });
+    }
+
+    // Scenario: Fan pending -> User manually selects Turbo -> Game starts and ends.
+    // Verifies that Game baseline captures the manual Turbo choice (not stale Default)
+    // and returns to Turbo upon game exit.
+    [Fact]
+    public async Task TestCase_FanPending_ManualTurbo_GameStartAndEnd_RestoresTurbo()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+
+            // Unplug AC -> Eco
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Reconnect AC: mode succeeds, fan fails -> PendingAcFanRestore = true
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(false);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+            Assert.True(window.PowerAutomation!.PendingAcFanRestore);
+            Assert.False(window.PowerAutomation!.PendingAcModeRestore);
+
+            // User manually chooses Turbo
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            bool manualOk = await window.SetManualModeAsync(OperatingMode.Turbo);
+            Assert.True(manualOk);
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+
+            // Start a game (which targets Extreme)
+            var game = new GameProfile
+            {
+                DisplayName = "HeavyGame",
+                ExeName = "game.exe",
+                TargetMode = OperatingMode.Extreme,
+                TargetCpuBoost = CpuBoostMode.Disabled,
+                TargetFanMode = FanMode.Max
+            };
+
+            await window.HandleGameStartedAsync(game);
+            Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+            // Baseline must be Turbo, NOT the stale Default!
+            Assert.Equal(OperatingMode.Turbo, window.SavedModeBeforeGame);
+
+            // End game
+            await window.HandleGameEndedAsync(game);
+
+            // Upon game exit, mode must restore to Turbo (the manual desktop baseline)!
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+        });
+    }
+
     #endregion
 }

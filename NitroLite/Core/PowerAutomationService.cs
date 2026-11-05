@@ -104,6 +104,36 @@ public class PowerAutomationService : IDisposable
         _isDcEcoActive = active;
     }
 
+    public void UpdateManualOperatingMode(OperatingMode mode)
+    {
+        _savedOperatingModeBeforeDc = mode;
+        _pendingAcModeRestore = false;
+        if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
+        {
+            _isDcEcoActive = false;
+        }
+    }
+
+    public void UpdateManualCpuBoost(CpuBoostMode boost)
+    {
+        _savedCpuBoostBeforeDc = boost;
+        _pendingAcCpuRestore = false;
+        if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
+        {
+            _isDcEcoActive = false;
+        }
+    }
+
+    public void UpdateManualFanMode(FanMode fan)
+    {
+        _savedFanModeBeforeDc = fan;
+        _pendingAcFanRestore = false;
+        if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
+        {
+            _isDcEcoActive = false;
+        }
+    }
+
     public event Action<PowerTransitionEventArgs>? PowerModeSwitched;
 
     public PowerAutomationService(

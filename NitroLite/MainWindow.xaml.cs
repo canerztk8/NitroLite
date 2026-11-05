@@ -1175,7 +1175,39 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> SetManualCpuBoostAsync(CpuBoostMode mode)
+    private void UpdateDesktopBaselineForManualChange(
+        OperatingMode? mode = null,
+        CpuBoostMode? boost = null,
+        FanMode? fan = null)
+    {
+        if (_isGameSessionActive) return;
+
+        if (mode.HasValue)
+        {
+            _savedModeBeforeGame = mode.Value;
+            _pendingModeRestore = false;
+            _powerAutomationService?.UpdateManualOperatingMode(mode.Value);
+        }
+
+        if (boost.HasValue)
+        {
+            _savedCpuBoostBeforeGame = boost.Value;
+            _pendingCpuBoostRestore = false;
+            _powerAutomationService?.UpdateManualCpuBoost(boost.Value);
+        }
+
+        if (fan.HasValue)
+        {
+            _savedFanModeBeforeGame = fan.Value;
+            _pendingFanRestore = false;
+            _powerAutomationService?.UpdateManualFanMode(fan.Value);
+        }
+
+        _hasPendingDesktopRestore = HasPendingDesktopRestore;
+        UpdateTrayRetryMenuItemState();
+    }
+
+    internal async Task<bool> SetManualCpuBoostAsync(CpuBoostMode mode)
     {
         await _gameProfileTransitionLock.WaitAsync();
         try
@@ -1183,13 +1215,7 @@ public partial class MainWindow : Window
             bool ok = await ApplyCpuBoostModeAsync(mode);
             if (ok)
             {
-                if (!_isGameSessionActive)
-                {
-                    _savedCpuBoostBeforeGame = mode;
-                    _pendingCpuBoostRestore = false;
-                    _hasPendingDesktopRestore = HasPendingDesktopRestore;
-                    UpdateTrayRetryMenuItemState();
-                }
+                UpdateDesktopBaselineForManualChange(boost: mode);
             }
             return ok;
         }
@@ -2036,9 +2062,18 @@ public partial class MainWindow : Window
                         {
                             if (_powerAutomationService?.IsDcEcoActive == true)
                             {
-                                _savedModeBeforeGame = _powerAutomationService.SavedOperatingMode;
-                                _savedCpuBoostBeforeGame = _powerAutomationService.SavedCpuBoost;
-                                _savedFanModeBeforeGame = _powerAutomationService.SavedFanMode;
+                                bool isAc = _powerAutomationService.LastAcStatus;
+                                _savedModeBeforeGame = (!isAc || _powerAutomationService.PendingAcModeRestore)
+                                    ? _powerAutomationService.SavedOperatingMode
+                                    : _currentMode;
+
+                                _savedCpuBoostBeforeGame = (!isAc || _powerAutomationService.PendingAcCpuRestore)
+                                    ? _powerAutomationService.SavedCpuBoost
+                                    : _cpuPowerService.CurrentMode;
+
+                                _savedFanModeBeforeGame = (!isAc || _powerAutomationService.PendingAcFanRestore)
+                                    ? _powerAutomationService.SavedFanMode
+                                    : _currentFanMode;
                             }
                             else
                             {
@@ -3270,7 +3305,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> SetManualModeAsync(OperatingMode mode)
+    internal async Task<bool> SetManualModeAsync(OperatingMode mode)
     {
         await _gameProfileTransitionLock.WaitAsync();
         try
@@ -3279,13 +3314,7 @@ public partial class MainWindow : Window
             if (ok)
             {
                 _currentMode = mode;
-                if (!_isGameSessionActive)
-                {
-                    _savedModeBeforeGame = mode;
-                    _pendingModeRestore = false;
-                    _hasPendingDesktopRestore = HasPendingDesktopRestore;
-                    UpdateTrayRetryMenuItemState();
-                }
+                UpdateDesktopBaselineForManualChange(mode: mode);
             }
             return ok;
         }
@@ -3337,7 +3366,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> SetManualFanModeAsync(FanMode mode)
+    internal async Task<bool> SetManualFanModeAsync(FanMode mode)
     {
         await _gameProfileTransitionLock.WaitAsync();
         try
@@ -3346,13 +3375,7 @@ public partial class MainWindow : Window
             if (ok)
             {
                 _currentFanMode = mode;
-                if (!_isGameSessionActive)
-                {
-                    _savedFanModeBeforeGame = mode;
-                    _pendingFanRestore = false;
-                    _hasPendingDesktopRestore = HasPendingDesktopRestore;
-                    UpdateTrayRetryMenuItemState();
-                }
+                UpdateDesktopBaselineForManualChange(fan: mode);
                 ShowToast(mode == FanMode.Auto ? "Otomatik fan eğrisi etkinleştirildi." : "Maksimum fan devri etkinleştirildi.");
             }
             else
