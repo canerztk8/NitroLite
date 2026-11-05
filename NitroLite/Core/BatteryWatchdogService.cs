@@ -49,13 +49,16 @@ public class BatteryWatchdogService : IDisposable
     public event Action<int>? OverchargeAlert;
     public event Action? DischargeTargetReached;
 
-    public BatteryWatchdogService()
+    public BatteryWatchdogService(bool attachSystemEvents = true)
     {
-        try
+        if (attachSystemEvents)
         {
-            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            try
+            {
+                SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            }
+            catch { }
         }
-        catch { }
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)

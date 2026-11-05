@@ -108,9 +108,12 @@ public class HardwareMonitorService : IDisposable
 
     public bool IsNvmlAvailable => _nvmlInitialized && _gpuDevice != IntPtr.Zero;
 
-    public HardwareMonitorService()
+    public HardwareMonitorService(bool initNvml = true)
     {
-        TryInitNvml();
+        if (initNvml)
+        {
+            TryInitNvml();
+        }
     }
 
     private void TryInitNvml()

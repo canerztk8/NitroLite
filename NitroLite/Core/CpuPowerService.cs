@@ -61,7 +61,8 @@ public class CpuPowerService
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr LocalFree(IntPtr hMem);
 
-    public CpuBoostMode CurrentMode { get; private set; } = CpuBoostMode.Aggressive;
+    public CpuBoostMode CurrentMode { get; internal set; } = CpuBoostMode.Aggressive;
+    internal void SetCurrentModeForTesting(CpuBoostMode mode) => CurrentMode = mode;
     public bool IsModeVerified { get; private set; }
     public CpuBoostMode? VerifiedCurrentMode => IsModeVerified ? CurrentMode : null;
     internal bool BypassNativePowerCalls { get; set; } = false;

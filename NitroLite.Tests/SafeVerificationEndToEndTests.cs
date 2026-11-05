@@ -86,13 +86,13 @@ public class SafeVerificationEndToEndTests
 
     private class TestCpuPowerService : CpuPowerService
     {
-        public new CpuBoostMode CurrentMode { get; set; } = CpuBoostMode.Aggressive;
         public List<CpuBoostMode> BoostHistory { get; } = new();
         public Func<CpuBoostMode, bool, bool, Task<bool>>? OnSetBoostModeAsync { get; set; }
 
         public TestCpuPowerService() : base(autoInitialize: false, bypassNativePowerCalls: true)
         {
             BypassNativePowerCalls = true;
+            CurrentMode = CpuBoostMode.Aggressive;
         }
 
         public override async Task<bool> SetBoostModeAsync(CpuBoostMode mode, bool targetAc = true, bool targetDc = true)
@@ -1086,7 +1086,7 @@ function global:Disable-ScheduledTask {
     {
         var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Extreme };
         var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
-        var mockDisplay = new DisplayRefreshRateService();
+        var mockDisplay = new TestDisplayRefreshRateServiceStub();
         var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = false };
         var transitionLock = new SemaphoreSlim(1, 1);
 
@@ -1120,7 +1120,7 @@ function global:Disable-ScheduledTask {
     {
         var mockAgent = new TestAcerAgentClient();
         var mockCpu = new TestCpuPowerService();
-        var mockDisplay = new DisplayRefreshRateService();
+        var mockDisplay = new TestDisplayRefreshRateServiceStub();
         var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = false };
 
         var powerService = new PowerAutomationService(
@@ -1131,7 +1131,7 @@ function global:Disable-ScheduledTask {
             attachSystemEvents: false);
 
         string lastMsg = "";
-        powerService.PowerModeSwitched += (isAc, msg) => lastMsg = msg;
+        powerService.PowerModeSwitched += e => lastMsg = e.Message;
 
         // Transition to DC succeeds
         await powerService.ProcessPowerTransitionAsync(isAc: false);
@@ -1216,7 +1216,7 @@ function global:Disable-ScheduledTask {
     {
         var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
         var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Disabled };
-        var mockDisplay = new DisplayRefreshRateService();
+        var mockDisplay = new TestDisplayRefreshRateServiceStub();
         var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = false };
 
         var activeGame = new GameProfile
@@ -1326,6 +1326,243 @@ function global:Disable-ScheduledTask {
     {
         bool actual = AcerAgentClient.IsSuccessResult(json);
         Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task TestCase8e_GameStartedOnBatteryEco_PreservesOriginalAcBaseline()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AtkMouseIntegrationEnabled = true };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            // 1. Unplug AC: machine transitions to DC Eco
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+            Assert.Equal(OperatingMode.Quiet, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Disabled, mockCpu.CurrentMode);
+            Assert.Equal(OperatingMode.Default, window.PowerAutomation.SavedOperatingMode);
+            Assert.Equal(CpuBoostMode.Aggressive, window.PowerAutomation.SavedCpuBoost);
+
+            // 2. Start game while on DC Eco
+            var game = new GameProfile
+            {
+                ExeName = "testgame",
+                DisplayName = "Test Game",
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Aggressive,
+                TargetFanMode = FanMode.Max,
+                TargetAtkMouseProfile = 2
+            };
+
+            await window.HandleGameStartedAsync(game);
+            Assert.True(window.IsGameSessionActive);
+            Assert.Equal(OperatingMode.Turbo, mockAgent.CurrentMode);
+            // Saved baseline for game restore must be the true AC baseline, NOT Quiet/Disabled!
+            Assert.Equal(OperatingMode.Default, window.SavedModeBeforeGame);
+            Assert.Equal(CpuBoostMode.Aggressive, window.SavedCpuBoostBeforeGame);
+
+            // 3. Game ends while STILL on battery: returns to Eco (Quiet / Disabled / Auto)
+            await window.HandleGameEndedAsync(game);
+            Assert.Equal(OperatingMode.Quiet, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Disabled, mockCpu.CurrentMode);
+            Assert.Equal(FanMode.Auto, mockAgent.CurrentFanMode);
+
+            // AC baseline in PowerAutomation must NOT have been corrupted to Quiet / Disabled!
+            Assert.Equal(OperatingMode.Default, window.PowerAutomation.SavedOperatingMode);
+            Assert.Equal(CpuBoostMode.Aggressive, window.PowerAutomation.SavedCpuBoost);
+
+            // 4. Plug AC back in: AC baseline restored!
+            await window.PowerAutomation.ProcessPowerTransitionAsync(isAc: true);
+            Assert.False(window.PowerAutomation.IsDcEcoActive);
+            Assert.Equal(OperatingMode.Default, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Aggressive, mockCpu.CurrentMode);
+        });
+    }
+
+    [Fact]
+    public async Task TestCase8f_RetryPendingDesktopRestore_OnBattery_AppliesEcoQuietNotDesktop()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AtkMouseIntegrationEnabled = true };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            // On battery
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            var game = new GameProfile
+            {
+                ExeName = "game.exe",
+                DisplayName = "Game",
+                TargetMode = OperatingMode.Extreme,
+                TargetCpuBoost = CpuBoostMode.Aggressive,
+                TargetFanMode = FanMode.Custom
+            };
+
+            await window.HandleGameStartedAsync(game);
+
+            // Fail Quiet mode switch during game exit
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+            await window.HandleGameEndedAsync(game);
+
+            Assert.True(window.HasPendingDesktopRestore);
+            Assert.True(window.PendingModeRestore);
+
+            // Now retry on battery: must apply Quiet (Eco), NOT Default!
+            mockAgent.OnSetOperatingModeAsync = null;
+            bool retryOk = await window.RetryPendingDesktopRestoreAsync();
+            Assert.True(retryOk);
+            Assert.False(window.HasPendingDesktopRestore);
+            Assert.Equal(OperatingMode.Quiet, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Disabled, mockCpu.CurrentMode);
+        });
+    }
+
+    [Fact]
+    public async Task TestCase4d_DisablingMouseIntegrationCheckbox_RestoresMouseAndClearsDebt()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient();
+            var mockCpu = new TestCpuPowerService();
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { AtkMouseIntegrationEnabled = true, DefaultAtkMouseProfile = 1 };
+
+            var mouseSwitchedHistory = new List<int>();
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => { mouseSwitchedHistory.Add(p); return true; },
+                isTestHarness: true);
+
+            var game = new GameProfile
+            {
+                ExeName = "game.exe",
+                DisplayName = "Game",
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Aggressive,
+                TargetFanMode = FanMode.Auto,
+                TargetAtkMouseProfile = 2
+            };
+
+            await window.HandleGameStartedAsync(game);
+            Assert.Equal(2, mouseSwitchedHistory.Last());
+
+            // User unchecks mouse integration checkbox while game is running
+            await window.SetMouseIntegrationEnabledAsync(false);
+
+            // Mouse must be restored immediately to desktop profile 1!
+            Assert.Equal(1, mouseSwitchedHistory.Last());
+            Assert.False(window.PendingMouseRestore);
+
+            // Game ends: restore must not fail or leave mouse in wrong profile
+            await window.HandleGameEndedAsync(game);
+            Assert.Equal(1, mouseSwitchedHistory.Last());
+            Assert.False(window.HasPendingDesktopRestore);
+        });
+    }
+
+    [Fact]
+    public async Task TestCase8g_PendingAcRestore_RetriedAndExposedToTray()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            // Switch to DC Eco
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // Connect AC, but mode restore fails
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+            await window.PowerAutomation.ProcessPowerTransitionAsync(isAc: true);
+
+            Assert.True(window.PowerAutomation.HasPendingAcRestore);
+            // MainWindow.HasPendingDesktopRestore must reflect AC failure so tray menu offers retry!
+            Assert.True(window.HasPendingDesktopRestore);
+
+            // Clear failure and call retry
+            mockAgent.OnSetOperatingModeAsync = null;
+            bool retryOk = await window.RetryPendingDesktopRestoreAsync();
+            Assert.True(retryOk);
+            Assert.False(window.PowerAutomation.HasPendingAcRestore);
+            Assert.False(window.HasPendingDesktopRestore);
+            Assert.Equal(OperatingMode.Default, mockAgent.CurrentMode);
+        });
+    }
+
+    [Fact]
+    public async Task TestCase8h_PowerModeSwitched_PartialFailure_DoesNotCorruptUiFields()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Extreme };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Extreme);
+            // Initial mode is Extreme
+            Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+
+            // Fail Quiet mode write when unplugging AC
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            // _currentMode must NOT be corrupted to Quiet since the hardware command failed!
+            Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+        });
     }
 
     #endregion

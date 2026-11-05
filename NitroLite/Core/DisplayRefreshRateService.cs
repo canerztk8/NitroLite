@@ -173,3 +173,20 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
         }
     }
 }
+
+public class TestDisplayRefreshRateServiceStub : IDisplayRefreshRateService
+{
+    private int _hz = 165;
+    public int SetRefreshRateCalls { get; private set; }
+    public int LastSetRefreshRate { get; private set; } = 165;
+
+    public int GetCurrentRefreshRate() => _hz;
+    public int GetMaxRefreshRate() => 165;
+    public bool SetRefreshRate(int hz)
+    {
+        SetRefreshRateCalls++;
+        LastSetRefreshRate = hz;
+        _hz = hz;
+        return true;
+    }
+}

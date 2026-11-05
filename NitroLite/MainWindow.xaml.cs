@@ -60,7 +60,7 @@ public partial class MainWindow : Window
     private int _gameSessionGeneration = 0;
     private readonly SemaphoreSlim _gameProfileTransitionLock = new(1, 1);
 
-    public bool HasPendingDesktopRestore => _hasPendingDesktopRestore || _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore || _pendingMouseRestore;
+    public bool HasPendingDesktopRestore => _hasPendingDesktopRestore || _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore || _pendingMouseRestore || (_powerAutomationService?.HasPendingAcRestore == true);
     internal bool PendingModeRestore => _pendingModeRestore;
     internal bool PendingCpuBoostRestore => _pendingCpuBoostRestore;
     internal bool PendingFanRestore => _pendingFanRestore;
@@ -71,6 +71,7 @@ public partial class MainWindow : Window
     internal int SavedMouseProfileBeforeGame => _savedMouseProfileBeforeGame;
     internal FanMode CurrentFanMode => _currentFanMode;
     internal OperatingMode CurrentMode => _currentMode;
+    internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
     internal bool IsGameSessionActive => _isGameSessionActive;
     internal int GameSessionGeneration => _gameSessionGeneration;
     internal SemaphoreSlim GameProfileTransitionLock => _gameProfileTransitionLock;
@@ -186,20 +187,22 @@ public partial class MainWindow : Window
         BatteryWatchdogService? batteryService = null,
         AppSettings? settings = null,
         Func<int, bool>? mouseProfileSwitcher = null,
-        bool isTestHarness = true)
+        bool isTestHarness = true,
+        IDisplayRefreshRateService? displayService = null,
+        HardwareMonitorService? hardwareService = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
         _gameService = gameService;
         _atkMouseService = atkMouseService;
-        _batteryService = batteryService ?? new BatteryWatchdogService();
+        _batteryService = batteryService ?? (isTestHarness ? new BatteryWatchdogService(attachSystemEvents: false) : new BatteryWatchdogService());
         _debloatService = new DebloatService();
         _rgbProfileService = new RgbProfileService();
-        _hardwareService = new HardwareMonitorService();
+        _hardwareService = hardwareService ?? (isTestHarness ? new HardwareMonitorService(initNvml: false) : new HardwareMonitorService());
         _memoryService = new MemoryCleanerService();
         _thermalService = new ThermalHealthService();
         _storageService = new StorageHealthService();
-        _displayService = new DisplayRefreshRateService();
+        _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         _fpsMonitorService = new FpsMonitorService();
         if (settings != null) _appSettings = settings;
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
@@ -224,6 +227,7 @@ public partial class MainWindow : Window
             _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
             _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
             _powerAutomationService.GetActiveGameProfile = () => _gameService.ActiveGameProfile;
+            _powerAutomationService.PowerModeSwitched += OnPowerModeSwitchedHandler;
         }
     }
 
@@ -330,31 +334,7 @@ public partial class MainWindow : Window
         _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
         _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
         _powerAutomationService.GetActiveGameProfile = () => _gameService.ActiveGameProfile;
-        _powerAutomationService.PowerModeSwitched += (isAc, msg) =>
-        {
-            Dispatcher.Invoke(() =>
-            {
-                if (Dispatcher.HasShutdownStarted) return;
-                if (!_isGameSessionActive)
-                {
-                    if (!isAc && _appSettings.DcPowerMode == DcPowerProfilePreference.Eco)
-                    {
-                        UpdateModeUi(OperatingMode.Quiet);
-                        _currentMode = OperatingMode.Quiet;
-                        _currentFanMode = FanMode.Auto;
-                        UpdateBoostUi(CpuBoostMode.Disabled);
-                    }
-                    else if (isAc)
-                    {
-                        UpdateModeUi(_powerAutomationService.SavedOperatingMode);
-                        _currentMode = _powerAutomationService.SavedOperatingMode;
-                        _currentFanMode = _powerAutomationService.SavedFanMode;
-                        UpdateBoostUi(_powerAutomationService.SavedCpuBoost);
-                    }
-                }
-                ShowToast(msg);
-            });
-        };
+        _powerAutomationService.PowerModeSwitched += OnPowerModeSwitchedHandler;
 
         Loaded += async (s, e) =>
         {
@@ -363,6 +343,46 @@ public partial class MainWindow : Window
 
         StateChanged += (s, e) => UpdateTelemetryPollingRate();
         IsVisibleChanged += (s, e) => UpdateTelemetryPollingRate();
+    }
+
+    private void OnPowerModeSwitchedHandler(PowerTransitionEventArgs e)
+    {
+        Action act = () =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+            if (!_isGameSessionActive)
+            {
+                if (e.ModeApplied)
+                {
+                    UpdateModeUi(e.VerifiedMode);
+                    _currentMode = e.VerifiedMode;
+                }
+                if (e.FanApplied)
+                {
+                    _currentFanMode = e.VerifiedFan;
+                }
+                if (e.BoostApplied)
+                {
+                    UpdateBoostUi(e.VerifiedBoost);
+                }
+            }
+            ShowToast(e.Message);
+        };
+
+        if (DispatcherRunner != null)
+        {
+            _ = DispatcherRunner(() => { act(); return Task.CompletedTask; });
+            return;
+        }
+
+        if (Dispatcher.CheckAccess())
+        {
+            act();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(act);
+        }
     }
 
     private void UpdateTelemetryPollingRate()
@@ -1604,10 +1624,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ChkAtkMouseIntegration_Changed(object sender, RoutedEventArgs e)
+    private async void ChkAtkMouseIntegration_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkAtkMouseIntegration == null) return;
         bool isEnabled = ChkAtkMouseIntegration.IsChecked == true;
+        await SetMouseIntegrationEnabledAsync(isEnabled);
+    }
+
+    internal async Task SetMouseIntegrationEnabledAsync(bool isEnabled)
+    {
         _appSettings.AtkMouseIntegrationEnabled = isEnabled;
         SaveSettings();
         UpdateAtkMouseIntegrationVisibility(isEnabled);
@@ -1619,7 +1644,41 @@ public partial class MainWindow : Window
         }
         else
         {
-            ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı.");
+            if (_isMouseProfileSwitchedForGame || _pendingMouseRestore)
+            {
+                await _gameProfileTransitionLock.WaitAsync();
+                try
+                {
+                    int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
+                        ? _appSettings.DefaultAtkMouseProfile 
+                        : _savedMouseProfileBeforeGame;
+
+                    if (targetMouseProfile > 0)
+                    {
+                        bool ok = await SwitchMouseProfileInternalAsync(targetMouseProfile);
+                        if (ok)
+                        {
+                            UpdateSideMouseProfileStatus(targetMouseProfile);
+                            _isMouseProfileSwitchedForGame = false;
+                            _pendingMouseRestore = false;
+                            ShowToast($"ATK Fare Entegrasyonu devre dışı bırakıldı (Fare Config {targetMouseProfile} profiline geri döndürüldü).");
+                        }
+                        else
+                        {
+                            _pendingMouseRestore = true;
+                            ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı (Masaüstü fare profiline geri dönülemedi).", false);
+                        }
+                    }
+                }
+                finally
+                {
+                    _gameProfileTransitionLock.Release();
+                }
+            }
+            else
+            {
+                ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı.");
+            }
         }
     }
 
@@ -1966,9 +2025,18 @@ public partial class MainWindow : Window
                         // If previous restore is pending or was interrupted, a new game must not overwrite this original reference!
                         if (!HasPendingDesktopRestore)
                         {
-                            _savedModeBeforeGame = _currentMode;
-                            _savedCpuBoostBeforeGame = _cpuPowerService.CurrentMode;
-                            _savedFanModeBeforeGame = _currentFanMode;
+                            if (_powerAutomationService?.IsDcEcoActive == true)
+                            {
+                                _savedModeBeforeGame = _powerAutomationService.SavedOperatingMode;
+                                _savedCpuBoostBeforeGame = _powerAutomationService.SavedCpuBoost;
+                                _savedFanModeBeforeGame = _powerAutomationService.SavedFanMode;
+                            }
+                            else
+                            {
+                                _savedModeBeforeGame = _currentMode;
+                                _savedCpuBoostBeforeGame = _cpuPowerService.CurrentMode;
+                                _savedFanModeBeforeGame = _currentFanMode;
+                            }
                             _savedMouseProfileBeforeGame = _atkMouseService.CurrentActiveProfile > 0 ? _atkMouseService.CurrentActiveProfile : 1;
                             _hasPendingDesktopRestore = true;
                         }
@@ -2089,6 +2157,16 @@ public partial class MainWindow : Window
         await HandleGameEndedAsync(profile);
     }
 
+    internal (OperatingMode Mode, CpuBoostMode Boost, FanMode Fan, bool IsEco) GetEffectiveRestoreTargets()
+    {
+        bool isBatteryEco = (_powerAutomationService?.LastAcStatus == false) && (_appSettings.DcPowerMode == DcPowerProfilePreference.Eco);
+        if (isBatteryEco)
+        {
+            return (OperatingMode.Quiet, CpuBoostMode.Disabled, FanMode.Auto, true);
+        }
+        return (_savedModeBeforeGame, _savedCpuBoostBeforeGame, _savedFanModeBeforeGame, false);
+    }
+
     internal async Task HandleGameEndedAsync(GameProfile profile)
     {
         if (Dispatcher.HasShutdownStarted) return;
@@ -2125,16 +2203,17 @@ public partial class MainWindow : Window
 
                             var failedSteps = new List<string>();
 
-                            bool isBatteryEco = (_powerAutomationService?.LastAcStatus == false) && (_appSettings.DcPowerMode == DcPowerProfilePreference.Eco);
+                            var targets = GetEffectiveRestoreTargets();
+                            OperatingMode targetRestoreMode = targets.Mode;
+                            CpuBoostMode targetRestoreBoost = targets.Boost;
+                            FanMode targetRestoreFan = targets.Fan;
+                            bool isBatteryEco = targets.IsEco;
+
                             if (isBatteryEco && _powerAutomationService != null)
                             {
-                                _powerAutomationService.SetSavedAcBaseline(_savedModeBeforeGame, _savedCpuBoostBeforeGame, _savedFanModeBeforeGame);
+                                _powerAutomationService.SetSavedAcBaseline(_savedModeBeforeGame, _savedCpuBoostBeforeGame, _savedFanModeBeforeGame, force: false);
                                 _powerAutomationService.SetDcEcoActive(true);
                             }
-
-                            OperatingMode targetRestoreMode = isBatteryEco ? OperatingMode.Quiet : _savedModeBeforeGame;
-                            CpuBoostMode targetRestoreBoost = isBatteryEco ? CpuBoostMode.Disabled : _savedCpuBoostBeforeGame;
-                            FanMode targetRestoreFan = isBatteryEco ? FanMode.Auto : _savedFanModeBeforeGame;
 
                             // 1. Operating mode
                             if (endGen != _gameSessionGeneration) return;
@@ -2188,7 +2267,7 @@ public partial class MainWindow : Window
                             // 4. Mouse profile
                             var restoredMouseInfo = "";
                             if (endGen != _gameSessionGeneration) return;
-                            bool shouldRestoreMouse = _appSettings.AtkMouseIntegrationEnabled && (_pendingMouseRestore || _isMouseProfileSwitchedForGame);
+                            bool shouldRestoreMouse = _pendingMouseRestore || _isMouseProfileSwitchedForGame;
                             if (shouldRestoreMouse)
                             {
                                 int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
@@ -2353,12 +2432,13 @@ public partial class MainWindow : Window
                     return false;
 
                 var failed = new List<string>();
+                var targets = GetEffectiveRestoreTargets();
 
                 // 1. Operating mode
                 if (_pendingModeRestore)
                 {
                     if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
-                    bool ok = await SwitchModeAsync(_savedModeBeforeGame);
+                    bool ok = await SwitchModeAsync(targets.Mode);
                     if (ok)
                     {
                         _pendingModeRestore = false;
@@ -2373,7 +2453,7 @@ public partial class MainWindow : Window
                 if (_pendingCpuBoostRestore)
                 {
                     if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
-                    bool ok = await ApplyCpuBoostModeAsync(_savedCpuBoostBeforeGame);
+                    bool ok = await ApplyCpuBoostModeAsync(targets.Boost);
                     if (ok)
                     {
                         _pendingCpuBoostRestore = false;
@@ -2388,10 +2468,10 @@ public partial class MainWindow : Window
                 if (_pendingFanRestore)
                 {
                     if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
-                    bool ok = await _agentClient.SetFanModeAsync(_savedFanModeBeforeGame);
+                    bool ok = await _agentClient.SetFanModeAsync(targets.Fan);
                     if (ok)
                     {
-                        _currentFanMode = _savedFanModeBeforeGame;
+                        _currentFanMode = targets.Fan;
                         _pendingFanRestore = false;
                     }
                     else
@@ -2401,7 +2481,7 @@ public partial class MainWindow : Window
                 }
 
                 // 4. Mouse
-                if (_pendingMouseRestore || (_appSettings.AtkMouseIntegrationEnabled && _isMouseProfileSwitchedForGame))
+                if (_pendingMouseRestore || _isMouseProfileSwitchedForGame)
                 {
                     if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
                     int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
@@ -2426,9 +2506,19 @@ public partial class MainWindow : Window
                     }
                 }
 
+                // 5. Pending AC Restore
+                if (_powerAutomationService?.HasPendingAcRestore == true)
+                {
+                    bool acOk = await _powerAutomationService.RetryPendingAcRestoreAsync(acquireLock: false);
+                    if (!acOk)
+                    {
+                        failed.Add("Adaptör Güç Ayarları");
+                    }
+                }
+
                 if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
 
-                bool allSucceeded = !_pendingModeRestore && !_pendingCpuBoostRestore && !_pendingFanRestore && !_pendingMouseRestore;
+                bool allSucceeded = !_pendingModeRestore && !_pendingCpuBoostRestore && !_pendingFanRestore && !_pendingMouseRestore && (_powerAutomationService?.HasPendingAcRestore != true);
                 _hasPendingDesktopRestore = !allSucceeded;
 
                 if (allSucceeded)
