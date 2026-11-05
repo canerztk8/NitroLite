@@ -118,6 +118,45 @@ public partial class MainWindow : Window
     private static readonly string ActiveRgbConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_rgb_state.json");
     private static readonly string AppSettingsConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
     private static readonly string LegacyConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+    private static readonly string GameSessionRecoveryFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_game_session.json");
+
+    internal void SaveGameSessionRecoveryState(GameSessionRecoveryState state)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            string tmp = GameSessionRecoveryFile + ".tmp." + Guid.NewGuid().ToString("N");
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, GameSessionRecoveryFile, overwrite: true);
+        }
+        catch { }
+    }
+
+    internal void ClearGameSessionRecoveryState()
+    {
+        try
+        {
+            if (File.Exists(GameSessionRecoveryFile))
+            {
+                File.Delete(GameSessionRecoveryFile);
+            }
+        }
+        catch { }
+    }
+
+    internal GameSessionRecoveryState? LoadGameSessionRecoveryState()
+    {
+        try
+        {
+            if (File.Exists(GameSessionRecoveryFile))
+            {
+                var json = File.ReadAllText(GameSessionRecoveryFile);
+                return JsonSerializer.Deserialize<GameSessionRecoveryState>(json);
+            }
+        }
+        catch { }
+        return null;
+    }
     private AppSettings _appSettings = new();
     private int _selectedTrendDays = 30;
 
@@ -407,6 +446,26 @@ public partial class MainWindow : Window
         {
             // 0. Load App Settings (Start Minimized, OSD, Window Position, Keyboard Lighting)
             LoadSettings();
+
+            // 0.1 Check for interrupted game session recovery (e.g. unexpected reboot/crash during gaming)
+            var recovery = LoadGameSessionRecoveryState();
+            if (recovery != null && recovery.IsActive)
+            {
+                try
+                {
+                    _currentMode = recovery.SavedMode;
+                    await _agentClient.SetOperatingModeAsync(recovery.SavedMode);
+                    await _cpuPowerService.SetBoostModeAsync(recovery.SavedBoost);
+                    await _agentClient.SetFanModeAsync(recovery.SavedFan);
+                    if (_appSettings.AtkMouseIntegrationEnabled && recovery.SavedMouseProfile >= 1 && recovery.SavedMouseProfile <= 4)
+                    {
+                        await SwitchMouseProfileInternalAsync(recovery.SavedMouseProfile);
+                    }
+                    ClearGameSessionRecoveryState();
+                    ShowToast("Önceki oyun oturumu beklenmedik şekilde kapandı; masaüstü ayarları geri yüklendi.");
+                }
+                catch { }
+            }
 
             // 1. Initial Mode
             _currentMode = await _agentClient.GetOperatingModeAsync();
@@ -1567,6 +1626,10 @@ public partial class MainWindow : Window
             bool success = await SwitchMouseProfileInternalAsync(selectedIdx);
             if (success)
             {
+                if (!_isGameSessionActive)
+                {
+                    _savedMouseProfileBeforeGame = selectedIdx;
+                }
                 UpdateSideMouseProfileStatus(selectedIdx);
                 ShowToast($"ATK A9 Fare donanımı Config {selectedIdx} profiline geçirildi.");
             }
@@ -1608,6 +1671,10 @@ public partial class MainWindow : Window
                     bool ok = await SwitchMouseProfileInternalAsync(profile);
                     if (ok)
                     {
+                        if (!_isGameSessionActive)
+                        {
+                            _savedMouseProfileBeforeGame = profile;
+                        }
                         await Dispatcher.InvokeAsync(() => UpdateSideMouseProfileStatus(profile));
                     }
                 });
@@ -1766,6 +1833,10 @@ public partial class MainWindow : Window
                 bool ok = await SwitchMouseProfileInternalAsync(val);
                 if (ok)
                 {
+                    if (!_isGameSessionActive)
+                    {
+                        _savedMouseProfileBeforeGame = val;
+                    }
                     UpdateDefaultMouseProfileBadge(val);
                     UpdateSideMouseProfileStatus(val);
                     ShowToast($"Varsayılan fare profili Config {val} olarak ayarlandı ve donanıma uygulandı.");
@@ -2096,6 +2167,16 @@ public partial class MainWindow : Window
                         _batteryService.IsGameSessionActive = true;
                         UpdateTrayRetryMenuItemState();
 
+                        SaveGameSessionRecoveryState(new GameSessionRecoveryState
+                        {
+                            IsActive = true,
+                            SavedMode = _savedModeBeforeGame,
+                            SavedBoost = _savedCpuBoostBeforeGame,
+                            SavedFan = _savedFanModeBeforeGame,
+                            SavedMouseProfile = _savedMouseProfileBeforeGame,
+                            Timestamp = DateTime.UtcNow
+                        });
+
                         var boostName = profile.TargetCpuBoost switch
                         {
                             CpuBoostMode.Disabled => "Devre Dışı",
@@ -2355,6 +2436,7 @@ public partial class MainWindow : Window
                             if (allSucceeded)
                             {
                                 _hasGameBaselineCaptured = false; // Allow next game start to capture a fresh baseline
+                                ClearGameSessionRecoveryState();
                             }
 
                             if (allSucceeded)
@@ -2580,6 +2662,7 @@ public partial class MainWindow : Window
                 if (allSucceeded)
                 {
                     _hasGameBaselineCaptured = false;
+                    ClearGameSessionRecoveryState();
                     if (TxtGameStatus != null)
                     {
                         TxtGameStatus.Text = _gameService.AutoGameModeEnabled 

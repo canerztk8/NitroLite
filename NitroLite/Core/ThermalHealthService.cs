@@ -53,6 +53,10 @@ public class ThermalHealthService
     private string _currentDayString = DateTime.Now.ToString("yyyy-MM-dd");
     private long _todayFanActiveSeconds = 0;
     private long _todayFanPassiveSeconds = 0;
+    private DateTime? _lastSampleTime;
+
+    internal long TotalFanActiveSeconds => _data.TotalFanActiveSeconds;
+    internal long TotalFanPassiveSeconds => _data.TotalFanPassiveSeconds;
 
     // In-memory rolling sample accumulation (thread-synchronized via _syncLock)
     private readonly List<double> _idleCpuTemps = new();
@@ -119,9 +123,25 @@ public class ThermalHealthService
         catch { }
     }
 
-    public void RecordSample(MonitorData data)
+    public void RecordSample(MonitorData data, int? customElapsedSeconds = null)
     {
         _sampleCounter++;
+
+        // Calculate wall-clock elapsed seconds (supports 1s active UI vs 3s tray minimization)
+        long elapsedSeconds = 1;
+        if (customElapsedSeconds.HasValue)
+        {
+            elapsedSeconds = Math.Clamp(customElapsedSeconds.Value, 1, 60);
+        }
+        else if (_lastSampleTime.HasValue)
+        {
+            var diff = (DateTime.UtcNow - _lastSampleTime.Value).TotalSeconds;
+            if (diff >= 1.0)
+            {
+                elapsedSeconds = (long)Math.Clamp(Math.Round(diff), 1.0, 10.0);
+            }
+        }
+        _lastSampleTime = DateTime.UtcNow;
 
         // Verify day boundary
         var todayStr = DateTime.Now.ToString("yyyy-MM-dd");
@@ -136,14 +156,14 @@ public class ThermalHealthService
         int maxRpm = Math.Max(data.CpuFanSpeed, data.GpuFanSpeed);
         if (maxRpm > 0)
         {
-            _data.TotalFanActiveSeconds++;
-            _todayFanActiveSeconds++;
-            _data.AccumulatedFanRpm += maxRpm;
+            _data.TotalFanActiveSeconds += elapsedSeconds;
+            _todayFanActiveSeconds += elapsedSeconds;
+            _data.AccumulatedFanRpm += (long)maxRpm * elapsedSeconds;
         }
         else
         {
-            _data.TotalFanPassiveSeconds++;
-            _todayFanPassiveSeconds++;
+            _data.TotalFanPassiveSeconds += elapsedSeconds;
+            _todayFanPassiveSeconds += elapsedSeconds;
         }
 
         // 2. Idle temperature sampling:

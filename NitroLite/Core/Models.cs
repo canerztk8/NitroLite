@@ -206,3 +206,13 @@ public class AppSettings
     [JsonPropertyName("atk_mouse_integration_enabled")]
     public bool AtkMouseIntegrationEnabled { get; set; } = false;
 }
+
+public class GameSessionRecoveryState
+{
+    public bool IsActive { get; set; }
+    public OperatingMode SavedMode { get; set; } = OperatingMode.Default;
+    public CpuBoostMode SavedBoost { get; set; } = CpuBoostMode.Aggressive;
+    public FanMode SavedFan { get; set; } = FanMode.Auto;
+    public int SavedMouseProfile { get; set; } = 1;
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
