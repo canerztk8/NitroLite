@@ -44,11 +44,20 @@ public class PowerAutomationService : IDisposable
     private bool _isDcEcoActive = false;
     private bool _isDisposed = false;
 
+    private bool _pendingAcModeRestore = false;
+    private bool _pendingAcCpuRestore = false;
+    private bool _pendingAcFanRestore = false;
+
     private OperatingMode _savedOperatingModeBeforeDc = OperatingMode.Default;
     private CpuBoostMode _savedCpuBoostBeforeDc = CpuBoostMode.Aggressive;
     private FanMode _savedFanModeBeforeDc = FanMode.Auto;
 
     public bool IsDcEcoActive => _isDcEcoActive;
+    public bool HasPendingAcRestore => _pendingAcModeRestore || _pendingAcCpuRestore || _pendingAcFanRestore;
+    public bool PendingAcModeRestore => _pendingAcModeRestore;
+    public bool PendingAcCpuRestore => _pendingAcCpuRestore;
+    public bool PendingAcFanRestore => _pendingAcFanRestore;
+
     public OperatingMode SavedOperatingMode => _savedOperatingModeBeforeDc;
     public CpuBoostMode SavedCpuBoost => _savedCpuBoostBeforeDc;
     public FanMode SavedFanMode => _savedFanModeBeforeDc;
@@ -61,8 +70,22 @@ public class PowerAutomationService : IDisposable
     }
 
     public Func<bool>? IsGameSessionActive { get; set; }
+    public Func<GameProfile?>? GetActiveGameProfile { get; set; }
     public Func<OperatingMode>? GetCurrentOperatingMode { get; set; }
+    public Func<CpuBoostMode>? GetCurrentCpuBoost { get; set; }
     public Func<FanMode>? GetCurrentFanMode { get; set; }
+
+    public void SetSavedAcBaseline(OperatingMode mode, CpuBoostMode boost, FanMode fan)
+    {
+        _savedOperatingModeBeforeDc = mode;
+        _savedCpuBoostBeforeDc = boost;
+        _savedFanModeBeforeDc = fan;
+    }
+
+    public void SetDcEcoActive(bool active)
+    {
+        _isDcEcoActive = active;
+    }
 
     public event Action<bool, string>? PowerModeSwitched; // bool isAc, string statusMessage
 
@@ -154,35 +177,53 @@ public class PowerAutomationService : IDisposable
                 // Transition to DC (On Battery)
                 if (_settings.DcPowerMode == DcPowerProfilePreference.Eco)
                 {
-                    _savedOperatingModeBeforeDc = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default;
-                    _savedCpuBoostBeforeDc = _cpuPowerService.CurrentMode;
-                    _savedFanModeBeforeDc = GetCurrentFanMode?.Invoke() ?? FanMode.Auto;
+                    if (!_isDcEcoActive)
+                    {
+                        _savedOperatingModeBeforeDc = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default;
+                        _savedCpuBoostBeforeDc = GetCurrentCpuBoost?.Invoke() ?? _cpuPowerService.CurrentMode;
+                        _savedFanModeBeforeDc = GetCurrentFanMode?.Invoke() ?? FanMode.Auto;
+                    }
                     _isDcEcoActive = true;
 
+                    bool modeOk = false;
                     try
                     {
-                        await _agentClient.SetOperatingModeAsync(OperatingMode.Quiet);
+                        modeOk = await _agentClient.SetOperatingModeAsync(OperatingMode.Quiet);
                     }
-                    catch { }
+                    catch { modeOk = false; }
 
+                    bool boostOk = false;
                     try
                     {
-                        await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled);
+                        boostOk = await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled);
                     }
-                    catch { }
+                    catch { boostOk = false; }
 
+                    bool fanOk = false;
                     try
                     {
-                        await _agentClient.SetFanModeAsync(FanMode.Auto);
+                        fanOk = await _agentClient.SetFanModeAsync(FanMode.Auto);
                     }
-                    catch { }
+                    catch { fanOk = false; }
 
                     if (_settings.AutoRefreshRateSwitching)
                     {
                         _displayService.SetRefreshRate(60);
                     }
 
-                    PowerModeSwitched?.Invoke(false, "Pilde Çalışma (Eco Modu): 60Hz, Sessiz Fan ve Güç Tasarrufu uygulandı.");
+                    var failed = new System.Collections.Generic.List<string>();
+                    if (!modeOk) failed.Add("Sessiz Mod");
+                    if (!boostOk) failed.Add("CPU Boost (Devre Dışı)");
+                    if (!fanOk) failed.Add("Fan Modu (Auto)");
+
+                    if (failed.Count == 0)
+                    {
+                        PowerModeSwitched?.Invoke(false, "Pilde Çalışma (Eco Modu): 60Hz, Sessiz Fan ve Güç Tasarrufu uygulandı.");
+                    }
+                    else
+                    {
+                        PowerModeSwitched?.Invoke(false, $"Pilde Çalışma (Kısmi Eco): Uygulanamayan ayarlar: {string.Join(", ", failed)}");
+                    }
                 }
                 else
                 {
@@ -194,27 +235,51 @@ public class PowerAutomationService : IDisposable
             else
             {
                 // Transition to AC (Adapter Connected)
+                bool allRestored = true;
+                var failed = new System.Collections.Generic.List<string>();
+
                 if (_isDcEcoActive)
                 {
+                    bool isGame = IsGameSessionActive?.Invoke() == true;
+                    var activeGame = GetActiveGameProfile?.Invoke();
+
+                    OperatingMode targetMode = (isGame && activeGame != null) ? activeGame.TargetMode : _savedOperatingModeBeforeDc;
+                    CpuBoostMode targetBoost = (isGame && activeGame != null) ? activeGame.TargetCpuBoost : _savedCpuBoostBeforeDc;
+                    FanMode targetFan = (isGame && activeGame != null) ? activeGame.TargetFanMode : _savedFanModeBeforeDc;
+
+                    bool modeOk = false;
                     try
                     {
-                        await _agentClient.SetOperatingModeAsync(_savedOperatingModeBeforeDc);
+                        modeOk = await _agentClient.SetOperatingModeAsync(targetMode);
                     }
-                    catch { }
+                    catch { modeOk = false; }
 
+                    bool boostOk = false;
                     try
                     {
-                        await _cpuPowerService.SetBoostModeAsync(_savedCpuBoostBeforeDc);
+                        boostOk = await _cpuPowerService.SetBoostModeAsync(targetBoost);
                     }
-                    catch { }
+                    catch { boostOk = false; }
 
+                    bool fanOk = false;
                     try
                     {
-                        await _agentClient.SetFanModeAsync(_savedFanModeBeforeDc);
+                        fanOk = await _agentClient.SetFanModeAsync(targetFan);
                     }
-                    catch { }
+                    catch { fanOk = false; }
 
-                    _isDcEcoActive = false;
+                    if (!modeOk) { _pendingAcModeRestore = true; failed.Add("Çalışma Modu"); } else { _pendingAcModeRestore = false; }
+                    if (!boostOk) { _pendingAcCpuRestore = true; failed.Add("CPU Boost"); } else { _pendingAcCpuRestore = false; }
+                    if (!fanOk) { _pendingAcFanRestore = true; failed.Add("Fan Modu"); } else { _pendingAcFanRestore = false; }
+
+                    if (modeOk && boostOk && fanOk)
+                    {
+                        _isDcEcoActive = false;
+                    }
+                    else
+                    {
+                        allRestored = false;
+                    }
                 }
 
                 int targetRate = 165;
@@ -225,7 +290,14 @@ public class PowerAutomationService : IDisposable
                     _displayService.SetRefreshRate(targetRate);
                 }
 
-                PowerModeSwitched?.Invoke(true, $"Adaptör Bağlandı: Önceki profil ve {targetRate}Hz tazeleme hızı geri yüklendi.");
+                if (allRestored)
+                {
+                    PowerModeSwitched?.Invoke(true, $"Adaptör Bağlandı: Önceki profil ve {targetRate}Hz tazeleme hızı geri yüklendi.");
+                }
+                else
+                {
+                    PowerModeSwitched?.Invoke(true, $"Adaptör Bağlandı (Kısmi Geri Yükleme): Geri yüklenemeyen ayarlar: {string.Join(", ", failed)}");
+                }
             }
         }
         finally

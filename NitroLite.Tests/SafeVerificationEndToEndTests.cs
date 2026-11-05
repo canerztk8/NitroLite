@@ -628,6 +628,148 @@ public class SafeVerificationEndToEndTests
         Assert.Contains("$vTask.State -ne 'Disabled'", script);
     }
 
+    private static async Task<int> ExecuteScriptWithMockCmdletsAsync(
+        string script,
+        Dictionary<string, (string Status, string StartType)> mockServices,
+        Dictionary<string, string>? mockTasks = null,
+        bool simulateStopError = false)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("$global:mockServices = @{};");
+        foreach (var kvp in mockServices)
+        {
+            sb.AppendLine($"$global:mockServices['{kvp.Key}'] = [PSCustomObject]@{{ Status = '{kvp.Value.Status}'; StartType = '{kvp.Value.StartType}' }};");
+        }
+
+        sb.AppendLine("$global:mockTasks = @{};");
+        if (mockTasks != null)
+        {
+            foreach (var kvp in mockTasks)
+            {
+                sb.AppendLine($"$global:mockTasks['{kvp.Key}'] = [PSCustomObject]@{{ State = '{kvp.Value}' }};");
+            }
+        }
+
+        var exportFile = Path.Combine(Path.GetTempPath(), $"nitrolite_mock_state_{Guid.NewGuid():N}.json");
+        var exportFileEscaped = exportFile.Replace("'", "''");
+
+        sb.AppendLine(@"
+function global:Export-MockState {
+    $export = @{}
+    foreach ($k in $global:mockServices.Keys) {
+        $export[$k] = @{ Status = $global:mockServices[$k].Status; StartType = $global:mockServices[$k].StartType }
+    }
+    $export | ConvertTo-Json | Out-File -FilePath '" + exportFileEscaped + @"' -Encoding utf8
+}
+function global:Get-Service {
+    param([string]$Name, [string]$ErrorAction)
+    if ($global:mockServices.ContainsKey($Name)) { return $global:mockServices[$Name] }
+    if ($ErrorAction -eq 'Stop') { throw ""Service not found: $Name"" }
+    return $null
+}
+function global:Set-Service {
+    param([string]$Name, [string]$StartupType, [string]$ErrorAction)
+    if ($global:mockServices.ContainsKey($Name)) {
+        $global:mockServices[$Name].StartType = $StartupType
+        Export-MockState
+        return
+    }
+    if ($ErrorAction -eq 'Stop') { throw ""Service not found: $Name"" }
+}
+function global:Start-Service {
+    param([string]$Name, [string]$ErrorAction)
+    if ($global:mockServices.ContainsKey($Name)) {
+        if ($global:mockServices[$Name].StartType -eq 'Disabled') {
+            if ($ErrorAction -eq 'Stop') { throw ""Cannot start disabled service: $Name"" }
+            return
+        }
+        $global:mockServices[$Name].Status = 'Running'
+        Export-MockState
+        return
+    }
+    if ($ErrorAction -eq 'Stop') { throw ""Service not found: $Name"" }
+}
+function global:Stop-Service {
+    param([string]$Name, [switch]$Force, [string]$ErrorAction)
+    if (" + (simulateStopError ? "$true" : "$false") + @") {
+        if ($ErrorAction -eq 'Stop') { throw ""Simulated stop service failure: $Name"" }
+        return
+    }
+    if ($global:mockServices.ContainsKey($Name)) {
+        $global:mockServices[$Name].Status = 'Stopped'
+        Export-MockState
+        return
+    }
+    if ($ErrorAction -eq 'Stop') { throw ""Service not found: $Name"" }
+}
+function global:Get-ScheduledTask {
+    param([string]$TaskName, [string]$ErrorAction)
+    if ($global:mockTasks.ContainsKey($TaskName)) { return $global:mockTasks[$TaskName] }
+    if ($ErrorAction -eq 'Stop') { throw ""Task not found: $TaskName"" }
+    return $null
+}
+function global:Enable-ScheduledTask {
+    param([string]$TaskName, [string]$ErrorAction)
+    if ($global:mockTasks.ContainsKey($TaskName)) { $global:mockTasks[$TaskName].State = 'Ready'; return }
+    if ($ErrorAction -eq 'Stop') { throw ""Task not found: $TaskName"" }
+}
+function global:Disable-ScheduledTask {
+    param([string]$TaskName, [string]$ErrorAction)
+    if ($global:mockTasks.ContainsKey($TaskName)) { $global:mockTasks[$TaskName].State = 'Disabled'; return }
+    if ($ErrorAction -eq 'Stop') { throw ""Task not found: $TaskName"" }
+}
+");
+
+        sb.AppendLine(script);
+
+        var tempPs1 = Path.Combine(Path.GetTempPath(), $"nitrolite_test_cmd_{Guid.NewGuid():N}.ps1");
+        await File.WriteAllTextAsync(tempPs1, sb.ToString());
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{tempPs1}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi)!;
+            string stdout = await proc.StandardOutput.ReadToEndAsync();
+            string stderr = await proc.StandardError.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+            if (proc.ExitCode != 0)
+            {
+                Console.WriteLine($"[ExecuteScriptWithMockCmdlets] ExitCode={proc.ExitCode}, StdOut={stdout}, StdErr={stderr}");
+            }
+
+            if (File.Exists(exportFile))
+            {
+                try
+                {
+                    var json = await File.ReadAllTextAsync(exportFile);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        var status = prop.Value.GetProperty("Status").GetString() ?? "";
+                        var startType = prop.Value.GetProperty("StartType").GetString() ?? "";
+                        mockServices[prop.Name] = (status, startType);
+                    }
+                }
+                catch { }
+            }
+
+            return proc.ExitCode;
+        }
+        finally
+        {
+            if (File.Exists(tempPs1)) File.Delete(tempPs1);
+            if (File.Exists(exportFile)) File.Delete(exportFile);
+        }
+    }
+
     [Fact]
     public async Task TestCase6b_DebloatService_StopFails_RecordsErrorAndRetainsBackupFile()
     {
@@ -644,8 +786,14 @@ public class SafeVerificationEndToEndTests
             File.WriteAllText(tempBackup, JsonSerializer.Serialize(backupData));
             service.BackupStateFilePath = tempBackup;
 
-            // Simulate PowerShell failure (exit code 1)
-            service.PowerShellRunner = (script, elevated) => Task.FromResult(1);
+            var mockServices = new Dictionary<string, (string Status, string StartType)>
+            {
+                ["AcerServiceSvc"] = ("Running", "Manual")
+            };
+
+            // Execute actual generated script against mock service cmdlets with simulated stop failure
+            service.PowerShellRunner = (script, elevated) =>
+                ExecuteScriptWithMockCmdletsAsync(script, mockServices, simulateStopError: true);
 
             bool ok = await service.RestoreTier1ServicesAsync();
             Assert.False(ok);
@@ -674,17 +822,79 @@ public class SafeVerificationEndToEndTests
             File.WriteAllText(tempBackup, JsonSerializer.Serialize(backupData));
             service.BackupStateFilePath = tempBackup;
 
-            // Simulate PowerShell verified success (exit code 0)
-            service.PowerShellRunner = (script, elevated) => Task.FromResult(0);
+            var mockServices = new Dictionary<string, (string Status, string StartType)>
+            {
+                ["AcerServiceSvc"] = ("Running", "Automatic")
+            };
+
+            // Execute actual generated script against mock service cmdlets with real command flow
+            service.PowerShellRunner = (script, elevated) =>
+                ExecuteScriptWithMockCmdletsAsync(script, mockServices, simulateStopError: false);
 
             bool ok = await service.RestoreTier1ServicesAsync();
-            Assert.True(ok);
+            Assert.True(ok, service.LastError);
             Assert.False(File.Exists(tempBackup), "Backup file MUST be deleted only upon verified success!");
         }
         finally
         {
             if (File.Exists(tempBackup)) File.Delete(tempBackup);
         }
+    }
+
+    [Fact]
+    public async Task TestCase6e_DebloatService_DisabledAndRunningRestore_AppliesManualBeforeStartAndExitsZero()
+    {
+        var service = new DebloatService();
+        var tempBackup = Path.Combine(Path.GetTempPath(), $"debloat_test_disrun_{Guid.NewGuid():N}.json");
+
+        try
+        {
+            // Service was recorded as Disabled + Running (fails in Windows if Set-Service Disabled is run before Start-Service)
+            var backupData = new Dictionary<string, string>
+            {
+                ["AcerServiceSvc"] = "Disabled",
+                ["AcerServiceSvc:Status"] = "Running"
+            };
+            File.WriteAllText(tempBackup, JsonSerializer.Serialize(backupData));
+            service.BackupStateFilePath = tempBackup;
+
+            var mockServices = new Dictionary<string, (string Status, string StartType)>
+            {
+                ["AcerServiceSvc"] = ("Stopped", "Disabled")
+            };
+
+            // Verify that the restore script successfully executes Manual -> Start -> Disabled sequence and exits with 0
+            service.PowerShellRunner = (script, elevated) =>
+                ExecuteScriptWithMockCmdletsAsync(script, mockServices);
+
+            bool ok = await service.RestoreTier1ServicesAsync();
+            Assert.True(ok, service.LastError);
+            Assert.False(File.Exists(tempBackup), "Backup must be removed on verified restore of Disabled+Running service!");
+            Assert.Equal("Disabled", mockServices["AcerServiceSvc"].StartType);
+            Assert.Equal("Running", mockServices["AcerServiceSvc"].Status);
+        }
+        finally
+        {
+            if (File.Exists(tempBackup)) File.Delete(tempBackup);
+        }
+    }
+
+    [Fact]
+    public async Task TestCase6f_DebloatService_DebloatScript_ExitsWithOneIfServiceFailsToStop()
+    {
+        var service = new DebloatService();
+        var mockServices = new Dictionary<string, (string Status, string StartType)>
+        {
+            ["AcerServiceSvc"] = ("Running", "Automatic")
+        };
+
+        // When stop fails, the generated script must throw and exit 1
+        service.PowerShellRunner = (script, elevated) =>
+            ExecuteScriptWithMockCmdletsAsync(script, mockServices, simulateStopError: true);
+
+        bool ok = await service.ApplyTier1DebloatAsync();
+        Assert.False(ok);
+        Assert.NotNull(service.LastError);
     }
 
     [Fact]
@@ -835,7 +1045,17 @@ public class SafeVerificationEndToEndTests
             service.ServiceStartupTypeQuerySeam = s => "Disabled";
             service.ServiceStatusQuerySeam = s => "Stopped";
             service.ScheduledTaskStateQuerySeam = t => "Disabled";
-            service.PowerShellRunner = (script, elevated) => Task.FromResult(0);
+            var mockServices = new Dictionary<string, (string Status, string StartType)>
+            {
+                ["AcerServiceSvc"] = ("Running", "Automatic"),
+                ["ASMSvc"] = ("Running", "Manual")
+            };
+            var mockTasks = new Dictionary<string, string>
+            {
+                ["NitroSenseLauncher"] = "Ready"
+            };
+            service.PowerShellRunner = (script, elevated) =>
+                ExecuteScriptWithMockCmdletsAsync(script, mockServices, mockTasks);
 
             // Re-apply debloat
             bool ok = await service.ApplyTier1DebloatAsync();
@@ -893,6 +1113,219 @@ public class SafeVerificationEndToEndTests
         Assert.Equal(FanMode.Auto, powerService.SavedFanMode);
 
         powerService.Dispose();
+    }
+
+    [Fact]
+    public async Task TestCase8b_PowerAutomationService_CommandFailure_DoesNotClearEcoActive_AndReportsPartialFailure()
+    {
+        var mockAgent = new TestAcerAgentClient();
+        var mockCpu = new TestCpuPowerService();
+        var mockDisplay = new DisplayRefreshRateService();
+        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = false };
+
+        var powerService = new PowerAutomationService(
+            mockAgent,
+            mockCpu,
+            mockDisplay,
+            settings,
+            attachSystemEvents: false);
+
+        string lastMsg = "";
+        powerService.PowerModeSwitched += (isAc, msg) => lastMsg = msg;
+
+        // Transition to DC succeeds
+        await powerService.ProcessPowerTransitionAsync(isAc: false);
+        Assert.True(powerService.IsDcEcoActive);
+
+        // Transition to AC where SetOperatingModeAsync fails
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+        await powerService.ProcessPowerTransitionAsync(isAc: true);
+
+        // Power automation must NOT clear _isDcEcoActive if commands failed!
+        Assert.True(powerService.IsDcEcoActive);
+        Assert.True(powerService.HasPendingAcRestore);
+        Assert.True(powerService.PendingAcModeRestore);
+        Assert.Contains("Kısmi", lastMsg);
+        Assert.Contains("Çalışma Modu", lastMsg);
+
+        powerService.Dispose();
+    }
+
+    [Fact]
+    public async Task TestCase8c_GameEndsOnBatteryEco_RestoresQuietEcoAndPreservesDesktopBaselineForAc()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AtkMouseIntegrationEnabled = true };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            // Simulate laptop is on battery (DC)
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+
+            var game = new GameProfile
+            {
+                ExeName = "testgame",
+                DisplayName = "Test Game",
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Aggressive,
+                TargetFanMode = FanMode.Max,
+                TargetAtkMouseProfile = 2
+            };
+
+            await window.HandleGameStartedAsync(game);
+            Assert.True(window.IsGameSessionActive);
+            Assert.Equal(OperatingMode.Turbo, mockAgent.CurrentMode);
+
+            // Game ends while STILL on battery!
+            await window.HandleGameEndedAsync(game);
+
+            // Must NOT restore desktop turbo/default over DC Eco mode!
+            // Must transition to Quiet, Boost Disabled, Fan Auto!
+            Assert.Equal(OperatingMode.Quiet, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Disabled, mockCpu.CurrentMode);
+            Assert.Equal(FanMode.Auto, mockAgent.CurrentFanMode);
+
+            // And the saved AC baseline must still be the desktop baseline (Default / Aggressive)
+            Assert.Equal(OperatingMode.Default, window.PowerAutomation.SavedOperatingMode);
+            Assert.Equal(CpuBoostMode.Aggressive, window.PowerAutomation.SavedCpuBoost);
+
+            // Now plug AC back in: desktop baseline is restored!
+            mockAgent.OnSetOperatingModeAsync = null;
+            await window.PowerAutomation.ProcessPowerTransitionAsync(isAc: true);
+            Assert.False(window.PowerAutomation.IsDcEcoActive);
+            Assert.Equal(OperatingMode.Default, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Aggressive, mockCpu.CurrentMode);
+        });
+    }
+
+    [Fact]
+    public async Task TestCase8d_AcConnectedDuringActiveGame_RestoresActiveGameProfileNotDesktopBaseline()
+    {
+        var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+        var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Disabled };
+        var mockDisplay = new DisplayRefreshRateService();
+        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = false };
+
+        var activeGame = new GameProfile
+        {
+            ExeName = "game.exe",
+            DisplayName = "Active Game",
+            TargetMode = OperatingMode.Extreme,
+            TargetCpuBoost = CpuBoostMode.Aggressive,
+            TargetFanMode = FanMode.Custom
+        };
+
+        bool isGameActive = true;
+        var powerService = new PowerAutomationService(
+            mockAgent,
+            mockCpu,
+            mockDisplay,
+            settings,
+            attachSystemEvents: false)
+        {
+            IsGameSessionActive = () => isGameActive,
+            GetActiveGameProfile = () => activeGame,
+            GetCurrentOperatingMode = () => OperatingMode.Default,
+            GetCurrentCpuBoost = () => CpuBoostMode.Disabled,
+            GetCurrentFanMode = () => FanMode.Auto
+        };
+
+        // On battery with Eco
+        await powerService.ProcessPowerTransitionAsync(isAc: false);
+        Assert.True(powerService.IsDcEcoActive);
+
+        // Plug AC back in WHILE game is still active
+        await powerService.ProcessPowerTransitionAsync(isAc: true);
+
+        // Must restore GAME PROFILE (Extreme / Aggressive / Custom), NOT desktop Default!
+        Assert.Equal(OperatingMode.Extreme, mockAgent.CurrentMode);
+        Assert.Equal(CpuBoostMode.Aggressive, mockCpu.CurrentMode);
+        Assert.Equal(FanMode.Custom, mockAgent.CurrentFanMode);
+
+        powerService.Dispose();
+    }
+
+    [Fact]
+    public async Task TestCase4c_LiveProfileSave_MouseDisabledRestoresToDesktopAndClearsFlag()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient();
+            var mockCpu = new TestCpuPowerService();
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { AtkMouseIntegrationEnabled = true, DefaultAtkMouseProfile = 1 };
+
+            var mouseSwitchedHistory = new List<int>();
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => { mouseSwitchedHistory.Add(p); return true; },
+                isTestHarness: true);
+
+            var gameProfile = new GameProfile
+            {
+                ExeName = "game1.exe",
+                DisplayName = "Game 1",
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Aggressive,
+                TargetFanMode = FanMode.Auto,
+                TargetAtkMouseProfile = 2
+            };
+
+            gameService.SetActiveGameForTesting(gameProfile, 1234);
+            await window.HandleGameStartedAsync(gameProfile);
+            Assert.True(window.IsGameSessionActive);
+            Assert.Equal(2, mouseSwitchedHistory.Last());
+
+            // Active game profile is edited while game is running: mouse changed to 0 (Don't use)
+            var editedProfile = new GameProfile
+            {
+                ExeName = "game1.exe",
+                DisplayName = "Game 1",
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Aggressive,
+                TargetFanMode = FanMode.Auto,
+                TargetAtkMouseProfile = 0
+            };
+
+            gameService.SetActiveGameForTesting(editedProfile, 1234);
+            // Apply live profile update directly: mouse must be restored to desktop profile 1!
+            bool ok = await window.ApplyLiveGameProfileAsync(editedProfile);
+            Assert.True(ok);
+            Assert.Equal(1, mouseSwitchedHistory.Last());
+        });
+    }
+
+    [Theory]
+    [InlineData("{\"result\":\"0\"}", true)]
+    [InlineData("{\"result\":\"3\"}", true)]
+    [InlineData("{\"result\":\"99\"}", false)]
+    [InlineData("{\"result\":\"1\"}", false)]
+    [InlineData("{\"result\":\"error\"}", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    [InlineData("invalid json", false)]
+    public void TestCase9_AcerAgentClient_IsSuccessResult_ValidatesOnlyZeroOrThree(string? json, bool expected)
+    {
+        bool actual = AcerAgentClient.IsSuccessResult(json);
+        Assert.Equal(expected, actual);
     }
 
     #endregion

@@ -18,19 +18,19 @@ namespace NitroLite;
 
 public partial class MainWindow : Window
 {
-    private AcerAgentClient _agentClient = new();
-    private BatteryWatchdogService _batteryService = new();
-    private readonly DebloatService _debloatService = new();
-    private CpuPowerService _cpuPowerService = new();
-    private GameDetectionService _gameService = new();
-    private readonly RgbProfileService _rgbProfileService = new();
-    private readonly HardwareMonitorService _hardwareService = new();
-    private readonly MemoryCleanerService _memoryService = new();
-    private readonly ThermalHealthService _thermalService = new();
-    private readonly StorageHealthService _storageService = new();
-    private readonly IDisplayRefreshRateService _displayService = new DisplayRefreshRateService();
-    private readonly FpsMonitorService _fpsMonitorService = new();
-    private AtkMouseService _atkMouseService = new();
+    private AcerAgentClient _agentClient;
+    private BatteryWatchdogService _batteryService;
+    private readonly DebloatService _debloatService;
+    private CpuPowerService _cpuPowerService;
+    private GameDetectionService _gameService;
+    private readonly RgbProfileService _rgbProfileService;
+    private readonly HardwareMonitorService _hardwareService;
+    private readonly MemoryCleanerService _memoryService;
+    private readonly ThermalHealthService _thermalService;
+    private readonly StorageHealthService _storageService;
+    private readonly IDisplayRefreshRateService _displayService;
+    private readonly FpsMonitorService _fpsMonitorService;
+    private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
 
     private readonly DispatcherTimer _pollTimer = new();
@@ -148,6 +148,20 @@ public partial class MainWindow : Window
 
     public MainWindow(bool startMinimized = false)
     {
+        _agentClient = new();
+        _batteryService = new();
+        _debloatService = new();
+        _cpuPowerService = new();
+        _gameService = new();
+        _rgbProfileService = new();
+        _hardwareService = new();
+        _memoryService = new();
+        _thermalService = new();
+        _storageService = new();
+        _displayService = new DisplayRefreshRateService();
+        _fpsMonitorService = new();
+        _atkMouseService = new();
+
         InitializeComponent();
         SetupTrayIcon();
         SetupTimers();
@@ -178,7 +192,15 @@ public partial class MainWindow : Window
         _cpuPowerService = cpuPowerService;
         _gameService = gameService;
         _atkMouseService = atkMouseService;
-        if (batteryService != null) _batteryService = batteryService;
+        _batteryService = batteryService ?? new BatteryWatchdogService();
+        _debloatService = new DebloatService();
+        _rgbProfileService = new RgbProfileService();
+        _hardwareService = new HardwareMonitorService();
+        _memoryService = new MemoryCleanerService();
+        _thermalService = new ThermalHealthService();
+        _storageService = new StorageHealthService();
+        _displayService = new DisplayRefreshRateService();
+        _fpsMonitorService = new FpsMonitorService();
         if (settings != null) _appSettings = settings;
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
@@ -198,8 +220,10 @@ public partial class MainWindow : Window
             _gameService.GameEnded += OnGameEnded;
             _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: false, transitionLock: _gameProfileTransitionLock);
             _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
+            _powerAutomationService.GetCurrentCpuBoost = () => _isGameSessionActive ? _savedCpuBoostBeforeGame : _cpuPowerService.CurrentMode;
             _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
             _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
+            _powerAutomationService.GetActiveGameProfile = () => _gameService.ActiveGameProfile;
         }
     }
 
@@ -302,8 +326,10 @@ public partial class MainWindow : Window
         // AC/DC Power & Display Automation
         _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: true, transitionLock: _gameProfileTransitionLock);
         _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
+        _powerAutomationService.GetCurrentCpuBoost = () => _isGameSessionActive ? _savedCpuBoostBeforeGame : _cpuPowerService.CurrentMode;
         _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
         _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
+        _powerAutomationService.GetActiveGameProfile = () => _gameService.ActiveGameProfile;
         _powerAutomationService.PowerModeSwitched += (isAc, msg) =>
         {
             Dispatcher.Invoke(() =>
@@ -1727,87 +1753,7 @@ public partial class MainWindow : Window
 
             if (isCurrentlyRunning)
             {
-                int saveGen = Interlocked.Increment(ref _gameSessionGeneration);
-                await _gameProfileTransitionLock.WaitAsync();
-                try
-                {
-                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive || _gameService.ActiveGameProfile == null ||
-                        !_gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return;
-                    }
-
-                    bool modeOk = await SwitchModeAsync(profile.TargetMode);
-                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
-
-                    bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
-                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
-
-                    bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
-                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
-                    if (fanOk)
-                    {
-                        _currentFanMode = profile.TargetFanMode;
-                    }
-
-                    bool mouseOk = true;
-                    if (_appSettings.AtkMouseIntegrationEnabled && profile.TargetAtkMouseProfile > 0)
-                    {
-                        mouseOk = await SwitchMouseProfileInternalAsync(profile.TargetAtkMouseProfile);
-                        if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
-                        if (mouseOk)
-                        {
-                            _isMouseProfileSwitchedForGame = true;
-                            UpdateSideMouseProfileStatus(profile.TargetAtkMouseProfile);
-                        }
-                    }
-                    else
-                    {
-                        _isMouseProfileSwitchedForGame = false;
-                    }
-
-                    var boostName = profile.TargetCpuBoost switch
-                    {
-                        CpuBoostMode.Disabled => "Devre Dışı",
-                        CpuBoostMode.Efficient => "Dengeli",
-                        _ => "Agresif (5.0 GHz)"
-                    };
-                    var mouseInfo = (_isMouseProfileSwitchedForGame && profile.TargetAtkMouseProfile > 0) ? $" / ATK Fare: Config {profile.TargetAtkMouseProfile}" : "";
-
-                    bool allCoreOk = modeOk && boostOk && fanOk && mouseOk;
-                    if (TxtGameStatus != null)
-                    {
-                        if (allCoreOk)
-                        {
-                            TxtGameStatus.Text = $"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})";
-                            if (TryFindResource("AccentGreen") is SolidColorBrush brush)
-                            {
-                                TxtGameStatus.Foreground = brush;
-                            }
-                        }
-                        else
-                        {
-                            TxtGameStatus.Text = $"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)";
-                            if (TryFindResource("AccentRed") is SolidColorBrush brush)
-                            {
-                                TxtGameStatus.Foreground = brush;
-                            }
-                        }
-                    }
-
-                    if (allCoreOk)
-                    {
-                        ShowToast($"'{profile.DisplayName}' profili kaydedildi ve uygulandı.");
-                    }
-                    else
-                    {
-                        ShowToast($"'{profile.DisplayName}' profili kaydedildi ancak bazı donanım ayarları uygulanamadı.", false);
-                    }
-                }
-                finally
-                {
-                    _gameProfileTransitionLock.Release();
-                }
+                await ApplyLiveGameProfileAsync(profile);
             }
             else
             {
@@ -1817,6 +1763,117 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowToast($"Profil kaydedilemedi: {ex.Message}", false);
+        }
+    }
+
+    internal async Task<bool> ApplyLiveGameProfileAsync(GameProfile profile)
+    {
+        int saveGen = Interlocked.Increment(ref _gameSessionGeneration);
+        await _gameProfileTransitionLock.WaitAsync();
+        try
+        {
+            if (saveGen != _gameSessionGeneration || !_isGameSessionActive || _gameService.ActiveGameProfile == null ||
+                !_gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            bool modeOk = await SwitchModeAsync(profile.TargetMode);
+            if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
+
+            bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
+            if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
+
+            bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
+            if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
+            if (fanOk)
+            {
+                _currentFanMode = profile.TargetFanMode;
+            }
+
+            bool mouseOk = true;
+            if (_appSettings.AtkMouseIntegrationEnabled && profile.TargetAtkMouseProfile > 0)
+            {
+                mouseOk = await SwitchMouseProfileInternalAsync(profile.TargetAtkMouseProfile);
+                if (mouseOk)
+                {
+                    _isMouseProfileSwitchedForGame = true;
+                    UpdateSideMouseProfileStatus(profile.TargetAtkMouseProfile);
+                }
+                if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
+            }
+            else if (_isMouseProfileSwitchedForGame)
+            {
+                // Profile option was changed to "Don't use" (0) or disabled while mouse had been switched for the game.
+                // Restore mouse to desktop/default profile immediately!
+                int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
+                    ? _appSettings.DefaultAtkMouseProfile 
+                    : _savedMouseProfileBeforeGame;
+
+                if (targetMouseProfile > 0)
+                {
+                    bool restoredOk = await SwitchMouseProfileInternalAsync(targetMouseProfile);
+                    if (restoredOk)
+                    {
+                        _isMouseProfileSwitchedForGame = false;
+                        UpdateSideMouseProfileStatus(targetMouseProfile);
+                    }
+                    else
+                    {
+                        _isMouseProfileSwitchedForGame = true;
+                        mouseOk = false;
+                    }
+                }
+                if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
+            }
+            else
+            {
+                _isMouseProfileSwitchedForGame = false;
+            }
+
+            var boostName = profile.TargetCpuBoost switch
+            {
+                CpuBoostMode.Disabled => "Devre Dışı",
+                CpuBoostMode.Efficient => "Dengeli",
+                _ => "Agresif (5.0 GHz)"
+            };
+            var mouseInfo = (_isMouseProfileSwitchedForGame && profile.TargetAtkMouseProfile > 0) ? $" / ATK Fare: Config {profile.TargetAtkMouseProfile}" : "";
+
+            bool allCoreOk = modeOk && boostOk && fanOk && mouseOk;
+            if (TxtGameStatus != null)
+            {
+                if (allCoreOk)
+                {
+                    TxtGameStatus.Text = $"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})";
+                    if (TryFindResource("AccentGreen") is SolidColorBrush brush)
+                    {
+                        TxtGameStatus.Foreground = brush;
+                    }
+                }
+                else
+                {
+                    TxtGameStatus.Text = $"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)";
+                    if (TryFindResource("AccentRed") is SolidColorBrush brush)
+                    {
+                        TxtGameStatus.Foreground = brush;
+                    }
+                }
+            }
+
+            if (allCoreOk)
+            {
+                ShowToast($"'{profile.DisplayName}' profili kaydedildi ve uygulandı.");
+            }
+            else
+            {
+                ShowToast($"'{profile.DisplayName}' profili kaydedildi ancak bazı donanım ayarları uygulanamadı.", false);
+            }
+
+            return allCoreOk;
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
         }
     }
 
@@ -2068,11 +2125,22 @@ public partial class MainWindow : Window
 
                             var failedSteps = new List<string>();
 
+                            bool isBatteryEco = (_powerAutomationService?.LastAcStatus == false) && (_appSettings.DcPowerMode == DcPowerProfilePreference.Eco);
+                            if (isBatteryEco && _powerAutomationService != null)
+                            {
+                                _powerAutomationService.SetSavedAcBaseline(_savedModeBeforeGame, _savedCpuBoostBeforeGame, _savedFanModeBeforeGame);
+                                _powerAutomationService.SetDcEcoActive(true);
+                            }
+
+                            OperatingMode targetRestoreMode = isBatteryEco ? OperatingMode.Quiet : _savedModeBeforeGame;
+                            CpuBoostMode targetRestoreBoost = isBatteryEco ? CpuBoostMode.Disabled : _savedCpuBoostBeforeGame;
+                            FanMode targetRestoreFan = isBatteryEco ? FanMode.Auto : _savedFanModeBeforeGame;
+
                             // 1. Operating mode
                             if (endGen != _gameSessionGeneration) return;
                             if (_pendingModeRestore)
                             {
-                                bool modeOk = await SwitchModeAsync(_savedModeBeforeGame);
+                                bool modeOk = await SwitchModeAsync(targetRestoreMode);
                                 if (endGen != _gameSessionGeneration) return;
                                 if (modeOk)
                                 {
@@ -2088,7 +2156,7 @@ public partial class MainWindow : Window
                             if (endGen != _gameSessionGeneration) return;
                             if (_pendingCpuBoostRestore)
                             {
-                                bool boostOk = await ApplyCpuBoostModeAsync(_savedCpuBoostBeforeGame);
+                                bool boostOk = await ApplyCpuBoostModeAsync(targetRestoreBoost);
                                 if (endGen != _gameSessionGeneration) return;
                                 if (boostOk)
                                 {
@@ -2100,15 +2168,15 @@ public partial class MainWindow : Window
                                 }
                             }
 
-                            // 3. Fan mode (restore _savedFanModeBeforeGame, NOT unconditionally Auto!)
+                            // 3. Fan mode (restore targetRestoreFan, NOT unconditionally Auto!)
                             if (endGen != _gameSessionGeneration) return;
                             if (_pendingFanRestore)
                             {
-                                bool fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeGame);
+                                bool fanOk = await _agentClient.SetFanModeAsync(targetRestoreFan);
                                 if (endGen != _gameSessionGeneration) return;
                                 if (fanOk)
                                 {
-                                    _currentFanMode = _savedFanModeBeforeGame;
+                                    _currentFanMode = targetRestoreFan;
                                     _pendingFanRestore = false;
                                 }
                                 else
@@ -2167,10 +2235,14 @@ public partial class MainWindow : Window
                                     }
                                 }
 
+                                string restoredSummary = isBatteryEco 
+                                    ? $"Pilde Eco profili (Quiet / Boost Devre Dışı{restoredMouseInfo})" 
+                                    : $"Varsayılan profil ({_savedModeBeforeGame}{restoredMouseInfo})";
+
                                 _notifyIcon?.ShowBalloonTip(2500, "NitroLite", 
-                                    $"{profile.DisplayName} sonlandırıldı. Varsayılan profil ({_savedModeBeforeGame}{restoredMouseInfo}) geri yüklendi.", 
+                                    $"{profile.DisplayName} sonlandırıldı. {restoredSummary} geri yüklendi.", 
                                     System.Windows.Forms.ToolTipIcon.Info);
-                                ShowToast("Masaüstü ayarları başarıyla geri yüklendi.");
+                                ShowToast(isBatteryEco ? "Pilde Eco profili uygulandı (Masaüstü ayarları adaptör için saklandı)." : "Masaüstü ayarları başarıyla geri yüklendi.");
                             }
                             else
                             {

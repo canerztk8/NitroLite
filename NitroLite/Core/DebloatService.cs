@@ -554,9 +554,13 @@ public class DebloatService
         if (shouldDisableTask)
         {
             taskDisableSnippet = "try { " +
-                                 "  $task = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction SilentlyContinue; " +
-                                 "  if ($task) { Disable-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction SilentlyContinue } " +
-                                 "} catch {}; ";
+                                 "  $task = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; " +
+                                 "  if ($task) { " +
+                                 "    Disable-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; " +
+                                 "    $vTask = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; " +
+                                 "    if ($vTask.State -ne 'Disabled') { throw 'NitroSenseLauncher görevi devre dışı bırakılamadı.' }; " +
+                                 "  } " +
+                                 "} catch { $errs += ('Task:NitroSenseLauncher: ' + $_.Exception.Message) }; ";
         }
 
         return $"$errLog = '{logEscaped}'; " +
@@ -566,8 +570,11 @@ public class DebloatService
                "  try { " +
                "    $svc = Get-Service -Name $s -ErrorAction SilentlyContinue; " +
                "    if ($svc) { " +
-               "      if ($svc.Status -eq 'Running') { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }; " +
+               "      if ($svc.Status -eq 'Running') { Stop-Service -Name $s -Force -ErrorAction Stop }; " +
                "      if ($svc.StartType -ne 'Disabled') { Set-Service -Name $s -StartupType Disabled -ErrorAction Stop }; " +
+               "      $vSvc = Get-Service -Name $s -ErrorAction Stop; " +
+               "      if ($vSvc.Status -ne 'Stopped') { throw 'Servis durdurulamadı veya hâlâ çalışıyor.' }; " +
+               "      if ($vSvc.StartType -ne 'Disabled') { throw 'Servis başlangıç türü devre dışı bırakılamadı.' }; " +
                "    } " +
                "  } catch { " +
                "    $errs += ($s + ': ' + $_.Exception.Message) " +
@@ -618,14 +625,26 @@ public class DebloatService
             sb.Append("try { ");
             sb.Append($"$svc = Get-Service -Name '{s}' -ErrorAction Stop; ");
             sb.Append($"if (-not $svc) {{ throw 'Servis bulunamadı: {s}' }}; ");
-            sb.Append($"Set-Service -Name '{s}' -StartupType {canonicalType} -ErrorAction Stop; ");
-            if (shouldStart)
+            if (canonicalType.Equals("Disabled", StringComparison.OrdinalIgnoreCase) && shouldStart)
             {
+                // Windows SCM prohibits starting a Disabled service (Error 1058).
+                // To restore a service recorded as Disabled + Running, temporarily set to Manual,
+                // start the service, and then switch startup type back to Disabled.
+                sb.Append($"Set-Service -Name '{s}' -StartupType Manual -ErrorAction Stop; ");
                 sb.Append($"Start-Service -Name '{s}' -ErrorAction Stop; ");
+                sb.Append($"Set-Service -Name '{s}' -StartupType Disabled -ErrorAction Stop; ");
             }
             else
             {
-                sb.Append($"Stop-Service -Name '{s}' -Force -ErrorAction Stop; ");
+                sb.Append($"Set-Service -Name '{s}' -StartupType {canonicalType} -ErrorAction Stop; ");
+                if (shouldStart)
+                {
+                    sb.Append($"Start-Service -Name '{s}' -ErrorAction Stop; ");
+                }
+                else
+                {
+                    sb.Append($"Stop-Service -Name '{s}' -Force -ErrorAction Stop; ");
+                }
             }
             sb.Append($"$vSvc = Get-Service -Name '{s}' -ErrorAction Stop; ");
             sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw 'Servis başlangıç türü doğrulanamadı: {s}' }}; ");
