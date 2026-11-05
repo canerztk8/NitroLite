@@ -1,0 +1,3582 @@
+using System.IO;
+using System.Media;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using Microsoft.Win32;
+using NitroLite.Core;
+using WpfBrush = System.Windows.Media.Brush;
+using WpfButton = System.Windows.Controls.Button;
+using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfPoint = System.Windows.Point;
+
+namespace NitroLite;
+
+public partial class MainWindow : Window
+{
+    private AcerAgentClient _agentClient = new();
+    private BatteryWatchdogService _batteryService = new();
+    private readonly DebloatService _debloatService = new();
+    private CpuPowerService _cpuPowerService = new();
+    private GameDetectionService _gameService = new();
+    private readonly RgbProfileService _rgbProfileService = new();
+    private readonly HardwareMonitorService _hardwareService = new();
+    private readonly MemoryCleanerService _memoryService = new();
+    private readonly ThermalHealthService _thermalService = new();
+    private readonly StorageHealthService _storageService = new();
+    private readonly IDisplayRefreshRateService _displayService = new DisplayRefreshRateService();
+    private readonly FpsMonitorService _fpsMonitorService = new();
+    private AtkMouseService _atkMouseService = new();
+    private PowerAutomationService? _powerAutomationService;
+
+    private readonly DispatcherTimer _pollTimer = new();
+    private System.Windows.Forms.NotifyIcon? _notifyIcon;
+    private System.Windows.Forms.ToolStripMenuItem? _menuItemRetryDesktop;
+    private OsdOverlayWindow? _osdWindow;
+    private bool _isOsdOpen = false;
+    private readonly List<MonitorData> _telemetryHistory = new();
+    private string _selectedChartMetric = "CPU_TEMP";
+    private DispatcherTimer? _toastTimer;
+    private long _telemetrySampleIndex = 0;
+
+    private OperatingMode _currentMode = OperatingMode.Default;
+    private OperatingMode _savedModeBeforeGame = OperatingMode.Default;
+    private CpuBoostMode _savedCpuBoostBeforeGame = CpuBoostMode.Aggressive;
+    private FanMode _currentFanMode = FanMode.Auto;
+    private FanMode _savedFanModeBeforeGame = FanMode.Auto;
+    private int _savedMouseProfileBeforeGame = 1;
+    private bool _isMouseProfileSwitchedForGame = false;
+    private GpuOperatingMode? _currentGpuMode = null;
+    private bool _isGameSessionActive = false;
+    private bool _hasPendingDesktopRestore = false;
+    private bool _pendingModeRestore = false;
+    private bool _pendingCpuBoostRestore = false;
+    private bool _pendingFanRestore = false;
+    private bool _pendingMouseRestore = false;
+    private int _gameSessionGeneration = 0;
+    private readonly SemaphoreSlim _gameProfileTransitionLock = new(1, 1);
+
+    public bool HasPendingDesktopRestore => _hasPendingDesktopRestore || _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore || _pendingMouseRestore;
+    internal bool PendingModeRestore => _pendingModeRestore;
+    internal bool PendingCpuBoostRestore => _pendingCpuBoostRestore;
+    internal bool PendingFanRestore => _pendingFanRestore;
+    internal bool PendingMouseRestore => _pendingMouseRestore;
+    internal OperatingMode SavedModeBeforeGame => _savedModeBeforeGame;
+    internal CpuBoostMode SavedCpuBoostBeforeGame => _savedCpuBoostBeforeGame;
+    internal FanMode SavedFanModeBeforeGame => _savedFanModeBeforeGame;
+    internal int SavedMouseProfileBeforeGame => _savedMouseProfileBeforeGame;
+    internal FanMode CurrentFanMode => _currentFanMode;
+    internal OperatingMode CurrentMode => _currentMode;
+    internal bool IsGameSessionActive => _isGameSessionActive;
+    internal int GameSessionGeneration => _gameSessionGeneration;
+    internal SemaphoreSlim GameProfileTransitionLock => _gameProfileTransitionLock;
+    internal System.Windows.Forms.ToolStripMenuItem? MenuItemRetryDesktop => _menuItemRetryDesktop;
+    internal Func<Func<Task>, Task>? DispatcherRunner { get; set; }
+    internal Func<int, bool>? MouseProfileSwitcher { get; set; }
+    internal Action<string, bool>? ToastHandler { get; set; }
+    internal PowerAutomationService? PowerAutomation => _powerAutomationService;
+
+    internal void SetPendingRestoreForTesting(
+        bool hasPending,
+        bool pendingMode = false,
+        bool pendingCpu = false,
+        bool pendingFan = false,
+        bool pendingMouse = false,
+        OperatingMode savedMode = OperatingMode.Default,
+        CpuBoostMode savedCpu = CpuBoostMode.Aggressive,
+        FanMode savedFan = FanMode.Auto,
+        int savedMouse = 1)
+    {
+        _hasPendingDesktopRestore = hasPending;
+        _pendingModeRestore = pendingMode;
+        _pendingCpuBoostRestore = pendingCpu;
+        _pendingFanRestore = pendingFan;
+        _pendingMouseRestore = pendingMouse;
+        _savedModeBeforeGame = savedMode;
+        _savedCpuBoostBeforeGame = savedCpu;
+        _savedFanModeBeforeGame = savedFan;
+        _savedMouseProfileBeforeGame = savedMouse;
+        UpdateTrayRetryMenuItemState();
+    }
+
+    private LightingConfig _lighting = new();
+    private bool _isApplyingPreset = false;
+    private bool _isUpdatingGameUi = false;
+    private bool _isInitializingUi = true;
+    private bool _isPolling = false;
+    private bool _isExiting = false;
+
+    private static readonly string ActiveRgbConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_rgb_state.json");
+    private static readonly string AppSettingsConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+    private static readonly string LegacyConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+    private AppSettings _appSettings = new();
+    private int _selectedTrendDays = 30;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private const int SW_RESTORE = 9;
+
+    public static void TrimMemory()
+    {
+        GC.Collect(2, GCCollectionMode.Aggressive, true, true);
+        GC.WaitForPendingFinalizers();
+        try
+        {
+            SetProcessWorkingSetSize(System.Diagnostics.Process.GetCurrentProcess().Handle, -1, -1);
+        }
+        catch { }
+    }
+
+    private int _hasInitialized = 0;
+
+    public async Task EnsureInitializedAsync()
+    {
+        if (Interlocked.Exchange(ref _hasInitialized, 1) != 0) return;
+        await RefreshAllAsync();
+    }
+
+    public MainWindow(bool startMinimized = false)
+    {
+        InitializeComponent();
+        SetupTrayIcon();
+        SetupTimers();
+        SetupEvents();
+
+        if (startMinimized)
+        {
+            WindowState = WindowState.Minimized;
+            Hide();
+        }
+
+        // Guarantees all services, settings, and staged boot backlight pulses
+        // execute immediately even when launching hidden/minimized to system tray on boot!
+        _ = EnsureInitializedAsync();
+    }
+
+    internal MainWindow(
+        AcerAgentClient agentClient,
+        CpuPowerService cpuPowerService,
+        GameDetectionService gameService,
+        AtkMouseService atkMouseService,
+        BatteryWatchdogService? batteryService = null,
+        AppSettings? settings = null,
+        Func<int, bool>? mouseProfileSwitcher = null,
+        bool isTestHarness = true)
+    {
+        _agentClient = agentClient;
+        _cpuPowerService = cpuPowerService;
+        _gameService = gameService;
+        _atkMouseService = atkMouseService;
+        if (batteryService != null) _batteryService = batteryService;
+        if (settings != null) _appSettings = settings;
+        if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
+
+        if (!isTestHarness)
+        {
+            InitializeComponent();
+            SetupTrayIcon();
+            SetupTimers();
+            SetupEvents();
+            _ = EnsureInitializedAsync();
+        }
+        else
+        {
+            _isInitializingUi = false;
+            DispatcherRunner = async action => await action();
+            _gameService.GameStarted += OnGameStarted;
+            _gameService.GameEnded += OnGameEnded;
+            _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: false, transitionLock: _gameProfileTransitionLock);
+            _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
+            _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
+            _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
+        }
+    }
+
+    private void SetupTrayIcon()
+    {
+        System.Drawing.Icon? appIcon = null;
+        try
+        {
+            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+            if (File.Exists(iconPath))
+            {
+                appIcon = new System.Drawing.Icon(iconPath);
+            }
+        }
+        catch { }
+
+        _notifyIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = appIcon ?? System.Drawing.SystemIcons.Application,
+            Visible = true,
+            Text = "NitroLite"
+        };
+
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        menu.Items.Add("Göster / Aç", null, (s, e) => ShowWindow());
+
+        _menuItemRetryDesktop = new System.Windows.Forms.ToolStripMenuItem("Masaüstü ayarlarını yeniden dene", null, async (s, e) =>
+        {
+            await RetryPendingDesktopRestoreAsync();
+        });
+        _menuItemRetryDesktop.Enabled = false;
+        menu.Items.Add(_menuItemRetryDesktop);
+
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+
+        menu.Items.Add("Sessiz Mod (Silent)", null, async (s, e) => await SetManualModeAsync(OperatingMode.Quiet));
+        menu.Items.Add("Dengeli Mod (Balanced)", null, async (s, e) => await SetManualModeAsync(OperatingMode.Default));
+        menu.Items.Add("Performans Modu (Power)", null, async (s, e) => await SetManualModeAsync(OperatingMode.Extreme));
+        menu.Items.Add("Turbo Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Turbo));
+
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("CPU Boost: Devre Dışı", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Disabled));
+        menu.Items.Add("CPU Boost: Agresif (5.0 GHz)", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Aggressive));
+
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("Çıkış", null, (s, e) => RealExit());
+
+        menu.Opening += (s, e) =>
+        {
+            UpdateTrayRetryMenuItemState();
+        };
+
+        _notifyIcon.ContextMenuStrip = menu;
+        _notifyIcon.DoubleClick += (s, e) => ShowWindow();
+    }
+
+    private void UpdateTrayRetryMenuItemState()
+    {
+        if (_menuItemRetryDesktop != null)
+        {
+            _menuItemRetryDesktop.Enabled = HasPendingDesktopRestore && !_isGameSessionActive;
+        }
+    }
+
+    private void SetupTimers()
+    {
+        _pollTimer.Interval = TimeSpan.FromSeconds(1);
+        _pollTimer.Tick += async (s, e) => await PollTelemetryAsync();
+        _pollTimer.Start();
+
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _toastTimer.Tick += OnToastTimerTick;
+    }
+
+    private void OnToastTimerTick(object? sender, EventArgs e)
+    {
+        _toastTimer?.Stop();
+        if (ToastBanner != null)
+        {
+            var fadeOut = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(400));
+            ToastBanner.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+        }
+    }
+
+    private void SetupEvents()
+    {
+        _batteryService.StatusUpdated += OnBatteryStatusUpdated;
+        _batteryService.OverchargeAlert += OnOverchargeAlert;
+        _batteryService.DischargeTargetReached += OnDischargeTargetReached;
+        _batteryService.Start();
+
+        // Game Detection Hooks
+        _gameService.GameStarted += OnGameStarted;
+        _gameService.GameEnded += OnGameEnded;
+
+        // Power & Session Switch Event Hooks for Keyboard Backlight Persistence
+        SystemEvents.PowerModeChanged += OnSystemPowerModeChanged;
+        SystemEvents.SessionSwitch += OnSystemSessionSwitch;
+
+        // AC/DC Power & Display Automation
+        _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: true, transitionLock: _gameProfileTransitionLock);
+        _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
+        _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
+        _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
+        _powerAutomationService.PowerModeSwitched += (isAc, msg) =>
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (Dispatcher.HasShutdownStarted) return;
+                if (!_isGameSessionActive)
+                {
+                    if (!isAc && _appSettings.DcPowerMode == DcPowerProfilePreference.Eco)
+                    {
+                        UpdateModeUi(OperatingMode.Quiet);
+                        _currentMode = OperatingMode.Quiet;
+                        _currentFanMode = FanMode.Auto;
+                        UpdateBoostUi(CpuBoostMode.Disabled);
+                    }
+                    else if (isAc)
+                    {
+                        UpdateModeUi(_powerAutomationService.SavedOperatingMode);
+                        _currentMode = _powerAutomationService.SavedOperatingMode;
+                        _currentFanMode = _powerAutomationService.SavedFanMode;
+                        UpdateBoostUi(_powerAutomationService.SavedCpuBoost);
+                    }
+                }
+                ShowToast(msg);
+            });
+        };
+
+        Loaded += async (s, e) =>
+        {
+            await EnsureInitializedAsync();
+        };
+
+        StateChanged += (s, e) => UpdateTelemetryPollingRate();
+        IsVisibleChanged += (s, e) => UpdateTelemetryPollingRate();
+    }
+
+    private void UpdateTelemetryPollingRate()
+    {
+        bool isHiddenOrMinimized = !IsVisible || WindowState == WindowState.Minimized;
+        // When minimized in tray, throttle polling to 3000ms to reduce background CPU cycles & power
+        var targetInterval = isHiddenOrMinimized ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(1);
+        if (_pollTimer.Interval != targetInterval)
+        {
+            _pollTimer.Interval = targetInterval;
+        }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        _isInitializingUi = true;
+        try
+        {
+            // 0. Load App Settings (Start Minimized, OSD, Window Position, Keyboard Lighting)
+            LoadSettings();
+
+            // 1. Initial Mode
+            _currentMode = await _agentClient.GetOperatingModeAsync();
+            UpdateModeUi(_currentMode);
+
+            // 1.1 Initial GPU Mode (MUX Switch)
+            await RefreshGpuModeAsync();
+
+            // 2. Initial Lighting (Check settings.json, then active_rgb_state.json)
+            bool restoredSavedRgb = false;
+
+            if (_appSettings.IsBacklightOff || (_appSettings.KeyboardLighting != null && (_appSettings.KeyboardLighting.Brightness == 0 || _appSettings.KeyboardLighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))))
+            {
+                _lighting.Brightness = 0;
+                _lighting.Effect = "OFF";
+                _lighting.Color = "#000000";
+                _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
+                UpdateLightingUi(_lighting);
+                UpdateEffectComboBox("OFF");
+                await _agentClient.TurnOffLightingAsync();
+                restoredSavedRgb = true;
+            }
+            else if (_appSettings.KeyboardLighting != null)
+            {
+                _lighting = _appSettings.KeyboardLighting;
+                UpdateLightingUi(_lighting);
+                UpdateEffectComboBox(_lighting.Effect);
+
+                if (_lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))
+                {
+                    await _agentClient.TurnOffLightingAsync();
+                }
+                else
+                {
+                    await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+                }
+                restoredSavedRgb = true;
+            }
+            else if (File.Exists(ActiveRgbConfigFile))
+            {
+                try
+                {
+                    var json = await File.ReadAllTextAsync(ActiveRgbConfigFile);
+                    var savedRgb = JsonSerializer.Deserialize<LightingConfig>(json);
+                    if (savedRgb != null)
+                    {
+                        _lighting = savedRgb;
+                        UpdateLightingUi(_lighting);
+                        UpdateEffectComboBox(_lighting.Effect);
+
+                        if (_lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))
+                        {
+                            await _agentClient.TurnOffLightingAsync();
+                        }
+                        else
+                        {
+                            await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+                        }
+                        restoredSavedRgb = true;
+                    }
+                }
+                catch { }
+            }
+
+            if (!restoredSavedRgb)
+            {
+                var cfg = await _agentClient.GetLightingConfigAsync();
+                if (cfg != null)
+                {
+                    _lighting = cfg;
+                    UpdateLightingUi(cfg);
+                    SaveSettings();
+                    SaveActiveRgbState();
+                }
+            }
+
+            // 2.1 Staged Background Reassertion for Cold Boot / Windows Logon
+            _ = ReassertKeyboardLightingAsync(isBoot: true);
+
+            // 3. CPU Boost Status
+            UpdateBoostUi(_cpuPowerService.CurrentMode);
+
+            // 4. RGB Presets list
+            PopulateRgbPresets(_appSettings.SelectedRgbPreset);
+
+            // 5. Configured Games list & Default Mouse Profile
+            PopulateConfiguredGames();
+            InitializeDefaultMouseProfileUi();
+
+            // 6. Battery Health Details, Thermal Paste / Fan & Storage Health
+            await RefreshBatteryHealthAsync();
+            RefreshThermalHealthUi();
+            RefreshStorageHealthUi();
+
+            // 7. Debloat & NitroSense Suppression check
+            _debloatService.DisableNitroSenseBackgroundExecution();
+            RefreshServiceList();
+            ChkAutoStart.IsChecked = _debloatService.IsNitroLiteAutoStartEnabled();
+        }
+        finally
+        {
+            _isInitializingUi = false;
+        }
+    }
+
+    private void LoadSettings()
+    {
+        _appSettings = SettingsManager.LoadSettingsWithFallback(AppSettingsConfigFile, AppSettingsConfigFile + ".bak", LegacyConfigFile);
+
+        // Immediately sync _lighting with loaded settings so it is never uninitialized
+        if (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset))
+        {
+            var presets = _rgbProfileService.GetPresets();
+            var sel = presets.FirstOrDefault(p => p.Name.Equals(_appSettings.SelectedRgbPreset, StringComparison.OrdinalIgnoreCase));
+            if (sel != null)
+            {
+                if (sel.Brightness == 0 || sel.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))
+                {
+                    _appSettings.IsBacklightOff = true;
+                }
+                _lighting.Effect = sel.Effect;
+                _lighting.Brightness = sel.Brightness;
+                _lighting.Speed = sel.Speed;
+                _lighting.Direction = sel.Direction;
+                _lighting.Color = sel.Color;
+                _lighting.LEDs = new List<string>(sel.LEDs);
+            }
+        }
+
+        if (_appSettings.IsBacklightOff || (_appSettings.KeyboardLighting != null && (_appSettings.KeyboardLighting.Brightness == 0 || _appSettings.KeyboardLighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))))
+        {
+            _lighting.Brightness = 0;
+            _lighting.Effect = "OFF";
+            _lighting.Color = "#000000";
+            _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
+            _appSettings.IsBacklightOff = true;
+        }
+        else if (_appSettings.KeyboardLighting != null)
+        {
+            _lighting = _appSettings.KeyboardLighting;
+        }
+
+        ChkStartMinimized.IsChecked = _appSettings.StartMinimized;
+        if (ChkAtkMouseIntegration != null)
+        {
+            ChkAtkMouseIntegration.IsChecked = _appSettings.AtkMouseIntegrationEnabled;
+        }
+        UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
+        ChkAutoRamClean.IsChecked = _appSettings.AutoRamCleanerEnabled;
+        _selectedChartMetric = string.IsNullOrEmpty(_appSettings.SelectedChartMetric) ? "CPU_TEMP" : _appSettings.SelectedChartMetric;
+        SetComboBoxByTag(CmbChartMetric, _selectedChartMetric);
+
+        if (_appSettings.WindowLeft.HasValue && _appSettings.WindowTop.HasValue)
+        {
+            double left = _appSettings.WindowLeft.Value;
+            double top = _appSettings.WindowTop.Value;
+
+            double minLeft = SystemParameters.VirtualScreenLeft;
+            double maxLeft = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - 100;
+            double minTop = SystemParameters.VirtualScreenTop;
+            double maxTop = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - 100;
+
+            if (left >= minLeft && left <= maxLeft && top >= minTop && top <= maxTop)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = left;
+                Top = top;
+            }
+        }
+
+        if (_appSettings.OsdEnabled)
+        {
+            ToggleOsd(true, showToast: false);
+        }
+
+        if (CmbDcPowerMode != null)
+        {
+            SetComboBoxByTag(CmbDcPowerMode, _appSettings.DcPowerMode.ToString());
+        }
+        if (ChkAutoRefreshRate != null)
+        {
+            ChkAutoRefreshRate.IsChecked = _appSettings.AutoRefreshRateSwitching;
+        }
+    }
+
+    private void SaveWindowPosition()
+    {
+        if (WindowState == WindowState.Normal)
+        {
+            _appSettings.WindowLeft = Left;
+            _appSettings.WindowTop = Top;
+            SaveSettings();
+        }
+    }
+
+    private void SaveSettings()
+    {
+        try
+        {
+            if (!_isInitializingUi && _lighting != null)
+            {
+                _appSettings.KeyboardLighting = _lighting;
+                _appSettings.IsBacklightOff = _lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
+                if (CmbRgbPresets?.SelectedItem is string presetName && !string.IsNullOrWhiteSpace(presetName))
+                {
+                    _appSettings.SelectedRgbPreset = presetName;
+                }
+            }
+
+            SettingsManager.SaveSettingsAtomic(AppSettingsConfigFile, _appSettings);
+            try
+            {
+                SettingsManager.SaveSettingsAtomic(LegacyConfigFile, _appSettings);
+            }
+            catch { }
+        }
+        catch { }
+    }
+
+    private void SaveActiveRgbState()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(_lighting, new JsonSerializerOptions { WriteIndented = true });
+            string tmp = ActiveRgbConfigFile + ".tmp." + Guid.NewGuid().ToString("N");
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, ActiveRgbConfigFile, overwrite: true);
+        }
+        catch { }
+    }
+
+    private void OnSystemPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Resume)
+        {
+            _ = ReassertKeyboardLightingAsync();
+        }
+    }
+
+    private void OnSystemSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionUnlock || e.Reason == SessionSwitchReason.SessionLogon)
+        {
+            _ = ReassertKeyboardLightingAsync();
+        }
+    }
+
+    public async Task ReassertKeyboardLightingAsync(bool isBoot = false)
+    {
+        // Staged re-assertion pulses with socket reconnect retry
+        // to override Acer EC firmware default resets, AcerLightingService boot triggers, and sleep wakeups.
+        int[] delays = isBoot
+            ? new[] { 500, 2000, 5000, 10000, 18000 }
+            : new[] { 250, 1500 };
+
+        foreach (var delay in delays)
+        {
+            await Task.Delay(delay);
+            for (int retry = 0; retry < 3; retry++)
+            {
+                try
+                {
+                    bool shouldBeOff = _appSettings.IsBacklightOff || 
+                                       _lighting.Brightness == 0 || 
+                                       _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) ||
+                                       (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset) && 
+                                        _appSettings.SelectedRgbPreset.Contains("kapalı", StringComparison.OrdinalIgnoreCase));
+
+                    bool success = shouldBeOff
+                        ? await _agentClient.TurnOffLightingAsync()
+                        : await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+
+                    if (success)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(200);
+                }
+                catch
+                {
+                    await Task.Delay(200);
+                }
+            }
+        }
+    }
+
+    public void ShowToast(string message, bool isSuccess = true)
+    {
+        ToastHandler?.Invoke(message, isSuccess);
+        if (Dispatcher.HasShutdownStarted) return;
+
+        Action action = () =>
+        {
+            if (Dispatcher.HasShutdownStarted || ToastBanner == null || TxtToastIcon == null || TxtToastMessage == null) return;
+
+            TxtToastIcon.Text = isSuccess ? "●" : "!";
+            TxtToastIcon.Foreground = TryFindResource(isSuccess ? "AccentGreen" : "AccentCyan") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Cyan);
+            ToastBanner.BorderBrush = TryFindResource(isSuccess ? "AccentGreen" : "AccentCyan") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Cyan);
+            TxtToastMessage.Text = message;
+
+            _toastTimer?.Stop();
+
+            var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200));
+            ToastBanner.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+
+            _toastTimer?.Start();
+        };
+
+        if (Dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(action);
+        }
+    }
+
+    private async Task PollTelemetryAsync()
+    {
+        if (_isPolling) return;
+        _isPolling = true;
+
+        try
+        {
+            var data = await _agentClient.GetMonitorDataAsync();
+        if (data != null)
+        {
+            // Enrich with GPU Wattage, VRAM and CPU Package Power
+            _hardwareService.EnrichMonitorData(data);
+            _thermalService.RecordSample(data);
+            _telemetrySampleIndex++;
+
+            bool isWindowVisible = IsVisible && WindowState != WindowState.Minimized;
+            bool isGpuSleeping = data.GpuTemperature <= 0;
+
+            if (isWindowVisible)
+            {
+                // Titlebar / Sidebar
+                TxtSideCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
+                TxtSideGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
+                TxtSideCpuFan.Text = TelemetryFormatter.FormatFanSpeed(data.CpuFanSpeed);
+
+                // Sub-Component Thermal Matrix: Motherboard / VRM (SYS1_TEMPERATURE)
+                if (TxtSubMoboTemp != null)
+                    TxtSubMoboTemp.Text = TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : 54);
+
+                // Tab 1: Fans
+                TxtCpuFanRpm.Text = TelemetryFormatter.FormatFanSpeed(data.CpuFanSpeed);
+                TxtGpuFanRpm.Text = TelemetryFormatter.FormatFanSpeed(data.GpuFanSpeed);
+                BarCpuFan.Value = data.CpuFanSpeed;
+                BarGpuFan.Value = data.GpuFanSpeed;
+
+                // Tab 2: Monitoring - CPU
+                TxtCpuCoreCount.Text = $" ({data.CpuCores} Çekirdek)";
+                TxtMonCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
+                BarMonCpuTemp.Value = data.CpuTemperature;
+
+                TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts);
+                BarMonCpuPower.Value = data.CpuPowerWatts;
+
+                TxtMonCpuUsage.Text = $"{data.CpuUsage:F1} %";
+                BarMonCpuUsage.Value = data.CpuUsage;
+
+                TxtMonCpuFreqGhz.Text = TelemetryFormatter.FormatCpuFrequency(data.CpuFrequencyMHz);
+                BarMonCpuFreq.Value = Math.Min(data.CpuFrequencyMHz, BarMonCpuFreq.Maximum);
+
+                // Tab 2: Monitoring - GPU
+                TxtMonGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
+                BarMonGpuTemp.Value = data.GpuTemperature;
+
+                TxtMonGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping);
+                BarMonGpuPower.Value = data.GpuPowerWatts;
+
+                TxtMonGpuUsage.Text = $"{data.GpuUsage:F1} %";
+                BarMonGpuUsage.Value = data.GpuUsage;
+
+                BarMonVram.Maximum = data.VramTotalMB > 0 ? data.VramTotalMB : 8192;
+                BarMonVram.Value = Math.Min(data.VramUsedMB, BarMonVram.Maximum);
+                TxtMonVram.Text = TelemetryFormatter.FormatVramUsage(data.VramUsedMB, data.VramTotalMB, isGpuSleeping);
+
+                // RAM
+                if (data.RamTotalMB > 0)
+                {
+                    var ramUsedGB = (data.RamTotalMB * (data.RamUsage / 100.0)) / 1024.0;
+                    var ramTotalGB = data.RamTotalMB / 1024.0;
+                    TxtMonRamDetail.Text = $"{ramUsedGB:F1} GB / {ramTotalGB:F1} GB";
+                    TxtMonRamPercent.Text = $"{data.RamUsage:F1} %";
+                    BarMonRam.Value = data.RamUsage;
+                }
+                else
+                {
+                    TxtMonRamDetail.Text = "-- GB / -- GB";
+                    TxtMonRamPercent.Text = "-- %";
+                    BarMonRam.Value = 0;
+                }
+
+                TxtMonSysTemp.Text = $"{data.SysTemperature} °C";
+
+                TxtAasStatus.Text = "AASSvc Donanım Köprüsü Aktif (Port 46933)";
+                LedAas.Fill = (SolidColorBrush)FindResource("AccentGreen");
+            }
+
+            // Update tray tooltip regardless of window visibility
+            if (_notifyIcon != null)
+            {
+                var tip = $"NitroLite: {_currentMode} | CPU: {data.CpuTemperature}°C | GPU: {data.GpuTemperature}°C";
+                _notifyIcon.Text = tip.Length > 63 ? tip[..63] : tip;
+            }
+
+            // Optimal Auto RAM Cleaner Check (32 GB RAM optimized) - suppressed during active gameplay to prevent micro-stutters
+            bool isGameActive = _isGameSessionActive || _gameService.IsGameActive;
+            if (_appSettings.AutoRamCleanerEnabled && !isGameActive && _memoryService.ShouldAutoClean(data.RamUsage, data.RamTotalMB, isGameActive))
+            {
+                var res = await _memoryService.CleanMemoryAsync();
+                if (res.FreedMegabytes > 150)
+                {
+                    string freedStr = res.FreedMegabytes >= 1024 ? $"{res.FreedMegabytes / 1024.0:F1} GB" : $"{res.FreedMegabytes:F0} MB";
+                    ShowToast($"Bellek temizlendi: {freedStr} alan boşaltıldı.");
+                    if (TxtRamCleanStatus != null)
+                    {
+                        TxtRamCleanStatus.Text = $" ({freedStr} Boşaltıldı)";
+                        TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+                    }
+                }
+            }
+
+            // Update OSD if open
+            if (_isOsdOpen && _osdWindow != null && _osdWindow.IsVisible)
+            {
+                _osdWindow.UpdateData(data, _currentMode);
+            }
+
+            // Keep rolling 60 seconds history
+            _telemetryHistory.Add(data);
+            if (_telemetryHistory.Count > 60)
+            {
+                _telemetryHistory.RemoveAt(0);
+            }
+
+            RenderTelemetryChart();
+
+            // Auto-sync game dropdown to running active game if tab is visible
+            var activeGame = _gameService.ActiveGameProfile;
+            if (activeGame != null && !_isUpdatingGameUi && CmbConfiguredGames != null && TabModes?.Visibility == Visibility.Visible)
+            {
+                var profiles = _gameService.GetProfiles();
+                int currentIdx = CmbConfiguredGames.SelectedIndex;
+                bool needsSync = currentIdx < 0 ||
+                                 currentIdx >= profiles.Count ||
+                                 !profiles[currentIdx].ExeName.Equals(activeGame.ExeName, StringComparison.OrdinalIgnoreCase);
+
+                if (needsSync)
+                {
+                    var idx = profiles.FindIndex(p => p.ExeName.Equals(activeGame.ExeName, StringComparison.OrdinalIgnoreCase));
+                    if (idx >= 0)
+                    {
+                        _isUpdatingGameUi = true;
+                        CmbConfiguredGames.SelectedIndex = idx;
+                        _isUpdatingGameUi = false;
+                        UpdateSelectedGameDetails();
+                    }
+                }
+            }
+
+            // Periodically refresh thermal health card if Battery & Health tab is active (every 5 samples)
+            if (TabBattery?.Visibility == Visibility.Visible && (_telemetrySampleIndex % 5 == 0))
+            {
+                RefreshThermalHealthUi();
+            }
+        }
+        else
+        {
+            TxtAasStatus.Text = "AASSvc bağlantısı bekleniyor...";
+            LedAas.Fill = (SolidColorBrush)FindResource("AccentRed");
+        }
+        }
+        finally
+        {
+            _isPolling = false;
+        }
+    }
+
+    // ==========================================
+    // Telemetry History Graph & Live Analytics
+    // ==========================================
+
+    private void CmbChartMetric_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || CmbChartMetric.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
+        _selectedChartMetric = tag;
+        _appSettings.SelectedChartMetric = tag;
+        SaveSettings();
+        RenderTelemetryChart();
+    }
+
+    private void RenderTelemetryChart()
+    {
+        if (_telemetryHistory.Count < 2 || CanvasHistoryChart == null) return;
+        if (!IsVisible || WindowState == WindowState.Minimized || TabMonitoring?.Visibility != Visibility.Visible) return;
+
+        double width = CanvasHistoryChart.ActualWidth;
+        double height = CanvasHistoryChart.ActualHeight;
+        if (width <= 0 || height <= 0)
+        {
+            width = 720;
+            height = 140;
+        }
+
+        List<double> values = new();
+        foreach (var d in _telemetryHistory)
+        {
+            double val = _selectedChartMetric switch
+            {
+                "CPU_TEMP" => d.CpuTemperature,
+                "GPU_TEMP" => d.GpuTemperature,
+                "CPU_WATT" => d.CpuPowerWatts,
+                "GPU_WATT" => d.GpuPowerWatts,
+                "CPU_GHZ" => d.CpuFrequencyMHz / 1000.0,
+                "CPU_USAGE" => d.CpuUsage,
+                "GPU_USAGE" => d.GpuUsage,
+                "RAM_USAGE" => d.RamUsage,
+                "VRAM_GB" => d.VramUsedMB / 1024.0,
+                _ => d.CpuTemperature
+            };
+            values.Add(val);
+        }
+
+        string unit = _selectedChartMetric switch
+        {
+            "CPU_TEMP" or "GPU_TEMP" => "°C",
+            "CPU_WATT" or "GPU_WATT" => "W",
+            "CPU_GHZ" => "GHz",
+            "CPU_USAGE" or "GPU_USAGE" or "RAM_USAGE" => "%",
+            "VRAM_GB" => "GB",
+            _ => ""
+        };
+
+        double current = values.Last();
+        double min = values.Min();
+        double max = values.Max();
+        double avg = values.Average();
+
+        bool isFine = _selectedChartMetric is "CPU_GHZ" or "VRAM_GB";
+        TxtChartCurrentVal.Text = isFine ? $"{current:F2} {unit}" : $"{current:F1} {unit}";
+        TxtChartMinVal.Text = isFine ? $"{min:F2} {unit}" : $"{min:F1} {unit}";
+        TxtChartMaxVal.Text = isFine ? $"{max:F2} {unit}" : $"{max:F1} {unit}";
+        TxtChartAvgVal.Text = isFine ? $"{avg:F2} {unit}" : $"{avg:F1} {unit}";
+
+        double rangeMin;
+        double rangeMax;
+
+        switch (_selectedChartMetric)
+        {
+            case "CPU_GHZ":
+                // Dynamic adaptive scaling for CPU clock: auto-scale so 100 MHz variations show visible peaks & valleys
+                double ghzMin = Math.Floor(min * 2.0) / 2.0 - 0.25;
+                double ghzMax = Math.Ceiling(max * 2.0) / 2.0 + 0.25;
+                if (ghzMax - ghzMin < 0.8) { ghzMin = Math.Max(0.5, ghzMin - 0.4); ghzMax = ghzMin + 0.8; }
+                rangeMin = Math.Max(0.0, ghzMin);
+                rangeMax = ghzMax;
+                break;
+
+            case "CPU_TEMP":
+            case "GPU_TEMP":
+                // Adaptive scale for temperature: 5°C padding so thermal curves are prominent
+                double tempMin = Math.Floor(min / 5.0) * 5.0 - 5.0;
+                double tempMax = Math.Ceiling(max / 5.0) * 5.0 + 5.0;
+                if (tempMax - tempMin < 15.0) { tempMin = Math.Max(25.0, tempMin - 5.0); tempMax = tempMin + 15.0; }
+                rangeMin = Math.Max(20.0, tempMin);
+                rangeMax = Math.Min(115.0, tempMax);
+                break;
+
+            case "CPU_WATT":
+            case "GPU_WATT":
+                double wattMin = Math.Max(0.0, Math.Floor(min / 10.0) * 10.0 - 5.0);
+                double wattMax = Math.Ceiling(max / 10.0) * 10.0 + 10.0;
+                if (wattMax - wattMin < 25.0) wattMax = wattMin + 25.0;
+                rangeMin = wattMin;
+                rangeMax = wattMax;
+                break;
+
+            case "CPU_USAGE":
+            case "GPU_USAGE":
+            case "RAM_USAGE":
+                if (max < 40.0)
+                {
+                    rangeMin = 0.0;
+                    rangeMax = 50.0;
+                }
+                else
+                {
+                    rangeMin = 0.0;
+                    rangeMax = 100.0;
+                }
+                break;
+
+            case "VRAM_GB":
+                rangeMin = 0.0;
+                rangeMax = Math.Max(8.0, Math.Ceiling(max + 1.0));
+                break;
+
+            default:
+                rangeMin = Math.Max(0.0, min - 5.0);
+                rangeMax = max + 5.0;
+                break;
+        }
+
+        // Update grid reference labels
+        if (TxtChartGridTop != null)
+            TxtChartGridTop.Text = isFine ? $"{rangeMax:F1} {unit}" : $"{(int)rangeMax} {unit}";
+        if (TxtChartGridMid != null)
+            TxtChartGridMid.Text = isFine ? $"{((rangeMin + rangeMax) / 2.0):F1} {unit}" : $"{(int)((rangeMin + rangeMax) / 2.0)} {unit}";
+        if (TxtChartGridBottom != null)
+            TxtChartGridBottom.Text = isFine ? $"{rangeMin:F1} {unit}" : $"{(int)rangeMin} {unit}";
+
+        double range = rangeMax - rangeMin;
+        if (range <= 0) range = 1;
+
+        int count = values.Count;
+        double stepX = width / Math.Max(count - 1, 1);
+
+        var linePoints = new PointCollection();
+        var areaPoints = new PointCollection();
+
+        areaPoints.Add(new WpfPoint(0, height));
+
+        double lastX = 0;
+        double lastY = height / 2;
+
+        for (int i = 0; i < count; i++)
+        {
+            double x = i * stepX;
+            double normalized = Math.Clamp((values[i] - rangeMin) / range, 0.0, 1.0);
+            double y = height - (normalized * (height - 24)) - 12;
+
+            var pt = new WpfPoint(x, y);
+            linePoints.Add(pt);
+            areaPoints.Add(pt);
+
+            lastX = x;
+            lastY = y;
+        }
+
+        areaPoints.Add(new WpfPoint((count - 1) * stepX, height));
+
+        ChartLine.Points = linePoints;
+        ChartArea.Points = areaPoints;
+
+        if (ChartDot != null)
+        {
+            Canvas.SetLeft(ChartDot, lastX - 3.5);
+            Canvas.SetTop(ChartDot, lastY - 3.5);
+            ChartDot.Visibility = Visibility.Visible;
+        }
+    }
+
+    // ==========================================
+    // On-Screen Display (OSD Overlay)
+    // ==========================================
+
+    private void BtnToggleOsd_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleOsd(!_isOsdOpen);
+    }
+
+    private void BtnCycleOsdCorner_Click(object sender, RoutedEventArgs e)
+    {
+        if (_osdWindow == null)
+        {
+            _osdWindow = new OsdOverlayWindow();
+        }
+        _osdWindow.CycleCorner();
+        _appSettings.OsdCorner = _osdWindow.CurrentCorner;
+        SaveSettings();
+
+        string cornerDesc = _osdWindow.CurrentCorner switch
+        {
+            0 => "Sol Üst",
+            1 => "Sağ Üst",
+            2 => "Sağ Alt",
+            3 => "Sol Alt",
+            _ => "Sol Üst"
+        };
+        ShowToast($"OSD konumu değiştirildi: {cornerDesc}");
+    }
+
+    private void ToggleOsd(bool enable, bool showToast = true)
+    {
+        _isOsdOpen = enable;
+        _appSettings.OsdEnabled = enable;
+        if (!_isInitializingUi)
+        {
+            SaveSettings();
+        }
+
+        if (_isOsdOpen)
+        {
+            if (_osdWindow == null)
+            {
+                _osdWindow = new OsdOverlayWindow();
+            }
+            _osdWindow.SetCorner(_appSettings.OsdCorner);
+            _osdWindow.Show();
+            BtnToggleOsd.Background = (SolidColorBrush)FindResource("AccentCyan");
+            BtnToggleOsd.Foreground = System.Windows.Media.Brushes.Black;
+            BtnToggleOsd.Content = "OSD Katmanı: Açık (Kapat)";
+
+            if (showToast) ShowToast("Ekran üstü gösterge etkinleştirildi.");
+        }
+        else
+        {
+            _osdWindow?.Hide();
+            BtnToggleOsd.Background = new BrushConverter().ConvertFromString("#162436") as WpfBrush;
+            BtnToggleOsd.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+            BtnToggleOsd.Content = "Ekran Üstü Gösterge (OSD)";
+            if (showToast) ShowToast("Ekran üstü gösterge kapatıldı.");
+        }
+    }
+
+    // ==========================================
+    // CPU Boost (Module B)
+    // ==========================================
+
+    private void UpdateBoostUi(CpuBoostMode mode)
+    {
+        if (TxtBoostStatusBadge != null)
+        {
+            switch (mode)
+            {
+                case CpuBoostMode.Disabled:
+                    TxtBoostStatusBadge.Text = " (Devre Dışı)";
+                    TxtBoostStatusBadge.Foreground = TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green;
+                    break;
+                case CpuBoostMode.Efficient:
+                    TxtBoostStatusBadge.Text = " (Dengeli)";
+                    TxtBoostStatusBadge.Foreground = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan;
+                    break;
+                case CpuBoostMode.Aggressive:
+                default:
+                    TxtBoostStatusBadge.Text = " (Agresif / 5.0 GHz)";
+                    TxtBoostStatusBadge.Foreground = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
+                    break;
+            }
+        }
+
+        if (TxtSideCpuBoost != null)
+        {
+            switch (mode)
+            {
+                case CpuBoostMode.Disabled:
+                    TxtSideCpuBoost.Text = "Devre Dışı";
+                    TxtSideCpuBoost.Foreground = TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green;
+                    break;
+                case CpuBoostMode.Efficient:
+                    TxtSideCpuBoost.Text = "Dengeli";
+                    TxtSideCpuBoost.Foreground = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan;
+                    break;
+                case CpuBoostMode.Aggressive:
+                default:
+                    TxtSideCpuBoost.Text = "Agresif";
+                    TxtSideCpuBoost.Foreground = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
+                    break;
+            }
+        }
+    }
+
+    private async Task<bool> SetManualCpuBoostAsync(CpuBoostMode mode)
+    {
+        await _gameProfileTransitionLock.WaitAsync();
+        try
+        {
+            bool ok = await ApplyCpuBoostModeAsync(mode);
+            if (ok)
+            {
+                if (!_isGameSessionActive)
+                {
+                    _savedCpuBoostBeforeGame = mode;
+                    _pendingCpuBoostRestore = false;
+                    _hasPendingDesktopRestore = HasPendingDesktopRestore;
+                    UpdateTrayRetryMenuItemState();
+                }
+            }
+            return ok;
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
+        }
+    }
+
+    private async void BtnBoost_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is WpfButton btn && btn.Tag is string tag)
+            {
+                if (Enum.TryParse<CpuBoostMode>(tag, out var mode))
+                {
+                    await SetManualCpuBoostAsync(mode);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"CPU modu uygulanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async Task<bool> ApplyCpuBoostModeAsync(CpuBoostMode mode)
+    {
+        var ok = await _cpuPowerService.SetBoostModeAsync(mode);
+        if (ok)
+        {
+            UpdateBoostUi(mode);
+            ShowToast($"CPU boost modu: {mode}");
+            return true;
+        }
+        else
+        {
+            ShowToast($"CPU boost modu uygulanamadı: {mode}", false);
+            return false;
+        }
+    }
+
+    // ==========================================
+    // GPU Operating Mode (MUX Switch) Control
+    // ==========================================
+
+    private int? _supportedGpuCapability;
+
+    public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)
+    {
+        int mask = 1 << (int)mode;
+        return (capabilityBitmask & mask) != 0;
+    }
+
+    public async Task RefreshGpuModeAsync()
+    {
+        try
+        {
+            var cap = await _agentClient.GetGpuModeCapabilityAsync();
+            _supportedGpuCapability = cap;
+
+            if (cap.HasValue && cap.Value > 0 && CmbGpuMode != null)
+            {
+                CmbGpuMode.Items.Clear();
+
+                // Bit 2 (4): Dynamic Display Switch (DDS / Advanced Optimus)
+                if (IsGpuModeSupported(cap.Value, GpuOperatingMode.Automatic))
+                {
+                    CmbGpuMode.Items.Add(new ComboBoxItem
+                    {
+                        Content = "Otomatik Seçim (DDS / Advanced Optimus)",
+                        Tag = "Automatic"
+                    });
+                }
+
+                // Bit 0 (1): Optimus (Hybrid iGPU + dGPU)
+                if (IsGpuModeSupported(cap.Value, GpuOperatingMode.Optimus))
+                {
+                    CmbGpuMode.Items.Add(new ComboBoxItem
+                    {
+                        Content = "Optimus (Hibrit iGPU + dGPU)",
+                        Tag = "Optimus"
+                    });
+                }
+
+                // Bit 1 (2): Discrete Only (dGPU)
+                if (IsGpuModeSupported(cap.Value, GpuOperatingMode.DiscreteGpu))
+                {
+                    CmbGpuMode.Items.Add(new ComboBoxItem
+                    {
+                        Content = "Yalnızca Harici GPU (NVIDIA dGPU)",
+                        Tag = "DiscreteGpu"
+                    });
+                }
+            }
+
+            var mode = await _agentClient.GetGpuModeAsync();
+            if (mode.HasValue)
+            {
+                UpdateGpuModeUi(mode.Value);
+            }
+            else
+            {
+                _currentGpuMode = null;
+                if (TxtGpuModeBadge != null)
+                {
+                    TxtGpuModeBadge.Text = "Bilinmiyor";
+                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
+                }
+            }
+
+            if (CmbGpuMode != null && CmbGpuMode.SelectedIndex == -1 && CmbGpuMode.Items.Count > 0)
+            {
+                CmbGpuMode.SelectedIndex = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            _currentGpuMode = null;
+            if (TxtGpuModeBadge != null)
+            {
+                TxtGpuModeBadge.Text = "Bilinmiyor";
+                TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
+            }
+            System.Diagnostics.Debug.WriteLine($"[GPU Mode] Refresh error: {ex.Message}");
+        }
+    }
+
+    private void UpdateGpuModeUi(GpuOperatingMode mode)
+    {
+        _currentGpuMode = mode;
+        if (TxtGpuModeBadge != null)
+        {
+            switch (mode)
+            {
+                case GpuOperatingMode.DiscreteGpu:
+                    TxtGpuModeBadge.Text = "NVIDIA GPU Yalnızca (dGPU)";
+                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentRed");
+                    SelectGpuModeCombo("DiscreteGpu");
+                    break;
+                case GpuOperatingMode.Optimus:
+                    TxtGpuModeBadge.Text = "Optimus (Hibrit iGPU + dGPU)";
+                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+                    SelectGpuModeCombo("Optimus");
+                    break;
+                case GpuOperatingMode.Automatic:
+                default:
+                    TxtGpuModeBadge.Text = "Otomatik Seçim (DDS / Dynamic)";
+                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+                    SelectGpuModeCombo("Automatic");
+                    break;
+            }
+        }
+    }
+
+    private void SelectGpuModeCombo(string tag)
+    {
+        if (CmbGpuMode == null) return;
+        for (int i = 0; i < CmbGpuMode.Items.Count; i++)
+        {
+            if (CmbGpuMode.Items[i] is ComboBoxItem item && string.Equals(item.Tag as string, tag, StringComparison.OrdinalIgnoreCase))
+            {
+                CmbGpuMode.SelectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    private async void BtnApplyGpuMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbGpuMode?.SelectedItem is not ComboBoxItem selectedItem || selectedItem.Tag is not string tagStr)
+        {
+            ShowToast("Lütfen bir GPU çalışma modu seçin.", false);
+            return;
+        }
+
+        if (!Enum.TryParse<GpuOperatingMode>(tagStr, out var targetMode))
+        {
+            ShowToast("Geçersiz GPU modu.", false);
+            return;
+        }
+
+        if (_supportedGpuCapability.HasValue && _supportedGpuCapability.Value > 0 && !IsGpuModeSupported(_supportedGpuCapability.Value, targetMode))
+        {
+            ShowToast("Seçilen GPU modu donanımınız tarafından desteklenmiyor.", false);
+            return;
+        }
+
+        if (_currentGpuMode.HasValue && targetMode == _currentGpuMode.Value)
+        {
+            ShowToast("Seçilen GPU modu zaten aktif.");
+            return;
+        }
+
+        string modeDisplayName = targetMode switch
+        {
+            GpuOperatingMode.DiscreteGpu => "Yalnızca Harici GPU (NVIDIA dGPU)",
+            GpuOperatingMode.Optimus => "Optimus (Hibrit iGPU + dGPU)",
+            _ => "Otomatik Seçim (DDS / Advanced Optimus)"
+        };
+
+        var confirm = System.Windows.MessageBox.Show(
+            this,
+            $"GPU Çalışma Modunu '{modeDisplayName}' olarak ayarlamak üzeresiniz.\n\n" +
+            "Donanım MUX anahtarı değiştirilirken ekran anlık olarak kararıp geri gelebilir ve yeni donanım yapılandırmasının tam devreye girmesi için bilgisayarınızı yeniden başlatmanız önerilir.\n\n" +
+            "Devam etmek istiyor musunuz?",
+            "GPU Çalışma Modu (MUX Switch)",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes) return;
+
+        BtnApplyGpuMode.IsEnabled = false;
+        try
+        {
+            var success = await _agentClient.SetGpuModeAsync(targetMode);
+            if (success)
+            {
+                UpdateGpuModeUi(targetMode);
+                ShowToast($"GPU modu '{modeDisplayName}' olarak güncellendi! Tam geçerlilik için yeniden başlatma önerilir.");
+            }
+            else
+            {
+                ShowToast("GPU modu uygulanamadı. Acer Agent Service yanıt vermedi.", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Hata: {ex.Message}", false);
+        }
+        finally
+        {
+            BtnApplyGpuMode.IsEnabled = true;
+        }
+    }
+
+    // ==========================================
+    // Enhanced Game Detection & Per-Game Profiles
+    // ==========================================
+
+    private void PopulateConfiguredGames(string? selectExeName = null)
+    {
+        if (CmbConfiguredGames == null) return;
+
+        var profiles = _gameService.GetProfiles();
+        var displayList = profiles.Select(p => 
+            string.Equals(p.DisplayName, p.ExeName, StringComparison.OrdinalIgnoreCase)
+                ? p.DisplayName
+                : $"{p.DisplayName} ({p.ExeName})"
+        ).ToList();
+
+        _isUpdatingGameUi = true;
+        try
+        {
+            CmbConfiguredGames.ItemsSource = displayList;
+
+            // Automatically prioritize currently running/active game if no specific selection was requested
+            var targetExe = selectExeName ?? _gameService.ActiveGameProfile?.ExeName;
+
+            if (!string.IsNullOrEmpty(targetExe))
+            {
+                var idx = profiles.FindIndex(p => p.ExeName.Equals(targetExe, StringComparison.OrdinalIgnoreCase));
+                CmbConfiguredGames.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+            else if (CmbConfiguredGames.Items.Count > 0)
+            {
+                CmbConfiguredGames.SelectedIndex = 0;
+            }
+        }
+        finally
+        {
+            _isUpdatingGameUi = false;
+        }
+
+        UpdateSelectedGameDetails();
+    }
+
+    private void CmbConfiguredGames_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingGameUi) return;
+        UpdateSelectedGameDetails();
+    }
+
+    private void UpdateSelectedGameDetails()
+    {
+        if (CmbConfiguredGames.SelectedIndex < 0) return;
+
+        var profiles = _gameService.GetProfiles();
+        if (CmbConfiguredGames.SelectedIndex >= profiles.Count) return;
+
+        var profile = profiles[CmbConfiguredGames.SelectedIndex];
+        var isCurrentlyActive = _gameService.ActiveGameProfile != null &&
+            _gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase);
+
+        TxtSelectedGameNameBadge.Text = isCurrentlyActive 
+            ? $" [{profile.DisplayName} - ŞU AN OYNANIYOR]" 
+            : $" [{profile.DisplayName}]";
+        TxtSelectedGameNameBadge.Foreground = (SolidColorBrush)FindResource(isCurrentlyActive ? "AccentGreen" : "TextSecondary");
+        TxtSelectedGameExePath.Text = string.IsNullOrEmpty(profile.InstallPath) 
+            ? $"{profile.ExeName}.exe" 
+            : (profile.InstallPath.Length > 48 ? "..." + profile.InstallPath[^45..] : profile.InstallPath);
+
+        // 1. Target Operating Mode ComboBox
+        SetComboBoxByTag(CmbGameTargetMode, profile.TargetMode.ToString());
+
+        // 2. Target CPU Boost ComboBox
+        SetComboBoxByTag(CmbGameTargetCpuBoost, profile.TargetCpuBoost.ToString());
+
+        // 3. Target Fan Mode ComboBox
+        SetComboBoxByTag(CmbGameTargetFan, profile.TargetFanMode.ToString());
+
+        // 4. Target ATK Mouse Profile ComboBox
+        if (CmbGameAtkMouseProfile != null)
+        {
+            var targetIdx = profile.TargetAtkMouseProfile;
+            CmbGameAtkMouseProfile.SelectedIndex = (targetIdx >= 0 && targetIdx < CmbGameAtkMouseProfile.Items.Count) 
+                ? targetIdx 
+                : 0;
+        }
+    }
+
+    private async Task<bool> SwitchMouseProfileInternalAsync(int targetProfile)
+    {
+        if (MouseProfileSwitcher != null)
+        {
+            return await Task.Run(() => MouseProfileSwitcher(targetProfile));
+        }
+        return await Task.Run(() => _atkMouseService.SwitchProfile(targetProfile));
+    }
+
+    private async void BtnTestMouseProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbGameAtkMouseProfile == null) return;
+        var selectedIdx = CmbGameAtkMouseProfile.SelectedIndex;
+        if (selectedIdx <= 0)
+        {
+            ShowToast("Test için 1-4 arasında bir ATK fare profili seçin.", false);
+            return;
+        }
+
+        if (BtnTestMouseProfile != null) BtnTestMouseProfile.IsEnabled = false;
+        try
+        {
+            bool success = await SwitchMouseProfileInternalAsync(selectedIdx);
+            if (success)
+            {
+                UpdateSideMouseProfileStatus(selectedIdx);
+                ShowToast($"ATK A9 Fare donanımı Config {selectedIdx} profiline geçirildi.");
+            }
+            else
+            {
+                ShowToast("ATK A9 fareye erişilemedi veya alıcı yanıt vermedi.", false);
+            }
+        }
+        finally
+        {
+            if (BtnTestMouseProfile != null) BtnTestMouseProfile.IsEnabled = true;
+        }
+    }
+
+    private void InitializeDefaultMouseProfileUi()
+    {
+        if (CmbDefaultAtkMouseProfile == null) return;
+        int profile = _appSettings.DefaultAtkMouseProfile; // 0..4, default is 1
+        int selectIdx = profile switch
+        {
+            1 => 0, // Config 1
+            2 => 1, // Config 2
+            3 => 2, // Config 3
+            4 => 3, // Config 4
+            _ => 4  // Son Kullanılanı Koru (0)
+        };
+        CmbDefaultAtkMouseProfile.SelectedIndex = selectIdx;
+        UpdateDefaultMouseProfileBadge(profile);
+
+        if (_appSettings.AtkMouseIntegrationEnabled)
+        {
+            UpdateSideMouseProfileStatus(profile >= 1 && profile <= 4 ? profile : _atkMouseService.CurrentActiveProfile);
+
+            // Apply on startup if set to a specific profile (1..4) and no game is currently active
+            if (profile >= 1 && profile <= 4 && !_isGameSessionActive)
+            {
+                _ = Task.Run(async () =>
+                {
+                    bool ok = await SwitchMouseProfileInternalAsync(profile);
+                    if (ok)
+                    {
+                        await Dispatcher.InvokeAsync(() => UpdateSideMouseProfileStatus(profile));
+                    }
+                });
+            }
+        }
+    }
+
+    private void UpdateSideMouseProfileStatus(int profile)
+    {
+        if (TxtSideMouseProfile == null) return;
+        if (profile >= 1 && profile <= 4)
+        {
+            TxtSideMouseProfile.Text = $"Config {profile}";
+            TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+        }
+        else
+        {
+            TxtSideMouseProfile.Text = "Bilinmiyor";
+            TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+        }
+    }
+
+    private void UpdateAtkMouseIntegrationVisibility(bool enabled)
+    {
+        if (CardDefaultMouseProfile != null)
+        {
+            CardDefaultMouseProfile.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (PnlGameAtkMouseProfile != null)
+        {
+            PnlGameAtkMouseProfile.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (GridGameSettingsRow != null)
+        {
+            GridGameSettingsRow.Columns = enabled ? 4 : 3;
+        }
+
+        if (RowSideMouseProfile != null)
+        {
+            RowSideMouseProfile.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        if (enabled)
+        {
+            UpdateSideMouseProfileStatus(_atkMouseService.CurrentActiveProfile);
+        }
+    }
+
+    private void ChkAtkMouseIntegration_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkAtkMouseIntegration == null) return;
+        bool isEnabled = ChkAtkMouseIntegration.IsChecked == true;
+        _appSettings.AtkMouseIntegrationEnabled = isEnabled;
+        SaveSettings();
+        UpdateAtkMouseIntegrationVisibility(isEnabled);
+
+        if (isEnabled)
+        {
+            InitializeDefaultMouseProfileUi();
+            ShowToast("ATK Fare Entegrasyonu etkinleştirildi.");
+        }
+        else
+        {
+            ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı.");
+        }
+    }
+
+    private void UpdateDefaultMouseProfileBadge(int profile)
+    {
+        if (TxtDefaultMouseProfileStatus == null) return;
+        if (profile >= 1 && profile <= 4)
+        {
+            TxtDefaultMouseProfileStatus.Text = $"Config {profile} (Aktif)";
+            TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+        }
+        else
+        {
+            TxtDefaultMouseProfileStatus.Text = "Son Kullanılan (Pasif)";
+            TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+        }
+    }
+
+    private void CmbDefaultAtkMouseProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isInitializingUi || CmbDefaultAtkMouseProfile == null) return;
+        if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int val))
+        {
+            _appSettings.DefaultAtkMouseProfile = val;
+            UpdateDefaultMouseProfileBadge(val);
+            SaveSettings();
+        }
+    }
+
+    private async void BtnApplyDefaultMouseProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbDefaultAtkMouseProfile == null) return;
+        int val = 1;
+        if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int parsed))
+        {
+            val = parsed;
+        }
+
+        _appSettings.DefaultAtkMouseProfile = val;
+        SaveSettings();
+
+        if (val >= 1 && val <= 4)
+        {
+            if (BtnApplyDefaultMouseProfile != null) BtnApplyDefaultMouseProfile.IsEnabled = false;
+            try
+            {
+                bool ok = await SwitchMouseProfileInternalAsync(val);
+                if (ok)
+                {
+                    UpdateDefaultMouseProfileBadge(val);
+                    UpdateSideMouseProfileStatus(val);
+                    ShowToast($"Varsayılan fare profili Config {val} olarak ayarlandı ve donanıma uygulandı.");
+                }
+                else
+                {
+                    if (TxtDefaultMouseProfileStatus != null)
+                    {
+                        TxtDefaultMouseProfileStatus.Text = $"Config {val} (Ulaşılamadı)";
+                        TxtDefaultMouseProfileStatus.Foreground = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
+                    }
+                    ShowToast($"Varsayılan profil Config {val} kaydedildi (Fare alıcısına ulaşılamadı).", false);
+                }
+            }
+            finally
+            {
+                if (BtnApplyDefaultMouseProfile != null) BtnApplyDefaultMouseProfile.IsEnabled = true;
+            }
+        }
+        else
+        {
+            UpdateDefaultMouseProfileBadge(val);
+            ShowToast("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi.");
+        }
+    }
+
+    private static void SetComboBoxByTag(WpfComboBox cmb, string tagValue)
+    {
+        for (int i = 0; i < cmb.Items.Count; i++)
+        {
+            if (cmb.Items[i] is ComboBoxItem item && item.Tag is string tag)
+            {
+                if (tag.Equals(tagValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    cmb.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    private async void BtnSaveGameProfile_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (CmbConfiguredGames.SelectedIndex < 0) return;
+
+            var profiles = _gameService.GetProfiles();
+            if (CmbConfiguredGames.SelectedIndex >= profiles.Count) return;
+
+            var profile = profiles[CmbConfiguredGames.SelectedIndex];
+
+            // 1. Operating Mode
+            if (CmbGameTargetMode.SelectedItem is ComboBoxItem modeItem && modeItem.Tag is string modeTag)
+            {
+                if (Enum.TryParse<OperatingMode>(modeTag, out var m)) profile.TargetMode = m;
+            }
+
+            // 2. CPU Boost Mode
+            if (CmbGameTargetCpuBoost.SelectedItem is ComboBoxItem cpuItem && cpuItem.Tag is string cpuTag)
+            {
+                if (Enum.TryParse<CpuBoostMode>(cpuTag, out var c)) profile.TargetCpuBoost = c;
+            }
+
+            // 3. Fan Mode
+            if (CmbGameTargetFan.SelectedItem is ComboBoxItem fanItem && fanItem.Tag is string fanTag)
+            {
+                if (Enum.TryParse<FanMode>(fanTag, out var f)) profile.TargetFanMode = f;
+            }
+
+            // 4. ATK Mouse Profile
+            if (CmbGameAtkMouseProfile != null && CmbGameAtkMouseProfile.SelectedIndex >= 0)
+            {
+                profile.TargetAtkMouseProfile = CmbGameAtkMouseProfile.SelectedIndex;
+            }
+
+            _gameService.SaveProfile(profile);
+
+            // If this game is currently running right now, hot-apply settings immediately in real-time!
+            bool isCurrentlyRunning = _gameService.ActiveGameProfile != null && 
+                                      _gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase);
+
+            if (isCurrentlyRunning)
+            {
+                int saveGen = Interlocked.Increment(ref _gameSessionGeneration);
+                await _gameProfileTransitionLock.WaitAsync();
+                try
+                {
+                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive || _gameService.ActiveGameProfile == null ||
+                        !_gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    bool modeOk = await SwitchModeAsync(profile.TargetMode);
+                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
+
+                    bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
+                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
+
+                    bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
+                    if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
+                    if (fanOk)
+                    {
+                        _currentFanMode = profile.TargetFanMode;
+                    }
+
+                    bool mouseOk = true;
+                    if (_appSettings.AtkMouseIntegrationEnabled && profile.TargetAtkMouseProfile > 0)
+                    {
+                        mouseOk = await SwitchMouseProfileInternalAsync(profile.TargetAtkMouseProfile);
+                        if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return;
+                        if (mouseOk)
+                        {
+                            _isMouseProfileSwitchedForGame = true;
+                            UpdateSideMouseProfileStatus(profile.TargetAtkMouseProfile);
+                        }
+                    }
+                    else
+                    {
+                        _isMouseProfileSwitchedForGame = false;
+                    }
+
+                    var boostName = profile.TargetCpuBoost switch
+                    {
+                        CpuBoostMode.Disabled => "Devre Dışı",
+                        CpuBoostMode.Efficient => "Dengeli",
+                        _ => "Agresif (5.0 GHz)"
+                    };
+                    var mouseInfo = (_isMouseProfileSwitchedForGame && profile.TargetAtkMouseProfile > 0) ? $" / ATK Fare: Config {profile.TargetAtkMouseProfile}" : "";
+
+                    bool allCoreOk = modeOk && boostOk && fanOk && mouseOk;
+                    if (TxtGameStatus != null)
+                    {
+                        if (allCoreOk)
+                        {
+                            TxtGameStatus.Text = $"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})";
+                            if (TryFindResource("AccentGreen") is SolidColorBrush brush)
+                            {
+                                TxtGameStatus.Foreground = brush;
+                            }
+                        }
+                        else
+                        {
+                            TxtGameStatus.Text = $"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)";
+                            if (TryFindResource("AccentRed") is SolidColorBrush brush)
+                            {
+                                TxtGameStatus.Foreground = brush;
+                            }
+                        }
+                    }
+
+                    if (allCoreOk)
+                    {
+                        ShowToast($"'{profile.DisplayName}' profili kaydedildi ve uygulandı.");
+                    }
+                    else
+                    {
+                        ShowToast($"'{profile.DisplayName}' profili kaydedildi ancak bazı donanım ayarları uygulanamadı.", false);
+                    }
+                }
+                finally
+                {
+                    _gameProfileTransitionLock.Release();
+                }
+            }
+            else
+            {
+                ShowToast($"'{profile.DisplayName}' oyun profili kaydedildi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Profil kaydedilemedi: {ex.Message}", false);
+        }
+    }
+
+    private void BtnScanGames_Click(object sender, RoutedEventArgs e)
+    {
+        var found = _gameService.ScanAndAddInstalledGames();
+        PopulateConfiguredGames();
+        ShowToast(found > 0 ? $"{found} yeni oyun profili eklendi." : "Yeni yüklü oyun tespit edilmedi.");
+    }
+
+    private void BtnAddCustomGame_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Çalıştırılabilir Oyun Dosyasını Seçin",
+            Filter = "Çalıştırılabilir Oyun Dosyaları (*.exe)|*.exe|Tüm Dosyalar (*.*)|*.*",
+            InitialDirectory = @"C:\Program Files (x86)\Steam\steamapps\common"
+        };
+
+        if (dlg.ShowDialog(this) == true)
+        {
+            var exeName = Path.GetFileNameWithoutExtension(dlg.FileName);
+            var cleanName = exeName.Replace("_", " ").Replace("-", " ");
+
+            var profile = new GameProfile
+            {
+                ExeName = exeName,
+                DisplayName = cleanName,
+                InstallPath = dlg.FileName,
+                TargetMode = OperatingMode.Turbo,
+                TargetCpuBoost = CpuBoostMode.Disabled, // Default to serin eco
+                TargetFanMode = FanMode.Auto,
+                AutoApply = true
+            };
+
+            _gameService.SaveProfile(profile);
+            PopulateConfiguredGames(exeName);
+            ShowToast($"'{cleanName}' profili eklendi.");
+        }
+    }
+
+    private void BtnDeleteGame_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbConfiguredGames.SelectedIndex < 0) return;
+
+        var profiles = _gameService.GetProfiles();
+        if (CmbConfiguredGames.SelectedIndex >= profiles.Count) return;
+
+        var profile = profiles[CmbConfiguredGames.SelectedIndex];
+        var confirm = System.Windows.MessageBox.Show(this, 
+            $"'{profile.DisplayName}' oyun profilini silmek istiyor musunuz?", 
+            "Profili Sil", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (confirm == MessageBoxResult.Yes)
+        {
+            _gameService.DeleteProfile(profile.ExeName);
+            PopulateConfiguredGames();
+            ShowToast($"'{profile.DisplayName}' profili silindi.");
+        }
+    }
+
+    private async void OnGameStarted(GameProfile profile)
+    {
+        await HandleGameStartedAsync(profile);
+    }
+
+    internal async Task HandleGameStartedAsync(GameProfile profile)
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        int sessionGen = Interlocked.Increment(ref _gameSessionGeneration);
+        try
+        {
+            await _gameProfileTransitionLock.WaitAsync();
+            try
+            {
+                if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+
+                Func<Task> work = async () =>
+                {
+                    if (Dispatcher.HasShutdownStarted || sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+                    try
+                    {
+                        // Automatically sync dropdown to currently running game
+                        if (CmbConfiguredGames != null)
+                        {
+                            PopulateConfiguredGames(profile.ExeName);
+                        }
+
+                        // Save desktop baseline reference before the first game transition.
+                        // If previous restore is pending or was interrupted, a new game must not overwrite this original reference!
+                        if (!HasPendingDesktopRestore)
+                        {
+                            _savedModeBeforeGame = _currentMode;
+                            _savedCpuBoostBeforeGame = _cpuPowerService.CurrentMode;
+                            _savedFanModeBeforeGame = _currentFanMode;
+                            _savedMouseProfileBeforeGame = _atkMouseService.CurrentActiveProfile > 0 ? _atkMouseService.CurrentActiveProfile : 1;
+                            _hasPendingDesktopRestore = true;
+                        }
+                        _isGameSessionActive = true;
+                        _batteryService.IsGameSessionActive = true;
+                        UpdateTrayRetryMenuItemState();
+
+                        var boostName = profile.TargetCpuBoost switch
+                        {
+                            CpuBoostMode.Disabled => "Devre Dışı",
+                            CpuBoostMode.Efficient => "Dengeli",
+                            _ => "Agresif (5.0 GHz)"
+                        };
+
+                        var mouseInfo = "";
+                        bool mouseSwitchedThisTurn = false;
+                        if (_appSettings.AtkMouseIntegrationEnabled && profile.TargetAtkMouseProfile > 0)
+                        {
+                            if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+                            bool mouseOk = await SwitchMouseProfileInternalAsync(profile.TargetAtkMouseProfile);
+                            if (mouseOk)
+                            {
+                                _isMouseProfileSwitchedForGame = true;
+                                mouseSwitchedThisTurn = true;
+                                mouseInfo = $" / Fare: Config {profile.TargetAtkMouseProfile}";
+                                UpdateSideMouseProfileStatus(profile.TargetAtkMouseProfile);
+                            }
+                            else
+                            {
+                                ShowToast("Oyun fare profiline geçilemedi.", false);
+                            }
+
+                            if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled)
+                            {
+                                if (mouseSwitchedThisTurn)
+                                {
+                                    _isMouseProfileSwitchedForGame = true;
+                                    _pendingMouseRestore = true;
+                                }
+                                return;
+                            }
+                        }
+
+                        if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+
+                        // Apply target settings with generation check at each stage under transition lock
+                        bool modeOk = await SwitchModeAsync(profile.TargetMode);
+                        if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+
+                        bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
+                        if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+
+                        bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
+                        if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+                        if (fanOk)
+                        {
+                            _currentFanMode = profile.TargetFanMode;
+                        }
+
+                        bool allCoreOk = modeOk && boostOk && fanOk;
+                        if (TxtGameStatus != null)
+                        {
+                            if (allCoreOk)
+                            {
+                                TxtGameStatus.Text = $"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})";
+                                if (TryFindResource("AccentGreen") is SolidColorBrush brush)
+                                {
+                                    TxtGameStatus.Foreground = brush;
+                                }
+                            }
+                            else
+                            {
+                                TxtGameStatus.Text = $"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)";
+                                if (TryFindResource("AccentRed") is SolidColorBrush brush)
+                                {
+                                    TxtGameStatus.Foreground = brush;
+                                }
+                            }
+                        }
+
+                        if (allCoreOk)
+                        {
+                            _notifyIcon?.ShowBalloonTip(3000, "NitroLite", 
+                                $"{profile.DisplayName} algılandı. Profil: {profile.TargetMode} / {boostName}{mouseInfo}", 
+                                System.Windows.Forms.ToolTipIcon.Info);
+                        }
+                        else
+                        {
+                            ShowToast($"'{profile.DisplayName}' profilinin bazı donanım ayarları uygulanamadı.", false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowToast($"Profil uygulanamadı: {ex.Message}", false);
+                    }
+                };
+
+                if (DispatcherRunner != null)
+                {
+                    await DispatcherRunner(work);
+                }
+                else
+                {
+                    var operation = Dispatcher.InvokeAsync(work);
+                    await operation.Task.Unwrap();
+                }
+            }
+            finally
+            {
+                _gameProfileTransitionLock.Release();
+            }
+        }
+        catch { }
+    }
+
+    private async void OnGameEnded(GameProfile profile)
+    {
+        await HandleGameEndedAsync(profile);
+    }
+
+    internal async Task HandleGameEndedAsync(GameProfile profile)
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        int endGen = Interlocked.Increment(ref _gameSessionGeneration);
+        try
+        {
+            await _gameProfileTransitionLock.WaitAsync();
+            try
+            {
+                if (endGen != _gameSessionGeneration) return;
+
+                Func<Task> work = async () =>
+                {
+                    if (Dispatcher.HasShutdownStarted || endGen != _gameSessionGeneration) return;
+                    try
+                    {
+                        // Immediately mark game session and battery monitoring inactive
+                        _isGameSessionActive = false;
+                        _batteryService.IsGameSessionActive = false;
+
+                        if (HasPendingDesktopRestore)
+                        {
+                            // Pre-mark restore steps so that if interrupted at any step,
+                            // unattempted steps remain pending and are not lost!
+                            _pendingModeRestore = true;
+                            _pendingCpuBoostRestore = true;
+                            _pendingFanRestore = true;
+                            if (_isMouseProfileSwitchedForGame || _pendingMouseRestore)
+                            {
+                                _pendingMouseRestore = true;
+                            }
+                            _hasPendingDesktopRestore = true;
+                            UpdateTrayRetryMenuItemState();
+
+                            var failedSteps = new List<string>();
+
+                            // 1. Operating mode
+                            if (endGen != _gameSessionGeneration) return;
+                            if (_pendingModeRestore)
+                            {
+                                bool modeOk = await SwitchModeAsync(_savedModeBeforeGame);
+                                if (endGen != _gameSessionGeneration) return;
+                                if (modeOk)
+                                {
+                                    _pendingModeRestore = false;
+                                }
+                                else
+                                {
+                                    failedSteps.Add("Çalışma Modu");
+                                }
+                            }
+
+                            // 2. CPU Boost mode
+                            if (endGen != _gameSessionGeneration) return;
+                            if (_pendingCpuBoostRestore)
+                            {
+                                bool boostOk = await ApplyCpuBoostModeAsync(_savedCpuBoostBeforeGame);
+                                if (endGen != _gameSessionGeneration) return;
+                                if (boostOk)
+                                {
+                                    _pendingCpuBoostRestore = false;
+                                }
+                                else
+                                {
+                                    failedSteps.Add("CPU Boost");
+                                }
+                            }
+
+                            // 3. Fan mode (restore _savedFanModeBeforeGame, NOT unconditionally Auto!)
+                            if (endGen != _gameSessionGeneration) return;
+                            if (_pendingFanRestore)
+                            {
+                                bool fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeGame);
+                                if (endGen != _gameSessionGeneration) return;
+                                if (fanOk)
+                                {
+                                    _currentFanMode = _savedFanModeBeforeGame;
+                                    _pendingFanRestore = false;
+                                }
+                                else
+                                {
+                                    failedSteps.Add("Fan Modu");
+                                }
+                            }
+
+                            // 4. Mouse profile
+                            var restoredMouseInfo = "";
+                            if (endGen != _gameSessionGeneration) return;
+                            bool shouldRestoreMouse = _appSettings.AtkMouseIntegrationEnabled && (_pendingMouseRestore || _isMouseProfileSwitchedForGame);
+                            if (shouldRestoreMouse)
+                            {
+                                int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
+                                    ? _appSettings.DefaultAtkMouseProfile 
+                                    : _savedMouseProfileBeforeGame;
+
+                                if (targetMouseProfile > 0)
+                                {
+                                    if (endGen != _gameSessionGeneration) return;
+                                    bool restoredOk = await SwitchMouseProfileInternalAsync(targetMouseProfile);
+                                    if (endGen != _gameSessionGeneration) return;
+                                    if (restoredOk)
+                                    {
+                                        restoredMouseInfo = $" / Fare: Config {targetMouseProfile}";
+                                        UpdateSideMouseProfileStatus(targetMouseProfile);
+                                        _isMouseProfileSwitchedForGame = false;
+                                        _pendingMouseRestore = false;
+                                    }
+                                    else
+                                    {
+                                        _isMouseProfileSwitchedForGame = true;
+                                        _pendingMouseRestore = true;
+                                        failedSteps.Add("Fare Profili");
+                                        ShowToast("Varsayılan fare profiline geri dönülemedi.", false);
+                                    }
+                                }
+                            }
+
+                            if (endGen != _gameSessionGeneration) return;
+
+                            bool allSucceeded = !_pendingModeRestore && !_pendingCpuBoostRestore && !_pendingFanRestore && !_pendingMouseRestore;
+                            _hasPendingDesktopRestore = !allSucceeded;
+
+                            if (allSucceeded)
+                            {
+                                if (TxtGameStatus != null)
+                                {
+                                    TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
+                                        ? "Durum: Beklemede (Aktif oyun yok)" 
+                                        : "Durum: Devre Dışı (Manuel Kontrol)";
+                                    if (TryFindResource("TextSecondary") is SolidColorBrush brush)
+                                    {
+                                        TxtGameStatus.Foreground = brush;
+                                    }
+                                }
+
+                                _notifyIcon?.ShowBalloonTip(2500, "NitroLite", 
+                                    $"{profile.DisplayName} sonlandırıldı. Varsayılan profil ({_savedModeBeforeGame}{restoredMouseInfo}) geri yüklendi.", 
+                                    System.Windows.Forms.ToolTipIcon.Info);
+                                ShowToast("Masaüstü ayarları başarıyla geri yüklendi.");
+                            }
+                            else
+                            {
+                                if (TxtGameStatus != null)
+                                {
+                                    TxtGameStatus.Text = "Durum: Masaüstü Geri Yükleme Bekliyor";
+                                    if (TryFindResource("AccentCyan") is SolidColorBrush brush)
+                                    {
+                                        TxtGameStatus.Foreground = brush;
+                                    }
+                                }
+
+                                ShowToast($"Geri yüklenemeyen ayarlar: {string.Join(", ", failedSteps)}", false);
+                            }
+                        }
+                        else if (_appSettings.AtkMouseIntegrationEnabled && _isMouseProfileSwitchedForGame)
+                        {
+                            if (endGen != _gameSessionGeneration) return;
+                            int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
+                                ? _appSettings.DefaultAtkMouseProfile 
+                                : _savedMouseProfileBeforeGame;
+                            if (targetMouseProfile > 0)
+                            {
+                                bool restoredOk = await SwitchMouseProfileInternalAsync(targetMouseProfile);
+                                if (endGen != _gameSessionGeneration) return;
+                                if (restoredOk)
+                                {
+                                    UpdateSideMouseProfileStatus(targetMouseProfile);
+                                    _isMouseProfileSwitchedForGame = false;
+                                    _pendingMouseRestore = false;
+                                }
+                                else
+                                {
+                                    _isMouseProfileSwitchedForGame = true;
+                                    _pendingMouseRestore = true;
+                                    ShowToast("Varsayılan fare profiline geri dönülemedi.", false);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (TxtGameStatus != null)
+                            {
+                                TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
+                                    ? "Durum: Beklemede (Aktif oyun yok)" 
+                                    : "Durum: Devre Dışı (Manuel Kontrol)";
+                                if (TryFindResource("TextSecondary") is SolidColorBrush brush)
+                                {
+                                    TxtGameStatus.Foreground = brush;
+                                }
+                            }
+                        }
+
+                        UpdateTrayRetryMenuItemState();
+
+                        // Refresh dropdown badge
+                        if (endGen == _gameSessionGeneration && CmbConfiguredGames != null)
+                        {
+                            PopulateConfiguredGames();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ShowToast($"Profil geri yüklenemedi: {ex.Message}", false);
+                    }
+                };
+
+                if (DispatcherRunner != null)
+                {
+                    await DispatcherRunner(work);
+                }
+                else
+                {
+                    var operation = Dispatcher.InvokeAsync(work);
+                    await operation.Task.Unwrap();
+                }
+            }
+            finally
+            {
+                _gameProfileTransitionLock.Release();
+            }
+        }
+        catch { }
+    }
+
+    public async Task<bool> RetryPendingDesktopRestoreAsync()
+    {
+        if (!HasPendingDesktopRestore)
+        {
+            return true;
+        }
+
+        if (_isGameSessionActive) return false;
+
+        await _gameProfileTransitionLock.WaitAsync();
+        try
+        {
+            if (_isGameSessionActive || !HasPendingDesktopRestore)
+            {
+                return !HasPendingDesktopRestore;
+            }
+
+            int retryGen = _gameSessionGeneration;
+
+            Func<Task<bool>> work = async () =>
+            {
+                if (Dispatcher.HasShutdownStarted || _isGameSessionActive || retryGen != _gameSessionGeneration)
+                    return false;
+
+                var failed = new List<string>();
+
+                // 1. Operating mode
+                if (_pendingModeRestore)
+                {
+                    if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
+                    bool ok = await SwitchModeAsync(_savedModeBeforeGame);
+                    if (ok)
+                    {
+                        _pendingModeRestore = false;
+                    }
+                    else
+                    {
+                        failed.Add("Çalışma Modu");
+                    }
+                }
+
+                // 2. CPU Boost
+                if (_pendingCpuBoostRestore)
+                {
+                    if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
+                    bool ok = await ApplyCpuBoostModeAsync(_savedCpuBoostBeforeGame);
+                    if (ok)
+                    {
+                        _pendingCpuBoostRestore = false;
+                    }
+                    else
+                    {
+                        failed.Add("CPU Boost");
+                    }
+                }
+
+                // 3. Fan
+                if (_pendingFanRestore)
+                {
+                    if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
+                    bool ok = await _agentClient.SetFanModeAsync(_savedFanModeBeforeGame);
+                    if (ok)
+                    {
+                        _currentFanMode = _savedFanModeBeforeGame;
+                        _pendingFanRestore = false;
+                    }
+                    else
+                    {
+                        failed.Add("Fan Modu");
+                    }
+                }
+
+                // 4. Mouse
+                if (_pendingMouseRestore || (_appSettings.AtkMouseIntegrationEnabled && _isMouseProfileSwitchedForGame))
+                {
+                    if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
+                    int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
+                        ? _appSettings.DefaultAtkMouseProfile 
+                        : _savedMouseProfileBeforeGame;
+
+                    if (targetMouseProfile > 0)
+                    {
+                        bool ok = await SwitchMouseProfileInternalAsync(targetMouseProfile);
+                        if (ok)
+                        {
+                            UpdateSideMouseProfileStatus(targetMouseProfile);
+                            _isMouseProfileSwitchedForGame = false;
+                            _pendingMouseRestore = false;
+                        }
+                        else
+                        {
+                            _isMouseProfileSwitchedForGame = true;
+                            _pendingMouseRestore = true;
+                            failed.Add("Fare Profili");
+                        }
+                    }
+                }
+
+                if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
+
+                bool allSucceeded = !_pendingModeRestore && !_pendingCpuBoostRestore && !_pendingFanRestore && !_pendingMouseRestore;
+                _hasPendingDesktopRestore = !allSucceeded;
+
+                if (allSucceeded)
+                {
+                    if (TxtGameStatus != null)
+                    {
+                        TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
+                            ? "Durum: Beklemede (Aktif oyun yok)" 
+                            : "Durum: Devre Dışı (Manuel Kontrol)";
+                        if (TryFindResource("TextSecondary") is SolidColorBrush brush)
+                        {
+                            TxtGameStatus.Foreground = brush;
+                        }
+                    }
+                    ShowToast("Bekleyen masaüstü ayarları başarıyla geri yüklendi.");
+                }
+                else
+                {
+                    if (TxtGameStatus != null)
+                    {
+                        TxtGameStatus.Text = "Durum: Masaüstü Geri Yükleme Bekliyor";
+                        if (TryFindResource("AccentCyan") is SolidColorBrush brush)
+                        {
+                            TxtGameStatus.Foreground = brush;
+                        }
+                    }
+                    ShowToast($"Yeniden deneme tamamlanamadı: {string.Join(", ", failed)}", false);
+                }
+
+                UpdateTrayRetryMenuItemState();
+                return allSucceeded;
+            };
+
+            if (DispatcherRunner != null)
+            {
+                bool res = false;
+                await DispatcherRunner(async () => { res = await work(); });
+                return res;
+            }
+            else
+            {
+                var operation = Dispatcher.InvokeAsync(work);
+                return await operation.Task.Unwrap();
+            }
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
+        }
+    }
+
+    private void ChkAutoGameMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || ChkAutoGameMode == null) return;
+        Interlocked.Increment(ref _gameSessionGeneration);
+        _gameService.AutoGameModeEnabled = ChkAutoGameMode.IsChecked == true;
+        TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
+            ? "Durum: Beklemede (Aktif oyun yok)" 
+            : "Durum: Devre Dışı (Manuel Kontrol)";
+    }
+
+    // ==========================================
+    // RGB Preset Manager (Module 4) & Persistence
+    // ==========================================
+
+    private void PopulateRgbPresets(string? selectPresetName = null)
+    {
+        if (CmbRgbPresets == null) return;
+
+        var presets = _rgbProfileService.GetPresets();
+        CmbRgbPresets.ItemsSource = presets.Select(p => p.Name).ToList();
+
+        string? target = selectPresetName;
+        if (string.IsNullOrEmpty(target) && !string.IsNullOrEmpty(_appSettings.SelectedRgbPreset))
+        {
+            target = _appSettings.SelectedRgbPreset;
+        }
+
+        if (!string.IsNullOrEmpty(target) && presets.Any(p => p.Name.Equals(target, StringComparison.OrdinalIgnoreCase)))
+        {
+            var matched = presets.First(p => p.Name.Equals(target, StringComparison.OrdinalIgnoreCase)).Name;
+            CmbRgbPresets.SelectedItem = matched;
+        }
+        else if (_appSettings.IsBacklightOff)
+        {
+            var offPreset = presets.FirstOrDefault(p => p.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) || p.Brightness == 0);
+            if (offPreset != null)
+            {
+                CmbRgbPresets.SelectedItem = offPreset.Name;
+            }
+            else
+            {
+                CmbRgbPresets.SelectedItem = null;
+            }
+        }
+        else
+        {
+            CmbRgbPresets.SelectedItem = null;
+        }
+    }
+
+    private async void CmbRgbPresets_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || _isApplyingPreset || CmbRgbPresets.SelectedItem is not string selectedName) return;
+
+        var preset = _rgbProfileService.GetPresets().FirstOrDefault(p => p.Name == selectedName);
+        if (preset == null) return;
+
+        _isApplyingPreset = true;
+        try
+        {
+            _lighting.Effect = preset.Effect;
+            _lighting.Brightness = preset.Brightness;
+            _lighting.Speed = preset.Speed;
+            _lighting.Direction = preset.Direction;
+            _lighting.Color = preset.Color;
+            _lighting.LEDs = new List<string>(preset.LEDs);
+
+            UpdateLightingUi(_lighting);
+            UpdateEffectComboBox(preset.Effect);
+
+            bool isOff = preset.Brightness == 0 || preset.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
+            if (isOff)
+            {
+                await _agentClient.TurnOffLightingAsync();
+            }
+            else
+            {
+                await _agentClient.SetLightingAsync(preset.Effect, preset.Brightness, preset.Speed, preset.Direction, preset.Color, preset.LEDs.ToArray());
+            }
+
+            _appSettings.SelectedRgbPreset = selectedName;
+            _appSettings.IsBacklightOff = isOff;
+            _appSettings.KeyboardLighting = _lighting;
+            SaveSettings();
+            SaveActiveRgbState();
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Aydınlatma profili uygulanamadı: {ex.Message}", false);
+        }
+        finally
+        {
+            _isApplyingPreset = false;
+        }
+    }
+
+    private void UpdateEffectComboBox(string effect)
+    {
+        for (int i = 0; i < CmbRgbEffect.Items.Count; i++)
+        {
+            if (CmbRgbEffect.Items[i] is ComboBoxItem item && item.Content is string text)
+            {
+                if (text.StartsWith(effect, StringComparison.OrdinalIgnoreCase))
+                {
+                    CmbRgbEffect.SelectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    private void BtnSaveCustomPreset_Click(object sender, RoutedEventArgs e)
+    {
+        var name = TxtCustomPresetName.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = $"Profil {DateTime.Now:HH:mm}";
+        }
+
+        _rgbProfileService.SaveCustomPreset(name, _lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs);
+
+        _appSettings.SelectedRgbPreset = name;
+        _appSettings.KeyboardLighting = _lighting;
+        _appSettings.IsBacklightOff = _lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
+        SaveSettings();
+        SaveActiveRgbState();
+
+        PopulateRgbPresets(name);
+        TxtCustomPresetName.Clear();
+
+        ShowToast($"'{name}' aydınlatma profili kaydedildi.");
+    }
+
+    private void BtnDeleteCustomPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbRgbPresets.SelectedItem is not string selectedName) return;
+
+        var ok = _rgbProfileService.DeletePreset(selectedName);
+        if (ok)
+        {
+            if (_appSettings.SelectedRgbPreset == selectedName)
+            {
+                _appSettings.SelectedRgbPreset = null;
+                SaveSettings();
+            }
+            PopulateRgbPresets();
+            ShowToast($"'{selectedName}' profili silindi.");
+        }
+        else
+        {
+            ShowToast("Varsayılan fabrika profilleri silinemez.", false);
+        }
+    }
+
+    // ==========================================
+    // Battery Health Details & Power Flow (v1.3)
+    // ==========================================
+
+    private async Task RefreshBatteryHealthAsync()
+    {
+        var details = await _batteryService.GetBatteryHealthDetailsAsync();
+        Dispatcher.Invoke(() =>
+        {
+            if (TxtBatHealthPercent != null)
+                TxtBatHealthPercent.Text = $"{details.HealthPercent:F1} %";
+
+            if (TxtBatWearPercent != null)
+                TxtBatWearPercent.Text = $"{details.WearLevelPercent:F1} %";
+
+            if (TxtBatFullChargeCap != null)
+                TxtBatFullChargeCap.Text = $"{details.FullChargeCapacityMWh:N0} mWh";
+
+            if (TxtBatDesignCap != null)
+                TxtBatDesignCap.Text = $"Fabrika: {details.DesignCapacityMWh:N0} mWh";
+
+            if (TxtBatVoltage != null)
+                TxtBatVoltage.Text = $"{details.VoltageVolts:F2} V";
+        });
+    }
+
+    private async void BtnRefreshBatHealth_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await RefreshBatteryHealthAsync();
+            RefreshThermalHealthUi();
+            RefreshStorageHealthUi();
+            ShowToast("Donanım sağlık telemetrisi güncellendi.");
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Telemetri güncellenemedi: {ex.Message}", false);
+        }
+    }
+
+    private void RefreshStorageHealthUi()
+    {
+        var drives = _storageService.GetDrives();
+        if (Dispatcher.HasShutdownStarted) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+
+            var d0 = drives.FirstOrDefault(d => d.DiskNumber == 0) ?? (drives.Count > 0 ? drives[0] : null);
+            if (d0 != null)
+            {
+                if (CardDrive0 != null) CardDrive0.Visibility = Visibility.Visible;
+                if (TxtDrive0Letter != null)
+                {
+                    string letter = !string.IsNullOrEmpty(d0.DriveLetter) ? d0.DriveLetter : "C";
+                    TxtDrive0Letter.Text = letter.Contains(',') ? $"[{letter}] " : $"[{letter}:] ";
+                }
+                if (TxtDrive0Name != null) TxtDrive0Name.Text = $"{d0.Model}";
+                if (TxtDrive0Bus != null)
+                {
+                    TxtDrive0Bus.Text = string.IsNullOrWhiteSpace(d0.Firmware)
+                        ? $" ({d0.BusType})"
+                        : $" ({d0.BusType} - {d0.Firmware})";
+                }
+                if (TxtDrive0Detail != null) TxtDrive0Detail.Text = TelemetryFormatter.FormatDiskCapacity(d0.UsedCapacityGB, d0.TotalCapacityGB);
+                if (TxtDrive0Free != null) TxtDrive0Free.Text = $"{d0.FreeCapacityGB:F1} GB Boş Alan";
+                if (BarDrive0 != null)
+                {
+                    BarDrive0.Value = d0.UsedPercent;
+                    BarDrive0.Foreground = (SolidColorBrush)FindResource(d0.UsedPercent > 85 ? "AccentRed" : (d0.UsedPercent > 70 ? "AccentCyan" : "AccentGreen"));
+                }
+                if (TxtDrive0HealthBadge != null)
+                {
+                    TxtDrive0HealthBadge.Text = $"Sağlık: %{d0.EstHealthPercent} ({d0.HealthDesc})";
+                }
+                if (TxtDrive0Temp != null)
+                {
+                    TxtDrive0Temp.Text = TelemetryFormatter.FormatTemperature(d0.Temperature);
+                }
+                if (TxtSubSsd1Temp != null)
+                {
+                    TxtSubSsd1Temp.Text = TelemetryFormatter.FormatTemperature(d0.Temperature);
+                }
+            }
+            else
+            {
+                if (CardDrive0 != null) CardDrive0.Visibility = Visibility.Collapsed;
+            }
+
+            var d1 = drives.FirstOrDefault(d => d.DiskNumber == 1 && d != d0) ?? (drives.Count > 1 ? drives.FirstOrDefault(d => d != d0) : null);
+            if (d1 != null)
+            {
+                if (CardDrive1 != null) CardDrive1.Visibility = Visibility.Visible;
+                if (TxtDrive1Letter != null)
+                {
+                    string letter = !string.IsNullOrEmpty(d1.DriveLetter) ? d1.DriveLetter : "D";
+                    TxtDrive1Letter.Text = letter.Contains(',') ? $"[{letter}] " : $"[{letter}:] ";
+                }
+                if (TxtDrive1Name != null) TxtDrive1Name.Text = $"{d1.Model}";
+                if (TxtDrive1Bus != null)
+                {
+                    TxtDrive1Bus.Text = string.IsNullOrWhiteSpace(d1.Firmware)
+                        ? $" ({d1.BusType})"
+                        : $" ({d1.BusType} - {d1.Firmware})";
+                }
+                if (TxtDrive1Detail != null) TxtDrive1Detail.Text = TelemetryFormatter.FormatDiskCapacity(d1.UsedCapacityGB, d1.TotalCapacityGB);
+                if (TxtDrive1Free != null) TxtDrive1Free.Text = $"{d1.FreeCapacityGB:F1} GB Boş Alan";
+                if (BarDrive1 != null)
+                {
+                    BarDrive1.Value = d1.UsedPercent;
+                    BarDrive1.Foreground = (SolidColorBrush)FindResource(d1.UsedPercent > 85 ? "AccentRed" : (d1.UsedPercent > 70 ? "AccentCyan" : "AccentGreen"));
+                }
+                if (TxtDrive1HealthBadge != null)
+                {
+                    TxtDrive1HealthBadge.Text = $"Sağlık: %{d1.EstHealthPercent} ({d1.HealthDesc})";
+                }
+                if (TxtDrive1Temp != null)
+                {
+                    TxtDrive1Temp.Text = TelemetryFormatter.FormatTemperature(d1.Temperature);
+                }
+                if (TxtSubSsd2Temp != null)
+                {
+                    TxtSubSsd2Temp.Text = TelemetryFormatter.FormatTemperature(d1.Temperature);
+                }
+            }
+            else
+            {
+                if (CardDrive1 != null) CardDrive1.Visibility = Visibility.Collapsed;
+            }
+
+            if (TxtStorageBadge != null)
+            {
+                bool allHealthy = drives.Count > 0 && drives.All(d => d.HealthStatus == 0);
+                TxtStorageBadge.Text = allHealthy ? "Tüm Sürücüler Sağlıklı" : "Sürücü Uyarısı Mevcut";
+                TxtStorageBadge.Foreground = (SolidColorBrush)FindResource(allHealthy ? "AccentGreen" : "AccentRed");
+            }
+        });
+    }
+
+    private void RefreshThermalHealthUi()
+    {
+        var report = _thermalService.GetReport();
+        var trend = _thermalService.GetStabilityTrend(_selectedTrendDays);
+        if (Dispatcher.HasShutdownStarted) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+
+            // 14 / 30 Day Thermal Stability Trend UI
+            if (TxtStabilityScore != null)
+            {
+                TxtStabilityScore.Text = TelemetryFormatter.FormatStabilityScore(trend.StabilityScorePercent);
+                TxtStabilityScore.Foreground = (SolidColorBrush)FindResource(
+                    trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
+                    (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
+            }
+
+            if (TxtStabilityStatus != null)
+            {
+                TxtStabilityStatus.Text = trend.StatusText;
+            }
+
+            if (TxtStabilitySlope != null)
+            {
+                string slopeState = trend.DegradationSlopePerDay <= 0.005 ? " (Stabil)" : " (Artış Eğiliminde)";
+                TxtStabilitySlope.Text = $"Eğim: {TelemetryFormatter.FormatThermalSlope(trend.DegradationSlopePerDay)}{slopeState}";
+            }
+
+            if (TxtStabilityBadge != null)
+            {
+                TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? "Nominal" :
+                    (trend.StatusLevel == ThermalStatusLevel.Good ? "Kararlı" : "Bakım Gerekli");
+                TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource(
+                    trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
+                    (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
+            }
+
+            if (BarStabilityScore != null)
+            {
+                BarStabilityScore.Value = trend.StabilityScorePercent;
+                BarStabilityScore.Foreground = (SolidColorBrush)FindResource(
+                    trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
+                    (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
+            }
+
+            if (TxtPasteHealthPercent != null)
+            {
+                TxtPasteHealthPercent.Text = $"{report.PasteHealthPercent:F1} %";
+                TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
+            }
+
+            if (TxtThermalResistance != null)
+            {
+                string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? " (Normal)" : " (Yüksek)");
+                TxtThermalResistance.Text = $"Direnç: {report.ThermalResistanceRatio:F2} °C/W{tag}";
+            }
+
+            if (TxtActiveFanHours != null)
+                TxtActiveFanHours.Text = $"{report.ActiveFanHours:F1} Saat";
+
+            if (TxtAvgFanRpm != null)
+                TxtAvgFanRpm.Text = $"Ortalama: ~{report.AvgFanRpm} RPM";
+
+            if (TxtPassiveFanHours != null)
+                TxtPassiveFanHours.Text = $"{report.PassiveFanHours:F1} Saat";
+
+            if (TxtFanBearingHealth != null)
+                TxtFanBearingHealth.Text = $"{report.FanBearingHealthPercent:F1} %";
+
+            if (TxtThermalBadge != null)
+            {
+                TxtThermalBadge.Text = report.PasteHealthStatus;
+                TxtThermalBadge.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
+            }
+
+            if (TxtThermalRecommendation != null)
+                TxtThermalRecommendation.Text = report.Recommendation;
+        });
+    }
+
+    private void RadioTrendPeriod_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.RadioButton rb && rb.Tag != null && int.TryParse(rb.Tag.ToString(), out int days))
+        {
+            _selectedTrendDays = days;
+            if (TxtStabilityDaysSubtitle != null)
+            {
+                TxtStabilityDaysSubtitle.Text = $" (Son {days} Günlük Veri Seti)";
+            }
+            RefreshThermalHealthUi();
+        }
+    }
+
+    private void OnBatteryStatusUpdated(BatteryStatusInfo status)
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+
+            // Live Battery Sub-Component Matrix Temperature
+            if (TxtSubBatteryTemp != null)
+            {
+                TxtSubBatteryTemp.Text = TelemetryFormatter.FormatDetailedTemperature(status.TemperatureCelsius);
+            }
+
+            TxtBatteryHeader.Text = $"{status.BatteryPercent}%";
+            TxtBatLevelBig.Text = $"{status.BatteryPercent}%";
+            BarBatBig.Value = status.BatteryPercent;
+
+            TxtBatStateDesc.Text = status.IsPluggedIn
+                ? (status.IsCharging ? "Adaptöre Bağlı (Şarj Ediliyor)" : "Adaptöre Bağlı (Sınırda)")
+                : "Pilde Çalışıyor (Deşarj)";
+
+            // Real-time power flow in Watts via TelemetryFormatter
+            if (TxtBatDischargeRate != null)
+            {
+                TxtBatDischargeRate.Text = TelemetryFormatter.FormatBatteryPowerFlow(status);
+                if (status.IsDischarging && status.DischargeRateWatts > 0)
+                {
+                    TxtBatDischargeRate.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+                }
+                else if (status.IsCharging && status.ChargeRateWatts > 0)
+                {
+                    TxtBatDischargeRate.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+                }
+                else
+                {
+                    TxtBatDischargeRate.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+                }
+            }
+
+            if (TxtBatRemainingTime != null)
+            {
+                TxtBatRemainingTime.Text = $"Kalan Süre: {TelemetryFormatter.FormatRemainingTime(status.EstimatedRemainingMinutes, status.IsPluggedIn, status.IsCharging)}";
+            }
+
+            if (status.IsOvercharged)
+            {
+                BannerOvercharge.Visibility = Visibility.Visible;
+                TxtOverchargeMsg.Text = $"Pil seviyesi %{status.BatteryPercent} seviyesine ulaştı. Adaptörü çıkararak deşarj işlemini başlatabilirsiniz.";
+            }
+            else
+            {
+                BannerOvercharge.Visibility = Visibility.Collapsed;
+            }
+        });
+    }
+
+    private void OnOverchargeAlert(int percent)
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+            SystemSounds.Exclamation.Play();
+            _notifyIcon?.ShowBalloonTip(3000, "NitroLite", $"Pil %{percent} seviyesine ulaştı (%80 eşiği aşıldı).", System.Windows.Forms.ToolTipIcon.Warning);
+        });
+    }
+
+    private void OnDischargeTargetReached()
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        Dispatcher.Invoke(() =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+            BtnToggleDischarge.Content = "Deşarj İşlemini Başlat";
+            BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
+            TxtDischargeStatus.Text = "Hedef seviyeye (%80) ulaşıldı. Şarj adaptörünü bağlayabilirsiniz.";
+            TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+
+            _notifyIcon?.ShowBalloonTip(4000, "NitroLite", "Pil seviyesi %80 sınırına ulaştı. Adaptörü bağlayabilirsiniz.", System.Windows.Forms.ToolTipIcon.Info);
+            ShowToast("Pil seviyesi %80 hedef sınırına indirildi.");
+        });
+    }
+
+    private void UpdateModeUi(OperatingMode mode)
+    {
+        _currentMode = mode;
+        if (TxtModeHeader != null)
+        {
+            TxtModeHeader.Text = mode switch
+            {
+                OperatingMode.Quiet => "SESSİZ",
+                OperatingMode.Default => "DENGELİ",
+                OperatingMode.Extreme => "PERFORMANS",
+                OperatingMode.Turbo => "TURBO",
+                _ => mode.ToString().ToUpperInvariant()
+            };
+        }
+
+        // Reset all mode badges and card buttons
+        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet);
+        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault);
+        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme);
+        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo);
+
+        switch (mode)
+        {
+            case OperatingMode.Quiet:
+                SetModeCardActive(BtnModeQuiet, IndQuiet, TxtIndQuiet, TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan);
+                break;
+            case OperatingMode.Default:
+                SetModeCardActive(BtnModeDefault, IndDefault, TxtIndDefault, TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green);
+                break;
+            case OperatingMode.Extreme:
+                SetModeCardActive(BtnModeExtreme, IndExtreme, TxtIndExtreme, TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red);
+                break;
+            case OperatingMode.Turbo:
+                SetModeCardActive(BtnModeTurbo, IndTurbo, TxtIndTurbo, TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red);
+                break;
+        }
+    }
+
+    private void ResetModeCard(WpfButton? btn, Border? ind, TextBlock? txt)
+    {
+        if (ind != null)
+        {
+            ind.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0x1E, 0x23, 0x2F));
+            ind.BorderBrush = (SolidColorBrush)FindResource("BorderDark");
+        }
+        if (txt != null)
+        {
+            txt.Text = "SEÇ";
+            txt.Foreground = (SolidColorBrush)FindResource("TextMuted");
+        }
+        if (btn != null)
+        {
+            btn.BorderBrush = (SolidColorBrush)FindResource("BorderDark");
+        }
+    }
+
+    private void SetModeCardActive(WpfButton? btn, Border? ind, TextBlock? txt, SolidColorBrush accent)
+    {
+        if (ind != null)
+        {
+            ind.Background = accent;
+            ind.BorderBrush = accent;
+        }
+        if (txt != null)
+        {
+            txt.Text = "AKTİF";
+            txt.Foreground = System.Windows.Media.Brushes.White;
+        }
+        if (btn != null)
+        {
+            btn.BorderBrush = accent;
+        }
+    }
+
+    private void UpdateLightingUi(LightingConfig cfg)
+    {
+        SliderBrightness.Value = cfg.Brightness;
+        TxtBrightnessVal.Text = cfg.Brightness == 0 ? "0 / 9 (Kapalı)" : $"{cfg.Brightness} / 9";
+
+        SliderSpeed.Value = cfg.Speed;
+        TxtSpeedVal.Text = $"{cfg.Speed} / 9";
+
+        // Zones
+        if (cfg.LEDs.Count >= 4)
+        {
+            PreviewZone1.Background = new BrushConverter().ConvertFromString(cfg.LEDs[0]) as WpfBrush;
+            PreviewZone2.Background = new BrushConverter().ConvertFromString(cfg.LEDs[1]) as WpfBrush;
+            PreviewZone3.Background = new BrushConverter().ConvertFromString(cfg.LEDs[2]) as WpfBrush;
+            PreviewZone4.Background = new BrushConverter().ConvertFromString(cfg.LEDs[3]) as WpfBrush;
+        }
+    }
+
+    // ==========================================
+    // UI Event Handlers
+    // ==========================================
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (_isExiting)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
+        e.Cancel = true;
+        SaveWindowPosition();
+        Hide();
+        TrimMemory();
+    }
+
+    private void BtnMinimize_Click(object sender, RoutedEventArgs e)
+    {
+        SaveWindowPosition();
+        WindowState = WindowState.Minimized;
+        TrimMemory();
+    }
+
+    private void BtnClose_Click(object sender, RoutedEventArgs e)
+    {
+        SaveWindowPosition();
+        Hide();
+        TrimMemory();
+    }
+
+    public void ShowWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        UpdateTelemetryPollingRate();
+        _ = ReassertKeyboardLightingAsync(isBoot: false);
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                ShowWindow(hwnd, SW_RESTORE);
+                SetForegroundWindow(hwnd);
+            }
+        }
+        catch { }
+
+        Activate();
+        Focus();
+        Topmost = true;
+        Topmost = false;
+
+        if (NavMonitoring?.IsChecked == true)
+        {
+            RenderTelemetryChart();
+        }
+    }
+
+    public void RealExit()
+    {
+        _isExiting = true;
+        SaveWindowPosition();
+
+        _batteryService.StatusUpdated -= OnBatteryStatusUpdated;
+        _batteryService.OverchargeAlert -= OnOverchargeAlert;
+        _batteryService.DischargeTargetReached -= OnDischargeTargetReached;
+        _gameService.GameStarted -= OnGameStarted;
+        _gameService.GameEnded -= OnGameEnded;
+
+        SystemEvents.PowerModeChanged -= OnSystemPowerModeChanged;
+        SystemEvents.SessionSwitch -= OnSystemSessionSwitch;
+
+        _pollTimer?.Stop();
+        _toastTimer?.Stop();
+
+        _thermalService.SaveData();
+        _hardwareService.Dispose();
+        _osdWindow?.Close();
+        _powerAutomationService?.Dispose();
+        _fpsMonitorService.Dispose();
+        _gameService.Dispose();
+        _batteryService.Dispose();
+        _agentClient.Dispose();
+        _notifyIcon?.Dispose();
+        System.Windows.Application.Current.Shutdown();
+    }
+
+    private void Nav_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || TabModes == null || TabMonitoring == null || TabRgb == null || TabBattery == null || TabDebloat == null) return;
+
+        TabModes.Visibility = NavModes.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TabMonitoring.Visibility = NavMonitoring.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TabRgb.Visibility = NavRgb.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TabBattery.Visibility = NavBattery.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TabDebloat.Visibility = NavDebloat.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+
+        if (NavMonitoring.IsChecked == true)
+        {
+            RenderTelemetryChart();
+        }
+
+        if (NavBattery.IsChecked == true)
+        {
+            RefreshThermalHealthUi();
+            RefreshStorageHealthUi();
+        }
+    }
+
+    private async Task<bool> SetManualModeAsync(OperatingMode mode)
+    {
+        await _gameProfileTransitionLock.WaitAsync();
+        try
+        {
+            bool ok = await SwitchModeAsync(mode);
+            if (ok)
+            {
+                _currentMode = mode;
+                if (!_isGameSessionActive)
+                {
+                    _savedModeBeforeGame = mode;
+                    _pendingModeRestore = false;
+                    _hasPendingDesktopRestore = HasPendingDesktopRestore;
+                    UpdateTrayRetryMenuItemState();
+                }
+            }
+            return ok;
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
+        }
+    }
+
+    private async void BtnMode_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is WpfButton btn && btn.Tag is string tagStr)
+            {
+                if (Enum.TryParse<OperatingMode>(tagStr, out var mode))
+                {
+                    await SetManualModeAsync(mode);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Çalışma modu uygulanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async Task<bool> SwitchModeAsync(OperatingMode mode)
+    {
+        try
+        {
+            var ok = await _agentClient.SetOperatingModeAsync(mode);
+            if (ok)
+            {
+                UpdateModeUi(mode);
+                ShowToast($"Çalışma modu: {mode}");
+                return true;
+            }
+            else
+            {
+                ShowToast($"Çalışma modu değiştirilemedi: {mode}", false);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Çalışma modu hatası: {ex.Message}", false);
+            return false;
+        }
+    }
+
+    private async Task<bool> SetManualFanModeAsync(FanMode mode)
+    {
+        await _gameProfileTransitionLock.WaitAsync();
+        try
+        {
+            bool ok = await _agentClient.SetFanModeAsync(mode);
+            if (ok)
+            {
+                _currentFanMode = mode;
+                if (!_isGameSessionActive)
+                {
+                    _savedFanModeBeforeGame = mode;
+                    _pendingFanRestore = false;
+                    _hasPendingDesktopRestore = HasPendingDesktopRestore;
+                    UpdateTrayRetryMenuItemState();
+                }
+                ShowToast(mode == FanMode.Auto ? "Otomatik fan eğrisi etkinleştirildi." : "Maksimum fan devri etkinleştirildi.");
+            }
+            else
+            {
+                ShowToast("Fan modu uygulanamadı.", false);
+            }
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Fan modu uygulanamadı: {ex.Message}", false);
+            return false;
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
+        }
+    }
+
+    private async void BtnFanAuto_Click(object sender, RoutedEventArgs e)
+    {
+        await SetManualFanModeAsync(FanMode.Auto);
+    }
+
+    private async void BtnFanMax_Click(object sender, RoutedEventArgs e)
+    {
+        await SetManualFanModeAsync(FanMode.Max);
+    }
+
+    private async void BtnPresetColor_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is WpfButton btn && btn.Tag is string hex)
+            {
+                if (hex == "#000000")
+                {
+                    await TurnOffLightsAsync();
+                    return;
+                }
+
+                if (SliderBrightness.Value == 0)
+                {
+                    SliderBrightness.Value = 5;
+                    _lighting.Brightness = 5;
+                }
+
+                _lighting.Color = hex;
+                _lighting.Effect = "STATIC";
+                _lighting.LEDs = new List<string> { hex, hex, hex, hex };
+
+                UpdateLightingUi(_lighting);
+                UpdateEffectComboBox("STATIC");
+                await _agentClient.SetLightingAsync("STATIC", _lighting.Brightness, _lighting.Speed, _lighting.Direction, hex, _lighting.LEDs.ToArray());
+                SaveActiveRgbState();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Aydınlatma rengi ayarlanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async void BtnTurnOffLights_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await TurnOffLightsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Aydınlatma kapatılamadı: {ex.Message}", false);
+        }
+    }
+
+    private async Task TurnOffLightsAsync()
+    {
+        _lighting.Brightness = 0;
+        _lighting.Effect = "OFF";
+        _lighting.Color = "#000000";
+        _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
+
+        SliderBrightness.Value = 0;
+        TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
+
+        PreviewZone1.Background = System.Windows.Media.Brushes.Black;
+        PreviewZone2.Background = System.Windows.Media.Brushes.Black;
+        PreviewZone3.Background = System.Windows.Media.Brushes.Black;
+        PreviewZone4.Background = System.Windows.Media.Brushes.Black;
+
+        UpdateEffectComboBox("OFF");
+        _appSettings.IsBacklightOff = true;
+        _appSettings.KeyboardLighting = _lighting;
+
+        var presets = _rgbProfileService.GetPresets();
+        var offPreset = presets.FirstOrDefault(p => p.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) || p.Brightness == 0);
+        if (offPreset != null)
+        {
+            _appSettings.SelectedRgbPreset = offPreset.Name;
+            if (CmbRgbPresets != null) CmbRgbPresets.SelectedItem = offPreset.Name;
+        }
+
+        SaveSettings();
+        SaveActiveRgbState();
+        await _agentClient.TurnOffLightingAsync();
+    }
+
+    private async void CmbRgbEffect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        try
+        {
+            if (!IsLoaded || _isInitializingUi || _isApplyingPreset) return;
+            if (CmbRgbEffect.SelectedItem is ComboBoxItem item && item.Content is string text)
+            {
+                var effectName = text.Split(' ')[0];
+                if (effectName.Equals("OFF", StringComparison.OrdinalIgnoreCase))
+                {
+                    await TurnOffLightsAsync();
+                    return;
+                }
+
+                _lighting.Effect = effectName;
+
+                if (SliderBrightness.Value == 0)
+                {
+                    SliderBrightness.Value = 5;
+                    _lighting.Brightness = 5;
+                }
+
+                await _agentClient.SetLightingAsync(effectName, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+                SaveActiveRgbState();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Aydınlatma efekti ayarlanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async void SliderBrightness_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        try
+        {
+            if (!IsLoaded || _isInitializingUi || _isApplyingPreset || TxtBrightnessVal == null) return;
+            var val = (int)e.NewValue;
+            if (val == 0)
+            {
+                TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
+                _lighting.Brightness = 0;
+                _appSettings.IsBacklightOff = true;
+                _appSettings.KeyboardLighting = _lighting;
+                PreviewZone1.Background = System.Windows.Media.Brushes.Black;
+                PreviewZone2.Background = System.Windows.Media.Brushes.Black;
+                PreviewZone3.Background = System.Windows.Media.Brushes.Black;
+                PreviewZone4.Background = System.Windows.Media.Brushes.Black;
+                SaveSettings();
+                SaveActiveRgbState();
+                await _agentClient.TurnOffLightingAsync();
+                return;
+            }
+
+            TxtBrightnessVal.Text = $"{val} / 9";
+            _lighting.Brightness = val;
+            _appSettings.IsBacklightOff = false;
+            _appSettings.KeyboardLighting = _lighting;
+            SaveSettings();
+            UpdateLightingUi(_lighting);
+            await _agentClient.SetLightingAsync(_lighting.Effect, val, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+            SaveActiveRgbState();
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Parlaklık uygulanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async void SliderSpeed_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        try
+        {
+            if (!IsLoaded || _isInitializingUi || _isApplyingPreset || TxtSpeedVal == null) return;
+            var val = (int)e.NewValue;
+            TxtSpeedVal.Text = $"{val} / 9";
+            _lighting.Speed = val;
+            await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, val, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+            SaveActiveRgbState();
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Efekt hızı uygulanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async void ChkBacklightTimeout_Changed(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!IsLoaded || _isInitializingUi) return;
+            var enable = ChkBacklightTimeout.IsChecked == true;
+            await _agentClient.SetBacklightTimeoutAsync(enable);
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Zaman aşımı uygulanamadı: {ex.Message}", false);
+        }
+    }
+
+    private void ChkWatchdog_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || ChkWatchdog == null) return;
+        _batteryService.WatchdogEnabled = ChkWatchdog.IsChecked == true;
+        if (_batteryService.WatchdogEnabled)
+        {
+            _batteryService.EnforceHealthSetting();
+        }
+    }
+
+    private void BtnToggleDischarge_Click(object sender, RoutedEventArgs e)
+    {
+        if (_batteryService.IsDischarging)
+        {
+            _batteryService.StopSafeDischarge();
+            BtnToggleDischarge.Content = "Deşarj İşlemini Başlat";
+            BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
+            TxtDischargeStatus.Text = "Durum: Durduruldu.";
+            TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+        }
+        else
+        {
+            var st = _batteryService.CurrentStatus;
+            if (st.IsPluggedIn)
+            {
+                var res = System.Windows.MessageBox.Show(this, 
+                    "Adaptör bağlıyken batarya deşarj edilemez.\n\nLütfen adaptör bağlantısını kesin ve işlemi başlatmak için 'Evet' seçeneğine tıklayın.", 
+                    "Adaptör Bağlantısı", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+                if (res != MessageBoxResult.Yes) return;
+            }
+
+            if (st.BatteryPercent <= 80)
+            {
+                ShowToast($"Pil seviyesi (%{st.BatteryPercent}) zaten hedef sınırın (%80) altındadır.", isSuccess: false);
+                return;
+            }
+
+            _batteryService.StartSafeDischarge();
+            BtnToggleDischarge.Content = "Deşarjı Durdur";
+            BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentRed");
+            TxtDischargeStatus.Text = "Deşarj işlemi aktif: Pil seviyesi %80 sınırına indiriliyor...";
+            TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+        }
+    }
+
+    private void RefreshServiceList()
+    {
+        ListServiceStatuses.ItemsSource = _debloatService.GetServiceStatuses();
+        bool isNsRunning = _debloatService.IsNitroSenseRunning();
+        if (TxtNitroSenseRunningBadge != null)
+        {
+            TxtNitroSenseRunningBadge.Text = isNsRunning ? " (Arka Planda Aktif)" : " (Devre Dışı)";
+            TxtNitroSenseRunningBadge.Foreground = isNsRunning 
+                ? (SolidColorBrush)FindResource("AccentRed") 
+                : (SolidColorBrush)FindResource("AccentGreen");
+        }
+    }
+
+    private void BtnKillNitroSense_Click(object sender, RoutedEventArgs e)
+    {
+        _debloatService.DisableNitroSenseBackgroundExecution();
+        int killed = _debloatService.KillNitroSenseProcesses();
+        RefreshServiceList();
+        ShowToast($"NitroSense sonlandırıldı ({killed} işlem).");
+    }
+
+    private async void BtnApplyDebloat_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var confirm = System.Windows.MessageBox.Show(this, 
+                "Altı adet OEM telemetri servisi devre dışı bırakılacak ve yaklaşık 214 MB bellek tasarrufu sağlanacaktır.\n\nDonanım kontrolleri etkilenmeyecektir. Devam edilsin mi?",
+                "Servis Yapılandırması", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (confirm == MessageBoxResult.Yes)
+            {
+                var ok = await _debloatService.ApplyTier1DebloatAsync();
+                RefreshServiceList();
+                if (ok)
+                {
+                    ShowToast("Telemetri servisleri devre dışı bırakıldı (~214 MB).");
+                }
+                else
+                {
+                    var msg = !string.IsNullOrEmpty(_debloatService.LastError) 
+                        ? $"Bazı servisler devre dışı bırakılamadı: {_debloatService.LastError}" 
+                        : "Servis devre dışı bırakma işlemi başarısız oldu (Yönetici yetkisi reddedilmiş olabilir).";
+                    ShowToast(msg, false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Servisler yapılandırılamadı: {ex.Message}", false);
+        }
+    }
+
+    private async void BtnRestoreServices_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var ok = await _debloatService.RestoreTier1ServicesAsync();
+            RefreshServiceList();
+            if (ok)
+            {
+                ShowToast("Önceki servis yapılandırması geri yüklendi.");
+            }
+            else
+            {
+                var msg = !string.IsNullOrEmpty(_debloatService.LastError) 
+                    ? $"Bazı servisler geri yüklenemedi: {_debloatService.LastError}" 
+                    : "Servisleri geri yükleme işlemi başarısız oldu (Yönetici yetkisi reddedilmiş olabilir).";
+                ShowToast(msg, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Servisler geri yüklenemedi: {ex.Message}", false);
+        }
+    }
+
+    private void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkAutoStart == null) return;
+        _debloatService.SetNitroLiteAutoStart(ChkAutoStart.IsChecked == true, ChkStartMinimized?.IsChecked == true);
+        ShowToast(ChkAutoStart.IsChecked == true ? "Başlangıçta otomatik çalıştırma etkin" : "Başlangıçta çalıştırma devre dışı");
+    }
+
+    private void ChkStartMinimized_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkStartMinimized == null) return;
+        _appSettings.StartMinimized = ChkStartMinimized.IsChecked == true;
+        SaveSettings();
+        _debloatService.SetNitroLiteAutoStart(ChkAutoStart.IsChecked == true, _appSettings.StartMinimized);
+        ShowToast(_appSettings.StartMinimized ? "Sistem tepsisinde başlatma etkin" : "Normal başlangıç etkin");
+    }
+
+    private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var res = await _memoryService.CleanMemoryAsync();
+            if (res.FreedMegabytes > 50)
+            {
+                string freedStr = res.FreedMegabytes >= 1024 
+                    ? $"{res.FreedMegabytes / 1024.0:F1} GB" 
+                    : $"{res.FreedMegabytes:F0} MB";
+                ShowToast($"{freedStr} bellek temizlendi ({res.ProcessesOptimized} işlem).");
+                if (TxtRamCleanStatus != null)
+                {
+                    TxtRamCleanStatus.Text = $" ({freedStr} Boşaltıldı)";
+                    TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+                }
+            }
+            else
+            {
+                ShowToast("Bellek önbelleği optimize durumda.");
+                if (TxtRamCleanStatus != null)
+                {
+                    TxtRamCleanStatus.Text = " (Optimize)";
+                    TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Bellek temizlenemedi: {ex.Message}", false);
+        }
+    }
+
+    private void ChkAutoRamClean_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkAutoRamClean == null) return;
+        _appSettings.AutoRamCleanerEnabled = ChkAutoRamClean.IsChecked == true;
+        SaveSettings();
+        ShowToast(_appSettings.AutoRamCleanerEnabled ? "Otomatik bellek temizleme etkin" : "Otomatik bellek temizleme devre dışı");
+    }
+
+    private void CmbDcPowerMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || CmbDcPowerMode?.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
+        if (Enum.TryParse<DcPowerProfilePreference>(tag, out var pref))
+        {
+            _appSettings.DcPowerMode = pref;
+            SaveSettings();
+            ShowToast($"Pilde güç tercihi: {pref}");
+        }
+    }
+
+    private void ChkAutoRefreshRate_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkAutoRefreshRate == null) return;
+        _appSettings.AutoRefreshRateSwitching = ChkAutoRefreshRate.IsChecked == true;
+        SaveSettings();
+        ShowToast(_appSettings.AutoRefreshRateSwitching
+            ? "Otomatik ekran tazeleme hızı geçişi etkin (60Hz / 165Hz)"
+            : "Otomatik ekran tazeleme hızı geçişi devre dışı");
+    }
+}

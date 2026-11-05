@@ -1,0 +1,32 @@
+## Build and Output directories
+[Bb]in/
+[Oo]bj/
+[Tt]est[Rr]esults/
+[Aa]rtifacts/
+
+## Visual Studio & Rider IDE files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+*.DotSettings.user
+
+## Temporary, Cache & Log files
+*.log
+*.tmp
+*.bak
+*.swp
+*.cache
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+## Runtime generated states & Local configurations
+NitroLite/bin/
+NitroLite.Tests/bin/
+debloat_backup_state.json
+thermal_health.json
+active_rgb_state.json
+battery-report.html
