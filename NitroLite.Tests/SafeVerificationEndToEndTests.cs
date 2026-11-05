@@ -1566,4 +1566,233 @@ function global:Disable-ScheduledTask {
     }
 
     #endregion
+
+    #region Bug Fix Tests — 4 Reproduced Bugs
+
+    // Bug 1: Desktop baseline captured when pending AC restore exists.
+    // HasPendingDesktopRestore includes AC failures, so game start saw "pending=true"
+    // and skipped saving the real desktop baseline. Fix: use _hasGameBaselineCaptured flag.
+    [Fact]
+    public async Task TestCase_AdapterPending_GameStart_CapturesFreshBaseline()
+    {
+        await RunInStaAsync(async () =>
+        {
+        var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Turbo };
+        var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Efficient };
+        var gameService = new GameDetectionService();
+        var mouseService = new AtkMouseService();
+        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+        var window = new MainWindow(
+            mockAgent,
+            mockCpu,
+            gameService,
+            mouseService,
+            settings: settings,
+            mouseProfileSwitcher: p => true,
+            isTestHarness: true);
+
+        window.SetCurrentModeForTesting(OperatingMode.Turbo);
+        mockCpu.CurrentMode = CpuBoostMode.Efficient;
+
+        // Step 1: Unplug AC (DC transition) - saves Turbo/Efficient as desktop reference in PowerAutomation
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+        mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+        await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+        // Step 2: Reconnect AC with fan failure → HasPendingAcRestore = true
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+        mockAgent.OnSetFanModeAsync = m => Task.FromResult(false); // fan fails
+        await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+        Assert.True(window.PowerAutomation!.HasPendingAcRestore);
+
+        // HasPendingDesktopRestore includes AC restore, but HasGameBaselineCaptured must be false
+        Assert.True(window.HasPendingDesktopRestore);
+        Assert.False(window.HasGameBaselineCaptured);
+
+        // Start a game — baseline should be captured even though HasPendingDesktopRestore = true
+        var profile = new GameProfile
+        {
+            DisplayName = "TestGame",
+            ExeName = "test.exe",
+            TargetMode = OperatingMode.Extreme,
+            TargetCpuBoost = CpuBoostMode.Aggressive,
+            TargetFanMode = FanMode.Max
+        };
+
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+        mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+        await window.HandleGameStartedAsync(profile);
+
+        // Baseline must reflect Turbo / Efficient (the real desktop values), not stale AC state
+        Assert.True(window.HasGameBaselineCaptured);
+        Assert.Equal(OperatingMode.Turbo, window.SavedModeBeforeGame);
+        Assert.Equal(CpuBoostMode.Efficient, window.SavedCpuBoostBeforeGame);
+        });
+    }
+
+    // Bug 2: Mouse integration disabled while mouse command in-flight causes race.
+    // Flag is read before lock is acquired → flag is false (command still running) → no restore attempted.
+    // Fix: acquire lock BEFORE reading flag.
+    [Fact]
+    public async Task TestCase_MouseIntegration_DisabledWhileCommandInFlight_RestoresMouse()
+    {
+        await RunInStaAsync(async () =>
+        {
+        var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+        var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+        var gameService = new GameDetectionService();
+        var mouseService = new AtkMouseService();
+        var settings = new AppSettings
+        {
+            AtkMouseIntegrationEnabled = true,
+            DefaultAtkMouseProfile = 1
+        };
+
+        // TCS blocks inside the mouse profile switcher to simulate an in-flight command
+        var mouseCommandStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mouseCommandGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int lastSwitchedProfile = 0;
+
+        var window = new MainWindow(
+            mockAgent,
+            mockCpu,
+            gameService,
+            mouseService,
+            settings: settings,
+            mouseProfileSwitcher: p =>
+            {
+                lastSwitchedProfile = p;
+                mouseCommandStarted.TrySetResult(true);
+                mouseCommandGate.Task.GetAwaiter().GetResult();
+                return true;
+            },
+            isTestHarness: true);
+
+        // Start game profile switch (mouse → Config 2) in background
+        var profile = new GameProfile
+        {
+            DisplayName = "RaceGame",
+            ExeName = "race.exe",
+            TargetMode = OperatingMode.Extreme,
+            TargetCpuBoost = CpuBoostMode.Aggressive,
+            TargetFanMode = FanMode.Auto,
+            TargetAtkMouseProfile = 2
+        };
+
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+        var gameStartTask = Task.Run(async () => await window.HandleGameStartedAsync(profile));
+
+        // Wait until mouse command is in-flight (blocked at gate)
+        await mouseCommandStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Disable integration while command is still in-flight.
+        // With the fix, SetMouseIntegrationEnabledAsync acquires the lock first → waits for
+        // the in-flight command to finish → reads flag (now true) → restores mouse.
+        var disableTask = Task.Run(async () => await window.SetMouseIntegrationEnabledAsync(false));
+
+        // Let the mouse command complete
+        await Task.Delay(100); // give disableTask a moment to try to acquire the lock
+        mouseCommandGate.TrySetResult(true);
+
+        await gameStartTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await disableTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The last profile switched should be 1 (restore to desktop profile)
+        Assert.Equal(1, lastSwitchedProfile);
+        Assert.False(window.PendingMouseRestore);
+        });
+    }
+
+    // Bug 3: Balanced DC mode AC reconnect fires event with Applied=true when no commands were sent.
+    // Fix: when !_isDcEcoActive && !HasPendingAcRestore, all Applied flags must be false.
+    [Fact]
+    public async Task TestCase_BalancedDcMode_AcReconnect_DoesNotCorruptCurrentMode()
+    {
+        await RunInStaAsync(async () =>
+        {
+        var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+        var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+        var gameService = new GameDetectionService();
+        var mouseService = new AtkMouseService();
+        // Balanced mode — DC eco is NOT active
+        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Balanced };
+
+        var window = new MainWindow(
+            mockAgent,
+            mockCpu,
+            gameService,
+            mouseService,
+            settings: settings,
+            mouseProfileSwitcher: p => true,
+            isTestHarness: true);
+
+        window.SetCurrentModeForTesting(OperatingMode.Extreme);
+        Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+
+        // Track whether any hardware command was actually sent
+        bool commandSent = false;
+        mockAgent.OnSetOperatingModeAsync = m => { commandSent = true; return Task.FromResult(true); };
+
+        // Simulate AC reconnect in Balanced mode (no pending restore, no eco)
+        await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+
+        // No command should have been sent
+        Assert.False(commandSent);
+        // CurrentMode must remain Extreme — the event must NOT overwrite it with a stale saved value
+        Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+        });
+    }
+
+    // Bug 4: RetryPendingAcRestoreAsync succeeds on hardware but never fires PowerModeSwitched.
+    // UI stays stale (shows Quiet instead of Default after retry).
+    // Fix: fire PowerModeSwitched with verified values after all pending flags clear.
+    [Fact]
+    public async Task TestCase_RetryPendingAcRestore_UpdatesUiAfterSuccess()
+    {
+        await RunInStaAsync(async () =>
+        {
+        var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+        var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+        var gameService = new GameDetectionService();
+        var mouseService = new AtkMouseService();
+        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+        var window = new MainWindow(
+            mockAgent,
+            mockCpu,
+            gameService,
+            mouseService,
+            settings: settings,
+            mouseProfileSwitcher: p => true,
+            isTestHarness: true);
+
+        // Start in Default mode on adapter
+        window.SetCurrentModeForTesting(OperatingMode.Default);
+
+        // Unplug AC: saves Default, switches to Eco/Quiet
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+        mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+        await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+        // Reconnect AC: fail mode command → pending restore
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(false);
+        await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: true);
+        Assert.True(window.PowerAutomation!.HasPendingAcRestore);
+
+        // Allow all commands to succeed on retry
+        mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+        mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(true);
+        mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+
+        bool retryOk = await window.PowerAutomation!.RetryPendingAcRestoreAsync();
+        Assert.True(retryOk);
+        Assert.False(window.PowerAutomation!.HasPendingAcRestore);
+
+        // UI must reflect the successfully restored Default mode — not remain stale
+        Assert.Equal(OperatingMode.Default, window.CurrentMode);
+        });
+    }
+
+    #endregion
 }

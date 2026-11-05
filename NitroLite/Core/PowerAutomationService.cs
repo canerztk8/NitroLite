@@ -272,9 +272,9 @@ public class PowerAutomationService : IDisposable
                 bool allRestored = true;
                 var failed = new System.Collections.Generic.List<string>();
 
-                bool modeOk = !_pendingAcModeRestore && !_isDcEcoActive;
-                bool boostOk = !_pendingAcCpuRestore && !_isDcEcoActive;
-                bool fanOk = !_pendingAcFanRestore && !_isDcEcoActive;
+                bool modeOk = false;
+                bool boostOk = false;
+                bool fanOk = false;
                 OperatingMode targetMode = _savedOperatingModeBeforeDc;
                 CpuBoostMode targetBoost = _savedCpuBoostBeforeDc;
                 FanMode targetFan = _savedFanModeBeforeDc;
@@ -406,6 +406,23 @@ public class PowerAutomationService : IDisposable
             if (!HasPendingAcRestore)
             {
                 _isDcEcoActive = false;
+
+                // Fire event so MainWindow updates _currentMode, boost UI, and fan display.
+                // Track per-step success via whether the pending flags were cleared.
+                bool modeWasApplied = !_pendingAcModeRestore;
+                bool boostWasApplied = !_pendingAcCpuRestore;
+                bool fanWasApplied = !_pendingAcFanRestore;
+                PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
+                {
+                    IsAc = true,
+                    Message = "Adaptör ayarları başarıyla yeniden uygulandı.",
+                    ModeApplied = modeWasApplied,
+                    VerifiedMode = modeWasApplied ? targetMode : (GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default),
+                    BoostApplied = boostWasApplied,
+                    VerifiedBoost = boostWasApplied ? targetBoost : _cpuPowerService.CurrentMode,
+                    FanApplied = fanWasApplied,
+                    VerifiedFan = fanWasApplied ? targetFan : (GetCurrentFanMode?.Invoke() ?? FanMode.Auto)
+                });
                 return true;
             }
             return false;

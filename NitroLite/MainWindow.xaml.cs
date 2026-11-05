@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private GpuOperatingMode? _currentGpuMode = null;
     private bool _isGameSessionActive = false;
     private bool _hasPendingDesktopRestore = false;
+    private bool _hasGameBaselineCaptured = false; // Separate from pending restore: true only after an actual game baseline was saved
     private bool _pendingModeRestore = false;
     private bool _pendingCpuBoostRestore = false;
     private bool _pendingFanRestore = false;
@@ -69,6 +70,7 @@ public partial class MainWindow : Window
     internal CpuBoostMode SavedCpuBoostBeforeGame => _savedCpuBoostBeforeGame;
     internal FanMode SavedFanModeBeforeGame => _savedFanModeBeforeGame;
     internal int SavedMouseProfileBeforeGame => _savedMouseProfileBeforeGame;
+    internal bool HasGameBaselineCaptured => _hasGameBaselineCaptured;
     internal FanMode CurrentFanMode => _currentFanMode;
     internal OperatingMode CurrentMode => _currentMode;
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
@@ -1644,10 +1646,14 @@ public partial class MainWindow : Window
         }
         else
         {
-            if (_isMouseProfileSwitchedForGame || _pendingMouseRestore)
+            // Acquire the lock FIRST, then check flags.
+            // If a mouse command is in-flight (running under the lock), it hasn't set
+            // _isMouseProfileSwitchedForGame yet — reading flags before acquiring would see false
+            // and skip the restore, leaving the mouse stuck in the game profile.
+            await _gameProfileTransitionLock.WaitAsync();
+            try
             {
-                await _gameProfileTransitionLock.WaitAsync();
-                try
+                if (_isMouseProfileSwitchedForGame || _pendingMouseRestore)
                 {
                     int targetMouseProfile = _appSettings.DefaultAtkMouseProfile > 0 
                         ? _appSettings.DefaultAtkMouseProfile 
@@ -1670,14 +1676,14 @@ public partial class MainWindow : Window
                         }
                     }
                 }
-                finally
+                else
                 {
-                    _gameProfileTransitionLock.Release();
+                    ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı.");
                 }
             }
-            else
+            finally
             {
-                ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı.");
+                _gameProfileTransitionLock.Release();
             }
         }
     }
@@ -2022,8 +2028,9 @@ public partial class MainWindow : Window
                         }
 
                         // Save desktop baseline reference before the first game transition.
-                        // If previous restore is pending or was interrupted, a new game must not overwrite this original reference!
-                        if (!HasPendingDesktopRestore)
+                        // Use _hasGameBaselineCaptured (not HasPendingDesktopRestore) so that a pending AC restore
+                        // failure does NOT prevent capturing the real pre-game desktop baseline.
+                        if (!_hasGameBaselineCaptured)
                         {
                             if (_powerAutomationService?.IsDcEcoActive == true)
                             {
@@ -2038,6 +2045,7 @@ public partial class MainWindow : Window
                                 _savedFanModeBeforeGame = _currentFanMode;
                             }
                             _savedMouseProfileBeforeGame = _atkMouseService.CurrentActiveProfile > 0 ? _atkMouseService.CurrentActiveProfile : 1;
+                            _hasGameBaselineCaptured = true;
                             _hasPendingDesktopRestore = true;
                         }
                         _isGameSessionActive = true;
@@ -2300,6 +2308,10 @@ public partial class MainWindow : Window
 
                             bool allSucceeded = !_pendingModeRestore && !_pendingCpuBoostRestore && !_pendingFanRestore && !_pendingMouseRestore;
                             _hasPendingDesktopRestore = !allSucceeded;
+                            if (allSucceeded)
+                            {
+                                _hasGameBaselineCaptured = false; // Allow next game start to capture a fresh baseline
+                            }
 
                             if (allSucceeded)
                             {
