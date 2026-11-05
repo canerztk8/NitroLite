@@ -53,6 +53,9 @@ public class PowerAutomationService : IDisposable
     private readonly System.Timers.Timer _debounceTimer;
     private bool _lastAcStatus = true;
     private bool _hasEvaluatedInitialState = false;
+    private bool _pendingDcApply;
+    private DcPowerProfilePreference? _lastPreference;
+    private bool? _lastRefreshPreference;
     private bool _isDcEcoActive = false;
     private bool _isDisposed = false;
 
@@ -199,11 +202,6 @@ public class PowerAutomationService : IDisposable
     {
         if (_isDisposed) return;
 
-        if (isAc == _lastAcStatus && _hasEvaluatedInitialState && !HasPendingAcRestore)
-        {
-            return;
-        }
-
         if (_transitionLock != null)
         {
             await _transitionLock.WaitAsync();
@@ -211,13 +209,16 @@ public class PowerAutomationService : IDisposable
         try
         {
             if (_isDisposed) return;
-            if (isAc == _lastAcStatus && _hasEvaluatedInitialState && !HasPendingAcRestore)
+            if (isAc == _lastAcStatus && _hasEvaluatedInitialState && !HasPendingAcRestore && !_pendingDcApply && _lastPreference == _settings.DcPowerMode && _lastRefreshPreference == _settings.AutoRefreshRateSwitching)
             {
                 return;
             }
 
             _lastAcStatus = isAc;
             _hasEvaluatedInitialState = true;
+            _lastPreference = _settings.DcPowerMode;
+            _lastRefreshPreference = _settings.AutoRefreshRateSwitching;
+            _pendingDcApply = false;
 
             if (!isAc)
             {
@@ -258,6 +259,7 @@ public class PowerAutomationService : IDisposable
                         _displayService.SetRefreshRate(60);
                     }
 
+                    _pendingDcApply = !modeOk || !boostOk || !fanOk;
                     var failed = new System.Collections.Generic.List<string>();
                     if (!modeOk) failed.Add("Sessiz Mod");
                     if (!boostOk) failed.Add("CPU Boost (Devre Dışı)");

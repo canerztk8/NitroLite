@@ -177,7 +177,7 @@ public class CpuPowerService
                 {
                     if (val == 0) return CpuBoostMode.Disabled;
                     if (val == 4) return CpuBoostMode.Efficient;
-                    return CpuBoostMode.Aggressive;
+                    return val <= 6 ? (CpuBoostMode)val : null;
                 }
             }
         }
@@ -280,7 +280,7 @@ public class CpuPowerService
             {
                 if (val == 0) return CpuBoostMode.Disabled;
                 if (val == 4) return CpuBoostMode.Efficient;
-                return CpuBoostMode.Aggressive;
+                return val <= 6 ? (CpuBoostMode)val : null;
             }
         }
         catch { }

@@ -594,7 +594,7 @@ public class DebloatService
         sb.Append($"$errLog = '{logEscaped}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
         sb.Append("$errs = @(); ");
 
-        if (backupState == null || backupState.Count == 0 || !Tier1Services.Any(s => backupState.ContainsKey(s) && !string.IsNullOrWhiteSpace(backupState[s])))
+        if (backupState == null || backupState.Count == 0 || !(Tier1Services.Any(s => backupState.ContainsKey(s) && !string.IsNullOrWhiteSpace(backupState[s])) || (backupState.TryGetValue("Task:NitroSenseLauncher", out var onlyTask) && (IsActiveTaskState(onlyTask) || IsDisabledTaskState(onlyTask)))))
         {
             sb.Append("$errs += 'Restore aborted: backup state is empty or contains no recorded services.'; ");
             sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
@@ -915,7 +915,9 @@ public class DebloatService
                 // Existing valid backup exists. Protect baseline from being overwritten by partially debloated state.
                 foreach (var svc in Tier1Services.Where(s => existingBackup.ContainsKey(s)))
                 {
-                    if (!IsValidStartupType(existingBackup[svc]))
+                    if (!IsValidStartupType(existingBackup[svc]) ||
+                        !existingBackup.TryGetValue(svc + ":Status", out var savedStatus) ||
+                        (savedStatus != "Running" && savedStatus != "Stopped"))
                     {
                         LastError = $"Debloat aborted: invalid startup type for service '{svc}' in existing backup.";
                         return false;

@@ -128,14 +128,14 @@ public class BatteryStatusInfo
 
 public class BatteryHealthDetails
 {
-    public double DesignCapacityMWh { get; set; } = 90614; // Acer Nitro 16 LG Chem AP21A8T (90.6 Wh)
-    public double FullChargeCapacityMWh { get; set; } = 83637;
-    public double RemainingCapacityMWh { get; set; } = 66528;
-    public double WearLevelPercent { get; set; } = 7.7;
-    public double HealthPercent { get; set; } = 92.3;
-    public double VoltageVolts { get; set; } = 16.5;
-    public string Manufacturer { get; set; } = "LGC (LG Chem)";
-    public string ModelName { get; set; } = "AP21A8T";
+    public double DesignCapacityMWh { get; set; } = 0;
+    public double FullChargeCapacityMWh { get; set; } = 0;
+    public double RemainingCapacityMWh { get; set; } = 0;
+    public double WearLevelPercent { get; set; } = 0;
+    public double HealthPercent { get; set; } = 0;
+    public double VoltageVolts { get; set; } = 0;
+    public string Manufacturer { get; set; } = "";
+    public string ModelName { get; set; } = "";
 }
 
 public class GameProfile

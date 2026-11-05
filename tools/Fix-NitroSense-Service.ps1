@@ -8,6 +8,7 @@ Write-Host "========================================================" -Foregroun
 $newDir = "C:\Windows\System32\DriverStore\FileRepository\predatorservice.inf_amd64_c634eb8e856fb962"
 $centralExe = "$newDir\AcerCentralService.exe"
 $lightingExe = "$newDir\AcerLightingService.exe"
+if (!(Test-Path -LiteralPath $centralExe -PathType Leaf) -or !(Test-Path -LiteralPath $lightingExe -PathType Leaf)) { throw "Expected Acer service binaries are missing; no changes applied." }
 
 # 1. Stop existing services and processes
 Write-Host "`n[1/5] Eski servisler ve NitroSense durduruluyor..." -ForegroundColor Yellow

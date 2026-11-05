@@ -11,6 +11,6 @@ if %errorlevel% neq 0 (
 )
 
 title Acer NitroSense Servis Guncelleme ve Onarma
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Fix-NitroSense-Service.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Restore-Mux-Setting.ps1"
 echo.
 pause

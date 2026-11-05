@@ -98,6 +98,8 @@ public class HardwareMonitorService : IDisposable
     private static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
 
     private bool _nvmlInitialized = false;
+    private bool _ownsNvml;
+    private readonly bool _allowNvml;
     private IntPtr _gpuDevice = IntPtr.Zero;
     private DateTime _lastNvmlRetryUtc = DateTime.MinValue;
 
@@ -110,6 +112,7 @@ public class HardwareMonitorService : IDisposable
 
     public HardwareMonitorService(bool initNvml = true)
     {
+        _allowNvml = initNvml;
         if (initNvml)
         {
             TryInitNvml();
@@ -120,8 +123,9 @@ public class HardwareMonitorService : IDisposable
     {
         try
         {
-            if (NvmlInit() == 0)
+            if (_ownsNvml || NvmlInit() == 0)
             {
+                _ownsNvml = true;
                 if (NvmlDeviceGetHandleByIndex(0, out _gpuDevice) == 0)
                 {
                     _nvmlInitialized = true;
@@ -208,7 +212,7 @@ public class HardwareMonitorService : IDisposable
     public void EnrichMonitorData(MonitorData data)
     {
         // 1. Retry NVML initialization when dGPU wakes from RTD3 deep sleep
-        if (!_nvmlInitialized || _gpuDevice == IntPtr.Zero)
+        if (_allowNvml && (!_nvmlInitialized || _gpuDevice == IntPtr.Zero))
         {
             if ((DateTime.UtcNow - _lastNvmlRetryUtc).TotalSeconds >= 4.0)
             {
@@ -301,8 +305,9 @@ public class HardwareMonitorService : IDisposable
 
     public void Dispose()
     {
-        if (_nvmlInitialized)
+        if (_ownsNvml)
         {
+            _ownsNvml = false;
             try
             {
                 NvmlShutdown();

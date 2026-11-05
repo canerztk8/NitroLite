@@ -225,13 +225,13 @@ public class StorageHealthService
                         if (resolvedLetters.Count > 0)
                         {
                             usedBytes = mountedUsedBytes;
-                            freeBytes = sizeBytes > 0 ? Math.Max(0, sizeBytes - usedBytes) : mountedFreeBytes;
+                            freeBytes = mountedFreeBytes;
                         }
                         else
                         {
                             // Unpartitioned or unmounted drive: 0 used, all space available
                             usedBytes = 0;
-                            freeBytes = totalBytes;
+                            freeBytes = 0;
                         }
 
                         double totalGB = Math.Round(totalBytes / (1024.0 * 1024.0 * 1024.0), 1);
@@ -286,11 +286,11 @@ public class StorageHealthService
                             // Disk 0: Samsung 990 Pro ~42°C
                             // Disk 1: Samsung PM9A1 OEM ~39°C
                             if (diskNum == 0 || friendlyName.Contains("990", StringComparison.OrdinalIgnoreCase))
-                                driveTemp = 42;
+                                driveTemp = null;
                             else if (diskNum == 1 || friendlyName.Contains("PM9A1", StringComparison.OrdinalIgnoreCase) || friendlyName.Contains("MZVL", StringComparison.OrdinalIgnoreCase))
-                                driveTemp = 39;
+                                driveTemp = null;
                             else
-                                driveTemp = 40;
+                                driveTemp = null;
                         }
 
                         list.Add(new StorageDriveInfo
@@ -383,7 +383,7 @@ public class StorageHealthService
 
                             long totalBytes = sizeBytes > 0 ? sizeBytes : (mountedUsed + mountedFree);
                             long usedBytes = mountedUsed;
-                            long freeBytes = totalBytes > usedBytes ? totalBytes - usedBytes : mountedFree;
+                            long freeBytes = mountedFree;
 
                             double totalGB = Math.Round(totalBytes / (1024.0 * 1024.0 * 1024.0), 1);
                             double freeGB = Math.Round(freeBytes / (1024.0 * 1024.0 * 1024.0), 1);
@@ -404,7 +404,7 @@ public class StorageHealthService
                                 HealthStatus = 0,
                                 HealthDesc = "Sağlıklı (Nominal)",
                                 EstHealthPercent = 100,
-                                Temperature = (index == 0 || model.Contains("990", StringComparison.OrdinalIgnoreCase)) ? 42 : 39
+                                Temperature = null
                             });
                         }
                         catch { }
@@ -438,7 +438,7 @@ public class StorageHealthService
                         UsedPercent = totalGB > 0 ? Math.Round((usedGB / totalGB) * 100.0, 1) : 0,
                         HealthDesc = "Sağlıklı (Kondisyon İyi)",
                         EstHealthPercent = 100,
-                        Temperature = 40
+                        Temperature = null
                     });
                 }
             }

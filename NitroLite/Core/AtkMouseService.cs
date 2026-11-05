@@ -64,8 +64,9 @@ public class AtkMouseService
                 return true;
             }
 
-            // Fallback if ACK read timed out but packet was transmitted
-            if (SendPacketToMatchingDevice("vid_" + VID_ATK, "col05", packet))
+            // An explicit negative acknowledgement is a failure. A missing acknowledgement
+            // is only successful if a separate read verifies the requested profile.
+            if (ack == null && QueryCurrentProfile() == configNumber)
             {
                 CurrentActiveProfile = configNumber;
                 return true;
@@ -426,7 +427,7 @@ public class AtkMouseService
                     if (GetOverlappedResult(handle, ref ov, out readBytes, false) && readBytes > 0)
                     {
                         ioPending = false; // Successfully reaped
-                        if (rxBuf.Length >= 2 && rxBuf[1] == expectedCmdId)
+                        if (readBytes == REPORT_LEN_ATK_COL05 && rxBuf[0] == REPORT_ID_ATK_COL05 && rxBuf[1] == expectedCmdId)
                         {
                             return rxBuf;
                         }
@@ -440,7 +441,7 @@ public class AtkMouseService
             }
             else if (readBytes > 0)
             {
-                if (rxBuf.Length >= 2 && rxBuf[1] == expectedCmdId)
+                if (readBytes == REPORT_LEN_ATK_COL05 && rxBuf[0] == REPORT_ID_ATK_COL05 && rxBuf[1] == expectedCmdId)
                 {
                     return rxBuf;
                 }

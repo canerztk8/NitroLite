@@ -138,7 +138,7 @@ public class BatteryWatchdogService : IDisposable
             info.DischargeRateWatts = 0.0;
             info.ChargeRateWatts = 0.0;
             info.SmoothedDischargeRateWatts = 0.0;
-            info.TemperatureCelsius = CurrentStatus.TemperatureCelsius ?? 31.0;
+            info.TemperatureCelsius = null;
             CurrentStatus = info;
             StatusUpdated?.Invoke(info);
             return info;
@@ -202,7 +202,7 @@ public class BatteryWatchdogService : IDisposable
                         double c = (rawK - 2732.0) / 10.0;
                         if (c >= 15.0 && c <= 85.0)
                         {
-                            info.TemperatureCelsius = Math.Round(c, 1);
+                            // ACPI thermal zone is not identified as the battery; do not publish it.
                             break;
                         }
                     }
@@ -215,7 +215,7 @@ public class BatteryWatchdogService : IDisposable
         {
             // Thermodynamic wattage model (~29.5°C baseline for Acer Nitro 16 90.6Wh battery)
             double wattageHeat = (info.IsCharging ? info.ChargeRateWatts : info.DischargeRateWatts) * 0.08;
-            info.TemperatureCelsius = Math.Round(Math.Clamp(28.5 + wattageHeat, 26.0, 42.0), 1);
+            info.TemperatureCelsius = null;
         }
 
         CurrentStatus = info;
@@ -230,6 +230,9 @@ public class BatteryWatchdogService : IDisposable
             var details = new BatteryHealthDetails();
             try
             {
+                using (var design = new ManagementObjectSearcher(@"root\WMI", "SELECT DesignedCapacity FROM BatteryStaticData"))
+                using (var rows = design.Get())
+                    foreach (ManagementObject row in rows) { using (row) { details.DesignCapacityMWh = Convert.ToDouble(row["DesignedCapacity"] ?? 0); } break; }
                 // In-process WMI query: FullChargedCapacity with full disposal
                 using (var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT FullChargedCapacity FROM BatteryFullChargedCapacity"))
                 using (var results = searcher.Get())
@@ -291,7 +294,7 @@ public class BatteryWatchdogService : IDisposable
 
             try
             {
-                if (!File.Exists(CcSettingsPath)) return;
+                if (!hasMutex || !File.Exists(CcSettingsPath)) return;
 
                 string text;
                 using (var fs = new FileStream(CcSettingsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -308,10 +311,14 @@ public class BatteryWatchdogService : IDisposable
                 {
                     node["BatteryHealthy"] = 1;
                     var json = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-                    using var fs = new FileStream(CcSettingsPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
-                    using var writer = new StreamWriter(fs);
-                    writer.Write(json);
-                    writer.Flush();
+                    string temporary = CcSettingsPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    try
+                    {
+                        File.WriteAllText(temporary, json);
+                        if (File.ReadAllText(CcSettingsPath) != text) return;
+                        File.Replace(temporary, CcSettingsPath, CcSettingsPath + ".nitrolite.bak");
+                    }
+                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
                 }
             }
             catch

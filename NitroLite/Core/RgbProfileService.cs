@@ -30,6 +30,8 @@ public class RgbProfileService
     public void SaveCustomPreset(string name, string effect, int brightness, int speed, int direction, string color, List<string> leds)
     {
         var existing = _presets.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (existing?.IsBuiltIn == true)
+            throw new ArgumentException("Fabrika profili adı kullanılamaz; farklı bir profil adı seçin.", nameof(name));
         if (existing != null)
         {
             existing.Effect = effect;

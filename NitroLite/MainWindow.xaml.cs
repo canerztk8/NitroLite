@@ -499,7 +499,9 @@ public partial class MainWindow : Window
             // 6. Battery Health Details, Thermal Paste / Fan & Storage Health
             await RefreshBatteryHealthAsync();
             RefreshThermalHealthUi();
-            RefreshStorageHealthUi();
+            await RefreshStorageHealthUi();
+
+            await _powerAutomationService!.EvaluatePowerStateAsync();
 
             // 7. Debloat & NitroSense Suppression check
             _debloatService.DisableNitroSenseBackgroundExecution();
@@ -514,7 +516,9 @@ public partial class MainWindow : Window
 
     private void LoadSettings()
     {
-        _appSettings = SettingsManager.LoadSettingsWithFallback(AppSettingsConfigFile, AppSettingsConfigFile + ".bak", LegacyConfigFile);
+        var loadedSettings = SettingsManager.LoadSettingsWithFallback(AppSettingsConfigFile, AppSettingsConfigFile + ".bak", LegacyConfigFile);
+        foreach (var property in typeof(AppSettings).GetProperties())
+            if (property.CanRead && property.CanWrite) property.SetValue(_appSettings, property.GetValue(loadedSettings));
 
         // Immediately sync _lighting with loaded settings so it is never uninitialized
         if (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset))
@@ -753,7 +757,7 @@ public partial class MainWindow : Window
 
                 // Sub-Component Thermal Matrix: Motherboard / VRM (SYS1_TEMPERATURE)
                 if (TxtSubMoboTemp != null)
-                    TxtSubMoboTemp.Text = TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : 54);
+                    TxtSubMoboTemp.Text = TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : null);
 
                 // Tab 1: Fans
                 TxtCpuFanRpm.Text = TelemetryFormatter.FormatFanSpeed(data.CpuFanSpeed);
@@ -766,7 +770,7 @@ public partial class MainWindow : Window
                 TxtMonCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
                 BarMonCpuTemp.Value = data.CpuTemperature;
 
-                TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts);
+                TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts) + " (tahmini)";
                 BarMonCpuPower.Value = data.CpuPowerWatts;
 
                 TxtMonCpuUsage.Text = $"{data.CpuUsage:F1} %";
@@ -1970,9 +1974,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void BtnScanGames_Click(object sender, RoutedEventArgs e)
+    private async void BtnScanGames_Click(object sender, RoutedEventArgs e)
     {
-        var found = _gameService.ScanAndAddInstalledGames();
+        var found = await Task.Run(() => _gameService.ScanAndAddInstalledGames());
         PopulateConfiguredGames();
         ShowToast(found > 0 ? $"{found} yeni oyun profili eklendi." : "Yeni yüklü oyun tespit edilmedi.");
     }
@@ -2787,10 +2791,10 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             if (TxtBatHealthPercent != null)
-                TxtBatHealthPercent.Text = $"{details.HealthPercent:F1} %";
+                TxtBatHealthPercent.Text = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0 ? $"{details.HealthPercent:F1} %" : "Ölçülemiyor";
 
             if (TxtBatWearPercent != null)
-                TxtBatWearPercent.Text = $"{details.WearLevelPercent:F1} %";
+                TxtBatWearPercent.Text = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0 ? $"{details.WearLevelPercent:F1} %" : "Ölçülemiyor";
 
             if (TxtBatFullChargeCap != null)
                 TxtBatFullChargeCap.Text = $"{details.FullChargeCapacityMWh:N0} mWh";
@@ -2809,7 +2813,7 @@ public partial class MainWindow : Window
         {
             await RefreshBatteryHealthAsync();
             RefreshThermalHealthUi();
-            RefreshStorageHealthUi();
+            await RefreshStorageHealthUi();
             ShowToast("Donanım sağlık telemetrisi güncellendi.");
         }
         catch (Exception ex)
@@ -2818,9 +2822,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RefreshStorageHealthUi()
+    private async Task RefreshStorageHealthUi()
     {
-        var drives = _storageService.GetDrives();
+        var drives = await Task.Run(() => _storageService.GetDrives());
         if (Dispatcher.HasShutdownStarted) return;
         Dispatcher.Invoke(() =>
         {
@@ -2851,7 +2855,7 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive0HealthBadge != null)
                 {
-                    TxtDrive0HealthBadge.Text = $"Sağlık: %{d0.EstHealthPercent} ({d0.HealthDesc})";
+                    TxtDrive0HealthBadge.Text = d0.EstHealthPercent >= 0 ? $"Sağlık: %{d0.EstHealthPercent}" : "Aşınma verisi ölçülemiyor";
                 }
                 if (TxtDrive0Temp != null)
                 {
@@ -2892,7 +2896,7 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive1HealthBadge != null)
                 {
-                    TxtDrive1HealthBadge.Text = $"Sağlık: %{d1.EstHealthPercent} ({d1.HealthDesc})";
+                    TxtDrive1HealthBadge.Text = d1.EstHealthPercent >= 0 ? $"Sağlık: %{d1.EstHealthPercent}" : "Aşınma verisi ölçülemiyor";
                 }
                 if (TxtDrive1Temp != null)
                 {
@@ -2965,7 +2969,7 @@ public partial class MainWindow : Window
 
             if (TxtPasteHealthPercent != null)
             {
-                TxtPasteHealthPercent.Text = $"{report.PasteHealthPercent:F1} %";
+                TxtPasteHealthPercent.Text = "Ölçülemiyor";
                 TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
 
@@ -2985,7 +2989,7 @@ public partial class MainWindow : Window
                 TxtPassiveFanHours.Text = $"{report.PassiveFanHours:F1} Saat";
 
             if (TxtFanBearingHealth != null)
-                TxtFanBearingHealth.Text = $"{report.FanBearingHealthPercent:F1} %";
+                TxtFanBearingHealth.Text = "Ölçülemiyor";
 
             if (TxtThermalBadge != null)
             {
@@ -2994,7 +2998,7 @@ public partial class MainWindow : Window
             }
 
             if (TxtThermalRecommendation != null)
-                TxtThermalRecommendation.Text = report.Recommendation;
+                TxtThermalRecommendation.Text = "Bu sensörlerden macun ve rulman ömrü güvenilir biçimde ölçülemez.";
         });
     }
 
@@ -3254,7 +3258,28 @@ public partial class MainWindow : Window
         }
     }
 
-    public void RealExit()
+    private bool _exitRequested;
+    public async void RealExit()
+    {
+        if (_exitRequested) return;
+        _exitRequested = true;
+        try
+        {
+            if (_isGameSessionActive || HasPendingDesktopRestore)
+            {
+                await HandleGameEndedAsync(_gameService.ActiveGameProfile ?? new GameProfile());
+                if (HasPendingDesktopRestore && !await RetryPendingDesktopRestoreAsync())
+                {
+                    ShowToast("Ayarlar geri yüklenemedi; yeniden deneyebilmeniz için uygulama açık bırakıldı.", false);
+                    return;
+                }
+            }
+            FinishExit();
+        }
+        catch (Exception ex) { ShowToast($"Çıkış tamamlanamadı: {ex.Message}", false); }
+        finally { _exitRequested = false; }
+    }
+    private void FinishExit()
     {
         _isExiting = true;
         SaveWindowPosition();
@@ -3283,7 +3308,7 @@ public partial class MainWindow : Window
         System.Windows.Application.Current.Shutdown();
     }
 
-    private void Nav_Checked(object sender, RoutedEventArgs e)
+    private async void Nav_Checked(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || TabModes == null || TabMonitoring == null || TabRgb == null || TabBattery == null || TabDebloat == null) return;
 
@@ -3301,7 +3326,7 @@ public partial class MainWindow : Window
         if (NavBattery.IsChecked == true)
         {
             RefreshThermalHealthUi();
-            RefreshStorageHealthUi();
+            await RefreshStorageHealthUi();
         }
     }
 
@@ -3762,7 +3787,7 @@ public partial class MainWindow : Window
         ShowToast(_appSettings.AutoRamCleanerEnabled ? "Otomatik bellek temizleme etkin" : "Otomatik bellek temizleme devre dışı");
     }
 
-    private void CmbDcPowerMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void CmbDcPowerMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || CmbDcPowerMode?.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
         if (Enum.TryParse<DcPowerProfilePreference>(tag, out var pref))
@@ -3770,16 +3795,19 @@ public partial class MainWindow : Window
             _appSettings.DcPowerMode = pref;
             SaveSettings();
             ShowToast($"Pilde güç tercihi: {pref}");
+            if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
         }
     }
 
-    private void ChkAutoRefreshRate_Changed(object sender, RoutedEventArgs e)
+    private async void ChkAutoRefreshRate_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkAutoRefreshRate == null) return;
         _appSettings.AutoRefreshRateSwitching = ChkAutoRefreshRate.IsChecked == true;
+        if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
         SaveSettings();
         ShowToast(_appSettings.AutoRefreshRateSwitching
             ? "Otomatik ekran tazeleme hızı geçişi etkin (60Hz / 165Hz)"
             : "Otomatik ekran tazeleme hızı geçişi devre dışı");
     }
 }
+
