@@ -511,10 +511,39 @@ public class AcerAgentClient : IDisposable
 
             var actualBrightness = isOff ? 0 : Math.Clamp(brightness, 0, 9);
             var actualColor = isOff ? "#000000" : primaryColor;
-            var actualEffect = isOff ? "STATIC" : effUpper;
+            var actualEffect = isOff ? "OFF" : effUpper;
 
-            // Send to Keyboard device (device = 1)
-            object paramKb = isStatic
+            // Global device (device = 0) is the master lighting target
+            object paramGlobal = (isStatic || isOff)
+                ? new
+                {
+                    device = 0,
+                    effect = actualEffect,
+                    brightness = actualBrightness,
+                    speed = Math.Clamp(speed, 1, 9),
+                    duration = 5,
+                    direction = Math.Clamp(direction, 0, 1),
+                    color = actualColor,
+                    LEDs = leds
+                }
+                : new
+                {
+                    device = 0,
+                    effect = actualEffect,
+                    dyEffect = actualEffect,
+                    brightness = actualBrightness,
+                    speed = Math.Clamp(speed, 1, 9),
+                    duration = 5,
+                    direction = Math.Clamp(direction, 0, 1),
+                    color = actualColor,
+                    LEDs = leds
+                };
+
+            var respGlobal = await SendRawAsync(PacketSetDeviceData, new { Function = "LIGHTING", Parameter = paramGlobal });
+            bool globalSuccess = !string.IsNullOrWhiteSpace(respGlobal) && IsSuccessResult(respGlobal);
+
+            // Also synchronize with Keyboard device (device = 1) for dynamic / multi-device models
+            object paramKb = (isStatic || isOff)
                 ? new
                 {
                     device = 1,
@@ -540,39 +569,9 @@ public class AcerAgentClient : IDisposable
                 };
 
             var respKb = await SendRawAsync(PacketSetDeviceData, new { Function = "LIGHTING", Parameter = paramKb });
-            if (string.IsNullOrWhiteSpace(respKb) || !IsSuccessResult(respKb))
-            {
-                return false;
-            }
+            bool kbSuccess = !string.IsNullOrWhiteSpace(respKb) && IsSuccessResult(respKb);
 
-            // Synchronize with Global device (device = 0)
-            object paramGlobal = isStatic
-                ? new
-                {
-                    device = 0,
-                    effect = actualEffect,
-                    brightness = actualBrightness,
-                    speed = Math.Clamp(speed, 1, 9),
-                    duration = 5,
-                    direction = Math.Clamp(direction, 0, 1),
-                    color = actualColor,
-                    LEDs = leds
-                }
-                : new
-                {
-                    device = 0,
-                    effect = actualEffect,
-                    dyEffect = actualEffect,
-                    brightness = actualBrightness,
-                    speed = Math.Clamp(speed, 1, 9),
-                    duration = 5,
-                    direction = Math.Clamp(direction, 0, 1),
-                    color = actualColor,
-                    LEDs = leds
-                };
-
-            var resp = await SendRawAsync(PacketSetDeviceData, new { Function = "LIGHTING", Parameter = paramGlobal });
-            return !string.IsNullOrWhiteSpace(resp) && IsSuccessResult(resp);
+            return globalSuccess || kbSuccess;
         }
         catch
         {

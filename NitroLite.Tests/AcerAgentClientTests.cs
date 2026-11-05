@@ -170,4 +170,77 @@ public class AcerAgentClientTests
         Assert.Contains("\"Function\":\"GPU_MODE\"", payload);
         Assert.Contains("\"mode\":1", payload);
     }
+
+    [Fact]
+    public void SetLighting_OffState_GeneratesOffEffectForBothDevices()
+    {
+        string[] leds = new[] { "#000000", "#000000", "#000000", "#000000" };
+        var paramGlobal = new
+        {
+            device = 0,
+            effect = "OFF",
+            brightness = 0,
+            speed = 1,
+            duration = 5,
+            direction = 1,
+            color = "#000000",
+            LEDs = leds
+        };
+        var paramKb = new
+        {
+            device = 1,
+            effect = "OFF",
+            brightness = 0,
+            speed = 1,
+            duration = 5,
+            direction = 1,
+            color = "#000000",
+            LEDs = leds
+        };
+
+        var jsonGlobal = JsonSerializer.Serialize(new { Function = "LIGHTING", Parameter = paramGlobal });
+        var jsonKb = JsonSerializer.Serialize(new { Function = "LIGHTING", Parameter = paramKb });
+
+        Assert.Contains("\"effect\":\"OFF\"", jsonGlobal);
+        Assert.Contains("\"effect\":\"OFF\"", jsonKb);
+        Assert.Contains("\"device\":0", jsonGlobal);
+        Assert.Contains("\"device\":1", jsonKb);
+    }
+
+    [Fact]
+    public void SetLighting_StaticProfile_FramesDevice0WithMultiZoneLeds()
+    {
+        string[] zones = new[] { "#00E5FF", "#FF2A55", "#00E5FF", "#FF2A55" };
+        var paramGlobal = new
+        {
+            device = 0,
+            effect = "STATIC",
+            brightness = 7,
+            speed = 4,
+            duration = 5,
+            direction = 1,
+            color = "#00E5FF",
+            LEDs = zones
+        };
+
+        var json = JsonSerializer.Serialize(new { Function = "LIGHTING", Parameter = paramGlobal });
+        Assert.Contains("\"effect\":\"STATIC\"", json);
+        Assert.Contains("\"device\":0", json);
+        Assert.Contains("\"#00E5FF\"", json);
+        Assert.Contains("\"#FF2A55\"", json);
+    }
+
+    [Theory]
+    [InlineData("{\"result\": \"0\"}", true)]
+    [InlineData("{\"result\": \"3\"}", true)]
+    [InlineData("{\"result\": 0}", true)]
+    [InlineData("{\"result\": 3}", true)]
+    [InlineData("{\"result\": \"4\"}", false)]
+    [InlineData("{\"result\": 4}", false)]
+    [InlineData("{\"result\": \"1\"}", false)]
+    [InlineData("", false)]
+    public void IsSuccessResult_AccuratelyDistinguishesSuccessAndErrorCodes(string json, bool expected)
+    {
+        Assert.Equal(expected, AcerAgentClient.IsSuccessResult(json));
+    }
 }

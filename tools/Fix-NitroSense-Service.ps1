@@ -18,10 +18,14 @@ Stop-Process -Name "AcerAgentService", "AcerHardwareService", "AcerCentralServic
 Start-Sleep -Seconds 1
 
 # 2. Update ImagePath in Registry to the 2025 driver version
-Write-Host "`n[2/5] Servis dosya yollari 2025 surumune guncelleniyor..." -ForegroundColor Yellow
+Write-Host "`n[2/5] Servis dosya yollari ve baslangic turleri 2025 surumune guncelleniyor..." -ForegroundColor Yellow
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\AASSvc" -Name "ImagePath" -Value $centralExe
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\AASSvc" -Name "Start" -Value 2 -Force
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\AcerLightingService" -Name "ImagePath" -Value $lightingExe
-Write-Host "  -> [BASARILI] AASSvc ImagePath guncellendi (v1.2.108.3)." -ForegroundColor Green
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\AcerLightingService" -Name "Start" -Value 2 -Force
+Set-Service -Name "AASSvc" -StartupType Automatic -ErrorAction SilentlyContinue
+Set-Service -Name "AcerLightingService" -StartupType Automatic -ErrorAction SilentlyContinue
+Write-Host "  -> [BASARILI] AASSvc ve AcerLightingService ImagePath ve Start (Automatic) guncellendi." -ForegroundColor Green
 
 # 3. Ensure MUX capability flags in registry
 Write-Host "`n[3/5] MUX yetenek degerleri yaziliyor..." -ForegroundColor Yellow
