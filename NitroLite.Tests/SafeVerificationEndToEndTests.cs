@@ -2183,5 +2183,158 @@ function global:Disable-ScheduledTask {
         });
     }
 
+    // Battery Scenario 1: On battery, change fan to Max -> reconnect AC
+    // Expected: Default / Aggressive / Max (untouched mode and boost restored to AC targets)
+    [Fact]
+    public async Task TestCase_BatteryManualFanChange_ReconnectAc_RestoresModeAndBoost_KeepsFanMax()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+            mockCpu.CurrentMode = CpuBoostMode.Aggressive;
+
+            // 1. Unplug AC: machine transitions to DC Eco (Quiet / Disabled / Auto)
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+            Assert.Equal(OperatingMode.Quiet, mockAgent.CurrentMode);
+            Assert.Equal(CpuBoostMode.Disabled, mockCpu.CurrentMode);
+
+            // 2. While on battery, manually set fan to Max
+            bool fanOk = await window.SetManualFanModeAsync(FanMode.Max);
+            Assert.True(fanOk);
+            Assert.Equal(FanMode.Max, window.CurrentFanMode);
+            // System must STILL be recognized as DC Eco active since we are still on battery!
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+
+            // 3. Reconnect AC
+            await window.PowerAutomation.ProcessPowerTransitionAsync(isAc: true);
+
+            // Expected: Default mode and Aggressive boost restored; Fan remains Max
+            Assert.Equal(OperatingMode.Default, window.CurrentMode);
+            Assert.Equal(CpuBoostMode.Aggressive, mockCpu.CurrentMode);
+            Assert.Equal(FanMode.Max, window.CurrentFanMode);
+            Assert.False(window.PowerAutomation.IsDcEcoActive);
+        });
+    }
+
+    // Battery Scenario 2: On battery, change mode to Turbo -> reconnect AC
+    // Expected: Turbo / Aggressive / Auto (manual Turbo preserved, untouched boost and fan restored to AC targets)
+    [Fact]
+    public async Task TestCase_BatteryManualModeChange_ReconnectAc_RestoresBoostAndFan_KeepsModeTurbo()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+            mockCpu.CurrentMode = CpuBoostMode.Aggressive;
+
+            // 1. Unplug AC: machine transitions to DC Eco (Quiet / Disabled / Auto)
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+
+            // 2. While on battery, manually set mode to Turbo
+            bool modeOk = await window.SetManualModeAsync(OperatingMode.Turbo);
+            Assert.True(modeOk);
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+
+            // 3. Reconnect AC
+            await window.PowerAutomation.ProcessPowerTransitionAsync(isAc: true);
+
+            // Expected: Turbo mode preserved; Aggressive boost and Auto fan restored
+            Assert.Equal(OperatingMode.Turbo, window.CurrentMode);
+            Assert.Equal(CpuBoostMode.Aggressive, mockCpu.CurrentMode);
+            Assert.Equal(FanMode.Auto, window.CurrentFanMode);
+            Assert.False(window.PowerAutomation.IsDcEcoActive);
+        });
+    }
+
+    // Battery Scenario 3: On battery, change CPU boost to Efficient -> reconnect AC
+    // Expected: Default / Efficient / Auto (manual Efficient preserved, untouched mode and fan restored to AC targets)
+    [Fact]
+    public async Task TestCase_BatteryManualCpuBoostChange_ReconnectAc_RestoresModeAndFan_KeepsBoostEfficient()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.SetCurrentModeForTesting(OperatingMode.Default);
+            mockCpu.CurrentMode = CpuBoostMode.Aggressive;
+
+            // 1. Unplug AC: machine transitions to DC Eco (Quiet / Disabled / Auto)
+            mockAgent.OnSetOperatingModeAsync = m => Task.FromResult(true);
+            mockAgent.OnSetFanModeAsync = m => Task.FromResult(true);
+            mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(true);
+            await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
+
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+
+            // 2. While on battery, manually set boost to Efficient
+            bool boostOk = await window.SetManualCpuBoostAsync(CpuBoostMode.Efficient);
+            Assert.True(boostOk);
+            Assert.Equal(CpuBoostMode.Efficient, mockCpu.CurrentMode);
+            Assert.True(window.PowerAutomation.IsDcEcoActive);
+
+            // 3. Reconnect AC
+            await window.PowerAutomation.ProcessPowerTransitionAsync(isAc: true);
+
+            // Expected: Default mode and Auto fan restored; Boost remains Efficient
+            Assert.Equal(OperatingMode.Default, window.CurrentMode);
+            Assert.Equal(CpuBoostMode.Efficient, mockCpu.CurrentMode);
+            Assert.Equal(FanMode.Auto, window.CurrentFanMode);
+            Assert.False(window.PowerAutomation.IsDcEcoActive);
+        });
+    }
+
     #endregion
 }

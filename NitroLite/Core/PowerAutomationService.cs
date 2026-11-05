@@ -108,7 +108,7 @@ public class PowerAutomationService : IDisposable
     {
         _savedOperatingModeBeforeDc = mode;
         _pendingAcModeRestore = false;
-        if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
+        if (_lastAcStatus && !HasPendingAcRestore)
         {
             _isDcEcoActive = false;
         }
@@ -118,7 +118,7 @@ public class PowerAutomationService : IDisposable
     {
         _savedCpuBoostBeforeDc = boost;
         _pendingAcCpuRestore = false;
-        if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
+        if (_lastAcStatus && !HasPendingAcRestore)
         {
             _isDcEcoActive = false;
         }
@@ -128,7 +128,7 @@ public class PowerAutomationService : IDisposable
     {
         _savedFanModeBeforeDc = fan;
         _pendingAcFanRestore = false;
-        if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
+        if (_lastAcStatus && !HasPendingAcRestore)
         {
             _isDcEcoActive = false;
         }
