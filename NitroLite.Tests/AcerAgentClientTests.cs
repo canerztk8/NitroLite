@@ -52,6 +52,23 @@ public class AcerAgentClientTests
     }
 
     [Fact]
+    public void IsResponseFor_TreatsNullRequestReplyAsResponseNotEvent()
+    {
+        using var client = new AcerAgentClient();
+        bool eventRaised = false;
+        client.ServiceEventReceived += (_, _) => eventRaised = true;
+
+        // Seen live for GET_LIGHTING_EFFECT_CAPABILITY (packet 40).
+        const string reply = "{\"request\":null,\"result\":\"0\",\"data\":[]}";
+        Assert.True(client.IsResponseFor(reply, "LIGHTING_EFFECT_CAPABILITY"));
+        // While no request is awaited (idle drain) it is dropped, not misread as an event.
+        Assert.False(client.IsResponseFor(reply, string.Empty));
+
+        System.Threading.Thread.Sleep(200);
+        Assert.False(eventRaised);
+    }
+
+    [Fact]
     public void BuildFanControlParameter_UsesNitroSenseCustomFanDataFormat()
     {
         var json = JsonSerializer.Serialize(AcerAgentClient.BuildFanControlParameter(FanMode.Custom, 70, 150));

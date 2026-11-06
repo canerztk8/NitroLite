@@ -264,6 +264,17 @@ public class AcerAgentClient : IDisposable
         if (node is not JsonObject obj) return false;
 
         var request = obj["request"]?.ToString();
+
+        // Some AASSvc replies (e.g. packet 40) carry "request": null. They are still responses: they have a
+        // "request" or "result" key, while service events carry "Function"/"Parameter" instead. Only one
+        // request is ever in flight (the client lock) and a timeout disconnects, so a null-request response
+        // belongs to the request being awaited. During the idle drain (expectedRequest empty) it is dropped.
+        bool isResponseShaped = obj.ContainsKey("request") || obj.ContainsKey("result");
+        if (request == null && isResponseShaped)
+        {
+            return expectedRequest.Length > 0;
+        }
+
         if (request == null)
         {
             var fn = obj["Function"]?.ToString() ?? string.Empty;
@@ -767,13 +778,15 @@ public class AcerAgentClient : IDisposable
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        // Wait briefly for an in-flight request so the semaphore is not disposed underneath it.
+        // Dispose is called on the UI thread during exit, so wait only briefly for an in-flight request.
+        // If it is still running, Disconnect() closes the socket, which makes its pending read fail fast
+        // (SendRawAsync catches that); the buffer is then left to the GC instead of being disposed under it.
         bool acquired = false;
-        try { acquired = _lock.Wait(TimeSpan.FromSeconds(4)); } catch { }
+        try { acquired = _lock.Wait(TimeSpan.FromMilliseconds(500)); } catch { }
         try
         {
             Disconnect();
-            _pending.Dispose();
+            if (acquired) _pending.Dispose();
         }
         finally
         {

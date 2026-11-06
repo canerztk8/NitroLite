@@ -13,7 +13,7 @@ namespace NitroLite.Core;
 
 public class GameDetectionService : IDisposable
 {
-    private static readonly string ProfilesFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "game_profiles.json");
+    private static readonly string ProfilesFile = AppPaths.GetDataFile("game_profiles.json");
 
     private readonly List<GameProfile> _profiles = new();
     private readonly System.Threading.Timer _scanTimer;

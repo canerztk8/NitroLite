@@ -17,7 +17,7 @@ public class RgbPreset
 
 public class RgbProfileService
 {
-    private static readonly string PresetsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "rgb_presets.json");
+    private static readonly string PresetsFile = AppPaths.GetDataFile("rgb_presets.json");
     private readonly List<RgbPreset> _presets = new();
     private readonly object _presetsLock = new();
 

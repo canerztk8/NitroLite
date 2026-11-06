@@ -336,42 +336,50 @@ public class BatteryWatchdogService : IDisposable
         });
     }
 
+    private static double _cachedDesignCapacityMWh;
+
     private static double QueryDesignCapacityFromSystem(out bool isEstimated)
     {
         isEstimated = false;
+
+        // Design capacity never changes; run powercfg once per process instead of on every Battery tab visit.
+        var cached = _cachedDesignCapacityMWh;
+        if (cached > 0) return cached;
+
+        var tempXml = AppPaths.UniqueTempFile("nitrolite_bat", ".xml");
         try
         {
-            var tempXml = Path.Combine(Path.GetTempPath(), $"bat_{Guid.NewGuid():N}.xml");
             var psi = new ProcessStartInfo
             {
-                FileName = "powercfg.exe",
+                FileName = AppPaths.SystemTool("powercfg.exe"),
                 Arguments = $"/batteryreport /xml /output \"{tempXml}\"",
                 CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true
+                UseShellExecute = false
             };
             using var proc = Process.Start(psi);
-            if (proc != null && proc.WaitForExit(3000))
+            if (proc != null)
             {
-                if (File.Exists(tempXml))
+                if (!proc.WaitForExit(5000))
                 {
-                    try
+                    try { proc.Kill(entireProcessTree: true); } catch { }
+                }
+                else if (File.Exists(tempXml))
+                {
+                    var xml = File.ReadAllText(tempXml);
+                    var match = Regex.Match(xml, @"<DesignCapacity>(\d+)</DesignCapacity>");
+                    if (match.Success && double.TryParse(match.Groups[1].Value, out double cap) && cap > 0)
                     {
-                        var xml = File.ReadAllText(tempXml);
-                        var match = Regex.Match(xml, @"<DesignCapacity>(\d+)</DesignCapacity>");
-                        if (match.Success && double.TryParse(match.Groups[1].Value, out double cap) && cap > 0)
-                        {
-                            return cap;
-                        }
-                    }
-                    finally
-                    {
-                        try { File.Delete(tempXml); } catch { }
+                        _cachedDesignCapacityMWh = cap;
+                        return cap;
                     }
                 }
             }
         }
         catch { }
+        finally
+        {
+            try { if (File.Exists(tempXml)) File.Delete(tempXml); } catch { }
+        }
 
         // Physical hardware specification for Acer Nitro 16 AN16-41 (LGC AP21A8T 90,614 mWh)
         isEstimated = true;

@@ -8,8 +8,8 @@ namespace NitroLite;
 
 public partial class App : System.Windows.Application
 {
-    private static readonly string LogFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "nitrolite.log");
-    private static readonly string ConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+    private static readonly string LogFile = Path.Combine(AppPaths.DataDirectory, "nitrolite.log");
+    private static readonly string ConfigFile = AppPaths.GetDataFile("config.json");
 
     private const string MutexName = "Local\\NitroLite_SingleInstance_Mutex_AN16";
     private const string EventName = "Local\\NitroLite_SingleInstance_WakeUpEvent_AN16";

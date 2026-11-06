@@ -219,7 +219,7 @@ public class CpuPowerService
                     ? ProcessInfoFactory($"/query SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}")
                     : new ProcessStartInfo
                     {
-                        FileName = "powercfg.exe",
+                        FileName = AppPaths.SystemTool("powercfg.exe"),
                         Arguments = $"/query SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
@@ -498,7 +498,7 @@ public class CpuPowerService
                 ? ProcessInfoFactory(args)
                 : new ProcessStartInfo
                 {
-                    FileName = "powercfg.exe",
+                    FileName = AppPaths.SystemTool("powercfg.exe"),
                     Arguments = args,
                     UseShellExecute = false,
                     CreateNoWindow = true

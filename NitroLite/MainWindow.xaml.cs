@@ -115,11 +115,11 @@ public partial class MainWindow : Window
     private bool _isPolling = false;
     private bool _isExiting = false;
 
-    private static readonly string ActiveRgbConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_rgb_state.json");
-    private static readonly string AppSettingsConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
-    private static readonly string LegacyConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
-    private static readonly string GameSessionRecoveryFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_game_session.json");
-    private static readonly string DcEcoStateFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dc_eco_state.json");
+    private static readonly string ActiveRgbConfigFile = AppPaths.GetDataFile("active_rgb_state.json");
+    private static readonly string AppSettingsConfigFile = AppPaths.GetDataFile("settings.json");
+    private static readonly string LegacyConfigFile = AppPaths.GetDataFile("config.json");
+    private static readonly string GameSessionRecoveryFile = AppPaths.GetDataFile("active_game_session.json");
+    private static readonly string DcEcoStateFile = AppPaths.GetDataFile("dc_eco_state.json");
 
     internal void SaveGameSessionRecoveryState(GameSessionRecoveryState state)
     {

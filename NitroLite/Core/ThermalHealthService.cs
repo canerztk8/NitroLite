@@ -43,7 +43,7 @@ public class ThermalHealthReport
 
 public class ThermalHealthService
 {
-    private static readonly string DataFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "thermal_health.json");
+    private static readonly string DataFile = AppPaths.GetDataFile("thermal_health.json");
     private readonly object _syncLock = new();
     private ThermalHealthData _data = new();
     private int _sampleCounter = 0;

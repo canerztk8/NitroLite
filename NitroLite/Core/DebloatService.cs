@@ -99,7 +99,7 @@ public class DebloatService
     public string? LastError { get; internal set; }
 
     public string BackupStateFilePath { get; set; } = 
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "debloat_backup_state.json");
+        AppPaths.GetDataFile("debloat_backup_state.json");
 
     private Process? _activePowerShellProcess;
     private readonly object _processLock = new();
@@ -390,7 +390,7 @@ public class DebloatService
 
                 using var p = Process.Start(new ProcessStartInfo
                 {
-                    FileName = "sc.exe",
+                    FileName = AppPaths.SystemTool("sc.exe"),
                     Arguments = $"query \"{name}\"",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
@@ -452,7 +452,7 @@ public class DebloatService
         {
             using var p = Process.Start(new ProcessStartInfo
             {
-                FileName = "schtasks.exe",
+                FileName = AppPaths.SystemTool("schtasks.exe"),
                 Arguments = $"/query /tn \"{taskName}\" /fo csv",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -529,7 +529,7 @@ public class DebloatService
 
     public string GenerateDebloatScript(Dictionary<string, string>? recordedState = null, string? errorLogPath = null)
     {
-        errorLogPath ??= Path.Combine(Path.GetTempPath(), "nitrolite_debloat_err.log");
+        errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_debloat_err", ".log");
         var logEscaped = errorLogPath.Replace("'", "''");
         var targetServices = recordedState != null
             ? Tier1Services.Where(s => recordedState.ContainsKey(s)).ToArray()
@@ -586,7 +586,7 @@ public class DebloatService
 
     public string GenerateRestoreScript(Dictionary<string, string>? backupState = null, string? errorLogPath = null)
     {
-        errorLogPath ??= Path.Combine(Path.GetTempPath(), "nitrolite_restore_err.log");
+        errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
         var logEscaped = errorLogPath.Replace("'", "''");
         backupState ??= LoadBackupState();
 
@@ -741,7 +741,7 @@ public class DebloatService
 
                 var psi = new ProcessStartInfo
                 {
-                    FileName = "powershell.exe",
+                    FileName = AppPaths.WindowsPowerShell,
                     Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}",
                     UseShellExecute = true,
                     Verb = "runas",
@@ -926,7 +926,7 @@ public class DebloatService
             }
 
             // 2. Generate and run debloat script with error logging
-            var errLog = Path.Combine(Path.GetTempPath(), "nitrolite_debloat_err.log");
+            var errLog = AppPaths.UniqueTempFile("nitrolite_debloat_err", ".log");
             var script = GenerateDebloatScript(existingBackup, errLog);
             return await RunElevatedPowerShellAsync(script, errLog);
         }
@@ -973,7 +973,7 @@ public class DebloatService
                 }
             }
 
-            var errLog = Path.Combine(Path.GetTempPath(), "nitrolite_restore_err.log");
+            var errLog = AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
             var script = GenerateRestoreScript(backup, errLog);
             bool success = await RunElevatedPowerShellAsync(script, errLog);
             if (success)
