@@ -51,6 +51,7 @@ public class PowerAutomationService : IDisposable
     private SemaphoreSlim? _transitionLock;
 
     private readonly System.Timers.Timer _debounceTimer;
+    private readonly object _stateSyncLock = new();
     private bool _lastAcStatus = true;
     private bool _hasEvaluatedInitialState = false;
     private bool _pendingDcApply;
@@ -92,48 +93,63 @@ public class PowerAutomationService : IDisposable
 
     public void SetSavedAcBaseline(OperatingMode mode, CpuBoostMode boost, FanMode fan, bool force = false)
     {
-        if (!force && _isDcEcoActive)
+        lock (_stateSyncLock)
         {
-            // Do not corrupt previously saved AC desktop baseline when on DC Eco mode!
-            return;
+            if (!force && _isDcEcoActive)
+            {
+                // Do not corrupt previously saved AC desktop baseline when on DC Eco mode!
+                return;
+            }
+            _savedOperatingModeBeforeDc = mode;
+            _savedCpuBoostBeforeDc = boost;
+            _savedFanModeBeforeDc = fan;
         }
-        _savedOperatingModeBeforeDc = mode;
-        _savedCpuBoostBeforeDc = boost;
-        _savedFanModeBeforeDc = fan;
     }
 
     public void SetDcEcoActive(bool active)
     {
-        _isDcEcoActive = active;
+        lock (_stateSyncLock)
+        {
+            _isDcEcoActive = active;
+        }
     }
 
     public void UpdateManualOperatingMode(OperatingMode mode)
     {
-        _savedOperatingModeBeforeDc = mode;
-        _pendingAcModeRestore = false;
-        if (_lastAcStatus && !HasPendingAcRestore)
+        lock (_stateSyncLock)
         {
-            _isDcEcoActive = false;
+            _savedOperatingModeBeforeDc = mode;
+            _pendingAcModeRestore = false;
+            if (_lastAcStatus && !HasPendingAcRestore)
+            {
+                _isDcEcoActive = false;
+            }
         }
     }
 
     public void UpdateManualCpuBoost(CpuBoostMode boost)
     {
-        _savedCpuBoostBeforeDc = boost;
-        _pendingAcCpuRestore = false;
-        if (_lastAcStatus && !HasPendingAcRestore)
+        lock (_stateSyncLock)
         {
-            _isDcEcoActive = false;
+            _savedCpuBoostBeforeDc = boost;
+            _pendingAcCpuRestore = false;
+            if (_lastAcStatus && !HasPendingAcRestore)
+            {
+                _isDcEcoActive = false;
+            }
         }
     }
 
     public void UpdateManualFanMode(FanMode fan)
     {
-        _savedFanModeBeforeDc = fan;
-        _pendingAcFanRestore = false;
-        if (_lastAcStatus && !HasPendingAcRestore)
+        lock (_stateSyncLock)
         {
-            _isDcEcoActive = false;
+            _savedFanModeBeforeDc = fan;
+            _pendingAcFanRestore = false;
+            if (_lastAcStatus && !HasPendingAcRestore)
+            {
+                _isDcEcoActive = false;
+            }
         }
     }
 
@@ -189,7 +205,14 @@ public class PowerAutomationService : IDisposable
     private async void OnDebounceElapsed(object? sender, ElapsedEventArgs e)
     {
         if (_isDisposed) return;
-        await EvaluatePowerStateAsync();
+        try
+        {
+            await EvaluatePowerStateAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"OnDebounceElapsed failed: {ex.Message}");
+        }
     }
 
     public async Task EvaluatePowerStateAsync(bool? forceAcStatus = null)
@@ -515,6 +538,5 @@ public class PowerAutomationService : IDisposable
 
         _debounceTimer.Stop();
         _debounceTimer.Dispose();
-        GC.SuppressFinalize(this);
     }
 }

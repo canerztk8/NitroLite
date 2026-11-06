@@ -115,7 +115,11 @@ public class ThermalHealthService
     {
         try
         {
-            var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
+            string json;
+            lock (_syncLock)
+            {
+                json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
+            }
             var tempFile = DataFile + ".tmp";
             File.WriteAllText(tempFile, json);
             File.Move(tempFile, DataFile, overwrite: true);
@@ -154,16 +158,19 @@ public class ThermalHealthService
 
         // 1. Fan runtime accumulation
         int maxRpm = Math.Max(data.CpuFanSpeed, data.GpuFanSpeed);
-        if (maxRpm > 0)
+        lock (_syncLock)
         {
-            _data.TotalFanActiveSeconds += elapsedSeconds;
-            _todayFanActiveSeconds += elapsedSeconds;
-            _data.AccumulatedFanRpm += (long)maxRpm * elapsedSeconds;
-        }
-        else
-        {
-            _data.TotalFanPassiveSeconds += elapsedSeconds;
-            _todayFanPassiveSeconds += elapsedSeconds;
+            if (maxRpm > 0)
+            {
+                _data.TotalFanActiveSeconds += elapsedSeconds;
+                _todayFanActiveSeconds += elapsedSeconds;
+                _data.AccumulatedFanRpm += (long)maxRpm * elapsedSeconds;
+            }
+            else
+            {
+                _data.TotalFanPassiveSeconds += elapsedSeconds;
+                _todayFanPassiveSeconds += elapsedSeconds;
+            }
         }
 
         // 2. Idle temperature sampling:
@@ -243,18 +250,18 @@ public class ThermalHealthService
 
     private void UpdateDailySummary()
     {
-        var todayStr = DateTime.Now.ToString("yyyy-MM-dd");
-        var summary = _data.DailyHistory.FirstOrDefault(d => d.Date == todayStr);
-        if (summary == null)
-        {
-            summary = new DailyThermalSummary { Date = todayStr };
-            _data.DailyHistory.Add(summary);
-            // Keep last 30 days history
-            if (_data.DailyHistory.Count > 30) _data.DailyHistory.RemoveAt(0);
-        }
-
         lock (_syncLock)
         {
+            var todayStr = DateTime.Now.ToString("yyyy-MM-dd");
+            var summary = _data.DailyHistory.FirstOrDefault(d => d.Date == todayStr);
+            if (summary == null)
+            {
+                summary = new DailyThermalSummary { Date = todayStr };
+                _data.DailyHistory.Add(summary);
+                // Keep last 30 days history
+                if (_data.DailyHistory.Count > 30) _data.DailyHistory.RemoveAt(0);
+            }
+
             if (_idleCpuTemps.Count > 0)
                 summary.AvgIdleCpuTemp = Math.Round(_idleCpuTemps.Average(), 1);
 
@@ -263,31 +270,30 @@ public class ThermalHealthService
 
             if (_loadThermalRatios.Count > 0)
                 summary.ThermalResistanceRatio = Math.Round(_loadThermalRatios.Average(), 2);
-        }
 
-        // Accurately assign daily active and passive minutes bounded to 1440 min/day
-        summary.ActiveFanMinutes = Math.Min(1440, (int)(_todayFanActiveSeconds / 60));
-        summary.PassiveFanMinutes = Math.Min(1440, (int)(_todayFanPassiveSeconds / 60));
+            // Accurately assign daily active and passive minutes bounded to 1440 min/day
+            summary.ActiveFanMinutes = Math.Min(1440, (int)(_todayFanActiveSeconds / 60));
+            summary.PassiveFanMinutes = Math.Min(1440, (int)(_todayFanPassiveSeconds / 60));
+        }
     }
 
     public ThermalHealthReport GetReport()
     {
-        double activeHours = Math.Round(_data.TotalFanActiveSeconds / 3600.0, 1);
-        double passiveHours = Math.Round(_data.TotalFanPassiveSeconds / 3600.0, 1);
-        int avgRpm = _data.TotalFanActiveSeconds > 0 
-            ? (int)(_data.AccumulatedFanRpm / _data.TotalFanActiveSeconds) 
-            : 2600;
-
-        // Fan Bearing Health: Fan bearings rated for ~40,000-50,000 hours
-        double fanBearingHealth = Math.Clamp(100.0 - (activeHours / 50000.0 * 100.0), 80.0, 100.0);
-
-        // Thermal Resistance Ratio without artificial clamp so degradation can be detected
+        double activeHours;
+        double passiveHours;
+        int avgRpm;
         double currentRatio;
         double idleTemp;
         double loadTemp;
 
         lock (_syncLock)
         {
+            activeHours = Math.Round(_data.TotalFanActiveSeconds / 3600.0, 1);
+            passiveHours = Math.Round(_data.TotalFanPassiveSeconds / 3600.0, 1);
+            avgRpm = _data.TotalFanActiveSeconds > 0 
+                ? (int)(_data.AccumulatedFanRpm / _data.TotalFanActiveSeconds) 
+                : 2600;
+
             currentRatio = _loadThermalRatios.Count > 0 
                 ? Math.Round(_loadThermalRatios.Average(), 2) 
                 : (_data.DailyHistory.LastOrDefault()?.ThermalResistanceRatio ?? 1.95);
@@ -300,6 +306,9 @@ public class ThermalHealthService
                 ? Math.Round(_loadCpuTemps.Average(), 1) 
                 : (_data.DailyHistory.LastOrDefault()?.AvgLoadCpuTemp ?? 68.5);
         }
+
+        // Fan Bearing Health: Fan bearings rated for ~40,000-50,000 hours
+        double fanBearingHealth = Math.Clamp(100.0 - (activeHours / 50000.0 * 100.0), 80.0, 100.0);
 
         // Calculate Paste Health:
         // Ideal for high-end paste/putty: 1.70 - 2.10 °C/W => 97% - 99.5%

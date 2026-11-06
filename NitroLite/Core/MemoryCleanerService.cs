@@ -34,6 +34,9 @@ public class MemoryCleanerService
     private static extern bool CloseHandle(IntPtr hObject);
 
     [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll")]
     private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
 
     [DllImport("user32.dll")]
@@ -133,7 +136,7 @@ public class MemoryCleanerService
         try
         {
             GC.Collect(2, GCCollectionMode.Aggressive, false, false);
-            SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, -1, -1);
+            SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
         }
         catch { }
 
@@ -142,7 +145,7 @@ public class MemoryCleanerService
 
         long freedBytes = (long)memAfter.ullAvailPhys - (long)memBefore.ullAvailPhys;
         double freedMB = freedBytes > 0 ? Math.Round(freedBytes / (1024.0 * 1024.0), 1) : 0;
-        double availGB = Math.Round(memAfter.ullAvailPhys / (1024.0 * 1024.0), 2);
+        double availGB = Math.Round(memAfter.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 2);
 
         return new MemoryCleanerResult
         {
@@ -157,26 +160,37 @@ public class MemoryCleanerService
     {
         try
         {
-            if (OpenProcessToken(Process.GetCurrentProcess().Handle, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token))
+            if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token))
             {
-                if (LookupPrivilegeValue(null, "SeProfileSingleProcessPrivilege", out LUID luid))
+                try
                 {
-                    var tp = new TOKEN_PRIVILEGES
+                    if (LookupPrivilegeValue(null, "SeProfileSingleProcessPrivilege", out LUID luid))
                     {
-                        PrivilegeCount = 1,
-                        Luid = luid,
-                        Attributes = SE_PRIVILEGE_ENABLED
-                    };
-                    AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                        var tp = new TOKEN_PRIVILEGES
+                        {
+                            PrivilegeCount = 1,
+                            Luid = luid,
+                            Attributes = SE_PRIVILEGE_ENABLED
+                        };
+                        AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                    }
                 }
-                CloseHandle(token);
+                finally
+                {
+                    CloseHandle(token);
+                }
             }
 
             GCHandle handle = GCHandle.Alloc(MemoryPurgeStandbyList, GCHandleType.Pinned);
-            uint status = NtSetSystemInformation(SystemMemoryListInformation, handle.AddrOfPinnedObject(), Marshal.SizeOf(typeof(int)));
-            handle.Free();
-
-            return status == 0;
+            try
+            {
+                uint status = NtSetSystemInformation(SystemMemoryListInformation, handle.AddrOfPinnedObject(), Marshal.SizeOf(typeof(int)));
+                return status == 0;
+            }
+            finally
+            {
+                handle.Free();
+            }
         }
         catch
         {
@@ -187,7 +201,7 @@ public class MemoryCleanerService
     private static int TrimProcessWorkingSets(int? excludePid = null, string? excludeProcessName = null)
     {
         int count = 0;
-        int currentPid = Process.GetCurrentProcess().Id;
+        int currentPid = Environment.ProcessId;
         int foregroundPid = GetForegroundProcessId();
 
         Process[]? processes = null;

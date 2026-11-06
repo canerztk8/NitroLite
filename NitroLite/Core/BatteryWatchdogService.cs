@@ -33,6 +33,7 @@ public class BatteryWatchdogService : IDisposable
     private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(3));
     private readonly CancellationTokenSource _cts = new();
 
+    private readonly object _dischargeLock = new();
     private CancellationTokenSource? _dischargeCts;
     private bool _isDischarging = false;
     private bool _isDisposed = false;
@@ -338,65 +339,83 @@ public class BatteryWatchdogService : IDisposable
 
     public void StartSafeDischarge()
     {
-        if (_isDischarging) return;
-
-        var info = UpdateStatus();
-        // Do not attempt discharge while connected to AC power
-        if (info.IsPluggedIn) return;
-
-        _isDischarging = true;
-        _dischargeCts = new CancellationTokenSource();
-        var token = _dischargeCts.Token;
-
-        Task.Run(async () =>
+        lock (_dischargeLock)
         {
-            var workerCount = 2;
-            var workers = new Task[workerCount];
+            if (_isDischarging) return;
 
-            for (int i = 0; i < workerCount; i++)
+            var info = UpdateStatus();
+            // Do not attempt discharge while connected to AC power
+            if (info.IsPluggedIn) return;
+
+            _isDischarging = true;
+            _dischargeCts?.Cancel();
+            _dischargeCts?.Dispose();
+            var cts = new CancellationTokenSource();
+            _dischargeCts = cts;
+            var token = cts.Token;
+
+            Task.Run(async () =>
             {
-                workers[i] = Task.Run(() =>
+                var workerCount = 2;
+                var workers = new Task[workerCount];
+
+                for (int i = 0; i < workerCount; i++)
+                {
+                    workers[i] = Task.Run(() =>
+                    {
+                        try
+                        {
+                            while (!token.IsCancellationRequested)
+                            {
+                                double d = 1.0001;
+                                for (int j = 0; j < 50000; j++)
+                                {
+                                    d = Math.Sin(d) * Math.Cos(d);
+                                }
+                                Thread.Sleep(5);
+                            }
+                        }
+                        catch (OperationCanceledException) { }
+                    }, token);
+                }
+
+                try
                 {
                     while (!token.IsCancellationRequested)
                     {
-                        double d = 1.0001;
-                        for (int j = 0; j < 50000; j++)
+                        var s = UpdateStatus();
+                        // Stop immediately if AC connected or discharge target (<= 80%) is reached
+                        if (s.IsPluggedIn || s.BatteryPercent <= 80)
                         {
-                            d = Math.Sin(d) * Math.Cos(d);
+                            StopSafeDischarge();
+                            if (!s.IsPluggedIn && s.BatteryPercent <= 80)
+                            {
+                                try { SystemSounds.Asterisk.Play(); } catch { }
+                                DischargeTargetReached?.Invoke();
+                            }
+                            break;
                         }
-                        Thread.Sleep(5);
-                    }
-                }, token);
-            }
 
-            while (!token.IsCancellationRequested)
-            {
-                var s = UpdateStatus();
-                // Stop immediately if AC connected or discharge target (<= 80%) is reached
-                if (s.IsPluggedIn || s.BatteryPercent <= 80)
-                {
-                    StopSafeDischarge();
-                    if (!s.IsPluggedIn && s.BatteryPercent <= 80)
-                    {
-                        try { SystemSounds.Asterisk.Play(); } catch { }
-                        DischargeTargetReached?.Invoke();
+                        await Task.Delay(2000, token);
                     }
-                    break;
                 }
-
-                await Task.Delay(2000, token).ContinueWith(_ => { });
-            }
-        }, token);
+                catch (OperationCanceledException) { }
+            }, token);
+        }
     }
 
     public void StopSafeDischarge()
     {
-        if (!_isDischarging) return;
-
-        _dischargeCts?.Cancel();
-        _dischargeCts?.Dispose();
-        _dischargeCts = null;
-        _isDischarging = false;
+        lock (_dischargeLock)
+        {
+            if (!_isDischarging) return;
+            _isDischarging = false;
+            try
+            {
+                _dischargeCts?.Cancel();
+            }
+            catch { }
+        }
         UpdateStatus();
     }
 
@@ -413,8 +432,16 @@ public class BatteryWatchdogService : IDisposable
 
         _cts.Cancel();
         _cts.Dispose();
-        _dischargeCts?.Cancel();
-        _dischargeCts?.Dispose();
+        lock (_dischargeLock)
+        {
+            try
+            {
+                _dischargeCts?.Cancel();
+                _dischargeCts?.Dispose();
+                _dischargeCts = null;
+            }
+            catch { }
+        }
         _timer.Dispose();
     }
 }

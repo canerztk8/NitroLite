@@ -1027,7 +1027,7 @@ public class DebloatService
 
             if (enable)
             {
-                var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                var exePath = Environment.ProcessPath;
                 if (!string.IsNullOrEmpty(exePath))
                 {
                     var cmd = startMinimized ? $"\"{exePath}\" --autostart --minimized" : $"\"{exePath}\" --autostart";

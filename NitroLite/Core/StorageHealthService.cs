@@ -280,18 +280,6 @@ public class StorageHealthService
                         {
                             driveTemp = measuredTemp;
                         }
-                        else
-                        {
-                            // Physical telemetry baseline for Acer Nitro 16 AN16-41 dual NVMe setup:
-                            // Disk 0: Samsung 990 Pro ~42°C
-                            // Disk 1: Samsung PM9A1 OEM ~39°C
-                            if (diskNum == 0 || friendlyName.Contains("990", StringComparison.OrdinalIgnoreCase))
-                                driveTemp = null;
-                            else if (diskNum == 1 || friendlyName.Contains("PM9A1", StringComparison.OrdinalIgnoreCase) || friendlyName.Contains("MZVL", StringComparison.OrdinalIgnoreCase))
-                                driveTemp = null;
-                            else
-                                driveTemp = null;
-                        }
 
                         list.Add(new StorageDriveInfo
                         {

@@ -163,6 +163,9 @@ public partial class MainWindow : Window
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
 
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
@@ -177,7 +180,7 @@ public partial class MainWindow : Window
         GC.WaitForPendingFinalizers();
         try
         {
-            SetProcessWorkingSetSize(System.Diagnostics.Process.GetCurrentProcess().Handle, -1, -1);
+            SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
         }
         catch { }
     }
@@ -720,43 +723,75 @@ public partial class MainWindow : Window
         }
     }
 
+    private CancellationTokenSource? _lightingReassertCts;
+
+    public void CancelActiveLightingReassertion()
+    {
+        try
+        {
+            _lightingReassertCts?.Cancel();
+            _lightingReassertCts?.Dispose();
+            _lightingReassertCts = null;
+        }
+        catch { }
+    }
+
     public async Task ReassertKeyboardLightingAsync(bool isBoot = false)
     {
+        CancelActiveLightingReassertion();
+        var cts = new CancellationTokenSource();
+        _lightingReassertCts = cts;
+        var token = cts.Token;
+
         // Staged re-assertion pulses with socket reconnect retry
         // to override Acer EC firmware default resets, AcerLightingService boot triggers, and sleep wakeups.
         int[] delays = isBoot
             ? new[] { 500, 2000, 5000, 10000, 18000 }
             : new[] { 250, 1500 };
 
-        foreach (var delay in delays)
+        try
         {
-            await Task.Delay(delay);
-            for (int retry = 0; retry < 3; retry++)
+            foreach (var delay in delays)
             {
-                try
+                await Task.Delay(delay, token);
+                if (token.IsCancellationRequested) return;
+
+                for (int retry = 0; retry < 3; retry++)
                 {
-                    bool shouldBeOff = _appSettings.IsBacklightOff || 
-                                       _lighting.Brightness == 0 || 
-                                       _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) ||
-                                       (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset) && 
-                                        _appSettings.SelectedRgbPreset.Contains("kapalı", StringComparison.OrdinalIgnoreCase));
-
-                    bool success = shouldBeOff
-                        ? await _agentClient.TurnOffLightingAsync()
-                        : await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
-
-                    if (success)
+                    if (token.IsCancellationRequested) return;
+                    try
                     {
-                        break;
-                    }
+                        bool shouldBeOff = _appSettings.IsBacklightOff || 
+                                           _lighting.Brightness == 0 || 
+                                           _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) ||
+                                           (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset) && 
+                                            _appSettings.SelectedRgbPreset.Contains("kapalı", StringComparison.OrdinalIgnoreCase));
 
-                    await Task.Delay(200);
-                }
-                catch
-                {
-                    await Task.Delay(200);
+                        bool success = shouldBeOff
+                            ? await _agentClient.TurnOffLightingAsync()
+                            : await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+
+                        if (success)
+                        {
+                            break;
+                        }
+
+                        await Task.Delay(200, token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    catch
+                    {
+                        await Task.Delay(200, token);
+                    }
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Gracefully canceled when user changed lighting or window reopened
         }
     }
 
@@ -2100,7 +2135,14 @@ public partial class MainWindow : Window
 
     private async void OnGameStarted(GameProfile profile)
     {
-        await HandleGameStartedAsync(profile);
+        try
+        {
+            await HandleGameStartedAsync(profile);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"OnGameStarted failed: {ex.Message}");
+        }
     }
 
     internal async Task HandleGameStartedAsync(GameProfile profile)
@@ -2282,7 +2324,14 @@ public partial class MainWindow : Window
 
     private async void OnGameEnded(GameProfile profile)
     {
-        await HandleGameEndedAsync(profile);
+        try
+        {
+            await HandleGameEndedAsync(profile);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"OnGameEnded failed: {ex.Message}");
+        }
     }
 
     internal (OperatingMode Mode, CpuBoostMode Boost, FanMode Fan, bool IsEco) GetEffectiveRestoreTargets()
@@ -2763,6 +2812,7 @@ public partial class MainWindow : Window
         if (preset == null) return;
 
         _isApplyingPreset = true;
+        CancelActiveLightingReassertion();
         try
         {
             _lighting.Effect = preset.Effect;
@@ -3376,7 +3426,11 @@ public partial class MainWindow : Window
 
         _thermalService.SaveData();
         _hardwareService.Dispose();
-        _osdWindow?.Close();
+        if (_osdWindow != null)
+        {
+            _osdWindow.IsExiting = true;
+            _osdWindow.Close();
+        }
         _powerAutomationService?.Dispose();
         _fpsMonitorService.Dispose();
         _gameService.Dispose();
@@ -3384,6 +3438,31 @@ public partial class MainWindow : Window
         _agentClient.Dispose();
         _notifyIcon?.Dispose();
         System.Windows.Application.Current.Shutdown();
+    }
+
+    public void FastExitForSessionEnding()
+    {
+        _isExiting = true;
+        try
+        {
+            SaveWindowPosition();
+            if (_osdWindow != null)
+            {
+                _osdWindow.IsExiting = true;
+                _osdWindow.Close();
+            }
+            _pollTimer?.Stop();
+            _toastTimer?.Stop();
+            _thermalService.SaveData();
+            _hardwareService.Dispose();
+            _powerAutomationService?.Dispose();
+            _fpsMonitorService.Dispose();
+            _gameService.Dispose();
+            _batteryService.Dispose();
+            _agentClient.Dispose();
+            _notifyIcon?.Dispose();
+        }
+        catch { }
     }
 
     private async void Nav_Checked(object sender, RoutedEventArgs e)
@@ -3514,6 +3593,7 @@ public partial class MainWindow : Window
         {
             if (sender is WpfButton btn && btn.Tag is string hex)
             {
+                CancelActiveLightingReassertion();
                 if (hex == "#000000")
                 {
                     await TurnOffLightsAsync();
@@ -3556,6 +3636,7 @@ public partial class MainWindow : Window
 
     private async Task TurnOffLightsAsync()
     {
+        CancelActiveLightingReassertion();
         _lighting.Brightness = 0;
         _lighting.Effect = "OFF";
         _lighting.Color = "#000000";
@@ -3591,6 +3672,7 @@ public partial class MainWindow : Window
         try
         {
             if (!IsLoaded || _isInitializingUi || _isApplyingPreset) return;
+            CancelActiveLightingReassertion();
             if (CmbRgbEffect.SelectedItem is ComboBoxItem item && item.Content is string text)
             {
                 var effectName = text.Split(' ')[0];
@@ -3623,6 +3705,7 @@ public partial class MainWindow : Window
         try
         {
             if (!IsLoaded || _isInitializingUi || _isApplyingPreset || TxtBrightnessVal == null) return;
+            CancelActiveLightingReassertion();
             var val = (int)e.NewValue;
             if (val == 0)
             {
@@ -3660,6 +3743,7 @@ public partial class MainWindow : Window
         try
         {
             if (!IsLoaded || _isInitializingUi || _isApplyingPreset || TxtSpeedVal == null) return;
+            CancelActiveLightingReassertion();
             var val = (int)e.NewValue;
             TxtSpeedVal.Text = $"{val} / 9";
             _lighting.Speed = val;

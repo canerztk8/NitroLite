@@ -9,6 +9,7 @@ namespace NitroLite.Core;
 public enum CpuBoostMode
 {
     Disabled = 0,    // Eco & Serin (Base clock, ~65°C)
+    Enabled = 1,     // Standart Boost (Windows Varsayılan)
     Aggressive = 2,  // Son Hız Boost (5.0 GHz, ~88°C)
     Efficient = 4    // Dengeli & Serin (Frekans Sınırı)
 }

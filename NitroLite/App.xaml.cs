@@ -151,7 +151,7 @@ public partial class App : System.Windows.Application
         {
             if (MainWindow is MainWindow win)
             {
-                win.RealExit();
+                win.FastExitForSessionEnding();
             }
         }
         catch { }

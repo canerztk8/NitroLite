@@ -36,6 +36,7 @@ public partial class OsdOverlayWindow : Window
     }
 
     public int CurrentCorner { get; private set; } = 0; // 0: TopLeft, 1: TopRight, 2: BottomRight, 3: BottomLeft
+    public bool IsExiting { get; set; } = false;
 
     public OsdOverlayWindow()
     {
@@ -53,6 +54,12 @@ public partial class OsdOverlayWindow : Window
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
+        if (IsExiting)
+        {
+            base.OnClosing(e);
+            return;
+        }
+
         e.Cancel = true;
         Hide();
         base.OnClosing(e);
