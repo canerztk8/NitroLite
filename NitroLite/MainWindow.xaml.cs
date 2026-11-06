@@ -409,7 +409,10 @@ public partial class MainWindow : Window
                     UpdateBoostUi(e.VerifiedBoost);
                 }
             }
-            ShowToast(e.Message);
+            if (!_isInitializingUi && !string.IsNullOrWhiteSpace(e.Message))
+            {
+                ShowToast(e.Message);
+            }
         };
 
         if (DispatcherRunner != null)
