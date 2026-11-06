@@ -494,7 +494,7 @@ public class VerifiedDefectsRegressionTests
     // DEFECT 5: AtkMouseService Asynchronous HID Overlapped Memory Safety
     // =========================================================================
 
-    [Theory]
+    [LiveSystemTheory]
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]

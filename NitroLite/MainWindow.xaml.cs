@@ -29,7 +29,6 @@ public partial class MainWindow : Window
     private readonly ThermalHealthService _thermalService;
     private readonly StorageHealthService _storageService;
     private readonly IDisplayRefreshRateService _displayService;
-    private readonly FpsMonitorService _fpsMonitorService;
     private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
 
@@ -207,7 +206,6 @@ public partial class MainWindow : Window
         _thermalService = new();
         _storageService = new();
         _displayService = new DisplayRefreshRateService();
-        _fpsMonitorService = new();
         _atkMouseService = new();
 
         InitializeComponent();
@@ -250,7 +248,6 @@ public partial class MainWindow : Window
         _thermalService = new ThermalHealthService();
         _storageService = new StorageHealthService();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
-        _fpsMonitorService = new FpsMonitorService();
         if (settings != null) _appSettings = settings;
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
@@ -3780,7 +3777,6 @@ public partial class MainWindow : Window
             _osdWindow.Close();
         }
         _powerAutomationService?.Dispose();
-        _fpsMonitorService.Dispose();
         _gameService.Dispose();
         _batteryService.Dispose();
         _agentClient.Dispose();
@@ -3804,7 +3800,6 @@ public partial class MainWindow : Window
             _thermalService.SaveData();
             _hardwareService.Dispose();
             _powerAutomationService?.Dispose();
-            _fpsMonitorService.Dispose();
             _gameService.Dispose();
             _batteryService.Dispose();
             _agentClient.Dispose();

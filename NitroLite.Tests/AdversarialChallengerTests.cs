@@ -306,7 +306,7 @@ public class AdversarialChallengerTests
         Assert.False(shouldClean, $"Auto-clean should be inhibited under scenario: {scenario}");
     }
 
-    [Fact]
+    [LiveSystemFact]
     public void MemoryCleaner_CooldownDebounce_StrictlyEnforced()
     {
         var service = new MemoryCleanerService();

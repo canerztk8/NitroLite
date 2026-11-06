@@ -171,42 +171,6 @@ public static class TelemetryFormatter
     }
 
     /// <summary>
-    /// Formats live game frame rate (FPS), falling back to "-- FPS" if unavailable or zero.
-    /// </summary>
-    public static string FormatFps(double fps, bool isAvailable = true)
-    {
-        if (!isAvailable || fps <= 0 || double.IsNaN(fps) || double.IsInfinity(fps))
-        {
-            return "-- FPS";
-        }
-        return string.Format(CultureInfo.InvariantCulture, "{0:F0} FPS", fps);
-    }
-
-    /// <summary>
-    /// Formats game frame presentation time (frametime in ms), falling back to "-- ms" if unavailable or zero.
-    /// </summary>
-    public static string FormatFrametime(double frametimeMs, bool isAvailable = true)
-    {
-        if (!isAvailable || frametimeMs <= 0 || double.IsNaN(frametimeMs) || double.IsInfinity(frametimeMs))
-        {
-            return "-- ms";
-        }
-        return string.Format(CultureInfo.InvariantCulture, "{0:F1} ms", frametimeMs);
-    }
-
-    /// <summary>
-    /// Formats 0.1% low frame rate (e.g. "95 FPS" or "-- FPS").
-    /// </summary>
-    public static string FormatLow01Fps(double low01Fps, bool isAvailable = true)
-    {
-        if (!isAvailable || low01Fps <= 0 || double.IsNaN(low01Fps) || double.IsInfinity(low01Fps))
-        {
-            return "-- FPS";
-        }
-        return string.Format(CultureInfo.InvariantCulture, "{0:F0} FPS", low01Fps);
-    }
-
-    /// <summary>
     /// Formats battery power flow rate distinguishing discharging, AC charging, AC saturated, and idle on battery.
     /// When discharging with known milliwatts, renders dual-unit format: "{0:F1} W ({1:N0} mW)".
     /// Preserves full backward-compatible output if milliwatts are not provided.

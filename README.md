@@ -2,118 +2,123 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-386%20Passed-10B981)](#testler)
+[![Tests](https://img.shields.io/badge/Tests-644-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Non--Blocking-0EA5E9)](#mimari)
 
-**NitroLite**, Acer Nitro ve Predator serisi oyuncu dizüstü bilgisayarları (özellikle **Acer Nitro 16 AN16-41** ve Zen 4 / RTX 40 serisi) için geliştirilmiş, ağır ve kaynak tüketen OEM yazılımlarının (NitroSense vb.) yerini alan **ultra hafif, açık kaynaklı ve modern** bir sistem kontrol merkezidir.
+**NitroLite**, Acer Nitro dizüstü bilgisayarlar (öncelikle **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070) için NitroSense'in yerini alan, hafif ve açık kaynaklı bir kontrol merkezidir. NitroSense'in kullandığı Acer servisleriyle (AcerAgentService, Acer Care Center) aynı protokolleri kullanır; ağır Electron arayüzünü çalıştırmaz.
 
-Standart OEM yazılımları arka planda 300 MB'tan fazla RAM ve sürekli CPU tüketirken, NitroLite **~25 MB RAM** ve **%0 boşta CPU** kullanımıyla çalışır.
-
----
-
-## 🌟 Öne Çıkan Özellikler
-
-### 1. Çalışma Modları ve Donanım Güç Limitleri
-- **4 Farklı Güç Modu:** Sessiz (*Quiet*), Dengeli (*Default/Balanced*), Performans (*Performance*), Turbo (*Extreme*).
-- **Yerel Donanım Köprüsü:** `AASSvc` (Port 46933) üzerinden gömülü denetleyiciye (EC) doğrudan komut iletimi.
-- **Fan Kontrolü:** Otomatik akıllı fan eğrisi veya Maksimum Devir (Max RPM) profilleri.
-
-### 2. İşlemci Performans Artışı (CPU Boost) Yönetimi
-- **Agresif (5.0+ GHz):** Maksimum tek çekirdek ve rekabetçi FPS performansı.
-- **Dengeli (~4.2 GHz):** Isıyı kontrol altında tutan yüke duyarlı frekans yönetimi.
-- **Devre Dışı (3.2 GHz):** Temel saat frekansı sınırı; fan gürültüsünü ve sıcaklığı minimuma indirir.
-
-### 3. GPU Çalışma Modu (MUX Switch) & Güvenlik
-- **NVIDIA Advanced Optimus (DDS) Entegrasyonu:** Yeniden başlatma gerektirmeden oyunlarda harici RTX GPU'ya, masaüstünde dahili Radeon iGPU'ya akıllı geçiş.
-- **Donanım Koruması:** Zorunlu MUX kilitlenmelerine ve siyah ekran risklerine karşı güvenli donanım modu.
-
-### 4. Akıllı Oyun Algılama ve Otomatik Profiller
-- **Sıfır Gecikmeli Algılama:** Sistemde çalışan oyunları (Steam, Epic Games vb.) otomatik tespit eder.
-- **Oyuna Özel Yapılandırma:** Her oyun için ayrı çalışma modu, fan profili, CPU boost seviyesi ve fare profili tanımlanabilir.
-- **Otomatik Geri Yükleme:** Oyundan çıkıldığında sistem ve fare otomatik olarak masaüstü ayarlarına döner.
-
-### 5. ATK / VXE Oyuncu Faresi Donanım Entegrasyonu
-- **Doğrudan HID İletişimi:** ATK A9 ve Compx fare protokolü üzerinden donanım sağlama toplamı (checksum) ile profil değiştirme.
-- **Config 1..4 Desteği:** Her oyuna özel fare konfigürasyonu (DPI, polling rate, lod vb.) atayabilme.
-- **Varsayılan Masaüstü Profili:** Oyun bittiğinde farenin otomatik olarak belirlenen varsayılan profile (ör. Config 1) dönmesi.
-
-### 6. Pil Sağlığı, Şarj Eşiği ve Otomatik Eco Modu
-- **%80 Şarj Sınırı:** Batarya ömrünü uzatan donanımsal şarj eşiği kontrolü.
-- **Gerçek Zamanlı Telemetri:** Anlık deşarj gücü (W), tahmini kalan pil süresi, yıpranma oranı (wear level) ve döngü sayısı.
-- **Fişten Çekilince Otomatik Eco:** Cihaz pildeyken ekranı otomatik 60 Hz'e çekip enerji tasarrufu sağlar; fişe takıldığında 165 Hz'e geri yükler.
-
-### 7. Modern Fluent OSD (Ekran Üstü Gösterge)
-- **Ultra Sade 3 Satırlı Gösterge:**
-  - `CPU: [Sıcaklık] | [Güç W] | [Frekans GHz] | [Kullanım %]`
-  - `GPU: [Sıcaklık] | [Güç W] | [Frekans MHz] | [VRAM]`
-  - `RAM: [Kullanım GB] | FAN: [RPM]`
-- **Bağımsız ve Güvenli:** Üçüncü taraf DLL enjeksiyonuna ihtiyaç duymaz; CS2 gibi korumalı oyunlarda hile korumasına takılmaz.
-- **Köşe Değiştirme:** Ekranın 4 köşesi arasında tek tıkla konumlandırma.
-
-### 8. 4 Bölgeli Klavye RGB Aydınlatması
-- Statik renkler, dalga, nefes alma ve zoom efektleri.
-- Windows oturum açılışında otomatik geri yükleme.
+**Ölçülen kaynak kullanımı** (AN16-41, tepside, Release): ~74 MB çalışma kümesi, boşta bir çekirdeğin yaklaşık %0,6'sı. Simge durumundayken telemetri 3 saniyede bir okunur.
 
 ---
 
-## 🏗️ Mimari ve Tasarım İlkeleri
+## 🌟 Özellikler
 
-NitroLite, Windows 11 Fluent tasarım standartlarına uygun olarak modern WPF ve C# 13 ile inşa edilmiştir:
+### 1. Çalışma Modları ve Fan
+- **4 güç modu:** Sessiz, Dengeli, Performans ve Turbo. Komutlar `AcerAgentService` (AASSvc, `127.0.0.1:46933`) üzerinden NitroSense ile aynı protokolle gönderilir.
+- **Fan:** Otomatik eğri veya maksimum devir.
+- **Mod tuşu:** Klavyedeki mod/Turbo tuşu NitroSense gibi modlar arasında geçiş yapar (adaptörde Dengeli → Performans → Turbo → Sessiz; pilde Dengeli ↔ Sessiz).
+- Mod okunamazsa arayüz "Bilinmiyor" gösterir; varsayılan bir mod uydurmaz.
+
+### 2. İşlemci Boost Yönetimi
+- Windows güç planındaki işlemci boost ayarını (PerfBoostMode) değiştirir: Agresif, Verimli veya Devre dışı. Devre dışı modda işlemci temel saat hızının üzerine çıkmaz; sıcaklık ve fan gürültüsü düşer.
+
+### 3. GPU Modu (MUX)
+- Servis destekliyorsa (`SUPPORT_GPU_MODE`), GPU modu NitroSense'in kullandığı komutla değiştirilir. Desteklemeyen sistemlerde seçim kilitli kalır ve nedeni gösterilir. NitroLite kayıt defterindeki MUX ayarlarını değiştirmez.
+
+### 4. Oyun Algılama ve Oyuna Özel Profiller
+- Kurulu oyunları (Steam ve yaygın kütüphane klasörleri) tarar; çalışan oyunu 2 saniyede bir kontrol eder.
+- Her oyun için çalışma modu, CPU boost, fan ve fare profili tanımlanabilir. Oyundan çıkınca masaüstü ayarlarına dönülür.
+
+### 5. ATK / VXE Fare Entegrasyonu (isteğe bağlı)
+- HID üzerinden Config 1–4 arasında profil değiştirme, oyuna özel profil ve oyun bitince varsayılan profile dönüş.
+
+### 6. Pil
+- **%80 şarj sınırı:** Acer Care Center (`AcerCCAgent`, `wss://localhost:4343`) üzerinden NitroSense ile aynı şekilde ayarlanır ve geri okunarak doğrulanır. Care Center kurulu değilse bu seçenek çalışmaz.
+- **Telemetri:** Anlık şarj/deşarj gücü, tahmini kalan süre, tam şarj kapasitesi ve aşınma oranı. Windows'un bildirmediği değerler "(tahmini)" etiketiyle gösterilir.
+- **Pilde otomatik Eco:** Pile geçince düşük güç modu ve (isteğe bağlı) ana ekranda 60 Hz; adaptör takılınca önceki ayarlar geri yüklenir. Uygulama çökerse bu durum bir sonraki açılışta onarılır.
+
+### 7. OSD (Ekran Üstü Gösterge)
+- Üç satır: CPU (sıcaklık, tahmini güç, frekans, kullanım), GPU (sıcaklık, güç, frekans, VRAM), RAM ve fan.
+- Oyuna DLL enjekte etmez; yalnızca her zaman üstte duran şeffaf bir penceredir. Dört köşeye yerleştirilebilir.
+
+### 8. Klavye RGB (4 bölge)
+- Statik, nefes, dalga, neon, kaydırma, zoom, meteor ve pırıltı efektleri; kendi profillerinizi kaydetme.
+- Uykudan dönüşte ve oturum açılışında ayar yeniden uygulanır. 30 saniyelik boşta kapanma ayarı cihazdan okunur.
+
+### 9. Sağlık Sekmesi
+- Pil, SSD ve termal durum kartları. SMART erişimi olmayan disk sıcaklıkları ve termal macun/fan yatağı tahminleri "(tahmini)" olarak işaretlidir.
+
+### Acer servisi kapalıysa
+AASSvc yanıt vermezse NitroLite, Windows ve NVIDIA sürücüsünden okunabilen verileri (CPU kullanımı, RAM, GPU) göstermeye devam eder. Yalnızca serviste bulunan sensörler "Servis yok" olarak işaretlenir.
+
+---
+
+## 🏗️ Yapı
 
 ```
 NitroLite
 ├── Core/
-│   ├── AcerAgentClient.cs      # AASSvc TCP donanım köprüsü (Port 46933)
-│   ├── AtkMouseService.cs       # ATK / VXE raw HID donanım protokolü
-│   ├── BatteryService.cs        # WMI / Win32 batarya ve deşarj telemetrisi
-│   ├── CpuPowerService.cs       # Powercfg GUID işlemci boost yöneticisi
-│   ├── GameDetectionService.cs  # Arka plan oyun algılama motoru
-│   ├── DebloatService.cs        # OEM arka plan servis optimizasyonu
-│   └── TelemetryFormatter.cs    # Güvenli biçimlendirici ve matematiksel limitler
-├── OsdOverlayWindow.xaml        # Şeffaf, donanım hızlandırmalı OSD penceresi
-├── MainWindow.xaml              # Fluent Dark UI ana kontrol merkezi
-└── App.xaml                     # Tekil örnekleme (Single-Instance Mutex)
+│   ├── AcerAgentClient.cs          # AASSvc TCP protokolü (mod, fan, GPU, RGB, telemetri, olaylar)
+│   ├── CareCenterClient.cs         # Acer Care Center WebSocket istemcisi (%80 şarj sınırı)
+│   ├── AtkMouseService.cs          # ATK / VXE fare HID protokolü
+│   ├── BatteryWatchdogService.cs   # Pil durumu, sağlık ve deşarj telemetrisi
+│   ├── CpuPowerService.cs          # Windows güç planı CPU boost ayarı
+│   ├── PowerAutomationService.cs   # Adaptör/pil geçişleri ve Eco kurtarma
+│   ├── GameDetectionService.cs     # Oyun tarama ve algılama
+│   ├── HardwareMonitorService.cs   # NVML (GPU) ve Windows yedek telemetrisi
+│   ├── StorageHealthService.cs     # Disk sağlık ve doluluk bilgisi
+│   ├── ThermalHealthService.cs     # Termal geçmiş ve tahminler
+│   ├── DebloatService.cs           # NitroSense arka plan servislerini devre dışı bırakma / geri alma
+│   ├── AppPaths.cs                 # Veri klasörü ve sistem aracı yolları
+│   └── TelemetryFormatter.cs       # Değer biçimlendirme ve "tahmini" etiketleri
+├── OsdOverlayWindow.xaml           # OSD penceresi
+├── MainWindow.xaml                 # Ana arayüz
+└── App.xaml                        # Tek örnek kontrolü ve hata kaydı
 ```
+
+**Veri konumu:** Ayarlar, oyun profilleri, RGB profilleri, termal geçmiş ve günlük dosyası `%LOCALAPPDATA%\NitroLite` altında tutulur. Eski sürümlerin exe yanındaki dosyaları ilk açılışta buraya kopyalanır.
 
 ---
 
 ## 🛠️ Gereksinimler ve Kurulum
 
 ### Sistem Gereksinimleri
-- **İşletim Sistemi:** Windows 11 (veya Windows 10 x64)
-- **Çalışma Zamanı:** [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
-- **Desteklenen Donanım:** Acer Nitro 16 (AN16-41) serisi (Zen 4 + RTX 40xx) ve uyumlu Acer Nitro / Predator modelleri.
+- **İşletim sistemi:** Windows 11 (Windows 10 x64 da çalışır)
+- **Çalışma zamanı:** [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+- **Acer servisleri:** `AcerAgentService` (mod, fan, RGB, telemetri) ve isteğe bağlı olarak Acer Care Center (şarj sınırı). Bunlar NitroSense ile birlikte gelir; NitroSense arayüzünün açık olması gerekmez.
+- **Test edilen donanım:** Acer Nitro 16 AN16-41. Diğer Nitro / Predator modellerinde servis desteğine göre bazı özellikler kilitli kalabilir.
 
 ### Kaynaktan Derleme
 
 ```powershell
-# Projeyi klonlayın
-git clone https://github.com/canerztrk8/NitroLite.git
+git clone https://github.com/canerztk8/NitroLite.git
 cd NitroLite
 
-# Testleri çalıştırın
-dotnet test NitroLite.sln
-
-# Release sürümünü derleyin
+dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 dotnet build -c Release NitroLite/NitroLite.csproj
 ```
 
-Derlenen çalıştırılabilir dosya `NitroLite/bin/Release/net10.0-windows/NitroLite.exe` konumunda hazır olacaktır.
+Çalıştırılabilir dosya: `NitroLite/bin/Release/net10.0-windows/NitroLite.exe`
 
 ---
 
 ## 🧪 Testler
 
-NitroLite kapsamlı bir test süitine sahiptir:
-- **386 Birim ve Dayanıklılık Testi:** Donanım paket baytları, sağlama toplamları, sınır değerler, negatif sıcaklıklar, batarya formülleri ve eşzamanlılık testleri.
-- Testleri çalıştırmak için:
-  ```powershell
-  dotnet test NitroLite.Tests/NitroLite.Tests.csproj
-  ```
+644 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+
+```powershell
+dotnet test NitroLite.Tests/NitroLite.Tests.csproj
+```
+
+- Testler kendi geçici veri klasörünü kullanır (`NITROLITE_DATA_DIR`); gerçek ayarlarınıza dokunmaz.
+- Gerçek sistemi değiştiren 6 test (tüm süreçlerin belleğini boşaltma, bağlı farenin profilini değiştirme, güç planı ayarı) varsayılan olarak atlanır. Bunları çalıştırmak için:
+
+```powershell
+$env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
+```
 
 ---
 
 ## 📄 Lisans
 
-Bu proje [MIT Lisansı](LICENSE) kapsamında lisanslanmıştır. Dilediğiniz gibi kullanabilir, geliştirebilir ve paylaşabilirsiniz.
+Bu proje [MIT Lisansı](LICENSE) kapsamındadır.

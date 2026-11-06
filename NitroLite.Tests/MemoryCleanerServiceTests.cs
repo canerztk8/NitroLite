@@ -59,7 +59,7 @@ public class MemoryCleanerServiceTests
         Assert.True(result, "Expected auto clean to trigger when free RAM is <= 2048 MB.");
     }
 
-    [Fact]
+    [LiveSystemFact]
     public void ShouldAutoClean_CooldownDebounce_ReturnsFalseImmediatelyAfterCleaning()
     {
         var service = new MemoryCleanerService();
@@ -72,7 +72,7 @@ public class MemoryCleanerServiceTests
         Assert.False(shouldClean, "AutoClean must be rate-limited by the 120-second cooldown period.");
     }
 
-    [Fact]
+    [LiveSystemFact]
     public void CleanMemory_ExecutesSafelyAndReturnsValidMetrics()
     {
         var service = new MemoryCleanerService();
@@ -86,7 +86,7 @@ public class MemoryCleanerServiceTests
         Assert.True(result.FreedMegabytes >= 0.0, "Freed megabytes must be non-negative.");
     }
 
-    [Fact]
+    [LiveSystemFact]
     public async Task CleanMemoryAsync_ExecutesAsynchronouslyWithoutDeadlock()
     {
         var service = new MemoryCleanerService();

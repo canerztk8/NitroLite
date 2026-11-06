@@ -180,16 +180,6 @@ public class ThermalStabilityTrend
     public double CoefficientOfVariation { get; set; }
 }
 
-public class FpsTelemetryInfo
-{
-    public bool IsAvailable { get; set; }
-    public double Fps { get; set; }
-    public double FrametimeMs { get; set; }
-    public double Low01Fps { get; set; }
-    public double Low1Fps { get; set; }
-    public string GameTitle { get; set; } = string.Empty;
-}
-
 public class AppSettings
 {
     public bool StartMinimized { get; set; } = false;

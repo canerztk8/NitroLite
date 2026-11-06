@@ -55,7 +55,7 @@ public class CpuPowerServiceTests
         Assert.Equal(expectedMode, resolved);
     }
 
-    [Fact]
+    [LiveSystemFact]
     public void ServiceInitialization_InstantiatesAndQueriesCurrentMode()
     {
         var service = new CpuPowerService();

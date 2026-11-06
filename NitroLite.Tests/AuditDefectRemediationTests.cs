@@ -20,7 +20,7 @@ public class AuditDefectRemediationTests
     [InlineData("0x99", null)]
     public void CpuPowerService_BoostModeQuery_ValidatesEnumProperly(string hexValue, CpuBoostMode? expected)
     {
-        var service = new CpuPowerService();
+        var service = new CpuPowerService(autoInitialize: false, bypassNativePowerCalls: true);
         service.MockPowerCfgQueryOutput = $"Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e\n" +
                                           $"  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00\n" +
                                           $"    Power Setting GUID: be337238-0d82-4146-a960-4f3749d470c7\n" +

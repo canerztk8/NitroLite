@@ -163,13 +163,4 @@ public partial class OsdOverlayWindow : Window
     {
         UpdateData(data, mode, (string?)null);
     }
-
-    public void UpdateFpsData(FpsTelemetryInfo? fpsInfo)
-    {
-    }
-
-    public void UpdateData(MonitorData data, OperatingMode mode, FpsTelemetryInfo? fpsInfo)
-    {
-        UpdateData(data, mode, fpsInfo?.GameTitle);
-    }
 }
