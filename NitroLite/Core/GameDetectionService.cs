@@ -426,9 +426,9 @@ public class GameDetectionService : IDisposable
             catch { }
         }
 
-        // Always sanitize and deduplicate after scanning
-        SanitizeProfiles();
-
+        // Candidates are already junk-filtered and de-duplicated before they are added above.
+        // Do not run SanitizeProfiles() here: it would silently delete profiles the user added by hand
+        // (e.g. a game whose exe name contains "server", "console" or "launcher").
         if (addedCount > 0)
         {
             PersistProfiles();
@@ -620,8 +620,8 @@ public class GameDetectionService : IDisposable
                     var list = JsonSerializer.Deserialize<List<GameProfile>>(json);
                     if (list != null && list.Count > 0)
                     {
+                        // Load user profiles as-is; never prune them silently on startup.
                         _profiles.AddRange(list);
-                        SanitizeProfiles();
                         return;
                     }
                 }

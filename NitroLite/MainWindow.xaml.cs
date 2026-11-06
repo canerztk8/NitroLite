@@ -960,21 +960,23 @@ public partial class MainWindow : Window
             var activeGame = _gameService.ActiveGameProfile;
             if (activeGame != null && !_isUpdatingGameUi && CmbConfiguredGames != null && TabModes?.Visibility == Visibility.Visible)
             {
-                var profiles = _gameService.GetProfiles();
-                int currentIdx = CmbConfiguredGames.SelectedIndex;
-                bool needsSync = currentIdx < 0 ||
-                                 currentIdx >= profiles.Count ||
-                                 !profiles[currentIdx].ExeName.Equals(activeGame.ExeName, StringComparison.OrdinalIgnoreCase);
+                var selectedExe = GetSelectedGameExeName();
+                bool needsSync = selectedExe == null ||
+                                 !selectedExe.Equals(activeGame.ExeName, StringComparison.OrdinalIgnoreCase);
 
                 if (needsSync)
                 {
-                    var idx = profiles.FindIndex(p => p.ExeName.Equals(activeGame.ExeName, StringComparison.OrdinalIgnoreCase));
-                    if (idx >= 0)
+                    if (_configuredGameExeNames.Any(e => e.Equals(activeGame.ExeName, StringComparison.OrdinalIgnoreCase)))
                     {
                         _isUpdatingGameUi = true;
-                        CmbConfiguredGames.SelectedIndex = idx;
-                        _isUpdatingGameUi = false;
+                        try { SelectConfiguredGame(activeGame.ExeName); }
+                        finally { _isUpdatingGameUi = false; }
                         UpdateSelectedGameDetails();
+                    }
+                    else if (_gameService.GetProfile(activeGame.ExeName) != null)
+                    {
+                        // The active game is not in the displayed snapshot (list changed underneath); rebuild it.
+                        PopulateConfiguredGames(activeGame.ExeName);
                     }
                 }
             }
@@ -1627,12 +1629,38 @@ public partial class MainWindow : Window
     // Enhanced Game Detection & Per-Game Profiles
     // ==========================================
 
+    // ExeNames in the exact order shown in CmbConfiguredGames. The profile list in GameDetectionService
+    // can change at any time (background scan, deletes), so the combo's SelectedIndex must never be used
+    // to index a freshly fetched GetProfiles() list; resolve the selection through this snapshot instead.
+    private List<string> _configuredGameExeNames = new();
+
+    private string? GetSelectedGameExeName()
+    {
+        if (CmbConfiguredGames == null) return null;
+        int idx = CmbConfiguredGames.SelectedIndex;
+        var snapshot = _configuredGameExeNames;
+        return idx >= 0 && idx < snapshot.Count ? snapshot[idx] : null;
+    }
+
+    private GameProfile? GetSelectedGameProfile()
+    {
+        var exe = GetSelectedGameExeName();
+        return exe == null ? null : _gameService.GetProfile(exe);
+    }
+
+    private void SelectConfiguredGame(string exeName)
+    {
+        if (CmbConfiguredGames == null) return;
+        var idx = _configuredGameExeNames.FindIndex(e => e.Equals(exeName, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0) CmbConfiguredGames.SelectedIndex = idx;
+    }
+
     private void PopulateConfiguredGames(string? selectExeName = null)
     {
         if (CmbConfiguredGames == null) return;
 
         var profiles = _gameService.GetProfiles();
-        var displayList = profiles.Select(p => 
+        var displayList = profiles.Select(p =>
             string.Equals(p.DisplayName, p.ExeName, StringComparison.OrdinalIgnoreCase)
                 ? p.DisplayName
                 : $"{p.DisplayName} ({p.ExeName})"
@@ -1641,6 +1669,7 @@ public partial class MainWindow : Window
         _isUpdatingGameUi = true;
         try
         {
+            _configuredGameExeNames = profiles.Select(p => p.ExeName).ToList();
             CmbConfiguredGames.ItemsSource = displayList;
 
             // Automatically prioritize currently running/active game if no specific selection was requested
@@ -1672,12 +1701,9 @@ public partial class MainWindow : Window
 
     private void UpdateSelectedGameDetails()
     {
-        if (CmbConfiguredGames.SelectedIndex < 0) return;
+        var profile = GetSelectedGameProfile();
+        if (profile == null) return;
 
-        var profiles = _gameService.GetProfiles();
-        if (CmbConfiguredGames.SelectedIndex >= profiles.Count) return;
-
-        var profile = profiles[CmbConfiguredGames.SelectedIndex];
         var isCurrentlyActive = _gameService.ActiveGameProfile != null &&
             _gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase);
 
@@ -1989,12 +2015,26 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (CmbConfiguredGames.SelectedIndex < 0) return;
+            var stored = GetSelectedGameProfile();
+            if (stored == null)
+            {
+                ShowToast("Seçili oyun profili bulunamadı; liste yenilendi.", false);
+                PopulateConfiguredGames();
+                return;
+            }
 
-            var profiles = _gameService.GetProfiles();
-            if (CmbConfiguredGames.SelectedIndex >= profiles.Count) return;
-
-            var profile = profiles[CmbConfiguredGames.SelectedIndex];
+            // Edit a copy so the shared instance held by GameDetectionService is only updated under its lock.
+            var profile = new GameProfile
+            {
+                ExeName = stored.ExeName,
+                DisplayName = stored.DisplayName,
+                TargetMode = stored.TargetMode,
+                TargetCpuBoost = stored.TargetCpuBoost,
+                TargetFanMode = stored.TargetFanMode,
+                InstallPath = stored.InstallPath,
+                AutoApply = stored.AutoApply,
+                TargetAtkMouseProfile = stored.TargetAtkMouseProfile
+            };
 
             // 1. Operating Mode
             if (CmbGameTargetMode.SelectedItem is ComboBoxItem modeItem && modeItem.Tag is string modeTag)
@@ -2192,13 +2232,14 @@ public partial class MainWindow : Window
 
     private void BtnDeleteGame_Click(object sender, RoutedEventArgs e)
     {
-        if (CmbConfiguredGames.SelectedIndex < 0) return;
+        var profile = GetSelectedGameProfile();
+        if (profile == null)
+        {
+            PopulateConfiguredGames();
+            return;
+        }
 
-        var profiles = _gameService.GetProfiles();
-        if (CmbConfiguredGames.SelectedIndex >= profiles.Count) return;
-
-        var profile = profiles[CmbConfiguredGames.SelectedIndex];
-        var confirm = System.Windows.MessageBox.Show(this, 
+        var confirm = System.Windows.MessageBox.Show(this,
             $"'{profile.DisplayName}' oyun profilini silmek istiyor musunuz?", 
             "Profili Sil", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
@@ -2951,7 +2992,20 @@ public partial class MainWindow : Window
             name = $"Profil {DateTime.Now:HH:mm}";
         }
 
-        _rgbProfileService.SaveCustomPreset(name, _lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs);
+        try
+        {
+            _rgbProfileService.SaveCustomPreset(name, _lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs);
+        }
+        catch (ArgumentException ex)
+        {
+            ShowToast(ex.Message, false);
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowToast($"Aydınlatma profili kaydedilemedi: {ex.Message}", false);
+            return;
+        }
 
         _appSettings.SelectedRgbPreset = name;
         _appSettings.KeyboardLighting = _lighting;
@@ -3126,9 +3180,23 @@ public partial class MainWindow : Window
 
             if (TxtStorageBadge != null)
             {
+                bool anyProblem = drives.Any(d => d.HealthStatus == 1 || d.HealthStatus == 2);
                 bool allHealthy = drives.Count > 0 && drives.All(d => d.HealthStatus == 0);
-                TxtStorageBadge.Text = allHealthy ? "Tüm Sürücüler Sağlıklı" : "Sürücü Uyarısı Mevcut";
-                TxtStorageBadge.Foreground = (SolidColorBrush)FindResource(allHealthy ? "AccentGreen" : "AccentRed");
+                if (anyProblem)
+                {
+                    TxtStorageBadge.Text = "Sürücü Uyarısı Mevcut";
+                    TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("AccentRed");
+                }
+                else if (allHealthy)
+                {
+                    TxtStorageBadge.Text = "Tüm Sürücüler Sağlıklı";
+                    TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+                }
+                else
+                {
+                    TxtStorageBadge.Text = "Sürücü Sağlığı Bilinmiyor";
+                    TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+                }
             }
         });
     }

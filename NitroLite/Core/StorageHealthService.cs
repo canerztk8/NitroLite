@@ -18,7 +18,9 @@ public class StorageDriveInfo
     public double UsedCapacityGB { get; set; }
     public double FreeCapacityGB { get; set; }
     public double UsedPercent { get; set; }
-    public int HealthStatus { get; set; } // 0 = Healthy, 1 = Warning, 2 = Unhealthy
+    // MSFT_PhysicalDisk.HealthStatus: 0 = Healthy, 1 = Warning, 2 = Unhealthy, 5 = Unknown
+    public const int HealthUnknown = 5;
+    public int HealthStatus { get; set; }
     public string HealthDesc { get; set; } = "Sağlıklı (Nominal)";
     public int EstHealthPercent { get; set; } = 100;
     public int? Temperature { get; set; }
@@ -182,7 +184,7 @@ public class StorageHealthService
 
                         string friendlyName = disk["FriendlyName"]?.ToString() ?? "NVMe SSD";
                         string firmware = disk["FirmwareVersion"]?.ToString() ?? "";
-                        int health = Convert.ToInt32(disk["HealthStatus"] ?? 0);
+                        int health = Convert.ToInt32(disk["HealthStatus"] ?? StorageDriveInfo.HealthUnknown);
                         long sizeBytes = Convert.ToInt64(disk["Size"] ?? 0);
                         int busType = Convert.ToInt32(disk["BusType"] ?? 0);
 
@@ -258,9 +260,13 @@ public class StorageHealthService
                         {
                             estHealth = 70;
                         }
-                        else
+                        else if (health == 2)
                         {
                             estHealth = 30;
+                        }
+                        else
+                        {
+                            estHealth = -1; // Unknown: no wear counter and no health report
                         }
 
                         string healthDesc;
@@ -272,9 +278,13 @@ public class StorageHealthService
                         {
                             healthDesc = "Uyarı (Sürücü Kontrolü Gerekli)";
                         }
-                        else
+                        else if (health == 2)
                         {
                             healthDesc = "Kritik (Acil Yedekleme Önerilir)";
+                        }
+                        else
+                        {
+                            healthDesc = "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)";
                         }
 
                         int? driveTemp = null;
@@ -406,9 +416,9 @@ public class StorageHealthService
                                 UsedCapacityGB = usedGB,
                                 FreeCapacityGB = freeGB,
                                 UsedPercent = usedPercent,
-                                HealthStatus = 0,
-                                HealthDesc = "Sağlıklı (Nominal)",
-                                EstHealthPercent = 100,
+                                HealthStatus = StorageDriveInfo.HealthUnknown,
+                                HealthDesc = "Bilinmiyor (Sağlık verisi okunamadı)",
+                                EstHealthPercent = -1,
                                 Temperature = index == 0 ? 42 : 39,
                                 IsTemperatureEstimated = true
                             });
@@ -432,9 +442,10 @@ public class StorageHealthService
                     double freeGB = Math.Round(di.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 1);
                     double usedGB = Math.Round(Math.Max(0, di.TotalSize - di.AvailableFreeSpace) / (1024.0 * 1024.0 * 1024.0), 1);
                     string driveLetter = di.Name.Replace(":\\", "").Replace(":", "").Trim();
+                    int diskIndex = index++;
                     list.Add(new StorageDriveInfo
                     {
-                        DiskNumber = index++,
+                        DiskNumber = diskIndex,
                         Model = $"Sabit Sürücü ({driveLetter}:)",
                         DriveLetter = driveLetter,
                         BusType = "SSD",
@@ -442,9 +453,10 @@ public class StorageHealthService
                         UsedCapacityGB = usedGB,
                         FreeCapacityGB = freeGB,
                         UsedPercent = totalGB > 0 ? Math.Round((usedGB / totalGB) * 100.0, 1) : 0,
-                        HealthDesc = "Sağlıklı (Kondisyon İyi)",
-                        EstHealthPercent = 100,
-                        Temperature = index == 0 ? 42 : 39,
+                        HealthStatus = StorageDriveInfo.HealthUnknown,
+                        HealthDesc = "Bilinmiyor (Sağlık verisi okunamadı)",
+                        EstHealthPercent = -1,
+                        Temperature = diskIndex == 0 ? 42 : 39,
                         IsTemperatureEstimated = true
                     });
                 }
