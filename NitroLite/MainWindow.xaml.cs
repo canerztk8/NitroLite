@@ -727,29 +727,21 @@ public partial class MainWindow : Window
 
     private void SaveWindowPosition()
     {
-        if (WindowState == WindowState.Normal)
+        if (WindowState == WindowState.Minimized) return;
+
+        // RestoreBounds is the window's normal (un-maximized) rectangle from Windows' window placement, valid in
+        // both Normal and Maximized state. ActualWidth/Left are not: right after a restore they still hold the
+        // maximized size, which saved the full-screen size as the "normal" size.
+        var restore = RestoreBounds;
+        if (!restore.IsEmpty && restore.Width > 0 && restore.Height > 0)
         {
-            _appSettings.WindowLeft = Left;
-            _appSettings.WindowTop = Top;
-            _appSettings.WindowWidth = ActualWidth > 0 ? ActualWidth : Width;
-            _appSettings.WindowHeight = ActualHeight > 0 ? ActualHeight : Height;
-            _appSettings.WindowMaximized = false;
-            SaveSettings();
+            _appSettings.WindowLeft = restore.Left;
+            _appSettings.WindowTop = restore.Top;
+            _appSettings.WindowWidth = restore.Width;
+            _appSettings.WindowHeight = restore.Height;
         }
-        else if (WindowState == WindowState.Maximized)
-        {
-            // Keep the size/position the window returns to when un-maximized.
-            var restore = RestoreBounds;
-            if (!restore.IsEmpty && restore.Width > 0 && restore.Height > 0)
-            {
-                _appSettings.WindowLeft = restore.Left;
-                _appSettings.WindowTop = restore.Top;
-                _appSettings.WindowWidth = restore.Width;
-                _appSettings.WindowHeight = restore.Height;
-            }
-            _appSettings.WindowMaximized = true;
-            SaveSettings();
-        }
+        _appSettings.WindowMaximized = WindowState == WindowState.Maximized;
+        SaveSettings();
     }
 
     private void SaveSettings()

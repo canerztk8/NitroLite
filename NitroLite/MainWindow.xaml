@@ -417,14 +417,20 @@
                                             <!-- CPU FAN -->
                                             <StackPanel Grid.Column="0" Margin="4,0,8,0">
                                                 <TextBlock Text="CPU Fanı" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="Bold" />
-                                                <TextBlock x:Name="TxtCpuFanRpm" Text="3089 RPM" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" Margin="0,4" />
+                                                <!-- Shrinks instead of clipping "2364 RPM (%39)" when the card is narrow -->
+                                                <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" Margin="0,4">
+                                                    <TextBlock x:Name="TxtCpuFanRpm" Text="3089 RPM" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" />
+                                                </Viewbox>
                                                 <ProgressBar x:Name="BarCpuFan" Height="4" Value="50" Maximum="6000" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderThickness="0" />
                                             </StackPanel>
 
                                             <!-- GPU FAN -->
                                             <StackPanel Grid.Column="1" Margin="4,0,8,0">
                                                 <TextBlock Text="GPU Fanı" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="Bold" />
-                                                <TextBlock x:Name="TxtGpuFanRpm" Text="3075 RPM" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" Margin="0,4" />
+                                                <!-- Shrinks instead of clipping "2364 RPM (%39)" when the card is narrow -->
+                                                <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" Margin="0,4">
+                                                    <TextBlock x:Name="TxtGpuFanRpm" Text="3075 RPM" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" />
+                                                </Viewbox>
                                                 <ProgressBar x:Name="BarGpuFan" Height="4" Value="50" Maximum="6000" Background="#222733" Foreground="{StaticResource AccentRed}" BorderThickness="0" />
                                             </StackPanel>
 
@@ -469,7 +475,7 @@
                                                     <TextBlock x:Name="TxtGpuModeBadge" Text="Yükleniyor..." Foreground="{StaticResource AccentCyan}" FontSize="11" FontWeight="Bold" />
                                                 </Border>
                                             </StackPanel>
-                                            <TextBlock Text="Ekran kartı bağlantı modu. Harici GPU doğrudan ekrana bağlanarak gecikmeyi düşürür ve maksimum FPS sağlar." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" />
+                                            <TextBlock Text="Ekran kartı bağlantı modu. Harici GPU doğrudan ekrana bağlanarak gecikmeyi düşürür ve maksimum FPS sağlar." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
                                             <TextBlock x:Name="TxtGpuModeNote" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{StaticResource AccentRed}" FontSize="11" Margin="0,6,0,0" />
                                         </StackPanel>
 
@@ -514,7 +520,7 @@
                                                             <TextBlock x:Name="TxtDefaultMouseProfileStatus" Text="Config 1 (Aktif)" Foreground="{StaticResource AccentGreen}" FontSize="11" FontWeight="Bold" />
                                                         </Border>
                                                     </StackPanel>
-                                                    <TextBlock Text="Oyunlar kapandığında veya masaüstü kullanımında farenin otomatik döneceği varsayılan donanım profili." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" />
+                                                    <TextBlock Text="Oyunlar kapandığında veya masaüstü kullanımında farenin otomatik döneceği varsayılan donanım profili." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                     <ComboBox x:Name="CmbDefaultAtkMouseProfile" Width="180" Margin="0,0,8,0" SelectionChanged="CmbDefaultAtkMouseProfile_SelectionChanged">
@@ -994,7 +1000,7 @@
                                             </Border>
 
                                             <CheckBox x:Name="ChkWatchdog" Content="%80 şarj koruma sınırını uygula" Checked="ChkWatchdog_Changed" Unchecked="ChkWatchdog_Changed" IsChecked="True" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" Margin="0,4" />
-                                            <TextBlock Text="Gömülü denetleyici (EC) şarj sınırını arka planda düzenli olarak denetler." Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
+                                            <TextBlock Text="Şarj sınırı Acer Care Center üzerinden ayarlanır ve bilgisayar yeniden başlasa da korunur." Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
 
                                             <Separator Background="{StaticResource BorderDark}" Margin="0,8,0,8" />
                                             <TextBlock Text="Pilde Çalışma Güç Profili (DC Modu):" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,4" />
@@ -1301,11 +1307,15 @@
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,12">
-                                            <StackPanel>
-                                                <TextBlock Text="OEM Telemetri Servislerini Devre Dışı Bırak (Tier 1)" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                                <TextBlock Text="AcerServiceSvc, ASMSvc, AcerDIAgentSvis, AcerEZSvc, AcerDeviceInfoAgentService, ADESv2" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                                <TextBlock Text="OEM Telemetri Servislerini Devre Dışı Bırak (Tier 1)" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
+                                                <TextBlock Text="AcerServiceSvc, ASMSvc, AcerDIAgentSvis, AcerEZSvc, AcerDeviceInfoAgentService, ADESv2" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
-                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
                                                 <Button Click="BtnApplyDebloat_Click" Content="Servisleri Devre Dışı Bırak (~214 MB)" Background="#2A1B28" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,7" Margin="0,0,8,0" Cursor="Hand" FontSize="11" />
                                                 <Button Click="BtnRestoreServices_Click" Content="Varsayılan Servisleri Etkinleştir" Background="#222733" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,7" Cursor="Hand" FontSize="11" />
                                             </StackPanel>
