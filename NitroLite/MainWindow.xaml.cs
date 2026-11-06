@@ -869,9 +869,6 @@ public partial class MainWindow : Window
                 }
 
                 TxtMonSysTemp.Text = $"{data.SysTemperature} °C";
-
-                TxtAasStatus.Text = "AASSvc Donanım Köprüsü Aktif (Port 46933)";
-                LedAas.Fill = (SolidColorBrush)FindResource("AccentGreen");
             }
 
             // Update tray tooltip regardless of window visibility
@@ -941,11 +938,6 @@ public partial class MainWindow : Window
             {
                 RefreshThermalHealthUi();
             }
-        }
-        else
-        {
-            TxtAasStatus.Text = "AASSvc bağlantısı bekleniyor...";
-            LedAas.Fill = (SolidColorBrush)FindResource("AccentRed");
         }
         }
         finally
