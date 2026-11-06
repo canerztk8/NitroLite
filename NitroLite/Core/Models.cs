@@ -140,6 +140,11 @@ public class BatteryHealthDetails
     public string ModelName { get; set; } = "";
     // True when DesignCapacityMWh is the AN16-41 factory constant because WMI and powercfg gave no value.
     public bool IsDesignCapacityEstimated { get; set; }
+    // True when FullChargeCapacityMWh is DesignCapacity × 0.923 because WMI reported no full-charge capacity
+    // (WearLevelPercent / HealthPercent are then derived from an assumption, not a measurement).
+    public bool IsFullChargeCapacityEstimated { get; set; }
+    // True when VoltageVolts is the 16.45 V nominal constant because WMI reported no voltage.
+    public bool IsVoltageEstimated { get; set; }
 }
 
 public class GameProfile
@@ -209,6 +214,12 @@ public class AppSettings
 
     [JsonPropertyName("atk_mouse_integration_enabled")]
     public bool AtkMouseIntegrationEnabled { get; set; } = false;
+
+    [JsonPropertyName("auto_game_mode_enabled")]
+    public bool AutoGameModeEnabled { get; set; } = true;
+
+    [JsonPropertyName("battery_watchdog_enabled")]
+    public bool BatteryWatchdogEnabled { get; set; } = true;
 }
 
 public class GameSessionRecoveryState

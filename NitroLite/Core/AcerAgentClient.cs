@@ -721,6 +721,27 @@ public class AcerAgentClient : IDisposable
         return await SetLightingAsync("OFF", 0, 1, 1, "#000000", new[] { "#000000", "#000000", "#000000", "#000000" });
     }
 
+    /// <summary>Reads the keyboard 30 s idle-off setting (GET_UPDATED_DATA BACKLIGHT_30S → data.status). Null if unknown.</summary>
+    public virtual async Task<bool?> GetBacklightTimeoutAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+            var resp = await SendFunctionAsync(PacketGetUpdatedData, "BACKLIGHT_30S");
+            var status = GetSuccessData(resp)?["status"]?.GetValue<int>();
+            return status.HasValue ? status.Value == 1 : null;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
     {
         await _lock.WaitAsync();

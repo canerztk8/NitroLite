@@ -314,6 +314,7 @@ public class BatteryWatchdogService : IDisposable
                 if (details.VoltageVolts <= 0)
                 {
                     details.VoltageVolts = 16.45; // Standard 4-cell Li-ion nominal for AP21A8T
+                    details.IsVoltageEstimated = true;
                 }
             }
 
@@ -321,6 +322,7 @@ public class BatteryWatchdogService : IDisposable
             if (details.FullChargeCapacityMWh <= 0 && details.DesignCapacityMWh > 0)
             {
                 details.FullChargeCapacityMWh = Math.Round(details.DesignCapacityMWh * 0.923, 0); // ~83,637 mWh
+                details.IsFullChargeCapacityEstimated = true;
             }
 
             if (details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0)

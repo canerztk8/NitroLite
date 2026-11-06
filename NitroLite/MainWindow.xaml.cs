@@ -476,8 +476,16 @@ public partial class MainWindow : Window
             }
 
             // 1. Initial Mode
-            _currentMode = await _agentClient.GetOperatingModeAsync();
-            UpdateModeUi(_currentMode);
+            var initialMode = await _agentClient.TryGetOperatingModeAsync();
+            if (initialMode.HasValue)
+            {
+                UpdateModeUi(initialMode.Value);
+            }
+            else
+            {
+                // Do not claim "Dengeli" when the service did not answer; no card is highlighted.
+                ShowUnknownModeUi();
+            }
 
             // 1.1 Initial GPU Mode (MUX Switch)
             await RefreshGpuModeAsync();
@@ -552,6 +560,9 @@ public partial class MainWindow : Window
 
             // 2.1 Staged Background Reassertion for Cold Boot / Windows Logon
             _ = ReassertKeyboardLightingAsync(isBoot: true);
+
+            // 2.2 Mirror the device's 30 s idle-off setting in the checkbox
+            await SyncBacklightTimeoutFromDeviceAsync();
 
             // 3. CPU Boost Status
             UpdateBoostUi(_cpuPowerService.CurrentMode);
@@ -633,6 +644,18 @@ public partial class MainWindow : Window
         }
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         ChkAutoRamClean.IsChecked = _appSettings.AutoRamCleanerEnabled;
+
+        // Persisted toggles: apply to the services directly (the Changed handlers ignore events
+        // raised while the window is not loaded / still initializing).
+        _gameService.AutoGameModeEnabled = _appSettings.AutoGameModeEnabled;
+        if (ChkAutoGameMode != null) ChkAutoGameMode.IsChecked = _appSettings.AutoGameModeEnabled;
+        if (TxtGameStatus != null && !_appSettings.AutoGameModeEnabled)
+        {
+            TxtGameStatus.Text = "Durum: Devre Dışı (Manuel Kontrol)";
+        }
+        _batteryService.WatchdogEnabled = _appSettings.BatteryWatchdogEnabled;
+        if (ChkWatchdog != null) ChkWatchdog.IsChecked = _appSettings.BatteryWatchdogEnabled;
+
         _selectedChartMetric = string.IsNullOrEmpty(_appSettings.SelectedChartMetric) ? "CPU_TEMP" : _appSettings.SelectedChartMetric;
         SetComboBoxByTag(CmbChartMetric, _selectedChartMetric);
 
@@ -2877,6 +2900,11 @@ public partial class MainWindow : Window
         if (!IsLoaded || ChkAutoGameMode == null) return;
         Interlocked.Increment(ref _gameSessionGeneration);
         _gameService.AutoGameModeEnabled = ChkAutoGameMode.IsChecked == true;
+        if (!_isInitializingUi)
+        {
+            _appSettings.AutoGameModeEnabled = _gameService.AutoGameModeEnabled;
+            SaveSettings();
+        }
         TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
             ? "Durum: Beklemede (Aktif oyun yok)" 
             : "Durum: Devre Dışı (Manuel Kontrol)";
@@ -2943,21 +2971,13 @@ public partial class MainWindow : Window
             UpdateLightingUi(_lighting);
             UpdateEffectComboBox(preset.Effect);
 
-            bool isOff = preset.Brightness == 0 || preset.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
-            if (isOff)
-            {
-                await _agentClient.TurnOffLightingAsync();
-            }
-            else
-            {
-                await _agentClient.SetLightingAsync(preset.Effect, preset.Brightness, preset.Speed, preset.Direction, preset.Color, preset.LEDs.ToArray());
-            }
+            bool isOff = IsLightingOff(_lighting);
+            if (!await ApplyLightingToDeviceAsync($"'{selectedName}' profili uygulanamadı")) return;
 
             _appSettings.SelectedRgbPreset = selectedName;
             _appSettings.IsBacklightOff = isOff;
             _appSettings.KeyboardLighting = _lighting;
-            SaveSettings();
-            SaveActiveRgbState();
+            PersistLightingState();
         }
         catch (Exception ex)
         {
@@ -3052,7 +3072,7 @@ public partial class MainWindow : Window
             // Values computed from a fixed factory capacity, and the hard-coded fallbacks used when Windows
             // reports nothing, are shown as estimates.
             bool measured = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0;
-            bool wearEstimated = !measured || details.IsDesignCapacityEstimated;
+            bool wearEstimated = !measured || details.IsDesignCapacityEstimated || details.IsFullChargeCapacityEstimated;
 
             if (TxtBatHealthPercent != null)
                 TxtBatHealthPercent.Text = TelemetryFormatter.MarkEstimated(measured ? $"{details.HealthPercent:F1} %" : "92.3 %", wearEstimated);
@@ -3061,7 +3081,9 @@ public partial class MainWindow : Window
                 TxtBatWearPercent.Text = TelemetryFormatter.MarkEstimated(measured ? $"{details.WearLevelPercent:F1} %" : "7.7 %", wearEstimated);
 
             if (TxtBatFullChargeCap != null)
-                TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0 ? $"{details.FullChargeCapacityMWh:N0} mWh" : TelemetryFormatter.MarkEstimated("83.637 mWh");
+                TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0
+                    ? TelemetryFormatter.MarkEstimated($"{details.FullChargeCapacityMWh:N0} mWh", details.IsFullChargeCapacityEstimated)
+                    : TelemetryFormatter.MarkEstimated("83.637 mWh");
 
             if (TxtBatDesignCap != null)
                 TxtBatDesignCap.Text = details.DesignCapacityMWh > 0
@@ -3069,7 +3091,9 @@ public partial class MainWindow : Window
                     : "Fabrika: " + TelemetryFormatter.MarkEstimated("90.614 mWh");
 
             if (TxtBatVoltage != null)
-                TxtBatVoltage.Text = details.VoltageVolts > 0 ? $"{details.VoltageVolts:F2} V" : TelemetryFormatter.MarkEstimated("16.45 V");
+                TxtBatVoltage.Text = details.VoltageVolts > 0
+                    ? TelemetryFormatter.MarkEstimated($"{details.VoltageVolts:F2} V", details.IsVoltageEstimated)
+                    : TelemetryFormatter.MarkEstimated("16.45 V");
         });
     }
 
@@ -3424,6 +3448,15 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ShowUnknownModeUi()
+    {
+        if (TxtModeHeader != null) TxtModeHeader.Text = "BİLİNMİYOR";
+        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet);
+        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault);
+        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme);
+        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo);
+    }
+
     private void ResetModeCard(WpfButton? btn, Border? ind, TextBlock? txt)
     {
         if (ind != null)
@@ -3460,12 +3493,84 @@ public partial class MainWindow : Window
         }
     }
 
+    // True while code (not the user) moves the RGB sliders, so their ValueChanged handlers do not
+    // fire a second lighting command for a change that is already being applied.
+    private bool _isSyncingLightingUi;
+    private DispatcherTimer? _lightingApplyTimer;
+    private static readonly TimeSpan LightingApplyDebounce = TimeSpan.FromMilliseconds(250);
+
+    private void SetLightingSlidersSilently(Action update)
+    {
+        bool previous = _isSyncingLightingUi;
+        _isSyncingLightingUi = true;
+        try { update(); }
+        finally { _isSyncingLightingUi = previous; }
+    }
+
+    private static bool IsLightingOff(LightingConfig cfg) =>
+        cfg.Brightness == 0 || cfg.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Sends the current <see cref="_lighting"/> to AASSvc and reports a failure to the user.
+    /// Cancels any pending debounced slider apply, since this call already carries the latest state.
+    /// </summary>
+    private async Task<bool> ApplyLightingToDeviceAsync(string failurePrefix)
+    {
+        _lightingApplyTimer?.Stop();
+        var cfg = _lighting;
+        bool ok = IsLightingOff(cfg)
+            ? await _agentClient.TurnOffLightingAsync()
+            : await _agentClient.SetLightingAsync(cfg.Effect, cfg.Brightness, cfg.Speed, cfg.Direction, cfg.Color, cfg.LEDs.ToArray());
+        if (!ok && !_isExiting)
+        {
+            ShowToast($"{failurePrefix}: klavye komutu reddedildi veya Acer servisine ulaşılamadı. Ayar kaydedilmedi.", false);
+        }
+        return ok;
+    }
+
+    private void PersistLightingState()
+    {
+        SaveSettings();
+        SaveActiveRgbState();
+    }
+
+    /// <summary>Coalesces rapid slider changes into one lighting command + one settings write.</summary>
+    private void ScheduleLightingApply()
+    {
+        if (_lightingApplyTimer == null)
+        {
+            _lightingApplyTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = LightingApplyDebounce };
+            _lightingApplyTimer.Tick += OnLightingApplyTimerTick;
+        }
+        _lightingApplyTimer.Stop();
+        _lightingApplyTimer.Start();
+    }
+
+    private async void OnLightingApplyTimerTick(object? sender, EventArgs e)
+    {
+        _lightingApplyTimer?.Stop();
+        if (_isExiting || Dispatcher.HasShutdownStarted) return;
+        try
+        {
+            if (await ApplyLightingToDeviceAsync("Aydınlatma ayarı uygulanamadı"))
+            {
+                PersistLightingState();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Aydınlatma ayarı uygulanamadı: {ex.Message}", false);
+        }
+    }
+
     private void UpdateLightingUi(LightingConfig cfg)
     {
-        SliderBrightness.Value = cfg.Brightness;
+        SetLightingSlidersSilently(() =>
+        {
+            SliderBrightness.Value = cfg.Brightness;
+            SliderSpeed.Value = cfg.Speed;
+        });
         TxtBrightnessVal.Text = cfg.Brightness == 0 ? "0 / 9 (Kapalı)" : $"{cfg.Brightness} / 9";
-
-        SliderSpeed.Value = cfg.Speed;
         TxtSpeedVal.Text = $"{cfg.Speed} / 9";
 
         // Zones
@@ -3767,9 +3872,8 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                if (SliderBrightness.Value == 0)
+                if (_lighting.Brightness == 0)
                 {
-                    SliderBrightness.Value = 5;
                     _lighting.Brightness = 5;
                 }
 
@@ -3778,9 +3882,10 @@ public partial class MainWindow : Window
                 _lighting.LEDs = new List<string> { hex, hex, hex, hex };
 
                 UpdateLightingUi(_lighting);
-                UpdateEffectComboBox("STATIC");
-                await _agentClient.SetLightingAsync("STATIC", _lighting.Brightness, _lighting.Speed, _lighting.Direction, hex, _lighting.LEDs.ToArray());
-                SaveActiveRgbState();
+                SuppressEffectComboEvents(() => UpdateEffectComboBox("STATIC"));
+                if (!await ApplyLightingToDeviceAsync("Aydınlatma rengi ayarlanamadı")) return;
+                _appSettings.IsBacklightOff = false;
+                PersistLightingState();
             }
         }
         catch (Exception ex)
@@ -3809,7 +3914,7 @@ public partial class MainWindow : Window
         _lighting.Color = "#000000";
         _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
 
-        SliderBrightness.Value = 0;
+        SetLightingSlidersSilently(() => SliderBrightness.Value = 0);
         TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
 
         PreviewZone1.Background = System.Windows.Media.Brushes.Black;
@@ -3817,7 +3922,10 @@ public partial class MainWindow : Window
         PreviewZone3.Background = System.Windows.Media.Brushes.Black;
         PreviewZone4.Background = System.Windows.Media.Brushes.Black;
 
-        UpdateEffectComboBox("OFF");
+        SuppressEffectComboEvents(() => UpdateEffectComboBox("OFF"));
+
+        if (!await ApplyLightingToDeviceAsync("Aydınlatma kapatılamadı")) return;
+
         _appSettings.IsBacklightOff = true;
         _appSettings.KeyboardLighting = _lighting;
 
@@ -3826,12 +3934,25 @@ public partial class MainWindow : Window
         if (offPreset != null)
         {
             _appSettings.SelectedRgbPreset = offPreset.Name;
-            if (CmbRgbPresets != null) CmbRgbPresets.SelectedItem = offPreset.Name;
+            if (CmbRgbPresets != null)
+            {
+                // Already applied above; do not let the preset combo send the same command again.
+                bool wasApplying = _isApplyingPreset;
+                _isApplyingPreset = true;
+                try { CmbRgbPresets.SelectedItem = offPreset.Name; }
+                finally { _isApplyingPreset = wasApplying; }
+            }
         }
 
-        SaveSettings();
-        SaveActiveRgbState();
-        await _agentClient.TurnOffLightingAsync();
+        PersistLightingState();
+    }
+
+    private void SuppressEffectComboEvents(Action update)
+    {
+        bool wasApplying = _isApplyingPreset;
+        _isApplyingPreset = true;
+        try { update(); }
+        finally { _isApplyingPreset = wasApplying; }
     }
 
     private async void CmbRgbEffect_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -3851,14 +3972,15 @@ public partial class MainWindow : Window
 
                 _lighting.Effect = effectName;
 
-                if (SliderBrightness.Value == 0)
+                if (_lighting.Brightness == 0)
                 {
-                    SliderBrightness.Value = 5;
                     _lighting.Brightness = 5;
                 }
+                UpdateLightingUi(_lighting);
 
-                await _agentClient.SetLightingAsync(effectName, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
-                SaveActiveRgbState();
+                if (!await ApplyLightingToDeviceAsync("Aydınlatma efekti ayarlanamadı")) return;
+                _appSettings.IsBacklightOff = false;
+                PersistLightingState();
             }
         }
         catch (Exception ex)
@@ -3867,73 +3989,85 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void SliderBrightness_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    // Sliders only update the preview and in-memory state immediately; the device command and the
+    // settings write are debounced (ScheduleLightingApply) so a drag sends one command, not one per tick.
+    private void SliderBrightness_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        try
-        {
-            if (!IsLoaded || _isInitializingUi || _isApplyingPreset || TxtBrightnessVal == null) return;
-            CancelActiveLightingReassertion();
-            var val = (int)e.NewValue;
-            if (val == 0)
-            {
-                TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
-                _lighting.Brightness = 0;
-                _appSettings.IsBacklightOff = true;
-                _appSettings.KeyboardLighting = _lighting;
-                PreviewZone1.Background = System.Windows.Media.Brushes.Black;
-                PreviewZone2.Background = System.Windows.Media.Brushes.Black;
-                PreviewZone3.Background = System.Windows.Media.Brushes.Black;
-                PreviewZone4.Background = System.Windows.Media.Brushes.Black;
-                SaveSettings();
-                SaveActiveRgbState();
-                await _agentClient.TurnOffLightingAsync();
-                return;
-            }
+        if (!IsLoaded || _isInitializingUi || _isApplyingPreset || _isSyncingLightingUi || TxtBrightnessVal == null) return;
+        CancelActiveLightingReassertion();
+        var val = (int)e.NewValue;
+        _lighting.Brightness = val;
+        _appSettings.IsBacklightOff = IsLightingOff(_lighting);
+        _appSettings.KeyboardLighting = _lighting;
 
-            TxtBrightnessVal.Text = $"{val} / 9";
-            _lighting.Brightness = val;
-            _appSettings.IsBacklightOff = false;
-            _appSettings.KeyboardLighting = _lighting;
-            SaveSettings();
-            UpdateLightingUi(_lighting);
-            await _agentClient.SetLightingAsync(_lighting.Effect, val, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
-            SaveActiveRgbState();
-        }
-        catch (Exception ex)
+        if (val == 0)
         {
-            ShowToast($"Parlaklık uygulanamadı: {ex.Message}", false);
+            TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
+            PreviewZone1.Background = System.Windows.Media.Brushes.Black;
+            PreviewZone2.Background = System.Windows.Media.Brushes.Black;
+            PreviewZone3.Background = System.Windows.Media.Brushes.Black;
+            PreviewZone4.Background = System.Windows.Media.Brushes.Black;
         }
+        else
+        {
+            UpdateLightingUi(_lighting);
+        }
+
+        ScheduleLightingApply();
     }
 
-    private async void SliderSpeed_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void SliderSpeed_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!IsLoaded || _isInitializingUi || _isApplyingPreset || _isSyncingLightingUi || TxtSpeedVal == null) return;
+        CancelActiveLightingReassertion();
+        var val = (int)e.NewValue;
+        TxtSpeedVal.Text = $"{val} / 9";
+        _lighting.Speed = val;
+        ScheduleLightingApply();
+    }
+
+    private bool _isSyncingBacklightTimeoutUi;
+
+    private void SetBacklightTimeoutCheckboxSilently(bool isChecked)
+    {
+        if (ChkBacklightTimeout == null) return;
+        _isSyncingBacklightTimeoutUi = true;
+        try { ChkBacklightTimeout.IsChecked = isChecked; }
+        finally { _isSyncingBacklightTimeoutUi = false; }
+    }
+
+    /// <summary>The 30 s idle-off setting lives on the device (EC); mirror it instead of assuming "off".</summary>
+    private async Task SyncBacklightTimeoutFromDeviceAsync()
     {
         try
         {
-            if (!IsLoaded || _isInitializingUi || _isApplyingPreset || TxtSpeedVal == null) return;
-            CancelActiveLightingReassertion();
-            var val = (int)e.NewValue;
-            TxtSpeedVal.Text = $"{val} / 9";
-            _lighting.Speed = val;
-            await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, val, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
-            SaveActiveRgbState();
+            var state = await _agentClient.GetBacklightTimeoutAsync();
+            if (state.HasValue && !Dispatcher.HasShutdownStarted)
+            {
+                SetBacklightTimeoutCheckboxSilently(state.Value);
+            }
         }
-        catch (Exception ex)
-        {
-            ShowToast($"Efekt hızı uygulanamadı: {ex.Message}", false);
-        }
+        catch { }
     }
 
     private async void ChkBacklightTimeout_Changed(object sender, RoutedEventArgs e)
     {
+        if (!IsLoaded || _isInitializingUi || _isSyncingBacklightTimeoutUi) return;
+        var enable = ChkBacklightTimeout.IsChecked == true;
+        bool ok;
         try
         {
-            if (!IsLoaded || _isInitializingUi) return;
-            var enable = ChkBacklightTimeout.IsChecked == true;
-            await _agentClient.SetBacklightTimeoutAsync(enable);
+            ok = await _agentClient.SetBacklightTimeoutAsync(enable);
         }
-        catch (Exception ex)
+        catch
         {
-            ShowToast($"Zaman aşımı uygulanamadı: {ex.Message}", false);
+            ok = false;
+        }
+
+        if (!ok)
+        {
+            SetBacklightTimeoutCheckboxSilently(!enable);
+            ShowToast("30 sn aydınlatma zaman aşımı değiştirilemedi: klavye komutu reddedildi veya Acer servisine ulaşılamadı.", false);
         }
     }
 
@@ -3941,6 +4075,11 @@ public partial class MainWindow : Window
     {
         if (!IsLoaded || ChkWatchdog == null) return;
         _batteryService.WatchdogEnabled = ChkWatchdog.IsChecked == true;
+        if (!_isInitializingUi)
+        {
+            _appSettings.BatteryWatchdogEnabled = _batteryService.WatchdogEnabled;
+            SaveSettings();
+        }
         if (_batteryService.WatchdogEnabled)
         {
             _batteryService.EnforceHealthSetting();
