@@ -4,14 +4,24 @@
         Title="NitroLite" 
         Icon="app.ico"
         Height="730" Width="1060"
+        MinHeight="730" MinWidth="1060"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
-        ResizeMode="CanMinimize"
+        Background="#0F1115"
+        ResizeMode="CanResize"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
         FontFamily="Segoe UI Variable Text, Segoe UI, sans-serif">
+
+    <!-- Borderless look with native window behaviour: edge resizing, Aero Snap, double-click to maximize.
+         No AllowsTransparency, so WPF renders on the GPU; Windows draws the shadow (and rounded corners on 11). -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="46"
+                      ResizeBorderThickness="6"
+                      CornerRadius="0"
+                      GlassFrameThickness="0,0,0,1"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
         <!-- Design System: Solid High-Contrast Dark Surfaces & Semantic Accents -->
@@ -238,10 +248,7 @@
     </Window.Resources>
 
     <!-- Main Container with Crisp 1px Border & Subtle Elevation -->
-    <Border Background="{StaticResource BgDark}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" CornerRadius="8" Margin="10">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="8" Color="#000000" Opacity="0.4" ShadowDepth="2" />
-        </Border.Effect>
+    <Border x:Name="RootBorder" Background="{StaticResource BgDark}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
 
         <Grid>
             <Grid.RowDefinitions>
@@ -252,7 +259,8 @@
             </Grid.RowDefinitions>
 
             <!-- CUSTOM SLEEK TITLE BAR -->
-            <Border Grid.Row="0" Background="#13161D" CornerRadius="8,8,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
+            <!-- Dragging, snapping and double-click maximize are handled by WindowChrome (CaptionHeight="46"). -->
+            <Border Grid.Row="0" Background="#13161D" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,0,1">
                 <Grid Margin="16,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="NitroLite" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
@@ -275,11 +283,15 @@
                         </Border>
 
                         <!-- Minimize Button -->
-                        <Button Click="BtnMinimize_Click" Width="30" Height="30" Background="Transparent" BorderThickness="0" Cursor="Hand" Margin="0,0,2,0">
+                        <Button Click="BtnMinimize_Click" Width="30" Height="30" Background="Transparent" BorderThickness="0" Cursor="Hand" Margin="0,0,2,0" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Küçült">
                             <TextBlock Text="–" Foreground="{StaticResource TextSecondary}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
+                        <!-- Maximize / Restore Button -->
+                        <Button x:Name="BtnMaximize" Click="BtnMaximize_Click" Width="30" Height="30" Background="Transparent" BorderThickness="0" Cursor="Hand" Margin="0,0,2,0" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Büyüt">
+                            <TextBlock x:Name="TxtMaximizeGlyph" Text="&#xE922;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource TextSecondary}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
                         <!-- Close Button (Minimizes to tray) -->
-                        <Button Click="BtnClose_Click" Width="30" Height="30" Background="Transparent" BorderThickness="0" Cursor="Hand">
+                        <Button Click="BtnClose_Click" Width="30" Height="30" Background="Transparent" BorderThickness="0" Cursor="Hand" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Tepsiye gizle">
                             <TextBlock Text="✕" Foreground="{StaticResource TextSecondary}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </StackPanel>
@@ -294,7 +306,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- SIDEBAR NAVIGATION -->
-                <Border Grid.Column="0" Background="#13161D" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,1,0" CornerRadius="0,0,0,8" Padding="12,16">
+                <Border Grid.Column="0" Background="#13161D" BorderBrush="{StaticResource BorderDark}" BorderThickness="0,0,1,0" Padding="12,16">
                     <StackPanel>
                         <TextBlock Text="Gezinti" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="12,0,0,8" />
                         <RadioButton x:Name="NavModes" Style="{StaticResource NavButton}" Content="Çalışma Modları" IsChecked="True" Checked="Nav_Checked" />

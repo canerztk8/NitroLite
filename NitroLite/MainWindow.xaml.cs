@@ -173,6 +173,7 @@ public partial class MainWindow : Window
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private const int SW_RESTORE = 9;
+    private const int SW_SHOWMAXIMIZED = 3;
 
     public static void TrimMemory()
     {
@@ -209,6 +210,7 @@ public partial class MainWindow : Window
         _atkMouseService = new();
 
         InitializeComponent();
+        WindowChromeHelper.Attach(this);
         SetupTrayIcon();
         SetupTimers();
         SetupEvents();
@@ -254,6 +256,7 @@ public partial class MainWindow : Window
         if (!isTestHarness)
         {
             InitializeComponent();
+            WindowChromeHelper.Attach(this);
             SetupTrayIcon();
             SetupTimers();
             SetupEvents();
@@ -389,7 +392,16 @@ public partial class MainWindow : Window
             await EnsureInitializedAsync();
         };
 
-        StateChanged += (s, e) => UpdateTelemetryPollingRate();
+        StateChanged += (s, e) =>
+        {
+            UpdateTelemetryPollingRate();
+            OnWindowStateChangedForChrome();
+        };
+        if (CanvasHistoryChart != null)
+        {
+            // Redraw the history chart immediately when the window is resized instead of on the next poll.
+            CanvasHistoryChart.SizeChanged += (s, e) => RenderTelemetryChart();
+        }
         IsVisibleChanged += (s, e) => UpdateTelemetryPollingRate();
     }
 
@@ -662,6 +674,13 @@ public partial class MainWindow : Window
         _selectedChartMetric = string.IsNullOrEmpty(_appSettings.SelectedChartMetric) ? "CPU_TEMP" : _appSettings.SelectedChartMetric;
         SetComboBoxByTag(CmbChartMetric, _selectedChartMetric);
 
+        // Restored window size, never below the design minimum or larger than the whole desktop.
+        if (_appSettings.WindowWidth is double savedWidth && _appSettings.WindowHeight is double savedHeight)
+        {
+            Width = Math.Clamp(savedWidth, MinWidth, Math.Max(MinWidth, SystemParameters.VirtualScreenWidth));
+            Height = Math.Clamp(savedHeight, MinHeight, Math.Max(MinHeight, SystemParameters.VirtualScreenHeight));
+        }
+
         if (_appSettings.WindowLeft.HasValue && _appSettings.WindowTop.HasValue)
         {
             double left = _appSettings.WindowLeft.Value;
@@ -677,6 +696,17 @@ public partial class MainWindow : Window
                 WindowStartupLocation = WindowStartupLocation.Manual;
                 Left = left;
                 Top = top;
+            }
+        }
+
+        if (_appSettings.WindowMaximized)
+        {
+            _restoreMaximized = true;
+            // Only maximize now if the window is on screen; when started minimized to the tray,
+            // ShowWindow() maximizes it the first time it is opened.
+            if (IsVisible && WindowState == WindowState.Normal)
+            {
+                WindowState = WindowState.Maximized;
             }
         }
 
@@ -701,6 +731,23 @@ public partial class MainWindow : Window
         {
             _appSettings.WindowLeft = Left;
             _appSettings.WindowTop = Top;
+            _appSettings.WindowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            _appSettings.WindowHeight = ActualHeight > 0 ? ActualHeight : Height;
+            _appSettings.WindowMaximized = false;
+            SaveSettings();
+        }
+        else if (WindowState == WindowState.Maximized)
+        {
+            // Keep the size/position the window returns to when un-maximized.
+            var restore = RestoreBounds;
+            if (!restore.IsEmpty && restore.Width > 0 && restore.Height > 0)
+            {
+                _appSettings.WindowLeft = restore.Left;
+                _appSettings.WindowTop = restore.Top;
+                _appSettings.WindowWidth = restore.Width;
+                _appSettings.WindowHeight = restore.Height;
+            }
+            _appSettings.WindowMaximized = true;
             SaveSettings();
         }
     }
@@ -3674,11 +3721,28 @@ public partial class MainWindow : Window
     // UI Event Handlers
     // ==========================================
 
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    // Whether the window should come back maximized when shown from the tray / after minimize.
+    private bool _restoreMaximized;
+
+    private void BtnMaximize_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    private void OnWindowStateChangedForChrome()
+    {
+        if (WindowState == WindowState.Maximized) _restoreMaximized = true;
+        else if (WindowState == WindowState.Normal) _restoreMaximized = false;
+
+        bool maximized = WindowState == WindowState.Maximized;
+        if (TxtMaximizeGlyph != null) TxtMaximizeGlyph.Text = maximized ? "" : "";
+        if (BtnMaximize != null) BtnMaximize.ToolTip = maximized ? "Geri al" : "Büyüt";
+        // Windows draws no frame around a maximized window; drop the 1px border so content reaches the edges.
+        if (RootBorder != null) RootBorder.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
+
+        if (WindowState != WindowState.Minimized && !_isInitializingUi)
         {
-            DragMove();
+            SaveWindowPosition();
         }
     }
 
@@ -3712,8 +3776,9 @@ public partial class MainWindow : Window
 
     public void ShowWindow()
     {
+        bool maximize = _restoreMaximized;
         Show();
-        WindowState = WindowState.Normal;
+        WindowState = maximize ? WindowState.Maximized : WindowState.Normal;
         UpdateTelemetryPollingRate();
         _ = ReassertKeyboardLightingAsync(isBoot: false);
         try
@@ -3721,7 +3786,8 @@ public partial class MainWindow : Window
             var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
             if (hwnd != IntPtr.Zero)
             {
-                ShowWindow(hwnd, SW_RESTORE);
+                // SW_RESTORE would un-maximize a maximized window, so bring it back in the state the user left it.
+                ShowWindow(hwnd, maximize ? SW_SHOWMAXIMIZED : SW_RESTORE);
                 SetForegroundWindow(hwnd);
             }
         }
