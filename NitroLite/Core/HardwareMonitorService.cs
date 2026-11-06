@@ -209,10 +209,17 @@ public class HardwareMonitorService : IDisposable
         return data;
     }
 
-    public void EnrichMonitorData(MonitorData data)
+    /// <param name="gpuAsleepPerService">
+    /// True when AASSvc reported the dGPU as powered down (GPU1_TEMPERATURE 0 = RTD3/D3cold on Optimus).
+    /// NVML queries (power, memory, clocks) can wake a sleeping dGPU and keep it out of D3cold, costing
+    /// battery; in that state NVML is not touched at all and the GPU values stay at 0.
+    /// </param>
+    public void EnrichMonitorData(MonitorData data, bool gpuAsleepPerService = false)
     {
+        bool mayQueryNvml = !gpuAsleepPerService;
+
         // 1. Retry NVML initialization when dGPU wakes from RTD3 deep sleep
-        if (_allowNvml && (!_nvmlInitialized || _gpuDevice == IntPtr.Zero))
+        if (mayQueryNvml && _allowNvml && (!_nvmlInitialized || _gpuDevice == IntPtr.Zero))
         {
             if ((DateTime.UtcNow - _lastNvmlRetryUtc).TotalSeconds >= 4.0)
             {
@@ -222,7 +229,7 @@ public class HardwareMonitorService : IDisposable
         }
 
         // 2. GPU Wattage, VRAM, Frequency, and Temperature via NVML
-        if (_nvmlInitialized && _gpuDevice != IntPtr.Zero)
+        if (mayQueryNvml && _nvmlInitialized && _gpuDevice != IntPtr.Zero)
         {
             try
             {

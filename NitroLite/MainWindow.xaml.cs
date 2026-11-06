@@ -374,6 +374,9 @@ public partial class MainWindow : Window
         SystemEvents.PowerModeChanged += OnSystemPowerModeChanged;
         SystemEvents.SessionSwitch += OnSystemSessionSwitch;
 
+        // Unsolicited AASSvc events (mode-switch key, keyboard backlight timeout)
+        _agentClient.ServiceEventReceived += OnAgentServiceEvent;
+
         // AC/DC Power & Display Automation
         _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: true, transitionLock: _gameProfileTransitionLock);
         _powerAutomationService.EcoStateFilePath = DcEcoStateFile;
@@ -563,6 +566,9 @@ public partial class MainWindow : Window
 
             // 2.2 Mirror the device's 30 s idle-off setting in the checkbox
             await SyncBacklightTimeoutFromDeviceAsync();
+
+            // 2.3 Mirror the Care Center 80 % charge limit (background; AcerCCAgent may be absent)
+            _ = SyncChargeLimitFromCareCenterAsync();
 
             // 3. CPU Boost Status
             UpdateBoostUi(_cpuPowerService.CurrentMode);
@@ -858,6 +864,51 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool? _lastServiceTelemetryAvailable;
+    private const string ServiceUnavailableText = "-- (Servis yok)";
+
+    /// <summary>Tells the user once when AASSvc telemetry is lost and once when it comes back.</summary>
+    private int _consecutiveTelemetryFailures;
+
+    private void UpdateServiceTelemetryState(bool serviceAvailable)
+    {
+        // Ignore a single timeout/reconnect; report loss only after 3 consecutive failed polls.
+        if (!serviceAvailable && ++_consecutiveTelemetryFailures < 3) return;
+        if (serviceAvailable) _consecutiveTelemetryFailures = 0;
+
+        var previous = _lastServiceTelemetryAvailable;
+        _lastServiceTelemetryAvailable = serviceAvailable;
+        if (previous == serviceAvailable) return;
+
+        if (!serviceAvailable)
+        {
+            ShowToast("Acer servisine (AcerAgentService) ulaşılamıyor; yalnızca Windows ve NVIDIA'dan okunabilen veriler gösteriliyor.", false);
+        }
+        else if (previous == false)
+        {
+            ShowToast("Acer servisi bağlantısı geri geldi; tüm sensörler okunuyor.");
+        }
+    }
+
+    private void ApplyServiceUnavailableTelemetryText(MonitorData data)
+    {
+        TxtSideCpuTemp.Text = ServiceUnavailableText;
+        TxtSideCpuFan.Text = ServiceUnavailableText;
+        TxtMonCpuTemp.Text = ServiceUnavailableText;
+        TxtCpuFanRpm.Text = ServiceUnavailableText;
+        TxtGpuFanRpm.Text = ServiceUnavailableText;
+        TxtMonSysTemp.Text = ServiceUnavailableText;
+        TxtMonCpuFreqGhz.Text = ServiceUnavailableText;
+        if (TxtSubMoboTemp != null) TxtSubMoboTemp.Text = ServiceUnavailableText;
+        if (data.GpuTemperature <= 0)
+        {
+            // NVML did not report either; do not claim the GPU is asleep.
+            TxtSideGpuTemp.Text = ServiceUnavailableText;
+            TxtMonGpuTemp.Text = ServiceUnavailableText;
+        }
+        TxtMonGpuUsage.Text = ServiceUnavailableText;
+    }
+
     private async Task PollTelemetryAsync()
     {
         if (_isPolling) return;
@@ -866,11 +917,26 @@ public partial class MainWindow : Window
         try
         {
             var data = await _agentClient.GetMonitorDataAsync();
+
+            // AASSvc unavailable: fall back to what Windows/NVML can measure (CPU load, RAM, GPU via NVML).
+            // Sensors only the Acer service provides (CPU temperature, fans, board temperature) are shown as
+            // unavailable, and the sample is kept out of thermal history, the chart and the OSD.
+            bool isFallback = data == null;
+            if (isFallback)
+            {
+                data = _hardwareService.CreateFallbackMonitorData();
+            }
+            UpdateServiceTelemetryState(serviceAvailable: !isFallback);
+
         if (data != null)
         {
-            // Enrich with GPU Wattage, VRAM and CPU Package Power
-            _hardwareService.EnrichMonitorData(data);
-            _thermalService.RecordSample(data);
+            if (!isFallback)
+            {
+                // Enrich with GPU Wattage, VRAM and CPU Package Power
+                // GPU1_TEMPERATURE 0 from AASSvc means the dGPU is powered down; do not wake it via NVML.
+                _hardwareService.EnrichMonitorData(data, gpuAsleepPerService: data.GpuTemperature <= 0);
+                _thermalService.RecordSample(data);
+            }
             _telemetrySampleIndex++;
 
             bool isWindowVisible = IsVisible && WindowState != WindowState.Minimized;
@@ -938,12 +1004,19 @@ public partial class MainWindow : Window
                 }
 
                 TxtMonSysTemp.Text = $"{data.SysTemperature} °C";
+
+                if (isFallback)
+                {
+                    ApplyServiceUnavailableTelemetryText(data);
+                }
             }
 
             // Update tray tooltip regardless of window visibility
             if (_notifyIcon != null)
             {
-                var tip = $"NitroLite: {_currentMode} | CPU: {data.CpuTemperature}°C | GPU: {data.GpuTemperature}°C";
+                var tip = isFallback
+                    ? $"NitroLite: Acer servisi yanıt vermiyor | CPU: %{data.CpuUsage:F0}"
+                    : $"NitroLite: {_currentMode} | CPU: {data.CpuTemperature}°C | GPU: {data.GpuTemperature}°C";
                 _notifyIcon.Text = tip.Length > 63 ? tip[..63] : tip;
             }
 
@@ -964,20 +1037,23 @@ public partial class MainWindow : Window
                 }
             }
 
-            // Update OSD if open
-            if (_isOsdOpen && _osdWindow != null && _osdWindow.IsVisible)
+            if (!isFallback)
             {
-                _osdWindow.UpdateData(data, _currentMode);
-            }
+                // Update OSD if open
+                if (_isOsdOpen && _osdWindow != null && _osdWindow.IsVisible)
+                {
+                    _osdWindow.UpdateData(data, _currentMode);
+                }
 
-            // Keep rolling 60 seconds history
-            _telemetryHistory.Add(data);
-            if (_telemetryHistory.Count > 60)
-            {
-                _telemetryHistory.RemoveAt(0);
-            }
+                // Keep rolling 60 seconds history
+                _telemetryHistory.Add(data);
+                if (_telemetryHistory.Count > 60)
+                {
+                    _telemetryHistory.RemoveAt(0);
+                }
 
-            RenderTelemetryChart();
+                RenderTelemetryChart();
+            }
 
             // Auto-sync game dropdown to running active game if tab is visible
             var activeGame = _gameService.ActiveGameProfile;
@@ -3691,6 +3767,7 @@ public partial class MainWindow : Window
 
         SystemEvents.PowerModeChanged -= OnSystemPowerModeChanged;
         SystemEvents.SessionSwitch -= OnSystemSessionSwitch;
+        _agentClient.ServiceEventReceived -= OnAgentServiceEvent;
 
         _pollTimer?.Stop();
         _toastTimer?.Stop();
@@ -3756,6 +3833,51 @@ public partial class MainWindow : Window
             await RefreshBatteryHealthAsync();
             RefreshThermalHealthUi();
             await RefreshStorageHealthUi();
+        }
+    }
+
+    // Raised on a thread-pool thread by AcerAgentClient. Events are read while a request is in flight,
+    // so with 1-3 s telemetry polling they arrive within a few seconds.
+    private void OnAgentServiceEvent(string function, System.Text.Json.Nodes.JsonNode? parameter)
+    {
+        if (_isExiting || Dispatcher.HasShutdownStarted) return;
+
+        if (function.Equals(ModeSwitchKey.PressEvent, StringComparison.OrdinalIgnoreCase))
+        {
+            Dispatcher.BeginInvoke(new Action(async () =>
+            {
+                try { await HandleModeSwitchKeyAsync(); }
+                catch (Exception ex) { ShowToast($"Mod tuşu işlenemedi: {ex.Message}", false); }
+            }));
+        }
+        else if (function.Equals(ModeSwitchKey.BacklightTimeoutEvent, StringComparison.OrdinalIgnoreCase))
+        {
+            int? status = null;
+            try { status = parameter?["status"]?.GetValue<int>(); } catch { }
+            if (status.HasValue)
+            {
+                Dispatcher.BeginInvoke(new Action(() => SetBacklightTimeoutCheckboxSilently(status.Value == 1)));
+            }
+        }
+    }
+
+    private int _modeSwitchKeyBusy;
+
+    private async Task HandleModeSwitchKeyAsync()
+    {
+        // Ignore key repeats while the previous switch is still being applied.
+        if (Interlocked.Exchange(ref _modeSwitchKeyBusy, 1) != 0) return;
+        try
+        {
+            var current = await _agentClient.TryGetOperatingModeAsync() ?? _currentMode;
+            bool onAc = _powerAutomationService?.LastAcStatus
+                        ?? (System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus != System.Windows.Forms.PowerLineStatus.Offline);
+            var next = ModeSwitchKey.Next(current, onAc);
+            await SetManualModeAsync(next);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _modeSwitchKeyBusy, 0);
         }
     }
 
@@ -4071,18 +4193,73 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ChkWatchdog_Changed(object sender, RoutedEventArgs e)
+    private readonly CareCenterClient _careCenterClient = new();
+    private bool _isSyncingWatchdogUi;
+
+    private void SetWatchdogCheckboxSilently(bool isChecked)
+    {
+        if (ChkWatchdog == null) return;
+        _isSyncingWatchdogUi = true;
+        try { ChkWatchdog.IsChecked = isChecked; }
+        finally { _isSyncingWatchdogUi = false; }
+        _batteryService.WatchdogEnabled = isChecked;
+    }
+
+    /// <summary>
+    /// The 80 % limit is owned by Acer Care Center; show what it actually reports instead of assuming.
+    /// Runs in the background so a missing AcerCCAgent cannot delay startup.
+    /// </summary>
+    private async Task SyncChargeLimitFromCareCenterAsync()
+    {
+        try
+        {
+            var mode = await _careCenterClient.GetBatteryChargeModeAsync();
+            if (!mode.HasValue || Dispatcher.HasShutdownStarted) return;
+            bool limited = mode.Value == BatteryChargeMode.Optimized80;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                SetWatchdogCheckboxSilently(limited);
+                if (_appSettings.BatteryWatchdogEnabled != limited)
+                {
+                    _appSettings.BatteryWatchdogEnabled = limited;
+                    SaveSettings();
+                }
+            });
+        }
+        catch { }
+    }
+
+    private async void ChkWatchdog_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || ChkWatchdog == null) return;
-        _batteryService.WatchdogEnabled = ChkWatchdog.IsChecked == true;
-        if (!_isInitializingUi)
+        bool enable = ChkWatchdog.IsChecked == true;
+        _batteryService.WatchdogEnabled = enable;
+        if (_isInitializingUi || _isSyncingWatchdogUi) return;
+
+        ChkWatchdog.IsEnabled = false;
+        try
         {
-            _appSettings.BatteryWatchdogEnabled = _batteryService.WatchdogEnabled;
-            SaveSettings();
+            bool ok = await _careCenterClient.SetBatteryChargeModeAsync(enable ? BatteryChargeMode.Optimized80 : BatteryChargeMode.Full);
+            if (ok)
+            {
+                _appSettings.BatteryWatchdogEnabled = enable;
+                SaveSettings();
+                ShowToast(enable ? "%80 şarj sınırı etkinleştirildi (Acer Care Center)." : "Şarj sınırı kapatıldı; pil %100'e kadar şarj olacak.");
+            }
+            else
+            {
+                SetWatchdogCheckboxSilently(!enable);
+                ShowToast($"Şarj sınırı değiştirilemedi: {_careCenterClient.LastError ?? "bilinmeyen hata"}", false);
+            }
         }
-        if (_batteryService.WatchdogEnabled)
+        catch (Exception ex)
         {
-            _batteryService.EnforceHealthSetting();
+            SetWatchdogCheckboxSilently(!enable);
+            ShowToast($"Şarj sınırı değiştirilemedi: {ex.Message}", false);
+        }
+        finally
+        {
+            ChkWatchdog.IsEnabled = true;
         }
     }
 

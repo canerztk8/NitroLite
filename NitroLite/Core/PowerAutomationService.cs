@@ -216,6 +216,9 @@ public class PowerAutomationService : IDisposable
         lock (_stateSyncLock)
         {
             _savedCpuBoostBeforeDc = boost;
+            // A manual choice overrides the battery value captured before Eco; otherwise reconnecting AC
+            // would write that stale value back over what the user just picked.
+            _savedDcBoostBeforeEco = null;
             _pendingAcCpuRestore = false;
             if (_lastAcStatus && !HasPendingAcRestore)
             {

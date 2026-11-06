@@ -29,7 +29,6 @@ public class BatteryWatchdogService : IDisposable
     [DllImport("kernel32.dll")]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
-    private const string CcSettingsPath = @"C:\ProgramData\Acer\CC\settings.json";
     private static readonly object _fileLock = new();
 
     private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(3));
@@ -66,7 +65,8 @@ public class BatteryWatchdogService : IDisposable
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
-        // Re-assert 80% boundary upon system wake from sleep/suspend or AC plug/unplug event
+        // The 80 % limit itself is stored by Acer Care Center (CareCenterClient) and survives sleep and
+        // reboots, so it is not re-asserted here; only the status / overcharge alert is refreshed.
         if (e.Mode == PowerModes.Resume || e.Mode == PowerModes.StatusChange)
         {
             if (e.Mode == PowerModes.StatusChange)
@@ -74,10 +74,6 @@ public class BatteryWatchdogService : IDisposable
                 _emaInitialized = false;
             }
 
-            if (WatchdogEnabled)
-            {
-                EnforceHealthSetting(force: true);
-            }
             UpdateStatus();
         }
     }
@@ -94,10 +90,6 @@ public class BatteryWatchdogService : IDisposable
             try
             {
                 UpdateStatus();
-                if (WatchdogEnabled)
-                {
-                    EnforceHealthSetting();
-                }
             }
             catch
             {
@@ -384,64 +376,6 @@ public class BatteryWatchdogService : IDisposable
         // Physical hardware specification for Acer Nitro 16 AN16-41 (LGC AP21A8T 90,614 mWh)
         isEstimated = true;
         return 90614.0;
-    }
-
-    public void EnforceHealthSetting(bool force = false)
-    {
-        lock (_fileLock)
-        {
-            Mutex? mutex = null;
-            bool hasMutex = false;
-            try
-            {
-                mutex = new Mutex(false, @"Global\AcerCC_Settings_Mutex");
-                hasMutex = mutex.WaitOne(TimeSpan.FromMilliseconds(500), false);
-            }
-            catch (AbandonedMutexException) { hasMutex = true; }
-            catch { }
-
-            try
-            {
-                if (!hasMutex || !File.Exists(CcSettingsPath)) return;
-
-                string text;
-                using (var fs = new FileStream(CcSettingsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var reader = new StreamReader(fs))
-                {
-                    text = reader.ReadToEnd();
-                }
-
-                var node = JsonNode.Parse(text);
-                if (node == null) return;
-
-                var val = node["BatteryHealthy"]?.GetValue<int>() ?? 0;
-                if (val != 1 || force)
-                {
-                    node["BatteryHealthy"] = 1;
-                    var json = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-                    string temporary = CcSettingsPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                    try
-                    {
-                        File.WriteAllText(temporary, json);
-                        if (File.ReadAllText(CcSettingsPath) != text) return;
-                        File.Replace(temporary, CcSettingsPath, CcSettingsPath + ".nitrolite.bak");
-                    }
-                    finally { if (File.Exists(temporary)) File.Delete(temporary); }
-                }
-            }
-            catch
-            {
-                // Care center file may be temporarily locked
-            }
-            finally
-            {
-                if (hasMutex && mutex != null)
-                {
-                    try { mutex.ReleaseMutex(); } catch { }
-                }
-                mutex?.Dispose();
-            }
-        }
     }
 
     public void StartSafeDischarge()

@@ -924,7 +924,7 @@ function global:Disable-ScheduledTask {
     {
         var service = new DebloatService();
         var tempBackup = Path.Combine(Path.GetTempPath(), $"debloat_test_missing_{Guid.NewGuid():N}.json");
-        var errLog = Path.Combine(Path.GetTempPath(), "nitrolite_restore_err.log");
+        string? errLog = null;
 
         try
         {
@@ -937,10 +937,12 @@ function global:Disable-ScheduledTask {
             File.WriteAllText(tempBackup, JsonSerializer.Serialize(backupData));
             service.BackupStateFilePath = tempBackup;
 
-            // Simulate script failure reporting missing service/task in error log
+            // Simulate script failure reporting missing service/task in error log.
+            // The log path is randomised per run, so take it from the generated script ("$errLog = '...';").
             service.PowerShellRunner = async (script, elevated) =>
             {
-                await File.WriteAllTextAsync(errLog, "AcerServiceSvc: Servis bulunamadı: AcerServiceSvc\nTask:NitroSenseLauncher: NitroSenseLauncher görevi bulunamadı.");
+                errLog = System.Text.RegularExpressions.Regex.Match(script, @"\$errLog = '([^']+)'").Groups[1].Value.Replace("''", "'");
+                await File.WriteAllTextAsync(errLog,"AcerServiceSvc: Servis bulunamadı: AcerServiceSvc\nTask:NitroSenseLauncher: NitroSenseLauncher görevi bulunamadı.");
                 return 1;
             };
 
@@ -954,7 +956,7 @@ function global:Disable-ScheduledTask {
         finally
         {
             if (File.Exists(tempBackup)) File.Delete(tempBackup);
-            if (File.Exists(errLog)) File.Delete(errLog);
+            if (errLog != null && File.Exists(errLog)) File.Delete(errLog);
         }
     }
 

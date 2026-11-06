@@ -32,6 +32,22 @@ public class IntegrationHealthTests
     }
 
     [Fact]
+    public void EnrichMonitorData_DoesNotQueryNvmlWhenServiceReportsGpuAsleep()
+    {
+        using var hwService = new HardwareMonitorService();
+        var monData = new MonitorData { CpuUsage = 10.0, GpuTemperature = 0 };
+
+        hwService.EnrichMonitorData(monData, gpuAsleepPerService: true);
+
+        // Nothing GPU-related may be filled in from NVML (which could wake the dGPU from D3cold).
+        Assert.Equal(0.0, monData.GpuPowerWatts);
+        Assert.Equal(0.0, monData.VramUsedMB);
+        Assert.Equal(0.0, monData.VramTotalMB);
+        Assert.Equal(0, monData.GpuTemperature);
+        Assert.True(monData.CpuPowerWatts > 0.0);
+    }
+
+    [Fact]
     public void Test1_StorageHealthService_GetDrives_SingleOrMultiDriveSupport()
     {
         var storageService = new StorageHealthService();

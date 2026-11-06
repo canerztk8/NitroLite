@@ -296,7 +296,7 @@ public class AdversarialR2R3EmpiricalTests
     {
         var service = new DebloatService();
         var tempBackup = Path.Combine(Path.GetTempPath(), $"debloat_partial_fail_{Guid.NewGuid():N}.json");
-        var errLog = Path.Combine(Path.GetTempPath(), "nitrolite_restore_err.log");
+        string? errLog = null;
 
         try
         {
@@ -314,6 +314,8 @@ public class AdversarialR2R3EmpiricalTests
             // Simulate multi-service failure report written to error log
             service.PowerShellRunner = async (script, elevated) =>
             {
+                // The log path is randomised per run; take it from the generated script.
+                errLog = System.Text.RegularExpressions.Regex.Match(script, @"\$errLog = '([^']+)'").Groups[1].Value.Replace("''", "'");
                 string errors =
                     "AcerServiceSvc: Servis durdurulamadı: Access is denied.\n" +
                     "Task:NitroSenseLauncher: NitroSenseLauncher görevi devre dışı bırakılamadı.";
@@ -333,7 +335,7 @@ public class AdversarialR2R3EmpiricalTests
         finally
         {
             if (File.Exists(tempBackup)) File.Delete(tempBackup);
-            if (File.Exists(errLog)) File.Delete(errLog);
+            if (errLog != null && File.Exists(errLog)) File.Delete(errLog);
         }
     }
 
