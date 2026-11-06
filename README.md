@@ -23,7 +23,7 @@
 - Windows güç planındaki işlemci boost ayarını (PerfBoostMode) değiştirir: Agresif, Verimli veya Devre dışı. Devre dışı modda işlemci temel saat hızının üzerine çıkmaz; sıcaklık ve fan gürültüsü düşer.
 
 ### 3. GPU Modu (MUX)
-- Servis destekliyorsa (`SUPPORT_GPU_MODE`), GPU modu NitroSense'in kullandığı komutla değiştirilir. Desteklemeyen sistemlerde seçim kilitli kalır ve nedeni gösterilir. NitroLite kayıt defterindeki MUX ayarlarını değiştirmez.
+- NitroSense gibi, servisin bildirdiği modlar (`SUPPORT_GPU_MODE_CAPABILITY`) arasından seçim yapılır: Otomatik, Optimus, Yalnızca NVIDIA. Yeni mod yeniden başlatmadan sonra geçerli olur; NitroLite isterseniz yeniden başlatmayı da başlatır. Servis mod bildirmezse seçim kilitli kalır. NitroLite kayıt defterindeki MUX ayarlarını değiştirmez.
 
 ### 4. Oyun Algılama ve Oyuna Özel Profiller
 - Kurulu oyunları (Steam ve yaygın kütüphane klasörleri) tarar; çalışan oyunu 2 saniyede bir kontrol eder.

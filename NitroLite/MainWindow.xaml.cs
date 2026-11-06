@@ -1485,7 +1485,6 @@ public partial class MainWindow : Window
     // ==========================================
 
     private int? _supportedGpuCapability;
-    private bool? _gpuModeSwitchSupported;
 
     public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)
     {
@@ -1494,13 +1493,14 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Mirrors NitroSense: GPU mode switching is offered only when AASSvc answers SUPPORT_GPU_MODE with data[0] == 1
-    /// AND reports a capability bitmask that contains the target mode. Unknown answers never allow a switch.
+    /// Mirrors NitroSense (personal-settings updateGPU_Mode): the GPU Operating card is shown whenever AASSvc reports
+    /// a non-zero SUPPORT_GPU_MODE_CAPABILITY bitmask, and the options are the modes in that bitmask.
+    /// NitroSense reads SUPPORT_GPU_MODE but never uses it to hide or lock the setting, so neither does NitroLite.
+    /// An unknown capability (service not answering) never allows a switch.
     /// </summary>
-    public static bool CanSwitchGpuMode(bool? serviceSupportsGpuMode, int? capabilityBitmask, GpuOperatingMode target)
+    public static bool CanSwitchGpuMode(int? capabilityBitmask, GpuOperatingMode target)
     {
-        return serviceSupportsGpuMode == true
-            && capabilityBitmask.HasValue
+        return capabilityBitmask.HasValue
             && capabilityBitmask.Value > 0
             && IsGpuModeSupported(capabilityBitmask.Value, target);
     }
@@ -1520,8 +1520,6 @@ public partial class MainWindow : Window
     {
         try
         {
-            var support = await _agentClient.GetSupportGpuModeAsync();
-            _gpuModeSwitchSupported = support;
             var cap = await _agentClient.GetGpuModeCapabilityAsync();
             _supportedGpuCapability = cap;
 
@@ -1530,7 +1528,7 @@ public partial class MainWindow : Window
                 CmbGpuMode.Items.Clear();
             }
 
-            if (support == true && cap.HasValue && cap.Value > 0 && CmbGpuMode != null)
+            if (cap.HasValue && cap.Value > 0 && CmbGpuMode != null)
             {
 
                 // Bit 2 (4): Dynamic Display Switch (DDS / Advanced Optimus)
@@ -1584,25 +1582,23 @@ public partial class MainWindow : Window
                 CmbGpuMode.SelectedIndex = 0;
             }
 
-            if (support == true && cap.HasValue && cap.Value > 0 && CmbGpuMode?.Items.Count > 0)
+            if (cap.HasValue && cap.Value > 0 && CmbGpuMode?.Items.Count > 0)
             {
-                SetGpuModeControlsEnabled(true, null);
+                SetGpuModeControlsEnabled(true, "Değişiklik, bilgisayar yeniden başlatıldıktan sonra geçerli olur.");
             }
-            else if (support == false)
+            else if (cap.HasValue)
             {
-                SetGpuModeControlsEnabled(false,
-                    "Acer servisi bu cihazda GPU modu değiştirmeyi şu an desteklenmiyor olarak bildiriyor (NitroSense de bu durumda seçeneği gizler). Modu BIOS'tan (F2 > Display Mode) değiştirebilirsiniz.");
+                SetGpuModeControlsEnabled(false, "Acer servisi bu cihaz için seçilebilir bir GPU modu bildirmiyor.");
             }
             else
             {
                 SetGpuModeControlsEnabled(false,
-                    "GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı.");
+                    "GPU modu desteği Acer servisinden okunamadı; güvenlik için mod değiştirme kapalı.");
             }
         }
         catch (Exception ex)
         {
             _currentGpuMode = null;
-            _gpuModeSwitchSupported = null;
             SetGpuModeControlsEnabled(false, "GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı.");
             if (TxtGpuModeBadge != null)
             {
@@ -1667,9 +1663,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!CanSwitchGpuMode(_gpuModeSwitchSupported, _supportedGpuCapability, targetMode))
+        if (!CanSwitchGpuMode(_supportedGpuCapability, targetMode))
         {
-            ShowToast("Seçilen GPU modu Acer servisi tarafından desteklenmiyor veya destek doğrulanamadı.", false);
+            ShowToast("Seçilen GPU modu Acer servisinin bildirdiği modlar arasında değil.", false);
             return;
         }
 
@@ -1689,7 +1685,7 @@ public partial class MainWindow : Window
         var confirm = System.Windows.MessageBox.Show(
             this,
             $"GPU Çalışma Modunu '{modeDisplayName}' olarak ayarlamak üzeresiniz.\n\n" +
-            "Donanım MUX anahtarı değiştirilirken ekran anlık olarak kararıp geri gelebilir ve yeni donanım yapılandırmasının tam devreye girmesi için bilgisayarınızı yeniden başlatmanız önerilir.\n\n" +
+            "NitroSense'te olduğu gibi yeni mod, bilgisayar yeniden başlatıldıktan sonra geçerli olur.\n\n" +
             "Devam etmek istiyor musunuz?",
             "GPU Çalışma Modu (MUX Switch)",
             MessageBoxButton.YesNo,
@@ -1704,7 +1700,25 @@ public partial class MainWindow : Window
             if (success)
             {
                 UpdateGpuModeUi(targetMode);
-                ShowToast($"GPU modu '{modeDisplayName}' olarak güncellendi! Tam geçerlilik için yeniden başlatma önerilir.");
+                ShowToast($"GPU modu '{modeDisplayName}' olarak ayarlandı; yeniden başlatınca geçerli olacak.");
+
+                var restart = System.Windows.MessageBox.Show(
+                    this,
+                    "GPU modu kaydedildi. Değişikliğin geçerli olması için bilgisayarın yeniden başlatılması gerekiyor.\n\n" +
+                    "Açık çalışmalarınızı kaydettiyseniz şimdi yeniden başlatılsın mı?",
+                    "Yeniden Başlat ve Uygula",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (restart == MessageBoxResult.Yes)
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = AppPaths.SystemTool("shutdown.exe"),
+                        Arguments = "/r /t 5 /c \"NitroLite: GPU modu degisikligi\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    })?.Dispose();
+                }
             }
             else
             {
