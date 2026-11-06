@@ -1,0 +1,50 @@
+namespace NitroLite.Core;
+
+/// <summary>
+/// Operating-mode rules and display names shared by the mode cards, tray menu, mode key and game profiles.
+/// </summary>
+public static class ModePolicy
+{
+    /// <summary>NitroSense: Turbo/Performance need the AC adapter and at least 40 % battery.</summary>
+    public const int MinBatteryPercentForHighPower = 40;
+
+    public const string HighPowerBlockedMessage =
+        "Turbo ve Performans modları yalnızca adaptör takılıyken ve pil en az %40 iken kullanılabilir (NitroSense kuralı).";
+
+    public static bool IsHighPowerMode(OperatingMode mode) =>
+        mode == OperatingMode.Turbo || mode == OperatingMode.Extreme;
+
+    /// <param name="batteryPercent">0-100, or null when unknown / no battery (treated as allowed on AC).</param>
+    public static bool IsHighPowerAllowed(bool onAc, int? batteryPercent) =>
+        onAc && (!batteryPercent.HasValue || batteryPercent.Value >= MinBatteryPercentForHighPower);
+
+    public static bool IsModeAllowed(OperatingMode mode, bool onAc, int? batteryPercent) =>
+        !IsHighPowerMode(mode) || IsHighPowerAllowed(onAc, batteryPercent);
+
+    /// <summary>Used for automatic changes (game profiles): a blocked high-power target falls back to Balanced.</summary>
+    public static OperatingMode ClampForPower(OperatingMode mode, bool onAc, int? batteryPercent) =>
+        IsModeAllowed(mode, onAc, batteryPercent) ? mode : OperatingMode.Default;
+
+    public static string DisplayName(OperatingMode mode) => mode switch
+    {
+        OperatingMode.Quiet => "Sessiz",
+        OperatingMode.Default => "Dengeli",
+        OperatingMode.Extreme => "Performans",
+        OperatingMode.Turbo => "Turbo",
+        OperatingMode.Eco => "Eco",
+        _ => $"Mod {(int)mode}"
+    };
+
+    /// <summary>
+    /// Windows PerfBoostMode names. Values NitroLite does not set itself (3, 5, 6) are shown by number instead of
+    /// being mislabelled as Aggressive.
+    /// </summary>
+    public static string BoostDisplayName(CpuBoostMode mode) => (int)mode switch
+    {
+        0 => "Devre Dışı",
+        1 => "Windows Varsayılanı",
+        2 => "Agresif",
+        4 => "Verimli",
+        _ => $"Diğer (Windows değeri {(int)mode})"
+    };
+}

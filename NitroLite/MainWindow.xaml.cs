@@ -45,7 +45,19 @@ public partial class MainWindow : Window
     private OperatingMode _currentMode = OperatingMode.Default;
     private OperatingMode _savedModeBeforeGame = OperatingMode.Default;
     private CpuBoostMode _savedCpuBoostBeforeGame = CpuBoostMode.Aggressive;
-    private FanMode _currentFanMode = FanMode.Auto;
+    private FanMode _currentFanModeValue = FanMode.Auto;
+
+    // Every assignment (manual, game profile, power transition, device sync) also refreshes the fan buttons.
+    private FanMode _currentFanMode
+    {
+        get => _currentFanModeValue;
+        set
+        {
+            _currentFanModeValue = value;
+            if (Dispatcher.CheckAccess()) UpdateFanButtonsUi(value);
+            else Dispatcher.BeginInvoke(new Action(() => UpdateFanButtonsUi(value)));
+        }
+    }
     private FanMode _savedFanModeBeforeGame = FanMode.Auto;
     private int _savedMouseProfileBeforeGame = 1;
     private bool _isMouseProfileSwitchedForGame = false;
@@ -310,14 +322,17 @@ public partial class MainWindow : Window
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-        menu.Items.Add("Sessiz Mod (Silent)", null, async (s, e) => await SetManualModeAsync(OperatingMode.Quiet));
-        menu.Items.Add("Dengeli Mod (Balanced)", null, async (s, e) => await SetManualModeAsync(OperatingMode.Default));
-        menu.Items.Add("Performans Modu (Power)", null, async (s, e) => await SetManualModeAsync(OperatingMode.Extreme));
+        // Each item calls the same code as the mode cards, so the battery rule for Turbo/Performance applies here too.
+        menu.Items.Add("Sessiz Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Quiet));
+        menu.Items.Add("Dengeli Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Default));
+        menu.Items.Add("Performans Modu", null, async (s, e) => await SetManualModeAsync(OperatingMode.Extreme));
         menu.Items.Add("Turbo Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Turbo));
+        menu.Items.Add("Eco Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Eco));
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("CPU Boost: Devre Dışı", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Disabled));
-        menu.Items.Add("CPU Boost: Agresif (5.0 GHz)", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Aggressive));
+        menu.Items.Add("CPU Boost: Verimli", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Efficient));
+        menu.Items.Add("CPU Boost: Agresif", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Aggressive));
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Çıkış", null, (s, e) => RealExit());
@@ -498,6 +513,11 @@ public partial class MainWindow : Window
                 // Do not claim "Dengeli" when the service did not answer; no card is highlighted.
                 ShowUnknownModeUi();
             }
+
+            // 1.0 Initial fan mode: read it instead of assuming Auto (NitroSense may have left it on Max).
+            var initialFan = await _agentClient.GetFanModeAsync();
+            if (initialFan.HasValue) _currentFanMode = initialFan.Value;
+            UpdateFanButtonsUi(_currentFanMode, initialFan.HasValue);
 
             // 1.1 Initial GPU Mode (MUX Switch)
             await RefreshGpuModeAsync();
@@ -900,6 +920,69 @@ public partial class MainWindow : Window
         }
     }
 
+    private DateTime _lastDeviceStateSyncUtc = DateTime.MinValue;
+    private static readonly TimeSpan DeviceStateSyncInterval = TimeSpan.FromSeconds(5);
+    private CpuBoostMode? _lastShownBoost;
+
+    /// <summary>
+    /// Brings the UI (and, outside game sessions, the desktop baseline) in line with the device. Skipped while a
+    /// mode/game/power transition holds the lock, so a half-applied transition is never read back as a user change.
+    /// </summary>
+    internal async Task SyncDeviceStateAsync()
+    {
+        if (_isInitializingUi || _isExiting) return;
+        if (!await _gameProfileTransitionLock.WaitAsync(0)) return;
+        try
+        {
+            var mode = await _agentClient.TryGetOperatingModeAsync();
+            if (mode.HasValue && mode.Value != _currentMode)
+            {
+                UpdateModeUi(mode.Value);
+                if (!_isGameSessionActive) UpdateDesktopBaselineForManualChange(mode: mode.Value);
+            }
+
+            var fan = await _agentClient.GetFanModeAsync();
+            if (fan.HasValue && fan.Value != _currentFanMode)
+            {
+                _currentFanMode = fan.Value;
+                if (!_isGameSessionActive) UpdateDesktopBaselineForManualChange(fan: fan.Value);
+            }
+            UpdateFanButtonsUi(fan ?? _currentFanMode, fan.HasValue);
+
+            var boost = _cpuPowerService.QueryCurrentBoostMode();
+            if (_cpuPowerService.IsModeVerified && boost != _lastShownBoost)
+            {
+                bool externalChange = _lastShownBoost.HasValue;
+                UpdateBoostUi(boost);
+                if (externalChange && !_isGameSessionActive) UpdateDesktopBaselineForManualChange(boost: boost);
+            }
+
+            UpdateHighPowerAvailabilityUi();
+        }
+        catch
+        {
+            // Best effort: the next poll tries again.
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
+        }
+    }
+
+    /// <summary>Highlights the active fan mode button (Auto / Max).</summary>
+    private void UpdateFanButtonsUi(FanMode mode, bool known = true)
+    {
+        if (BtnFanAuto == null || BtnFanMax == null) return;
+        var activeBorder = (SolidColorBrush)FindResource("AccentCyan");
+        var idleBorder = (SolidColorBrush)FindResource("BorderDark");
+        BtnFanAuto.BorderBrush = known && mode == FanMode.Auto ? activeBorder : idleBorder;
+        BtnFanMax.BorderBrush = known && mode == FanMode.Max ? (SolidColorBrush)FindResource("AccentRed") : idleBorder;
+        BtnFanAuto.FontWeight = known && mode == FanMode.Auto ? FontWeights.Bold : FontWeights.Normal;
+        BtnFanMax.FontWeight = known && mode == FanMode.Max ? FontWeights.Bold : FontWeights.Normal;
+        BtnFanAuto.ToolTip = known && mode == FanMode.Auto ? "Etkin" : null;
+        BtnFanMax.ToolTip = known && mode == FanMode.Max ? "Etkin" : null;
+    }
+
     private bool? _lastServiceTelemetryAvailable;
     private const string ServiceUnavailableText = "-- (Servis yok)";
 
@@ -983,15 +1066,15 @@ public partial class MainWindow : Window
                 // Titlebar / Sidebar
                 TxtSideCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
                 TxtSideGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
-                TxtSideCpuFan.Text = TelemetryFormatter.FormatFanSpeed(data.CpuFanSpeed);
+                TxtSideCpuFan.Text = TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed);
 
                 // Sub-Component Thermal Matrix: Motherboard / VRM (SYS1_TEMPERATURE)
                 if (TxtSubMoboTemp != null)
                     TxtSubMoboTemp.Text = TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : null);
 
                 // Tab 1: Fans
-                TxtCpuFanRpm.Text = TelemetryFormatter.FormatFanSpeed(data.CpuFanSpeed);
-                TxtGpuFanRpm.Text = TelemetryFormatter.FormatFanSpeed(data.GpuFanSpeed);
+                TxtCpuFanRpm.Text = TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed);
+                TxtGpuFanRpm.Text = TelemetryFormatter.FormatFanSpeedRpm(data.GpuFanSpeed);
                 BarCpuFan.Value = data.CpuFanSpeed;
                 BarGpuFan.Value = data.GpuFanSpeed;
 
@@ -1114,6 +1197,14 @@ public partial class MainWindow : Window
                         PopulateConfiguredGames(activeGame.ExeName);
                     }
                 }
+            }
+
+            // Re-read operating mode, fan mode and CPU boost so changes made elsewhere (NitroSense, the mode key,
+            // Windows power settings) are reflected instead of showing the last value NitroLite set.
+            if (!isFallback && (DateTime.UtcNow - _lastDeviceStateSyncUtc) >= DeviceStateSyncInterval)
+            {
+                _lastDeviceStateSyncUtc = DateTime.UtcNow;
+                await SyncDeviceStateAsync();
             }
 
             // Periodically refresh thermal health card if Battery & Health tab is active (every 5 samples)
@@ -1372,45 +1463,44 @@ public partial class MainWindow : Window
 
     private void UpdateBoostUi(CpuBoostMode mode)
     {
+        _lastShownBoost = mode;
+
+        // Values NitroLite does not set itself (Windows default 1, or 3/5/6) are named as such instead of being
+        // shown as "Aggressive".
+        string name = ModePolicy.BoostDisplayName(mode);
+        var brush = mode switch
+        {
+            CpuBoostMode.Disabled => TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green,
+            CpuBoostMode.Efficient => TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan,
+            CpuBoostMode.Aggressive => TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red,
+            _ => TryFindResource("TextSecondary") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray
+        };
+
         if (TxtBoostStatusBadge != null)
         {
-            switch (mode)
-            {
-                case CpuBoostMode.Disabled:
-                    TxtBoostStatusBadge.Text = " (Devre Dışı)";
-                    TxtBoostStatusBadge.Foreground = TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green;
-                    break;
-                case CpuBoostMode.Efficient:
-                    TxtBoostStatusBadge.Text = " (Dengeli)";
-                    TxtBoostStatusBadge.Foreground = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan;
-                    break;
-                case CpuBoostMode.Aggressive:
-                default:
-                    TxtBoostStatusBadge.Text = " (Agresif / 5.0 GHz)";
-                    TxtBoostStatusBadge.Foreground = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
-                    break;
-            }
+            TxtBoostStatusBadge.Text = $" ({name})";
+            TxtBoostStatusBadge.Foreground = brush;
         }
 
         if (TxtSideCpuBoost != null)
         {
-            switch (mode)
-            {
-                case CpuBoostMode.Disabled:
-                    TxtSideCpuBoost.Text = "Devre Dışı";
-                    TxtSideCpuBoost.Foreground = TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green;
-                    break;
-                case CpuBoostMode.Efficient:
-                    TxtSideCpuBoost.Text = "Dengeli";
-                    TxtSideCpuBoost.Foreground = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan;
-                    break;
-                case CpuBoostMode.Aggressive:
-                default:
-                    TxtSideCpuBoost.Text = "Agresif";
-                    TxtSideCpuBoost.Foreground = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
-                    break;
-            }
+            TxtSideCpuBoost.Text = (int)mode is 0 or 1 or 2 or 4 ? name : "Diğer";
+            TxtSideCpuBoost.Foreground = brush;
         }
+
+        // Highlight the matching boost button (none for values without a button).
+        HighlightBoostButton(BtnBoostAggressive, mode == CpuBoostMode.Aggressive, "AccentRed");
+        HighlightBoostButton(BtnBoostEfficient, mode == CpuBoostMode.Efficient, "AccentCyan");
+        HighlightBoostButton(BtnBoostDisabled, mode == CpuBoostMode.Disabled, "AccentGreen");
+    }
+
+    private void HighlightBoostButton(WpfButton? button, bool active, string accentKey)
+    {
+        if (button == null) return;
+        button.BorderBrush = active
+            ? (TryFindResource(accentKey) as SolidColorBrush ?? System.Windows.Media.Brushes.White)
+            : (TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray);
+        button.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
     }
 
     private void UpdateDesktopBaselineForManualChange(
@@ -1509,12 +1599,12 @@ public partial class MainWindow : Window
         if (ok)
         {
             UpdateBoostUi(mode);
-            ShowToast($"CPU boost modu: {mode}");
+            ShowToast($"CPU boost modu: {ModePolicy.BoostDisplayName(mode)}");
             return true;
         }
         else
         {
-            ShowToast($"CPU boost modu uygulanamadı: {mode}", false);
+            ShowToast($"CPU boost modu uygulanamadı: {ModePolicy.BoostDisplayName(mode)}", false);
             return false;
         }
     }
@@ -1675,6 +1765,24 @@ public partial class MainWindow : Window
         }
     }
 
+    // Mode written to the firmware in this session that only takes effect after a restart.
+    private GpuOperatingMode? _pendingGpuMode;
+
+    private static string GpuModeShortName(GpuOperatingMode? mode) => mode switch
+    {
+        GpuOperatingMode.DiscreteGpu => "Yalnızca NVIDIA",
+        GpuOperatingMode.Optimus => "Optimus",
+        GpuOperatingMode.Automatic => "Otomatik",
+        _ => "Bilinmiyor"
+    };
+
+    private void ShowPendingGpuModeBadge()
+    {
+        if (TxtGpuModeBadge == null || !_pendingGpuMode.HasValue) return;
+        TxtGpuModeBadge.Text = $"{GpuModeShortName(_currentGpuMode)} → {GpuModeShortName(_pendingGpuMode)} (yeniden başlatma bekleniyor)";
+        TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+    }
+
     private void SelectGpuModeCombo(string tag)
     {
         if (CmbGpuMode == null) return;
@@ -1708,7 +1816,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_currentGpuMode.HasValue && targetMode == _currentGpuMode.Value)
+        if (_pendingGpuMode.HasValue && targetMode == _pendingGpuMode.Value)
+        {
+            ShowToast("Bu GPU modu zaten ayarlandı; yeniden başlatınca geçerli olacak.");
+            return;
+        }
+
+        // Re-selecting the running mode is allowed only to cancel a pending, not yet applied change.
+        if (!_pendingGpuMode.HasValue && _currentGpuMode.HasValue && targetMode == _currentGpuMode.Value)
         {
             ShowToast("Seçilen GPU modu zaten aktif.");
             return;
@@ -1738,7 +1853,17 @@ public partial class MainWindow : Window
             var success = await _agentClient.SetGpuModeAsync(targetMode);
             if (success)
             {
-                UpdateGpuModeUi(targetMode);
+                // The running mode does not change until restart: keep showing it and mark the pending one.
+                if (_currentGpuMode.HasValue && targetMode == _currentGpuMode.Value)
+                {
+                    _pendingGpuMode = null;
+                    UpdateGpuModeUi(targetMode);
+                }
+                else
+                {
+                    _pendingGpuMode = targetMode;
+                    ShowPendingGpuModeBadge();
+                }
                 ShowToast($"GPU modu '{modeDisplayName}' olarak ayarlandı; yeniden başlatınca geçerli olacak.");
 
                 var restart = System.Windows.MessageBox.Show(
@@ -1939,28 +2064,62 @@ public partial class MainWindow : Window
             _ => 4  // Son Kullanılanı Koru (0)
         };
         CmbDefaultAtkMouseProfile.SelectedIndex = selectIdx;
-        UpdateDefaultMouseProfileBadge(profile);
 
-        if (_appSettings.AtkMouseIntegrationEnabled)
+        if (!_appSettings.AtkMouseIntegrationEnabled)
         {
-            UpdateSideMouseProfileStatus(profile >= 1 && profile <= 4 ? profile : _atkMouseService.CurrentActiveProfile);
+            UpdateDefaultMouseProfileBadge(profile);
+            return;
+        }
 
-            // Apply on startup if set to a specific profile (1..4) and no game is currently active
-            if (profile >= 1 && profile <= 4 && !_isGameSessionActive)
+        // Nothing is shown as active until the mouse itself confirms it.
+        UpdateDefaultMouseProfileBadge(profile, confirmed: null);
+        UpdateSideMouseProfileStatus(0);
+        _ = ApplyStartupMouseProfileAsync(profile);
+    }
+
+    /// <summary>
+    /// Startup mouse profile: switches to the default (1..4) or, for "keep last used", reads the current profile.
+    /// Runs under the same transition lock as game sessions so it cannot interleave with a game starting.
+    /// </summary>
+    private async Task ApplyStartupMouseProfileAsync(int profile)
+    {
+        try
+        {
+            await _gameProfileTransitionLock.WaitAsync();
+            try
             {
-                _ = Task.Run(async () =>
+                if (profile >= 1 && profile <= 4)
                 {
+                    if (_isGameSessionActive) return; // the game profile owns the mouse now
                     bool ok = await SwitchMouseProfileInternalAsync(profile);
-                    if (ok)
+                    if (ok && !_isGameSessionActive)
                     {
-                        if (!_isGameSessionActive)
-                        {
-                            _savedMouseProfileBeforeGame = profile;
-                        }
-                        await Dispatcher.InvokeAsync(() => UpdateSideMouseProfileStatus(profile));
+                        _savedMouseProfileBeforeGame = profile;
                     }
-                });
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        UpdateDefaultMouseProfileBadge(profile, confirmed: ok);
+                        UpdateSideMouseProfileStatus(ok ? profile : 0);
+                    });
+                }
+                else
+                {
+                    int? current = MouseProfileSwitcher != null ? null : await Task.Run(() => _atkMouseService.QueryCurrentProfile());
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        UpdateDefaultMouseProfileBadge(profile);
+                        UpdateSideMouseProfileStatus(current ?? 0);
+                    });
+                }
             }
+            finally
+            {
+                _gameProfileTransitionLock.Release();
+            }
+        }
+        catch
+        {
+            // Best effort; the badges stay in their "not confirmed" state.
         }
     }
 
@@ -2003,7 +2162,7 @@ public partial class MainWindow : Window
 
         if (enabled)
         {
-            UpdateSideMouseProfileStatus(_atkMouseService.CurrentActiveProfile);
+            UpdateSideMouseProfileStatus(_atkMouseService.HasConfirmedProfile ? _atkMouseService.CurrentActiveProfile : 0);
         }
     }
 
@@ -2069,13 +2228,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateDefaultMouseProfileBadge(int profile)
+    /// <param name="confirmed">true = the mouse accepted the switch, false = it did not answer,
+    /// null = not confirmed yet (only the setting is known).</param>
+    private void UpdateDefaultMouseProfileBadge(int profile, bool? confirmed = true)
     {
         if (TxtDefaultMouseProfileStatus == null) return;
         if (profile >= 1 && profile <= 4)
         {
-            TxtDefaultMouseProfileStatus.Text = $"Config {profile} (Aktif)";
-            TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+            (string suffix, string brushKey) = confirmed switch
+            {
+                true => ("Aktif", "AccentGreen"),
+                false => ("Ulaşılamadı", "AccentRed"),
+                null => ("Uygulanıyor…", "TextSecondary")
+            };
+            TxtDefaultMouseProfileStatus.Text = $"Config {profile} ({suffix})";
+            TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
         }
         else
         {
@@ -2090,8 +2257,17 @@ public partial class MainWindow : Window
         if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int val))
         {
             _appSettings.DefaultAtkMouseProfile = val;
-            UpdateDefaultMouseProfileBadge(val);
             SaveSettings();
+            if (val >= 1 && val <= 4 && TxtDefaultMouseProfileStatus != null)
+            {
+                // Saved as the default, but not sent to the mouse until "Uygula" (or the next game exit).
+                TxtDefaultMouseProfileStatus.Text = $"Config {val} (Uygula'ya basın)";
+                TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+            }
+            else
+            {
+                UpdateDefaultMouseProfileBadge(val);
+            }
         }
     }
 
@@ -2209,7 +2385,10 @@ public partial class MainWindow : Window
                 profile.TargetAtkMouseProfile = CmbGameAtkMouseProfile.SelectedIndex;
             }
 
-            _gameService.SaveProfile(profile);
+            if (!_gameService.SaveProfile(profile))
+            {
+                ShowToast($"'{profile.DisplayName}' ayarları uygulandı ama diske kaydedilemedi; uygulama kapanınca kaybolabilir.", false);
+            }
 
             // If this game is currently running right now, hot-apply settings immediately in real-time!
             bool isCurrentlyRunning = _gameService.ActiveGameProfile != null && 
@@ -2242,7 +2421,8 @@ public partial class MainWindow : Window
                 return false;
             }
 
-            bool modeOk = await SwitchModeAsync(profile.TargetMode);
+            var (liveOnAc, liveBattery) = PowerStateProvider();
+            bool modeOk = await SwitchModeAsync(ModePolicy.ClampForPower(profile.TargetMode, liveOnAc, liveBattery));
             if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
 
             bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
@@ -2295,12 +2475,7 @@ public partial class MainWindow : Window
                 _isMouseProfileSwitchedForGame = false;
             }
 
-            var boostName = profile.TargetCpuBoost switch
-            {
-                CpuBoostMode.Disabled => "Devre Dışı",
-                CpuBoostMode.Efficient => "Dengeli",
-                _ => "Agresif (5.0 GHz)"
-            };
+            var boostName = ModePolicy.BoostDisplayName(profile.TargetCpuBoost);
             var mouseInfo = (_isMouseProfileSwitchedForGame && profile.TargetAtkMouseProfile > 0) ? $" / ATK Fare: Config {profile.TargetAtkMouseProfile}" : "";
 
             bool allCoreOk = modeOk && boostOk && fanOk && mouseOk;
@@ -2343,40 +2518,79 @@ public partial class MainWindow : Window
 
     private async void BtnScanGames_Click(object sender, RoutedEventArgs e)
     {
-        var found = await Task.Run(() => _gameService.ScanAndAddInstalledGames());
-        PopulateConfiguredGames();
-        ShowToast(found > 0 ? $"{found} yeni oyun profili eklendi." : "Yeni yüklü oyun tespit edilmedi.");
+        if (BtnScanGames != null)
+        {
+            BtnScanGames.IsEnabled = false;
+            BtnScanGames.Content = "Taranıyor…";
+        }
+        try
+        {
+            var found = await Task.Run(() => _gameService.ScanAndAddInstalledGames());
+            PopulateConfiguredGames();
+            ShowToast(found > 0 ? $"{found} yeni oyun profili eklendi." : "Yeni yüklü oyun tespit edilmedi.");
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Oyun taraması başarısız: {ex.Message}", false);
+        }
+        finally
+        {
+            if (BtnScanGames != null)
+            {
+                BtnScanGames.Content = "Yüklü Oyunları Tara";
+                BtnScanGames.IsEnabled = true;
+            }
+        }
     }
 
     private void BtnAddCustomGame_Click(object sender, RoutedEventArgs e)
     {
+        var steamCommon = @"C:\Program Files (x86)\Steam\steamapps\common";
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Çalıştırılabilir Oyun Dosyasını Seçin",
-            Filter = "Çalıştırılabilir Oyun Dosyaları (*.exe)|*.exe|Tüm Dosyalar (*.*)|*.*",
-            InitialDirectory = @"C:\Program Files (x86)\Steam\steamapps\common"
+            Filter = "Çalıştırılabilir Oyun Dosyaları (*.exe)|*.exe",
+            InitialDirectory = Directory.Exists(steamCommon) ? steamCommon : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
         };
 
-        if (dlg.ShowDialog(this) == true)
+        if (dlg.ShowDialog(this) != true) return;
+
+        var error = GameDetectionService.ValidateCustomGameExecutable(dlg.FileName);
+        if (error != null)
         {
-            var exeName = Path.GetFileNameWithoutExtension(dlg.FileName);
-            var cleanName = exeName.Replace("_", " ").Replace("-", " ");
-
-            var profile = new GameProfile
-            {
-                ExeName = exeName,
-                DisplayName = cleanName,
-                InstallPath = dlg.FileName,
-                TargetMode = OperatingMode.Turbo,
-                TargetCpuBoost = CpuBoostMode.Disabled, // Default to serin eco
-                TargetFanMode = FanMode.Auto,
-                AutoApply = true
-            };
-
-            _gameService.SaveProfile(profile);
-            PopulateConfiguredGames(exeName);
-            ShowToast($"'{cleanName}' profili eklendi.");
+            ShowToast(error, false);
+            return;
         }
+
+        var exeName = Path.GetFileNameWithoutExtension(dlg.FileName);
+
+        // Already configured: keep the user's settings instead of overwriting them with defaults.
+        var existing = _gameService.GetProfile(exeName);
+        if (existing != null)
+        {
+            PopulateConfiguredGames(existing.ExeName);
+            ShowToast($"'{existing.DisplayName}' zaten listede; mevcut ayarları korundu.");
+            return;
+        }
+
+        var cleanName = exeName.Replace("_", " ").Replace("-", " ");
+        var profile = new GameProfile
+        {
+            ExeName = exeName,
+            DisplayName = cleanName,
+            InstallPath = dlg.FileName,
+            TargetMode = OperatingMode.Turbo,
+            // Same heuristic as the installed-games scan (Disabled only for light 2D games).
+            TargetCpuBoost = GameDetectionService.DetermineOptimalCpuBoost(exeName),
+            TargetFanMode = FanMode.Auto,
+            AutoApply = true
+        };
+
+        bool saved = _gameService.SaveProfile(profile);
+        PopulateConfiguredGames(exeName);
+        ShowToast(saved
+            ? $"'{cleanName}' profili eklendi."
+            : $"'{cleanName}' eklendi ama diske kaydedilemedi; uygulama kapanınca kaybolabilir.", saved);
     }
 
     private void BtnDeleteGame_Click(object sender, RoutedEventArgs e)
@@ -2481,12 +2695,7 @@ public partial class MainWindow : Window
                             Timestamp = DateTime.UtcNow
                         });
 
-                        var boostName = profile.TargetCpuBoost switch
-                        {
-                            CpuBoostMode.Disabled => "Devre Dışı",
-                            CpuBoostMode.Efficient => "Dengeli",
-                            _ => "Agresif (5.0 GHz)"
-                        };
+                        var boostName = ModePolicy.BoostDisplayName(profile.TargetCpuBoost);
 
                         var mouseInfo = "";
                         bool mouseSwitchedThisTurn = false;
@@ -2519,8 +2728,15 @@ public partial class MainWindow : Window
 
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
 
-                        // Apply target settings with generation check at each stage under transition lock
-                        bool modeOk = await SwitchModeAsync(profile.TargetMode);
+                        // Apply target settings with generation check at each stage under transition lock.
+                        // Turbo/Performance are not allowed on battery or below 40 %: fall back to Balanced.
+                        var (gameOnAc, gameBattery) = PowerStateProvider();
+                        var gameMode = ModePolicy.ClampForPower(profile.TargetMode, gameOnAc, gameBattery);
+                        if (gameMode != profile.TargetMode)
+                        {
+                            ShowToast($"'{profile.DisplayName}': {ModePolicy.DisplayName(profile.TargetMode)} pilde kullanılamaz, Dengeli uygulandı.", false);
+                        }
+                        bool modeOk = await SwitchModeAsync(gameMode);
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
 
                         bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
@@ -3466,6 +3682,8 @@ public partial class MainWindow : Window
                 TxtSubBatteryTemp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatDetailedTemperature(status.TemperatureCelsius), status.IsTemperatureEstimated);
             }
 
+            UpdateHighPowerAvailabilityUi();
+
             TxtBatteryHeader.Text = $"{status.BatteryPercent}%";
             TxtBatLevelBig.Text = $"{status.BatteryPercent}%";
             BarBatBig.Value = status.BatteryPercent;
@@ -3547,15 +3765,13 @@ public partial class MainWindow : Window
                 OperatingMode.Default => "DENGELİ",
                 OperatingMode.Extreme => "PERFORMANS",
                 OperatingMode.Turbo => "TURBO",
-                _ => mode.ToString().ToUpperInvariant()
+                OperatingMode.Eco => "ECO",
+                _ => ModePolicy.DisplayName(mode).ToUpperInvariant()
             };
         }
 
         // Reset all mode badges and card buttons
-        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet);
-        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault);
-        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme);
-        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo);
+        ResetAllModeCards();
 
         switch (mode)
         {
@@ -3571,16 +3787,56 @@ public partial class MainWindow : Window
             case OperatingMode.Turbo:
                 SetModeCardActive(BtnModeTurbo, IndTurbo, TxtIndTurbo, TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red);
                 break;
+            case OperatingMode.Eco:
+                SetModeCardActive(BtnModeEco, IndEco, TxtIndEco, TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green);
+                break;
         }
+
+        UpdateHighPowerAvailabilityUi();
+    }
+
+    private void ResetAllModeCards()
+    {
+        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet);
+        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault);
+        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme);
+        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo);
+        ResetModeCard(BtnModeEco, IndEco, TxtIndEco);
     }
 
     private void ShowUnknownModeUi()
     {
         if (TxtModeHeader != null) TxtModeHeader.Text = "BİLİNMİYOR";
-        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet);
-        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault);
-        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme);
-        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo);
+        ResetAllModeCards();
+        UpdateHighPowerAvailabilityUi();
+    }
+
+    private bool? _lastHighPowerAllowed;
+
+    /// <summary>
+    /// Locks the Turbo/Performance cards on battery or below 40 % (NitroSense rule) and says why.
+    /// Called on mode changes, battery status updates and the periodic state poll.
+    /// </summary>
+    private void UpdateHighPowerAvailabilityUi()
+    {
+        var (onAc, percent) = PowerStateProvider();
+        bool allowed = ModePolicy.IsHighPowerAllowed(onAc, percent);
+        if (_lastHighPowerAllowed == allowed) return;
+        _lastHighPowerAllowed = allowed;
+
+        foreach (var card in new[] { BtnModeExtreme, BtnModeTurbo })
+        {
+            if (card == null) continue;
+            card.IsEnabled = allowed;
+            card.Opacity = allowed ? 1.0 : 0.45;
+            card.ToolTip = allowed ? null : ModePolicy.HighPowerBlockedMessage;
+        }
+
+        if (TxtModeLockNote != null)
+        {
+            TxtModeLockNote.Text = allowed ? string.Empty : ModePolicy.HighPowerBlockedMessage;
+            TxtModeLockNote.Visibility = allowed ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     private void ResetModeCard(WpfButton? btn, Border? ind, TextBlock? txt)
@@ -3930,16 +4186,40 @@ public partial class MainWindow : Window
 
     private int _modeSwitchKeyBusy;
 
+    /// <summary>Current power source and battery level; replaceable in tests.</summary>
+    internal Func<(bool OnAc, int? BatteryPercent)> PowerStateProvider { get; set; } = ReadSystemPowerState;
+
+    private static (bool OnAc, int? BatteryPercent) ReadSystemPowerState()
+    {
+        try
+        {
+            var ps = System.Windows.Forms.SystemInformation.PowerStatus;
+            bool onAc = ps.PowerLineStatus != System.Windows.Forms.PowerLineStatus.Offline;
+            // BatteryLifePercent is 0..1, or 255 (2.55) when unknown / no battery.
+            int? percent = ps.BatteryLifePercent >= 0f && ps.BatteryLifePercent <= 1f
+                ? (int)Math.Round(ps.BatteryLifePercent * 100f)
+                : null;
+            return (onAc, percent);
+        }
+        catch
+        {
+            return (true, null);
+        }
+    }
+
     private async Task HandleModeSwitchKeyAsync()
     {
+        // NitroSense handles the same PRESS_TURBO_BUTTON event and switches the mode itself; handling it here too
+        // would move two steps per key press. Let NitroSense own the key while it runs.
+        if (_debloatService.IsNitroSenseRunning()) return;
+
         // Ignore key repeats while the previous switch is still being applied.
         if (Interlocked.Exchange(ref _modeSwitchKeyBusy, 1) != 0) return;
         try
         {
             var current = await _agentClient.TryGetOperatingModeAsync() ?? _currentMode;
-            bool onAc = _powerAutomationService?.LastAcStatus
-                        ?? (System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus != System.Windows.Forms.PowerLineStatus.Offline);
-            var next = ModeSwitchKey.Next(current, onAc);
+            var (onAc, percent) = PowerStateProvider();
+            var next = ModeSwitchKey.Next(current, onAc, percent);
             await SetManualModeAsync(next);
         }
         finally
@@ -3950,6 +4230,13 @@ public partial class MainWindow : Window
 
     internal async Task<bool> SetManualModeAsync(OperatingMode mode)
     {
+        var (onAc, percent) = PowerStateProvider();
+        if (!ModePolicy.IsModeAllowed(mode, onAc, percent))
+        {
+            ShowToast(ModePolicy.HighPowerBlockedMessage, false);
+            return false;
+        }
+
         await _gameProfileTransitionLock.WaitAsync();
         try
         {
@@ -3993,12 +4280,12 @@ public partial class MainWindow : Window
             if (ok)
             {
                 UpdateModeUi(mode);
-                ShowToast($"Çalışma modu: {mode}");
+                ShowToast($"Çalışma modu: {ModePolicy.DisplayName(mode)}");
                 return true;
             }
             else
             {
-                ShowToast($"Çalışma modu değiştirilemedi: {mode}", false);
+                ShowToast($"Çalışma modu değiştirilemedi: {ModePolicy.DisplayName(mode)}", false);
                 return false;
             }
         }

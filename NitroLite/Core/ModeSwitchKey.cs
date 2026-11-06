@@ -11,13 +11,17 @@ public static class ModeSwitchKey
     public const string BacklightTimeoutEvent = "KEYBOARD_BACKLIGHT_30_SEC_EVENT";
 
     /// <summary>
-    /// On the adapter this follows NitroSense's cycle: Default → Extreme → Turbo → Quiet → Default.
-    /// On battery NitroSense toggles Default ↔ Eco; NitroLite manages battery Eco itself, so the key toggles
-    /// Default ↔ Quiet there and never selects the high-power modes.
+    /// Mirrors NitroSense: on the adapter Default → Extreme → Turbo → Quiet → Default; on battery Default ↔ Eco.
+    /// When the high-power modes are not allowed (adapter with battery below 40 %), the AC cycle skips them.
     /// </summary>
-    public static OperatingMode Next(OperatingMode current, bool onAc)
+    public static OperatingMode Next(OperatingMode current, bool onAc, int? batteryPercent = null)
     {
         if (!onAc)
+        {
+            return current == OperatingMode.Default ? OperatingMode.Eco : OperatingMode.Default;
+        }
+
+        if (!ModePolicy.IsHighPowerAllowed(onAc, batteryPercent))
         {
             return current == OperatingMode.Default ? OperatingMode.Quiet : OperatingMode.Default;
         }

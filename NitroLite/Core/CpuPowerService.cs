@@ -8,10 +8,10 @@ namespace NitroLite.Core;
 
 public enum CpuBoostMode
 {
-    Disabled = 0,    // Eco & Serin (Base clock, ~65°C)
-    Enabled = 1,     // Standart Boost (Windows Varsayılan)
-    Aggressive = 2,  // Son Hız Boost (5.0 GHz, ~88°C)
-    Efficient = 4    // Dengeli & Serin (Frekans Sınırı)
+    Disabled = 0,    // Windows PerfBoostMode 0: no boost, stays at base clock (~3.8 GHz on the 7840HS)
+    Enabled = 1,     // Windows default boost
+    Aggressive = 2,  // Windows PerfBoostMode 2: boost as high as the CPU allows
+    Efficient = 4    // Windows PerfBoostMode 4 "Efficient Aggressive": boost on, efficiency-biased; no fixed frequency cap
 }
 
 public class CpuPowerService

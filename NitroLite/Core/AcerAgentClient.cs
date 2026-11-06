@@ -583,6 +583,27 @@ public class AcerAgentClient : IDisposable
         };
     }
 
+    /// <summary>Reads the current fan mode (GET_UPDATED_DATA FAN_CONTROL → data.mode). Null if unknown.</summary>
+    public virtual async Task<FanMode?> GetFanModeAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+            var resp = await SendFunctionAsync(PacketGetUpdatedData, "FAN_CONTROL");
+            var mode = GetSuccessData(resp)?["mode"]?.GetValue<int>();
+            return mode.HasValue && Enum.IsDefined(typeof(FanMode), mode.Value) ? (FanMode)mode.Value : null;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     /// <summary>Sets fan mode. For <see cref="FanMode.Custom"/> the speeds are percentages (0-100).</summary>
     public virtual async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = 50, int gpuPercent = 50)
     {

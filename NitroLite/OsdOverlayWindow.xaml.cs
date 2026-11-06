@@ -155,7 +155,7 @@ public partial class OsdOverlayWindow : Window
                 TxtOsdRam.Text = "-- GB";
             }
 
-            TxtOsdFan.Text = $"FAN: {TelemetryFormatter.FormatFanSpeed(data.CpuFanSpeed)}";
+            TxtOsdFan.Text = $"FAN: {TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed)}";
         });
     }
 

@@ -147,7 +147,8 @@ public class GameDetectionService : IDisposable
         }
     }
 
-    public void SaveProfile(GameProfile profile)
+    /// <summary>Adds or updates a profile. Returns false if it could not be written to disk.</summary>
+    public bool SaveProfile(GameProfile profile)
     {
         lock (_profiles)
         {
@@ -174,7 +175,7 @@ public class GameDetectionService : IDisposable
             {
                 _profiles.Add(profile);
             }
-            PersistProfiles();
+            return PersistProfiles();
         }
     }
 
@@ -248,6 +249,94 @@ public class GameDetectionService : IDisposable
         }
 
         return false;
+    }
+
+    // Programs that are always (or very often) running: a game profile for one of them would keep NitroLite in
+    // game mode permanently, so they cannot be added by hand.
+    private static readonly HashSet<string> NonGameExecutables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "explorer", "svchost", "dwm", "csrss", "winlogon", "lsass", "services", "smss", "wininit", "sihost",
+        "taskmgr", "searchhost", "startmenuexperiencehost", "shellexperiencehost", "runtimebroker", "ctfmon",
+        "conhost", "cmd", "powershell", "pwsh", "windowsterminal", "notepad", "mspaint",
+        "chrome", "msedge", "firefox", "opera", "brave", "discord", "spotify", "teams", "ms-teams", "slack",
+        "steam", "steamwebhelper", "epicgameslauncher", "battle.net", "eadesktop", "ubisoftconnect", "galaxyclient",
+        "code", "devenv", "nitrolite", "nitrosense", "obs64", "onedrive"
+    };
+
+    /// <summary>
+    /// Checks a user-picked file before it becomes a game profile. Returns an error message, or null if it is fine.
+    /// </summary>
+    public static string? ValidateCustomGameExecutable(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return "Dosya bulunamadı.";
+        if (!string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
+            return "Yalnızca .exe dosyaları oyun olarak eklenebilir.";
+
+        var name = Path.GetFileNameWithoutExtension(path);
+        if (NonGameExecutables.Contains(name))
+            return $"'{name}.exe' bir oyun değil ve sürekli çalıştığı için oyun modunu kalıcı olarak açık tutar.";
+
+        try
+        {
+            var full = Path.GetFullPath(path);
+            var windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (!string.IsNullOrEmpty(windowsDir) &&
+                full.StartsWith(windowsDir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+                return "Windows klasöründeki dosyalar oyun olarak eklenemez.";
+        }
+        catch
+        {
+            return "Dosya yolu okunamadı.";
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// True if <paramref name="processPath"/> may belong to <paramref name="profile"/>. When the profile has a known
+    /// install path that still exists, a same-named exe elsewhere (another program, a copy) does not match.
+    /// An unknown process path (access denied, protected game) is accepted so detection keeps working.
+    /// </summary>
+    public static bool IsPathCompatible(GameProfile profile, string? processPath)
+    {
+        if (string.IsNullOrWhiteSpace(profile.InstallPath) || string.IsNullOrWhiteSpace(processPath)) return true;
+        try
+        {
+            if (!File.Exists(profile.InstallPath)) return true; // game moved/updated: fall back to the name
+            return string.Equals(Path.GetFullPath(profile.InstallPath), Path.GetFullPath(processPath), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool QueryFullProcessImageName(IntPtr hProcess, int flags, System.Text.StringBuilder exeName, ref int size);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    /// <summary>Full image path of a process with the least access right Windows offers; null if not allowed.</summary>
+    private static string? TryGetProcessPath(int pid)
+    {
+        IntPtr h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (h == IntPtr.Zero) return null;
+        try
+        {
+            var sb = new System.Text.StringBuilder(1024);
+            int size = sb.Capacity;
+            return QueryFullProcessImageName(h, 0, sb, ref size) ? sb.ToString(0, size) : null;
+        }
+        finally
+        {
+            CloseHandle(h);
+        }
     }
 
     public static string PickBestGameExecutable(string dirName, List<string> candidateExes)
@@ -448,7 +537,7 @@ public class GameDetectionService : IDisposable
         return exeName;
     }
 
-    private static CpuBoostMode DetermineOptimalCpuBoost(string exeName)
+    public static CpuBoostMode DetermineOptimalCpuBoost(string exeName)
     {
         // 2D lightweight games run cool and quiet at base clock
         if (exeName.Contains("balatro", StringComparison.OrdinalIgnoreCase))
@@ -557,6 +646,12 @@ public class GameDetectionService : IDisposable
                                 prof.ExeName.Equals(cleanName, StringComparison.OrdinalIgnoreCase) ||
                                 Path.GetFileNameWithoutExtension(prof.ExeName).Equals(cleanName, StringComparison.OrdinalIgnoreCase)
                             ));
+
+                        // Name matched: confirm the location when the profile knows where the game is installed.
+                        if (match != null && !IsPathCompatible(match, TryGetProcessPath(p.Id)))
+                        {
+                            match = null;
+                        }
 
                         if (match != null)
                         {
@@ -727,7 +822,7 @@ public class GameDetectionService : IDisposable
         });
     }
 
-    private void PersistProfiles()
+    private bool PersistProfiles()
     {
         try
         {
@@ -735,8 +830,12 @@ public class GameDetectionService : IDisposable
             var tempFile = ProfilesFile + ".tmp";
             File.WriteAllText(tempFile, json);
             File.Move(tempFile, ProfilesFile, overwrite: true);
+            return true;
         }
-        catch { }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Dispose()

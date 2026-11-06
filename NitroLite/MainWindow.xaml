@@ -356,13 +356,13 @@
                                 <TextBlock Text="Çalışma Modları ve Fan Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock Text="Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
 
-                                <!-- 4 Mode Selection Cards -->
-                                <UniformGrid Columns="4" Margin="0,0,0,16">
-                                    <!-- SILENT / QUIET -->
+                                <!-- Mode Selection Cards (texts follow NitroSense's own mode descriptions) -->
+                                <UniformGrid Columns="5" Margin="0,0,0,6">
+                                    <!-- QUIET -->
                                     <Button x:Name="BtnModeQuiet" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Quiet" Margin="4">
                                         <StackPanel>
-                                            <TextBlock Text="Sessiz (Silent)" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" />
-                                            <TextBlock Text="Düşük akustik profil ve güç tasarrufu" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" Height="30" />
+                                            <TextBlock Text="Sessiz" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" />
+                                            <TextBlock Text="Olabildiğince sessiz; toplantı, ders, internet gibi hafif kullanım" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" MinHeight="44" />
                                             <Border x:Name="IndQuiet" Background="#1E232F" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" CornerRadius="4" Padding="8,3" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtIndQuiet" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                             </Border>
@@ -372,8 +372,8 @@
                                     <!-- BALANCED / DEFAULT -->
                                     <Button x:Name="BtnModeDefault" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Default" Margin="4">
                                         <StackPanel>
-                                            <TextBlock Text="Dengeli (Balanced)" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" />
-                                            <TextBlock Text="Standart güç tüketimi ve otomatik fan eğrisi" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" Height="30" />
+                                            <TextBlock Text="Dengeli" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" />
+                                            <TextBlock Text="Günlük kullanım için önerilen; ofis ve genel işler" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" MinHeight="44" />
                                             <Border x:Name="IndDefault" Background="#1E232F" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" CornerRadius="4" Padding="8,3" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtIndDefault" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                             </Border>
@@ -383,8 +383,8 @@
                                     <!-- PERFORMANCE / EXTREME -->
                                     <Button x:Name="BtnModeExtreme" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Extreme" Margin="4">
                                         <StackPanel>
-                                            <TextBlock Text="Performans (Power)" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" />
-                                            <TextBlock Text="Yüksek saat frekansları ve +50 MHz GPU ofseti" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" Height="30" />
+                                            <TextBlock Text="Performans" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource TextPrimary}" />
+                                            <TextBlock Text="Oyun için; CPU ve GPU hız aşırtmalı, fan devri sınırlı" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" MinHeight="44" />
                                             <Border x:Name="IndExtreme" Background="#1E232F" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" CornerRadius="4" Padding="8,3" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtIndExtreme" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                             </Border>
@@ -395,13 +395,27 @@
                                     <Button x:Name="BtnModeTurbo" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Turbo" Margin="4">
                                         <StackPanel>
                                             <TextBlock Text="Turbo" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource AccentRed}" />
-                                            <TextBlock Text="Maksimum fan devri ve +100 MHz GPU ofseti" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" Height="30" />
+                                            <TextBlock Text="Sınırsız oyun; en yüksek hız aşırtma ve fan devri" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" MinHeight="44" />
                                             <Border x:Name="IndTurbo" Background="#1E232F" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" CornerRadius="4" Padding="8,3" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtIndTurbo" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                             </Border>
                                         </StackPanel>
                                     </Button>
+
+                                    <!-- ECO (reported by AASSvc as mode 6; NitroSense offers it on battery) -->
+                                    <Button x:Name="BtnModeEco" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Eco" Margin="4">
+                                        <StackPanel>
+                                            <TextBlock Text="Eco" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource AccentGreen}" />
+                                            <TextBlock Text="En düşük güç tüketimi; pilde daha uzun kullanım" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,12" MinHeight="44" />
+                                            <Border x:Name="IndEco" Background="#1E232F" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" CornerRadius="4" Padding="8,3" HorizontalAlignment="Left">
+                                                <TextBlock x:Name="TxtIndEco" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Button>
                                 </UniformGrid>
+                                <TextBlock x:Name="TxtModeLockNote" Visibility="Collapsed" Foreground="{StaticResource AccentRed}" FontSize="11" TextWrapping="Wrap" Margin="4,0,4,0" />
+                                <Border Height="10" />
+
 
                                 <!-- ROW: FAN CONTROL & GLOBAL CPU BOOST -->
                                 <UniformGrid Columns="2" Margin="0,0,0,16">
@@ -421,7 +435,7 @@
                                                 <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" Margin="0,4">
                                                     <TextBlock x:Name="TxtCpuFanRpm" Text="3089 RPM" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" />
                                                 </Viewbox>
-                                                <ProgressBar x:Name="BarCpuFan" Height="4" Value="50" Maximum="6000" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderThickness="0" />
+                                                <ProgressBar x:Name="BarCpuFan" ToolTip="Çubuk yaklaşık olarak 6000 RPM tavana göre çizilir; Acer gerçek azami devri bildirmiyor." Height="4" Value="50" Maximum="6000" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderThickness="0" />
                                             </StackPanel>
 
                                             <!-- GPU FAN -->
@@ -431,7 +445,7 @@
                                                 <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left" Margin="0,4">
                                                     <TextBlock x:Name="TxtGpuFanRpm" Text="3075 RPM" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" />
                                                 </Viewbox>
-                                                <ProgressBar x:Name="BarGpuFan" Height="4" Value="50" Maximum="6000" Background="#222733" Foreground="{StaticResource AccentRed}" BorderThickness="0" />
+                                                <ProgressBar x:Name="BarGpuFan" ToolTip="Çubuk yaklaşık olarak 6000 RPM tavana göre çizilir; Acer gerçek azami devri bildirmiyor." Height="4" Value="50" Maximum="6000" Background="#222733" Foreground="{StaticResource AccentRed}" BorderThickness="0" />
                                             </StackPanel>
 
                                             <!-- FAN TOGGLES -->
@@ -447,14 +461,14 @@
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                                                 <TextBlock Text="CPU Performans Artışı (Boost)" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
-                                                <TextBlock x:Name="TxtBoostStatusBadge" Text=" (Agresif)" Foreground="{StaticResource AccentRed}" FontSize="11" FontWeight="Bold" Margin="4,0,0,0" />
+                                                <TextBlock x:Name="TxtBoostStatusBadge" Text=" (--)" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="Bold" Margin="4,0,0,0" />
                                             </StackPanel>
                                             <TextBlock Text="Windows güç planı işlemci saat frekansı davranışı." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,0,0,10" />
 
                                             <UniformGrid Columns="3">
-                                                <Button x:Name="BtnBoostAggressive" Content="Agresif" Click="BtnBoost_Click" Tag="Aggressive" Background="#222733" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="6,8" Margin="2" Cursor="Hand" FontSize="11" ToolTip="Maksimum saat frekansı (5.0 GHz)" />
-                                                <Button x:Name="BtnBoostEfficient" Content="Dengeli" Click="BtnBoost_Click" Tag="Efficient" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="6,8" Margin="2" Cursor="Hand" FontSize="11" ToolTip="Yüke duyarlı frekans yönetimi (~4.2 GHz)" />
-                                                <Button x:Name="BtnBoostDisabled" Content="Devre Dışı" Click="BtnBoost_Click" Tag="Disabled" Background="#222733" Foreground="{StaticResource AccentGreen}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="6,8" Margin="2" Cursor="Hand" FontSize="11" ToolTip="Temel saat frekansı sınırı (3.2 GHz)" />
+                                                <Button x:Name="BtnBoostAggressive" Content="Agresif" Click="BtnBoost_Click" Tag="Aggressive" Background="#222733" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="6,8" Margin="2" Cursor="Hand" FontSize="11" ToolTip="Windows boost değeri 2: işlemci yükte mümkün olan en yüksek frekansa çıkar" />
+                                                <Button x:Name="BtnBoostEfficient" Content="Verimli" Click="BtnBoost_Click" Tag="Efficient" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="6,8" Margin="2" Cursor="Hand" FontSize="11" ToolTip="Windows boost değeri 4 (Efficient Aggressive): boost açık, verimlilik öncelikli; frekans sabit bir değerle sınırlanmaz" />
+                                                <Button x:Name="BtnBoostDisabled" Content="Devre Dışı" Click="BtnBoost_Click" Tag="Disabled" Background="#222733" Foreground="{StaticResource AccentGreen}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="6,8" Margin="2" Cursor="Hand" FontSize="11" ToolTip="Windows boost değeri 0: işlemci taban frekansının üzerine çıkmaz (7840HS için yaklaşık 3.8 GHz)" />
                                             </UniformGrid>
                                         </StackPanel>
                                     </Border>
@@ -575,7 +589,7 @@
                                                         <TextBlock Text="Çalışma Modu:" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="Bold" Margin="0,0,0,4" />
                                                         <ComboBox x:Name="CmbGameTargetMode">
                                                             <ComboBoxItem Content="Turbo (Yüksek Güç Sınırı)" IsSelected="True" Tag="Turbo" />
-                                                            <ComboBoxItem Content="Performans (+50 MHz GPU)" Tag="Extreme" />
+                                                            <ComboBoxItem Content="Performans" Tag="Extreme" />
                                                             <ComboBoxItem Content="Dengeli (Varsayılan)" Tag="Default" />
                                                             <ComboBoxItem Content="Sessiz (Düşük Güç)" Tag="Quiet" />
                                                         </ComboBox>
@@ -585,9 +599,9 @@
                                                     <StackPanel Margin="3,0,3,0">
                                                         <TextBlock Text="CPU Boost Davranışı:" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="Bold" Margin="0,0,0,4" />
                                                         <ComboBox x:Name="CmbGameTargetCpuBoost">
-                                                            <ComboBoxItem Content="Devre Dışı (3.2 GHz)" IsSelected="True" Tag="Disabled" />
-                                                            <ComboBoxItem Content="Dengeli (4.2 GHz)" Tag="Efficient" />
-                                                            <ComboBoxItem Content="Agresif (5.0 GHz)" Tag="Aggressive" />
+                                                            <ComboBoxItem Content="Devre Dışı (taban frekans)" IsSelected="True" Tag="Disabled" />
+                                                            <ComboBoxItem Content="Verimli" Tag="Efficient" />
+                                                            <ComboBoxItem Content="Agresif" Tag="Aggressive" />
                                                         </ComboBox>
                                                     </StackPanel>
 

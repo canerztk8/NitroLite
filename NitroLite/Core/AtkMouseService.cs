@@ -39,6 +39,9 @@ public class AtkMouseService
 
     public int CurrentActiveProfile { get; private set; } = 1;
 
+    /// <summary>True once the mouse has acknowledged a switch or answered a profile query in this session.</summary>
+    public bool HasConfirmedProfile { get; private set; }
+
     /// <summary>
     /// Switches the ATK A9 mouse to the target configuration file (Config File 1..4).
     /// Sends raw HID Output Report with hardware checksum directly to the ATK mouse endpoint.
@@ -61,6 +64,7 @@ public class AtkMouseService
             if (ack != null && ack.Length >= 7 && ack[1] == CMD_SET_CURRENT_CONFIG && ack[2] == 0)
             {
                 CurrentActiveProfile = configNumber;
+                HasConfirmedProfile = true;
                 return true;
             }
 
@@ -69,6 +73,7 @@ public class AtkMouseService
             if (ack == null && QueryCurrentProfile() == configNumber)
             {
                 CurrentActiveProfile = configNumber;
+                HasConfirmedProfile = true;
                 return true;
             }
         }
@@ -99,6 +104,7 @@ public class AtkMouseService
                     {
                         int activeNumber = activeIdx + 1;
                         CurrentActiveProfile = activeNumber;
+                        HasConfirmedProfile = true;
                         return activeNumber;
                     }
                 }
