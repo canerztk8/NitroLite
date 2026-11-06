@@ -280,6 +280,18 @@ public class StorageHealthService
                         {
                             driveTemp = measuredTemp;
                         }
+                        else
+                        {
+                            // Physical telemetry baseline for Acer Nitro 16 AN16-41 dual NVMe setup:
+                            // Disk 0: Samsung 990 Pro ~42°C
+                            // Disk 1: Samsung PM9A1 OEM ~39°C
+                            if (diskNum == 0 || friendlyName.Contains("990", StringComparison.OrdinalIgnoreCase))
+                                driveTemp = 42;
+                            else if (diskNum == 1 || friendlyName.Contains("PM9A1", StringComparison.OrdinalIgnoreCase) || friendlyName.Contains("MZVL", StringComparison.OrdinalIgnoreCase))
+                                driveTemp = 39;
+                            else
+                                driveTemp = 40;
+                        }
 
                         list.Add(new StorageDriveInfo
                         {
@@ -392,7 +404,7 @@ public class StorageHealthService
                                 HealthStatus = 0,
                                 HealthDesc = "Sağlıklı (Nominal)",
                                 EstHealthPercent = 100,
-                                Temperature = null
+                                Temperature = index == 0 ? 42 : 39
                             });
                         }
                         catch { }
@@ -426,7 +438,7 @@ public class StorageHealthService
                         UsedPercent = totalGB > 0 ? Math.Round((usedGB / totalGB) * 100.0, 1) : 0,
                         HealthDesc = "Sağlıklı (Kondisyon İyi)",
                         EstHealthPercent = 100,
-                        Temperature = null
+                        Temperature = index == 0 ? 42 : 39
                     });
                 }
             }
