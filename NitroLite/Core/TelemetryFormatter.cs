@@ -27,7 +27,7 @@ public static class TelemetryFormatter
     /// </summary>
     public static string FormatCpuTemperature(double temp)
     {
-        if (temp <= 0) return "0 °C (Beklemede)";
+        if (temp <= 0) return "-- °C"; // no reading (a running CPU is never at 0 °C)
         return $"{Math.Round(temp):F0} °C";
     }
 
@@ -98,7 +98,7 @@ public static class TelemetryFormatter
     /// </summary>
     public static string FormatCpuFrequency(double freqMhz)
     {
-        if (freqMhz <= 0) return "0.00 GHz (Beklemede)";
+        if (freqMhz <= 0) return "-- GHz"; // no reading
         double ghz = freqMhz / 1000.0;
         return string.Format(CultureInfo.InvariantCulture, "{0:F2} GHz", ghz);
     }

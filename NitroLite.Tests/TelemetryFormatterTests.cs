@@ -68,8 +68,8 @@ public class TelemetryFormatterTests
     {
         Assert.Equal("68 °C", TelemetryFormatter.FormatCpuTemperature(68.4));
         Assert.Equal("75 °C", TelemetryFormatter.FormatCpuTemperature(74.6));
-        Assert.Equal("0 °C (Beklemede)", TelemetryFormatter.FormatCpuTemperature(0.0));
-        Assert.Equal("0 °C (Beklemede)", TelemetryFormatter.FormatCpuTemperature(-5.0));
+        Assert.Equal("-- °C", TelemetryFormatter.FormatCpuTemperature(0.0));
+        Assert.Equal("-- °C", TelemetryFormatter.FormatCpuTemperature(-5.0));
     }
 
     [Fact]
@@ -109,8 +109,8 @@ public class TelemetryFormatterTests
     {
         Assert.Equal("4.25 GHz", TelemetryFormatter.FormatCpuFrequency(4250.0));
         Assert.Equal("3.80 GHz", TelemetryFormatter.FormatCpuFrequency(3800.0));
-        Assert.Equal("0.00 GHz (Beklemede)", TelemetryFormatter.FormatCpuFrequency(0.0));
-        Assert.Equal("0.00 GHz (Beklemede)", TelemetryFormatter.FormatCpuFrequency(-100.0));
+        Assert.Equal("-- GHz", TelemetryFormatter.FormatCpuFrequency(0.0));
+        Assert.Equal("-- GHz", TelemetryFormatter.FormatCpuFrequency(-100.0));
     }
 
     [Fact]

@@ -11,10 +11,8 @@
         WindowStartupLocation="Manual"
         Focusable="False">
 
+    <!-- No DropShadowEffect: on a layered (transparent) window every 1 s update would be re-rendered in software. -->
     <Border Background="#F20F1115" BorderBrush="#252B38" BorderThickness="1" CornerRadius="6" Padding="12,8">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="6" Color="#000000" Opacity="0.5" ShadowDepth="1" />
-        </Border.Effect>
 
         <StackPanel TextElement.FontFamily="Consolas, Cascadia Code, Courier New, monospace">
             <!-- CPU Row -->

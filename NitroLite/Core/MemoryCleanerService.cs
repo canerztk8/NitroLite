@@ -9,15 +9,15 @@ public class MemoryCleanerResult
 {
     public double FreedMegabytes { get; set; }
     public double AvailableGigabytes { get; set; }
+    /// <summary>Kept for compatibility; other processes are no longer trimmed, so this is always 0.</summary>
     public int ProcessesOptimized { get; set; }
     public bool StandbyPurged { get; set; }
+    /// <summary>True when the standby purge was skipped because NitroLite is not running as administrator.</summary>
+    public bool RequiresAdministrator { get; set; }
 }
 
 public class MemoryCleanerService
 {
-    [DllImport("psapi.dll")]
-    private static extern int EmptyWorkingSet(IntPtr hwProc);
-
     [DllImport("ntdll.dll")]
     private static extern uint NtSetSystemInformation(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength);
 
@@ -38,12 +38,6 @@ public class MemoryCleanerService
 
     [DllImport("kernel32.dll")]
     private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct LUID
@@ -86,21 +80,6 @@ public class MemoryCleanerService
 
     private DateTime _lastAutoCleanTime = DateTime.MinValue;
 
-    private static int GetForegroundProcessId()
-    {
-        try
-        {
-            IntPtr hwnd = GetForegroundWindow();
-            if (hwnd != IntPtr.Zero)
-            {
-                GetWindowThreadProcessId(hwnd, out uint pid);
-                return (int)pid;
-            }
-        }
-        catch { }
-        return 0;
-    }
-
     public bool ShouldAutoClean(double ramUsagePercent, double ramTotalMB, bool isGameActive = false)
     {
         // Total RAM must be legitimate
@@ -122,6 +101,30 @@ public class MemoryCleanerService
         return await Task.Run(() => CleanMemory(excludePid, excludeProcessName));
     }
 
+    /// <summary>True when the current process runs elevated (needed to purge the standby list).</summary>
+    public static bool IsRunningAsAdministrator()
+    {
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            return new System.Security.Principal.WindowsPrincipal(identity)
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Purges the Windows standby list (needs administrator rights) and trims NitroLite's own memory.
+    /// </summary>
+    /// <remarks>
+    /// It no longer empties the working sets of other processes. That only pushed their memory to the standby
+    /// list (which Windows already counts as available), so the "freed" figure was cosmetic, and every program,
+    /// including a game running in the background, then stuttered while paging it back in.
+    /// The parameters are kept for compatibility and are no longer used.
+    /// </remarks>
     public MemoryCleanerResult CleanMemory(int? excludePid = null, string? excludeProcessName = null)
     {
         _lastAutoCleanTime = DateTime.Now;
@@ -129,8 +132,9 @@ public class MemoryCleanerService
         var memBefore = new MEMORYSTATUSEX();
         GlobalMemoryStatusEx(memBefore);
 
-        bool standbyPurged = TryPurgeStandbyList();
-        int procCount = TrimProcessWorkingSets(excludePid, excludeProcessName);
+        bool isAdmin = IsRunningAsAdministrator();
+        bool standbyPurged = isAdmin && TryPurgeStandbyList();
+        int procCount = 0;
 
         // Gently trim NitroLite's own heap
         try
@@ -152,7 +156,8 @@ public class MemoryCleanerService
             FreedMegabytes = freedMB,
             AvailableGigabytes = availGB,
             ProcessesOptimized = procCount,
-            StandbyPurged = standbyPurged
+            StandbyPurged = standbyPurged,
+            RequiresAdministrator = !isAdmin
         };
     }
 
@@ -198,48 +203,4 @@ public class MemoryCleanerService
         }
     }
 
-    private static int TrimProcessWorkingSets(int? excludePid = null, string? excludeProcessName = null)
-    {
-        int count = 0;
-        int currentPid = Environment.ProcessId;
-        int foregroundPid = GetForegroundProcessId();
-
-        Process[]? processes = null;
-        try
-        {
-            processes = Process.GetProcesses();
-            foreach (var proc in processes)
-            {
-                try
-                {
-                    // Skip system idle, current process, and the active foreground user application
-                    if (proc.Id <= 4 || proc.Id == currentPid) continue;
-                    if (foregroundPid > 0 && proc.Id == foregroundPid) continue;
-                    if (excludePid.HasValue && proc.Id == excludePid.Value) continue;
-
-                    if (!string.IsNullOrEmpty(excludeProcessName))
-                    {
-                        if (string.Equals(proc.ProcessName, excludeProcessName, StringComparison.OrdinalIgnoreCase))
-                            continue;
-                    }
-
-                    if (EmptyWorkingSet(proc.Handle) != 0)
-                    {
-                        count++;
-                    }
-                }
-                catch
-                {
-                    // Access denied or process exited - safe to ignore
-                }
-                finally
-                {
-                    try { proc.Dispose(); } catch { }
-                }
-            }
-        }
-        catch { }
-
-        return count;
-    }
 }

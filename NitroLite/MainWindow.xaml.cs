@@ -466,8 +466,10 @@ public partial class MainWindow : Window
     private void UpdateTelemetryPollingRate()
     {
         bool isHiddenOrMinimized = !IsVisible || WindowState == WindowState.Minimized;
-        // When minimized in tray, throttle polling to 3000ms to reduce background CPU cycles & power
-        var targetInterval = isHiddenOrMinimized ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(1);
+        // The OSD is used while gaming with NitroLite in the tray: keep it at 1 s while it is shown.
+        bool osdShown = _isOsdOpen && _osdWindow != null && _osdWindow.IsVisible;
+        // Otherwise, when minimized in tray, throttle polling to 3000ms to reduce background CPU cycles & power
+        var targetInterval = isHiddenOrMinimized && !osdShown ? TimeSpan.FromSeconds(3) : TimeSpan.FromSeconds(1);
         if (_pollTimer.Interval != targetInterval)
         {
             _pollTimer.Interval = targetInterval;
@@ -518,6 +520,9 @@ public partial class MainWindow : Window
             var initialFan = await _agentClient.GetFanModeAsync();
             if (initialFan.HasValue) _currentFanMode = initialFan.Value;
             UpdateFanButtonsUi(_currentFanMode, initialFan.HasValue);
+
+            // 1.05 Hardware names (CPU, GPU, memory) from Windows, read in the background
+            _ = LoadHardwareInfoAsync();
 
             // 1.1 Initial GPU Mode (MUX Switch)
             await RefreshGpuModeAsync();
@@ -679,6 +684,7 @@ public partial class MainWindow : Window
         }
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         ChkAutoRamClean.IsChecked = _appSettings.AutoRamCleanerEnabled;
+        UpdateRamCleanAvailabilityUi();
 
         // Persisted toggles: apply to the services directly (the Changed handlers ignore events
         // raised while the window is not loaded / still initializing).
@@ -920,6 +926,34 @@ public partial class MainWindow : Window
         }
     }
 
+    private HardwareInfo? _hardwareInfo;
+
+    /// <summary>Fills the CPU/GPU/memory names from Windows instead of hard-coded labels.</summary>
+    private async Task LoadHardwareInfoAsync()
+    {
+        try
+        {
+            var info = await Task.Run(HardwareInfoService.Get);
+            _hardwareInfo = info;
+            if (Dispatcher.HasShutdownStarted) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (TxtMonCpuName != null && info.CpuName.Length > 0) TxtMonCpuName.Text = info.CpuName;
+                if (TxtMonGpuName != null && info.DiscreteGpuName.Length > 0) TxtMonGpuName.Text = info.DiscreteGpuName;
+                if (TxtMonRamInfo != null) TxtMonRamInfo.Text = info.FormatMemoryText();
+            });
+        }
+        catch { }
+    }
+
+    /// <summary>Sets a bar value; if the value exceeds the bar's ceiling the ceiling grows instead of the bar pinning at full.</summary>
+    private static void SetBarValueGrowing(System.Windows.Controls.ProgressBar? bar, double value, double step)
+    {
+        if (bar == null) return;
+        if (value > bar.Maximum) bar.Maximum = Math.Ceiling(value / step) * step;
+        bar.Value = Math.Max(0, value);
+    }
+
     private DateTime _lastDeviceStateSyncUtc = DateTime.MinValue;
     private static readonly TimeSpan DeviceStateSyncInterval = TimeSpan.FromSeconds(5);
     private CpuBoostMode? _lastShownBoost;
@@ -1079,25 +1113,26 @@ public partial class MainWindow : Window
                 BarGpuFan.Value = data.GpuFanSpeed;
 
                 // Tab 2: Monitoring - CPU
-                TxtCpuCoreCount.Text = $" ({data.CpuCores} Çekirdek)";
+                var coreText = (_hardwareInfo?.FormatCoreText(data.CpuCores)) ?? (data.CpuCores > 0 ? $"{data.CpuCores} iş parçacığı" : "");
+                TxtCpuCoreCount.Text = string.IsNullOrEmpty(coreText) ? "" : $" ({coreText})";
                 TxtMonCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
                 BarMonCpuTemp.Value = data.CpuTemperature;
 
                 TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts) + " (tahmini)";
-                BarMonCpuPower.Value = data.CpuPowerWatts;
+                SetBarValueGrowing(BarMonCpuPower, data.CpuPowerWatts, 10);
 
                 TxtMonCpuUsage.Text = $"{data.CpuUsage:F1} %";
                 BarMonCpuUsage.Value = data.CpuUsage;
 
                 TxtMonCpuFreqGhz.Text = TelemetryFormatter.FormatCpuFrequency(data.CpuFrequencyMHz);
-                BarMonCpuFreq.Value = Math.Min(data.CpuFrequencyMHz, BarMonCpuFreq.Maximum);
+                SetBarValueGrowing(BarMonCpuFreq, data.CpuFrequencyMHz, 100);
 
                 // Tab 2: Monitoring - GPU
                 TxtMonGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
                 BarMonGpuTemp.Value = data.GpuTemperature;
 
                 TxtMonGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping);
-                BarMonGpuPower.Value = data.GpuPowerWatts;
+                SetBarValueGrowing(BarMonGpuPower, data.GpuPowerWatts, 10);
 
                 TxtMonGpuUsage.Text = $"{data.GpuUsage:F1} %";
                 BarMonGpuUsage.Value = data.GpuUsage;
@@ -1122,7 +1157,7 @@ public partial class MainWindow : Window
                     BarMonRam.Value = 0;
                 }
 
-                TxtMonSysTemp.Text = $"{data.SysTemperature} °C";
+                TxtMonSysTemp.Text = TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : null);
 
                 if (isFallback)
                 {
@@ -1139,21 +1174,13 @@ public partial class MainWindow : Window
                 _notifyIcon.Text = tip.Length > 63 ? tip[..63] : tip;
             }
 
-            // Optimal Auto RAM Cleaner Check (32 GB RAM optimized) - suppressed during active gameplay to prevent micro-stutters
+            // Automatic standby purge under memory pressure; never during games, only when elevated, and not awaited
+            // here so the telemetry loop keeps running while it works.
             bool isGameActive = _isGameSessionActive || _gameService.IsGameActive;
-            if (_appSettings.AutoRamCleanerEnabled && !isGameActive && _memoryService.ShouldAutoClean(data.RamUsage, data.RamTotalMB, isGameActive))
+            if (_appSettings.AutoRamCleanerEnabled && !isGameActive && _ramCleanAvailable == true
+                && _memoryService.ShouldAutoClean(data.RamUsage, data.RamTotalMB, isGameActive))
             {
-                var res = await _memoryService.CleanMemoryAsync();
-                if (res.FreedMegabytes > 150)
-                {
-                    string freedStr = res.FreedMegabytes >= 1024 ? $"{res.FreedMegabytes / 1024.0:F1} GB" : $"{res.FreedMegabytes:F0} MB";
-                    ShowToast($"Bellek temizlendi: {freedStr} alan boşaltıldı.");
-                    if (TxtRamCleanStatus != null)
-                    {
-                        TxtRamCleanStatus.Text = $" ({freedStr} Boşaltıldı)";
-                        TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
-                    }
-                }
+                _ = RunAutoRamCleanAsync();
             }
 
             if (!isFallback)
@@ -1164,9 +1191,11 @@ public partial class MainWindow : Window
                     _osdWindow.UpdateData(data, _currentMode);
                 }
 
-                // Keep rolling 60 seconds history
+                // Keep the last 60 seconds by time (not by count: polling is 3 s while hidden, 1 s while shown).
+                data.Timestamp = DateTime.Now;
                 _telemetryHistory.Add(data);
-                if (_telemetryHistory.Count > 60)
+                var historyCutoff = data.Timestamp - ChartWindow;
+                while (_telemetryHistory.Count > 0 && (_telemetryHistory[0].Timestamp < historyCutoff || _telemetryHistory.Count > 240))
                 {
                     _telemetryHistory.RemoveAt(0);
                 }
@@ -1233,9 +1262,46 @@ public partial class MainWindow : Window
         RenderTelemetryChart();
     }
 
+    private static readonly TimeSpan ChartWindow = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Value of <paramref name="metric"/> in sample <paramref name="d"/>, or null when the sample has no real reading
+    /// for it (sensor 0, or the dGPU asleep for GPU metrics), so gaps do not drag min/average down.
+    /// </summary>
+    internal static double? GetChartValue(string metric, MonitorData d)
+    {
+        bool gpuAwake = d.GpuTemperature > 0;
+        double? v = metric switch
+        {
+            "CPU_TEMP" => d.CpuTemperature > 0 ? d.CpuTemperature : null,
+            "GPU_TEMP" => gpuAwake ? d.GpuTemperature : null,
+            "CPU_WATT" => d.CpuPowerWatts > 0 ? d.CpuPowerWatts : null,
+            "GPU_WATT" => gpuAwake ? d.GpuPowerWatts : null,
+            "CPU_GHZ" => d.CpuFrequencyMHz > 0 ? d.CpuFrequencyMHz / 1000.0 : null,
+            "CPU_USAGE" => d.CpuUsage,
+            "GPU_USAGE" => gpuAwake ? d.GpuUsage : null,
+            "RAM_USAGE" => d.RamTotalMB > 0 ? d.RamUsage : null,
+            "VRAM_GB" => gpuAwake && d.VramTotalMB > 0 ? d.VramUsedMB / 1024.0 : null,
+            _ => d.CpuTemperature > 0 ? d.CpuTemperature : null
+        };
+        return v.HasValue && !double.IsNaN(v.Value) && !double.IsInfinity(v.Value) ? v : null;
+    }
+
+    private void ClearTelemetryChart(string unit)
+    {
+        string dash = string.IsNullOrEmpty(unit) ? "--" : $"-- {unit}";
+        TxtChartCurrentVal.Text = dash;
+        TxtChartMinVal.Text = dash;
+        TxtChartMaxVal.Text = dash;
+        TxtChartAvgVal.Text = dash;
+        ChartLine.Points = new PointCollection();
+        ChartArea.Points = new PointCollection();
+        if (ChartDot != null) ChartDot.Visibility = Visibility.Collapsed;
+    }
+
     private void RenderTelemetryChart()
     {
-        if (_telemetryHistory.Count < 2 || CanvasHistoryChart == null) return;
+        if (CanvasHistoryChart == null) return;
         if (!IsVisible || WindowState == WindowState.Minimized || TabMonitoring?.Visibility != Visibility.Visible) return;
 
         double width = CanvasHistoryChart.ActualWidth;
@@ -1246,24 +1312,18 @@ public partial class MainWindow : Window
             height = 140;
         }
 
-        List<double> values = new();
+        // Time-based window: x follows the sample time, so the chart really spans the last 60 seconds whatever the
+        // polling rate was (3 s while hidden, 1 s while shown).
+        var now = DateTime.Now;
+        var windowStart = now - ChartWindow;
+        var samples = new List<(DateTime Time, double Value)>();
         foreach (var d in _telemetryHistory)
         {
-            double val = _selectedChartMetric switch
-            {
-                "CPU_TEMP" => d.CpuTemperature,
-                "GPU_TEMP" => d.GpuTemperature,
-                "CPU_WATT" => d.CpuPowerWatts,
-                "GPU_WATT" => d.GpuPowerWatts,
-                "CPU_GHZ" => d.CpuFrequencyMHz / 1000.0,
-                "CPU_USAGE" => d.CpuUsage,
-                "GPU_USAGE" => d.GpuUsage,
-                "RAM_USAGE" => d.RamUsage,
-                "VRAM_GB" => d.VramUsedMB / 1024.0,
-                _ => d.CpuTemperature
-            };
-            values.Add(val);
+            if (d.Timestamp < windowStart) continue;
+            var v = GetChartValue(_selectedChartMetric, d);
+            if (v.HasValue) samples.Add((d.Timestamp, v.Value));
         }
+        List<double> values = samples.Select(s => s.Value).ToList();
 
         string unit = _selectedChartMetric switch
         {
@@ -1274,6 +1334,12 @@ public partial class MainWindow : Window
             "VRAM_GB" => "GB",
             _ => ""
         };
+
+        if (values.Count < 2)
+        {
+            ClearTelemetryChart(unit);
+            return;
+        }
 
         double current = values.Last();
         double min = values.Min();
@@ -1356,21 +1422,22 @@ public partial class MainWindow : Window
         double range = rangeMax - rangeMin;
         if (range <= 0) range = 1;
 
-        int count = values.Count;
-        double stepX = width / Math.Max(count - 1, 1);
+        int count = samples.Count;
+        double windowSeconds = ChartWindow.TotalSeconds;
 
         var linePoints = new PointCollection();
         var areaPoints = new PointCollection();
 
-        areaPoints.Add(new WpfPoint(0, height));
+        double firstX = Math.Clamp((samples[0].Time - windowStart).TotalSeconds / windowSeconds, 0.0, 1.0) * width;
+        areaPoints.Add(new WpfPoint(firstX, height));
 
         double lastX = 0;
         double lastY = height / 2;
 
         for (int i = 0; i < count; i++)
         {
-            double x = i * stepX;
-            double normalized = Math.Clamp((values[i] - rangeMin) / range, 0.0, 1.0);
+            double x = Math.Clamp((samples[i].Time - windowStart).TotalSeconds / windowSeconds, 0.0, 1.0) * width;
+            double normalized = Math.Clamp((samples[i].Value - rangeMin) / range, 0.0, 1.0);
             double y = height - (normalized * (height - 24)) - 12;
 
             var pt = new WpfPoint(x, y);
@@ -1381,7 +1448,7 @@ public partial class MainWindow : Window
             lastY = y;
         }
 
-        areaPoints.Add(new WpfPoint((count - 1) * stepX, height));
+        areaPoints.Add(new WpfPoint(lastX, height));
 
         ChartLine.Points = linePoints;
         ChartArea.Points = areaPoints;
@@ -1408,9 +1475,12 @@ public partial class MainWindow : Window
         if (_osdWindow == null)
         {
             _osdWindow = new OsdOverlayWindow();
+            _osdWindow.SetCorner(_appSettings.OsdCorner);
+            _osdWindow.SetMonitor(_appSettings.OsdMonitor);
         }
         _osdWindow.CycleCorner();
         _appSettings.OsdCorner = _osdWindow.CurrentCorner;
+        _appSettings.OsdMonitor = _osdWindow.CurrentMonitor;
         SaveSettings();
 
         string cornerDesc = _osdWindow.CurrentCorner switch
@@ -1421,7 +1491,13 @@ public partial class MainWindow : Window
             3 => "Sol Alt",
             _ => "Sol Üst"
         };
-        ShowToast($"OSD konumu değiştirildi: {cornerDesc}");
+        if (OsdOverlayWindow.MonitorCount > 1)
+        {
+            cornerDesc += $", monitör {_osdWindow.CurrentMonitor + 1}/{OsdOverlayWindow.MonitorCount}";
+        }
+        ShowToast(_isOsdOpen
+            ? $"OSD konumu: {cornerDesc}"
+            : $"OSD kapalı; konum kaydedildi ({cornerDesc}). Açınca orada görünecek.");
     }
 
     private void ToggleOsd(bool enable, bool showToast = true)
@@ -1440,7 +1516,9 @@ public partial class MainWindow : Window
                 _osdWindow = new OsdOverlayWindow();
             }
             _osdWindow.SetCorner(_appSettings.OsdCorner);
+            _osdWindow.SetMonitor(_appSettings.OsdMonitor);
             _osdWindow.Show();
+            UpdateTelemetryPollingRate();
             BtnToggleOsd.Background = (SolidColorBrush)FindResource("AccentCyan");
             BtnToggleOsd.Foreground = System.Windows.Media.Brushes.Black;
             BtnToggleOsd.Content = "OSD Katmanı: Açık (Kapat)";
@@ -1450,6 +1528,7 @@ public partial class MainWindow : Window
         else
         {
             _osdWindow?.Hide();
+            UpdateTelemetryPollingRate();
             BtnToggleOsd.Background = new BrushConverter().ConvertFromString("#162436") as WpfBrush;
             BtnToggleOsd.Foreground = (SolidColorBrush)FindResource("AccentCyan");
             BtnToggleOsd.Content = "Ekran Üstü Gösterge (OSD)";
@@ -4747,34 +4826,96 @@ public partial class MainWindow : Window
 
     private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)
     {
+        if (BtnCleanRamCache != null) BtnCleanRamCache.IsEnabled = false;
         try
         {
             var res = await _memoryService.CleanMemoryAsync();
-            if (res.FreedMegabytes > 50)
-            {
-                string freedStr = res.FreedMegabytes >= 1024 
-                    ? $"{res.FreedMegabytes / 1024.0:F1} GB" 
-                    : $"{res.FreedMegabytes:F0} MB";
-                ShowToast($"{freedStr} bellek temizlendi ({res.ProcessesOptimized} işlem).");
-                if (TxtRamCleanStatus != null)
-                {
-                    TxtRamCleanStatus.Text = $" ({freedStr} Boşaltıldı)";
-                    TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
-                }
-            }
-            else
-            {
-                ShowToast("Bellek önbelleği optimize durumda.");
-                if (TxtRamCleanStatus != null)
-                {
-                    TxtRamCleanStatus.Text = " (Optimize)";
-                    TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
-                }
-            }
+            ShowMemoryCleanResult(res, automatic: false);
         }
         catch (Exception ex)
         {
-            ShowToast($"Bellek temizlenemedi: {ex.Message}", false);
+            ShowToast($"Bekleme belleği boşaltılamadı: {ex.Message}", false);
+        }
+        finally
+        {
+            UpdateRamCleanAvailabilityUi();
+        }
+    }
+
+    private void ShowMemoryCleanResult(MemoryCleanerResult res, bool automatic)
+    {
+        if (res.RequiresAdministrator)
+        {
+            if (!automatic)
+                ShowToast("Bekleme belleğini boşaltmak yönetici izni gerektirir; NitroLite yönetici olarak çalışmıyor. Windows bu belleği zaten gerektiğinde kullanır.", false);
+            SetRamCleanStatus(" (Yönetici izni gerekli)", "TextSecondary");
+            return;
+        }
+        if (!res.StandbyPurged)
+        {
+            if (!automatic) ShowToast("Windows bekleme listesini boşaltmayı reddetti.", false);
+            SetRamCleanStatus(" (Başarısız)", "AccentRed");
+            return;
+        }
+
+        string freedStr = res.FreedMegabytes >= 1024
+            ? $"{res.FreedMegabytes / 1024.0:F1} GB"
+            : $"{res.FreedMegabytes:F0} MB";
+        if (!automatic || res.FreedMegabytes > 150)
+            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} serbest bırakıldı.");
+        SetRamCleanStatus($" ({freedStr} boşaltıldı)", "AccentGreen");
+    }
+
+    private void SetRamCleanStatus(string text, string brushKey)
+    {
+        if (TxtRamCleanStatus == null) return;
+        TxtRamCleanStatus.Text = text;
+        TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
+    }
+
+    private bool? _ramCleanAvailable;
+
+    /// <summary>The standby purge only works elevated: lock the controls and say why when it cannot work.</summary>
+    private void UpdateRamCleanAvailabilityUi()
+    {
+        _ramCleanAvailable ??= MemoryCleanerService.IsRunningAsAdministrator();
+        bool ok = _ramCleanAvailable.Value;
+        if (BtnCleanRamCache != null)
+        {
+            // Not disabled: the custom button background renders as an empty white box when disabled.
+            // It stays clickable and explains why the purge needs administrator rights.
+            BtnCleanRamCache.IsEnabled = true;
+            BtnCleanRamCache.Opacity = ok ? 1.0 : 0.5;
+        }
+        if (ChkAutoRamClean != null) ChkAutoRamClean.IsEnabled = ok;
+        if (!ok)
+        {
+            SetRamCleanStatus(" (Yönetici izni gerekli)", "TextSecondary");
+            if (TxtRamCleanNote != null)
+                TxtRamCleanNote.Text = "Windows'un önbellekte tuttuğu (bekleme listesi) belleği boşaltır; çalışan programların belleğine dokunmaz. "
+                                     + "Bu işlem yönetici izni gerektirir ve NitroLite şu an yönetici olarak çalışmıyor. Windows bu belleği zaten gerektiğinde kendisi kullanır.";
+        }
+        else if (TxtRamCleanStatus != null && TxtRamCleanStatus.Text.Contains("Yönetici"))
+        {
+            SetRamCleanStatus(" (Hazır)", "AccentGreen");
+        }
+    }
+
+    private int _autoRamCleanRunning;
+
+    /// <summary>Runs the automatic purge without blocking the telemetry loop.</summary>
+    private async Task RunAutoRamCleanAsync()
+    {
+        if (Interlocked.Exchange(ref _autoRamCleanRunning, 1) != 0) return;
+        try
+        {
+            var res = await _memoryService.CleanMemoryAsync();
+            if (!Dispatcher.HasShutdownStarted) ShowMemoryCleanResult(res, automatic: true);
+        }
+        catch { }
+        finally
+        {
+            Interlocked.Exchange(ref _autoRamCleanRunning, 0);
         }
     }
 

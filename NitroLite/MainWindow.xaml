@@ -665,7 +665,7 @@
                                     <Border Style="{StaticResource CardBorder}" Margin="0,0,6,0">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                <TextBlock Text="AMD Ryzen Zen 4 CPU" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                                <TextBlock x:Name="TxtMonCpuName" Text="İşlemci" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
                                                 <TextBlock x:Name="TxtCpuCoreCount" Text=" (16 Çekirdek)" Foreground="{StaticResource TextMuted}" FontSize="12" />
                                             </StackPanel>
                                             
@@ -681,7 +681,7 @@
                                                 <TextBlock Text="Paket Güç Tüketimi:" Foreground="{StaticResource TextSecondary}" FontSize="11" />
                                                 <TextBlock x:Name="TxtMonCpuPower" Text="-- W" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right" />
                                             </Grid>
-                                            <ProgressBar x:Name="BarMonCpuPower" Height="4" Maximum="65" Background="#222733" Foreground="{StaticResource AccentGreen}" BorderThickness="0" Margin="0,0,0,6" />
+                                            <ProgressBar x:Name="BarMonCpuPower" Height="4" Maximum="80" Background="#222733" Foreground="{StaticResource AccentGreen}" BorderThickness="0" Margin="0,0,0,6" />
 
                                             <!-- Usage -->
                                             <Grid Margin="0,3">
@@ -702,7 +702,7 @@
                                     <!-- GPU CARD -->
                                     <Border Style="{StaticResource CardBorder}" Margin="6,0,0,0">
                                         <StackPanel>
-                                            <TextBlock Text="NVIDIA GeForce RTX 4070 Laptop GPU" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,8" />
+                                            <TextBlock x:Name="TxtMonGpuName" Text="Ekran Kartı" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,8" />
                                             
                                             <!-- Temp -->
                                             <Grid Margin="0,3">
@@ -751,12 +751,13 @@
                                                     <TextBlock x:Name="TxtMonRamPercent" Text="-- %" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" HorizontalAlignment="Right" />
                                                 </Grid>
                                                 <ProgressBar x:Name="BarMonRam" Height="5" Maximum="100" Background="#222733" Foreground="{StaticResource AccentGreen}" BorderThickness="0" />
+                                                <TextBlock x:Name="TxtMonRamInfo" Text="--" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,6,0,0" />
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                                <TextBlock Text="Anakart ve Sistem Sıcaklığı" Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="Bold" />
+                                                <TextBlock Text="Sistem Sıcaklığı" Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="Bold" />
                                                 <TextBlock x:Name="TxtMonSysTemp" Text="-- °C" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-                                                <TextBlock x:Name="TxtMonRamFreq" Text="DDR5 5600 MHz Çift Kanal (32 GB)" Foreground="{StaticResource TextMuted}" FontSize="11" />
+                                                <TextBlock Text="Acer servisinin SYS1 sensörü (konumu Acer tarafından belirtilmiyor)" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Grid>
 
@@ -770,13 +771,14 @@
 
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                                                        <TextBlock Text="Bellek Önbelleği Temizleme" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
+                                                        <TextBlock Text="Bekleme Belleğini Boşaltma" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
                                                         <TextBlock x:Name="TxtRamCleanStatus" Text=" (Hazır)" Foreground="{StaticResource AccentGreen}" FontSize="11" FontWeight="Bold" Margin="4,0,0,0" />
                                                     </StackPanel>
-                                                    <CheckBox x:Name="ChkAutoRamClean" Content="Otomatik bellek temizleme (Oyun başlangıcında ve boş RAM &lt; 4 GB iken)" IsChecked="False" Checked="ChkAutoRamClean_Changed" Unchecked="ChkAutoRamClean_Changed" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" />
+                                                    <CheckBox x:Name="ChkAutoRamClean" Content="Otomatik: RAM %88 dolduğunda veya 2 GB'tan az boş kaldığında (oyun sırasında çalışmaz)" IsChecked="False" Checked="ChkAutoRamClean_Changed" Unchecked="ChkAutoRamClean_Changed" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" />
+                                                    <TextBlock x:Name="TxtRamCleanNote" Text="Windows'un önbellekte tuttuğu (bekleme listesi) belleği boşaltır. Çalışan programların belleğine dokunmaz. Yönetici izni gerekir." Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0" />
                                                 </StackPanel>
 
-                                                <Button x:Name="BtnCleanRamCache" Grid.Column="1" Content="Bellek Önbelleğini Temizle" Click="BtnCleanRamCache_Click" Background="#222733" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,7" FontWeight="SemiBold" FontSize="11" Cursor="Hand" VerticalAlignment="Center" ToolTip="Kullanılmayan Standby bellek listesini ve çalışan küme önbelleklerini temizler." />
+                                                <Button x:Name="BtnCleanRamCache" Grid.Column="1" Content="Bekleme Belleğini Boşalt" Click="BtnCleanRamCache_Click" Background="#222733" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,7" FontWeight="SemiBold" FontSize="11" Cursor="Hand" VerticalAlignment="Center" ToolTip="Windows bekleme listesini boşaltır (yönetici izni gerekir). Çalışan programların belleğini diske itmez." />
                                             </Grid>
                                         </Border>
                                     </StackPanel>
@@ -788,14 +790,14 @@
                                         <Grid Margin="0,0,0,10">
                                             <StackPanel>
                                                 <TextBlock Text="Telemetri Geçmiş Grafiği" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
-                                                <TextBlock Text="Seçili donanım metriğinin son 60 saniyelik zaman serisi verileri." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                                <TextBlock Text="Seçili metriğin son 60 saniyesi. Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
                                             </StackPanel>
 
                                             <!-- Metric Selection Dropdown -->
                                             <ComboBox x:Name="CmbChartMetric" Width="240" SelectionChanged="CmbChartMetric_SelectionChanged" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                 <ComboBoxItem Content="CPU Sıcaklığı (°C)" Tag="CPU_TEMP" IsSelected="True" />
                                                 <ComboBoxItem Content="GPU Sıcaklığı (°C)" Tag="GPU_TEMP" />
-                                                <ComboBoxItem Content="CPU Güç Tüketimi (W)" Tag="CPU_WATT" />
+                                                <ComboBoxItem Content="CPU Güç Tüketimi (W, tahmini)" Tag="CPU_WATT" />
                                                 <ComboBoxItem Content="GPU Güç Tüketimi (W)" Tag="GPU_WATT" />
                                                 <ComboBoxItem Content="CPU Saat Frekansı (GHz)" Tag="CPU_GHZ" />
                                                 <ComboBoxItem Content="CPU Kullanımı (%)" Tag="CPU_USAGE" />

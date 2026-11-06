@@ -193,6 +193,8 @@ public class AppSettings
     public double? WindowHeight { get; set; }
     public bool WindowMaximized { get; set; }
     public int OsdCorner { get; set; } = 0;
+    // Index into the monitor list (System.Windows.Forms.Screen.AllScreens) the OSD is shown on.
+    public int OsdMonitor { get; set; } = 0;
     public LightingConfig? KeyboardLighting { get; set; }
     public bool IsBacklightOff { get; set; } = false;
     public string? SelectedRgbPreset { get; set; }
