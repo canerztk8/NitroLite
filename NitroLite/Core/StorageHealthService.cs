@@ -22,6 +22,8 @@ public class StorageDriveInfo
     public string HealthDesc { get; set; } = "Sağlıklı (Nominal)";
     public int EstHealthPercent { get; set; } = 100;
     public int? Temperature { get; set; }
+    // True when Temperature is a model baseline (no SMART reading available without admin rights).
+    public bool IsTemperatureEstimated { get; set; }
 }
 
 public class StorageHealthService
@@ -276,12 +278,14 @@ public class StorageHealthService
                         }
 
                         int? driveTemp = null;
+                        bool tempEstimated = false;
                         if (tempMap.TryGetValue(diskNum, out int measuredTemp) && measuredTemp > 0 && measuredTemp < 120)
                         {
                             driveTemp = measuredTemp;
                         }
                         else
                         {
+                            tempEstimated = true;
                             // Physical telemetry baseline for Acer Nitro 16 AN16-41 dual NVMe setup:
                             // Disk 0: Samsung 990 Pro ~42°C
                             // Disk 1: Samsung PM9A1 OEM ~39°C
@@ -307,7 +311,8 @@ public class StorageHealthService
                             HealthStatus = health,
                             HealthDesc = healthDesc,
                             EstHealthPercent = estHealth,
-                            Temperature = driveTemp
+                            Temperature = driveTemp,
+                            IsTemperatureEstimated = tempEstimated
                         });
                     }
                     catch { }
@@ -404,7 +409,8 @@ public class StorageHealthService
                                 HealthStatus = 0,
                                 HealthDesc = "Sağlıklı (Nominal)",
                                 EstHealthPercent = 100,
-                                Temperature = index == 0 ? 42 : 39
+                                Temperature = index == 0 ? 42 : 39,
+                                IsTemperatureEstimated = true
                             });
                         }
                         catch { }
@@ -438,7 +444,8 @@ public class StorageHealthService
                         UsedPercent = totalGB > 0 ? Math.Round((usedGB / totalGB) * 100.0, 1) : 0,
                         HealthDesc = "Sağlıklı (Kondisyon İyi)",
                         EstHealthPercent = 100,
-                        Temperature = index == 0 ? 42 : 39
+                        Temperature = index == 0 ? 42 : 39,
+                        IsTemperatureEstimated = true
                     });
                 }
             }

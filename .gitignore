@@ -30,3 +30,7 @@ debloat_backup_state.json
 thermal_health.json
 active_rgb_state.json
 battery-report.html
+
+## NitroLite crash-recovery state
+dc_eco_state.json
+active_game_session.json

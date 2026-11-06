@@ -13,11 +13,11 @@ Set-ItemProperty -Path $regPath -Name "discrete_gpu_support" -Value 1 -Type DWor
 $val = (Get-ItemProperty -Path $regPath).discrete_gpu_support
 Write-Host "  -> [BASARILI] discrete_gpu_support degeri: $val" -ForegroundColor Green
 
-# 2. Kalicilik gorevi olustur (Bilgisayar her acildiginda dGPU modunda degerin sifirlanmasini onler)
-Write-Host "`n[2/3] Kalicilik gorevi olusturuluyor (Startup MUX Guardian)..." -ForegroundColor Yellow
-$taskCmd = "powershell -WindowStyle Hidden -NoProfile -Command `"Set-ItemProperty -Path '$regPath' -Name 'discrete_gpu_support' -Value 1 -Type DWord`""
-schtasks /create /tn "AcerNitroSenseMuxRestore" /tr $taskCmd /sc onlogon /rl highest /f | Out-Null
-Write-Host "  -> [BASARILI] Baslangic gorevi tanimlandi (Reboot sonrasi da korunacak)." -ForegroundColor Green
+# 2. Kalicilik gorevi ARTIK OLUSTURULMUYOR.
+#    AcerHardwareService bu degeri acilista GetGamingMiscSetting(9) kontrolu basarisiz olursa 0'a ceker.
+#    Her oturum acilisinda en yuksek yetkiyle zorla 1 yazmak, firmware'in reddettigi bir durumu gizler.
+#    Eski surumden kalan gorevi kaldirmak icin: Remove-Mux-Logon-Task.ps1
+Write-Host "`n[2/3] Tek seferlik degisiklik; kalici gorev olusturulmadi." -ForegroundColor Yellow
 
 # 3. Quick Access servisini baslat (MUI_undefined sorununu cozer)
 Start-Service -Name "AcerQAAgentSvis" -ErrorAction SilentlyContinue

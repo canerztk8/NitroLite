@@ -1315,14 +1315,14 @@ function global:Disable-ScheduledTask {
 
     [Theory]
     [InlineData("{\"result\":\"0\"}", true)]
-    [InlineData("{\"result\":\"3\"}", true)]
+    [InlineData("{\"result\":\"3\"}", false)]
     [InlineData("{\"result\":\"99\"}", false)]
     [InlineData("{\"result\":\"1\"}", false)]
     [InlineData("{\"result\":\"error\"}", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
     [InlineData("invalid json", false)]
-    public void TestCase9_AcerAgentClient_IsSuccessResult_ValidatesOnlyZeroOrThree(string? json, bool expected)
+    public void TestCase9_AcerAgentClient_IsSuccessResult_ValidatesOnlyZero(string? json, bool expected)
     {
         bool actual = AcerAgentClient.IsSuccessResult(json);
         Assert.Equal(expected, actual);

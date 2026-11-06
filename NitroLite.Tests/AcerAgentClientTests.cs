@@ -9,6 +9,68 @@ namespace NitroLite.Tests;
 
 public class AcerAgentClientTests
 {
+    [Fact]
+    public void TryFindJsonObject_SplitsBackToBackMessagesAndSkipsNoise()
+    {
+        var bytes = Encoding.UTF8.GetBytes("\r\n{ \"Function\" : \"ADAPTOR_CHANGED\" }\n{ \"request\" : \"OPERATING_MODE\", \"result\" : \"0\", \"data\" : { \"mode\" : 4 } }");
+
+        Assert.True(AcerAgentClient.TryFindJsonObject(bytes, out int s1, out int e1));
+        Assert.Equal("{ \"Function\" : \"ADAPTOR_CHANGED\" }", Encoding.UTF8.GetString(bytes, s1, e1 - s1));
+
+        var rest = bytes.AsSpan(e1);
+        Assert.True(AcerAgentClient.TryFindJsonObject(rest, out int s2, out int e2));
+        using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(rest.Slice(s2, e2 - s2)));
+        Assert.Equal("OPERATING_MODE", doc.RootElement.GetProperty("request").GetString());
+    }
+
+    [Fact]
+    public void TryFindJsonObject_IgnoresBracesInsideStringsAndWaitsForCompletion()
+    {
+        var partial = Encoding.UTF8.GetBytes("{ \"color\" : \"#00}E5{FF\", \"data\" : { \"x\" : 1 }");
+        Assert.False(AcerAgentClient.TryFindJsonObject(partial, out _, out _));
+
+        var complete = Encoding.UTF8.GetBytes("{ \"color\" : \"#00}E5{FF\", \"data\" : { \"x\" : 1 } }");
+        Assert.True(AcerAgentClient.TryFindJsonObject(complete, out int s, out int e));
+        Assert.Equal(0, s);
+        Assert.Equal(complete.Length, e);
+    }
+
+    [Fact]
+    public void IsResponseFor_MatchesByRequestAndPublishesEventsSeparately()
+    {
+        using var client = new AcerAgentClient();
+        var received = new System.Threading.ManualResetEventSlim(false);
+        string? eventName = null;
+        client.ServiceEventReceived += (fn, _) => { eventName = fn; received.Set(); };
+
+        Assert.False(client.IsResponseFor("{\"Function\":\"PRESS_TURBO_BUTTON\",\"Parameter\":{\"status\":1}}", "OPERATING_MODE"));
+        Assert.True(received.Wait(2000));
+        Assert.Equal("PRESS_TURBO_BUTTON", eventName);
+
+        Assert.False(client.IsResponseFor("{\"request\":\"FAN_CONTROL\",\"result\":\"0\"}", "OPERATING_MODE"));
+        Assert.True(client.IsResponseFor("{\"request\":\"OPERATING_MODE\",\"result\":\"0\"}", "OPERATING_MODE"));
+    }
+
+    [Fact]
+    public void BuildFanControlParameter_UsesNitroSenseCustomFanDataFormat()
+    {
+        var json = JsonSerializer.Serialize(AcerAgentClient.BuildFanControlParameter(FanMode.Custom, 70, 150));
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        Assert.Equal(2, root.GetProperty("mode").GetInt32());
+        var fans = root.GetProperty("custom_fan_data");
+        Assert.Equal(2, fans.GetArrayLength());
+        Assert.Equal("CPU", fans[0].GetProperty("fan_name").GetString());
+        Assert.Equal(0, fans[0].GetProperty("fan_custom_auto").GetInt32());
+        Assert.Equal(70, fans[0].GetProperty("fan_custom_speed").GetInt32());
+        Assert.Equal(100, fans[1].GetProperty("fan_custom_speed").GetInt32()); // clamped to 100 %
+
+        var autoJson = JsonSerializer.Serialize(AcerAgentClient.BuildFanControlParameter(FanMode.Auto));
+        using var autoDoc = JsonDocument.Parse(autoJson);
+        Assert.Equal(0, autoDoc.RootElement.GetProperty("mode").GetInt32());
+        Assert.Equal(1, autoDoc.RootElement.GetProperty("custom_fan_data")[0].GetProperty("fan_custom_auto").GetInt32());
+    }
+
     private static bool IsValidJson(string str)
     {
         if (string.IsNullOrWhiteSpace(str)) return false;
@@ -232,9 +294,9 @@ public class AcerAgentClientTests
 
     [Theory]
     [InlineData("{\"result\": \"0\"}", true)]
-    [InlineData("{\"result\": \"3\"}", true)]
+    [InlineData("{\"result\": \"3\"}", false)]
     [InlineData("{\"result\": 0}", true)]
-    [InlineData("{\"result\": 3}", true)]
+    [InlineData("{\"result\": 3}", false)]
     [InlineData("{\"result\": \"4\"}", false)]
     [InlineData("{\"result\": 4}", false)]
     [InlineData("{\"result\": \"1\"}", false)]

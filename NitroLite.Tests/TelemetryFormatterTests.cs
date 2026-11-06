@@ -233,3 +233,22 @@ public class TelemetryFormatterTests
         Assert.Equal("0.0 GB", TelemetryFormatter.FormatDiskCapacity(0, 0));
     }
 }
+
+public class EstimatedValueLabelTests
+{
+    [Fact]
+    public void MarkEstimated_PrefixesAndSuffixesOnlyEstimatedValues()
+    {
+        Assert.Equal("~42 °C (tahmini)", NitroLite.Core.TelemetryFormatter.MarkEstimated("42 °C"));
+        Assert.Equal("42 °C", NitroLite.Core.TelemetryFormatter.MarkEstimated("42 °C", isEstimated: false));
+    }
+
+    [Theory]
+    [InlineData("-- °C")]
+    [InlineData("--.- °C")]
+    [InlineData("")]
+    public void MarkEstimated_LeavesPlaceholdersUntouched(string placeholder)
+    {
+        Assert.Equal(placeholder, NitroLite.Core.TelemetryFormatter.MarkEstimated(placeholder));
+    }
+}

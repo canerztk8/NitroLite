@@ -21,6 +21,18 @@ public class LightingConfig
     public List<string> LEDs { get; set; } = new() { "#00E5FF", "#00E5FF", "#00E5FF", "#00E5FF" };
 }
 
+/// <summary>
+/// Client for the Acer Agent Service (AASSvc / AcerAgentService.exe) loopback protocol on 127.0.0.1:46933.
+///
+/// Protocol (verified against NitroSense 5.0.1327 PSSdkAdapter and live AASSvc 1.2.2108.1):
+///   Request  = "ACER" + uint32 little-endian PacketID + UTF-8 JSON { "Function": ..., "Parameter": ... }
+///   Response = JSON { "request": &lt;Function or PacketID name&gt;, "result": "&lt;code&gt;", "data": ... }
+///   Result codes: "0" SUCCESS, "1" FAIL_TO_GET_DATA, "2" TIMEOUT, "3" WRONG_PARAMETERS;
+///   invalid parameter values have also been observed to return "4". Only "0" is success.
+///   Messages without a "request" field are unsolicited service events
+///   ({ "Function": ..., "Parameter": ... }, e.g. Turbo button or adapter changes).
+///   Responses are matched to requests by the "request" field, never by arrival order.
+/// </summary>
 public class AcerAgentClient : IDisposable
 {
     private const string Host = "127.0.0.1";
@@ -28,7 +40,7 @@ public class AcerAgentClient : IDisposable
 
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("ACER");
 
-    // Packet IDs
+    // Packet IDs (NitroSense PacketID enum)
     private const uint PacketInitialization = 0;
     private const uint PacketGetMonitorData = 10;
     private const uint PacketGetUpdatedData = 20;
@@ -36,9 +48,20 @@ public class AcerAgentClient : IDisposable
     private const uint PacketGetLightingCapability = 40;
     private const uint PacketSetDeviceData = 100;
 
+    public const string ResultSuccess = "0";
+
     private readonly SemaphoreSlim _lock = new(1, 1);
     private TcpClient? _client;
     private NetworkStream? _stream;
+
+    // Bytes received but not yet consumed (may hold events or the start of the next message).
+    private readonly MemoryStream _pending = new();
+
+    /// <summary>
+    /// Raised (on a thread-pool thread) for unsolicited AASSvc messages that carry no "request" field.
+    /// Arguments: event function name (may be empty) and its Parameter node (may be null).
+    /// </summary>
+    public event Action<string, JsonNode?>? ServiceEventReceived;
 
     public virtual bool IsConnected => _client?.Connected ?? false;
 
@@ -48,6 +71,7 @@ public class AcerAgentClient : IDisposable
         try { _client?.Dispose(); } catch { }
         _stream = null;
         _client = null;
+        _pending.SetLength(0);
     }
 
     public virtual async Task<bool> EnsureConnectedAsync()
@@ -65,7 +89,7 @@ public class AcerAgentClient : IDisposable
 
     private async Task<bool> EnsureConnectedInternalAsync()
     {
-        if (_client != null && _client.Connected)
+        if (_client != null && _client.Connected && _stream != null)
             return true;
 
         Disconnect();
@@ -76,12 +100,15 @@ public class AcerAgentClient : IDisposable
             using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             await _client.ConnectAsync(Host, Port, connectCts.Token);
             _stream = _client.GetStream();
-            _stream.ReadTimeout = 3000;
-            _stream.WriteTimeout = 3000;
 
-            // Send handshake initialization
-            var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" });
-            return initResp != null;
+            // Handshake: the service answers VERSION with result "0".
+            var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" }, "VERSION");
+            if (!IsSuccessResult(initResp))
+            {
+                Disconnect();
+                return false;
+            }
+            return true;
         }
         catch
         {
@@ -92,6 +119,9 @@ public class AcerAgentClient : IDisposable
 
     public const int MaxResponseSizeBytes = 1024 * 1024; // 1 MB upper bound to prevent unbounded memory allocation
 
+    /// <summary>
+    /// Incremental brace scanner kept for compatibility. Returns true once a complete top-level object has been seen.
+    /// </summary>
     public static bool TryScanJsonCompleteness(byte[] buffer, int offset, int length, ref int openBraceCount, ref bool inString, ref bool isEscaped, ref bool hasStartedJson)
     {
         for (int i = offset; i < offset + length; i++)
@@ -139,90 +169,217 @@ public class AcerAgentClient : IDisposable
         return false;
     }
 
-    private async Task<string?> SendRawAsync(uint packetId, object payload)
+    /// <summary>
+    /// Finds the first complete top-level JSON object in <paramref name="data"/>.
+    /// Bytes before the first '{' are treated as noise. Returns false if no complete object is present yet.
+    /// <paramref name="start"/> is the index of the opening brace, <paramref name="endExclusive"/> the index after the closing brace.
+    /// </summary>
+    public static bool TryFindJsonObject(ReadOnlySpan<byte> data, out int start, out int endExclusive)
+    {
+        start = -1;
+        endExclusive = -1;
+        int depth = 0;
+        bool inString = false;
+        bool escaped = false;
+
+        for (int i = 0; i < data.Length; i++)
+        {
+            byte b = data[i];
+            if (start < 0)
+            {
+                if (b == '{')
+                {
+                    start = i;
+                    depth = 1;
+                }
+                continue;
+            }
+
+            if (escaped) { escaped = false; continue; }
+            if (inString)
+            {
+                if (b == '\\') escaped = true;
+                else if (b == '"') inString = false;
+                continue;
+            }
+
+            if (b == '"') inString = true;
+            else if (b == '{') depth++;
+            else if (b == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    endExclusive = i + 1;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Removes and returns the next complete JSON object from the pending buffer, or null if none is complete yet.
+    /// </summary>
+    private string? TakeNextObjectFromPending()
+    {
+        if (_pending.Length == 0) return null;
+        var bytes = _pending.GetBuffer();
+        var span = new ReadOnlySpan<byte>(bytes, 0, (int)_pending.Length);
+        if (!TryFindJsonObject(span, out int start, out int end))
+        {
+            // Drop leading noise before any '{' so it cannot accumulate.
+            int brace = span.IndexOf((byte)'{');
+            if (brace < 0) _pending.SetLength(0);
+            else if (brace > 0) Compact(brace);
+            return null;
+        }
+
+        string json = Encoding.UTF8.GetString(bytes, start, end - start);
+        Compact(end);
+        return json;
+    }
+
+    private void Compact(int consumed)
+    {
+        int remaining = (int)_pending.Length - consumed;
+        if (remaining > 0)
+        {
+            var bytes = _pending.GetBuffer();
+            Buffer.BlockCopy(bytes, consumed, bytes, 0, remaining);
+        }
+        _pending.SetLength(Math.Max(0, remaining));
+        _pending.Position = _pending.Length;
+    }
+
+    /// <summary>
+    /// Classifies one decoded message. Returns true if it is the response to <paramref name="expectedRequest"/>.
+    /// Unsolicited events are published through <see cref="ServiceEventReceived"/>; stale responses are dropped.
+    /// </summary>
+    internal bool IsResponseFor(string json, string expectedRequest)
+    {
+        JsonNode? node;
+        try { node = JsonNode.Parse(json); }
+        catch { return false; }
+        if (node is not JsonObject obj) return false;
+
+        var request = obj["request"]?.ToString();
+        if (request == null)
+        {
+            var fn = obj["Function"]?.ToString() ?? string.Empty;
+            var parameter = obj["Parameter"]?.DeepClone();
+            var handler = ServiceEventReceived;
+            if (handler != null)
+            {
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try { handler(fn, parameter); } catch { }
+                });
+            }
+            return false;
+        }
+
+        return string.Equals(request, expectedRequest, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<string?> SendRawAsync(uint packetId, object payload, string expectedRequest)
     {
         if (_stream == null) return null;
 
         try
         {
-            var json = JsonSerializer.Serialize(payload);
-            var jsonBytes = Encoding.UTF8.GetBytes(json);
-            var packetIdBytes = BitConverter.GetBytes(packetId);
+            var jsonBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+            var packet = new byte[Magic.Length + 4 + jsonBytes.Length];
+            Buffer.BlockCopy(Magic, 0, packet, 0, Magic.Length);
+            BitConverter.GetBytes(packetId).CopyTo(packet, Magic.Length);
+            Buffer.BlockCopy(jsonBytes, 0, packet, Magic.Length + 4, jsonBytes.Length);
 
-            using var ms = new MemoryStream();
-            await ms.WriteAsync(Magic);
-            await ms.WriteAsync(packetIdBytes);
-            await ms.WriteAsync(jsonBytes);
-
-            var packet = ms.ToArray();
             using var ioCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
+            // Events that arrived while idle are still in the buffer; publish them before the new request.
+            string? queued;
+            while ((queued = TakeNextObjectFromPending()) != null)
+            {
+                IsResponseFor(queued, string.Empty);
+            }
 
             await _stream.WriteAsync(packet, ioCts.Token);
             await _stream.FlushAsync(ioCts.Token);
 
-            // Read response with streaming chunk reassembly, balanced brace framing, and size limits
-            using var responseMs = new MemoryStream();
             var buffer = new byte[8192];
-            int openBraces = 0;
-            bool inString = false;
-            bool isEscaped = false;
-            bool hasStarted = false;
-
             while (true)
             {
-                int read = await _stream.ReadAsync(buffer, 0, buffer.Length, ioCts.Token);
-                if (read <= 0)
+                string? message;
+                while ((message = TakeNextObjectFromPending()) != null)
                 {
-                    // Server closed or EOF before complete JSON was received
-                    Disconnect();
-                    return null;
-                }
-
-                // Check size bounding before copying
-                if (responseMs.Length + read > MaxResponseSizeBytes)
-                {
-                    // Response exceeded maximum safe limit (1 MB). Disconnect to drain socket.
-                    Disconnect();
-                    return null;
-                }
-
-                responseMs.Write(buffer, 0, read);
-
-                // Scan byte stream for balanced JSON braces without decoding to string every chunk
-                bool isComplete = TryScanJsonCompleteness(buffer, 0, read, ref openBraces, ref inString, ref isEscaped, ref hasStarted);
-
-                if (isComplete)
-                {
-                    var fullBytes = responseMs.ToArray();
-                    var candidate = Encoding.UTF8.GetString(fullBytes).Trim();
-                    if (IsValidJson(candidate))
+                    if (IsResponseFor(message, expectedRequest))
                     {
-                        return candidate;
+                        return message;
                     }
                 }
+
+                int read = await _stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ioCts.Token);
+                if (read <= 0)
+                {
+                    Disconnect();
+                    return null;
+                }
+
+                if (_pending.Length + read > MaxResponseSizeBytes)
+                {
+                    Disconnect();
+                    return null;
+                }
+
+                _pending.Position = _pending.Length;
+                _pending.Write(buffer, 0, read);
             }
         }
         catch
         {
-            // On timeout or I/O error, disconnect immediately so late bytes do not corrupt next command
+            // On timeout or I/O error, disconnect so late bytes cannot be mistaken for the next response.
             Disconnect();
             return null;
         }
     }
 
-    private static bool IsValidJson(string str)
+    private Task<string?> SendFunctionAsync(uint packetId, string function, object? parameter = null)
     {
-        if (string.IsNullOrWhiteSpace(str)) return false;
-        str = str.Trim();
-        if (!str.StartsWith("{") || !str.EndsWith("}")) return false;
+        object payload = parameter == null
+            ? new { Function = function }
+            : new { Function = function, Parameter = parameter };
+        return SendRawAsync(packetId, payload, function);
+    }
+
+    /// <summary>
+    /// Returns true only for result "0" (SUCCESS). "1"/"2"/"3"/"4" and malformed JSON are failures.
+    /// </summary>
+    public static bool IsSuccessResult(string? responseJson)
+    {
+        if (string.IsNullOrWhiteSpace(responseJson)) return false;
         try
         {
-            using var doc = JsonDocument.Parse(str);
-            return true;
+            var node = JsonNode.Parse(responseJson);
+            var resStr = node?["result"]?.ToString();
+            return resStr == ResultSuccess;
         }
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>Parses a successful response and returns its "data" node, or null on any failure.</summary>
+    private static JsonNode? GetSuccessData(string? responseJson)
+    {
+        if (!IsSuccessResult(responseJson)) return null;
+        try
+        {
+            return JsonNode.Parse(responseJson!)?["data"];
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -233,11 +390,8 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return null;
 
-            var resp = await SendRawAsync(PacketGetMonitorData, new { Function = "GET_MONITOR_DATA" });
-            if (string.IsNullOrWhiteSpace(resp)) return null;
-
-            var node = JsonNode.Parse(resp);
-            var dataNode = node?["data"];
+            var resp = await SendRawAsync(PacketGetMonitorData, new { }, "GET_MONITOR_DATA");
+            var dataNode = GetSuccessData(resp);
             if (dataNode == null) return null;
 
             return JsonSerializer.Deserialize<MonitorData>(dataNode.ToJsonString());
@@ -252,23 +406,25 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    public virtual async Task<OperatingMode> GetOperatingModeAsync()
+    /// <summary>Reads the operating mode. Returns null when the service is unreachable or rejects the query.</summary>
+    public virtual async Task<OperatingMode?> TryGetOperatingModeAsync()
     {
         await _lock.WaitAsync();
         try
         {
-            if (!await EnsureConnectedInternalAsync()) return OperatingMode.Default;
+            if (!await EnsureConnectedInternalAsync()) return null;
 
-            var resp = await SendRawAsync(PacketGetUpdatedData, new { Function = "OPERATING_MODE" });
-            if (string.IsNullOrWhiteSpace(resp)) return OperatingMode.Default;
-
-            var node = JsonNode.Parse(resp);
-            var modeVal = node?["data"]?["mode"]?.GetValue<int>() ?? 1;
-            return Enum.IsDefined(typeof(OperatingMode), modeVal) ? (OperatingMode)modeVal : OperatingMode.Default;
+            var resp = await SendFunctionAsync(PacketGetUpdatedData, "OPERATING_MODE");
+            var modeVal = GetSuccessData(resp)?["mode"]?.GetValue<int>();
+            if (modeVal.HasValue && Enum.IsDefined(typeof(OperatingMode), modeVal.Value))
+            {
+                return (OperatingMode)modeVal.Value;
+            }
+            return null;
         }
         catch
         {
-            return OperatingMode.Default;
+            return null;
         }
         finally
         {
@@ -276,24 +432,9 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    /// <summary>
-    /// Validates Acer Agent Service response JSON.
-    /// In AASSvc on Acer Nitro, result "0" or "3" indicates command acknowledgement.
-    /// Non-zero/non-three results (e.g. "99"), null, empty, or malformed JSON are treated as failures.
-    /// </summary>
-    public static bool IsSuccessResult(string? responseJson)
+    public virtual async Task<OperatingMode> GetOperatingModeAsync()
     {
-        if (string.IsNullOrWhiteSpace(responseJson)) return false;
-        try
-        {
-            var node = JsonNode.Parse(responseJson);
-            var resStr = node?["result"]?.ToString();
-            return resStr == "0" || resStr == "3";
-        }
-        catch
-        {
-            return false;
-        }
+        return await TryGetOperatingModeAsync() ?? OperatingMode.Default;
     }
 
     public virtual async Task<bool> SetOperatingModeAsync(OperatingMode mode)
@@ -302,20 +443,8 @@ public class AcerAgentClient : IDisposable
         try
         {
             if (!await EnsureConnectedInternalAsync()) return false;
-
-            var payload = new
-            {
-                Function = "OPERATING_MODE",
-                Parameter = new { mode = (int)mode }
-            };
-
-            var resp = await SendRawAsync(PacketSetDeviceData, payload);
-            if (string.IsNullOrWhiteSpace(resp)) return false;
-
-            var node = JsonNode.Parse(resp);
-            var resStr = node?["result"]?.ToString();
-            // In AASSvc on Acer Nitro, result "0" or "3" indicates command acknowledgement
-            return resStr == "0" || resStr == "3";
+            var resp = await SendFunctionAsync(PacketSetDeviceData, "OPERATING_MODE", new { mode = (int)mode });
+            return IsSuccessResult(resp);
         }
         catch
         {
@@ -334,14 +463,8 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return null;
 
-            var resp = await SendRawAsync(PacketGetUpdatedData, new { Function = "GPU_MODE" });
-            if (string.IsNullOrWhiteSpace(resp)) return null;
-
-            var node = JsonNode.Parse(resp);
-            var resStr = node?["result"]?.ToString();
-            if (resStr != null && resStr != "0" && resStr != "3") return null;
-
-            var modeVal = node?["data"]?["mode"]?.GetValue<int>();
+            var resp = await SendFunctionAsync(PacketGetUpdatedData, "GPU_MODE");
+            var modeVal = GetSuccessData(resp)?["mode"]?.GetValue<int>();
             if (modeVal.HasValue && Enum.IsDefined(typeof(GpuOperatingMode), modeVal.Value))
             {
                 return (GpuOperatingMode)modeVal.Value;
@@ -364,23 +487,40 @@ public class AcerAgentClient : IDisposable
         try
         {
             if (!await EnsureConnectedInternalAsync()) return false;
-
-            var payload = new
-            {
-                Function = "GPU_MODE",
-                Parameter = new { mode = (int)mode }
-            };
-
-            var resp = await SendRawAsync(PacketSetDeviceData, payload);
-            if (string.IsNullOrWhiteSpace(resp)) return false;
-
-            var node = JsonNode.Parse(resp);
-            var resStr = node?["result"]?.ToString();
-            return resStr == "0" || resStr == "3";
+            var resp = await SendFunctionAsync(PacketSetDeviceData, "GPU_MODE", new { mode = (int)mode });
+            return IsSuccessResult(resp);
         }
         catch
         {
             return false;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// SUPPORT_GPU_MODE: NitroSense only offers GPU mode switching when this returns data[0] == 1.
+    /// Returns true/false from the service, or null if the query failed.
+    /// </summary>
+    public virtual async Task<bool?> GetSupportGpuModeAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+
+            var resp = await SendFunctionAsync(PacketInitialization, "SUPPORT_GPU_MODE");
+            if (GetSuccessData(resp) is JsonArray arr && arr.Count > 0)
+            {
+                return arr[0]?.GetValue<int>() == 1;
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
         }
         finally
         {
@@ -395,15 +535,8 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return null;
 
-            var resp = await SendRawAsync(PacketInitialization, new { Function = "SUPPORT_GPU_MODE_CAPABILITY" });
-            if (string.IsNullOrWhiteSpace(resp)) return null;
-
-            var node = JsonNode.Parse(resp);
-            var resStr = node?["result"]?.ToString();
-            if (resStr != null && resStr != "0" && resStr != "3") return null;
-
-            var capArr = node?["data"] as JsonArray;
-            if (capArr != null && capArr.Count > 0)
+            var resp = await SendFunctionAsync(PacketInitialization, "SUPPORT_GPU_MODE_CAPABILITY");
+            if (GetSuccessData(resp) is JsonArray capArr && capArr.Count > 0)
             {
                 return capArr[0]?.GetValue<int>();
             }
@@ -419,30 +552,34 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    public virtual async Task<bool> SetFanModeAsync(FanMode mode, int cpuRpm = 0, int gpuRpm = 0)
+    /// <summary>
+    /// Builds the FAN_CONTROL parameter in the format used by NitroSense and accepted by AASSvc:
+    /// { mode, custom_fan_data: [ { fan_custom_auto, fan_custom_speed (0-100 %), fan_index, fan_name } ] }.
+    /// </summary>
+    public static object BuildFanControlParameter(FanMode mode, int cpuPercent = 50, int gpuPercent = 50)
+    {
+        int cpu = Math.Clamp(cpuPercent, 0, 100);
+        int gpu = Math.Clamp(gpuPercent, 0, 100);
+        int customAuto = mode == FanMode.Custom ? 0 : 1;
+        return new
+        {
+            mode = (int)mode,
+            custom_fan_data = new object[]
+            {
+                new { fan_custom_auto = customAuto, fan_custom_speed = cpu, fan_index = 0, fan_name = "CPU" },
+                new { fan_custom_auto = customAuto, fan_custom_speed = gpu, fan_index = 0, fan_name = "GPU" }
+            }
+        };
+    }
+
+    /// <summary>Sets fan mode. For <see cref="FanMode.Custom"/> the speeds are percentages (0-100).</summary>
+    public virtual async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = 50, int gpuPercent = 50)
     {
         await _lock.WaitAsync();
         try
         {
             if (!await EnsureConnectedInternalAsync()) return false;
-
-            int safeCpu = Math.Clamp(cpuRpm, 0, 6000);
-            int safeGpu = Math.Clamp(gpuRpm, 0, 6000);
-
-            object param = mode switch
-            {
-                FanMode.Max => new { mode = 1 },
-                FanMode.Custom => new { mode = 2, cpu_fan = safeCpu, gpu_fan = safeGpu },
-                _ => new { mode = 0 } // Auto
-            };
-
-            var payload = new
-            {
-                Function = "FAN_CONTROL",
-                Parameter = param
-            };
-
-            var resp = await SendRawAsync(PacketSetDeviceData, payload);
+            var resp = await SendFunctionAsync(PacketSetDeviceData, "FAN_CONTROL", BuildFanControlParameter(mode, cpuPercent, gpuPercent));
             return IsSuccessResult(resp);
         }
         catch
@@ -462,11 +599,8 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return null;
 
-            var resp = await SendRawAsync(PacketGetUpdatedData, new { Function = "LIGHTING" });
-            if (string.IsNullOrWhiteSpace(resp)) return null;
-
-            var node = JsonNode.Parse(resp);
-            var dataNode = node?["data"];
+            var resp = await SendFunctionAsync(PacketGetUpdatedData, "LIGHTING");
+            var dataNode = GetSuccessData(resp);
             if (dataNode == null) return null;
 
             var cfg = new LightingConfig
@@ -495,6 +629,18 @@ public class AcerAgentClient : IDisposable
         }
     }
 
+    private static string NormalizeHexColor(string? color, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return fallback;
+        var hex = color.Trim().TrimStart('#');
+        if (hex.Length != 6) return fallback;
+        foreach (var ch in hex)
+        {
+            if (!Uri.IsHexDigit(ch)) return fallback;
+        }
+        return "#" + hex.ToUpperInvariant();
+    }
+
     public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors)
     {
         await _lock.WaitAsync();
@@ -502,22 +648,34 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return false;
 
-            var effUpper = effect.ToUpperInvariant();
+            var effUpper = (effect ?? "STATIC").ToUpperInvariant();
             var isOff = effUpper == "OFF" || brightness <= 0;
             var isStatic = effUpper == "STATIC" || isOff;
-            var leds = isOff 
-                ? new[] { "#000000", "#000000", "#000000", "#000000" } 
-                : (zoneColors ?? new[] { primaryColor, primaryColor, primaryColor, primaryColor });
+
+            var safePrimary = NormalizeHexColor(primaryColor, "#00E5FF");
+            string[] leds;
+            if (isOff)
+            {
+                leds = new[] { "#000000", "#000000", "#000000", "#000000" };
+            }
+            else
+            {
+                leds = new string[4];
+                for (int i = 0; i < 4; i++)
+                {
+                    var source = zoneColors != null && i < zoneColors.Length ? zoneColors[i] : safePrimary;
+                    leds[i] = NormalizeHexColor(source, safePrimary);
+                }
+            }
 
             var actualBrightness = isOff ? 0 : Math.Clamp(brightness, 0, 9);
-            var actualColor = isOff ? "#000000" : primaryColor;
+            var actualColor = isOff ? "#000000" : safePrimary;
             var actualEffect = isOff ? "OFF" : effUpper;
 
-            // Global device (device = 0) is the master lighting target
-            object paramGlobal = (isStatic || isOff)
+            object BuildParam(int device) => isStatic
                 ? new
                 {
-                    device = 0,
+                    device,
                     effect = actualEffect,
                     brightness = actualBrightness,
                     speed = Math.Clamp(speed, 1, 9),
@@ -528,7 +686,7 @@ public class AcerAgentClient : IDisposable
                 }
                 : new
                 {
-                    device = 0,
+                    device,
                     effect = actualEffect,
                     dyEffect = actualEffect,
                     brightness = actualBrightness,
@@ -539,37 +697,12 @@ public class AcerAgentClient : IDisposable
                     LEDs = leds
                 };
 
-            var respGlobal = await SendRawAsync(PacketSetDeviceData, new { Function = "LIGHTING", Parameter = paramGlobal });
-            bool globalSuccess = !string.IsNullOrWhiteSpace(respGlobal) && IsSuccessResult(respGlobal);
+            // Global device (device = 0) is the master lighting target; device = 1 is the keyboard sub-device.
+            var respGlobal = await SendFunctionAsync(PacketSetDeviceData, "LIGHTING", BuildParam(0));
+            bool globalSuccess = IsSuccessResult(respGlobal);
 
-            // Also synchronize with Keyboard device (device = 1) for dynamic / multi-device models
-            object paramKb = (isStatic || isOff)
-                ? new
-                {
-                    device = 1,
-                    effect = actualEffect,
-                    brightness = actualBrightness,
-                    speed = Math.Clamp(speed, 1, 9),
-                    duration = 5,
-                    direction = Math.Clamp(direction, 0, 1),
-                    color = actualColor,
-                    LEDs = leds
-                }
-                : new
-                {
-                    device = 1,
-                    effect = actualEffect,
-                    dyEffect = actualEffect,
-                    brightness = actualBrightness,
-                    speed = Math.Clamp(speed, 1, 9),
-                    duration = 5,
-                    direction = Math.Clamp(direction, 0, 1),
-                    color = actualColor,
-                    LEDs = leds
-                };
-
-            var respKb = await SendRawAsync(PacketSetDeviceData, new { Function = "LIGHTING", Parameter = paramKb });
-            bool kbSuccess = !string.IsNullOrWhiteSpace(respKb) && IsSuccessResult(respKb);
+            var respKb = await SendFunctionAsync(PacketSetDeviceData, "LIGHTING", BuildParam(1));
+            bool kbSuccess = IsSuccessResult(respKb);
 
             return globalSuccess || kbSuccess;
         }
@@ -594,14 +727,7 @@ public class AcerAgentClient : IDisposable
         try
         {
             if (!await EnsureConnectedInternalAsync()) return false;
-
-            var payload = new
-            {
-                Function = "BACKLIGHT_30S",
-                Parameter = new { status = enable30s ? 1 : 0 }
-            };
-
-            var resp = await SendRawAsync(PacketSetDeviceData, payload);
+            var resp = await SendFunctionAsync(PacketSetDeviceData, "BACKLIGHT_30S", new { status = enable30s ? 1 : 0 });
             return IsSuccessResult(resp);
         }
         catch
@@ -614,9 +740,26 @@ public class AcerAgentClient : IDisposable
         }
     }
 
+    private int _disposed;
+
     public void Dispose()
     {
-        Disconnect();
-        _lock.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        // Wait briefly for an in-flight request so the semaphore is not disposed underneath it.
+        bool acquired = false;
+        try { acquired = _lock.Wait(TimeSpan.FromSeconds(4)); } catch { }
+        try
+        {
+            Disconnect();
+            _pending.Dispose();
+        }
+        finally
+        {
+            if (acquired)
+            {
+                try { _lock.Release(); } catch { }
+            }
+        }
     }
 }

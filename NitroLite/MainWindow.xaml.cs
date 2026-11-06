@@ -119,6 +119,7 @@ public partial class MainWindow : Window
     private static readonly string AppSettingsConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
     private static readonly string LegacyConfigFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
     private static readonly string GameSessionRecoveryFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "active_game_session.json");
+    private static readonly string DcEcoStateFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dc_eco_state.json");
 
     internal void SaveGameSessionRecoveryState(GameSessionRecoveryState state)
     {
@@ -375,6 +376,7 @@ public partial class MainWindow : Window
 
         // AC/DC Power & Display Automation
         _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: true, transitionLock: _gameProfileTransitionLock);
+        _powerAutomationService.EcoStateFilePath = DcEcoStateFile;
         _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
         _powerAutomationService.GetCurrentCpuBoost = () => _isGameSessionActive ? _savedCpuBoostBeforeGame : _cpuPowerService.CurrentMode;
         _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
@@ -566,7 +568,13 @@ public partial class MainWindow : Window
             RefreshThermalHealthUi();
             await RefreshStorageHealthUi();
 
-            await _powerAutomationService!.EvaluatePowerStateAsync();
+            // Eco baseline left behind by a crash or exit on battery: load it so the evaluation below
+            // restores the desktop settings when running on the adapter.
+            if (_powerAutomationService!.RestorePersistedEcoState())
+            {
+                System.Diagnostics.Trace.WriteLine("Recovered persisted battery Eco baseline.");
+            }
+            await _powerAutomationService.EvaluatePowerStateAsync();
 
             // 7. Debloat & NitroSense Suppression check
             _debloatService.DisableNitroSenseBackgroundExecution();
@@ -1336,6 +1344,28 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Restores CPU boost after a game. On battery Eco the game's value is replaced by the desktop baseline on the
+    /// AC power-plan value and by Disabled on the DC value only, so the adapter never inherits the Eco limit.
+    /// </summary>
+    private async Task<bool> ApplyRestoreBoostAsync(CpuBoostMode target, bool isBatteryEco)
+    {
+        if (!isBatteryEco)
+        {
+            return await ApplyCpuBoostModeAsync(target);
+        }
+
+        bool acOk = await _cpuPowerService.SetBoostModeAsync(_savedCpuBoostBeforeGame, targetAc: true, targetDc: false);
+        bool dcOk = await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true);
+        if (acOk && dcOk)
+        {
+            UpdateBoostUi(_cpuPowerService.CurrentMode);
+            return true;
+        }
+        ShowToast("CPU boost modu geri yüklenemedi.", false);
+        return false;
+    }
+
     private async Task<bool> ApplyCpuBoostModeAsync(CpuBoostMode mode)
     {
         var ok = await _cpuPowerService.SetBoostModeAsync(mode);
@@ -1357,6 +1387,7 @@ public partial class MainWindow : Window
     // ==========================================
 
     private int? _supportedGpuCapability;
+    private bool? _gpuModeSwitchSupported;
 
     public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)
     {
@@ -1364,16 +1395,45 @@ public partial class MainWindow : Window
         return (capabilityBitmask & mask) != 0;
     }
 
+    /// <summary>
+    /// Mirrors NitroSense: GPU mode switching is offered only when AASSvc answers SUPPORT_GPU_MODE with data[0] == 1
+    /// AND reports a capability bitmask that contains the target mode. Unknown answers never allow a switch.
+    /// </summary>
+    public static bool CanSwitchGpuMode(bool? serviceSupportsGpuMode, int? capabilityBitmask, GpuOperatingMode target)
+    {
+        return serviceSupportsGpuMode == true
+            && capabilityBitmask.HasValue
+            && capabilityBitmask.Value > 0
+            && IsGpuModeSupported(capabilityBitmask.Value, target);
+    }
+
+    private void SetGpuModeControlsEnabled(bool enabled, string? note)
+    {
+        if (CmbGpuMode != null) CmbGpuMode.IsEnabled = enabled;
+        if (BtnApplyGpuMode != null) BtnApplyGpuMode.IsEnabled = enabled;
+        if (TxtGpuModeNote != null)
+        {
+            TxtGpuModeNote.Text = note ?? string.Empty;
+            TxtGpuModeNote.Visibility = string.IsNullOrEmpty(note) ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
     public async Task RefreshGpuModeAsync()
     {
         try
         {
+            var support = await _agentClient.GetSupportGpuModeAsync();
+            _gpuModeSwitchSupported = support;
             var cap = await _agentClient.GetGpuModeCapabilityAsync();
             _supportedGpuCapability = cap;
 
-            if (cap.HasValue && cap.Value > 0 && CmbGpuMode != null)
+            if (CmbGpuMode != null)
             {
                 CmbGpuMode.Items.Clear();
+            }
+
+            if (support == true && cap.HasValue && cap.Value > 0 && CmbGpuMode != null)
+            {
 
                 // Bit 2 (4): Dynamic Display Switch (DDS / Advanced Optimus)
                 if (IsGpuModeSupported(cap.Value, GpuOperatingMode.Automatic))
@@ -1425,10 +1485,27 @@ public partial class MainWindow : Window
             {
                 CmbGpuMode.SelectedIndex = 0;
             }
+
+            if (support == true && cap.HasValue && cap.Value > 0 && CmbGpuMode?.Items.Count > 0)
+            {
+                SetGpuModeControlsEnabled(true, null);
+            }
+            else if (support == false)
+            {
+                SetGpuModeControlsEnabled(false,
+                    "Acer servisi bu cihazda GPU modu değiştirmeyi şu an desteklenmiyor olarak bildiriyor (NitroSense de bu durumda seçeneği gizler). Modu BIOS'tan (F2 > Display Mode) değiştirebilirsiniz.");
+            }
+            else
+            {
+                SetGpuModeControlsEnabled(false,
+                    "GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı.");
+            }
         }
         catch (Exception ex)
         {
             _currentGpuMode = null;
+            _gpuModeSwitchSupported = null;
+            SetGpuModeControlsEnabled(false, "GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı.");
             if (TxtGpuModeBadge != null)
             {
                 TxtGpuModeBadge.Text = "Bilinmiyor";
@@ -1492,9 +1569,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_supportedGpuCapability.HasValue && _supportedGpuCapability.Value > 0 && !IsGpuModeSupported(_supportedGpuCapability.Value, targetMode))
+        if (!CanSwitchGpuMode(_gpuModeSwitchSupported, _supportedGpuCapability, targetMode))
         {
-            ShowToast("Seçilen GPU modu donanımınız tarafından desteklenmiyor.", false);
+            ShowToast("Seçilen GPU modu Acer servisi tarafından desteklenmiyor veya destek doğrulanamadı.", false);
             return;
         }
 
@@ -2412,7 +2489,7 @@ public partial class MainWindow : Window
                             if (endGen != _gameSessionGeneration) return;
                             if (_pendingCpuBoostRestore)
                             {
-                                bool boostOk = await ApplyCpuBoostModeAsync(targetRestoreBoost);
+                                bool boostOk = await ApplyRestoreBoostAsync(targetRestoreBoost, isBatteryEco);
                                 if (endGen != _gameSessionGeneration) return;
                                 if (boostOk)
                                 {
@@ -2635,7 +2712,7 @@ public partial class MainWindow : Window
                 if (_pendingCpuBoostRestore)
                 {
                     if (_isGameSessionActive || retryGen != _gameSessionGeneration) return false;
-                    bool ok = await ApplyCpuBoostModeAsync(targets.Boost);
+                    bool ok = await ApplyRestoreBoostAsync(targets.Boost, targets.IsEco);
                     if (ok)
                     {
                         _pendingCpuBoostRestore = false;
@@ -2918,20 +2995,27 @@ public partial class MainWindow : Window
         var details = await _batteryService.GetBatteryHealthDetailsAsync();
         Dispatcher.Invoke(() =>
         {
+            // Values computed from a fixed factory capacity, and the hard-coded fallbacks used when Windows
+            // reports nothing, are shown as estimates.
+            bool measured = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0;
+            bool wearEstimated = !measured || details.IsDesignCapacityEstimated;
+
             if (TxtBatHealthPercent != null)
-                TxtBatHealthPercent.Text = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0 ? $"{details.HealthPercent:F1} %" : "92.3 %";
+                TxtBatHealthPercent.Text = TelemetryFormatter.MarkEstimated(measured ? $"{details.HealthPercent:F1} %" : "92.3 %", wearEstimated);
 
             if (TxtBatWearPercent != null)
-                TxtBatWearPercent.Text = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0 ? $"{details.WearLevelPercent:F1} %" : "7.7 %";
+                TxtBatWearPercent.Text = TelemetryFormatter.MarkEstimated(measured ? $"{details.WearLevelPercent:F1} %" : "7.7 %", wearEstimated);
 
             if (TxtBatFullChargeCap != null)
-                TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0 ? $"{details.FullChargeCapacityMWh:N0} mWh" : "83.637 mWh";
+                TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0 ? $"{details.FullChargeCapacityMWh:N0} mWh" : TelemetryFormatter.MarkEstimated("83.637 mWh");
 
             if (TxtBatDesignCap != null)
-                TxtBatDesignCap.Text = details.DesignCapacityMWh > 0 ? $"Fabrika: {details.DesignCapacityMWh:N0} mWh" : "Fabrika: 90.614 mWh";
+                TxtBatDesignCap.Text = details.DesignCapacityMWh > 0
+                    ? "Fabrika: " + TelemetryFormatter.MarkEstimated($"{details.DesignCapacityMWh:N0} mWh", details.IsDesignCapacityEstimated)
+                    : "Fabrika: " + TelemetryFormatter.MarkEstimated("90.614 mWh");
 
             if (TxtBatVoltage != null)
-                TxtBatVoltage.Text = details.VoltageVolts > 0 ? $"{details.VoltageVolts:F2} V" : "16.45 V";
+                TxtBatVoltage.Text = details.VoltageVolts > 0 ? $"{details.VoltageVolts:F2} V" : TelemetryFormatter.MarkEstimated("16.45 V");
         });
     }
 
@@ -2987,11 +3071,11 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive0Temp != null)
                 {
-                    TxtDrive0Temp.Text = TelemetryFormatter.FormatTemperature(d0.Temperature);
+                    TxtDrive0Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d0.Temperature), d0.IsTemperatureEstimated);
                 }
                 if (TxtSubSsd1Temp != null)
                 {
-                    TxtSubSsd1Temp.Text = TelemetryFormatter.FormatTemperature(d0.Temperature);
+                    TxtSubSsd1Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d0.Temperature), d0.IsTemperatureEstimated);
                 }
             }
             else
@@ -3028,11 +3112,11 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive1Temp != null)
                 {
-                    TxtDrive1Temp.Text = TelemetryFormatter.FormatTemperature(d1.Temperature);
+                    TxtDrive1Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d1.Temperature), d1.IsTemperatureEstimated);
                 }
                 if (TxtSubSsd2Temp != null)
                 {
-                    TxtSubSsd2Temp.Text = TelemetryFormatter.FormatTemperature(d1.Temperature);
+                    TxtSubSsd2Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d1.Temperature), d1.IsTemperatureEstimated);
                 }
             }
             else
@@ -3061,15 +3145,17 @@ public partial class MainWindow : Window
             // 14 / 30 Day Thermal Stability Trend UI
             if (TxtStabilityScore != null)
             {
-                TxtStabilityScore.Text = TelemetryFormatter.FormatStabilityScore(trend.StabilityScorePercent);
+                TxtStabilityScore.Text = "~" + TelemetryFormatter.FormatStabilityScore(trend.StabilityScorePercent);
                 TxtStabilityScore.Foreground = (SolidColorBrush)FindResource(
                     trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
                     (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
             }
 
+            // Thermal resistance uses the estimated CPU power (no package power sensor), so every value
+            // derived from it in this card is shown as an estimate.
             if (TxtStabilityStatus != null)
             {
-                TxtStabilityStatus.Text = trend.StatusText;
+                TxtStabilityStatus.Text = "Tahmini: " + trend.StatusText;
             }
 
             if (TxtStabilitySlope != null)
@@ -3080,8 +3166,8 @@ public partial class MainWindow : Window
 
             if (TxtStabilityBadge != null)
             {
-                TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? "Nominal" :
-                    (trend.StatusLevel == ThermalStatusLevel.Good ? "Kararlı" : "Bakım Gerekli");
+                TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? "Nominal (tahmini)" :
+                    (trend.StatusLevel == ThermalStatusLevel.Good ? "Kararlı (tahmini)" : "Bakım Önerilebilir (tahmini)");
                 TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource(
                     trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
                     (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
@@ -3097,14 +3183,14 @@ public partial class MainWindow : Window
 
             if (TxtPasteHealthPercent != null)
             {
-                TxtPasteHealthPercent.Text = $"{report.PasteHealthPercent:F1} %";
+                TxtPasteHealthPercent.Text = $"~{report.PasteHealthPercent:F1} %";
                 TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
 
             if (TxtThermalResistance != null)
             {
                 string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? " (Normal)" : " (Yüksek)");
-                TxtThermalResistance.Text = $"Direnç: {report.ThermalResistanceRatio:F2} °C/W{tag}";
+                TxtThermalResistance.Text = $"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}";
             }
 
             if (TxtActiveFanHours != null)
@@ -3117,20 +3203,21 @@ public partial class MainWindow : Window
                 TxtPassiveFanHours.Text = $"{report.PassiveFanHours:F1} Saat";
 
             if (TxtFanBearingHealth != null)
-                TxtFanBearingHealth.Text = $"{report.FanBearingHealthPercent:F1} %";
+                TxtFanBearingHealth.Text = $"~{report.FanBearingHealthPercent:F1} %";
 
             if (TxtThermalBadge != null)
             {
-                TxtThermalBadge.Text = report.PasteHealthStatus;
+                TxtThermalBadge.Text = "Tahmini: " + report.PasteHealthStatus;
                 TxtThermalBadge.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
 
             if (TxtThermalRecommendation != null)
-                TxtThermalRecommendation.Text = report.Recommendation;
+                TxtThermalRecommendation.Text = report.Recommendation +
+                    " Not: Bu değerlendirme tahminidir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.";
 
             if (TxtSubMoboTemp != null && (string.IsNullOrEmpty(TxtSubMoboTemp.Text) || TxtSubMoboTemp.Text == "-- °C"))
             {
-                TxtSubMoboTemp.Text = "48 °C";
+                TxtSubMoboTemp.Text = TelemetryFormatter.MarkEstimated("48 °C");
             }
         });
     }
@@ -3158,7 +3245,7 @@ public partial class MainWindow : Window
             // Live Battery Sub-Component Matrix Temperature
             if (TxtSubBatteryTemp != null)
             {
-                TxtSubBatteryTemp.Text = TelemetryFormatter.FormatDetailedTemperature(status.TemperatureCelsius);
+                TxtSubBatteryTemp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatDetailedTemperature(status.TemperatureCelsius), status.IsTemperatureEstimated);
             }
 
             TxtBatteryHeader.Text = $"{status.BatteryPercent}%";
@@ -3406,6 +3493,12 @@ public partial class MainWindow : Window
                     ShowToast("Ayarlar geri yüklenemedi; yeniden deneyebilmeniz için uygulama açık bırakıldı.", false);
                     return;
                 }
+            }
+
+            // Leave no battery Eco changes behind. If this fails, the persisted Eco state is restored on next start.
+            if (_powerAutomationService != null && !await _powerAutomationService.RevertEcoForExitAsync())
+            {
+                System.Diagnostics.Trace.WriteLine("Eco revert on exit incomplete; persisted state will be restored next start.");
             }
             FinishExit();
         }

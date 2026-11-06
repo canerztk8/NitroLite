@@ -254,13 +254,13 @@ public class RemainingFindingsRegressionTests
 
     [Theory]
     [InlineData("{\"result\": \"0\"}", true)]
-    [InlineData("{\"result\": \"3\"}", true)]
+    [InlineData("{\"result\": \"3\"}", false)]
     [InlineData("{\"result\": \"99\"}", false)]
     [InlineData("{\"result\": \"1\"}", false)]
     [InlineData("{\"error\": \"fail\"}", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
-    public void Finding3_AcerAgentClient_IsSuccessResult_RejectsErrorAndAccepts0And3(string? responseJson, bool expectedSuccess)
+    public void Finding3_AcerAgentClient_IsSuccessResult_RejectsErrorAndAcceptsOnly0(string? responseJson, bool expectedSuccess)
     {
         bool actual = AcerAgentClient.IsSuccessResult(responseJson);
         Assert.Equal(expectedSuccess, actual);

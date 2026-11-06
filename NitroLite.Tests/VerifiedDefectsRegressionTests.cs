@@ -694,6 +694,12 @@ public class VerifiedDefectsRegressionTests
     [InlineData("{\"result\": \"-1\"}")]
     [InlineData("{\"result\": \"ERROR\"}")]
     [InlineData("{\"result\": \"failed\"}")]
+    // AASSvc RETURN_CODE 3 = WRONG_PARAMETERS (NitroSense enum, confirmed live with an unknown function)
+    [InlineData("{\"result\": \"3\"}")]
+    [InlineData("{\"result\": 3}")]
+    [InlineData("{\"result\": \"3\", \"data\": {\"mode\": 1}}")]
+    // Observed live for an out-of-range OPERATING_MODE value
+    [InlineData("{\"result\": \"4\"}")]
     public void Defect6_AcerAgentClient_IsSuccessResult_TreatsResult99AndErrorCodesAsFalse(string responseJson)
     {
         bool success = AcerAgentClient.IsSuccessResult(responseJson);
@@ -702,12 +708,9 @@ public class VerifiedDefectsRegressionTests
 
     [Theory]
     [InlineData("{\"result\": \"0\"}")]
-    [InlineData("{\"result\": \"3\"}")]
     [InlineData("{\"result\": 0}")]
-    [InlineData("{\"result\": 3}")]
     [InlineData("{\"result\": \"0\", \"data\": {\"status\": \"ok\"}}")]
-    [InlineData("{\"result\": \"3\", \"data\": {\"mode\": 1}}")]
-    public void Defect6_AcerAgentClient_IsSuccessResult_ReturnsTrueOnlyFor0And3(string responseJson)
+    public void Defect6_AcerAgentClient_IsSuccessResult_ReturnsTrueOnlyFor0(string responseJson)
     {
         bool success = AcerAgentClient.IsSuccessResult(responseJson);
         Assert.True(success, $"Response '{responseJson}' should be recognized as success.");

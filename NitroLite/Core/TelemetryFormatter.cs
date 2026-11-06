@@ -8,6 +8,18 @@ namespace NitroLite.Core;
 /// </summary>
 public static class TelemetryFormatter
 {
+    public const string EstimatedSuffix = " (tahmini)";
+
+    /// <summary>
+    /// Marks a value that comes from a model or a fixed baseline instead of a sensor reading.
+    /// Empty and placeholder ("--") texts are returned unchanged.
+    /// </summary>
+    public static string MarkEstimated(string text, bool isEstimated = true)
+    {
+        if (!isEstimated || string.IsNullOrWhiteSpace(text) || text.Contains("--")) return text;
+        return "~" + text + EstimatedSuffix;
+    }
+
     private static readonly CultureInfo TrCulture = new("tr-TR");
 
     /// <summary>

@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Timers;
 using Microsoft.Win32;
@@ -16,6 +18,20 @@ public class PowerTransitionEventArgs : EventArgs
     public CpuBoostMode VerifiedBoost { get; init; }
     public bool FanApplied { get; init; }
     public FanMode VerifiedFan { get; init; }
+}
+
+/// <summary>
+/// Persisted snapshot of the AC desktop baseline while battery Eco is active, so a crash or forced exit on battery
+/// can be undone on the next start.
+/// </summary>
+public class DcEcoRecoveryState
+{
+    public bool IsDcEcoActive { get; set; }
+    public OperatingMode SavedMode { get; set; } = OperatingMode.Default;
+    public CpuBoostMode SavedBoost { get; set; } = CpuBoostMode.Aggressive;
+    public FanMode SavedFan { get; set; } = FanMode.Auto;
+    public CpuBoostMode? SavedDcBoost { get; set; }
+    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>
@@ -67,6 +83,71 @@ public class PowerAutomationService : IDisposable
     private OperatingMode _savedOperatingModeBeforeDc = OperatingMode.Default;
     private CpuBoostMode _savedCpuBoostBeforeDc = CpuBoostMode.Aggressive;
     private FanMode _savedFanModeBeforeDc = FanMode.Auto;
+    // The power plan's battery (DC) boost value before Eco replaced it. Eco only writes the DC value,
+    // so the AC value is never touched and a crash on battery cannot cost performance on the adapter.
+    private CpuBoostMode? _savedDcBoostBeforeEco;
+
+    /// <summary>
+    /// Optional file used to persist the Eco baseline. Null disables persistence (unit tests).
+    /// </summary>
+    public string? EcoStateFilePath { get; set; }
+
+    internal void PersistEcoState()
+    {
+        var path = EcoStateFilePath;
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            if (!_isDcEcoActive && !HasPendingAcRestore)
+            {
+                if (File.Exists(path)) File.Delete(path);
+                return;
+            }
+
+            var state = new DcEcoRecoveryState
+            {
+                IsDcEcoActive = true,
+                SavedMode = _savedOperatingModeBeforeDc,
+                SavedBoost = _savedCpuBoostBeforeDc,
+                SavedFan = _savedFanModeBeforeDc,
+                SavedDcBoost = _savedDcBoostBeforeEco,
+                TimestampUtc = DateTime.UtcNow
+            };
+            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Loads a persisted Eco baseline (left behind by a crash or exit on battery) so the next
+    /// <see cref="EvaluatePowerStateAsync"/> on AC restores the desktop settings. Returns true if one was loaded.
+    /// </summary>
+    public bool RestorePersistedEcoState()
+    {
+        var path = EcoStateFilePath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
+        try
+        {
+            var state = JsonSerializer.Deserialize<DcEcoRecoveryState>(File.ReadAllText(path));
+            if (state == null || !state.IsDcEcoActive) return false;
+            lock (_stateSyncLock)
+            {
+                _savedOperatingModeBeforeDc = state.SavedMode;
+                _savedCpuBoostBeforeDc = state.SavedBoost;
+                _savedFanModeBeforeDc = state.SavedFan;
+                _savedDcBoostBeforeEco = state.SavedDcBoost;
+                _isDcEcoActive = true;
+            }
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public bool IsDcEcoActive => _isDcEcoActive;
     public bool HasPendingAcRestore => _pendingAcModeRestore || _pendingAcCpuRestore || _pendingAcFanRestore;
@@ -104,6 +185,7 @@ public class PowerAutomationService : IDisposable
             _savedCpuBoostBeforeDc = boost;
             _savedFanModeBeforeDc = fan;
         }
+        PersistEcoState();
     }
 
     public void SetDcEcoActive(bool active)
@@ -112,6 +194,7 @@ public class PowerAutomationService : IDisposable
         {
             _isDcEcoActive = active;
         }
+        PersistEcoState();
     }
 
     public void UpdateManualOperatingMode(OperatingMode mode)
@@ -125,6 +208,7 @@ public class PowerAutomationService : IDisposable
                 _isDcEcoActive = false;
             }
         }
+        PersistEcoState();
     }
 
     public void UpdateManualCpuBoost(CpuBoostMode boost)
@@ -138,6 +222,7 @@ public class PowerAutomationService : IDisposable
                 _isDcEcoActive = false;
             }
         }
+        PersistEcoState();
     }
 
     public void UpdateManualFanMode(FanMode fan)
@@ -151,6 +236,7 @@ public class PowerAutomationService : IDisposable
                 _isDcEcoActive = false;
             }
         }
+        PersistEcoState();
     }
 
     public event Action<PowerTransitionEventArgs>? PowerModeSwitched;
@@ -253,8 +339,11 @@ public class PowerAutomationService : IDisposable
                         _savedOperatingModeBeforeDc = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default;
                         _savedCpuBoostBeforeDc = GetCurrentCpuBoost?.Invoke() ?? _cpuPowerService.CurrentMode;
                         _savedFanModeBeforeDc = GetCurrentFanMode?.Invoke() ?? FanMode.Auto;
+                        try { _savedDcBoostBeforeEco = _cpuPowerService.QueryBoostModeExact(false); }
+                        catch { _savedDcBoostBeforeEco = null; }
                     }
                     _isDcEcoActive = true;
+                    PersistEcoState();
 
                     bool modeOk = false;
                     try
@@ -266,7 +355,8 @@ public class PowerAutomationService : IDisposable
                     bool boostOk = false;
                     try
                     {
-                        boostOk = await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled);
+                        // Battery (DC) power plan value only: the AC value stays untouched.
+                        boostOk = await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true);
                     }
                     catch { boostOk = false; }
 
@@ -358,11 +448,16 @@ public class PowerAutomationService : IDisposable
                     {
                         try
                         {
-                            boostOk = await _cpuPowerService.SetBoostModeAsync(targetBoost);
+                            boostOk = await RestoreBoostAfterEcoAsync(isGame && activeGame != null, targetBoost);
                         }
                         catch { boostOk = false; }
                         _pendingAcCpuRestore = !boostOk;
                         if (!boostOk) failed.Add("CPU Boost");
+                        if (boostOk && !(isGame && activeGame != null))
+                        {
+                            // Eco never changed the AC value, so the active boost is whatever the plan reports now.
+                            targetBoost = _cpuPowerService.CurrentMode;
+                        }
                     }
 
                     if (_pendingAcFanRestore || _isDcEcoActive)
@@ -379,11 +474,13 @@ public class PowerAutomationService : IDisposable
                     if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
                     {
                         _isDcEcoActive = false;
+                        _savedDcBoostBeforeEco = null;
                     }
                     else
                     {
                         allRestored = false;
                     }
+                    PersistEcoState();
                 }
 
                 int targetRate = 165;
@@ -455,11 +552,13 @@ public class PowerAutomationService : IDisposable
             if (_pendingAcCpuRestore)
             {
                 bool ok = false;
-                try { ok = await _cpuPowerService.SetBoostModeAsync(targetBoost); } catch { ok = false; }
+                bool gameTarget = isGame && activeGame != null;
+                try { ok = await RestoreBoostAfterEcoAsync(gameTarget, targetBoost); } catch { ok = false; }
                 if (ok)
                 {
                     _pendingAcCpuRestore = false;
                     boostAppliedThisRun = true;
+                    if (!gameTarget) targetBoost = _cpuPowerService.CurrentMode;
                 }
             }
 
@@ -477,7 +576,9 @@ public class PowerAutomationService : IDisposable
             if (!HasPendingAcRestore)
             {
                 _isDcEcoActive = false;
+                _savedDcBoostBeforeEco = null;
             }
+            PersistEcoState();
 
             // Fire event whenever at least one command was actually sent and succeeded in this retry run,
             // even if another step remains pending (partial success). Only mark *Applied = true for
@@ -509,6 +610,58 @@ public class PowerAutomationService : IDisposable
             {
                 _transitionLock?.Release();
             }
+        }
+    }
+
+    /// <summary>
+    /// Undo Eco's CPU boost change. A running game's profile applies to both AC and DC values;
+    /// otherwise only the battery (DC) value is put back, because Eco never modified the AC value.
+    /// </summary>
+    private Task<bool> RestoreBoostAfterEcoAsync(bool applyGameProfile, CpuBoostMode targetBoost)
+    {
+        if (applyGameProfile)
+        {
+            return _cpuPowerService.SetBoostModeAsync(targetBoost);
+        }
+        var dcTarget = _savedDcBoostBeforeEco ?? _savedCpuBoostBeforeDc;
+        return _cpuPowerService.SetBoostModeAsync(dcTarget, targetAc: false, targetDc: true);
+    }
+
+    /// <summary>
+    /// Puts the desktop baseline back when the app exits while Eco is active, so nothing is left behind.
+    /// The display refresh rate is only raised when automatic switching is enabled.
+    /// </summary>
+    public async Task<bool> RevertEcoForExitAsync()
+    {
+        if (_isDisposed || (!_isDcEcoActive && !HasPendingAcRestore)) return true;
+
+        if (_transitionLock != null) await _transitionLock.WaitAsync();
+        try
+        {
+            bool modeOk = false, boostOk = false, fanOk = false;
+            try { modeOk = await _agentClient.SetOperatingModeAsync(_savedOperatingModeBeforeDc); } catch { }
+            try { boostOk = await RestoreBoostAfterEcoAsync(false, _savedCpuBoostBeforeDc); } catch { }
+            try { fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeDc); } catch { }
+
+            if (_settings.AutoRefreshRateSwitching)
+            {
+                int maxRate = _displayService.GetMaxRefreshRate();
+                if (maxRate > 60) _displayService.SetRefreshRate(maxRate);
+            }
+
+            bool ok = modeOk && boostOk && fanOk;
+            if (ok)
+            {
+                _isDcEcoActive = false;
+                _pendingAcModeRestore = _pendingAcCpuRestore = _pendingAcFanRestore = false;
+                _savedDcBoostBeforeEco = null;
+            }
+            PersistEcoState();
+            return ok;
+        }
+        finally
+        {
+            _transitionLock?.Release();
         }
     }
 

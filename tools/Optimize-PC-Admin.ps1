@@ -1,4 +1,9 @@
 # Antigravity PC Optimizer - Elevated Script for Acer Nitro 16
+#
+# UYARI / WARNING: This is a PERSONAL, machine-specific script and is not part of NitroLite.
+# It assumes Samsung 990 PRO (C:) + a second SSD (D:), Plastic SCM, Office and a stale PlanetVPN service,
+# disables SysMain, restarts audio services, purges C:\Windows\Temp and DELETES a service with sc.exe.
+# Do not run it on another computer and do not distribute it with the application.
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  Applying Elevated Performance Optimizations" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan

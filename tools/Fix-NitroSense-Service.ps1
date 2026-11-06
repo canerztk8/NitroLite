@@ -27,12 +27,11 @@ Set-Service -Name "AASSvc" -StartupType Automatic -ErrorAction SilentlyContinue
 Set-Service -Name "AcerLightingService" -StartupType Automatic -ErrorAction SilentlyContinue
 Write-Host "  -> [BASARILI] AASSvc ve AcerLightingService ImagePath ve Start (Automatic) guncellendi." -ForegroundColor Green
 
-# 3. Ensure MUX capability flags in registry
-Write-Host "`n[3/5] MUX yetenek degerleri yaziliyor..." -ForegroundColor Yellow
-$advPath = "HKLM:\SOFTWARE\OEM\AcerAgentService\AdvanceSettings"
-Set-ItemProperty -Path $advPath -Name "discrete_gpu_support" -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $advPath -Name "dgpu_mode_capability" -Value 7 -Type DWord -Force
-Write-Host "  -> [BASARILI] discrete_gpu_support = 1, dgpu_mode_capability = 7" -ForegroundColor Green
+# 3. MUX capability flags are NOT written any more.
+#    dgpu_mode_capability is reported by the hardware service itself; forcing it (and discrete_gpu_support)
+#    makes NitroSense/NitroLite offer GPU modes the firmware may reject (black screen risk).
+#    If you deliberately want the MUX option back, run Restore-Mux-Setting.ps1 once.
+Write-Host "`n[3/5] MUX yetenek degerlerine dokunulmuyor (donanim servisi belirler)." -ForegroundColor Yellow
 
 # 4. Start updated 2025 services
 Write-Host "`n[4/5] Guncel 2025 Acer servisleri baslatiliyor..." -ForegroundColor Yellow
@@ -41,11 +40,9 @@ Start-Service -Name "AcerLightingService" -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 Write-Host "  -> [BASARILI] Guncel servisler calisiyor." -ForegroundColor Green
 
-# 5. Create persistent logon task
-Write-Host "`n[5/5] Baslangic gorevi tanimlaniyor..." -ForegroundColor Yellow
-$taskCmd = "powershell -WindowStyle Hidden -NoProfile -Command `"Set-ItemProperty -Path '$advPath' -Name 'discrete_gpu_support' -Value 1 -Type DWord`""
-schtasks /create /tn "AcerNitroSenseMuxRestore" /tr $taskCmd /sc onlogon /rl highest /f | Out-Null
-Write-Host "  -> [BASARILI] Baslangic gorevi hazir." -ForegroundColor Green
+# 5. No persistent logon task is created any more (it ran with highest privileges on every logon).
+#    Remove a task left by older versions with Remove-Mux-Logon-Task.ps1.
+Write-Host "`n[5/5] Kalici baslangic gorevi olusturulmuyor." -ForegroundColor Yellow
 
 Write-Host "`n========================================================" -ForegroundColor Cyan
 Write-Host "  ISLEM BASARIYLA TAMAMLANDI!" -ForegroundColor Green

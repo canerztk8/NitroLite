@@ -110,18 +110,18 @@ public partial class App : System.Windows.Application
 
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
-            File.AppendAllText(LogFile, "Domain Exception:\n" + args.ExceptionObject + "\n\n");
+            WriteLog("Domain Exception", args.ExceptionObject?.ToString());
         };
 
         DispatcherUnhandledException += (s, args) =>
         {
-            File.AppendAllText(LogFile, "Dispatcher Exception:\n" + args.Exception + "\n\n");
+            WriteLog("Dispatcher Exception", args.Exception.ToString());
             args.Handled = false;
         };
 
         TaskScheduler.UnobservedTaskException += (s, args) =>
         {
-            File.AppendAllText(LogFile, "Task Exception:\n" + args.Exception + "\n\n");
+            WriteLog("Task Exception", args.Exception.ToString());
         };
 
         try
@@ -140,8 +140,37 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            File.AppendAllText(LogFile, "Startup Exception:\n" + ex + "\n\n");
+            // Without a window the process would stay alive (OnExplicitShutdown) holding the single-instance mutex,
+            // and every later launch would silently exit. Report and shut down instead.
+            WriteLog("Startup Exception", ex.ToString());
+            try
+            {
+                System.Windows.MessageBox.Show(
+                    "NitroLite başlatılamadı ve kapatılacak.\n\n" + ex.Message + "\n\nAyrıntılar: " + LogFile,
+                    "NitroLite", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch { }
+            Shutdown(1);
         }
+    }
+
+    private const long MaxLogBytes = 1024 * 1024;
+
+    /// <summary>
+    /// Appends to the log without ever throwing (handlers run during crashes), rotating it at 1 MB.
+    /// </summary>
+    internal static void WriteLog(string title, string? details)
+    {
+        try
+        {
+            var info = new FileInfo(LogFile);
+            if (info.Exists && info.Length > MaxLogBytes)
+            {
+                File.Move(LogFile, LogFile + ".old", overwrite: true);
+            }
+            File.AppendAllText(LogFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {title}:\n{details}\n\n");
+        }
+        catch { }
     }
 
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)

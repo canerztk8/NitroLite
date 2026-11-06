@@ -124,6 +124,8 @@ public class BatteryStatusInfo
     public double DischargeRateMilliwatts { get; set; }
     public double RemainingCapacityMWh { get; set; }
     public double SmoothedDischargeRateWatts { get; set; }
+    // True when TemperatureCelsius comes from the charge/discharge wattage model instead of a sensor.
+    public bool IsTemperatureEstimated { get; set; }
 }
 
 public class BatteryHealthDetails
@@ -136,6 +138,8 @@ public class BatteryHealthDetails
     public double VoltageVolts { get; set; } = 0;
     public string Manufacturer { get; set; } = "";
     public string ModelName { get; set; } = "";
+    // True when DesignCapacityMWh is the AN16-41 factory constant because WMI and powercfg gave no value.
+    public bool IsDesignCapacityEstimated { get; set; }
 }
 
 public class GameProfile

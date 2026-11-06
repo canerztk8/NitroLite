@@ -458,15 +458,13 @@
                                                 </Border>
                                             </StackPanel>
                                             <TextBlock Text="Ekran kartı bağlantı modu. Harici GPU doğrudan ekrana bağlanarak gecikmeyi düşürür ve maksimum FPS sağlar." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" />
+                                            <TextBlock x:Name="TxtGpuModeNote" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{StaticResource AccentRed}" FontSize="11" Margin="0,6,0,0" />
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <ComboBox x:Name="CmbGpuMode" Width="230" Margin="0,0,8,0">
-                                                <ComboBoxItem Content="Otomatik Seçim (DDS / Advanced Optimus)" Tag="Automatic" />
-                                                <ComboBoxItem Content="Optimus (Hibrit iGPU + dGPU)" Tag="Optimus" />
-                                                <ComboBoxItem Content="Yalnızca Harici GPU (NVIDIA dGPU)" Tag="DiscreteGpu" />
-                                            </ComboBox>
-                                            <Button x:Name="BtnApplyGpuMode" Content="Modu Uygula" Click="BtnApplyGpuMode_Click" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="14,7" Cursor="Hand" FontWeight="SemiBold" FontSize="11" ToolTip="Seçilen GPU modunu uygular." />
+                                            <!-- Items are filled only from the modes AASSvc reports as supported (SUPPORT_GPU_MODE_CAPABILITY). -->
+                                            <ComboBox x:Name="CmbGpuMode" Width="230" Margin="0,0,8,0" IsEnabled="False" />
+                                            <Button x:Name="BtnApplyGpuMode" IsEnabled="False" Content="Modu Uygula" Click="BtnApplyGpuMode_Click" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="14,7" Cursor="Hand" FontWeight="SemiBold" FontSize="11" ToolTip="Seçilen GPU modunu uygular." />
                                         </StackPanel>
                                     </Grid>
                                 </Border>

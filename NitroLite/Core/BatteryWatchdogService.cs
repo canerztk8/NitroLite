@@ -219,6 +219,7 @@ public class BatteryWatchdogService : IDisposable
             // Thermodynamic wattage model (~29.5°C baseline for Acer Nitro 16 90.6Wh battery)
             double wattageHeat = (info.IsCharging ? info.ChargeRateWatts : info.DischargeRateWatts) * 0.08;
             info.TemperatureCelsius = Math.Round(Math.Clamp(28.5 + wattageHeat, 26.0, 42.0), 1);
+            info.IsTemperatureEstimated = true;
         }
 
         CurrentStatus = info;
@@ -288,7 +289,8 @@ public class BatteryWatchdogService : IDisposable
             // 4. Fallback for DesignCapacity if WMI BatteryStaticData failed (Win11 AMD ACPI 0x80041001)
             if (details.DesignCapacityMWh <= 0)
             {
-                details.DesignCapacityMWh = QueryDesignCapacityFromSystem();
+                details.DesignCapacityMWh = QueryDesignCapacityFromSystem(out bool designEstimated);
+                details.IsDesignCapacityEstimated = designEstimated;
             }
 
             // 5. Fallback for Voltage if BatteryStatus WMI was empty
@@ -332,8 +334,9 @@ public class BatteryWatchdogService : IDisposable
         });
     }
 
-    private static double QueryDesignCapacityFromSystem()
+    private static double QueryDesignCapacityFromSystem(out bool isEstimated)
     {
+        isEstimated = false;
         try
         {
             var tempXml = Path.Combine(Path.GetTempPath(), $"bat_{Guid.NewGuid():N}.xml");
@@ -369,6 +372,7 @@ public class BatteryWatchdogService : IDisposable
         catch { }
 
         // Physical hardware specification for Acer Nitro 16 AN16-41 (LGC AP21A8T 90,614 mWh)
+        isEstimated = true;
         return 90614.0;
     }
 

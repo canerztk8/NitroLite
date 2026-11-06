@@ -132,7 +132,8 @@ public partial class OsdOverlayWindow : Window
 
             // CPU
             TxtOsdCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
-            TxtOsdCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts);
+            // CPU package power is estimated from usage and clock (no sensor reading), so mark it as approximate.
+            TxtOsdCpuPower.Text = "~" + TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts);
             TxtOsdCpuFreq.Text = TelemetryFormatter.FormatCpuFrequency(data.CpuFrequencyMHz);
             TxtOsdCpuUsage.Text = $"{data.CpuUsage:F0}%";
 
