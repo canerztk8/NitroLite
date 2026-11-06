@@ -351,8 +351,8 @@
                     
                     <!-- TAB 1: MODES & FANS -->
                     <Grid x:Name="TabModes" Visibility="Visible">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="0,0,10,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                            <StackPanel>
                                 <TextBlock Text="Çalışma Modları ve Fan Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock Text="Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
 
@@ -631,8 +631,8 @@
 
                     <!-- TAB 2: LIVE MONITORING & OSD -->
                     <Grid x:Name="TabMonitoring" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="0,0,10,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                            <StackPanel>
                                 <Grid Margin="0,0,0,14">
                                     <StackPanel>
                                         <TextBlock Text="Donanım Telemetrisi ve OSD Göstergesi" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
@@ -850,8 +850,8 @@
 
                     <!-- TAB 3: KEYBOARD RGB -->
                     <Grid x:Name="TabRgb" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="0,0,10,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                            <StackPanel>
                                 <TextBlock Text="Klavye RGB Aydınlatma Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock Text="Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
 
@@ -971,8 +971,8 @@
 
                     <!-- TAB 4: BATTERY HEALTH & SAFE DISCHARGE -->
                     <Grid x:Name="TabBattery" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="0,0,10,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                            <StackPanel>
                                 <TextBlock Text="Pil Şarj Sınırı ve Güvenli Deşarj" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock Text="Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
 
@@ -1299,8 +1299,8 @@
 
                     <!-- TAB 5: DEBLOAT HUB & SETTINGS -->
                     <Grid x:Name="TabDebloat" Visibility="Collapsed">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Margin="0,0,10,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                            <StackPanel>
                                 <TextBlock Text="Sistem Servisleri ve Başlangıç Ayarları" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock Text="Gereksiz OEM telemetri servislerini devre dışı bırakın ve başlangıç davranışını yapılandırın." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
 
