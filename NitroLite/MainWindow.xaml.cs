@@ -1299,6 +1299,9 @@ public partial class MainWindow : Window
                 _ = RunAutoRamCleanAsync();
             }
 
+            // Startup mouse profile that failed because the wireless mouse was asleep.
+            RetryPendingMouseStartupIfDue();
+
             if (!isFallback)
             {
                 // Update OSD if open
@@ -2208,11 +2211,12 @@ public partial class MainWindow : Window
 
     private async Task<bool> SwitchMouseProfileInternalAsync(int targetProfile)
     {
-        if (MouseProfileSwitcher != null)
-        {
-            return await Task.Run(() => MouseProfileSwitcher(targetProfile));
-        }
-        return await Task.Run(() => _atkMouseService.SwitchProfile(targetProfile));
+        bool ok = MouseProfileSwitcher != null
+            ? await Task.Run(() => MouseProfileSwitcher(targetProfile))
+            : await Task.Run(() => _atkMouseService.SwitchProfile(targetProfile));
+        // Any confirmed switch (test button, "Uygula", a game) supersedes a pending startup retry.
+        if (ok) SetPendingMouseStartup(null);
+        return ok;
     }
 
     private async void BtnTestMouseProfile_Click(object sender, RoutedEventArgs e)
@@ -2294,19 +2298,21 @@ public partial class MainWindow : Window
                     {
                         _savedMouseProfileBeforeGame = profile;
                     }
+                    SetPendingMouseStartup(ok ? null : profile);
                     await Dispatcher.InvokeAsync(() =>
                     {
                         UpdateDefaultMouseProfileBadge(profile, confirmed: ok);
-                        UpdateSideMouseProfileStatus(ok ? profile : 0);
+                        UpdateSideMouseProfileStatus(ok ? profile : 0, waiting: !ok);
                     });
                 }
                 else
                 {
                     int? current = MouseProfileSwitcher != null ? null : await Task.Run(() => _atkMouseService.QueryCurrentProfile());
+                    SetPendingMouseStartup(current.HasValue || MouseProfileSwitcher != null ? null : 0);
                     await Dispatcher.InvokeAsync(() =>
                     {
                         UpdateDefaultMouseProfileBadge(profile);
-                        UpdateSideMouseProfileStatus(current ?? 0);
+                        UpdateSideMouseProfileStatus(current ?? 0, waiting: !current.HasValue && MouseProfileSwitcher == null);
                     });
                 }
             }
@@ -2321,19 +2327,57 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateSideMouseProfileStatus(int profile)
+    private void UpdateSideMouseProfileStatus(int profile, bool waiting = false)
     {
         if (TxtSideMouseProfile == null) return;
         if (profile >= 1 && profile <= 4)
         {
             TxtSideMouseProfile.Text = $"Config {profile}";
             TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("AccentGreen");
+            TxtSideMouseProfile.ToolTip = null;
         }
         else
         {
-            TxtSideMouseProfile.Text = "Bilinmiyor";
+            TxtSideMouseProfile.Text = waiting ? "Fare uykuda" : "Bilinmiyor";
             TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+            TxtSideMouseProfile.ToolTip = waiting
+                ? "Kablosuz fare boştayken alıcı yanıt vermez. Fareyi oynattığınızda NitroLite profili otomatik uygular (30 sn'de bir denenir)."
+                : null;
         }
+    }
+
+    // ---------------------------------------------------------------- startup mouse profile retry
+    // A wireless ATK mouse that is asleep does not answer, so the startup profile (or the read of the current one)
+    // fails. Measured on the AN16-41: asleep → no reply at all; moved → every query answered within ~15 ms.
+    // Retry from the telemetry loop until it answers instead of leaving "Ulaşılamadı" until the next restart.
+
+    private static readonly TimeSpan MouseRetryInterval = TimeSpan.FromSeconds(30);
+    private int? _pendingMouseStartupProfile;      // 1..4 = apply this profile, 0 = only read the current one
+    private DateTime _nextMouseRetry = DateTime.MaxValue;
+    private int _mouseRetryRunning;
+
+    private void SetPendingMouseStartup(int? profile)
+    {
+        _pendingMouseStartupProfile = profile;
+        _nextMouseRetry = profile.HasValue ? DateTime.Now + MouseRetryInterval : DateTime.MaxValue;
+    }
+
+    /// <summary>Called from the telemetry loop; cheap unless a retry is due.</summary>
+    private void RetryPendingMouseStartupIfDue()
+    {
+        if (_pendingMouseStartupProfile is not int profile || DateTime.Now < _nextMouseRetry) return;
+        if (!_appSettings.AtkMouseIntegrationEnabled || _isGameSessionActive)
+        {
+            if (!_appSettings.AtkMouseIntegrationEnabled) SetPendingMouseStartup(null);
+            return;
+        }
+        if (Interlocked.Exchange(ref _mouseRetryRunning, 1) != 0) return;
+        _nextMouseRetry = DateTime.Now + MouseRetryInterval;
+        _ = Task.Run(async () =>
+        {
+            try { await ApplyStartupMouseProfileAsync(profile); }
+            finally { Interlocked.Exchange(ref _mouseRetryRunning, 0); }
+        });
     }
 
     private void UpdateAtkMouseIntegrationVisibility(bool enabled)
@@ -2436,7 +2480,7 @@ public partial class MainWindow : Window
             (string suffix, string brushKey) = confirmed switch
             {
                 true => ("Aktif", "AccentGreen"),
-                false => ("Ulaşılamadı", "AccentRed"),
+                false => ("Yanıt yok: fare uykuda olabilir", "AccentRed"),
                 null => ("Uygulanıyor…", "TextSecondary")
             };
             TxtDefaultMouseProfileStatus.Text = $"Config {profile} ({suffix})";
