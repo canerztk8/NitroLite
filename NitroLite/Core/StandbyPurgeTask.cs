@@ -31,12 +31,27 @@ public class StandbyPurgeTask
     public const string TaskFolder = @"\NitroLite";
     public const string TaskName = "StandbyPurge";
     public const string HelperExeName = "NitroLite.StandbyPurge.exe";
-    public static readonly string[] HelperFiles =
+    /// <summary>
+    /// Files the helper may consist of. A normal build is framework-dependent (exe + dll + runtimeconfig, needs the
+    /// .NET runtime); the release package ships a Native AOT build that is the exe alone and needs no runtime.
+    /// </summary>
+    public static readonly string[] CandidateFiles =
     {
         "NitroLite.StandbyPurge.exe",
         "NitroLite.StandbyPurge.dll",
         "NitroLite.StandbyPurge.runtimeconfig.json"
     };
+
+    /// <summary>The helper files actually present next to NitroLite.exe (exe first); empty when the exe is missing.</summary>
+    public string[] BundledHelperFiles()
+    {
+        if (!File.Exists(Path.Combine(BundledDirectory, HelperExeName))) return Array.Empty<string>();
+        var files = CandidateFiles.Where(f => File.Exists(Path.Combine(BundledDirectory, f))).ToArray();
+        // A framework-dependent exe without its dll/runtimeconfig would not start: treat as missing.
+        bool frameworkDependent = files.Length > 1;
+        if (frameworkDependent && files.Length != CandidateFiles.Length) return Array.Empty<string>();
+        return files;
+    }
 
     public string InstallDirectory { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "NitroLite", "StandbyPurge");
@@ -59,7 +74,8 @@ public class StandbyPurgeTask
 
     public StandbyPurgeTaskState GetState()
     {
-        if (!HelperFiles.All(f => File.Exists(Path.Combine(BundledDirectory, f)))) return StandbyPurgeTaskState.Unavailable;
+        var files = BundledHelperFiles();
+        if (files.Length == 0) return StandbyPurgeTaskState.Unavailable;
 
         var task = ReadTask();
         if (task == null) return StandbyPurgeTaskState.NotInstalled;
@@ -69,18 +85,19 @@ public class StandbyPurgeTask
                       && string.Equals(Path.GetFullPath(task.ActionPath.Trim('"')), Path.GetFullPath(InstalledExePath), StringComparison.OrdinalIgnoreCase);
         if (!taskOk) return StandbyPurgeTaskState.NeedsUpdate;
 
-        var bundled = ComputeHashes(BundledDirectory);
-        var installed = ComputeHashes(InstallDirectory);
+        // Switching between a normal build and the release package changes the exe, so this also catches that.
+        var bundled = ComputeHashes(BundledDirectory, files);
+        var installed = ComputeHashes(InstallDirectory, files);
         if (bundled == null || installed == null) return StandbyPurgeTaskState.NeedsUpdate;
         return bundled.SequenceEqual(installed) ? StandbyPurgeTaskState.Ready : StandbyPurgeTaskState.NeedsUpdate;
     }
 
-    /// <summary>SHA-256 of each helper file (in <see cref="HelperFiles"/> order); null when one is missing.</summary>
-    public static string[]? ComputeHashes(string directory)
+    /// <summary>SHA-256 of each of <paramref name="files"/> in <paramref name="directory"/>; null when one is missing.</summary>
+    public static string[]? ComputeHashes(string directory, IReadOnlyList<string> files)
     {
         try
         {
-            return HelperFiles.Select(f =>
+            return files.Select(f =>
             {
                 using var s = File.OpenRead(Path.Combine(directory, f));
                 return Convert.ToHexString(SHA256.HashData(s));
@@ -169,10 +186,12 @@ public class StandbyPurgeTask
     /// Elevated script: copy the helper to Program Files, check every copied file against the hash NitroLite
     /// computed just before (the source folder is user-writable), then register the task for <paramref name="userId"/>.
     /// </summary>
-    public string GenerateInstallScript(string userId, string[] expectedHashes, string errorLogPath)
+    public string GenerateInstallScript(string userId, IReadOnlyList<string> files, string[] expectedHashes, string errorLogPath)
     {
         if (!SafeUserName.IsMatch(userId)) throw new ArgumentException($"Geçersiz kullanıcı adı: {userId}", nameof(userId));
-        if (expectedHashes.Length != HelperFiles.Length || expectedHashes.Any(h => !Regex.IsMatch(h, "^[0-9A-F]{64}$")))
+        if (files.Count == 0 || files[0] != HelperExeName || files.Any(f => !CandidateFiles.Contains(f)))
+            throw new ArgumentException("Geçersiz yardımcı dosya listesi.", nameof(files));
+        if (expectedHashes.Length != files.Count || expectedHashes.Any(h => !Regex.IsMatch(h, "^[0-9A-F]{64}$")))
             throw new ArgumentException("Geçersiz dosya özeti.", nameof(expectedHashes));
 
         var sb = new System.Text.StringBuilder();
@@ -181,9 +200,9 @@ public class StandbyPurgeTask
         sb.Append($"$src = {Quote(BundledDirectory)}; $dst = {Quote(InstallDirectory)}; ");
         sb.Append("if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction Stop }; ");
         sb.Append("New-Item -ItemType Directory -Path $dst -Force -ErrorAction Stop | Out-Null; ");
-        for (int i = 0; i < HelperFiles.Length; i++)
+        for (int i = 0; i < files.Count; i++)
         {
-            var f = Quote(HelperFiles[i]);
+            var f = Quote(files[i]);
             sb.Append($"Copy-Item -LiteralPath (Join-Path $src {f}) -Destination (Join-Path $dst {f}) -Force -ErrorAction Stop; ");
             sb.Append($"if ((Get-FileHash -LiteralPath (Join-Path $dst {f}) -Algorithm SHA256).Hash -ne '{expectedHashes[i]}') " +
                       $"{{ Remove-Item -LiteralPath $dst -Recurse -Force; throw ('Kopyalanan dosya doğrulanamadı: ' + {f}) }}; ");
@@ -219,7 +238,8 @@ public class StandbyPurgeTask
     public async Task<bool> InstallAsync()
     {
         LastError = null;
-        var hashes = ComputeHashes(BundledDirectory);
+        var files = BundledHelperFiles();
+        var hashes = files.Length == 0 ? null : ComputeHashes(BundledDirectory, files);
         if (hashes == null)
         {
             LastError = "Temizleme yardımcısı NitroLite klasöründe bulunamadı (StandbyPurge).";
@@ -231,7 +251,7 @@ public class StandbyPurgeTask
 
         var errLog = AppPaths.UniqueTempFile("nitrolite_purge_setup_err", ".log");
         string script;
-        try { script = GenerateInstallScript(userId, hashes, errLog); }
+        try { script = GenerateInstallScript(userId, files, hashes, errLog); }
         catch (Exception ex) { LastError = ex.Message; return false; }
 
         bool ok = await RunElevatedAsync(script, errLog);

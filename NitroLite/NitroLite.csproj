@@ -15,9 +15,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="app.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- Embedded (Window Icon="app.ico" resolves it as a resource), so the single-file package needs no loose file.
+         The tray icon uses the exe's own icon (ApplicationIcon) when app.ico is not on disk. -->
+    <Resource Include="app.ico" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,7 +26,10 @@
 
   <ItemGroup>
     <!-- Build order only: the helper builds itself into bin\...\StandbyPurge for the one-time setup to copy. -->
-    <ProjectReference Include="..\NitroLite.StandbyPurge\NitroLite.StandbyPurge.csproj" ReferenceOutputAssembly="false" />
+    <!-- Publish settings (runtime, self-contained, single file) must not reach the helper: the release script
+         builds it separately as a Native AOT exe (scripts/publish-release.ps1). -->
+    <ProjectReference Include="..\NitroLite.StandbyPurge\NitroLite.StandbyPurge.csproj" ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile;IncludeNativeLibrariesForSelfExtract;RuntimeFrameworkVersion;PublishDir;DebugType" />
   </ItemGroup>
 
   <ItemGroup>

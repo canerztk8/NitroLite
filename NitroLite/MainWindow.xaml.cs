@@ -226,6 +226,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         WindowChromeHelper.Attach(this);
+        ShowAppVersion();
         SetupTrayIcon();
         SetupTimers();
         SetupEvents();
@@ -265,7 +266,7 @@ public partial class MainWindow : Window
         _thermalService = new ThermalHealthService();
         _storageService = new StorageHealthService();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
-        if (settings != null) _appSettings = settings;
+        if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
         if (!isTestHarness)
@@ -293,6 +294,13 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Shows the version from the project file (Version in NitroLite.csproj) instead of a hard-coded label.</summary>
+    private void ShowAppVersion()
+    {
+        var v = typeof(MainWindow).Assembly.GetName().Version;
+        if (TxtAppVersion != null && v != null) TxtAppVersion.Text = v.Build > 0 ? $"v{v.Major}.{v.Minor}.{v.Build}" : $"v{v.Major}.{v.Minor}";
+    }
+
     private void SetupTrayIcon()
     {
         System.Drawing.Icon? appIcon = null;
@@ -302,6 +310,11 @@ public partial class MainWindow : Window
             if (File.Exists(iconPath))
             {
                 appIcon = new System.Drawing.Icon(iconPath);
+            }
+            else if (Environment.ProcessPath is { } exe)
+            {
+                // Single-file release package: app.ico is inside the exe; use the exe's own icon (ApplicationIcon).
+                appIcon = System.Drawing.Icon.ExtractAssociatedIcon(exe);
             }
         }
         catch { }
@@ -663,6 +676,7 @@ public partial class MainWindow : Window
         var loadedSettings = SettingsManager.LoadSettingsWithFallback(AppSettingsConfigFile, AppSettingsConfigFile + ".bak", LegacyConfigFile);
         foreach (var property in typeof(AppSettings).GetProperties())
             if (property.CanRead && property.CanWrite) property.SetValue(_appSettings, property.GetValue(loadedSettings));
+        _settingsLoaded = true;
 
         // Immediately sync _lighting with loaded settings so it is never uninitialized
         if (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset))
@@ -791,8 +805,14 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    // Settings are written only after they were read from disk (or handed in by the test harness). Before that
+    // _appSettings holds defaults: a window that failed in InitializeComponent is still closed by WPF on shutdown,
+    // and OnClosing → SaveWindowPosition used to write those defaults over the user's real settings.
+    private bool _settingsLoaded;
+
     private void SaveSettings()
     {
+        if (!_settingsLoaded) return;
         try
         {
             if (!_isInitializingUi && _lighting != null)

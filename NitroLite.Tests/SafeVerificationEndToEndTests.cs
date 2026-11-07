@@ -113,6 +113,36 @@ public class SafeVerificationEndToEndTests
 
     #endregion
 
+    #region Settings are never overwritten before they were loaded
+
+    [Fact]
+    public async Task ClosingAWindowWhoseSettingsWereNeverLoaded_DoesNotOverwriteTheSettingsFile()
+    {
+        // Regression: a window that failed during startup (InitializeComponent threw) is still closed by WPF on
+        // shutdown; OnClosing → SaveWindowPosition wrote default settings over the user's real ones.
+        var settingsPath = AppPaths.GetDataFile("settings.json");
+        const string userSettings = "{ \"StartMinimized\": true, \"atk_mouse_integration_enabled\": true }";
+
+        await RunInStaAsync(() =>
+        {
+            File.WriteAllText(settingsPath, userSettings);
+
+            var window = new MainWindow(
+                new TestAcerAgentClient(),
+                new TestCpuPowerService(),
+                new GameDetectionService(),
+                new AtkMouseService(),
+                settings: null,            // nothing loaded yet, like a window that never reached its Loaded event
+                isTestHarness: true);
+            window.Close();                // hides instead of exiting, after saving the window position
+
+            Assert.Equal(userSettings, File.ReadAllText(settingsPath));
+            return Task.CompletedTask;
+        });
+    }
+
+    #endregion
+
     #region Test Case 1: Rapid Game Switch & Desktop Reference Preservation
 
     [Fact]

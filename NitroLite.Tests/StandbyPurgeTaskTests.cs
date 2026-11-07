@@ -15,7 +15,7 @@ public class StandbyPurgeTaskTests : IDisposable
     public StandbyPurgeTaskTests()
     {
         Directory.CreateDirectory(Bundled);
-        foreach (var f in StandbyPurgeTask.HelperFiles) File.WriteAllText(Path.Combine(Bundled, f), "v1 " + f);
+        foreach (var f in StandbyPurgeTask.CandidateFiles) File.WriteAllText(Path.Combine(Bundled, f), "v1 " + f);
     }
 
     public void Dispose()
@@ -26,7 +26,7 @@ public class StandbyPurgeTaskTests : IDisposable
     private void CopyToInstalled(string? changeFile = null)
     {
         Directory.CreateDirectory(Installed);
-        foreach (var f in StandbyPurgeTask.HelperFiles)
+        foreach (var f in StandbyPurgeTask.CandidateFiles)
             File.WriteAllText(Path.Combine(Installed, f), f == changeFile ? "old " + f : "v1 " + f);
     }
 
@@ -45,6 +45,36 @@ public class StandbyPurgeTaskTests : IDisposable
     {
         File.Delete(Path.Combine(Bundled, StandbyPurgeTask.HelperExeName));
         Assert.Equal(StandbyPurgeTaskState.Unavailable, Create(() => null).GetState());
+    }
+
+    [Fact]
+    public void ReleasePackage_SingleFileHelperIsRecognisedAndVerified()
+    {
+        // Native AOT release: the exe alone.
+        File.Delete(Path.Combine(Bundled, "NitroLite.StandbyPurge.dll"));
+        File.Delete(Path.Combine(Bundled, "NitroLite.StandbyPurge.runtimeconfig.json"));
+        var task = Create(GoodTask);
+        Assert.Equal(new[] { StandbyPurgeTask.HelperExeName }, task.BundledHelperFiles());
+
+        Directory.CreateDirectory(Installed);
+        File.WriteAllText(Path.Combine(Installed, StandbyPurgeTask.HelperExeName), "v1 " + StandbyPurgeTask.HelperExeName);
+        Assert.Equal(StandbyPurgeTaskState.Ready, task.GetState());
+
+        File.WriteAllText(Path.Combine(Installed, StandbyPurgeTask.HelperExeName), "dev build exe");
+        Assert.Equal(StandbyPurgeTaskState.NeedsUpdate, task.GetState());   // switched from a normal build
+
+        var script = task.GenerateInstallScript("caner", task.BundledHelperFiles(),
+            StandbyPurgeTask.ComputeHashes(Bundled, task.BundledHelperFiles())!, @"C:\Temp\e.log");
+        Assert.DoesNotContain(".dll", script);
+    }
+
+    [Fact]
+    public void IncompleteFrameworkDependentHelper_IsUnavailable()
+    {
+        File.Delete(Path.Combine(Bundled, "NitroLite.StandbyPurge.runtimeconfig.json"));
+        var task = Create(() => null);
+        Assert.Empty(task.BundledHelperFiles());
+        Assert.Equal(StandbyPurgeTaskState.Unavailable, task.GetState());
     }
 
     [Fact]
@@ -83,8 +113,9 @@ public class StandbyPurgeTaskTests : IDisposable
     public void InstallScript_CopiesVerifiesAndRegistersAnElevatedTaskForTheUser()
     {
         var task = Create(() => null);
-        var hashes = StandbyPurgeTask.ComputeHashes(Bundled)!;
-        var script = task.GenerateInstallScript(@"CZTRK\caner", hashes, @"C:\Temp\err.log");
+        var files = task.BundledHelperFiles();
+        var hashes = StandbyPurgeTask.ComputeHashes(Bundled, files)!;
+        var script = task.GenerateInstallScript(@"CZTRK\caner", files, hashes, @"C:\Temp\err.log");
 
         foreach (var h in hashes) Assert.Contains(h, script);
         Assert.Contains("Get-FileHash", script);
@@ -103,15 +134,16 @@ public class StandbyPurgeTaskTests : IDisposable
     public void InstallScript_RejectsUnsafeUserNames(string user)
     {
         var task = Create(() => null);
-        var hashes = StandbyPurgeTask.ComputeHashes(Bundled)!;
-        Assert.Throws<ArgumentException>(() => task.GenerateInstallScript(user, hashes, @"C:\Temp\err.log"));
+        var files = task.BundledHelperFiles();
+        var hashes = StandbyPurgeTask.ComputeHashes(Bundled, files)!;
+        Assert.Throws<ArgumentException>(() => task.GenerateInstallScript(user, files, hashes, @"C:\Temp\err.log"));
     }
 
     [Fact]
     public void InstallScript_RejectsBadHashes()
     {
         var task = Create(() => null);
-        Assert.Throws<ArgumentException>(() => task.GenerateInstallScript("caner", new[] { "x", "y", "z" }, @"C:\Temp\e.log"));
+        Assert.Throws<ArgumentException>(() => task.GenerateInstallScript("caner", task.BundledHelperFiles(), new[] { "x", "y", "z" }, @"C:\Temp\e.log"));
     }
 
     [Fact]
