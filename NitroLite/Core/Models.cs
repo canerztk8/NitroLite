@@ -224,6 +224,18 @@ public class AppSettings
 
     [JsonPropertyName("battery_watchdog_enabled")]
     public bool BatteryWatchdogEnabled { get; set; } = true;
+
+    // Custom fan speeds (%), used when the fan mode is "Özel". Kept within MinCustomFanPercent..100.
+    [JsonPropertyName("custom_fan_cpu_percent")]
+    public int CustomFanCpuPercent { get; set; } = 50;
+
+    [JsonPropertyName("custom_fan_gpu_percent")]
+    public int CustomFanGpuPercent { get; set; } = 50;
+
+    /// <summary>Lowest custom fan speed offered: NitroSense's own default, low enough to be quiet at idle.</summary>
+    public const int MinCustomFanPercent = 30;
+
+    public static int ClampCustomFanPercent(int value) => Math.Clamp(value, MinCustomFanPercent, 100);
 }
 
 public class GameSessionRecoveryState

@@ -704,6 +704,7 @@ public partial class MainWindow : Window
         }
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         ChkAutoRamClean.IsChecked = _appSettings.AutoRamCleanerEnabled;
+        LoadCustomFanSettings();
         _ = RefreshRamCleanStateAsync();
 
         // Persisted toggles: apply to the services directly (the Changed handlers ignore events
@@ -1053,6 +1054,83 @@ public partial class MainWindow : Window
         BtnFanMax.FontWeight = known && mode == FanMode.Max ? FontWeights.Bold : FontWeights.Normal;
         BtnFanAuto.ToolTip = known && mode == FanMode.Auto ? "Etkin" : null;
         BtnFanMax.ToolTip = known && mode == FanMode.Max ? "Etkin" : null;
+        if (BtnFanCustom != null)
+        {
+            bool custom = known && mode == FanMode.Custom;
+            BtnFanCustom.BorderBrush = custom ? activeBorder : idleBorder;
+            BtnFanCustom.FontWeight = custom ? FontWeights.Bold : FontWeights.Normal;
+            BtnFanCustom.ToolTip = custom ? "Etkin" : "CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır.";
+        }
+        // The sliders stay open while the user is choosing "Özel" (before the service confirms it).
+        if (PnlCustomFan != null)
+            PnlCustomFan.Visibility = (known && mode == FanMode.Custom) || _customFanPanelPinned ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---------------------------------------------------------------- custom fan speeds
+
+    private bool _customFanPanelPinned;
+    private DispatcherTimer? _customFanApplyTimer;
+
+    /// <summary>Loads the saved custom speeds into the sliders and the Acer client (all restore paths use them).</summary>
+    private void LoadCustomFanSettings()
+    {
+        int cpu = AppSettings.ClampCustomFanPercent(_appSettings.CustomFanCpuPercent);
+        int gpu = AppSettings.ClampCustomFanPercent(_appSettings.CustomFanGpuPercent);
+        _agentClient.CustomFanCpuPercent = cpu;
+        _agentClient.CustomFanGpuPercent = gpu;
+        if (SliderFanCpu != null) SliderFanCpu.Value = cpu;
+        if (SliderFanGpu != null) SliderFanGpu.Value = gpu;
+        UpdateCustomFanLabels();
+    }
+
+    private void UpdateCustomFanLabels()
+    {
+        if (TxtFanCpuPercent != null && SliderFanCpu != null) TxtFanCpuPercent.Text = $"%{(int)SliderFanCpu.Value}";
+        if (TxtFanGpuPercent != null && SliderFanGpu != null) TxtFanGpuPercent.Text = $"%{(int)SliderFanGpu.Value}";
+    }
+
+    private async void BtnFanCustom_Click(object sender, RoutedEventArgs e)
+    {
+        _customFanPanelPinned = true;
+        try
+        {
+            await SetManualFanModeAsync(FanMode.Custom);
+        }
+        finally
+        {
+            _customFanPanelPinned = false;
+            UpdateFanButtonsUi(_currentFanMode);
+        }
+    }
+
+    private void SliderCustomFan_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        UpdateCustomFanLabels();
+        if (!IsLoaded || _isInitializingUi || SliderFanCpu == null || SliderFanGpu == null) return;
+
+        _appSettings.CustomFanCpuPercent = AppSettings.ClampCustomFanPercent((int)SliderFanCpu.Value);
+        _appSettings.CustomFanGpuPercent = AppSettings.ClampCustomFanPercent((int)SliderFanGpu.Value);
+        _agentClient.CustomFanCpuPercent = _appSettings.CustomFanCpuPercent;
+        _agentClient.CustomFanGpuPercent = _appSettings.CustomFanGpuPercent;
+
+        // Apply and save once dragging pauses, not on every tick of the slider.
+        _customFanApplyTimer ??= CreateCustomFanApplyTimer();
+        _customFanApplyTimer.Stop();
+        _customFanApplyTimer.Start();
+    }
+
+    private DispatcherTimer CreateCustomFanApplyTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        timer.Tick += async (s, e) =>
+        {
+            timer.Stop();
+            SaveSettings();
+            if (_currentFanMode != FanMode.Custom || _isGameSessionActive) return;
+            if (!await _agentClient.SetFanModeAsync(FanMode.Custom))
+                ShowToast("Fan hızı uygulanamadı.", false);
+        };
+        return timer;
     }
 
     private bool? _lastServiceTelemetryAvailable;
@@ -4623,7 +4701,12 @@ public partial class MainWindow : Window
             {
                 _currentFanMode = mode;
                 UpdateDesktopBaselineForManualChange(fan: mode);
-                ShowToast(mode == FanMode.Auto ? "Otomatik fan eğrisi etkinleştirildi." : "Maksimum fan devri etkinleştirildi.");
+                ShowToast(mode switch
+                {
+                    FanMode.Auto => "Otomatik fan eğrisi etkinleştirildi.",
+                    FanMode.Max => "Maksimum fan devri etkinleştirildi.",
+                    _ => $"Özel fan hızı: CPU %{_agentClient.CustomFanCpuPercent}, GPU %{_agentClient.CustomFanGpuPercent}."
+                });
             }
             else
             {

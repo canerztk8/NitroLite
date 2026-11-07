@@ -604,9 +604,22 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    /// <summary>Sets fan mode. For <see cref="FanMode.Custom"/> the speeds are percentages (0-100).</summary>
-    public virtual async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = 50, int gpuPercent = 50)
+    /// <summary>
+    /// CPU/GPU fan speeds (%) sent whenever <see cref="FanMode.Custom"/> is applied without explicit values, so every
+    /// path that restores a saved fan mode (game end, adapter change, crash recovery) restores the user's speeds too.
+    /// </summary>
+    public int CustomFanCpuPercent { get; set; } = 50;
+    public int CustomFanGpuPercent { get; set; } = 50;
+
+    /// <summary>
+    /// Sets fan mode. For <see cref="FanMode.Custom"/> the speeds are percentages (0-100); a negative value means
+    /// "use <see cref="CustomFanCpuPercent"/> / <see cref="CustomFanGpuPercent"/>". AASSvc ignores the speeds in
+    /// Auto and Max (verified on the AN16-41: 60 % custom ≈ 4300 RPM on both fans).
+    /// </summary>
+    public virtual async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
     {
+        if (cpuPercent < 0) cpuPercent = CustomFanCpuPercent;
+        if (gpuPercent < 0) gpuPercent = CustomFanGpuPercent;
         await _lock.WaitAsync();
         try
         {
