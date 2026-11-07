@@ -25,6 +25,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Build order only: the helper builds itself into bin\...\StandbyPurge for the one-time setup to copy. -->
+    <ProjectReference Include="..\NitroLite.StandbyPurge\NitroLite.StandbyPurge.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>NitroLite.Tests</_Parameter1>
     </AssemblyAttribute>

@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     private readonly RgbProfileService _rgbProfileService;
     private readonly HardwareMonitorService _hardwareService;
     private readonly MemoryCleanerService _memoryService;
+    // No-prompt standby purge (elevated scheduled task); null in the test harness so tests never start it.
+    private readonly StandbyPurgeTask? _purgeTask;
     private readonly ThermalHealthService _thermalService;
     private readonly StorageHealthService _storageService;
     private readonly IDisplayRefreshRateService _displayService;
@@ -215,7 +217,8 @@ public partial class MainWindow : Window
         _gameService = new();
         _rgbProfileService = new();
         _hardwareService = new();
-        _memoryService = new();
+        _purgeTask = new StandbyPurgeTask();
+        _memoryService = new() { PurgeTask = _purgeTask };
         _thermalService = new();
         _storageService = new();
         _displayService = new DisplayRefreshRateService();
@@ -686,7 +689,7 @@ public partial class MainWindow : Window
         }
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         ChkAutoRamClean.IsChecked = _appSettings.AutoRamCleanerEnabled;
-        UpdateRamCleanAvailabilityUi();
+        _ = RefreshRamCleanStateAsync();
 
         // Persisted toggles: apply to the services directly (the Changed handlers ignore events
         // raised while the window is not loaded / still initializing).
@@ -1206,6 +1209,9 @@ public partial class MainWindow : Window
                 }
 
                 RenderTelemetryChart();
+
+                // Live standby/free sizes in the RAM card while it is on screen (one cheap syscall).
+                if (IsVisible && TabMonitoring?.Visibility == Visibility.Visible && !_ramCleanBusy) UpdateMemoryListText();
             }
 
             // Auto-sync game dropdown to running active game if tab is visible
@@ -5248,11 +5254,27 @@ public partial class MainWindow : Window
             : "Windows açılışında pencere açık başlayacak");
     }
 
+    private bool _ramCleanBusy;
+
     private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)
     {
-        if (BtnCleanRamCache != null) BtnCleanRamCache.IsEnabled = false;
+        if (_ramCleanBusy) return;
+        _ramCleanBusy = true;
+        if (BtnCleanRamCache != null) BtnCleanRamCache.Opacity = 0.45;
         try
         {
+            if (!_ramCleanIsAdmin && _purgeTask != null)
+            {
+                var state = await Task.Run(() => _purgeTask.GetState());
+                if (state == StandbyPurgeTaskState.Unavailable)
+                {
+                    ShowToast("Temizleme yardımcısı NitroLite klasöründe bulunamadı; NitroLite'ı yeniden derleyin.", false);
+                    return;
+                }
+                if (state != StandbyPurgeTaskState.Ready && !await RunPurgeSetupAsync(state)) return;
+            }
+
+            SetRamCleanStatus(" (Boşaltılıyor…)", "TextSecondary");
             var res = await _memoryService.CleanMemoryAsync();
             ShowMemoryCleanResult(res, automatic: false);
         }
@@ -5262,7 +5284,56 @@ public partial class MainWindow : Window
         }
         finally
         {
-            UpdateRamCleanAvailabilityUi();
+            _ramCleanBusy = false;
+            await RefreshRamCleanStateAsync(keepResultText: true);
+        }
+    }
+
+    /// <summary>Asks once, then installs the no-prompt purge task (one UAC prompt). Returns true when it is ready.</summary>
+    private async Task<bool> RunPurgeSetupAsync(StandbyPurgeTaskState state)
+    {
+        if (_purgeTask == null) return false;
+        string text = state == StandbyPurgeTaskState.NeedsUpdate
+            ? "Sormadan temizleme kurulumu bu NitroLite sürümüyle uyuşmuyor ve güncellenmesi gerekiyor.\n\n" +
+              "Windows bir kez yönetici izni (UAC) isteyecek. Sonrasında temizleme yine sormadan çalışır.\n\nGüncellensin mi?"
+            : "Bekleme belleğini boşaltmak yönetici yetkisi ister. Her seferinde sormaması için bir kerelik kurulum yapılacak:\n\n" +
+              "• Yalnızca bekleme belleğini boşaltan küçük bir program C:\\Program Files\\NitroLite klasörüne kopyalanır.\n" +
+              "• Onu yönetici yetkisiyle çalıştıran bir Windows görevi (\\NitroLite\\StandbyPurge) kaydedilir. Görev kendiliğinden çalışmaz; yalnızca NitroLite başlatır.\n\n" +
+              "Windows şimdi bir kez yönetici izni (UAC) isteyecek. Sonrasında butona her bastığınızda sormadan çalışır. " +
+              "Bu karttaki \"Kurulumu kaldır\" ile tamamen silebilirsiniz.\n\nKurulum yapılsın mı?";
+        var confirm = System.Windows.MessageBox.Show(this, text, "Sormadan Bellek Temizleme", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return false;
+
+        SetRamCleanStatus(" (Kuruluyor…)", "TextSecondary");
+        bool ok = await _purgeTask.InstallAsync();
+        if (!ok)
+        {
+            ShowToast($"Kurulum yapılamadı: {_purgeTask.LastError}", false);
+            return false;
+        }
+        ShowToast("Kurulum tamam. Bekleme belleği artık sormadan boşaltılacak.");
+        return true;
+    }
+
+    private async void BtnRemovePurgeTask_Click(object sender, RoutedEventArgs e)
+    {
+        if (_purgeTask == null || _ramCleanBusy) return;
+        var confirm = System.Windows.MessageBox.Show(this,
+            "Sormadan temizleme kurulumu kaldırılacak (Windows görevi ve C:\\Program Files\\NitroLite\\StandbyPurge klasörü silinir).\n\n" +
+            "Windows bir kez yönetici izni (UAC) isteyecek. Devam edilsin mi?",
+            "Kurulumu Kaldır", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        _ramCleanBusy = true;
+        try
+        {
+            bool ok = await _purgeTask.UninstallAsync();
+            ShowToast(ok ? "Sormadan temizleme kurulumu kaldırıldı." : $"Kaldırılamadı: {_purgeTask.LastError}", ok);
+        }
+        finally
+        {
+            _ramCleanBusy = false;
+            await RefreshRamCleanStateAsync();
         }
     }
 
@@ -5271,13 +5342,22 @@ public partial class MainWindow : Window
         if (res.RequiresAdministrator)
         {
             if (!automatic)
-                ShowToast("Bekleme belleğini boşaltmak yönetici izni gerektirir; NitroLite yönetici olarak çalışmıyor. Windows bu belleği zaten gerektiğinde kullanır.", false);
-            SetRamCleanStatus(" (Yönetici izni gerekli)", "TextSecondary");
+                ShowToast("Bekleme belleğini boşaltmak için bir kerelik kurulum gerekiyor (butona basınca başlar).", false);
             return;
         }
         if (!res.StandbyPurged)
         {
-            if (!automatic) ShowToast("Windows bekleme listesini boşaltmayı reddetti.", false);
+            if (!automatic)
+            {
+                string why = res.TaskExitCode switch
+                {
+                    2 => "görev yönetici yetkisi alamadı (hesap yönetici olmayabilir)",
+                    3 => "Windows boşaltmayı reddetti",
+                    null => res.Error ?? "görev çalışmadı",
+                    _ => $"hata kodu {res.TaskExitCode}"
+                };
+                ShowToast($"Bekleme belleği boşaltılamadı: {why}.", false);
+            }
             SetRamCleanStatus(" (Başarısız)", "AccentRed");
             return;
         }
@@ -5286,8 +5366,9 @@ public partial class MainWindow : Window
             ? $"{res.FreedMegabytes / 1024.0:F1} GB"
             : $"{res.FreedMegabytes:F0} MB";
         if (!automatic || res.FreedMegabytes > 150)
-            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} serbest bırakıldı.");
+            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe geçti.");
         SetRamCleanStatus($" ({freedStr} boşaltıldı)", "AccentGreen");
+        UpdateMemoryListText();
     }
 
     private void SetRamCleanStatus(string text, string brushKey)
@@ -5297,32 +5378,57 @@ public partial class MainWindow : Window
         TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
     }
 
-    private bool? _ramCleanAvailable;
+    private readonly bool _ramCleanIsAdmin = MemoryCleanerService.IsRunningAsAdministrator();
+    // Admin, or the no-prompt task is installed and current: the purge (manual and automatic) works.
+    private bool _ramCleanAvailable;
 
-    /// <summary>The standby purge only works elevated: lock the controls and say why when it cannot work.</summary>
-    private void UpdateRamCleanAvailabilityUi()
+    /// <summary>Reads the task state off the UI thread and updates the card (status, auto checkbox, remove link).</summary>
+    private async Task RefreshRamCleanStateAsync(bool keepResultText = false)
     {
-        _ramCleanAvailable ??= MemoryCleanerService.IsRunningAsAdministrator();
-        bool ok = _ramCleanAvailable.Value;
+        StandbyPurgeTaskState? state = null;
+        if (!_ramCleanIsAdmin && _purgeTask != null)
+        {
+            try { state = await Task.Run(() => _purgeTask.GetState()); } catch { state = null; }
+        }
+        _ramCleanAvailable = _ramCleanIsAdmin || state == StandbyPurgeTaskState.Ready;
+
         if (BtnCleanRamCache != null)
         {
-            // Not disabled: the custom button background renders as an empty white box when disabled.
-            // It stays clickable and explains why the purge needs administrator rights.
-            BtnCleanRamCache.IsEnabled = true;
-            BtnCleanRamCache.Opacity = ok ? 1.0 : 0.5;
+            // Never disabled: the custom button template renders a disabled button as an empty white box.
+            BtnCleanRamCache.Opacity = 1.0;
+            BtnCleanRamCache.Content = _ramCleanAvailable || state == null ? "Bekleme Belleğini Boşalt" : "Kur ve Boşalt";
         }
-        if (ChkAutoRamClean != null) ChkAutoRamClean.IsEnabled = ok;
-        if (!ok)
+        if (ChkAutoRamClean != null) ChkAutoRamClean.IsEnabled = _ramCleanAvailable;
+        if (BtnRemovePurgeTask != null)
+            BtnRemovePurgeTask.Visibility = state is StandbyPurgeTaskState.Ready or StandbyPurgeTaskState.NeedsUpdate
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        bool showingResult = keepResultText && TxtRamCleanStatus != null
+            && (TxtRamCleanStatus.Text.Contains("boşaltıldı") || TxtRamCleanStatus.Text.Contains("Başarısız"));
+        if (!showingResult)
         {
-            SetRamCleanStatus(" (Yönetici izni gerekli)", "TextSecondary");
-            if (TxtRamCleanNote != null)
-                TxtRamCleanNote.Text = "Windows'un önbellekte tuttuğu (bekleme listesi) belleği boşaltır; çalışan programların belleğine dokunmaz. "
-                                     + "Bu işlem yönetici izni gerektirir ve NitroLite şu an yönetici olarak çalışmıyor. Windows bu belleği zaten gerektiğinde kendisi kullanır.";
+            if (_ramCleanIsAdmin) SetRamCleanStatus(" (Hazır)", "AccentGreen");
+            else switch (state)
+            {
+                case StandbyPurgeTaskState.Ready: SetRamCleanStatus(" (Hazır · sormadan çalışır)", "AccentGreen"); break;
+                case StandbyPurgeTaskState.NeedsUpdate: SetRamCleanStatus(" (Kurulum güncellenmeli)", "AccentRed"); break;
+                case StandbyPurgeTaskState.Unavailable: SetRamCleanStatus(" (Yardımcı dosya eksik)", "AccentRed"); break;
+                default: SetRamCleanStatus(" (Bir kerelik kurulum gerekli)", "TextSecondary"); break;
+            }
         }
-        else if (TxtRamCleanStatus != null && TxtRamCleanStatus.Text.Contains("Yönetici"))
-        {
-            SetRamCleanStatus(" (Hazır)", "AccentGreen");
-        }
+        UpdateMemoryListText();
+    }
+
+    /// <summary>Live standby/free sizes in the RAM card (readable without administrator rights).</summary>
+    private void UpdateMemoryListText()
+    {
+        if (TxtRamCleanNote == null) return;
+        var lists = MemoryCleanerService.ReadMemoryLists();
+        string sizes = lists.HasValue
+            ? $"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. "
+            : "";
+        TxtRamCleanNote.Text = sizes + "Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz. "
+                               + "Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.";
     }
 
     private int _autoRamCleanRunning;
