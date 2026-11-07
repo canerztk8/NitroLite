@@ -24,6 +24,6 @@ public class RepairRegressionTests
  [Fact] public void TaskOnlyRestoreGeneratesTaskCommand()
  {
   var s=new DebloatService(); var script=s.GenerateRestoreScript(new(){["Task:NitroSenseLauncher"]="Ready"});
-  Assert.Contains("Enable-ScheduledTask",script); Assert.DoesNotContain("Restore aborted",script);
+  Assert.Contains("Enable-ScheduledTask",script); Assert.DoesNotContain(DebloatService.NoBackupMessage,script);
  }
 }

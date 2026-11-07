@@ -601,11 +601,11 @@ class Program
         {
             var t = new StartupOptionsTests();
             t.EmptyArgs_EvaluatesToManualLaunchNonMinimized();
-            t.AutostartFlag_EvaluatesToAutostartAndMinimized();
+            t.AutostartFlag_EvaluatesToAutostartButNotMinimized();
             t.MinimizedFlag_EvaluatesToMinimizedNonAutostart();
             t.CombinedFlags_EvaluatesToBothTrue();
-            t.CaseInsensitiveArgs_ParsedCorrectly("--AUTOSTART");
-            t.CaseInsensitiveArgs_ParsedCorrectly("--minimized");
+            t.CaseInsensitiveArgs_ParsedCorrectly("--AUTOSTART", true, false);
+            t.CaseInsensitiveArgs_ParsedCorrectly("--minimized", false, true);
             t.UnrecognizedFlagsAndWhitespace_HandledGracefully();
             t.DebloatService_AutoStartCommandLine_ContainsAutostartFlag();
             Console.ForegroundColor = ConsoleColor.Green;
@@ -673,7 +673,7 @@ class Program
             t.StabilityTrend_DaysParameterBoundaries_NeverThrowOrProduceInvalidState(int.MaxValue);
             t.StabilityTrend_ZeroAndNegativeRatios_SafelyGuardedAgainstDivisionByZero();
             t.StartupOptions_NullAndWhitespaceInputs_NeverStartMinimized();
-            t.StartupOptions_CasePermutationsAndPadding_ParsedAccurately("--AuToStArT", true, true);
+            t.StartupOptions_CasePermutationsAndPadding_ParsedAccurately("--AuToStArT", false, true);
             t.StartupOptions_CasePermutationsAndPadding_ParsedAccurately("--MiNiMiZeD", true, false);
             t.StartupOptions_DuplicatedFlags_AreIdempotent();
             t.StartupOptions_MixedAndUnrecognizedFlags_HandledGracefully();

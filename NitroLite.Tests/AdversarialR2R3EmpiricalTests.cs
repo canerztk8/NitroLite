@@ -354,13 +354,13 @@ public class AdversarialR2R3EmpiricalTests
             // 1. Restore must fail and retain file
             bool restoreOk = await service.RestoreTier1ServicesAsync();
             Assert.False(restoreOk);
-            Assert.Contains("corrupted", service.LastError, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("bozuk", service.LastError, StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(tempBackup));
 
             // 2. Apply must abort rather than overwriting the corrupted backup
             bool applyOk = await service.ApplyTier1DebloatAsync();
             Assert.False(applyOk);
-            Assert.Contains("corrupted", service.LastError, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("bozuk", service.LastError, StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(tempBackup));
         }
         finally

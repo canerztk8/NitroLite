@@ -292,13 +292,13 @@ public class AdversarialRegressionAndStartupTests
     }
 
     [Theory]
-    [InlineData("--autostart", true, true)]
-    [InlineData("--AuToStArT", true, true)]
-    [InlineData("--AUTOSTART", true, true)]
+    [InlineData("--autostart", false, true)]
+    [InlineData("--AuToStArT", false, true)]
+    [InlineData("--AUTOSTART", false, true)]
     [InlineData("--minimized", true, false)]
     [InlineData("--MiNiMiZeD", true, false)]
     [InlineData("--MINIMIZED", true, false)]
-    [InlineData("  --autostart  ", true, true)]
+    [InlineData("  --autostart  ", false, true)]
     [InlineData("\t--minimized\t", true, false)]
     public void StartupOptions_CasePermutationsAndPadding_ParsedAccurately(
         string flag, bool expectedMinimized, bool expectedAutoStart)
@@ -313,7 +313,7 @@ public class AdversarialRegressionAndStartupTests
     public void StartupOptions_DuplicatedFlags_AreIdempotent()
     {
         var opt1 = StartupOptions.Parse(new[] { "--autostart", "--autostart", "--autostart" });
-        Assert.True(opt1.StartMinimized);
+        Assert.False(opt1.StartMinimized);
         Assert.True(opt1.IsAutoStart);
 
         var opt2 = StartupOptions.Parse(new[] { "--minimized", "--minimized" });
@@ -330,7 +330,7 @@ public class AdversarialRegressionAndStartupTests
     {
         var testCases = new (string[] args, bool expectedMinimized, bool expectedAutoStart)[]
         {
-            (new[] { "--foo", "--autostart", "--bar" }, true, true),
+            (new[] { "--foo", "--autostart", "--bar" }, false, true),
             (new[] { "--foo", "--minimized", "--bar" }, true, false),
             (new[] { "--foo", "--bar", "-a", "/autostart", "--", "-" }, false, false),
             (new[] { "C:\\Path\\To\\File.txt", "--start-minimized", "--auto-start" }, false, false)

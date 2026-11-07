@@ -910,7 +910,7 @@ function global:Disable-ScheduledTask {
 
             bool ok = await service.RestoreTier1ServicesAsync();
             Assert.False(ok);
-            Assert.Contains("corrupted", service.LastError, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("bozuk", service.LastError, StringComparison.OrdinalIgnoreCase);
             Assert.True(File.Exists(tempBackup), "Corrupted backup file must NOT be deleted silently!");
         }
         finally

@@ -21,10 +21,11 @@ public class StartupOptions
             if (string.IsNullOrWhiteSpace(rawArg)) continue;
             var arg = rawArg.Trim();
 
+            // --autostart only marks a Windows sign-in launch. Whether the window stays hidden is decided by
+            // --minimized, which the Run entry carries only while "start in the tray" is checked.
             if (arg.Equals("--autostart", StringComparison.OrdinalIgnoreCase))
             {
                 options.IsAutoStart = true;
-                options.StartMinimized = true;
             }
             else if (arg.Equals("--minimized", StringComparison.OrdinalIgnoreCase))
             {

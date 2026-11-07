@@ -18,10 +18,10 @@ public class StartupOptionsTests
     }
 
     [Fact]
-    public void AutostartFlag_EvaluatesToAutostartAndMinimized()
+    public void AutostartFlag_EvaluatesToAutostartButNotMinimized()
     {
         var options = StartupOptions.Parse(new[] { "--autostart" });
-        Assert.True(options.StartMinimized);
+        Assert.False(options.StartMinimized); // only --minimized hides the window
         Assert.True(options.IsAutoStart);
     }
 
@@ -42,14 +42,15 @@ public class StartupOptionsTests
     }
 
     [Theory]
-    [InlineData("--AUTOSTART")]
-    [InlineData("--AutoStart")]
-    [InlineData("--mInImIzEd")]
-    [InlineData("--MINIMIZED")]
-    public void CaseInsensitiveArgs_ParsedCorrectly(string flag)
+    [InlineData("--AUTOSTART", true, false)]
+    [InlineData("--AutoStart", true, false)]
+    [InlineData("--mInImIzEd", false, true)]
+    [InlineData("--MINIMIZED", false, true)]
+    public void CaseInsensitiveArgs_ParsedCorrectly(string flag, bool autoStart, bool minimized)
     {
         var options = StartupOptions.Parse(new[] { flag });
-        Assert.True(options.StartMinimized);
+        Assert.Equal(autoStart, options.IsAutoStart);
+        Assert.Equal(minimized, options.StartMinimized);
     }
 
     [Fact]
@@ -70,7 +71,7 @@ public class StartupOptionsTests
 
         var normalParsed = StartupOptions.Parse(new[] { "--autostart" });
         Assert.True(normalParsed.IsAutoStart);
-        Assert.True(normalParsed.StartMinimized);
+        Assert.False(normalParsed.StartMinimized);
 
         var minParsed = StartupOptions.Parse(new[] { "--autostart", "--minimized" });
         Assert.True(minParsed.IsAutoStart);

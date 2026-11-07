@@ -628,9 +628,10 @@ public partial class MainWindow : Window
             }
             await _powerAutomationService.EvaluatePowerStateAsync();
 
-            // 7. Debloat & NitroSense Suppression check
-            _debloatService.DisableNitroSenseBackgroundExecution();
-            RefreshServiceList();
+            // 7. Services page state. An existing autostart entry is kept working (moved exe, --minimized flag in
+            // sync with the setting); nothing is written when autostart is off.
+            _debloatService.RepairNitroLiteAutoStart(_appSettings.StartMinimized);
+            await RefreshServiceListAsync();
             ChkAutoStart.IsChecked = _debloatService.IsNitroLiteAutoStartEnabled();
         }
         finally
@@ -4425,6 +4426,12 @@ public partial class MainWindow : Window
             RenderTelemetryChart();
         }
 
+        if (NavDebloat.IsChecked == true)
+        {
+            // NitroSense may have been opened or closed, or services changed outside NitroLite, since the last look.
+            await RefreshServiceListAsync();
+        }
+
         if (NavBattery.IsChecked == true)
         {
             await RefreshBatteryHealthAsync();
@@ -5058,73 +5065,140 @@ public partial class MainWindow : Window
         }));
     }
 
-    private void RefreshServiceList()
+    private bool _serviceOperationBusy;
+
+    // Service registry reads, the SCM queries and the schtasks call run off the UI thread.
+    private async Task RefreshServiceListAsync()
     {
-        ListServiceStatuses.ItemsSource = _debloatService.GetServiceStatuses();
-        bool isNsRunning = _debloatService.IsNitroSenseRunning();
+        var (statuses, nsRunning, launcherEnabled) = await Task.Run(() =>
+            (_debloatService.GetServiceStatuses(), _debloatService.IsNitroSenseRunning(), _debloatService.IsNitroSenseLauncherEnabled()));
+
+        if (ListServiceStatuses != null) ListServiceStatuses.ItemsSource = statuses;
+
         if (TxtNitroSenseRunningBadge != null)
         {
-            TxtNitroSenseRunningBadge.Text = isNsRunning ? " (Arka Planda Aktif)" : " (Devre Dışı)";
-            TxtNitroSenseRunningBadge.Foreground = isNsRunning 
-                ? (SolidColorBrush)FindResource("AccentRed") 
-                : (SolidColorBrush)FindResource("AccentGreen");
+            TxtNitroSenseRunningBadge.Text = nsRunning ? "Açık" : "Kapalı";
+            TxtNitroSenseRunningBadge.Foreground = nsRunning
+                ? (SolidColorBrush)FindResource("AccentRed")
+                : (SolidColorBrush)FindResource("TextMuted");
+        }
+        if (TxtNitroSenseLauncherState != null)
+        {
+            TxtNitroSenseLauncherState.Text = launcherEnabled switch
+            {
+                true => "Windows açılışında NitroSense'i başlatan görev (NitroSenseLauncher): açık",
+                false => "Windows açılışında NitroSense'i başlatan görev (NitroSenseLauncher): kapalı",
+                null => "NitroSense'i açılışta başlatan görev bulunamadı"
+            };
+        }
+        // Dimmed rather than disabled: the button template renders a disabled button as a blank light box.
+        if (BtnKillNitroSense != null) BtnKillNitroSense.Opacity = nsRunning ? 1.0 : 0.45;
+        UpdateServiceButtons();
+    }
+
+    private void UpdateServiceButtons()
+    {
+        // Dimmed, not disabled (see above); the click handlers ignore clicks while an operation runs.
+        foreach (var b in new[] { BtnApplyDebloat, BtnRestoreServices })
+        {
+            if (b != null) b.Opacity = _serviceOperationBusy ? 0.45 : 1.0;
         }
     }
 
-    private void BtnKillNitroSense_Click(object sender, RoutedEventArgs e)
+    private async void BtnKillNitroSense_Click(object sender, RoutedEventArgs e)
     {
-        _debloatService.DisableNitroSenseBackgroundExecution();
-        int killed = _debloatService.KillNitroSenseProcesses();
-        RefreshServiceList();
-        ShowToast($"NitroSense sonlandırıldı ({killed} işlem).");
+        if (!_debloatService.IsNitroSenseRunning())
+        {
+            await RefreshServiceListAsync();
+            ShowToast("NitroSense zaten kapalı.");
+            return;
+        }
+
+        var confirm = System.Windows.MessageBox.Show(this,
+            "NitroSense ve yardımcı işlemleri kapatılacak. Kaydedilmemiş bir NitroSense ayarı varsa kaybolur.\n\nDevam edilsin mi?",
+            "NitroSense'i Kapat", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        bool closed = await Task.Run(() => _debloatService.KillNitroSenseProcesses());
+        await RefreshServiceListAsync();
+        ShowToast(closed ? "NitroSense kapatıldı." : "NitroSense kapatılamadı (yönetici olarak çalışıyor olabilir).", closed);
     }
 
     private async void BtnApplyDebloat_Click(object sender, RoutedEventArgs e)
     {
+        if (_serviceOperationBusy) return;
         try
         {
-            var confirm = System.Windows.MessageBox.Show(this, 
-                "Altı adet OEM telemetri servisi devre dışı bırakılacak ve yaklaşık 214 MB bellek tasarrufu sağlanacaktır.\n\nDonanım kontrolleri etkilenmeyecektir. Devam edilsin mi?",
-                "Servis Yapılandırması", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (confirm == MessageBoxResult.Yes)
+            if (await Task.Run(() => _debloatService.AreAllInstalledServicesDisabled()) && !_debloatService.HasRestorableBackup())
             {
-                var ok = await _debloatService.ApplyTier1DebloatAsync();
-                RefreshServiceList();
-                if (ok)
-                {
-                    ShowToast("Telemetri servisleri devre dışı bırakıldı (~214 MB).");
-                }
-                else
-                {
-                    var msg = !string.IsNullOrEmpty(_debloatService.LastError) 
-                        ? $"Bazı servisler devre dışı bırakılamadı: {_debloatService.LastError}" 
-                        : "Servis devre dışı bırakma işlemi başarısız oldu (Yönetici yetkisi reddedilmiş olabilir).";
-                    ShowToast(msg, false);
-                }
+                ShowToast(DebloatService.AlreadyDisabledMessage);
+                return;
+            }
+
+            var confirm = System.Windows.MessageBox.Show(this,
+                "Listelenen Acer arka plan servisleri durdurulup devre dışı bırakılacak ve NitroSense'in açılışta başlatılması kapatılacak. " +
+                "Mevcut ayarlar önce yedeklenir; \"Servisleri Geri Yükle\" ile geri dönebilirsiniz.\n\n" +
+                "NitroLite'ın kullandığı Acer Agent, Care Center ve Lighting servislerine dokunulmaz. Yönetici izni istenecek.\n\nDevam edilsin mi?",
+                "Acer Servisleri", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            _serviceOperationBusy = true;
+            UpdateServiceButtons();
+            var ok = await _debloatService.ApplyTier1DebloatAsync();
+            _serviceOperationBusy = false;
+            await RefreshServiceListAsync();
+            if (ok)
+            {
+                ShowToast("Acer arka plan servisleri devre dışı bırakıldı.");
+            }
+            else
+            {
+                var msg = !string.IsNullOrEmpty(_debloatService.LastError)
+                    ? $"Servisler devre dışı bırakılamadı: {_debloatService.LastError}"
+                    : "Servisler devre dışı bırakılamadı (yönetici izni verilmemiş olabilir).";
+                ShowToast(msg, false);
             }
         }
         catch (Exception ex)
         {
             ShowToast($"Servisler yapılandırılamadı: {ex.Message}", false);
         }
+        finally
+        {
+            _serviceOperationBusy = false;
+            UpdateServiceButtons();
+        }
     }
 
     private async void BtnRestoreServices_Click(object sender, RoutedEventArgs e)
     {
+        if (_serviceOperationBusy) return;
         try
         {
-            var ok = await _debloatService.RestoreTier1ServicesAsync();
-            RefreshServiceList();
+            bool hasBackup = _debloatService.HasRestorableBackup();
+            var question = hasBackup
+                ? "Servisler, devre dışı bırakılmadan önce kaydedilen haline döndürülecek. Yönetici izni istenecek.\n\nDevam edilsin mi?"
+                : "Servislerin önceki hali için kayıtlı bir yedek yok.\n\nServisler Acer'in fabrika ayarına (Otomatik başlat) döndürülüp başlatılacak. " +
+                  "NitroSense'in açılışta başlatma ayarına dokunulmaz. Yönetici izni istenecek.\n\nDevam edilsin mi?";
+            var confirm = System.Windows.MessageBox.Show(this, question, "Servisleri Geri Yükle", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            _serviceOperationBusy = true;
+            UpdateServiceButtons();
+            var ok = hasBackup
+                ? await _debloatService.RestoreTier1ServicesAsync()
+                : await _debloatService.RestoreFactoryDefaultsAsync();
+            _serviceOperationBusy = false;
+            await RefreshServiceListAsync();
             if (ok)
             {
-                ShowToast("Önceki servis yapılandırması geri yüklendi.");
+                ShowToast(hasBackup ? "Önceki servis yapılandırması geri yüklendi." : "Servisler Acer fabrika ayarına döndürüldü.");
             }
             else
             {
-                var msg = !string.IsNullOrEmpty(_debloatService.LastError) 
-                    ? $"Bazı servisler geri yüklenemedi: {_debloatService.LastError}" 
-                    : "Servisleri geri yükleme işlemi başarısız oldu (Yönetici yetkisi reddedilmiş olabilir).";
+                var msg = !string.IsNullOrEmpty(_debloatService.LastError)
+                    ? $"Servisler geri yüklenemedi: {_debloatService.LastError}"
+                    : "Servisler geri yüklenemedi (yönetici izni verilmemiş olabilir).";
                 ShowToast(msg, false);
             }
         }
@@ -5132,13 +5206,28 @@ public partial class MainWindow : Window
         {
             ShowToast($"Servisler geri yüklenemedi: {ex.Message}", false);
         }
+        finally
+        {
+            _serviceOperationBusy = false;
+            UpdateServiceButtons();
+        }
     }
 
     private void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkAutoStart == null) return;
-        _debloatService.SetNitroLiteAutoStart(ChkAutoStart.IsChecked == true, ChkStartMinimized?.IsChecked == true);
-        ShowToast(ChkAutoStart.IsChecked == true ? "Başlangıçta otomatik çalıştırma etkin" : "Başlangıçta çalıştırma devre dışı");
+        bool enable = ChkAutoStart.IsChecked == true;
+        if (_debloatService.SetNitroLiteAutoStart(enable, _appSettings.StartMinimized))
+        {
+            ShowToast(enable ? "Windows açılışında otomatik çalıştırma etkin" : "Windows açılışında çalıştırma kapatıldı");
+            return;
+        }
+
+        // Windows refused the change: show the real state again.
+        _isInitializingUi = true;
+        try { ChkAutoStart.IsChecked = _debloatService.IsNitroLiteAutoStartEnabled(); }
+        finally { _isInitializingUi = false; }
+        ShowToast("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı).", false);
     }
 
     private void ChkStartMinimized_Changed(object sender, RoutedEventArgs e)
@@ -5146,8 +5235,17 @@ public partial class MainWindow : Window
         if (!IsLoaded || _isInitializingUi || ChkStartMinimized == null) return;
         _appSettings.StartMinimized = ChkStartMinimized.IsChecked == true;
         SaveSettings();
-        _debloatService.SetNitroLiteAutoStart(ChkAutoStart.IsChecked == true, _appSettings.StartMinimized);
-        ShowToast(_appSettings.StartMinimized ? "Sistem tepsisinde başlatma etkin" : "Normal başlangıç etkin");
+        // The flag lives in the Run entry; only rewrite it when autostart is on.
+        bool written = !_debloatService.IsNitroLiteAutoStartEnabled()
+            || _debloatService.SetNitroLiteAutoStart(true, _appSettings.StartMinimized);
+        if (!written)
+        {
+            ShowToast("Ayar kaydedildi ama başlangıç kaydı güncellenemedi.", false);
+            return;
+        }
+        ShowToast(_appSettings.StartMinimized
+            ? "Windows açılışında pencere gösterilmeden tepside başlayacak"
+            : "Windows açılışında pencere açık başlayacak");
     }
 
     private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)

@@ -249,12 +249,16 @@ public class VerifiedDefectsRegressionTests
         var debloat = new DebloatService();
         // Point backup file path to an impossible / unwritable location
         debloat.BackupStateFilePath = @"Z:\NonExistentDrive_Forbidden\backup_state.json";
+        // Services enabled and running, independent of this machine's real service state.
+        debloat.ServiceStartupTypeQuerySeam = _ => "Automatic";
+        debloat.ServiceStatusQuerySeam = _ => "Running";
+        debloat.ScheduledTaskStateQuerySeam = _ => "Ready";
 
         bool result = await debloat.ApplyTier1DebloatAsync();
 
         Assert.False(result);
         Assert.NotNull(debloat.LastError);
-        Assert.Contains("Debloat aborted: failed to persist service backup state to disk.", debloat.LastError);
+        Assert.Contains("servis yedeği diske yazılamadı", debloat.LastError);
     }
 
     [Fact]

@@ -103,7 +103,7 @@ public class RemainingFindingsRegressionTests
             File.WriteAllText(tempFile, "{}");
             bool result = await debloat.RestoreTier1ServicesAsync();
             Assert.False(result);
-            Assert.Contains("backup state is empty or contains no recorded services", debloat.LastError);
+            Assert.Equal(DebloatService.NoBackupMessage, debloat.LastError);
 
             // 2. Backup file with only non-service keys
             var nonServiceMap = new Dictionary<string, string>
@@ -113,7 +113,7 @@ public class RemainingFindingsRegressionTests
             File.WriteAllText(tempFile, JsonSerializer.Serialize(nonServiceMap));
             result = await debloat.RestoreTier1ServicesAsync();
             Assert.False(result);
-            Assert.Contains("backup state is empty or contains no recorded services", debloat.LastError);
+            Assert.Equal(DebloatService.NoBackupMessage, debloat.LastError);
         }
         finally
         {
@@ -234,7 +234,7 @@ public class RemainingFindingsRegressionTests
         Assert.Contains("exit 1", script);
         Assert.Contains("$errLog", script);
         Assert.Contains("$errs", script);
-        Assert.Contains("Restore aborted: backup state is empty or contains no recorded services", script);
+        Assert.Contains(DebloatService.NoBackupMessage, script);
     }
 
     [Fact]
@@ -244,7 +244,7 @@ public class RemainingFindingsRegressionTests
         var statuses = debloat.GetServiceStatuses();
 
         Assert.Equal(DebloatService.Tier1Services.Length, statuses.Count);
-        var allowedStatuses = new HashSet<string> { "Çalışıyor", "Durduruldu", "Kayıtlı Değil", "Bilinmiyor" };
+        var allowedStatuses = new HashSet<string> { "Çalışıyor", "Durduruldu", "Durduruldu (elle başlar)", "Devre dışı", "Kurulu değil", "Bilinmiyor" };
         foreach (var info in statuses)
         {
             Assert.Contains(info.Status, allowedStatuses);

@@ -17,9 +17,28 @@ internal static class TestDataIsolation
     internal static void RedirectAppDataToTempFolder()
     {
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppPaths.DataDirOverrideVariable))) return;
+        // The test host is usually terminated by the runner before ProcessExit runs, so also remove folders that
+        // earlier runs left behind (older than an hour, so a parallel run's folder is never touched).
+        try
+        {
+            foreach (var old in Directory.GetDirectories(Path.GetTempPath(), "NitroLiteTests_*"))
+            {
+                if (DateTime.Now - Directory.GetLastWriteTime(old) > TimeSpan.FromHours(1))
+                {
+                    try { Directory.Delete(old, recursive: true); } catch { }
+                }
+            }
+        }
+        catch { }
+
         var dir = Path.Combine(Path.GetTempPath(), "NitroLiteTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         Environment.SetEnvironmentVariable(AppPaths.DataDirOverrideVariable, dir);
+        // Remove the throw-away folder when the test process ends so test runs do not pile up in %TEMP%.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        };
     }
 }
 

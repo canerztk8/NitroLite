@@ -187,7 +187,7 @@ public class DebloatService
                 using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{name}", false);
                 if (key != null)
                 {
-                    var dispName = key.GetValue("DisplayName")?.ToString() ?? name;
+                    var dispName = CleanDisplayName(key.GetValue("DisplayName")?.ToString(), name);
                     var startVal = key.GetValue("Start");
                     var startInt = startVal is int i ? i : 2;
                     var startTypeStr = startInt switch
@@ -198,26 +198,11 @@ public class DebloatService
                         _ => "Unknown"
                     };
 
-                    var liveStatus = QueryServiceStatusDirect(name);
-                    string statusDisplay;
-                    if (liveStatus == "Running")
-                    {
-                        statusDisplay = "Çalışıyor";
-                    }
-                    else if (liveStatus == "Stopped")
-                    {
-                        statusDisplay = "Durduruldu";
-                    }
-                    else
-                    {
-                        statusDisplay = startInt == 4 ? "Durduruldu" : "Bilinmiyor";
-                    }
-
                     list.Add(new ServiceStatusInfo
                     {
                         Name = name,
                         DisplayName = dispName,
-                        Status = statusDisplay,
+                        Status = DescribeStatus(QueryServiceStatusDirect(name), startTypeStr),
                         StartType = startTypeStr,
                         IsDisabled = startInt == 4
                     });
@@ -228,7 +213,7 @@ public class DebloatService
                     {
                         Name = name,
                         DisplayName = name,
-                        Status = "Kayıtlı Değil",
+                        Status = "Kurulu değil",
                         StartType = "Disabled",
                         IsDisabled = true
                     });
@@ -247,6 +232,54 @@ public class DebloatService
             }
         }
         return list;
+    }
+
+    /// <summary>Text for the status list: the start type matters as much as the live state.</summary>
+    public static string DescribeStatus(string? liveStatus, string startType)
+    {
+        if (string.Equals(startType, "Disabled", StringComparison.OrdinalIgnoreCase)) return "Devre dışı";
+        if (liveStatus == "Running") return "Çalışıyor";
+        if (liveStatus == "Stopped")
+            return string.Equals(startType, "Manual", StringComparison.OrdinalIgnoreCase) ? "Durduruldu (elle başlar)" : "Durduruldu";
+        return "Bilinmiyor";
+    }
+
+    /// <summary>
+    /// The registry DisplayName may be an indirect string ("@oem72.inf,%NAME%;Acer Service Component Service");
+    /// the text after the last ';' is the fallback name Windows shows.
+    /// </summary>
+    public static string CleanDisplayName(string? raw, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return fallback;
+        var text = raw.Trim();
+        if (text.StartsWith("@"))
+        {
+            int semi = text.LastIndexOf(';');
+            text = semi >= 0 && semi < text.Length - 1 ? text[(semi + 1)..].Trim() : fallback;
+        }
+        return string.IsNullOrWhiteSpace(text) ? fallback : text;
+    }
+
+    /// <summary>
+    /// Start type Acer installs each service with. Every one of these driver packages declares
+    /// StartType = 2 (SERVICE_AUTO_START) in its INF, and the System event log on the AN16-41 shows each
+    /// being changed "from auto start to disabled". Used to restore when no backup of the earlier state exists.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> FactoryStartTypes =
+        Tier1Services.ToDictionary(s => s, _ => "Automatic", StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>True when a backup with at least one valid recorded service exists.</summary>
+    public bool HasRestorableBackup()
+    {
+        var backup = LoadBackupState();
+        return backup.Count > 0 && Tier1Services.Any(s => backup.ContainsKey(s) && IsValidStartupType(backup[s]));
+    }
+
+    /// <summary>True when every installed Tier 1 service is already disabled (nothing for the debloat to do).</summary>
+    public bool AreAllInstalledServicesDisabled(Dictionary<string, string>? startTypes = null)
+    {
+        startTypes ??= RecordCurrentStartupTypes();
+        return startTypes.Count > 0 && startTypes.Values.All(t => string.Equals(t, "Disabled", StringComparison.OrdinalIgnoreCase));
     }
 
     public Dictionary<string, string> RecordCurrentStartupTypes()
@@ -500,7 +533,7 @@ public class DebloatService
         }
         catch (Exception ex)
         {
-            LastError = $"Debloat backup state file is corrupted: {ex.Message}";
+            LastError = $"Servis yedek dosyası bozuk: {ex.Message}";
         }
         return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
@@ -522,7 +555,7 @@ public class DebloatService
         }
         catch (Exception ex)
         {
-            LastError = $"Failed to save backup state: {ex.Message}";
+            LastError = $"Servis yedeği kaydedilemedi: {ex.Message}";
             return false;
         }
     }
@@ -584,6 +617,70 @@ public class DebloatService
                "if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }";
     }
 
+    public const string NoBackupMessage = "Geri yükleme iptal: kayıtlı servis yedeği yok.";
+    public const string AlreadyDisabledMessage = "Servislerin hepsi zaten devre dışı; değişiklik yapılmadı.";
+
+    /// <summary>
+    /// Restores Acer's install-time configuration (<see cref="FactoryStartTypes"/>) when no backup exists.
+    /// Services that are not installed are skipped; a service that is set to Automatic but does not stay
+    /// running is not an error (Windows starts it again at the next boot). The NitroSenseLauncher task is left alone.
+    /// </summary>
+    public string GenerateFactoryRestoreScript(string? errorLogPath = null)
+    {
+        errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
+        var logEscaped = errorLogPath.Replace("'", "''");
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"$errLog = '{logEscaped}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
+        sb.Append("$errs = @(); ");
+        foreach (var s in Tier1Services)
+        {
+            string canonicalType = ValidateStartupType(FactoryStartTypes[s], s);
+            sb.Append("try { ");
+            sb.Append($"$svc = Get-Service -Name '{s}' -ErrorAction SilentlyContinue; ");
+            sb.Append("if ($svc) { ");
+            sb.Append($"Set-Service -Name '{s}' -StartupType {canonicalType} -ErrorAction Stop; ");
+            sb.Append($"Start-Service -Name '{s}' -ErrorAction SilentlyContinue; ");
+            sb.Append($"$vSvc = Get-Service -Name '{s}' -ErrorAction Stop; ");
+            sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw 'Servis başlangıç türü doğrulanamadı: {s}' }}; ");
+            sb.Append("} ");
+            sb.Append("} catch { ");
+            sb.Append($"$errs += ('{s}: ' + $_.Exception.Message); ");
+            sb.Append("}; ");
+        }
+        sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
+        return sb.ToString();
+    }
+
+    public async Task<bool> RestoreFactoryDefaultsAsync()
+    {
+        if (IsPreviousProcessRunning(out var runningMsg))
+        {
+            LastError = runningMsg;
+            return false;
+        }
+
+        await _debloatLock.WaitAsync();
+        try
+        {
+            if (IsPreviousProcessRunning(out var runningMsgLocked))
+            {
+                LastError = runningMsgLocked;
+                return false;
+            }
+            var errLog = AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
+            return await RunElevatedPowerShellAsync(GenerateFactoryRestoreScript(errLog), errLog);
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            return false;
+        }
+        finally
+        {
+            _debloatLock.Release();
+        }
+    }
+
     public string GenerateRestoreScript(Dictionary<string, string>? backupState = null, string? errorLogPath = null)
     {
         errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
@@ -596,7 +693,7 @@ public class DebloatService
 
         if (backupState == null || backupState.Count == 0 || !(Tier1Services.Any(s => backupState.ContainsKey(s) && !string.IsNullOrWhiteSpace(backupState[s])) || (backupState.TryGetValue("Task:NitroSenseLauncher", out var onlyTask) && (IsActiveTaskState(onlyTask) || IsDisabledTaskState(onlyTask)))))
         {
-            sb.Append("$errs += 'Restore aborted: backup state is empty or contains no recorded services.'; ");
+            sb.Append("$errs += '" + NoBackupMessage + "'; ");
             sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
             return sb.ToString();
         }
@@ -719,7 +816,7 @@ public class DebloatService
 
                 if (runnerExit != 0 && string.IsNullOrEmpty(LastError))
                 {
-                    LastError = $"PowerShell process exited with code {runnerExit}";
+                    LastError = $"PowerShell işlemi {runnerExit} çıkış koduyla bitti.";
                 }
 
                 return runnerExit == 0;
@@ -765,7 +862,7 @@ public class DebloatService
                 {
                     // Timed out: do NOT access p.ExitCode to avoid InvalidOperationException.
                     // Retain p in _activePowerShellProcess to block subsequent operations until it exits.
-                    LastError = "PowerShell işlemi 20 saniye içinde tamamlanamadı ve arka planda devam ediyor. Süreç sonlanana kadar yeni işlem başlatılamaz.";
+                    LastError = $"PowerShell işlemi {PowerShellTimeoutMs / 1000} saniye içinde tamamlanamadı ve arka planda devam ediyor. Süreç sonlanana kadar yeni işlem başlatılamaz.";
                     return false;
                 }
 
@@ -802,7 +899,7 @@ public class DebloatService
 
                 if (exitCode != 0 && string.IsNullOrEmpty(LastError))
                 {
-                    LastError = $"PowerShell process exited with code {exitCode}";
+                    LastError = $"PowerShell işlemi {exitCode} çıkış koduyla bitti.";
                 }
 
                 return exitCode == 0;
@@ -862,12 +959,20 @@ public class DebloatService
                 // If backup file exists on disk but is invalid / corrupt, do NOT overwrite it!
                 if (File.Exists(BackupStateFilePath))
                 {
-                    LastError = $"Apply debloat aborted: an existing backup file exists at '{BackupStateFilePath}' but its content is invalid or corrupted. Please inspect or restore it before applying debloat.";
+                    LastError = $"İşlem iptal: '{BackupStateFilePath}' konumundaki servis yedeği geçersiz veya bozuk; üzerine yazılmadı. Dosyayı kontrol edin.";
                     return false;
                 }
 
                 // Clean baseline: record current startup types, running states, and scheduled task state before modifying
                 var currentTypes = RecordCurrentStartupTypes();
+
+                // Recording an all-disabled state as the baseline would make "restore" keep everything disabled.
+                if (AreAllInstalledServicesDisabled(currentTypes))
+                {
+                    LastError = AlreadyDisabledMessage;
+                    return false;
+                }
+
                 var currentStatuses = RecordCurrentServiceRunningStates();
                 var taskState = RecordCurrentScheduledTaskState("NitroSenseLauncher");
 
@@ -887,7 +992,7 @@ public class DebloatService
                 // Abort service shutdown if backup state cannot be written
                 if (!SaveBackupState(existingBackup))
                 {
-                    LastError = $"Debloat aborted: failed to persist service backup state to disk. {LastError}".Trim();
+                    LastError = $"İşlem iptal: servis yedeği diske yazılamadı. {LastError}".Trim();
                     return false;
                 }
 
@@ -900,12 +1005,12 @@ public class DebloatService
                 {
                     if (!existingBackup.ContainsKey(svc) || !IsValidStartupType(existingBackup[svc]))
                     {
-                        LastError = $"Debloat aborted: incomplete backup state for installed service '{svc}' (missing startup type).";
+                        LastError = $"İşlem iptal: '{svc}' servisinin yedeğinde başlangıç türü eksik.";
                         return false;
                     }
                     if (!existingBackup.ContainsKey(svc + ":Status") || string.IsNullOrWhiteSpace(existingBackup[svc + ":Status"]))
                     {
-                        LastError = $"Debloat aborted: incomplete backup state for installed service '{svc}' (missing running status).";
+                        LastError = $"İşlem iptal: '{svc}' servisinin yedeğinde çalışma durumu eksik.";
                         return false;
                     }
                 }
@@ -919,7 +1024,7 @@ public class DebloatService
                         !existingBackup.TryGetValue(svc + ":Status", out var savedStatus) ||
                         (savedStatus != "Running" && savedStatus != "Stopped"))
                     {
-                        LastError = $"Debloat aborted: invalid startup type for service '{svc}' in existing backup.";
+                        LastError = $"İşlem iptal: mevcut yedekte '{svc}' servisinin kaydı geçersiz.";
                         return false;
                     }
                 }
@@ -958,7 +1063,7 @@ public class DebloatService
             {
                 if (string.IsNullOrEmpty(LastError))
                 {
-                    LastError = "Restore aborted: backup state is empty or contains no recorded services.";
+                    LastError = NoBackupMessage;
                 }
                 return false;
             }
@@ -968,7 +1073,7 @@ public class DebloatService
             {
                 if (!IsValidStartupType(backup[svc]))
                 {
-                    LastError = $"Restore aborted: invalid startup type '{backup[svc]}' for service '{svc}' in backup state.";
+                    LastError = $"Geri yükleme iptal: yedekte '{svc}' için geçersiz başlangıç türü '{backup[svc]}'.";
                     return false;
                 }
             }
@@ -1005,12 +1110,40 @@ public class DebloatService
         }
     }
 
-    public bool IsNitroLiteAutoStartEnabled()
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValueName = "NitroLite";
+
+    internal Func<string?>? AutoStartReadSeam { get; set; }
+    internal Func<string?, bool>? AutoStartWriteSeam { get; set; }
+    internal Func<string, bool>? FileExistsSeam { get; set; }
+
+    public bool IsNitroLiteAutoStartEnabled() => !string.IsNullOrWhiteSpace(ReadAutoStartCommand());
+
+    private string? ReadAutoStartCommand()
     {
+        if (AutoStartReadSeam != null) return AutoStartReadSeam();
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false);
-            return key?.GetValue("NitroLite") != null;
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false);
+            return key?.GetValue(RunValueName)?.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // null deletes the value. Returns false when the registry could not be written.
+    private bool WriteAutoStartCommand(string? command)
+    {
+        if (AutoStartWriteSeam != null) return AutoStartWriteSeam(command);
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true) ?? Registry.CurrentUser.CreateSubKey(RunKeyPath, true);
+            if (key == null) return false;
+            if (command == null) key.DeleteValue(RunValueName, false);
+            else key.SetValue(RunValueName, command);
+            return true;
         }
         catch
         {
@@ -1018,34 +1151,52 @@ public class DebloatService
         }
     }
 
-    public void SetNitroLiteAutoStart(bool enable, bool startMinimized = false)
-    {
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
-            if (key == null) return;
+    public static string BuildAutoStartCommand(string exePath, bool startMinimized) =>
+        startMinimized ? $"\"{exePath}\" --autostart --minimized" : $"\"{exePath}\" --autostart";
 
-            if (enable)
-            {
-                var exePath = Environment.ProcessPath;
-                if (!string.IsNullOrEmpty(exePath))
-                {
-                    var cmd = startMinimized ? $"\"{exePath}\" --autostart --minimized" : $"\"{exePath}\" --autostart";
-                    key.SetValue("NitroLite", cmd);
-                }
-            }
-            else
-            {
-                key.DeleteValue("NitroLite", false);
-            }
-        }
-        catch
+    /// <summary>Executable path from a Run value ("\"C:\...\NitroLite.exe\" --autostart" or an unquoted path).</summary>
+    public static string? ParseAutoStartExePath(string? command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return null;
+        var c = command.Trim();
+        if (c.StartsWith("\""))
         {
-            // Ignore
+            int end = c.IndexOf('"', 1);
+            return end > 1 ? c[1..end] : null;
         }
+        int exe = c.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+        return exe > 0 ? c[..(exe + 4)] : c.Split(' ')[0];
     }
 
-    public const string NitroSensePackageFamily = "ULICTekInc.NitroSenseforNotebook_nt9dgb7efx6bt";
+    /// <summary>Writes or removes the Run entry. Returns false when Windows refused the change.</summary>
+    public bool SetNitroLiteAutoStart(bool enable, bool startMinimized = false)
+    {
+        if (!enable) return WriteAutoStartCommand(null);
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath)) return false;
+        return WriteAutoStartCommand(BuildAutoStartCommand(exePath, startMinimized));
+    }
+
+    /// <summary>
+    /// Keeps an existing Run entry working: when the executable it points to no longer exists (folder moved or
+    /// deleted), it is pointed at this executable; when only the --minimized flag disagrees with the setting, the
+    /// flag is fixed and the path kept. Does nothing when autostart is off. Returns true when the entry was changed.
+    /// </summary>
+    public bool RepairNitroLiteAutoStart(bool startMinimized, string? currentExePath = null)
+    {
+        var command = ReadAutoStartCommand();
+        if (string.IsNullOrWhiteSpace(command)) return false;
+
+        currentExePath ??= Environment.ProcessPath;
+        var registeredPath = ParseAutoStartExePath(command);
+        var fileExists = FileExistsSeam ?? File.Exists;
+        var targetPath = registeredPath != null && fileExists(registeredPath) ? registeredPath : currentExePath;
+        if (string.IsNullOrEmpty(targetPath)) return false;
+
+        var desired = BuildAutoStartCommand(targetPath, startMinimized);
+        if (string.Equals(command.Trim(), desired, StringComparison.OrdinalIgnoreCase)) return false;
+        return WriteAutoStartCommand(desired);
+    }
 
     public bool IsNitroSenseRunning()
     {
@@ -1063,15 +1214,22 @@ public class DebloatService
         }
     }
 
-    public int KillNitroSenseProcesses()
+    /// <summary>
+    /// Closes NitroSense (an Electron app: one main process plus helpers, so the whole tree is killed).
+    /// Returns true when no NitroSense process is left afterwards.
+    /// </summary>
+    public bool KillNitroSenseProcesses()
     {
         var procs = Process.GetProcessesByName("NitroSense");
-        int count = procs.Length;
         foreach (var p in procs)
         {
             try
             {
-                p.Kill(true);
+                if (!p.HasExited)
+                {
+                    p.Kill(true);
+                    p.WaitForExit(2000);
+                }
             }
             catch { }
             finally
@@ -1079,20 +1237,18 @@ public class DebloatService
                 try { p.Dispose(); } catch { }
             }
         }
-        return count;
+        return !IsNitroSenseRunning();
     }
 
-    public void DisableNitroSenseBackgroundExecution()
+    /// <summary>
+    /// State of the "NitroSenseLauncher" scheduled task, which starts NitroSense at sign-in:
+    /// true = enabled, false = disabled, null = not found / unreadable.
+    /// </summary>
+    public bool? IsNitroSenseLauncherEnabled()
     {
-        try
-        {
-            using var key = Registry.CurrentUser.CreateSubKey($@"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications\{NitroSensePackageFamily}", true);
-            if (key != null)
-            {
-                key.SetValue("Disabled", 1, RegistryValueKind.DWord);
-                key.SetValue("DisabledByUser", 1, RegistryValueKind.DWord);
-            }
-        }
-        catch { }
+        var state = RecordCurrentScheduledTaskState("NitroSenseLauncher");
+        if (IsActiveTaskState(state)) return true;
+        if (IsDisabledTaskState(state)) return false;
+        return null;
     }
 }

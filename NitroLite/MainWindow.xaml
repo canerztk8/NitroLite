@@ -1327,7 +1327,7 @@
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Sistem Servisleri ve Başlangıç Ayarları" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
-                                <TextBlock Text="Gereksiz OEM telemetri servislerini devre dışı bırakın ve başlangıç davranışını yapılandırın." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
+                                <TextBlock Text="Gereksiz Acer arka plan servislerini kapatın, NitroSense'i yönetin ve NitroLite'ın başlangıç davranışını ayarlayın." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" TextWrapping="Wrap" />
 
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
@@ -1337,12 +1337,12 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                                <TextBlock Text="OEM Telemetri Servislerini Devre Dışı Bırak (Tier 1)" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
-                                                <TextBlock Text="AcerServiceSvc, ASMSvc, AcerDIAgentSvis, AcerEZSvc, AcerDeviceInfoAgentService, ADESv2" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                <TextBlock Text="Acer Arka Plan Servisleri" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
+                                                <TextBlock Text="Servis bileşeni, sistem izleme, cihaz bilgisi, Experience Zone ve cihaz etkinleştirme servisleri. NitroLite'ın kullandığı Acer Agent, Care Center ve Lighting servislerine dokunulmaz. Ayarlar değiştirilmeden önce yedeklenir." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                                <Button Click="BtnApplyDebloat_Click" Content="Servisleri Devre Dışı Bırak (~214 MB)" Background="#2A1B28" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,7" Margin="0,0,8,0" Cursor="Hand" FontSize="11" />
-                                                <Button Click="BtnRestoreServices_Click" Content="Varsayılan Servisleri Etkinleştir" Background="#222733" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,7" Cursor="Hand" FontSize="11" />
+                                                <Button x:Name="BtnApplyDebloat" Click="BtnApplyDebloat_Click" Content="Devre Dışı Bırak" Background="#2A1B28" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,7" Margin="0,0,8,0" Cursor="Hand" FontSize="11" />
+                                                <Button x:Name="BtnRestoreServices" Click="BtnRestoreServices_Click" Content="Servisleri Geri Yükle" Background="#222733" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,7" Cursor="Hand" FontSize="11" />
                                             </StackPanel>
                                         </Grid>
 
@@ -1351,8 +1351,12 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Grid Margin="0,3">
-                                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" />
-                                                        <TextBlock Text="{Binding Status}" Foreground="{StaticResource AccentCyan}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right" />
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding DisplayName}" ToolTip="{Binding Name}" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentCyan}" FontWeight="Bold" FontSize="11" />
                                                     </Grid>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
@@ -1360,7 +1364,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- NITROSENSE BACKGROUND SUPPRESSION & RAM CLEANER -->
+                                <!-- NITROSENSE -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1369,12 +1373,13 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                <TextBlock Text="NitroSense Arka Plan Yürütme Kısıtlaması" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                                <TextBlock x:Name="TxtNitroSenseRunningBadge" Text=" (Devre Dışı)" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="NitroSense" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                                <TextBlock x:Name="TxtNitroSenseRunningBadge" Text="--" Foreground="{StaticResource TextMuted}" FontWeight="Bold" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center" />
                                             </StackPanel>
-                                            <TextBlock Text="NitroSense kapatıldığında arka plan servislerinin çalışmaya devam etmesini ve bellek tüketmesini engeller." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" />
+                                            <TextBlock Text="NitroSense açıkken klavye ışığını ve mod tuşunu NitroSense yönetir, NitroLite karışmaz. Bu buton NitroSense'i ve yardımcı işlemlerini kapatır." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="TxtNitroSenseLauncherState" Text="--" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
                                         </StackPanel>
-                                        <Button x:Name="BtnKillNitroSense" Grid.Column="1" Content="NitroSense İşlemlerini Sonlandır" Click="BtnKillNitroSense_Click" Background="#2A1B28" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,8" Cursor="Hand" VerticalAlignment="Center" FontSize="11" />
+                                        <Button x:Name="BtnKillNitroSense" Grid.Column="1" Content="NitroSense'i Kapat" Click="BtnKillNitroSense_Click" Background="#2A1B28" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,8" Cursor="Hand" VerticalAlignment="Center" FontSize="11" />
                                     </Grid>
                                 </Border>
 
@@ -1382,9 +1387,9 @@
                                 <Border Style="{StaticResource CardBorder}">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,12">
-                                            <StackPanel>
-                                                <TextBlock Text="Windows başlangıcında otomatik çalıştır" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="Kullanıcı oturumu açıldığında arka planda başlatılır." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                            <StackPanel Margin="0,0,48,0">
+                                                <TextBlock Text="Windows açılışında otomatik çalıştır" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Oturum açıldığında NitroLite başlatılır (yönetici izni gerekmez)." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <CheckBox x:Name="ChkAutoStart" Checked="ChkAutoStart_Changed" Unchecked="ChkAutoStart_Changed" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>
@@ -1392,9 +1397,9 @@
                                         <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,12" />
 
                                         <Grid>
-                                            <StackPanel>
-                                                <TextBlock Text="Sistem tepsisinde simge durumunda başlat" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="Uygulama açılışta ana pencereyi görüntülemeden sistem tepsisine küçülür." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                            <StackPanel Margin="0,0,48,0">
+                                                <TextBlock Text="Windows açılışında tepside başlat" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Otomatik başlatmada pencere gösterilmez, NitroLite sistem tepsisinde çalışır. Elle açtığınızda pencere her zaman görünür." TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <CheckBox x:Name="ChkStartMinimized" Checked="ChkStartMinimized_Changed" Unchecked="ChkStartMinimized_Changed" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>
