@@ -633,7 +633,8 @@ public class AcerAgentClient : IDisposable
 
             var resp = await SendFunctionAsync(PacketGetUpdatedData, "LIGHTING");
             var dataNode = GetSuccessData(resp);
-            if (dataNode == null) return null;
+            // Without the effect and brightness the reply describes nothing usable; do not invent a WAVE/cyan default.
+            if (dataNode?["effect"] == null || dataNode["brightness"] == null) return null;
 
             var cfg = new LightingConfig
             {
@@ -672,6 +673,15 @@ public class AcerAgentClient : IDisposable
         }
         return "#" + hex.ToUpperInvariant();
     }
+
+    /// <summary>True when the last lighting command was accepted by only one of the two targets (global / keyboard).</summary>
+    public bool LastLightingPartialFailure { get; private set; }
+
+    /// <summary>
+    /// NitroSense EFFECT_DIRECTION: 1 = right, 2 = left, 3 = up, 4 = down (5-8 rotate/diagonal, unused here).
+    /// 0 is not a valid direction (the old 0..1 clamp sent it for "left").
+    /// </summary>
+    public static int NormalizeDirection(int direction) => direction is >= 1 and <= 4 ? direction : 1;
 
     public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors)
     {
@@ -712,7 +722,7 @@ public class AcerAgentClient : IDisposable
                     brightness = actualBrightness,
                     speed = Math.Clamp(speed, 1, 9),
                     duration = 5,
-                    direction = Math.Clamp(direction, 0, 1),
+                    direction = NormalizeDirection(direction),
                     color = actualColor,
                     LEDs = leds
                 }
@@ -724,7 +734,7 @@ public class AcerAgentClient : IDisposable
                     brightness = actualBrightness,
                     speed = Math.Clamp(speed, 1, 9),
                     duration = 5,
-                    direction = Math.Clamp(direction, 0, 1),
+                    direction = NormalizeDirection(direction),
                     color = actualColor,
                     LEDs = leds
                 };
@@ -736,6 +746,9 @@ public class AcerAgentClient : IDisposable
             var respKb = await SendFunctionAsync(PacketSetDeviceData, "LIGHTING", BuildParam(1));
             bool kbSuccess = IsSuccessResult(respKb);
 
+            // Both the global (0) and keyboard (1) targets are expected to accept the command; report a
+            // half-applied change instead of hiding it.
+            LastLightingPartialFailure = globalSuccess != kbSuccess;
             return globalSuccess || kbSuccess;
         }
         catch

@@ -44,6 +44,7 @@ public class RgbProfileService
         }
     }
 
+    /// <summary>Saves a user preset. Throws for built-in names; throws IOException if it cannot be written to disk.</summary>
     public void SaveCustomPreset(string name, string effect, int brightness, int speed, int direction, string color, List<string> leds)
     {
         lock (_presetsLock)
@@ -74,7 +75,11 @@ public class RgbProfileService
                     IsBuiltIn = false
                 });
             }
-            Persist();
+            if (!Persist())
+            {
+                // Surface the failure (the UI shows it) instead of claiming the preset was saved.
+                throw new IOException("Profil dosyası diske yazılamadı.");
+            }
         }
     }
 
@@ -114,7 +119,7 @@ public class RgbProfileService
             _presets.Add(new RgbPreset
             {
                 Name = "Okyanus Mavisi",
-                Effect = "WAVE",
+                Effect = "STATIC", // WAVE ignores colours (rainbow); the blue zones need STATIC
                 Brightness = 6,
                 Speed = 3,
                 Color = "#00B0FF",
@@ -125,7 +130,7 @@ public class RgbProfileService
             _presets.Add(new RgbPreset
             {
                 Name = "Kırmızı & Turuncu (Inferno)",
-                Effect = "BREATHING",
+                Effect = "STATIC", // BREATHING takes a single colour; four zone colours need STATIC
                 Brightness = 8,
                 Speed = 4,
                 Color = "#FF3D00",
@@ -147,11 +152,46 @@ public class RgbProfileService
             _presets.Add(new RgbPreset
             {
                 Name = "Vaporwave (Mor & Pembe)",
-                Effect = "NEON",
+                Effect = "STATIC", // NEON cycles its own colours; purple/pink zones need STATIC
                 Brightness = 7,
                 Speed = 4,
                 Color = "#BD00FF",
                 LEDs = new() { "#BD00FF", "#FF007F", "#BD00FF", "#FF007F" },
+                IsBuiltIn = true
+            });
+
+            // Dynamic effects. WAVE and NEON use the keyboard's own colours, so their names say so.
+            _presets.Add(new RgbPreset
+            {
+                Name = "Gökkuşağı Dalga",
+                Effect = "WAVE",
+                Brightness = 7,
+                Speed = 4,
+                Direction = 1,
+                Color = "#FFFFFF",
+                LEDs = new() { "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF" },
+                IsBuiltIn = true
+            });
+
+            _presets.Add(new RgbPreset
+            {
+                Name = "Neon Renk Geçişi",
+                Effect = "NEON",
+                Brightness = 7,
+                Speed = 4,
+                Color = "#FFFFFF",
+                LEDs = new() { "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF" },
+                IsBuiltIn = true
+            });
+
+            _presets.Add(new RgbPreset
+            {
+                Name = "Kırmızı Nefes",
+                Effect = "BREATHING",
+                Brightness = 8,
+                Speed = 4,
+                Color = "#FF2A55",
+                LEDs = new() { "#FF2A55", "#FF2A55", "#FF2A55", "#FF2A55" },
                 IsBuiltIn = true
             });
 
@@ -199,7 +239,7 @@ public class RgbProfileService
         }
     }
 
-    private void Persist()
+    private bool Persist()
     {
         try
         {
@@ -212,7 +252,11 @@ public class RgbProfileService
             var tempFile = PresetsFile + ".tmp";
             File.WriteAllText(tempFile, json);
             File.Move(tempFile, PresetsFile, overwrite: true);
+            return true;
         }
-        catch { }
+        catch
+        {
+            return false;
+        }
     }
 }

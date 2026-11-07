@@ -530,7 +530,7 @@ public partial class MainWindow : Window
             // 2. Initial Lighting (Check settings.json, then active_rgb_state.json)
             bool restoredSavedRgb = false;
 
-            if (_appSettings.IsBacklightOff || (_appSettings.KeyboardLighting != null && (_appSettings.KeyboardLighting.Brightness == 0 || _appSettings.KeyboardLighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))))
+            if ((_appSettings.KeyboardLighting != null ? IsLightingOff(_appSettings.KeyboardLighting) : _appSettings.IsBacklightOff) /* KeyboardLighting is the source of truth; IsBacklightOff only for old settings files */)
             {
                 _lighting.Brightness = 0;
                 _lighting.Effect = "OFF";
@@ -664,7 +664,7 @@ public partial class MainWindow : Window
             }
         }
 
-        if (_appSettings.IsBacklightOff || (_appSettings.KeyboardLighting != null && (_appSettings.KeyboardLighting.Brightness == 0 || _appSettings.KeyboardLighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))))
+        if ((_appSettings.KeyboardLighting != null ? IsLightingOff(_appSettings.KeyboardLighting) : _appSettings.IsBacklightOff) /* KeyboardLighting is the source of truth; IsBacklightOff only for old settings files */)
         {
             _lighting.Brightness = 0;
             _lighting.Effect = "OFF";
@@ -837,6 +837,9 @@ public partial class MainWindow : Window
 
     public async Task ReassertKeyboardLightingAsync(bool isBoot = false)
     {
+        // NitroSense also restores the keyboard lighting; re-applying ours on resume/unlock would fight it.
+        if (_debloatService.IsNitroSenseRunning()) return;
+
         CancelActiveLightingReassertion();
         var cts = new CancellationTokenSource();
         _lightingReassertCts = cts;
@@ -3462,23 +3465,36 @@ public partial class MainWindow : Window
 
     private void BtnDeleteCustomPreset_Click(object sender, RoutedEventArgs e)
     {
-        if (CmbRgbPresets.SelectedItem is not string selectedName) return;
-
-        var ok = _rgbProfileService.DeletePreset(selectedName);
-        if (ok)
+        if (CmbRgbPresets.SelectedItem is not string selectedName)
         {
-            if (_appSettings.SelectedRgbPreset == selectedName)
-            {
-                _appSettings.SelectedRgbPreset = null;
-                SaveSettings();
-            }
-            PopulateRgbPresets();
-            ShowToast($"'{selectedName}' profili silindi.");
+            ShowToast("Silmek için listeden bir profil seçin.", false);
+            return;
         }
-        else
+
+        var preset = _rgbProfileService.GetPresets().FirstOrDefault(p => p.Name == selectedName);
+        if (preset?.IsBuiltIn == true)
         {
             ShowToast("Varsayılan fabrika profilleri silinemez.", false);
+            return;
         }
+
+        var confirm = System.Windows.MessageBox.Show(this,
+            $"'{selectedName}' aydınlatma profilini silmek istiyor musunuz?",
+            "Profili Sil", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        if (!_rgbProfileService.DeletePreset(selectedName))
+        {
+            ShowToast("Profil silinemedi.", false);
+            return;
+        }
+
+        // Clear the combo first: SaveSettings() copies the combo's selection into SelectedRgbPreset,
+        // which used to write the just-deleted name back.
+        MarkLightingCustomized();
+        SaveSettings();
+        PopulateRgbPresets();
+        ShowToast($"'{selectedName}' profili silindi.");
     }
 
     // ==========================================
@@ -3986,7 +4002,127 @@ public partial class MainWindow : Window
         {
             ShowToast($"{failurePrefix}: klavye komutu reddedildi veya Acer servisine ulaşılamadı. Ayar kaydedilmedi.", false);
         }
+        else if (ok && _agentClient.LastLightingPartialFailure && !_isExiting)
+        {
+            ShowToast("Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.", false);
+        }
+
+        // Remember the last lit configuration so brightness/effect changes after "off" can bring it back.
+        if (ok && !IsLightingOff(cfg))
+        {
+            _appSettings.LastActiveLighting = LightingPolicy.Clone(cfg);
+        }
         return ok;
+    }
+
+    /// <summary>Any manual change means the lighting no longer matches the selected preset: clear the selection
+    /// (so re-selecting the same preset applies it again) and stop saving its name.</summary>
+    private void MarkLightingCustomized()
+    {
+        _appSettings.SelectedRgbPreset = null;
+        if (CmbRgbPresets?.SelectedItem == null) return;
+        bool wasApplying = _isApplyingPreset;
+        _isApplyingPreset = true;
+        try { CmbRgbPresets.SelectedItem = null; }
+        finally { _isApplyingPreset = wasApplying; }
+    }
+
+    private static WpfBrush SolidOrFallback(string? hex)
+    {
+        try { return (new BrushConverter().ConvertFromString(hex ?? "#000000") as WpfBrush) ?? System.Windows.Media.Brushes.Black; }
+        catch { return System.Windows.Media.Brushes.Black; }
+    }
+
+    /// <summary>Rainbow sample for effects that use the keyboard's own colours (each zone shifted).</summary>
+    private static WpfBrush RainbowBrush(int zone)
+    {
+        var hues = new[] { "#FF2A55", "#FFAA00", "#00FFA3", "#00E5FF", "#BD00FF", "#FF2A55" };
+        var brush = new LinearGradientBrush { StartPoint = new WpfPoint(0, 0.5), EndPoint = new WpfPoint(1, 0.5) };
+        for (int i = 0; i < 3; i++)
+        {
+            var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hues[(zone + i) % hues.Length]);
+            brush.GradientStops.Add(new GradientStop(c, i / 2.0));
+        }
+        return brush;
+    }
+
+    /// <summary>
+    /// Shows what the keyboard will actually do: zone colours only for STATIC, one colour for the other
+    /// colour effects, a rainbow sample for WAVE/NEON (which ignore the chosen colour), black when off.
+    /// </summary>
+    private void UpdatePreviewZones(LightingConfig cfg)
+    {
+        var zones = new[] { PreviewZone1, PreviewZone2, PreviewZone3, PreviewZone4 };
+        string note;
+        for (int i = 0; i < zones.Length; i++)
+        {
+            if (zones[i] == null) continue;
+            if (IsLightingOff(cfg)) zones[i].Background = System.Windows.Media.Brushes.Black;
+            else if (!LightingPolicy.EffectUsesColor(cfg.Effect)) zones[i].Background = RainbowBrush(i);
+            else if (LightingPolicy.EffectUsesZoneColors(cfg.Effect)) zones[i].Background = SolidOrFallback(i < cfg.LEDs.Count ? cfg.LEDs[i] : cfg.Color);
+            else zones[i].Background = SolidOrFallback(cfg.Color);
+
+            // Keep the zone label readable on dark colours and when off (dark text vanished on black).
+            if (zones[i].Child is TextBlock label)
+            {
+                bool dark = zones[i].Background is SolidColorBrush s
+                    && (0.299 * s.Color.R + 0.587 * s.Color.G + 0.114 * s.Color.B) < 110;
+                label.Foreground = dark
+                    ? (TryFindResource("TextSecondary") as WpfBrush ?? System.Windows.Media.Brushes.Gray)
+                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0F, 0x11, 0x15));
+            }
+        }
+
+        if (IsLightingOff(cfg))
+            note = "Aydınlatma kapalı. Parlaklığı artırmak, bir efekt ya da renk seçmek son ayarla geri açar.";
+        else if (!LightingPolicy.EffectUsesColor(cfg.Effect))
+            note = "Bu efekt klavyenin kendi renk döngüsünü kullanır; seçilen renk uygulanmaz.";
+        else if (!LightingPolicy.EffectUsesZoneColors(cfg.Effect))
+            note = "Bu efekt tek renk kullanır; bölgelere ayrı renk yalnızca Sabit Renk (STATIC) efektinde verilebilir.";
+        else
+            note = "";
+
+        if (TxtZonePreviewNote != null)
+        {
+            TxtZonePreviewNote.Text = note;
+            TxtZonePreviewNote.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    private bool _isSyncingDirectionUi;
+
+    /// <summary>Shows the direction picker only for effects that support it, with only the allowed directions.</summary>
+    private void UpdateLightingControlsForEffect(LightingConfig cfg)
+    {
+        var allowed = IsLightingOff(cfg) ? Array.Empty<int>() : LightingPolicy.AllowedDirections(cfg.Effect);
+        if (PnlRgbDirection != null) PnlRgbDirection.Visibility = allowed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (CmbRgbDirection != null)
+        {
+            _isSyncingDirectionUi = true;
+            try
+            {
+                CmbRgbDirection.Items.Clear();
+                foreach (var d in allowed)
+                {
+                    CmbRgbDirection.Items.Add(new ComboBoxItem { Content = LightingPolicy.DirectionName(d), Tag = d });
+                }
+                int idx = allowed.ToList().IndexOf(cfg.Direction);
+                CmbRgbDirection.SelectedIndex = allowed.Count > 0 ? Math.Max(0, idx) : -1;
+            }
+            finally
+            {
+                _isSyncingDirectionUi = false;
+            }
+        }
+
+        if (TxtRgbEffectNote != null)
+        {
+            string note = IsLightingOff(cfg) || LightingPolicy.EffectUsesColor(cfg.Effect)
+                ? ""
+                : "Renk butonları bu efektte kullanılmaz; bir renk seçerseniz Sabit Renk'e geçilir.";
+            TxtRgbEffectNote.Text = note;
+            TxtRgbEffectNote.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private void PersistLightingState()
@@ -4031,17 +4167,11 @@ public partial class MainWindow : Window
             SliderBrightness.Value = cfg.Brightness;
             SliderSpeed.Value = cfg.Speed;
         });
-        TxtBrightnessVal.Text = cfg.Brightness == 0 ? "0 / 9 (Kapalı)" : $"{cfg.Brightness} / 9";
+        TxtBrightnessVal.Text = IsLightingOff(cfg) ? "0 / 9 (Kapalı)" : $"{cfg.Brightness} / 9";
         TxtSpeedVal.Text = $"{cfg.Speed} / 9";
 
-        // Zones
-        if (cfg.LEDs.Count >= 4)
-        {
-            PreviewZone1.Background = new BrushConverter().ConvertFromString(cfg.LEDs[0]) as WpfBrush;
-            PreviewZone2.Background = new BrushConverter().ConvertFromString(cfg.LEDs[1]) as WpfBrush;
-            PreviewZone3.Background = new BrushConverter().ConvertFromString(cfg.LEDs[2]) as WpfBrush;
-            PreviewZone4.Background = new BrushConverter().ConvertFromString(cfg.LEDs[3]) as WpfBrush;
-        }
+        UpdatePreviewZones(cfg);
+        UpdateLightingControlsForEffect(cfg);
     }
 
     // ==========================================
@@ -4420,32 +4550,137 @@ public partial class MainWindow : Window
         {
             if (sender is WpfButton btn && btn.Tag is string hex)
             {
-                CancelActiveLightingReassertion();
                 if (hex == "#000000")
                 {
+                    CancelActiveLightingReassertion();
                     await TurnOffLightsAsync();
                     return;
                 }
-
-                if (_lighting.Brightness == 0)
-                {
-                    _lighting.Brightness = 5;
-                }
-
-                _lighting.Color = hex;
-                _lighting.Effect = "STATIC";
-                _lighting.LEDs = new List<string> { hex, hex, hex, hex };
-
-                UpdateLightingUi(_lighting);
-                SuppressEffectComboEvents(() => UpdateEffectComboBox("STATIC"));
-                if (!await ApplyLightingToDeviceAsync("Aydınlatma rengi ayarlanamadı")) return;
-                _appSettings.IsBacklightOff = false;
-                PersistLightingState();
+                await ApplyColorToAllZonesAsync(hex);
             }
         }
         catch (Exception ex)
         {
             ShowToast($"Aydınlatma rengi ayarlanamadı: {ex.Message}", false);
+        }
+    }
+
+    /// <summary>
+    /// One colour for the whole keyboard. Effects that take a colour (STATIC, BREATHING, ZOOM…) keep running with
+    /// the new colour; WAVE/NEON ignore colours, so the keyboard switches to STATIC. When the lights are off, the
+    /// last lit settings come back with this colour.
+    /// </summary>
+    private async Task ApplyColorToAllZonesAsync(string hex)
+    {
+        CancelActiveLightingReassertion();
+        if (IsLightingOff(_lighting))
+        {
+            _lighting = LightingPolicy.ResumeFromOff(_appSettings.LastActiveLighting);
+        }
+        if (!LightingPolicy.EffectUsesColor(_lighting.Effect))
+        {
+            _lighting.Effect = "STATIC";
+        }
+        _lighting.Color = hex;
+        _lighting.LEDs = new List<string> { hex, hex, hex, hex };
+
+        MarkLightingCustomized();
+        UpdateLightingUi(_lighting);
+        SuppressEffectComboEvents(() => UpdateEffectComboBox(_lighting.Effect));
+        if (!await ApplyLightingToDeviceAsync("Aydınlatma rengi ayarlanamadı")) return;
+        _appSettings.IsBacklightOff = false;
+        PersistLightingState();
+    }
+
+    /// <summary>Opens the Windows colour picker; returns "#RRGGBB" or null when cancelled.</summary>
+    private static string? PickColor(string? initialHex)
+    {
+        using var dlg = new System.Windows.Forms.ColorDialog { FullOpen = true, AnyColor = true };
+        try
+        {
+            var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(initialHex ?? LightingPolicy.DefaultColor);
+            dlg.Color = System.Drawing.Color.FromArgb(c.R, c.G, c.B);
+        }
+        catch { }
+        return dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK
+            ? $"#{dlg.Color.R:X2}{dlg.Color.G:X2}{dlg.Color.B:X2}"
+            : null;
+    }
+
+    private async void BtnCustomColor_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var hex = PickColor(IsLightingOff(_lighting) ? null : _lighting.Color);
+            if (hex == null) return;
+            if (hex == "#000000")
+            {
+                await TurnOffLightsAsync();
+                return;
+            }
+            await ApplyColorToAllZonesAsync(hex);
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Aydınlatma rengi ayarlanamadı: {ex.Message}", false);
+        }
+    }
+
+    /// <summary>Click a zone to give it its own colour. Zone colours only exist in STATIC, so it switches to STATIC.</summary>
+    private async void PreviewZone_Click(object sender, MouseButtonEventArgs e)
+    {
+        try
+        {
+            if (sender is not Border zone || !int.TryParse(zone.Tag?.ToString(), out int index) || index < 0 || index > 3) return;
+            CancelActiveLightingReassertion();
+
+            var baseCfg = IsLightingOff(_lighting) ? LightingPolicy.ResumeFromOff(_appSettings.LastActiveLighting) : LightingPolicy.Clone(_lighting);
+            var leds = baseCfg.LEDs.Count >= 4 ? baseCfg.LEDs.Take(4).ToList() : Enumerable.Repeat(baseCfg.Color, 4).ToList();
+            // Coming from a single-colour or rainbow effect, every zone starts from the visible colour.
+            if (!LightingPolicy.EffectUsesZoneColors(baseCfg.Effect))
+            {
+                var start = LightingPolicy.EffectUsesColor(baseCfg.Effect) ? baseCfg.Color : LightingPolicy.DefaultColor;
+                leds = Enumerable.Repeat(start, 4).ToList();
+            }
+
+            var hex = PickColor(leds[index]);
+            if (hex == null) return;
+
+            leds[index] = hex;
+            baseCfg.Effect = "STATIC";
+            baseCfg.LEDs = leds;
+            baseCfg.Color = leds[0];
+            _lighting = baseCfg;
+
+            MarkLightingCustomized();
+            UpdateLightingUi(_lighting);
+            SuppressEffectComboEvents(() => UpdateEffectComboBox("STATIC"));
+            if (!await ApplyLightingToDeviceAsync("Bölge rengi ayarlanamadı")) return;
+            _appSettings.IsBacklightOff = false;
+            PersistLightingState();
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Bölge rengi ayarlanamadı: {ex.Message}", false);
+        }
+    }
+
+    private async void CmbRgbDirection_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        try
+        {
+            if (!IsLoaded || _isInitializingUi || _isApplyingPreset || _isSyncingDirectionUi) return;
+            if (CmbRgbDirection.SelectedItem is not ComboBoxItem item || item.Tag is not int direction) return;
+            if (_lighting.Direction == direction) return;
+            CancelActiveLightingReassertion();
+            _lighting.Direction = direction;
+            MarkLightingCustomized();
+            if (!await ApplyLightingToDeviceAsync("Efekt yönü ayarlanamadı")) return;
+            PersistLightingState();
+        }
+        catch (Exception ex)
+        {
+            ShowToast($"Efekt yönü ayarlanamadı: {ex.Message}", false);
         }
     }
 
@@ -4464,19 +4699,17 @@ public partial class MainWindow : Window
     private async Task TurnOffLightsAsync()
     {
         CancelActiveLightingReassertion();
+        // Keep what was lit so brightness/effect/colour changes can bring it back later.
+        if (!IsLightingOff(_lighting))
+        {
+            _appSettings.LastActiveLighting = LightingPolicy.Clone(_lighting);
+        }
         _lighting.Brightness = 0;
         _lighting.Effect = "OFF";
         _lighting.Color = "#000000";
         _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
 
-        SetLightingSlidersSilently(() => SliderBrightness.Value = 0);
-        TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
-
-        PreviewZone1.Background = System.Windows.Media.Brushes.Black;
-        PreviewZone2.Background = System.Windows.Media.Brushes.Black;
-        PreviewZone3.Background = System.Windows.Media.Brushes.Black;
-        PreviewZone4.Background = System.Windows.Media.Brushes.Black;
-
+        UpdateLightingUi(_lighting);
         SuppressEffectComboEvents(() => UpdateEffectComboBox("OFF"));
 
         if (!await ApplyLightingToDeviceAsync("Aydınlatma kapatılamadı")) return;
@@ -4525,12 +4758,19 @@ public partial class MainWindow : Window
                     return;
                 }
 
-                _lighting.Effect = effectName;
-
-                if (_lighting.Brightness == 0)
+                // From "off" (black colours), bring the last lit settings back with the chosen effect;
+                // otherwise just change the effect.
+                if (IsLightingOff(_lighting))
                 {
-                    _lighting.Brightness = 5;
+                    _lighting = LightingPolicy.ResumeFromOff(_appSettings.LastActiveLighting, effect: effectName);
                 }
+                else
+                {
+                    _lighting.Effect = effectName;
+                    if (!LightingPolicy.AllowedDirections(effectName).Contains(_lighting.Direction)) _lighting.Direction = 1;
+                }
+
+                MarkLightingCustomized();
                 UpdateLightingUi(_lighting);
 
                 if (!await ApplyLightingToDeviceAsync("Aydınlatma efekti ayarlanamadı")) return;
@@ -4551,23 +4791,27 @@ public partial class MainWindow : Window
         if (!IsLoaded || _isInitializingUi || _isApplyingPreset || _isSyncingLightingUi || TxtBrightnessVal == null) return;
         CancelActiveLightingReassertion();
         var val = (int)e.NewValue;
-        _lighting.Brightness = val;
-        _appSettings.IsBacklightOff = IsLightingOff(_lighting);
-        _appSettings.KeyboardLighting = _lighting;
 
-        if (val == 0)
+        if (val > 0 && IsLightingOff(_lighting))
         {
-            TxtBrightnessVal.Text = "0 / 9 (Kapalı)";
-            PreviewZone1.Background = System.Windows.Media.Brushes.Black;
-            PreviewZone2.Background = System.Windows.Media.Brushes.Black;
-            PreviewZone3.Background = System.Windows.Media.Brushes.Black;
-            PreviewZone4.Background = System.Windows.Media.Brushes.Black;
+            // Raising brightness while off: bring back the last lit settings at this brightness
+            // (before, the command stayed "OFF" and the keyboard never lit up).
+            _lighting = LightingPolicy.ResumeFromOff(_appSettings.LastActiveLighting, brightness: val);
+            SuppressEffectComboEvents(() => UpdateEffectComboBox(_lighting.Effect));
         }
         else
         {
-            UpdateLightingUi(_lighting);
+            if (val == 0 && !IsLightingOff(_lighting))
+            {
+                _appSettings.LastActiveLighting = LightingPolicy.Clone(_lighting);
+            }
+            _lighting.Brightness = val;
         }
 
+        _appSettings.IsBacklightOff = IsLightingOff(_lighting);
+        _appSettings.KeyboardLighting = _lighting;
+        MarkLightingCustomized();
+        UpdateLightingUi(_lighting);
         ScheduleLightingApply();
     }
 
@@ -4578,6 +4822,7 @@ public partial class MainWindow : Window
         var val = (int)e.NewValue;
         TxtSpeedVal.Text = $"{val} / 9";
         _lighting.Speed = val;
+        MarkLightingCustomized();
         ScheduleLightingApply();
     }
 

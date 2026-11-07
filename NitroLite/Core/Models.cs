@@ -196,6 +196,8 @@ public class AppSettings
     // Index into the monitor list (System.Windows.Forms.Screen.AllScreens) the OSD is shown on.
     public int OsdMonitor { get; set; } = 0;
     public LightingConfig? KeyboardLighting { get; set; }
+    // Last lighting that was actually on, so raising brightness or picking an effect after "off" can restore it.
+    public LightingConfig? LastActiveLighting { get; set; }
     public bool IsBacklightOff { get; set; } = false;
     public string? SelectedRgbPreset { get; set; }
 

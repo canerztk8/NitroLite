@@ -874,21 +874,22 @@
                                 <!-- 4 Zones Visual Preview -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
-                                        <TextBlock Text="Dört Bölgeli Aydınlatma Düzeni" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="0,0,0,10" />
+                                        <TextBlock Text="Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="0,0,0,10" />
                                         <UniformGrid Columns="4" Height="64">
-                                            <Border x:Name="PreviewZone1" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
+                                            <Border x:Name="PreviewZone1" Tag="0" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
                                                 <TextBlock Text="Bölge 1 (Sol)" Foreground="#0F1115" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
-                                            <Border x:Name="PreviewZone2" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
+                                            <Border x:Name="PreviewZone2" Tag="1" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
                                                 <TextBlock Text="Bölge 2 (Orta Sol)" Foreground="#0F1115" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
-                                            <Border x:Name="PreviewZone3" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
+                                            <Border x:Name="PreviewZone3" Tag="2" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
                                                 <TextBlock Text="Bölge 3 (Orta Sağ)" Foreground="#0F1115" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
-                                            <Border x:Name="PreviewZone4" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
+                                            <Border x:Name="PreviewZone4" Tag="3" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="#0EA5E9" CornerRadius="4" Margin="3" BorderBrush="{StaticResource BorderDark}" BorderThickness="1">
                                                 <TextBlock Text="Bölge 4 (Sayısal)" Foreground="#0F1115" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
                                         </UniformGrid>
+                                        <TextBlock x:Name="TxtZonePreviewNote" Text="" Visibility="Collapsed" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="3,8,3,0" />
                                     </StackPanel>
                                 </Border>
 
@@ -938,6 +939,7 @@
                                         <Button Click="BtnPresetColor_Click" Tag="#FFAA00" Background="#FFAA00" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Turuncu" />
                                         <Button Click="BtnPresetColor_Click" Tag="#FFFFFF" Background="#FFFFFF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Beyaz" />
                                         <Button Click="BtnPresetColor_Click" Tag="#000000" Background="#000000" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Kapalı" />
+                                        <Button x:Name="BtnCustomColor" Content="Özel Renk…" Click="BtnCustomColor_Click" Height="36" Padding="12,0" Background="#222733" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" FontSize="11" FontWeight="SemiBold" ToolTip="Herhangi bir renk seçin (tüm bölgeler)" />
                                     </StackPanel>
                                 </StackPanel>
 
@@ -962,6 +964,12 @@
                                                 <ComboBoxItem Content="TWINKLING (Yıldız Parıltısı)" />
                                                 <ComboBoxItem Content="OFF (Işık Kapalı)" />
                                             </ComboBox>
+                                            <TextBlock x:Name="TxtRgbEffectNote" Text="" Visibility="Collapsed" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,-6,0,10" />
+
+                                            <StackPanel x:Name="PnlRgbDirection" Visibility="Collapsed" Margin="0,0,0,10">
+                                                <TextBlock Text="Efekt Yönü:" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="Bold" Margin="0,0,0,4" />
+                                                <ComboBox x:Name="CmbRgbDirection" SelectionChanged="CmbRgbDirection_SelectionChanged" />
+                                            </StackPanel>
 
                                             <CheckBox x:Name="ChkBacklightTimeout" Content="30 saniye boşta kaldığında aydınlatmayı kapat" Checked="ChkBacklightTimeout_Changed" Unchecked="ChkBacklightTimeout_Changed" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0" />
                                         </StackPanel>
