@@ -508,11 +508,11 @@ class Program
         try
         {
             var t = new MemoryCleanerServiceTests();
-            t.ShouldAutoClean_ZeroOrNegativeRamTotal_ReturnsFalse();
-            t.ShouldAutoClean_WhenGameIsActive_AlwaysReturnsFalseToPreventStutter();
-            t.ShouldAutoClean_NormalRamConditions_ReturnsFalse();
-            t.ShouldAutoClean_HighUsageThreshold_ReturnsTrue(88.0, 32768.0);
-            t.ShouldAutoClean_LowFreeMemoryThreshold_ReturnsTrue();
+            t.ShouldAutoClean_WithoutMemoryLists_ReturnsFalse();
+            t.ShouldAutoClean_LowFreeAndLargeStandby_ReturnsTrue();
+            t.ShouldAutoClean_PlentyOfFreeMemory_ReturnsFalse();
+            t.ShouldAutoClean_ThresholdsAreStrict(0.99, 1.01, true);
+            t.ShouldAutoClean_SmallStandbyList_ReturnsFalseBecauseAPurgeWouldFreeNothing();
             t.CleanMemory_ExecutesSafelyAndReturnsValidMetrics();
             await t.CleanMemoryAsync_ExecutesAsynchronouslyWithoutDeadlock();
             Console.ForegroundColor = ConsoleColor.Green;
@@ -731,7 +731,7 @@ class Program
             t.DebloatService_PreDebloatStartupTypes_RecordedAndRestoredAccurately();
             t.DebloatService_PowerShellFailures_SurfacedAndNotSilentlySuppressed();
             t.AppSettings_AutoRamCleanerEnabled_DefaultsToFalse();
-            t.MemoryCleaner_ShouldAutoClean_BypassedWhenGameActive();
+            t.MemoryCleaner_ShouldAutoClean_DependsOnRealFreeMemoryNotOnGames();
             t.TryScanJsonCompleteness_DetectsBalancedBracesWithoutStringAllocations();
             t.TryScanJsonCompleteness_IgnoresBracesInsideStringsAndEscapes();
             t.AcerAgentClient_MaxResponseSizeEnforced();

@@ -293,15 +293,14 @@ public class AdversarialChallengerTests
     // =========================================================================
 
     [Theory]
-    [InlineData(0.0, 99.0, false, "Zero RAM total")]
-    [InlineData(-1024.0, 95.0, false, "Negative RAM total")]
-    [InlineData(32768.0, 95.0, true, "Active gaming session")]
-    [InlineData(32768.0, 50.0, false, "Low RAM usage (16GB free)")]
+    [InlineData(16.0, 0.1, "Plenty of free memory")]
+    [InlineData(0.3, 0.2, "Memory full of programs, nothing in standby")]
+    [InlineData(-1.0, -1.0, "Nonsense sizes")]
     public void MemoryCleaner_ShouldAutoClean_IsInhibitedUnderAdversarialConditions(
-        double totalRam, double usagePct, bool isGameActive, string scenario)
+        double freeGb, double standbyGb, string scenario)
     {
         var service = new MemoryCleanerService();
-        bool shouldClean = service.ShouldAutoClean(usagePct, totalRam, isGameActive);
+        bool shouldClean = service.ShouldAutoClean(new MemoryListSizes(freeGb, standbyGb));
 
         Assert.False(shouldClean, $"Auto-clean should be inhibited under scenario: {scenario}");
     }
@@ -314,10 +313,10 @@ public class AdversarialChallengerTests
         // 1. Trigger cleaning
         service.CleanMemory(excludePid: Process.GetCurrentProcess().Id);
 
-        // 2. Immediate check under critical 95% RAM pressure
-        bool shouldClean = service.ShouldAutoClean(ramUsagePercent: 95.0, ramTotalMB: 16384.0, isGameActive: false);
+        // 2. Immediate check with almost no free memory and a large standby list
+        bool shouldClean = service.ShouldAutoClean(new MemoryListSizes(0.1, 12.0));
 
-        Assert.False(shouldClean, "Auto-clean must be debounced by 120s cooldown even under 95% pressure.");
+        Assert.False(shouldClean, "Auto-clean must be debounced by the 5-minute interval even under pressure.");
     }
 
     // =========================================================================

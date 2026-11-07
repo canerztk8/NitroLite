@@ -9,54 +9,38 @@ namespace NitroLite.Tests;
 public class MemoryCleanerServiceTests
 {
     [Fact]
-    public void ShouldAutoClean_ZeroOrNegativeRamTotal_ReturnsFalse()
+    public void ShouldAutoClean_WithoutMemoryLists_ReturnsFalse()
     {
-        var service = new MemoryCleanerService();
-
-        Assert.False(service.ShouldAutoClean(95.0, 0.0, false));
-        Assert.False(service.ShouldAutoClean(95.0, -1024.0, false));
+        Assert.False(new MemoryCleanerService().ShouldAutoClean(null));
     }
 
     [Fact]
-    public void ShouldAutoClean_WhenGameIsActive_AlwaysReturnsFalseToPreventStutter()
+    public void ShouldAutoClean_LowFreeAndLargeStandby_ReturnsTrue()
     {
-        var service = new MemoryCleanerService();
-
-        // High RAM pressure (92% used, 1GB free), but game is actively playing
-        bool result = service.ShouldAutoClean(ramUsagePercent: 92.0, ramTotalMB: 32768.0, isGameActive: true);
-        Assert.False(result, "AutoClean must never trigger when a game is actively running to prevent stutter.");
+        // The case "RAM used %" cannot see: ~55% used, but only 0.8 GB is truly free and 8 GB sits in standby.
+        Assert.True(new MemoryCleanerService().ShouldAutoClean(new MemoryListSizes(0.8, 8.2)));
     }
 
     [Fact]
-    public void ShouldAutoClean_NormalRamConditions_ReturnsFalse()
+    public void ShouldAutoClean_PlentyOfFreeMemory_ReturnsFalse()
     {
-        var service = new MemoryCleanerService();
+        Assert.False(new MemoryCleanerService().ShouldAutoClean(new MemoryListSizes(5.7, 8.2)));
+    }
 
-        // 60% usage on 32GB RAM (approx 13GB free)
-        bool result = service.ShouldAutoClean(ramUsagePercent: 60.0, ramTotalMB: 32768.0, isGameActive: false);
-        Assert.False(result);
+    [Fact]
+    public void ShouldAutoClean_SmallStandbyList_ReturnsFalseBecauseAPurgeWouldFreeNothing()
+    {
+        // Genuinely full memory (programs, not cache): purging the standby list cannot help.
+        Assert.False(new MemoryCleanerService().ShouldAutoClean(new MemoryListSizes(0.4, 0.5)));
     }
 
     [Theory]
-    [InlineData(88.0, 32768.0)]
-    [InlineData(92.5, 32768.0)]
-    [InlineData(98.0, 16384.0)]
-    public void ShouldAutoClean_HighUsageThreshold_ReturnsTrue(double usagePct, double totalMB)
+    [InlineData(0.99, 1.01, true)]
+    [InlineData(1.00, 4.00, false)]   // free exactly 1 GB is not "below"
+    [InlineData(0.50, 1.00, false)]   // standby exactly 1 GB is not "above"
+    public void ShouldAutoClean_ThresholdsAreStrict(double freeGb, double standbyGb, bool expected)
     {
-        var service = new MemoryCleanerService();
-
-        bool result = service.ShouldAutoClean(usagePct, totalMB, false);
-        Assert.True(result, $"Expected auto clean to trigger at {usagePct}% usage.");
-    }
-
-    [Fact]
-    public void ShouldAutoClean_LowFreeMemoryThreshold_ReturnsTrue()
-    {
-        var service = new MemoryCleanerService();
-
-        // 80% usage on 8192 MB -> Free = 1638.4 MB (<= 2048 MB threshold)
-        bool result = service.ShouldAutoClean(ramUsagePercent: 80.0, ramTotalMB: 8192.0, isGameActive: false);
-        Assert.True(result, "Expected auto clean to trigger when free RAM is <= 2048 MB.");
+        Assert.Equal(expected, new MemoryCleanerService().ShouldAutoClean(new MemoryListSizes(freeGb, standbyGb)));
     }
 
     [LiveSystemFact]
@@ -64,12 +48,11 @@ public class MemoryCleanerServiceTests
     {
         var service = new MemoryCleanerService();
 
-        // Trigger manual clean
+        // A manual clean also restarts the automatic interval.
         service.CleanMemory(excludePid: Process.GetCurrentProcess().Id);
 
-        // Immediately check auto clean condition (even under 95% pressure)
-        bool shouldClean = service.ShouldAutoClean(95.0, 32768.0, false);
-        Assert.False(shouldClean, "AutoClean must be rate-limited by the 120-second cooldown period.");
+        Assert.False(service.ShouldAutoClean(new MemoryListSizes(0.2, 10.0)),
+            "AutoClean must be rate-limited by the 5-minute interval.");
     }
 
     [LiveSystemFact]

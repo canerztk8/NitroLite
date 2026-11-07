@@ -88,17 +88,14 @@ public class AuditRemediationTests
     }
 
     [Fact]
-    public void MemoryCleaner_ShouldAutoClean_BypassedWhenGameActive()
+    public void MemoryCleaner_ShouldAutoClean_DependsOnRealFreeMemoryNotOnGames()
     {
         var cleaner = new MemoryCleanerService();
 
-        // Even with 95% RAM utilization and low free RAM, game active state MUST completely suppress cleaning
-        bool shouldCleanInGame = cleaner.ShouldAutoClean(ramUsagePercent: 95.0, ramTotalMB: 32768.0, isGameActive: true);
-        Assert.False(shouldCleanInGame, "Memory cleaning must be bypassed when a game is active to avoid micro-stutters");
-
-        // When game is inactive, memory pressure triggers clean
-        bool shouldCleanIdle = cleaner.ShouldAutoClean(ramUsagePercent: 95.0, ramTotalMB: 32768.0, isGameActive: false);
-        Assert.True(shouldCleanIdle, "Memory cleaning should proceed when game is inactive and memory pressure is high");
+        // The rule no longer looks at games: the standby-list stutter it prevents happens in games.
+        // It looks at the real free list and the standby list.
+        Assert.True(cleaner.ShouldAutoClean(new MemoryListSizes(0.6, 9.0)), "Low free memory with a large standby list must trigger a purge");
+        Assert.False(cleaner.ShouldAutoClean(new MemoryListSizes(6.0, 9.0)), "Enough free memory must not trigger a purge");
     }
 
     // =========================================================================

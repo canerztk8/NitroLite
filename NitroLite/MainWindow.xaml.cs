@@ -326,16 +326,22 @@ public partial class MainWindow : Window
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
         // Each item calls the same code as the mode cards, so the battery rule for Turbo/Performance applies here too.
-        menu.Items.Add("Sessiz Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Quiet));
-        menu.Items.Add("Dengeli Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Default));
-        menu.Items.Add("Performans Modu", null, async (s, e) => await SetManualModeAsync(OperatingMode.Extreme));
-        menu.Items.Add("Turbo Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Turbo));
-        menu.Items.Add("Eco Mod", null, async (s, e) => await SetManualModeAsync(OperatingMode.Eco));
+        // Tags let the Opening handler tick the active mode and boost.
+        void AddMode(string text, OperatingMode mode) =>
+            menu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(text, null, async (s, e) => await SetManualModeAsync(mode)) { Tag = mode });
+        void AddBoost(string text, CpuBoostMode boost) =>
+            menu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(text, null, async (s, e) => await SetManualCpuBoostAsync(boost)) { Tag = boost });
+
+        AddMode("Sessiz Mod", OperatingMode.Quiet);
+        AddMode("Dengeli Mod", OperatingMode.Default);
+        AddMode("Performans Modu", OperatingMode.Extreme);
+        AddMode("Turbo Mod", OperatingMode.Turbo);
+        AddMode("Eco Mod", OperatingMode.Eco);
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add("CPU Boost: Devre Dışı", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Disabled));
-        menu.Items.Add("CPU Boost: Verimli", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Efficient));
-        menu.Items.Add("CPU Boost: Agresif", null, async (s, e) => await SetManualCpuBoostAsync(CpuBoostMode.Aggressive));
+        AddBoost("CPU Boost: Devre Dışı", CpuBoostMode.Disabled);
+        AddBoost("CPU Boost: Verimli", CpuBoostMode.Efficient);
+        AddBoost("CPU Boost: Agresif", CpuBoostMode.Aggressive);
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Çıkış", null, (s, e) => RealExit());
@@ -343,6 +349,15 @@ public partial class MainWindow : Window
         menu.Opening += (s, e) =>
         {
             UpdateTrayRetryMenuItemState();
+            foreach (var item in menu.Items.OfType<System.Windows.Forms.ToolStripMenuItem>())
+            {
+                item.Checked = item.Tag switch
+                {
+                    OperatingMode m => m == _currentMode,
+                    CpuBoostMode b => _lastShownBoost == b,
+                    _ => false
+                };
+            }
         };
 
         _notifyIcon.ContextMenuStrip = menu;
@@ -902,7 +917,7 @@ public partial class MainWindow : Window
         }
     }
 
-    public void ShowToast(string message, bool isSuccess = true)
+    public void ShowToast(string message, bool isSuccess = true, bool trayBalloon = true)
     {
         ToastHandler?.Invoke(message, isSuccess);
         if (Dispatcher.HasShutdownStarted) return;
@@ -910,6 +925,21 @@ public partial class MainWindow : Window
         Action action = () =>
         {
             if (Dispatcher.HasShutdownStarted || ToastBanner == null || TxtToastIcon == null || TxtToastMessage == null) return;
+
+            // In the tray (window hidden or minimized) the banner is invisible: actions started from the tray menu, the
+            // mode key or automation would give no feedback, and a refusal ("Turbo not on battery") would look like
+            // success. Show it as a Windows notification instead.
+            if (!IsVisible || WindowState == WindowState.Minimized)
+            {
+                if (!trayBalloon || _notifyIcon == null || _isExiting || _isInitializingUi) return;
+                try
+                {
+                    _notifyIcon.ShowBalloonTip(isSuccess ? 2500 : 4000, "NitroLite", message,
+                        isSuccess ? System.Windows.Forms.ToolTipIcon.Info : System.Windows.Forms.ToolTipIcon.Warning);
+                }
+                catch { }
+                return;
+            }
 
             TxtToastIcon.Text = isSuccess ? "●" : "!";
             TxtToastIcon.Foreground = TryFindResource(isSuccess ? "AccentGreen" : "AccentCyan") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Cyan);
@@ -1182,11 +1212,11 @@ public partial class MainWindow : Window
                 _notifyIcon.Text = tip.Length > 63 ? tip[..63] : tip;
             }
 
-            // Automatic standby purge under memory pressure; never during games, only when elevated, and not awaited
+            // Automatic standby purge when real free memory is low and the standby list is large (games included: that
+            // is where the stutter happens). Only when the purge can run (elevated or no-prompt task ready); not awaited
             // here so the telemetry loop keeps running while it works.
-            bool isGameActive = _isGameSessionActive || _gameService.IsGameActive;
-            if (_appSettings.AutoRamCleanerEnabled && !isGameActive && _ramCleanAvailable == true
-                && _memoryService.ShouldAutoClean(data.RamUsage, data.RamTotalMB, isGameActive))
+            if (_appSettings.AutoRamCleanerEnabled && _ramCleanAvailable && !_ramCleanBusy
+                && _memoryService.ShouldAutoClean(MemoryCleanerService.ReadMemoryLists()))
             {
                 _ = RunAutoRamCleanAsync();
             }
@@ -3076,7 +3106,7 @@ public partial class MainWindow : Window
                                 _notifyIcon?.ShowBalloonTip(2500, "NitroLite", 
                                     $"{profile.DisplayName} sonlandırıldı. {restoredSummary} geri yüklendi.", 
                                     System.Windows.Forms.ToolTipIcon.Info);
-                                ShowToast(isBatteryEco ? "Pilde Eco profili uygulandı (Masaüstü ayarları adaptör için saklandı)." : "Masaüstü ayarları başarıyla geri yüklendi.");
+                                ShowToast(isBatteryEco ? "Pilde Eco profili uygulandı (Masaüstü ayarları adaptör için saklandı)." : "Masaüstü ayarları başarıyla geri yüklendi.", trayBalloon: false);
                             }
                             else
                             {
@@ -3916,7 +3946,7 @@ public partial class MainWindow : Window
             TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
 
             _notifyIcon?.ShowBalloonTip(4000, "NitroLite", "Pil seviyesi %80 sınırına ulaştı. Adaptörü bağlayabilirsiniz.", System.Windows.Forms.ToolTipIcon.Info);
-            ShowToast("Pil seviyesi %80 hedef sınırına indirildi.");
+            ShowToast("Pil seviyesi %80 hedef sınırına indirildi.", trayBalloon: false);
         });
     }
 
@@ -5366,7 +5396,7 @@ public partial class MainWindow : Window
             ? $"{res.FreedMegabytes / 1024.0:F1} GB"
             : $"{res.FreedMegabytes:F0} MB";
         if (!automatic || res.FreedMegabytes > 150)
-            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe geçti.");
+            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe geçti.", trayBalloon: !automatic);
         SetRamCleanStatus($" ({freedStr} boşaltıldı)", "AccentGreen");
         UpdateMemoryListText();
     }

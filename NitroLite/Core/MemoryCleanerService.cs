@@ -98,20 +98,24 @@ public class MemoryCleanerService
 
     private DateTime _lastAutoCleanTime = DateTime.MinValue;
 
-    public bool ShouldAutoClean(double ramUsagePercent, double ramTotalMB, bool isGameActive = false)
+    /// <summary>Automatic purge: real free memory below this…</summary>
+    public const double AutoCleanFreeBelowGb = 1.0;
+    /// <summary>…while the standby list holds more than this (otherwise a purge would free nothing).</summary>
+    public const double AutoCleanStandbyAboveGb = 1.0;
+    public static readonly TimeSpan AutoCleanInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Automatic purge rule (the same idea as ISLC): purge when the real free list is low while the standby list is
+    /// large. That is the situation where Windows hands standby pages back slowly and games stutter. The "RAM used %"
+    /// figure cannot see it: it counts standby as available, so it shows ~55% while only 1 GB is truly free.
+    /// It also runs during games: that is where the stutter happens, and the purge itself takes ~0.2 s.
+    /// At most once per <see cref="AutoCleanInterval"/>; a manual clean also resets the interval.
+    /// </summary>
+    public bool ShouldAutoClean(MemoryListSizes? lists)
     {
-        // Total RAM must be legitimate
-        if (ramTotalMB <= 0) return false;
-
-        // Optional game active suppression
-        if (isGameActive) return false;
-
-        // Rate-limit auto cleaner to at most once per 120 seconds
-        if ((DateTime.Now - _lastAutoCleanTime).TotalSeconds < 120) return false;
-
-        double freeMB = ramTotalMB * (1.0 - (ramUsagePercent / 100.0));
-        // Auto-clean only under genuine memory pressure
-        return ramUsagePercent >= 88.0 || freeMB <= 2048.0;
+        if (lists is not { } l) return false;
+        if (DateTime.Now - _lastAutoCleanTime < AutoCleanInterval) return false;
+        return l.FreeGigabytes < AutoCleanFreeBelowGb && l.StandbyGigabytes > AutoCleanStandbyAboveGb;
     }
 
     public async Task<MemoryCleanerResult> CleanMemoryAsync(int? excludePid = null, string? excludeProcessName = null)
