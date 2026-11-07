@@ -31,6 +31,8 @@ public class DcEcoRecoveryState
     public CpuBoostMode SavedBoost { get; set; } = CpuBoostMode.Aggressive;
     public FanMode SavedFan { get; set; } = FanMode.Auto;
     public CpuBoostMode? SavedDcBoost { get; set; }
+    // Built-in panel refresh rate before Eco lowered it to 60 Hz (null = Eco did not change it).
+    public int? SavedRefreshRate { get; set; }
     public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
 }
 
@@ -86,6 +88,8 @@ public class PowerAutomationService : IDisposable
     // The power plan's battery (DC) boost value before Eco replaced it. Eco only writes the DC value,
     // so the AC value is never touched and a crash on battery cannot cost performance on the adapter.
     private CpuBoostMode? _savedDcBoostBeforeEco;
+    // Panel refresh rate Eco replaced with 60 Hz; only this value is restored on AC (null = Eco did not touch it).
+    private int? _savedRefreshRateBeforeEco;
 
     /// <summary>
     /// Optional file used to persist the Eco baseline. Null disables persistence (unit tests).
@@ -98,7 +102,8 @@ public class PowerAutomationService : IDisposable
         if (string.IsNullOrEmpty(path)) return;
         try
         {
-            if (!_isDcEcoActive && !HasPendingAcRestore)
+            // Also keep the file while a lowered panel rate still has to be restored (e.g. lid was closed on AC).
+            if (!_isDcEcoActive && !HasPendingAcRestore && !_savedRefreshRateBeforeEco.HasValue)
             {
                 if (File.Exists(path)) File.Delete(path);
                 return;
@@ -106,11 +111,12 @@ public class PowerAutomationService : IDisposable
 
             var state = new DcEcoRecoveryState
             {
-                IsDcEcoActive = true,
+                IsDcEcoActive = _isDcEcoActive || HasPendingAcRestore,
                 SavedMode = _savedOperatingModeBeforeDc,
                 SavedBoost = _savedCpuBoostBeforeDc,
                 SavedFan = _savedFanModeBeforeDc,
                 SavedDcBoost = _savedDcBoostBeforeEco,
+                SavedRefreshRate = _savedRefreshRateBeforeEco,
                 TimestampUtc = DateTime.UtcNow
             };
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
@@ -132,13 +138,23 @@ public class PowerAutomationService : IDisposable
         try
         {
             var state = JsonSerializer.Deserialize<DcEcoRecoveryState>(File.ReadAllText(path));
-            if (state == null || !state.IsDcEcoActive) return false;
+            if (state == null) return false;
+            if (!state.IsDcEcoActive)
+            {
+                // Only a panel refresh rate is still waiting to be restored.
+                if (state.SavedRefreshRate.HasValue)
+                {
+                    lock (_stateSyncLock) { _savedRefreshRateBeforeEco = state.SavedRefreshRate; }
+                }
+                return false;
+            }
             lock (_stateSyncLock)
             {
                 _savedOperatingModeBeforeDc = state.SavedMode;
                 _savedCpuBoostBeforeDc = state.SavedBoost;
                 _savedFanModeBeforeDc = state.SavedFan;
                 _savedDcBoostBeforeEco = state.SavedDcBoost;
+                _savedRefreshRateBeforeEco = state.SavedRefreshRate;
                 _isDcEcoActive = true;
             }
             return true;
@@ -372,7 +388,13 @@ public class PowerAutomationService : IDisposable
 
                     if (_settings.AutoRefreshRateSwitching)
                     {
-                        _displayService.SetRefreshRate(60);
+                        // Built-in panel only. Remember its rate so AC restores exactly that, not "maximum".
+                        int before = _displayService.GetCurrentRefreshRate();
+                        if (before > 60 && _displayService.SetRefreshRate(60))
+                        {
+                            _savedRefreshRateBeforeEco = before;
+                            PersistEcoState();
+                        }
                     }
 
                     _pendingDcApply = !modeOk || !boostOk || !fanOk;
@@ -486,16 +508,14 @@ public class PowerAutomationService : IDisposable
                     PersistEcoState();
                 }
 
-                int targetRate = 165;
-                if (_settings.AutoRefreshRateSwitching)
-                {
-                    int maxRate = _displayService.GetMaxRefreshRate();
-                    targetRate = maxRate > 60 ? maxRate : 165;
-                    _displayService.SetRefreshRate(targetRate);
-                }
+                // Only undo what Eco did: restore the panel rate it lowered. If Eco never changed it, the display
+                // is left alone (it used to be forced to its maximum on every AC event, including startup).
+                int? restoredRate = RestorePanelRefreshRateAfterEco();
 
                 string message = allRestored
-                    ? $"Adaptör Bağlandı: Önceki profil ve {targetRate}Hz tazeleme hızı geri yüklendi."
+                    ? (restoredRate.HasValue
+                        ? $"Adaptör Bağlandı: Önceki profil ve {restoredRate}Hz ekran tazeleme hızı geri yüklendi."
+                        : "Adaptör Bağlandı: Önceki profil geri yüklendi.")
                     : $"Adaptör Bağlandı (Kısmi Geri Yükleme): Geri yüklenemeyen ayarlar: {string.Join(", ", failed)}";
 
                 PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
@@ -617,6 +637,20 @@ public class PowerAutomationService : IDisposable
     }
 
     /// <summary>
+    /// Puts the built-in panel back to the refresh rate Eco replaced with 60 Hz. Returns the restored rate, or null
+    /// when Eco had not changed it (nothing is touched) or the panel is not available right now (kept for next time).
+    /// </summary>
+    private int? RestorePanelRefreshRateAfterEco()
+    {
+        var saved = _savedRefreshRateBeforeEco;
+        if (!saved.HasValue) return null;
+        if (!_displayService.SetRefreshRate(saved.Value)) return null;
+        _savedRefreshRateBeforeEco = null;
+        PersistEcoState();
+        return saved;
+    }
+
+    /// <summary>
     /// Undo Eco's CPU boost change. A running game's profile applies to both AC and DC values;
     /// otherwise only the battery (DC) value is put back, because Eco never modified the AC value.
     /// </summary>
@@ -646,11 +680,7 @@ public class PowerAutomationService : IDisposable
             try { boostOk = await RestoreBoostAfterEcoAsync(false, _savedCpuBoostBeforeDc); } catch { }
             try { fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeDc); } catch { }
 
-            if (_settings.AutoRefreshRateSwitching)
-            {
-                int maxRate = _displayService.GetMaxRefreshRate();
-                if (maxRate > 60) _displayService.SetRefreshRate(maxRate);
-            }
+            RestorePanelRefreshRateAfterEco();
 
             bool ok = modeOk && boostOk && fanOk;
             if (ok)

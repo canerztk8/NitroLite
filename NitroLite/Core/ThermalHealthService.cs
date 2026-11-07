@@ -13,18 +13,21 @@ public class DailyThermalSummary
     public double AvgIdleGpuTemp { get; set; } = 41.0;
     public double AvgLoadCpuTemp { get; set; } = 68.5;
     public double AvgLoadGpuTemp { get; set; } = 65.0;
-    public double ThermalResistanceRatio { get; set; } = 1.95; // °C per Watt
-    public int ActiveFanMinutes { get; set; } = 120;
-    public int PassiveFanMinutes { get; set; } = 60;
+    public double ThermalResistanceRatio { get; set; } = 1.95; // °C per Watt; 0 = no load measurement that day
+    public int ActiveFanMinutes { get; set; } = 0;
+    public int PassiveFanMinutes { get; set; } = 0;
 }
 
 public class ThermalHealthData
 {
-    public long TotalFanActiveSeconds { get; set; } = 144000;  // Initial baseline ~40 hours
-    public long TotalFanPassiveSeconds { get; set; } = 86400;  // Initial baseline ~24 hours
-    public long AccumulatedFanRpm { get; set; } = 388800000;
-    public double BaselineThermalRatio { get; set; } = 1.95;   // AMD Zen 4 Phoenix + High Performance Thermal Interface
+    // Counted from NitroLite's own samples only. Older versions started these at 40 h / 24 h of invented runtime.
+    public long TotalFanActiveSeconds { get; set; } = 0;
+    public long TotalFanPassiveSeconds { get; set; } = 0;
+    public long AccumulatedFanRpm { get; set; } = 0;
+    public double BaselineThermalRatio { get; set; } = 1.95;   // reference value for the trend calculation
     public List<DailyThermalSummary> DailyHistory { get; set; } = new();
+    /// <summary>0 = written by an older version (may contain the invented seed); 2 = clean.</summary>
+    public int DataVersion { get; set; } = 0;
 }
 
 public class ThermalHealthReport
@@ -39,6 +42,12 @@ public class ThermalHealthReport
     public double RecentIdleTemp { get; set; } = 44.0;
     public double RecentLoadTemp { get; set; } = 68.5;
     public string Recommendation { get; set; } = "Termal direnç ve ısı transferi nominal tolerans sınırları içindedir. Bakım gerekmemektedir.";
+    /// <summary>True once a sustained-load sample exists (now or in history); otherwise the ratio/paste values are only the reference baseline.</summary>
+    public bool HasLoadMeasurement { get; set; }
+    /// <summary>True once an idle sample exists (now or in history).</summary>
+    public bool HasIdleMeasurement { get; set; }
+    /// <summary>Fan life rating the "bearing" percentage is based on (hours).</summary>
+    public double FanRatedHours { get; set; } = 50000;
 }
 
 public class ThermalHealthService
@@ -79,6 +88,7 @@ public class ThermalHealthService
                 if (loaded != null)
                 {
                     _data = loaded;
+                    if (RemoveLegacySeed(_data)) SaveData();
 
                     // Restore today's fan time counter from history if present
                     var today = _data.DailyHistory.FirstOrDefault(d => d.Date == _currentDayString);
@@ -93,22 +103,44 @@ public class ThermalHealthService
         }
         catch { }
 
-        // Seed with initial baseline if no existing valid data
-        _data = new ThermalHealthData();
-        _data.DailyHistory.Add(new DailyThermalSummary
-        {
-            Date = DateTime.Now.ToString("yyyy-MM-dd"),
-            AvgIdleCpuTemp = 44.0,
-            AvgIdleGpuTemp = 41.5,
-            AvgLoadCpuTemp = 68.5,
-            AvgLoadGpuTemp = 65.0,
-            ThermalResistanceRatio = 1.95,
-            ActiveFanMinutes = 180,
-            PassiveFanMinutes = 90
-        });
-        _todayFanActiveSeconds = 180 * 60;
-        _todayFanPassiveSeconds = 90 * 60;
+        // No data yet: start empty. (Older versions invented a first day and 40 h / 24 h of fan runtime here.)
+        _data = new ThermalHealthData { DataVersion = 2 };
         SaveData();
+    }
+
+    /// <summary>
+    /// Cleans data written by older versions: subtracts the invented fan runtime they started with and marks the
+    /// invented day entries (their GPU fields were never measured and the load values are the seed constants)
+    /// as "no load measurement" so they no longer feed the trend. Returns true if anything changed.
+    /// </summary>
+    internal static bool RemoveLegacySeed(ThermalHealthData data)
+    {
+        if (data.DataVersion >= 2) return false;
+
+        if (data.TotalFanActiveSeconds >= 144000) data.TotalFanActiveSeconds -= 144000;
+        if (data.TotalFanPassiveSeconds >= 86400) data.TotalFanPassiveSeconds -= 86400;
+        if (data.AccumulatedFanRpm >= 388800000) data.AccumulatedFanRpm -= 388800000;
+
+        foreach (var day in data.DailyHistory)
+        {
+            // Days without a sustained-load sample kept the class default 1.95 / 68.5 °C.
+            if (Math.Abs(day.ThermalResistanceRatio - 1.95) < 0.001 && Math.Abs(day.AvgLoadCpuTemp - 68.5) < 0.001)
+            {
+                day.ThermalResistanceRatio = 0;
+                day.AvgLoadCpuTemp = 0;
+            }
+            // Idle defaults (44.0 seed / 44.5 class default) were never measured either.
+            if (Math.Abs(day.AvgIdleCpuTemp - 44.0) < 0.001 || Math.Abs(day.AvgIdleCpuTemp - 44.5) < 0.001)
+            {
+                day.AvgIdleCpuTemp = 0;
+            }
+            // GPU idle/load temperatures were never sampled at all.
+            day.AvgIdleGpuTemp = 0;
+            day.AvgLoadGpuTemp = 0;
+        }
+
+        data.DataVersion = 2;
+        return true;
     }
 
     public void SaveData()
@@ -256,7 +288,16 @@ public class ThermalHealthService
             var summary = _data.DailyHistory.FirstOrDefault(d => d.Date == todayStr);
             if (summary == null)
             {
-                summary = new DailyThermalSummary { Date = todayStr };
+                // Start a day as "not measured"; only real samples below fill it in.
+                summary = new DailyThermalSummary
+                {
+                    Date = todayStr,
+                    ThermalResistanceRatio = 0,
+                    AvgLoadCpuTemp = 0,
+                    AvgIdleCpuTemp = 0,
+                    AvgIdleGpuTemp = 0,
+                    AvgLoadGpuTemp = 0
+                };
                 _data.DailyHistory.Add(summary);
                 // Keep last 30 days history
                 if (_data.DailyHistory.Count > 30) _data.DailyHistory.RemoveAt(0);
@@ -285,26 +326,34 @@ public class ThermalHealthService
         double currentRatio;
         double idleTemp;
         double loadTemp;
+        bool hasLoad;
+        bool hasIdle;
 
         lock (_syncLock)
         {
             activeHours = Math.Round(_data.TotalFanActiveSeconds / 3600.0, 1);
             passiveHours = Math.Round(_data.TotalFanPassiveSeconds / 3600.0, 1);
-            avgRpm = _data.TotalFanActiveSeconds > 0 
-                ? (int)(_data.AccumulatedFanRpm / _data.TotalFanActiveSeconds) 
-                : 2600;
+            avgRpm = _data.TotalFanActiveSeconds > 0
+                ? (int)(_data.AccumulatedFanRpm / _data.TotalFanActiveSeconds)
+                : 0;
 
-            currentRatio = _loadThermalRatios.Count > 0 
-                ? Math.Round(_loadThermalRatios.Average(), 2) 
-                : (_data.DailyHistory.LastOrDefault()?.ThermalResistanceRatio ?? 1.95);
+            // History entries with 0 are days without a measurement; only real ones are used.
+            var lastLoadDay = _data.DailyHistory.LastOrDefault(d => d.ThermalResistanceRatio > 0);
+            var lastIdleDay = _data.DailyHistory.LastOrDefault(d => d.AvgIdleCpuTemp > 0);
+            hasLoad = _loadThermalRatios.Count > 0 || lastLoadDay != null;
+            hasIdle = _idleCpuTemps.Count > 0 || lastIdleDay != null;
 
-            idleTemp = _idleCpuTemps.Count > 0 
-                ? Math.Round(_idleCpuTemps.Average(), 1) 
-                : (_data.DailyHistory.LastOrDefault()?.AvgIdleCpuTemp ?? 44.5);
+            currentRatio = _loadThermalRatios.Count > 0
+                ? Math.Round(_loadThermalRatios.Average(), 2)
+                : (lastLoadDay?.ThermalResistanceRatio ?? _data.BaselineThermalRatio);
 
-            loadTemp = _loadCpuTemps.Count > 0 
-                ? Math.Round(_loadCpuTemps.Average(), 1) 
-                : (_data.DailyHistory.LastOrDefault()?.AvgLoadCpuTemp ?? 68.5);
+            idleTemp = _idleCpuTemps.Count > 0
+                ? Math.Round(_idleCpuTemps.Average(), 1)
+                : (lastIdleDay?.AvgIdleCpuTemp ?? 0);
+
+            loadTemp = _loadCpuTemps.Count > 0
+                ? Math.Round(_loadCpuTemps.Average(), 1)
+                : (lastLoadDay?.AvgLoadCpuTemp ?? 0);
         }
 
         // Fan Bearing Health: Fan bearings rated for ~40,000-50,000 hours
@@ -364,7 +413,12 @@ public class ThermalHealthService
             FanBearingHealthPercent = Math.Round(fanBearingHealth, 1),
             RecentIdleTemp = idleTemp,
             RecentLoadTemp = loadTemp,
-            Recommendation = recommendation
+            Recommendation = hasLoad
+                ? recommendation
+                : "Henüz yük altında ölçüm yok. Değerlendirme, işlemci bir süre yük altında (oyun, derleme vb.) çalıştıktan sonra oluşur.",
+            HasLoadMeasurement = hasLoad,
+            HasIdleMeasurement = hasIdle,
+            FanRatedHours = 50000
         };
     }
 
@@ -385,7 +439,8 @@ public class ThermalHealthService
         double baseline;
         lock (_syncLock)
         {
-            entries = _data.DailyHistory.TakeLast(days).ToList();
+            // Only days with a real sustained-load measurement (ratio > 0) count towards the trend.
+            entries = _data.DailyHistory.Where(d => d.ThermalResistanceRatio > 0).TakeLast(days).ToList();
             baseline = _data.BaselineThermalRatio;
         }
 
@@ -399,9 +454,9 @@ public class ThermalHealthService
                 DegradationSlopePerDay = 0.0,
                 StatusText = "Veri toplanıyor (Yeterli gün kaydı yok)",
                 StatusLevel = ThermalStatusLevel.Excellent,
-                CurrentRatio = baseline,
+                CurrentRatio = 0, // no measured day yet
                 BaselineRatio = baseline,
-                AverageRatio = baseline,
+                AverageRatio = 0, // no measured day yet
                 CoefficientOfVariation = 0.0
             };
         }

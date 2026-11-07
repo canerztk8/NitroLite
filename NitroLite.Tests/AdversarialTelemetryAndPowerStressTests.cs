@@ -249,10 +249,9 @@ public class AdversarialTelemetryAndPowerStressTests
         await service.ProcessPowerTransitionAsync(isAc: true);
         Assert.False(service.IsDcEcoActive);
 
-        // Because Eco was never active, it must NOT revert user's settings to old saved mode
-        // Only 165Hz display refresh should be restored
-        Assert.Single(mockDisplay.CallLog);
-        Assert.Equal(165, mockDisplay.CallLog[0]);
+        // Because Eco was never active, it must NOT revert the user's settings to the old saved mode,
+        // and since Eco never lowered the refresh rate, the display must not be touched either.
+        Assert.Empty(mockDisplay.CallLog);
     }
 
     [Fact]
@@ -274,13 +273,16 @@ public class AdversarialTelemetryAndPowerStressTests
             GetCurrentFanMode = () => FanMode.Auto
         };
 
-        // Double AC transition
+        // Double AC transition without Eco ever lowering the rate: the display is left alone.
         await service.ProcessPowerTransitionAsync(isAc: true);
         await service.ProcessPowerTransitionAsync(isAc: true);
+        Assert.Empty(mockDisplay.CallLog);
 
-        // Should not trigger multiple redundant display switches
-        Assert.Single(mockDisplay.CallLog);
-        Assert.Equal(165, mockDisplay.CallLog[0]);
+        // Battery Eco lowers it once; the following AC events restore it exactly once.
+        await service.ProcessPowerTransitionAsync(isAc: false);
+        await service.ProcessPowerTransitionAsync(isAc: true);
+        await service.ProcessPowerTransitionAsync(isAc: true);
+        Assert.Equal(new[] { 60, 165 }, mockDisplay.CallLog);
     }
 
     [Fact]

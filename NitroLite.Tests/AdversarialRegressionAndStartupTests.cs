@@ -55,7 +55,8 @@ public class AdversarialRegressionAndStartupTests
 
         var trend = service.GetStabilityTrend(30);
 
-        Assert.Equal(1, trend.DaysCount);
+        // A ratio of 0 or below means "no load measurement that day" and is not counted.
+        Assert.Equal(ratio > 0 ? 1 : 0, trend.DaysCount);
         Assert.Equal(0.0, trend.DegradationSlopePerDay);
         Assert.Equal(0.0, trend.CoefficientOfVariation);
         Assert.InRange(trend.StabilityScorePercent, 50.0, 100.0);
@@ -256,7 +257,8 @@ public class AdversarialRegressionAndStartupTests
 
         var trend = service.GetStabilityTrend(30);
 
-        Assert.Equal(2, trend.DaysCount);
+        // Days with ratio 0 have no load measurement and are skipped, so there is nothing to divide by.
+        Assert.Equal(0, trend.DaysCount);
         Assert.Equal(0.0, trend.AverageRatio);
         // CV calculation checks meanY > 0, so meanY = 0 returns 0.0 instead of NaN
         Assert.Equal(0.0, trend.CoefficientOfVariation);

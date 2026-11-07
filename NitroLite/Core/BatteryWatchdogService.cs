@@ -107,7 +107,28 @@ public class BatteryWatchdogService : IDisposable
         }
     }
 
+    private readonly object _statusLock = new();
+
+    /// <summary>
+    /// Reads the battery state. Serialised (the main loop and the discharge loop both call it, and the discharge
+    /// rate smoothing is stateful); events are raised outside the lock so a UI handler cannot deadlock it.
+    /// </summary>
     public BatteryStatusInfo UpdateStatus()
+    {
+        BatteryStatusInfo info;
+        bool raiseOvercharge;
+        lock (_statusLock)
+        {
+            info = ComputeStatus();
+            raiseOvercharge = info.IsOvercharged && !CurrentStatus.IsOvercharged;
+            CurrentStatus = info;
+        }
+        if (raiseOvercharge) OverchargeAlert?.Invoke(info.BatteryPercent);
+        StatusUpdated?.Invoke(info);
+        return info;
+    }
+
+    private BatteryStatusInfo ComputeStatus()
     {
         var info = new BatteryStatusInfo();
         if (GetSystemPowerStatus(out var status))
@@ -117,12 +138,8 @@ public class BatteryWatchdogService : IDisposable
             info.IsCharging = (status.BatteryFlag & 8) != 0;
             info.EstimatedRemainingMinutes = status.BatteryLifeTime > 0 ? status.BatteryLifeTime / 60 : -1;
             info.IsWatchdogActive = WatchdogEnabled;
-            info.IsOvercharged = info.IsPluggedIn && info.BatteryPercent > 80;
-
-            if (info.IsOvercharged && !CurrentStatus.IsOvercharged)
-            {
-                OverchargeAlert?.Invoke(info.BatteryPercent);
-            }
+            // Only meaningful while the 80 % limit is on: with it off, charging to 100 % is the user's choice.
+            info.IsOvercharged = WatchdogEnabled && info.IsPluggedIn && info.BatteryPercent > 80;
         }
 
         // GAMING OPTIMIZATION: When gaming and connected to AC, bypass heavy WMI queries (~235 ms)
@@ -134,8 +151,7 @@ public class BatteryWatchdogService : IDisposable
             info.ChargeRateWatts = 0.0;
             info.SmoothedDischargeRateWatts = 0.0;
             info.TemperatureCelsius = null;
-            CurrentStatus = info;
-            StatusUpdated?.Invoke(info);
+            info.ChargeRateUnknown = true;
             return info;
         }
 
@@ -206,16 +222,8 @@ public class BatteryWatchdogService : IDisposable
         }
         catch { }
 
-        if (!info.TemperatureCelsius.HasValue)
-        {
-            // Thermodynamic wattage model (~29.5°C baseline for Acer Nitro 16 90.6Wh battery)
-            double wattageHeat = (info.IsCharging ? info.ChargeRateWatts : info.DischargeRateWatts) * 0.08;
-            info.TemperatureCelsius = Math.Round(Math.Clamp(28.5 + wattageHeat, 26.0, 42.0), 1);
-            info.IsTemperatureEstimated = true;
-        }
-
-        CurrentStatus = info;
-        StatusUpdated?.Invoke(info);
+        // No battery temperature sensor is exposed on this model: leave it unknown ("--") instead of the old
+        // wattage-based guess (28.5 °C + W × 0.08) that was shown in the component matrix.
         return info;
     }
 
@@ -303,19 +311,45 @@ public class BatteryWatchdogService : IDisposable
                 }
                 catch { }
 
-                if (details.VoltageVolts <= 0)
-                {
-                    details.VoltageVolts = 16.45; // Standard 4-cell Li-ion nominal for AP21A8T
-                    details.IsVoltageEstimated = true;
-                }
+                // Still nothing: leave it unknown ("--") instead of a model-specific 16.45 V constant.
             }
 
-            // 6. Fallback for FullChargeCapacity if needed
-            if (details.FullChargeCapacityMWh <= 0 && details.DesignCapacityMWh > 0)
+            // 6. Identity and cycle count (Win32_Battery / BatteryCycleCount).
+            try
             {
-                details.FullChargeCapacityMWh = Math.Round(details.DesignCapacityMWh * 0.923, 0); // ~83,637 mWh
-                details.IsFullChargeCapacityEstimated = true;
+                using var bs = new ManagementObjectSearcher(@"root\cimv2", "SELECT Name, DeviceID, Chemistry FROM Win32_Battery");
+                using var rows = bs.Get();
+                foreach (ManagementObject b in rows)
+                {
+                    using (b)
+                    {
+                        details.ModelName = (b["Name"]?.ToString() ?? "").Trim();
+                        details.Manufacturer = ParseBatteryManufacturer(b["DeviceID"]?.ToString(), details.ModelName);
+                        details.Chemistry = BatteryChemistryName(Convert.ToInt32(b["Chemistry"] ?? 0));
+                        break;
+                    }
+                }
             }
+            catch { }
+
+            try
+            {
+                using var cs = new ManagementObjectSearcher(@"root\WMI", "SELECT CycleCount FROM BatteryCycleCount");
+                using var rows = cs.Get();
+                foreach (ManagementObject c in rows)
+                {
+                    using (c)
+                    {
+                        int cycles = Convert.ToInt32(c["CycleCount"] ?? 0);
+                        details.CycleCount = cycles > 0 ? cycles : null; // 0 = not reported by the firmware
+                        break;
+                    }
+                }
+            }
+            catch { }
+
+            // No full-charge capacity from Windows: leave it unknown. (The old "design × 0.923" guess happened to
+            // match this AN16-41 but would be shown as a measurement anywhere else.)
 
             if (details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0)
             {
@@ -373,20 +407,50 @@ public class BatteryWatchdogService : IDisposable
             try { if (File.Exists(tempXml)) File.Delete(tempXml); } catch { }
         }
 
-        // Physical hardware specification for Acer Nitro 16 AN16-41 (LGC AP21A8T 90,614 mWh)
-        isEstimated = true;
-        return 90614.0;
+        // Unknown: no model-specific constant (the old 90,614 mWh AN16-41 value would be wrong on other batteries).
+        isEstimated = false;
+        return 0;
     }
 
-    public void StartSafeDischarge()
+    /// <summary>Win32_Battery.Chemistry codes.</summary>
+    public static string BatteryChemistryName(int code) => code switch
     {
+        3 => "Kurşun asit",
+        4 => "Nikel kadmiyum",
+        5 => "Nikel metal hidrit",
+        6 => "Lityum-iyon",
+        7 => "Çinko hava",
+        8 => "Lityum polimer",
+        _ => ""
+    };
+
+    /// <summary>
+    /// Win32_Battery.DeviceID is typically serial + manufacturer + name (e.g. "34643LGCAP21A8T"): strip the name at
+    /// the end and the leading serial digits to get the manufacturer ("LGC"). Empty when it does not follow that shape.
+    /// </summary>
+    public static string ParseBatteryManufacturer(string? deviceId, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(name)) return "";
+        var id = deviceId.Trim();
+        var n = name.Trim();
+        if (!id.EndsWith(n, StringComparison.OrdinalIgnoreCase) || id.Length <= n.Length) return "";
+        var prefix = id.Substring(0, id.Length - n.Length).TrimStart('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Trim();
+        return prefix.Length is > 0 and <= 16 ? prefix : "";
+    }
+
+    /// <summary>Raised whenever discharge starts (true) or stops for any reason (false), e.g. the adapter was reconnected.</summary>
+    public event Action<bool>? DischargeStateChanged;
+
+    /// <summary>Starts the load. Returns false (nothing started) on AC power or when already at or below 80 %.</summary>
+    public bool StartSafeDischarge()
+    {
+        var info = UpdateStatus();
         lock (_dischargeLock)
         {
-            if (_isDischarging) return;
+            if (_isDischarging) return true;
 
-            var info = UpdateStatus();
-            // Do not attempt discharge while connected to AC power
-            if (info.IsPluggedIn) return;
+            // Do not attempt discharge while connected to AC power, or when there is nothing to discharge.
+            if (info.IsPluggedIn || info.BatteryPercent <= 80) return false;
 
             _isDischarging = true;
             _dischargeCts?.Cancel();
@@ -443,6 +507,8 @@ public class BatteryWatchdogService : IDisposable
                 catch (OperationCanceledException) { }
             }, token);
         }
+        DischargeStateChanged?.Invoke(true);
+        return true;
     }
 
     public void StopSafeDischarge()
@@ -457,6 +523,7 @@ public class BatteryWatchdogService : IDisposable
             }
             catch { }
         }
+        DischargeStateChanged?.Invoke(false);
         UpdateStatus();
     }
 

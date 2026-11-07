@@ -133,7 +133,8 @@ public class StorageHealthServiceTests
         Assert.True(d0.TotalCapacityGB > 0.0, "Disk 0 total capacity must be greater than 0 GB.");
         Assert.True(d0.UsedCapacityGB >= 0.0, "Disk 0 used capacity must be non-negative.");
         Assert.True(d0.FreeCapacityGB >= 0.0, "Disk 0 free capacity must be non-negative.");
-        Assert.InRange(d0.EstHealthPercent, 0, 100);
+        // -1 = wear counter not readable without administrator rights (no longer reported as a fake 100 %).
+        Assert.True(d0.EstHealthPercent == -1 || (d0.EstHealthPercent >= 0 && d0.EstHealthPercent <= 100));
         Assert.False(string.IsNullOrWhiteSpace(d0.Model), "Disk model name must not be empty.");
 
         // If multiple drives exist, DiskNumbers should be unique and strictly ordered

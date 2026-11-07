@@ -379,6 +379,7 @@ public partial class MainWindow : Window
         _batteryService.StatusUpdated += OnBatteryStatusUpdated;
         _batteryService.OverchargeAlert += OnOverchargeAlert;
         _batteryService.DischargeTargetReached += OnDischargeTargetReached;
+        _batteryService.DischargeStateChanged += OnDischargeStateChanged;
         _batteryService.Start();
 
         // Game Detection Hooks
@@ -3508,29 +3509,65 @@ public partial class MainWindow : Window
         {
             // Values computed from a fixed factory capacity, and the hard-coded fallbacks used when Windows
             // reports nothing, are shown as estimates.
+            // Only values Windows reported are shown; anything missing is "--" (no model-specific constants).
             bool measured = details.DesignCapacityMWh > 0 && details.FullChargeCapacityMWh > 0;
-            bool wearEstimated = !measured || details.IsDesignCapacityEstimated || details.IsFullChargeCapacityEstimated;
+            bool wearEstimated = details.IsDesignCapacityEstimated || details.IsFullChargeCapacityEstimated;
 
             if (TxtBatHealthPercent != null)
-                TxtBatHealthPercent.Text = TelemetryFormatter.MarkEstimated(measured ? $"{details.HealthPercent:F1} %" : "92.3 %", wearEstimated);
+                TxtBatHealthPercent.Text = measured ? TelemetryFormatter.MarkEstimated($"{details.HealthPercent:F1} %", wearEstimated) : "--";
+            if (TxtBatHealthNote != null)
+                TxtBatHealthNote.Text = !measured ? "Kapasite okunamadı"
+                    : details.HealthPercent >= 80 ? "İyi"
+                    : details.HealthPercent >= 60 ? "Yıpranmış"
+                    : "Değişim önerilir";
 
             if (TxtBatWearPercent != null)
-                TxtBatWearPercent.Text = TelemetryFormatter.MarkEstimated(measured ? $"{details.WearLevelPercent:F1} %" : "7.7 %", wearEstimated);
+                TxtBatWearPercent.Text = measured ? TelemetryFormatter.MarkEstimated($"{details.WearLevelPercent:F1} %", wearEstimated) : "--";
+            if (TxtBatWearNote != null)
+                TxtBatWearNote.Text = !measured ? "--"
+                    : details.WearLevelPercent < 10 ? "Düşük aşınma (< %10)"
+                    : details.WearLevelPercent < 25 ? "Orta aşınma (%10–25)"
+                    : "Yüksek aşınma (> %25)";
 
             if (TxtBatFullChargeCap != null)
                 TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0
                     ? TelemetryFormatter.MarkEstimated($"{details.FullChargeCapacityMWh:N0} mWh", details.IsFullChargeCapacityEstimated)
-                    : TelemetryFormatter.MarkEstimated("83.637 mWh");
+                    : "--";
 
             if (TxtBatDesignCap != null)
                 TxtBatDesignCap.Text = details.DesignCapacityMWh > 0
                     ? "Fabrika: " + TelemetryFormatter.MarkEstimated($"{details.DesignCapacityMWh:N0} mWh", details.IsDesignCapacityEstimated)
-                    : "Fabrika: " + TelemetryFormatter.MarkEstimated("90.614 mWh");
+                    : "Fabrika: --";
+
+            if (TxtBatCycleCount != null)
+                TxtBatCycleCount.Text = details.CycleCount.HasValue
+                    ? $"Döngü: {details.CycleCount.Value}"
+                    : "Döngü sayısı: pil yazılımı bildirmiyor";
 
             if (TxtBatVoltage != null)
                 TxtBatVoltage.Text = details.VoltageVolts > 0
                     ? TelemetryFormatter.MarkEstimated($"{details.VoltageVolts:F2} V", details.IsVoltageEstimated)
-                    : TelemetryFormatter.MarkEstimated("16.45 V");
+                    : "--";
+
+            if (TxtBatChemistry != null)
+            {
+                // Li-ion cells are ~3.6-3.85 V nominal; the series cell count is inferred from the pack voltage.
+                int cells = details.VoltageVolts > 0 ? (int)Math.Round(details.VoltageVolts / 3.85) : 0;
+                var parts = new List<string>();
+                if (details.Chemistry.Length > 0) parts.Add(details.Chemistry);
+                if (cells is >= 1 and <= 8 && details.Chemistry.StartsWith("Lityum")) parts.Add($"~{cells} hücre (gerilimden)");
+                TxtBatChemistry.Text = parts.Count > 0 ? string.Join(" · ", parts) : "--";
+            }
+
+            if (TxtBatIdentity != null)
+            {
+                var id = string.Join(" ", new[] { details.Manufacturer, details.ModelName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                TxtBatIdentity.Text = id.Length > 0
+                    ? $"{id} · Windows (WMI) üzerinden okunan kapasite ve gerilim."
+                    : "Windows (WMI) üzerinden okunan kapasite ve gerilim.";
+                if (TxtSubBatteryName != null)
+                    TxtSubBatteryName.Text = id.Length > 0 ? $"{id} · sıcaklık sensörü bildirilmiyor" : "Sıcaklık sensörü bildirilmiyor";
+            }
         });
     }
 
@@ -3582,7 +3619,7 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive0HealthBadge != null)
                 {
-                    TxtDrive0HealthBadge.Text = d0.EstHealthPercent >= 0 ? $"Sağlık: %{d0.EstHealthPercent}" : "Aşınma verisi ölçülemiyor";
+                    TxtDrive0HealthBadge.Text = d0.EstHealthPercent >= 0 ? $"Sağlık: %{d0.EstHealthPercent}" : "Aşınma ölçülemiyor (yönetici izni gerekli)";
                 }
                 if (TxtDrive0Temp != null)
                 {
@@ -3591,6 +3628,8 @@ public partial class MainWindow : Window
                 if (TxtSubSsd1Temp != null)
                 {
                     TxtSubSsd1Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d0.Temperature), d0.IsTemperatureEstimated);
+                    if (TxtSubSsd1Label != null) TxtSubSsd1Label.Text = string.IsNullOrEmpty(d0.DriveLetter) ? "Disk 1" : $"Disk 1 ({d0.DriveLetter}:)";
+                    if (TxtSubSsd1Name != null) TxtSubSsd1Name.Text = d0.Model;
                 }
             }
             else
@@ -3623,7 +3662,7 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive1HealthBadge != null)
                 {
-                    TxtDrive1HealthBadge.Text = d1.EstHealthPercent >= 0 ? $"Sağlık: %{d1.EstHealthPercent}" : "Aşınma verisi ölçülemiyor";
+                    TxtDrive1HealthBadge.Text = d1.EstHealthPercent >= 0 ? $"Sağlık: %{d1.EstHealthPercent}" : "Aşınma ölçülemiyor (yönetici izni gerekli)";
                 }
                 if (TxtDrive1Temp != null)
                 {
@@ -3632,6 +3671,8 @@ public partial class MainWindow : Window
                 if (TxtSubSsd2Temp != null)
                 {
                     TxtSubSsd2Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d1.Temperature), d1.IsTemperatureEstimated);
+                    if (TxtSubSsd2Label != null) TxtSubSsd2Label.Text = string.IsNullOrEmpty(d1.DriveLetter) ? "Disk 2" : $"Disk 2 ({d1.DriveLetter}:)";
+                    if (TxtSubSsd2Name != null) TxtSubSsd2Name.Text = d1.Model;
                 }
             }
             else
@@ -3672,7 +3713,16 @@ public partial class MainWindow : Window
             if (Dispatcher.HasShutdownStarted) return;
 
             // 14 / 30 Day Thermal Stability Trend UI
-            if (TxtStabilityScore != null)
+            if (trend.DaysCount == 0)
+            {
+                // No day with a sustained-load measurement yet: show that instead of a 100 % score.
+                if (TxtStabilityScore != null) { TxtStabilityScore.Text = "--"; TxtStabilityScore.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
+                if (TxtStabilityStatus != null) TxtStabilityStatus.Text = "Veri toplanıyor (yük altında ölçüm yapılan gün yok)";
+                if (TxtStabilitySlope != null) TxtStabilitySlope.Text = "Eğim: --";
+                if (TxtStabilityBadge != null) { TxtStabilityBadge.Text = "Veri yok"; TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
+                if (BarStabilityScore != null) BarStabilityScore.Value = 0;
+            }
+            else if (TxtStabilityScore != null)
             {
                 TxtStabilityScore.Text = "~" + TelemetryFormatter.FormatStabilityScore(trend.StabilityScorePercent);
                 TxtStabilityScore.Foreground = (SolidColorBrush)FindResource(
@@ -3682,18 +3732,18 @@ public partial class MainWindow : Window
 
             // Thermal resistance uses the estimated CPU power (no package power sensor), so every value
             // derived from it in this card is shown as an estimate.
-            if (TxtStabilityStatus != null)
+            if (trend.DaysCount > 0 && TxtStabilityStatus != null)
             {
                 TxtStabilityStatus.Text = "Tahmini: " + trend.StatusText;
             }
 
-            if (TxtStabilitySlope != null)
+            if (trend.DaysCount > 0 && TxtStabilitySlope != null)
             {
                 string slopeState = trend.DegradationSlopePerDay <= 0.005 ? " (Stabil)" : " (Artış Eğiliminde)";
                 TxtStabilitySlope.Text = $"Eğim: {TelemetryFormatter.FormatThermalSlope(trend.DegradationSlopePerDay)}{slopeState}";
             }
 
-            if (TxtStabilityBadge != null)
+            if (trend.DaysCount > 0 && TxtStabilityBadge != null)
             {
                 TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? "Nominal (tahmini)" :
                     (trend.StatusLevel == ThermalStatusLevel.Good ? "Kararlı (tahmini)" : "Bakım Önerilebilir (tahmini)");
@@ -3702,7 +3752,7 @@ public partial class MainWindow : Window
                     (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
             }
 
-            if (BarStabilityScore != null)
+            if (trend.DaysCount > 0 && BarStabilityScore != null)
             {
                 BarStabilityScore.Value = trend.StabilityScorePercent;
                 BarStabilityScore.Foreground = (SolidColorBrush)FindResource(
@@ -3710,23 +3760,29 @@ public partial class MainWindow : Window
                     (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
             }
 
+            // Everything in this card is derived from the estimated CPU power (no package power sensor) or from
+            // fan runtime counted by NitroLite. Without a sustained-load sample there is nothing to show yet.
+            bool hasLoad = report.HasLoadMeasurement;
             if (TxtPasteHealthPercent != null)
             {
-                TxtPasteHealthPercent.Text = $"~{report.PasteHealthPercent:F1} %";
-                TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
+                TxtPasteHealthPercent.Text = hasLoad ? $"~{report.PasteHealthPercent:F1} %" : "Ölçüm yok";
+                TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
+                    : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
 
             if (TxtThermalResistance != null)
             {
                 string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? " (Normal)" : " (Yüksek)");
-                TxtThermalResistance.Text = $"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}";
+                TxtThermalResistance.Text = hasLoad
+                    ? $"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}"
+                    : "Yük altında örnek bekleniyor";
             }
 
             if (TxtActiveFanHours != null)
                 TxtActiveFanHours.Text = $"{report.ActiveFanHours:F1} Saat";
 
             if (TxtAvgFanRpm != null)
-                TxtAvgFanRpm.Text = $"Ortalama: ~{report.AvgFanRpm} RPM";
+                TxtAvgFanRpm.Text = report.AvgFanRpm > 0 ? $"Ortalama: {report.AvgFanRpm} RPM" : "Ortalama: --";
 
             if (TxtPassiveFanHours != null)
                 TxtPassiveFanHours.Text = $"{report.PassiveFanHours:F1} Saat";
@@ -3734,20 +3790,19 @@ public partial class MainWindow : Window
             if (TxtFanBearingHealth != null)
                 TxtFanBearingHealth.Text = $"~{report.FanBearingHealthPercent:F1} %";
 
+            if (TxtFanRatedLife != null)
+                TxtFanRatedLife.Text = $"Varsayılan fan ömrü {report.FanRatedHours:N0} saat; yalnızca NitroLite açıkken sayılan çalışma süresinden (tahmini)";
+
             if (TxtThermalBadge != null)
             {
-                TxtThermalBadge.Text = "Tahmini: " + report.PasteHealthStatus;
-                TxtThermalBadge.Foreground = (SolidColorBrush)FindResource(report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
+                TxtThermalBadge.Text = hasLoad ? "Tahmini: " + report.PasteHealthStatus : "Veri toplanıyor";
+                TxtThermalBadge.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
+                    : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
 
             if (TxtThermalRecommendation != null)
                 TxtThermalRecommendation.Text = report.Recommendation +
-                    " Not: Bu değerlendirme tahminidir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.";
-
-            if (TxtSubMoboTemp != null && (string.IsNullOrEmpty(TxtSubMoboTemp.Text) || TxtSubMoboTemp.Text == "-- °C"))
-            {
-                TxtSubMoboTemp.Text = TelemetryFormatter.MarkEstimated("48 °C");
-            }
+                    " Not: Bu değerlendirme deneysel bir tahmindir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.";
         });
     }
 
@@ -3783,9 +3838,18 @@ public partial class MainWindow : Window
             TxtBatLevelBig.Text = $"{status.BatteryPercent}%";
             BarBatBig.Value = status.BatteryPercent;
 
-            TxtBatStateDesc.Text = status.IsPluggedIn
-                ? (status.IsCharging ? "Adaptöre Bağlı (Şarj Ediliyor)" : "Adaptöre Bağlı (Sınırda)")
-                : "Pilde Çalışıyor (Deşarj)";
+            // Windows keeps its "charging" flag set while the 80 % limit holds the battery at 0 W, so decide by the
+            // actual charge current when it was read.
+            if (!status.IsPluggedIn)
+                TxtBatStateDesc.Text = "Pilde Çalışıyor (Deşarj)";
+            else if (status.ChargeRateUnknown)
+                TxtBatStateDesc.Text = "Adaptöre Bağlı";
+            else if (status.ChargeRateWatts > 0)
+                TxtBatStateDesc.Text = "Adaptöre Bağlı (Şarj Ediliyor)";
+            else
+                TxtBatStateDesc.Text = _batteryService.WatchdogEnabled && status.BatteryPercent >= 78
+                    ? "Adaptöre Bağlı (Şarj sınırında bekliyor)"
+                    : "Adaptöre Bağlı (Şarj olmuyor)";
 
             // Real-time power flow in Watts via TelemetryFormatter
             if (TxtBatDischargeRate != null)
@@ -4296,6 +4360,7 @@ public partial class MainWindow : Window
         _batteryService.StatusUpdated -= OnBatteryStatusUpdated;
         _batteryService.OverchargeAlert -= OnOverchargeAlert;
         _batteryService.DischargeTargetReached -= OnDischargeTargetReached;
+        _batteryService.DischargeStateChanged -= OnDischargeStateChanged;
         _gameService.GameStarted -= OnGameStarted;
         _gameService.GameEnded -= OnGameEnded;
 
@@ -4945,36 +5010,52 @@ public partial class MainWindow : Window
     {
         if (_batteryService.IsDischarging)
         {
-            _batteryService.StopSafeDischarge();
-            BtnToggleDischarge.Content = "Deşarj İşlemini Başlat";
-            BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
-            TxtDischargeStatus.Text = "Durum: Durduruldu.";
-            TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+            _batteryService.StopSafeDischarge(); // UI follows via DischargeStateChanged
+            return;
         }
-        else
+
+        if (_batteryService.CurrentStatus.IsPluggedIn)
+        {
+            var res = System.Windows.MessageBox.Show(this,
+                "Adaptör bağlıyken batarya deşarj edilemez.\n\nAdaptörü çıkardıktan sonra 'Evet'e tıklayın.",
+                "Adaptör Bağlantısı", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (res != MessageBoxResult.Yes) return;
+        }
+
+        // The service re-reads the battery; it refuses on AC or at <= 80 %, and the UI only shows "active" if it started.
+        if (!_batteryService.StartSafeDischarge())
         {
             var st = _batteryService.CurrentStatus;
-            if (st.IsPluggedIn)
-            {
-                var res = System.Windows.MessageBox.Show(this, 
-                    "Adaptör bağlıyken batarya deşarj edilemez.\n\nLütfen adaptör bağlantısını kesin ve işlemi başlatmak için 'Evet' seçeneğine tıklayın.", 
-                    "Adaptör Bağlantısı", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-
-                if (res != MessageBoxResult.Yes) return;
-            }
-
-            if (st.BatteryPercent <= 80)
-            {
-                ShowToast($"Pil seviyesi (%{st.BatteryPercent}) zaten hedef sınırın (%80) altındadır.", isSuccess: false);
-                return;
-            }
-
-            _batteryService.StartSafeDischarge();
-            BtnToggleDischarge.Content = "Deşarjı Durdur";
-            BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentRed");
-            TxtDischargeStatus.Text = "Deşarj işlemi aktif: Pil seviyesi %80 sınırına indiriliyor...";
-            TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+            ShowToast(st.IsPluggedIn
+                ? "Adaptör hâlâ bağlı; deşarj başlatılmadı."
+                : $"Pil seviyesi (%{st.BatteryPercent}) zaten %80 veya altında; deşarja gerek yok.", isSuccess: false);
         }
+    }
+
+    /// <summary>Keeps the discharge card in sync with the service, including stops caused by reconnecting the adapter.</summary>
+    private void OnDischargeStateChanged(bool active)
+    {
+        if (Dispatcher.HasShutdownStarted) return;
+        // Invoke (not BeginInvoke): keeps the order with DischargeTargetReached, whose message must win.
+        Dispatcher.Invoke(new Action(() =>
+        {
+            if (BtnToggleDischarge == null || TxtDischargeStatus == null) return;
+            if (active)
+            {
+                BtnToggleDischarge.Content = "Deşarjı Durdur";
+                BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentRed");
+                TxtDischargeStatus.Text = "Deşarj işlemi aktif: Pil seviyesi %80 sınırına indiriliyor...";
+                TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+            }
+            else
+            {
+                BtnToggleDischarge.Content = "Deşarj İşlemini Başlat";
+                BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
+                bool plugged = _batteryService.CurrentStatus.IsPluggedIn;
+                TxtDischargeStatus.Text = plugged ? "Durum: Durdu (adaptör bağlandı)." : "Durum: Durduruldu.";
+                TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+            }
+        }));
     }
 
     private void RefreshServiceList()
@@ -5179,7 +5260,7 @@ public partial class MainWindow : Window
         {
             _appSettings.DcPowerMode = pref;
             SaveSettings();
-            ShowToast($"Pilde güç tercihi: {pref}");
+            ShowToast(pref == DcPowerProfilePreference.Eco ? "Pilde güç tercihi: Eco (sessiz mod, pilde boost kapalı)" : "Pilde güç tercihi: Dengeli (mevcut ayarlar korunur)");
             if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
         }
     }
@@ -5191,7 +5272,7 @@ public partial class MainWindow : Window
         if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
         SaveSettings();
         ShowToast(_appSettings.AutoRefreshRateSwitching
-            ? "Otomatik ekran tazeleme hızı geçişi etkin (60Hz / 165Hz)"
+            ? "Otomatik tazeleme etkin: pilde Eco laptop ekranını 60 Hz'e alır, adaptörde önceki hıza döner"
             : "Otomatik ekran tazeleme hızı geçişi devre dışı");
     }
 }

@@ -188,7 +188,7 @@ public class StorageHealthService
                         long sizeBytes = Convert.ToInt64(disk["Size"] ?? 0);
                         int busType = Convert.ToInt32(disk["BusType"] ?? 0);
 
-                        string busDesc = busType == 17 ? "NVMe Gen 4x4" : (busType == 11 ? "SATA SSD" : "SSD");
+                        string busDesc = busType == 17 ? "NVMe" : (busType == 11 ? "SATA SSD" : "SSD");
 
                         List<string> candidateLetters = new();
                         if (partitionLetters.TryGetValue(diskNum, out var mappedLetters) && mappedLetters.Count > 0)
@@ -254,7 +254,9 @@ public class StorageHealthService
                         }
                         else if (health == 0)
                         {
-                            estHealth = 100;
+                            // Windows reports the drive healthy but the wear counter was not readable (needs admin):
+                            // "healthy" is shown as the status, the wear percentage stays unknown instead of a claimed 100 %.
+                            estHealth = -1;
                         }
                         else if (health == 1)
                         {
@@ -293,19 +295,8 @@ public class StorageHealthService
                         {
                             driveTemp = measuredTemp;
                         }
-                        else
-                        {
-                            tempEstimated = true;
-                            // Physical telemetry baseline for Acer Nitro 16 AN16-41 dual NVMe setup:
-                            // Disk 0: Samsung 990 Pro ~42°C
-                            // Disk 1: Samsung PM9A1 OEM ~39°C
-                            if (diskNum == 0 || friendlyName.Contains("990", StringComparison.OrdinalIgnoreCase))
-                                driveTemp = 42;
-                            else if (diskNum == 1 || friendlyName.Contains("PM9A1", StringComparison.OrdinalIgnoreCase) || friendlyName.Contains("MZVL", StringComparison.OrdinalIgnoreCase))
-                                driveTemp = 39;
-                            else
-                                driveTemp = 40;
-                        }
+                        // No reading (SMART counters need administrator rights): leave it unknown instead of
+                        // a per-slot guess (42 / 39 / 40 °C) that looked like a measurement.
 
                         list.Add(new StorageDriveInfo
                         {
@@ -411,7 +402,7 @@ public class StorageHealthService
                                 DiskNumber = index,
                                 Model = model,
                                 DriveLetter = displayLetter,
-                                BusType = "NVMe Gen 4x4",
+                                BusType = "NVMe",
                                 TotalCapacityGB = totalGB,
                                 UsedCapacityGB = usedGB,
                                 FreeCapacityGB = freeGB,
@@ -419,8 +410,8 @@ public class StorageHealthService
                                 HealthStatus = StorageDriveInfo.HealthUnknown,
                                 HealthDesc = "Bilinmiyor (Sağlık verisi okunamadı)",
                                 EstHealthPercent = -1,
-                                Temperature = index == 0 ? 42 : 39,
-                                IsTemperatureEstimated = true
+                                Temperature = null,
+                                IsTemperatureEstimated = false
                             });
                         }
                         catch { }
@@ -456,8 +447,8 @@ public class StorageHealthService
                         HealthStatus = StorageDriveInfo.HealthUnknown,
                         HealthDesc = "Bilinmiyor (Sağlık verisi okunamadı)",
                         EstHealthPercent = -1,
-                        Temperature = diskIndex == 0 ? 42 : 39,
-                        IsTemperatureEstimated = true
+                        Temperature = null,
+                        IsTemperatureEstimated = false
                     });
                 }
             }

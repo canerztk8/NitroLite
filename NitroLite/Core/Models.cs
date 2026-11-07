@@ -119,6 +119,8 @@ public class BatteryStatusInfo
     public bool IsOvercharged { get; set; } // > 80%
     public double DischargeRateWatts { get; set; }
     public double ChargeRateWatts { get; set; }
+    // True when the charge rate was not read (game session fast path): do not infer "full/held" from 0 W.
+    public bool ChargeRateUnknown { get; set; }
     public bool IsDischarging { get; set; }
     public double? TemperatureCelsius { get; set; }
     public double DischargeRateMilliwatts { get; set; }
@@ -145,6 +147,10 @@ public class BatteryHealthDetails
     public bool IsFullChargeCapacityEstimated { get; set; }
     // True when VoltageVolts is the 16.45 V nominal constant because WMI reported no voltage.
     public bool IsVoltageEstimated { get; set; }
+    // Win32_Battery.Chemistry as text ("Lityum-iyon", …); empty when unknown.
+    public string Chemistry { get; set; } = "";
+    // BatteryCycleCount; null when the firmware does not report it (reports 0).
+    public int? CycleCount { get; set; }
 }
 
 public class GameProfile
