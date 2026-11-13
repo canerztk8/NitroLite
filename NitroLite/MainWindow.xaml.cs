@@ -41,6 +41,11 @@ public partial class MainWindow : Window
     private OsdOverlayWindow? _osdWindow;
     private bool _isOsdOpen = false;
     private readonly List<MonitorData> _telemetryHistory = new();
+    // Mode changes drawn as vermilion ticks on the recording strip, plus the pooled Line elements
+    // that draw them: reused every render so the strip never allocates visual children.
+    private readonly List<(DateTime At, OperatingMode Mode)> _modeMarks = new();
+    private readonly List<System.Windows.Shapes.Line> _traceMarkLines = new();
+    private const int MaxTraceMarks = 8;
     private string _selectedChartMetric = "CPU_TEMP";
     private DispatcherTimer? _toastTimer;
     private long _telemetrySampleIndex = 0;
@@ -454,6 +459,10 @@ public partial class MainWindow : Window
         {
             // Redraw the history chart immediately when the window is resized instead of on the next poll.
             CanvasHistoryChart.SizeChanged += (s, e) => RenderTelemetryChart();
+        }
+        if (CanvasModeTrace != null)
+        {
+            CanvasModeTrace.SizeChanged += (s, e) => RenderModeTrace();
         }
         IsVisibleChanged += (s, e) => UpdateTelemetryPollingRate();
     }
@@ -1188,8 +1197,8 @@ public partial class MainWindow : Window
             }
 
             TxtToastIcon.Text = isSuccess ? "●" : "!";
-            TxtToastIcon.Foreground = TryFindResource(isSuccess ? "AccentGreen" : "AccentCyan") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Cyan);
-            ToastBanner.BorderBrush = TryFindResource(isSuccess ? "AccentGreen" : "AccentCyan") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Cyan);
+            TxtToastIcon.Foreground = TryFindResource(isSuccess ? "AccentGreen" : "AccentRed") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Firebrick);
+            ToastBanner.BorderBrush = TryFindResource(isSuccess ? "AccentGreen" : "AccentRed") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Firebrick);
             TxtToastMessage.Text = message;
 
             _toastTimer?.Stop();
@@ -1343,13 +1352,17 @@ public partial class MainWindow : Window
         if (!_segIdle.ContainsKey(button))
             _segIdle[button] = (button.Background, button.Foreground);
 
-        var signal = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Goldenrod;
-        var onAccent = TryFindResource("OnAccent") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
+        var ink = TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
+        var deep = TryFindResource("PanelBg") as SolidColorBrush ?? System.Windows.Media.Brushes.LightGray;
+        var rule = TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         var idle = _segIdle[button];
 
-        button.Background = active ? signal : idle.Background;
-        button.Foreground = active ? onAccent : idle.Foreground;
-        button.BorderBrush = active ? signal : (TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray);
+        // The chosen option is pressed into the paper, not painted red: a deeper ground, full ink
+        // type and a 2px ink rule under it. Vermilion stays reserved for what is live right now.
+        button.Background = active ? deep : idle.Background;
+        button.Foreground = active ? ink : idle.Foreground;
+        button.BorderBrush = active ? ink : rule;
+        button.BorderThickness = active ? new Thickness(1, 1, 1, 2) : new Thickness(1);
         button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
     }
 
@@ -1627,6 +1640,7 @@ public partial class MainWindow : Window
                 }
 
                 RenderTelemetryChart();
+                RenderModeTrace();
 
                 // Live standby/free sizes in the RAM card while it is on screen (one cheap syscall).
                 if (IsVisible && TabMonitoring?.Visibility == Visibility.Visible && !_ramCleanBusy) UpdateMemoryListText();
@@ -1726,6 +1740,137 @@ public partial class MainWindow : Window
         ChartLine.Points = new PointCollection();
         ChartArea.Points = new PointCollection();
         if (ChartDot != null) ChartDot.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Draws the recording strip on the modes screen: the last 60 seconds of CPU temperature as a
+    /// continuous ink trace, a vermilion "now" edge, and a tick wherever the mode changed. The strip
+    /// is the surface's signature move, so it reads the same history the chart uses instead of
+    /// running a second sampler.
+    /// </summary>
+    private void RenderModeTrace()
+    {
+        if (CanvasModeTrace == null || TraceLine == null) return;
+        if (!IsVisible || WindowState == WindowState.Minimized) return;
+        if (TabModes == null || TabModes.Visibility != Visibility.Visible) return;
+
+        double width = CanvasModeTrace.ActualWidth;
+        double height = CanvasModeTrace.ActualHeight;
+        if (width <= 0 || height <= 0) return;
+
+        var now = DateTime.Now;
+        // The strip shows everything recorded so far, up to the 60 s window: a fresh recording fills
+        // the paper instead of hugging the right edge, and the span is written out so the scale is
+        // never guessed.
+        var span = ChartWindow;
+        if (_telemetryHistory.Count > 0)
+        {
+            var recorded = now - _telemetryHistory[0].Timestamp;
+            if (recorded < span) span = recorded;
+        }
+        if (span < TimeSpan.FromSeconds(5)) span = TimeSpan.FromSeconds(5);
+        var windowStart = now - span;
+        var samples = new List<(double X, double Value)>();
+        foreach (var d in _telemetryHistory)
+        {
+            if (d.Timestamp < windowStart) continue;
+            var v = GetChartValue("CPU_TEMP", d);
+            if (!v.HasValue) continue;
+            double x = (d.Timestamp - windowStart).TotalSeconds / span.TotalSeconds * width;
+            samples.Add((x, v.Value));
+        }
+
+        if (TxtTraceSpan != null) TxtTraceSpan.Text = $"KAYIT · {span.TotalSeconds:0} SANİYE";
+
+        if (samples.Count < 2)
+        {
+            TraceLine.Points = new PointCollection();
+            if (TxtTraceValue != null) TxtTraceValue.Text = "-- °C";
+            if (TxtTraceRange != null) TxtTraceRange.Text = "--";
+            if (TxtTraceEmpty != null) TxtTraceEmpty.Visibility = Visibility.Visible;
+            HideTraceMarks(0);
+            return;
+        }
+
+        if (TxtTraceEmpty != null) TxtTraceEmpty.Visibility = Visibility.Collapsed;
+
+        double low = samples[0].Value, high = samples[0].Value;
+        foreach (var s in samples)
+        {
+            if (s.Value < low) low = s.Value;
+            if (s.Value > high) high = s.Value;
+        }
+        // A flat trace must not sit on the floor: hold a 4 °C band around the value.
+        if (high - low < 4)
+        {
+            double mid = (high + low) / 2;
+            low = mid - 2;
+            high = mid + 2;
+        }
+
+        const double pad = 7;
+        double usable = Math.Max(1, height - pad * 2);
+        var points = new PointCollection(samples.Count);
+        foreach (var s in samples)
+        {
+            double y = pad + (1 - (s.Value - low) / (high - low)) * usable;
+            points.Add(new WpfPoint(s.X, y));
+        }
+        TraceLine.Points = points;
+
+        if (TraceNow != null)
+        {
+            TraceNow.X1 = width - 0.5;
+            TraceNow.X2 = width - 0.5;
+            TraceNow.Y1 = 0;
+            TraceNow.Y2 = height;
+        }
+
+        if (TxtTraceValue != null) TxtTraceValue.Text = $"{samples[samples.Count - 1].Value:0} °C";
+        if (TxtTraceRange != null) TxtTraceRange.Text = $"{low:0}–{high:0} °C";
+
+        DrawTraceMarks(windowStart, span, width, height);
+    }
+
+    private void DrawTraceMarks(DateTime windowStart, TimeSpan span, double width, double height)
+    {
+        if (TraceMarks == null) return;
+
+        var ink = TryFindResource("Vermilion") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
+        while (_traceMarkLines.Count < MaxTraceMarks)
+        {
+            var line = new System.Windows.Shapes.Line
+            {
+                Stroke = ink,
+                StrokeThickness = 1,
+                Visibility = Visibility.Collapsed,
+                SnapsToDevicePixels = true
+            };
+            TraceMarks.Children.Add(line);
+            _traceMarkLines.Add(line);
+        }
+
+        int used = 0;
+        foreach (var mark in _modeMarks)
+        {
+            if (mark.At < windowStart || used >= MaxTraceMarks) continue;
+            double x = (mark.At - windowStart).TotalSeconds / span.TotalSeconds * width;
+            var line = _traceMarkLines[used++];
+            line.X1 = x;
+            line.X2 = x;
+            line.Y1 = 0;
+            line.Y2 = height;
+            line.Visibility = Visibility.Visible;
+        }
+        HideTraceMarks(used);
+    }
+
+    private void HideTraceMarks(int from)
+    {
+        for (int i = from; i < _traceMarkLines.Count; i++)
+        {
+            _traceMarkLines[i].Visibility = Visibility.Collapsed;
+        }
     }
 
     private void RenderTelemetryChart()
@@ -1958,7 +2103,7 @@ public partial class MainWindow : Window
         {
             _osdWindow?.Hide();
             UpdateTelemetryPollingRate();
-            BtnToggleOsd.Background = new BrushConverter().ConvertFromString("#162436") as WpfBrush;
+            BtnToggleOsd.Background = System.Windows.Media.Brushes.Transparent;
             BtnToggleOsd.Foreground = (SolidColorBrush)FindResource("AccentCyan");
             BtnToggleOsd.Content = "Ekran Üstü Gösterge (OSD)";
             if (showToast) ShowToast("Ekran üstü gösterge kapatıldı.");
@@ -1976,13 +2121,8 @@ public partial class MainWindow : Window
         // Values NitroLite does not set itself (Windows default 1, or 3/5/6) are named as such instead of being
         // shown as "Aggressive".
         string name = ModePolicy.BoostDisplayName(mode);
-        var brush = mode switch
-        {
-            CpuBoostMode.Disabled => TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green,
-            CpuBoostMode.Efficient => TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan,
-            CpuBoostMode.Aggressive => TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red,
-            _ => TryFindResource("TextSecondary") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray
-        };
+        // A boost level is a setting, not an alarm: it is set in ink like every other readout.
+        var brush = TryFindResource("InkSoft") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
 
         if (TxtBoostStatusBadge != null)
         {
@@ -4234,7 +4374,7 @@ public partial class MainWindow : Window
                 if (BarDrive0 != null)
                 {
                     BarDrive0.Value = d0.UsedPercent;
-                    BarDrive0.Foreground = (SolidColorBrush)FindResource(d0.UsedPercent > 85 ? "AccentRed" : (d0.UsedPercent > 70 ? "AccentCyan" : "AccentGreen"));
+                    BarDrive0.Foreground = (SolidColorBrush)FindResource(d0.UsedPercent > 85 ? "AccentRed" : "Ink");
                 }
                 if (TxtDrive0HealthBadge != null)
                 {
@@ -4279,7 +4419,7 @@ public partial class MainWindow : Window
                 if (BarDrive1 != null)
                 {
                     BarDrive1.Value = d1.UsedPercent;
-                    BarDrive1.Foreground = (SolidColorBrush)FindResource(d1.UsedPercent > 85 ? "AccentRed" : (d1.UsedPercent > 70 ? "AccentCyan" : "AccentGreen"));
+                    BarDrive1.Foreground = (SolidColorBrush)FindResource(d1.UsedPercent > 85 ? "AccentRed" : "Ink");
                 }
                 if (TxtDrive1HealthBadge != null)
                 {
@@ -4388,10 +4528,8 @@ public partial class MainWindow : Window
             }
             else if (TxtStabilityScore != null)
             {
+                // The score is a measurement, so it stays in ink; the verdict is the badge beside it.
                 TxtStabilityScore.Text = "~" + TelemetryFormatter.FormatStabilityScore(trend.StabilityScorePercent);
-                TxtStabilityScore.Foreground = (SolidColorBrush)FindResource(
-                    trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
-                    (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
             }
 
             // Thermal resistance uses the estimated CPU power (no package power sensor), so every value
@@ -4418,10 +4556,8 @@ public partial class MainWindow : Window
 
             if (trend.DaysCount > 0 && BarStabilityScore != null)
             {
+                // The bar is a measurement, so it is drawn in ink; the verdict lives in the badge text.
                 BarStabilityScore.Value = trend.StabilityScorePercent;
-                BarStabilityScore.Foreground = (SolidColorBrush)FindResource(
-                    trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
-                    (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
             }
 
             // Everything in this card is derived from the estimated CPU power (no package power sensor) or from
@@ -4588,7 +4724,17 @@ public partial class MainWindow : Window
 
     private void UpdateModeUi(OperatingMode mode)
     {
+        bool modeChanged = _currentMode != mode;
         _currentMode = mode;
+        if (modeChanged)
+        {
+            // The recording strip keeps a tick for every change inside its window, so a switch stays
+            // visible on the paper instead of vanishing with the toast.
+            var at = DateTime.Now;
+            _modeMarks.Add((at, mode));
+            var cutoff = at - ChartWindow;
+            _modeMarks.RemoveAll(m => m.At < cutoff);
+        }
         if (TxtModeHeader != null)
         {
             TxtModeHeader.Text = mode switch
@@ -4607,7 +4753,7 @@ public partial class MainWindow : Window
 
         // One signal colour for the whole board: the active row is marked by position and fill,
         // not by a per-mode hue, so the eye never has to relearn what a colour means.
-        var signal = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Goldenrod;
+        var signal = TryFindResource("Vermilion") as SolidColorBrush ?? System.Windows.Media.Brushes.Goldenrod;
         switch (mode)
         {
             case OperatingMode.Quiet:
@@ -4679,7 +4825,7 @@ public partial class MainWindow : Window
         if (ind != null)
         {
             ind.Background = System.Windows.Media.Brushes.Transparent;
-            ind.BorderBrush = TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
+            ind.BorderBrush = TryFindResource("Rule") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         }
         if (txt != null)
         {
@@ -4688,32 +4834,35 @@ public partial class MainWindow : Window
         }
         if (btn != null)
         {
+            // The 3x18 mark in the row's left margin is driven by BorderBrush; transparent means "no mark".
             btn.Background = System.Windows.Media.Brushes.Transparent;
-            btn.Foreground = TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.White;
+            btn.BorderBrush = System.Windows.Media.Brushes.Transparent;
+            btn.Foreground = TryFindResource("TextSecondary") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
         }
     }
 
     /// <summary>
-    /// The active mode is the row that has flipped: the whole row takes the board's signal colour and
-    /// its type turns dark, so the state reads at a glance without a side stripe or a glow.
+    /// The active mode is marked by a 3px vermilion time mark above its row, full ink type and a
+    /// vermilion chip; the other rows drop back to soft ink. State by de-emphasis, never by a fill,
+    /// so the eye never has to relearn what a colour means.
     /// </summary>
     private void SetModeCardActive(WpfButton? btn, Border? ind, TextBlock? txt, SolidColorBrush accent)
     {
-        var onAccent = TryFindResource("OnAccent") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
         if (ind != null)
         {
             ind.Background = System.Windows.Media.Brushes.Transparent;
-            ind.BorderBrush = onAccent;
+            ind.BorderBrush = accent;
         }
         if (txt != null)
         {
             txt.Text = "AKTİF";
-            txt.Foreground = onAccent;
+            txt.Foreground = accent;
         }
         if (btn != null)
         {
-            btn.Background = accent;
-            btn.Foreground = onAccent;
+            btn.Background = System.Windows.Media.Brushes.Transparent;
+            btn.BorderBrush = accent;
+            btn.Foreground = TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
         }
     }
 
@@ -4804,20 +4953,11 @@ public partial class MainWindow : Window
         for (int i = 0; i < zones.Length; i++)
         {
             if (zones[i] == null) continue;
-            if (IsLightingOff(cfg)) zones[i].Background = System.Windows.Media.Brushes.Black;
+            if (IsLightingOff(cfg)) zones[i].Background = TryFindResource("Ink") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
             else if (!LightingPolicy.EffectUsesColor(cfg.Effect)) zones[i].Background = RainbowBrush(i);
             else if (LightingPolicy.EffectUsesZoneColors(cfg.Effect)) zones[i].Background = SolidOrFallback(i < cfg.LEDs.Count ? cfg.LEDs[i] : cfg.Color);
             else zones[i].Background = SolidOrFallback(cfg.Color);
 
-            // Keep the zone label readable on dark colours and when off (dark text vanished on black).
-            if (zones[i].Child is TextBlock label)
-            {
-                bool dark = zones[i].Background is SolidColorBrush s
-                    && (0.299 * s.Color.R + 0.587 * s.Color.G + 0.114 * s.Color.B) < 110;
-                label.Foreground = dark
-                    ? (TryFindResource("TextSecondary") as WpfBrush ?? System.Windows.Media.Brushes.Gray)
-                    : (TryFindResource("OnAccent") as WpfBrush ?? System.Windows.Media.Brushes.Black);
-            }
         }
 
         if (IsLightingOff(cfg))

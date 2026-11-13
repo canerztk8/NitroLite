@@ -1,33 +1,33 @@
 ---
 name: NitroLite
-description: Acer Nitro dizüstüler için hafif NitroSense alternatifi — Departure Board görsel dünyası
+description: Acer Nitro dizüstüler için hafif NitroSense alternatifi — Kandilli sismograf kağıdı görsel dünyası
 colors:
-  bg-dark: "#0E1216"
-  rail: "#0A0D10"
-  panel: "#11161A"
-  card: "#151A1F"
-  card-hover: "#1C2228"
-  border: "#252D35"
-  border-strong: "#3A444E"
-  signal: "#F0B429"
-  on-signal: "#0E1216"
-  danger: "#E85C4A"
-  warn-bg: "#2A1A16"
-  ok: "#3FA96B"
-  info: "#5B9BD5"
-  text-primary: "#F4F1E8"
-  text-secondary: "#A3ADB7"
-  text-muted: "#7C8791"
+  paper: "#F2EDE3"
+  paper-deep: "#E8E0D2"
+  card: "#F8F4EB"
+  card-hover: "#EDE6D8"
+  rail: "#EAE3D5"
+  rule: "#D5CBB8"
+  rule-strong: "#B8AB93"
+  ink: "#1B1917"
+  ink-soft: "#4A4238"
+  ink-faint: "#6E6558"
+  vermilion: "#C0392B"
+  vermilion-deep: "#9B2C1F"
+  olive: "#5F6B3E"
+  slate: "#4A6274"
+  on-accent: "#F7F2E8"
+  warn-bg: "#F0E2D2"
 typography:
   display:
     fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
-    fontSize: "20px"
+    fontSize: "18px"
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0em"
   title:
     fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
-    fontSize: "15px"
+    fontSize: "14px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0em"
@@ -46,13 +46,19 @@ typography:
   micro:
     fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "10px"
-    fontWeight: 700
+    fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0.02em"
+  figure:
+    fontFamily: "Cascadia Mono, Consolas, Courier New, monospace"
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: "0em"
 rounded:
-  sm: "2px"
-  md: "3px"
-  lg: "4px"
+  none: "0px"
+  sm: "1px"
+  md: "2px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -61,151 +67,173 @@ spacing:
   xl: "20px"
 components:
   mode-row:
-    backgroundColor: "{colors.card}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.md}"
-    padding: "14px 11px"
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-soft}"
+    rounded: "{rounded.none}"
+    padding: "12px 14px 12px 0px"
   mode-row-active:
-    backgroundColor: "{colors.signal}"
-    textColor: "{colors.on-signal}"
-    rounded: "{rounded.md}"
-    padding: "14px 11px"
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "12px 14px 12px 0px"
   nav-item:
-    backgroundColor: "{colors.rail}"
-    textColor: "{colors.text-secondary}"
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-soft}"
     rounded: "{rounded.md}"
-    padding: "12px 9px"
+    padding: "8px 10px"
   nav-item-active:
-    backgroundColor: "{colors.signal}"
-    textColor: "{colors.on-signal}"
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.md}"
-    padding: "12px 9px"
+    padding: "8px 10px"
   seg-button:
-    backgroundColor: "{colors.panel}"
-    textColor: "{colors.text-primary}"
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-soft}"
     rounded: "{rounded.md}"
-    padding: "12px 6px"
+    padding: "5px 14px"
   seg-button-active:
-    backgroundColor: "{colors.signal}"
-    textColor: "{colors.on-signal}"
+    backgroundColor: "{colors.paper-deep}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.md}"
-    padding: "12px 6px"
-  card:
-    backgroundColor: "{colors.card}"
-    textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
-    padding: "14px"
+    padding: "5px 14px"
+  section:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "14px 0px 0px 0px"
   stat-cell:
-    backgroundColor: "{colors.card}"
-    textColor: "{colors.text-primary}"
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: "8px 16px 0px 0px"
+  stamp:
+    backgroundColor: "transparent"
+    textColor: "{colors.vermilion}"
     rounded: "{rounded.sm}"
-    padding: "10px 0px"
+    padding: "2px 7px"
 ---
 
 ## Overview
 
-NitroLite'ın görsel dünyası **Departure Board**: bir tren istasyonundaki kalkış tahtası, loş bir odada okunurken. İki mürekkep — koyu zemin ve kırık beyaz metin — artı tek bir amber sinyal rengi. Dünya yalnızca tipografi, palet, yoğunluk ve tek imza hareketi verir; yerleşim, gezinme ve kontrol davranışı tanıdık Windows kalır.
+NitroLite'ın görsel dünyası **Kandilli sismograf kağıdı**: bir tambur kayıt cihazının üzerine sardığı kağıt. Sıcak krem stok bütün yüzeyi kaplar, gövdeyi tek bir mürekkep taşır, tek bir vermilyon "şimdi"yi ve gerçekten dikkat isteyen şeyi işaretler. Dünya yalnızca zemin, çizgi, tipografi ve tek imza hareketi verir; yerleşim, gezinme ve kontrol davranışı tanıdık Windows kalır.
 
-İmza hareket: **aktif satır tam zemin bandı olarak döner.** Kenar çizgisi, sol şerit, parlama veya gradyan yok — satırın tamamı amber dolguya geçer ve tipografisi koyuya döner. Bir ekranda aynı anda tek bir amber band vardır.
+İmza hareket: **kayıt şeridi.** Her ekranın üstünde son 60 saniyenin sürekli mürekkep izi var; sağ kenarda kesikli vermilyon bir "şimdi" çizgisi, izin ucunda vermilyon bir nokta. Kalem mürekkeptir, damga vermilyondur — bu ayrım dünyanın tamamını yönetir.
 
-Yüzey modu **Operate**: kullanıcı bir görevi bitirir. Süs değil, tarama hızı ve tutarlılık önemlidir. Marka, hassas detaylarda yaşar: hizalama, tek sinyal rengi, dürüst boş durumlar.
+Yüzey modu **Operate**: kullanıcı bir görevi bitirir. Süs değil, tarama hızı ve tutarlılık önemlidir. Marka, hassas detaylarda yaşar: hizalama, tek vurgu rengi, dürüst boş durumlar, ölçümün mürekkeple çizilmesi.
 
 ## Colors
 
-- **bg-dark `#0E1216`** — pencere zemini. Her şeyin altındaki tek katman.
-- **rail `#0A0D10`** — başlık çubuğu ve kenar çubuğu. Zeminden bir tık koyu, böylece gezinme "çerçeve" gibi okunur.
-- **panel `#11161A`** — iç içe paneller, segment düğmelerinin boş durumu.
-- **card `#151A1F`** — içerik kartları. Zeminden ayrımı gölge değil, 1px `border` çizgisi sağlar.
-- **card-hover `#1C2228`** — yalnızca fare üzerindeyken.
-- **border `#252D35`** — varsayılan 1px çizgi. **border-strong `#3A444E`** — odak ve hover.
-- **signal `#F0B429`** — amber. Uygulamada **tek** vurgu rengi: aktif mod satırı, aktif gezinme öğesi, seçili segment, birincil düğme, grafik çizgisi, ölçüm çubukları.
-- **on-signal `#0E1216`** — amber zemin üzerindeki metin. Saf siyah değil; zeminle aynı mürekkep.
-- **danger `#E85C4A`** — yalnızca gerçekten yanlış olan durumlar: 85 °C üstü sıcaklık, silme eylemleri, engellenmiş mod.
-- **warn-bg `#2A1A16`** — yıkıcı düğmelerin sakin zemini; kırmızı metinle birlikte.
-- **ok `#3FA96B`** — onaylanmış durum çipleri ("Config 1 (Aktif)").
-- **info `#5B9BD5`** — yalnızca pil gerilimi gibi nötr bir üçüncü ölçüm gerektiğinde.
-- **text-primary `#F4F1E8`** — kırık beyaz, saf beyaz değil. **text-secondary `#A3ADB7`** — açıklamalar. **text-muted `#7C8791`** — mikro etiketler ve "SEÇ" ipuçları.
+- **paper `#F2EDE3`** — pencere zemini. Her şeyin altındaki tek katman; gün boyu açık kalan bir ekran için göz yormayan sıcak krem.
+- **paper-deep `#E8E0D2`** — kayıt şeridinin ve grafiğin zemini, seçili segment düğmesinin dolgusu. Kağıdın bir ton koyusu.
+- **card `#F8F4EB`** — form alanları ve açılır liste zemini. Kağıttan bir tık açık.
+- **card-hover `#EDE6D8`** — yalnızca fare üzerindeyken.
+- **rail `#EAE3D5`** — kenar çubuğu. Zeminden bir tık koyu, böylece gezinme "çerçeve" gibi okunur.
+- **rule `#D5CBB8`** — varsayılan 1px çizgi. **rule-strong `#B8AB93`** — odak, hover, ölçüm çubuğu rayı.
+- **ink `#1B1917`** — gövde metni, ölçüm çubuklarının dolgusu, grafik izi, işaretli kutu. Saf siyah değil; kağıda basılmış mürekkep.
+- **ink-soft `#4A4238`** — açıklamalar, ikincil değerler. **ink-faint `#6E6558`** — mikro etiketler ve "SEÇ" ipuçları.
+- **vermilion `#C0392B`** — dünyanın tek vurgusu ve **yalnızca üç iş için**: (1) şu an canlı olan şey — başlık çubuğundaki mod, grafiğin uç noktası, "şimdi" çizgisi; (2) dikkat isteyen durum — eşik aşımı, bakım önerisi, engellenmiş mod; (3) yıkıcı eylem metni. Başka hiçbir yerde kullanılmaz.
+- **vermilion-deep `#9B2C1F`** — yıkıcı düğme metni ve uyarı başlığı. Parlak vermilyondan bir tık koyu, düğme metni olarak daha az bağırır.
+- **olive `#5F6B3E`** — doğrulanmış iyi durum: pil sağlığı, SSD sıcaklığı, nominal kararlılık.
+- **slate `#4A6274`** — nötr üçüncü ölçüm (pil gerilimi, GPU modu rozeti).
+- **on-accent `#F7F2E8`** — mürekkep dolgu üzerindeki metin ve tik.
+- **warn-bg `#F0E2D2`** — uyarı bandının zemini; vermilyon metinle birlikte.
 
-Renk asla tek başına anlam taşımaz: her durum çipi metin de yazar ("AKTİF", "SEÇ", "Devre dışı").
+Renk asla tek başına anlam taşımaz: her durum çipi metin de yazar ("AKTİF", "SEÇ", "Devre dışı", "Bakım Önerilebilir").
+
+**Ölçüm çubukları renk taşımaz.** Ray `rule`, dolgu `ink`. Bir çubuk ölçümü gösterir, yargıyı değil; yargı yanındaki metinde ve rozette durur. Tek istisna %85 üzeri disk doluluğu ve çalışan deşarj işlemi — bunlar gerçek eşik ve gerçek canlı durum.
 
 ## Typography
 
-Tek aile: **Segoe UI Variable Text**, yedek Segoe UI. Özel font yüklenmez — hafiflik kısıtı.
+İki aile, kesin iş bölümü: **kaydedilen rakamlar** Cascadia Mono (yedek Consolas, Courier New), **yazılan metin** Segoe UI Variable Text. Özel font yüklenmez — hafiflik kısıtı.
 
-Ölçek dar ve bilinçli olarak küçük: bu bir kontrol paneli, okunacak makale değil.
+| Rol | Boyut | Ağırlık | Aile | Kullanım |
+|---|---|---|---|---|
+| display | 18px | SemiBold | Segoe UI | Sekme başlığı, her ekranda bir tane |
+| title | 14px | SemiBold | Segoe UI | Mod satırı adı, bölüm başlığı |
+| body | 12px | Regular | Segoe UI | Açıklama paragrafı |
+| label | 11px | Regular / SemiBold | Segoe UI | Alan etiketi, düğme metni, durum çipi |
+| micro | 10px | SemiBold | Segoe UI | Ölçüm etiketi, "SEÇ", eksen yazısı |
+| figure | 12–20px | Regular / SemiBold | Cascadia Mono | Her sayısal okuma, eksen değeri, RPM, °C |
 
-| Rol | Boyut | Ağırlık | Kullanım |
-|---|---|---|---|
-| display | 20px | SemiBold | Sekme başlığı, tek bir tane |
-| title | 15px | SemiBold | Mod satırı adı, kart başlığı |
-| body | 12px | Regular | Açıklama paragrafı |
-| label | 11px | Regular / SemiBold | Alan etiketi, düğme metni, durum çipi |
-| micro | 10px | Bold | Ölçüm etiketi, "SEÇ" |
+Mono rakamlar sütun halinde hizalanır: bir değer listesi aşağı doğru tarandığında basamaklar üst üste gelir. Etiket solda, değer sağda, ikisi aynı baseline'da.
 
-Rakamlar hizalı okunur: ölçüm değerleri Bold ve sağa yaslı, etiketler solda. Bir satırda etiket + değer çifti her zaman aynı baseline'da.
+WPF'te harf aralığı ayarı yok; mikro etiketlerin ferahlığı büyük harf ve `ink-faint` ile kurulur, `letter-spacing` ile değil.
 
 ## Layout
 
-- Pencere: 1060×730 varsayılan, 2560×1380'e kadar genişler. Kenar çubuğu sabit **210px**, içerik `*`.
-- İçerik boşluğu **20px**; kart arası **10–16px**.
-- Kart içi dolgu **14px**. Satır dolgusu **14px 11px**.
+- Pencere: 1060×730 varsayılan, 2560×1380'e kadar genişler. Kenar çubuğu sabit **200px**, içerik `*`.
+- İçerik boşluğu **26px** yatay, **20px** dikey. Bölüm arası **14–18px**.
 - Dikey ritim 4'ün katları: 4 / 8 / 12 / 16 / 20.
-- **Kart ızgarası yok.** Aynı boy dört kutu yerine tek bir okuma şeridi: üstte 1px çizgi, altında etiket/değer çiftleri. Ölçümler satır satır dizilir, kutu kutu değil.
-- Geniş ekranda satırlar uzar; bu doğru — tahta geniştir. İçerik ortalanmaz, sola yaslanır.
-- Form alanları (ComboBox) içeriğe göre sınırlanır (`MaxWidth`), satırı doldurmaz.
+- **Kart ızgarası yok.** Bölüm, kağıt üzerinde çizgiyle ayrılmış bir banttır: üstte 1px `rule`, altında 14px boşluk, sonra içerik. Aynı boy dört kutu yerine tek bir okuma şeridi.
+- Ölçümler satır satır dizilir, kutu kutu değil. Dört sütunlu okuma şeridinde her hücrenin üstünde kendi 1px çizgisi vardır; hücreler arasında kutu, gölge veya zemin farkı yoktur.
+- Geniş ekranda satırlar uzar; bu doğru — kağıt geniştir. İçerik ortalanmaz, sola yaslanır.
+- Form alanları (ComboBox, TextBox) içeriğe göre sınırlanır, satırı doldurmaz.
+- Sağa yaslı eylem sütunu her bölümde aynı x'te durur; düğmeler satırın ortasında yüzmez.
 
 ## Elevation & Depth
 
-**Gölge yok.** Hiyerarşi üç şeyle kurulur: zemin tonu (rail → bg → panel → card), 1px çizgi ve boşluk.
+**Gölge yok.** Hiyerarşi üç şeyle kurulur: kağıt tonu (rail → paper → card → paper-deep), 1px çizgi ve boşluk.
 
 - `DropShadowEffect` kullanılmaz; hiçbir yerde. Pencere kenarını Windows çizer.
-- Bulanıklık, cam efekti, `AllowsTransparency` yok — WPF GPU üzerinde çizsin.
+- Gradyan, bulanıklık, cam efekti, `AllowsTransparency` yok — WPF GPU üzerinde çizsin, boşta tüketim düşük kalsın.
 - Katman sayısı düşük tutulur: her ek kutu boşta tüketim demektir.
+- Derinlik hissi tek yerden gelir: kayıt şeridi kağıttan bir ton koyu bir banttır ve 1px çizgiyle çevrilidir. Başka hiçbir yüzey "yukarıda" durmaz.
 
 ## Shapes
 
-- Köşe yarıçapı **2 / 3 / 4px**. Daha büyüğü "kart" hissi verir, bu dünyada istenmez.
-- 1px çizgi her yerde aynı kalınlıkta. 2px yalnızca grafik çizgisinde.
-- Ölçüm çubukları **3–5px** yüksekliğinde, yuvarlatılmış uçlu.
-- Onay kutuları ve radyo düğmeleri **14×14px kare**, 2px yarıçap. Yuvarlak değil — tahta dilinde kare.
-- Slider: 3px ray, **10×14px kare** tutamak.
+- Köşe yarıçapı **0 / 1 / 2px**. Daha büyüğü "kart" hissi verir, bu dünyada istenmez. Bölümler ve okuma şeritleri tamamen kare.
+- 1px çizgi her yerde aynı kalınlıkta. 1.5px yalnızca grafik izinde.
+- Ölçüm çubukları **4–6px** yüksekliğinde, yuvarlatılmamış uçlu.
+- Onay kutuları ve radyo düğmeleri **14×14px kare**, 1px yarıçap. Yuvarlak değil — kayıt kağıdı dilinde kare.
+- Slider: 3px ray, **8×16px** kare tutamak, rayın iki ucunda 4px pay (tutamak kenarda kırpılmaz).
+- Mod satırının sol işareti **3×18px** dikdörtgen; gezinme işareti **5×5px** kare.
 
 ## Components
 
-**Mode row** — tam genişlik satır, altında 1px ayırıcı. Sol: ad (title) + açıklama (label, %72 opaklık). Sağ: durum çipi. Aktifken satırın tamamı `signal` dolguya geçer, metin `on-signal` olur, çip "AKTİF" yazar. Hover, dolgunun **altında** duran ayrı bir katmandır; aktif bandı asla yıkamaz.
+**Kayıt şeridi (imza)** — ekranın üstünde 72px yüksekliğinde `paper-deep` bant, 1px `rule` çerçeve. İçinde son 60 saniyenin sürekli `ink` izi (1.4px), sağ kenarda kesikli vermilyon "şimdi" çizgisi, mod değişimlerinde vermilyon dikey tik. Üstünde mikro etiketler: solda "KAYIT · 42 SANİYE", sağda "ARALIK 58–71 °C" ve "ŞİMDİ 64 °C". Veri yokken ortada "Kayıt bekleniyor" yazar, boş bir çizgi çizilmez.
 
-**Nav item** — aynı dil, daha küçük: 12px 9px dolgu, 3px yarıçap. Aktif olan amber band + koyu metin.
+**Telemetri grafiği** — aynı dil, daha büyük (140px). İz `ink`, uçtaki nokta vermilyon. Ölçek **sağda ayrı bir olukta** durur, 1px dikey çizgiyle ayrılmış; etiket asla izin üstüne binmez. Üç yatay kılavuz çizgisi `rule`.
 
-**Seg button** — fan modu ve CPU boost gibi 2–4 seçenekli gruplar. Boş durum `panel` zemin + `text-primary`; seçili olan amber band + koyu metin. Boş durumdaki renk ipucu (kırmızı "Maksimum", amber "Özel") korunur; seçilince yerini sinyal rengine bırakır.
+**Mode row** — tam genişlik satır, üstünde 1px `rule`. Sol kenarda 14px'lik işaret kolonu, içinde aktif satırda 3×18px vermilyon dikdörtgen. Sağda durum damgası: pasif satırda `rule` çerçeveli "SEÇ" (`ink-faint`), aktif satırda vermilyon çerçeveli "AKTİF" (vermilyon metin). Aktif satırın metni `ink`, diğerleri `ink-soft`. **Durum dolguyla değil, geri çekilmeyle kurulur** — hiçbir satır renkli banda dönmez.
 
-**Card** — `card` zemin, 1px `border`, 4px yarıçap, 14px dolgu. Başlık title, altında label açıklama.
+**Nav item** — aynı dil, daha küçük: 10px 8px dolgu, 2px yarıçap. Aktif olan `paper` zemin alır ve sol margininde 5×5px vermilyon kare belirir. Şerit yok, dolgu yok.
 
-**Stat cell** — kart değil: üstte 1px çizgi, altında micro etiket + büyük değer + not. Dört tanesi yan yana bir okuma şeridi oluşturur.
+**Seg button** — fan modu ve CPU boost gibi 2–4 seçenekli gruplar. Boş durum saydam zemin + `rule` çerçeve + `ink-soft` metin. Seçili olan `paper-deep` zemin + `ink` çerçeve + `ink` metin + SemiBold + altında 2px `ink` çizgi: kağıda bastırılmış gibi okunur, kırmızıya boyanmaz.
 
-**Checkbox / Radio** — 14px kare, `border-strong` çerçeve; işaretliyken amber dolgu + koyu tik. Metin 7px sağda.
+**Section** — `CardBorder` stili: saydam zemin, üstte 1px `rule`, 14px üst dolgu, yarıçap yok. Başlık title, altında label açıklama. 21 kullanım aynı dili miras alır.
 
-**Slider** — 3px ray (`panel` zemin, `border` çerçeve), dolu kısım amber, kare tutamak `text-primary`.
+**Stat cell** — kart değil: üstte 1px çizgi, altında mikro etiket + mono değer + not. Dört tanesi yan yana bir okuma şeridi oluşturur.
 
-**Toast** — `card` zemin, `border-strong` çerçeve, 4px yarıçap. Gölge yok.
+**Checkbox / Radio** — 14px kare, `rule-strong` çerçeve; işaretliyken `ink` dolgu + `on-accent` tik. Metin 7px sağda. Radyo da kare — aynı aileden okunur.
+
+**Slider** — 3px ray (`rule`), dolu kısım `ink`, kare tutamak `ink`.
+
+**Stamp** — vermilyon 1px çerçeve, 1px yarıçap, 2px 7px dolgu, mikro büyük harf. Yalnızca "AKTİF" için. Ekranda tek tane olur.
+
+**Toast** — `card` zemin, `rule-strong` çerçeve, 2px yarıçap, 200ms fade. Gölge yok.
 
 ## Do's and Don'ts
 
 **Yap**
 
-- Bir ekranda tek amber band. Aynı anda iki "aktif" satır gösterme.
+- Kalemi mürekkeple, damgayı vermilyonla çiz. Bir ekranda vermilyon en fazla üç yerde görünsün ve her biri "şu an" ya da "dikkat" desin.
 - Durumu metinle de yaz: "AKTİF", "SEÇ", "Devre dışı", "Uyanıyor…".
-- Okunamayan değeri `--` göster; tahmin etme.
-- Hiyerarşiyi zemin tonu + 1px çizgi + boşlukla kur.
+- Okunamayan değeri `--` göster; tahmin etme. Tahmini değeri "~" ve "(tahmini)" ile işaretle.
+- Hiyerarşiyi kağıt tonu + 1px çizgi + boşlukla kur.
+- Her sayıyı mono ile diz; etiketle değeri aynı baseline'da hizala.
 - Yeni bir ölçüm eklerken mevcut okuma şeridine satır olarak ekle, yeni kart açma.
 - Türkçe yaz; kod tanımlayıcıları İngilizce kalsın.
 
 **Yapma**
 
 - Gölge, gradyan, bulanıklık, cam efekti, parlama.
+- Ölçüm çubuğunu duruma göre renklendirme — çubuk ölçer, rozet yargılar.
+- Onay kutusunu, radyoyu, slider dolgusunu veya seçili segmenti vermilyona boyama.
 - Başlığın üstüne küçük "kicker" etiketi.
 - Kartın üstüne veya yanına renkli 1px şerit.
-- Gradyan metin.
+- İç içe kutu: bölüm içinde bölüm, kart içinde kart.
 - Aynı boy kartlardan oluşan ızgara (dört kutu, altı kutu…).
+- Grafik eksen etiketini izin üstüne bindirme; ölçek kendi oluğunda durur.
 - Oyuncu RGB'si: neon, çok renkli vurgular, animasyonlu geçişler.
 - Sürekli animasyon veya saniyede birden fazla kare tüketen efekt. Tek hareket: 200ms toast fade.
 - Emoji.
