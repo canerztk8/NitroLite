@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Ключ настроек Acer Agent не найден; на этом компьютере нет записи о переключателе MUX.",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "Не удалось прочитать резервную копию оптимизации; она не была перезаписана.",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Не удалось записать резервную копию оптимизации; ни один параметр не изменён."
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Не удалось записать резервную копию оптимизации; ни один параметр не изменён.",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "Сам задаёт скорость вентиляторов по температуре процессора.",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "Кривая вентиляторов включена: скорость следует за температурой процессора.",
+ "Fan eğrisi başlatılamadı.": "Не удалось запустить кривую вентиляторов.",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "Кривая вентиляторов выключена; вентиляторы снова в автоматическом режиме.",
+ "Fan eğrisi kapandı.": "Кривая вентиляторов выключена.",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Кривая вентиляторов выключена: режим вентиляторов изменён в другом месте.",
+ "Sıcaklık bekleniyor…": "Ожидание температуры…",
+ "CPU {0} °C · fan %{1}": "ЦП {0} °C · вентилятор {1} %",
+ "Eğri": "Кривая",
+ "FAN EĞRİSİ": "КРИВАЯ ВЕНТИЛЯТОРОВ",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Кривая следует за температурой процессора: при росте вентиляторы сразу ускоряются, а замедляются только после выхода за зону гистерезиса. Во время игровой сессии действует настройка вентиляторов игрового профиля."
 }

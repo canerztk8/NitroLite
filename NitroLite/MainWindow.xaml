@@ -879,6 +879,7 @@
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
 
                                         <Grid Grid.Row="0" Margin="0,0,0,14">
@@ -886,7 +887,8 @@
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                 <Button x:Name="BtnFanAuto" Style="{StaticResource SegButton}" Content="Otomatik" Click="BtnFanAuto_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" Margin="0,0,6,0" FontSize="11" />
                                                 <Button x:Name="BtnFanMax" Style="{StaticResource SegButton}" Content="Maksimum" Click="BtnFanMax_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" Margin="0,0,6,0" FontSize="11" />
-                                                <Button x:Name="BtnFanCustom" Style="{StaticResource SegButton}" Content="Özel" Click="BtnFanCustom_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" FontSize="11" ToolTip="CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır." />
+                                                <Button x:Name="BtnFanCustom" Style="{StaticResource SegButton}" Content="Özel" Click="BtnFanCustom_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" Margin="0,0,6,0" FontSize="11" ToolTip="CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır." />
+                                                <Button x:Name="BtnFanCurve" Style="{StaticResource SegButton}" Content="Eğri" Click="BtnFanCurve_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" FontSize="11" ToolTip="Fan hızını CPU sıcaklığına göre kendisi ayarlar." />
                                             </StackPanel>
                                         </Grid>
 
@@ -934,6 +936,101 @@
                                             <TextBlock x:Name="TxtFanGpuPercent" Grid.Row="1" Grid.Column="2" Text="%50" Style="{StaticResource Figure}" HorizontalAlignment="Right" Margin="0,8,0,0" />
                                             <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="Sabit hız: fan yüke göre hızlanmaz. Ağır yükte sıcaklığı izleyin; ısınırsa Otomatik'e dönün." Foreground="{StaticResource InkFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,8,0,0" />
                                         </Grid>
+
+                                        <!-- SOFTWARE FAN CURVE (shown in "Eğri" mode) -->
+                                        <StackPanel x:Name="PnlFanCurve" Grid.Row="3" Margin="0,16,0,0" Visibility="Collapsed">
+                                            <Border Height="1" Background="{StaticResource Rule}" Margin="0,0,0,12" />
+                                            <Grid>
+                                                <TextBlock Text="FAN EĞRİSİ" Style="{StaticResource LabelCaps}" />
+                                                <TextBlock x:Name="TxtFanCurveStatus" Text="--" HorizontalAlignment="Right" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" />
+                                            </Grid>
+                                            <!-- The trace: temperature across, fan speed up. Drawn in code so it always matches the sliders. -->
+                                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="1" Margin="0,8,0,0" Background="{StaticResource PaperDeep}">
+                                                <Grid Height="92">
+                                                    <Canvas x:Name="CanvasFanCurveGrid" ClipToBounds="True" />
+                                                    <Canvas x:Name="CanvasFanCurve" ClipToBounds="True" SizeChanged="CanvasFanCurve_SizeChanged">
+                                                        <Polyline x:Name="FanCurveLine" Stroke="{StaticResource Ink}" StrokeThickness="1.5" StrokeLineJoin="Round" />
+                                                        <Rectangle x:Name="FanCurveMarker" Width="5" Height="5" Fill="{StaticResource Vermilion}" Visibility="Collapsed" />
+                                                    </Canvas>
+                                                </Grid>
+                                            </Border>
+                                            <Grid Margin="0,10,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="24" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <Grid Grid.Row="0" Grid.Column="0" Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="34" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="42" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="40°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve0" Grid.Column="1" Minimum="30" Maximum="100" Value="30" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtCurve0" Grid.Column="2" Text="%30" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+                                                <Grid Grid.Row="0" Grid.Column="2" Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="34" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="42" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="50°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve1" Grid.Column="1" Minimum="30" Maximum="100" Value="32" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtCurve1" Grid.Column="2" Text="%32" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+
+                                                <Grid Grid.Row="1" Grid.Column="0" Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="34" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="42" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="60°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve2" Grid.Column="1" Minimum="30" Maximum="100" Value="36" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtCurve2" Grid.Column="2" Text="%36" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+                                                <Grid Grid.Row="1" Grid.Column="2" Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="34" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="42" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="70°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve3" Grid.Column="1" Minimum="30" Maximum="100" Value="42" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtCurve3" Grid.Column="2" Text="%42" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+
+                                                <Grid Grid.Row="2" Grid.Column="0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="34" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="42" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="80°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve4" Grid.Column="1" Minimum="30" Maximum="100" Value="62" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtCurve4" Grid.Column="2" Text="%62" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+                                                <Grid Grid.Row="2" Grid.Column="2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="34" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="42" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="90°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve5" Grid.Column="1" Minimum="30" Maximum="100" Value="100" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="TxtCurve5" Grid.Column="2" Text="%100" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Grid>
+                                            <TextBlock Text="Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir." Foreground="{StaticResource InkFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,10,0,0" />
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
 

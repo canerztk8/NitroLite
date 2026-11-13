@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -72,9 +72,12 @@ public class SafeVerificationEndToEndTests
             return true;
         }
 
+        public List<(FanMode Mode, int Cpu, int Gpu)> FanSpeedHistory { get; } = new();
+
         public override async Task<bool> SetFanModeAsync(FanMode mode, int cpuRpm = 0, int gpuRpm = 0)
         {
             FanHistory.Add(mode);
+            FanSpeedHistory.Add((mode, cpuRpm, gpuRpm));
             if (OnSetFanModeAsync != null)
             {
                 bool res = await OnSetFanModeAsync(mode);
@@ -2614,6 +2617,95 @@ function global:Disable-ScheduledTask {
             Assert.True(ok);
             Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
             Assert.Equal(OperatingMode.Extreme, window.CurrentAppSettings.LastOperatingMode);
+        });
+    }
+
+    #endregion
+
+    #region Software fan curve
+
+    private static MainWindow FanCurveWindow(TestAcerAgentClient agent, AppSettings settings) =>
+        new(agent, new TestCpuPowerService(), new GameDetectionService(), new AtkMouseService(),
+            settings: settings, isTestHarness: true);
+
+    [Fact]
+    public async Task EnablingTheFanCurve_TakesTheFansInCustomModeAndRemembersIt()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings
+            {
+                CustomFanCpuPercent = 55,
+                FanCurvePoints = new List<FanCurvePoint> { new(50, 40), new(80, 100) }
+            };
+            var window = FanCurveWindow(agent, settings);
+
+            Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+
+            Assert.Equal(FanMode.Custom, agent.CurrentFanMode);
+            Assert.Equal(FanMode.Custom, window.CurrentFanMode);
+            Assert.True(settings.FanCurveEnabled);
+            // No temperature has been read yet, so the curve falls back to the saved manual speed instead of
+            // guessing a fan speed from a sensor it does not have.
+            Assert.Equal(55, agent.CustomFanCpuPercent);
+            Assert.Equal(55, agent.CustomFanGpuPercent);
+        });
+    }
+
+    [Fact]
+    public async Task DisablingTheFanCurve_HandsTheFansBackToTheFirmware()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings { CustomFanCpuPercent = 70, CustomFanGpuPercent = 65 };
+            var window = FanCurveWindow(agent, settings);
+
+            Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+            Assert.True(await window.SetFanCurveEnabledAsync(false, quiet: true));
+
+            Assert.Equal(FanMode.Auto, agent.CurrentFanMode);
+            Assert.Equal(FanMode.Auto, window.CurrentFanMode);
+            Assert.False(settings.FanCurveEnabled);
+            // The manual speeds the user had before the curve are back in the client, not the curve's last value.
+            Assert.Equal(70, agent.CustomFanCpuPercent);
+            Assert.Equal(65, agent.CustomFanGpuPercent);
+        });
+    }
+
+    [Fact]
+    public async Task ChoosingAFanModeByHand_StopsTheCurve()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings();
+            var window = FanCurveWindow(agent, settings);
+
+            Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+            Assert.True(await window.SetManualFanModeAsync(FanMode.Max));
+
+            Assert.False(settings.FanCurveEnabled);
+            Assert.Equal(FanMode.Max, agent.CurrentFanMode);
+            Assert.Equal(FanMode.Max, window.CurrentFanMode);
+        });
+    }
+
+    [Fact]
+    public async Task AFailedCurveStart_LeavesTheSettingOffAndTheFansAlone()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            agent.OnSetFanModeAsync = _ => Task.FromResult(false);
+            var settings = new AppSettings();
+            var window = FanCurveWindow(agent, settings);
+
+            Assert.False(await window.SetFanCurveEnabledAsync(true, quiet: true));
+
+            Assert.False(settings.FanCurveEnabled);
+            Assert.Equal(FanMode.Auto, agent.CurrentFanMode);
         });
     }
 

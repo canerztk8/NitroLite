@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Acer Agent सेटिंग्स कुंजी नहीं मिली; इस कंप्यूटर में MUX स्विच रिकॉर्ड नहीं है।",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "अनुकूलन बैकअप पढ़ा नहीं जा सका; उसे अधिलेखित नहीं किया गया।",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "अनुकूलन बैकअप लिखा नहीं जा सका; कोई सेटिंग नहीं बदली गई।"
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "अनुकूलन बैकअप लिखा नहीं जा सका; कोई सेटिंग नहीं बदली गई।",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "CPU तापमान के अनुसार पंखे की गति स्वयं तय करता है।",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "फ़ैन कर्व चालू: पंखे की गति CPU तापमान का पालन करती है।",
+ "Fan eğrisi başlatılamadı.": "फ़ैन कर्व शुरू नहीं हो सका।",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "फ़ैन कर्व बंद; पंखे फिर से स्वचालित मोड पर हैं।",
+ "Fan eğrisi kapandı.": "फ़ैन कर्व बंद।",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "फ़ैन कर्व बंद: पंखे का मोड कहीं और से बदला गया।",
+ "Sıcaklık bekleniyor…": "तापमान की प्रतीक्षा…",
+ "CPU {0} °C · fan %{1}": "CPU {0} °C · पंखा {1}%",
+ "Eğri": "कर्व",
+ "FAN EĞRİSİ": "फ़ैन कर्व",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "कर्व CPU तापमान का पालन करता है: तापमान बढ़ते ही पंखे तेज़ हो जाते हैं और गिरने पर हिस्टैरिसिस बैंड पार करने के बाद ही धीमे होते हैं। गेम सत्र के दौरान गेम प्रोफ़ाइल की पंखा सेटिंग लागू होती है।"
 }

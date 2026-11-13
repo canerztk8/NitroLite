@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "The Acer Agent settings key was not found; this computer has no MUX switch record.",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "The optimization backup could not be read; it was not overwritten.",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "The optimization backup could not be written; no setting was changed."
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "The optimization backup could not be written; no setting was changed.",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "Sets the fan speed from the CPU temperature on its own.",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "Fan curve on: fan speed follows the CPU temperature.",
+ "Fan eğrisi başlatılamadı.": "The fan curve could not be started.",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "Fan curve off; the fans are back on automatic.",
+ "Fan eğrisi kapandı.": "Fan curve off.",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Fan curve off: the fan mode was changed somewhere else.",
+ "Sıcaklık bekleniyor…": "Waiting for a temperature…",
+ "CPU {0} °C · fan %{1}": "CPU {0} °C · fan {1}%",
+ "Eğri": "Curve",
+ "FAN EĞRİSİ": "FAN CURVE",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "The curve follows the CPU temperature: the fans speed up as soon as it rises, and slow down only after it falls past the hysteresis band. During a game session the game profile's fan setting applies."
 }

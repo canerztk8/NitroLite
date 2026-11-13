@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Der Acer-Agent-Einstellungsschlüssel wurde nicht gefunden; dieser Computer hat keinen MUX-Switch-Eintrag.",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "Die Optimierungssicherung konnte nicht gelesen werden; sie wurde nicht überschrieben.",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Die Optimierungssicherung konnte nicht geschrieben werden; keine Einstellung wurde geändert."
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Die Optimierungssicherung konnte nicht geschrieben werden; keine Einstellung wurde geändert.",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "Stellt die Lüfterdrehzahl selbst aus der CPU-Temperatur ein.",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "Lüfterkurve aktiv: die Drehzahl folgt der CPU-Temperatur.",
+ "Fan eğrisi başlatılamadı.": "Die Lüfterkurve konnte nicht gestartet werden.",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "Lüfterkurve aus; die Lüfter laufen wieder automatisch.",
+ "Fan eğrisi kapandı.": "Lüfterkurve aus.",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Lüfterkurve aus: der Lüftermodus wurde anderswo geändert.",
+ "Sıcaklık bekleniyor…": "Temperatur wird erwartet…",
+ "CPU {0} °C · fan %{1}": "CPU {0} °C · Lüfter {1} %",
+ "Eğri": "Kurve",
+ "FAN EĞRİSİ": "LÜFTERKURVE",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Die Kurve folgt der CPU-Temperatur: steigt sie, drehen die Lüfter sofort auf; sinkt sie, werden sie erst nach der Hysterese langsamer. Während einer Spielsitzung gilt die Lüftereinstellung des Spielprofils."
 }

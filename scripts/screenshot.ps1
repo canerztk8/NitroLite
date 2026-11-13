@@ -51,6 +51,12 @@
     Turns ATK mouse integration on with this default profile (0-4), so the sidebar's FARE row is
     captured. Omit it to leave the integration off, as a fresh install has it.
 
+.PARAMETER FanCurve
+    Turns the software fan curve on, so the curve editor is captured instead of the fixed-speed sliders.
+
+.PARAMETER FanCurveFlat
+    Turns the curve on with a flat shape at this percentage, so a fixed fan speed can be measured.
+
 .PARAMETER Settle
     Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
     value is still being fetched at startup (for example the ATK mouse profile).
@@ -73,6 +79,8 @@ param(
     [string]$Exe = '',
     [switch]$KeepOpen,
     [ValidateRange(0, 4)][int]$MouseProfile,
+    [switch]$FanCurve,
+    [ValidateRange(30, 100)][int]$FanCurveFlat,
     [int]$Settle = 0
 )
 
@@ -136,6 +144,12 @@ $themeValue = if ($Theme -eq 'dark') { 1 } else { 0 }
 $json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": $themeValue"
 if ($PSBoundParameters.ContainsKey('MouseProfile')) {
     $json += ",`r`n  `"atk_mouse_integration_enabled`": true,`r`n  `"default_atk_mouse_profile`": $MouseProfile"
+}
+if ($FanCurve) {
+    $json += ",`r`n  `"fan_curve_enabled`": true"
+}
+if ($PSBoundParameters.ContainsKey('FanCurveFlat')) {
+    $json += ",`r`n  `"fan_curve_enabled`": true,`r`n  `"fan_curve_points`": [`r`n    { `"TemperatureC`": 40, `"Percent`": $FanCurveFlat },`r`n    { `"TemperatureC`": 90, `"Percent`": $FanCurveFlat }`r`n  ]"
 }
 $json += "`r`n}`r`n"
 [IO.File]::WriteAllText((Join-Path $dataDir 'settings.json'), $json, (New-Object Text.UTF8Encoding($false)))

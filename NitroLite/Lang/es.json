@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "No se encontró la clave de configuración de Acer Agent; este equipo no tiene registro de conmutador MUX.",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "No se pudo leer la copia de seguridad de la optimización; no se sobrescribió.",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "No se pudo escribir la copia de seguridad de la optimización; no se cambió ningún ajuste."
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "No se pudo escribir la copia de seguridad de la optimización; no se cambió ningún ajuste.",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "Ajusta la velocidad del ventilador según la temperatura de la CPU.",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "Curva de ventilador activa: la velocidad sigue la temperatura de la CPU.",
+ "Fan eğrisi başlatılamadı.": "No se pudo iniciar la curva de ventilador.",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "Curva de ventilador desactivada; los ventiladores vuelven a automático.",
+ "Fan eğrisi kapandı.": "Curva de ventilador desactivada.",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Curva de ventilador desactivada: el modo de ventilador se cambió en otro sitio.",
+ "Sıcaklık bekleniyor…": "Esperando una temperatura…",
+ "CPU {0} °C · fan %{1}": "CPU {0} °C · ventilador {1} %",
+ "Eğri": "Curva",
+ "FAN EĞRİSİ": "CURVA DE VENTILADOR",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "La curva sigue la temperatura de la CPU: los ventiladores aceleran en cuanto sube y solo bajan tras superar la banda de histéresis. Durante una sesión de juego se aplica el ajuste de ventilador del perfil del juego."
 }

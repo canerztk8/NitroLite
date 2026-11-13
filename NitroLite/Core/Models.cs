@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Text.Json.Serialization;
 
 namespace NitroLite.Core;
@@ -276,6 +277,23 @@ public class AppSettings
 
     public static int ClampCustomFanPercent(int value) => Math.Clamp(value, MinCustomFanPercent, 100);
 
+    // Software fan curve. When enabled it owns the fan mode: NitroLite keeps the fans on a custom speed and
+    // moves that speed with the CPU temperature instead of leaving it where the user last put it.
+    [JsonPropertyName("fan_curve_enabled")]
+    public bool FanCurveEnabled { get; set; } = false;
+
+    [JsonPropertyName("fan_curve_points")]
+    public List<FanCurvePoint>? FanCurvePoints { get; set; } = FanCurve.DefaultPoints();
+
+    [JsonPropertyName("fan_curve_hysteresis_c")]
+    public int FanCurveHysteresisC { get; set; } = FanCurve.DefaultHysteresisC;
+
+    [JsonPropertyName("fan_curve_min_dwell_seconds")]
+    public int FanCurveMinDwellSeconds { get; set; } = FanCurve.DefaultMinDwellSeconds;
+
+    /// <summary>The saved curve, cleaned up and ready to apply.</summary>
+    public FanCurve BuildFanCurve() => new(FanCurvePoints, FanCurveHysteresisC, FanCurveMinDwellSeconds);
+
     /// <summary>
     /// Brings every value that came out of a settings file back into the range the app can act on.
     /// System.Text.Json accepts any number for an enum, so a hand-edited or half-written file can carry
@@ -298,6 +316,12 @@ public class AppSettings
         DefaultAtkMouseProfile = Math.Clamp(DefaultAtkMouseProfile, 0, 4);
         CustomFanCpuPercent = ClampCustomFanPercent(CustomFanCpuPercent);
         CustomFanGpuPercent = ClampCustomFanPercent(CustomFanGpuPercent);
+
+        // A curve with no usable anchor would leave the feature on with nothing to follow: fall back to the
+        // default shape instead of silently running the fans at whatever the last write happened to be.
+        FanCurvePoints = FanCurve.Sanitize(FanCurvePoints);
+        FanCurveHysteresisC = Math.Clamp(FanCurveHysteresisC, 0, 15);
+        FanCurveMinDwellSeconds = Math.Clamp(FanCurveMinDwellSeconds, 0, 120);
 
         if (Language != null && !Loc.IsSupported(Language)) Language = null;
     }

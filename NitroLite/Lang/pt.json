@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "A chave de configurações do Acer Agent não foi encontrada; este computador não tem registro de switch MUX.",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "Não foi possível ler o backup da otimização; ele não foi sobrescrito.",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Não foi possível gravar o backup da otimização; nenhuma configuração foi alterada."
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Não foi possível gravar o backup da otimização; nenhuma configuração foi alterada.",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "Ajusta a velocidade da ventoinha pela temperatura da CPU.",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "Curva de ventoinha ativa: a velocidade segue a temperatura da CPU.",
+ "Fan eğrisi başlatılamadı.": "Não foi possível iniciar a curva de ventoinha.",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "Curva de ventoinha desativada; as ventoinhas voltaram ao automático.",
+ "Fan eğrisi kapandı.": "Curva de ventoinha desativada.",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Curva de ventoinha desativada: o modo da ventoinha foi alterado em outro lugar.",
+ "Sıcaklık bekleniyor…": "Aguardando uma temperatura…",
+ "CPU {0} °C · fan %{1}": "CPU {0} °C · ventoinha {1} %",
+ "Eğri": "Curva",
+ "FAN EĞRİSİ": "CURVA DE VENTOINHA",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "A curva segue a temperatura da CPU: as ventoinhas aceleram assim que ela sobe e só desaceleram depois de passar da faixa de histerese. Durante uma sessão de jogo vale a configuração de ventoinha do perfil do jogo."
 }

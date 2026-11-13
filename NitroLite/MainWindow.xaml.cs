@@ -14,6 +14,7 @@ using NitroLite.Core;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfButton = System.Windows.Controls.Button;
 using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfLine = System.Windows.Shapes.Line;
 using WpfPoint = System.Windows.Point;
 
 namespace NitroLite;
@@ -567,6 +568,9 @@ public partial class MainWindow : Window
             if (initialFan.HasValue) _currentFanMode = initialFan.Value;
             UpdateFanButtonsUi(_currentFanMode, initialFan.HasValue);
 
+            // The curve owns the fans when it is on: take them now instead of waiting for the first poll.
+            if (_appSettings.FanCurveEnabled) await SetFanCurveEnabledAsync(true, quiet: true);
+
             // 1.05 Hardware names (CPU, GPU, memory) from Windows, read in the background
             _ = LoadHardwareInfoAsync();
 
@@ -817,6 +821,7 @@ public partial class MainWindow : Window
         }
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         LoadCustomFanSettings();
+        LoadFanCurveSettings();
         _ = RefreshRamCleanStateAsync();
 
         // Persisted toggles: apply to the services directly (the Changed handlers ignore events
@@ -1318,7 +1323,9 @@ public partial class MainWindow : Window
             if (fan.HasValue && fan.Value != _currentFanMode)
             {
                 _currentFanMode = fan.Value;
-                if (!_isGameSessionActive) UpdateDesktopBaselineForManualChange(fan: fan.Value);
+                // While the curve owns the fans, a different mode is not a user choice: the curve takes it back
+                // on the next poll, so it must not become the desktop baseline.
+                if (!_isGameSessionActive && !_fanCurveEnabled) UpdateDesktopBaselineForManualChange(fan: fan.Value);
             }
             UpdateFanButtonsUi(fan ?? _currentFanMode, fan.HasValue);
 
@@ -1342,7 +1349,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Highlights the active fan mode button (Auto / Max).</summary>
+    /// <summary>Highlights the active fan mode button (Auto / Max / Custom / Curve).</summary>
     private void UpdateFanButtonsUi(FanMode mode, bool known = true)
     {
         if (BtnFanAuto == null || BtnFanMax == null) return;
@@ -1350,15 +1357,30 @@ public partial class MainWindow : Window
         SetSegActive(BtnFanMax, known && mode == FanMode.Max);
         BtnFanAuto.ToolTip = known && mode == FanMode.Auto ? Loc.T("Etkin") : null;
         BtnFanMax.ToolTip = known && mode == FanMode.Max ? Loc.T("Etkin") : null;
+
+        // The curve drives the fans through the service's custom mode, so "Özel" and "Eğri" share one device
+        // state. Which of the two is lit is decided here, not by the device.
+        bool curveOwnsFans = _fanCurveEnabled;
         if (BtnFanCustom != null)
         {
-            bool custom = known && mode == FanMode.Custom;
+            bool custom = known && mode == FanMode.Custom && !curveOwnsFans;
             SetSegActive(BtnFanCustom, custom);
             BtnFanCustom.ToolTip = custom ? Loc.T("Etkin") : Loc.T("CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır.");
         }
+        if (BtnFanCurve != null)
+        {
+            bool curve = known && mode == FanMode.Custom && curveOwnsFans;
+            SetSegActive(BtnFanCurve, curve);
+            BtnFanCurve.ToolTip = curve ? Loc.T("Etkin") : Loc.T("Fan hızını CPU sıcaklığına göre kendisi ayarlar.");
+        }
+
         // The sliders stay open while the user is choosing "Özel" (before the service confirms it).
         if (PnlCustomFan != null)
-            PnlCustomFan.Visibility = (known && mode == FanMode.Custom) || _customFanPanelPinned ? Visibility.Visible : Visibility.Collapsed;
+            PnlCustomFan.Visibility = ((known && mode == FanMode.Custom && !curveOwnsFans) || _customFanPanelPinned)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        if (PnlFanCurve != null)
+            PnlFanCurve.Visibility = curveOwnsFans ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // The idle look of each segmented button is whatever the XAML declared (a red "Maksimum", an
@@ -1457,6 +1479,312 @@ public partial class MainWindow : Window
         return timer;
     }
 
+    // ---------------------------------------------------------------- software fan curve
+
+    private bool _fanCurveEnabled;
+    private FanCurveEvaluator? _fanCurveEvaluator;
+    private DispatcherTimer? _fanCurveApplyTimer;
+    private int _fanCurveLastTemperatureC;
+    private int _fanCurveLastPercent;
+    private bool _isUpdatingFanCurveUi;
+
+    /// <summary>The six sliders of the curve editor, in anchor order. Null before the window is built.</summary>
+    private Slider?[] FanCurveSliders => new Slider?[] { SliderCurve0, SliderCurve1, SliderCurve2, SliderCurve3, SliderCurve4, SliderCurve5 };
+
+    private TextBlock?[] FanCurveLabels => new TextBlock?[] { TxtCurve0, TxtCurve1, TxtCurve2, TxtCurve3, TxtCurve4, TxtCurve5 };
+
+    /// <summary>
+    /// Fills the curve editor from the saved settings. Arming the curve is the startup path's job (or the
+    /// button's), not this one: a settings reload must never silently take the fans.
+    /// </summary>
+    private void LoadFanCurveSettings()
+    {
+        _fanCurveLastPercent = _appSettings.CustomFanCpuPercent;
+        ApplyFanCurveToEditor(_appSettings.BuildFanCurve());
+        UpdateFanCurveStatusText();
+    }
+
+    private void ApplyFanCurveToEditor(FanCurve curve)
+    {
+        _isUpdatingFanCurveUi = true;
+        try
+        {
+            var sliders = FanCurveSliders;
+            for (int i = 0; i < sliders.Length && i < FanCurve.AnchorTemperatures.Count; i++)
+            {
+                if (sliders[i] == null) continue;
+                sliders[i]!.Value = curve.PercentAt(FanCurve.AnchorTemperatures[i]);
+            }
+        }
+        finally
+        {
+            _isUpdatingFanCurveUi = false;
+        }
+        UpdateFanCurveLabels();
+        RenderFanCurve();
+    }
+
+    /// <summary>The curve the editor currently shows, as the six anchors the sliders stand for.</summary>
+    private List<FanCurvePoint> ReadFanCurveFromEditor()
+    {
+        var points = new List<FanCurvePoint>();
+        var sliders = FanCurveSliders;
+        for (int i = 0; i < sliders.Length && i < FanCurve.AnchorTemperatures.Count; i++)
+        {
+            int percent = sliders[i] == null
+                ? FanCurve.MinPercent
+                : AppSettings.ClampCustomFanPercent((int)sliders[i]!.Value);
+            points.Add(new FanCurvePoint(FanCurve.AnchorTemperatures[i], percent));
+        }
+        return points;
+    }
+
+    private void UpdateFanCurveLabels()
+    {
+        var sliders = FanCurveSliders;
+        var labels = FanCurveLabels;
+        for (int i = 0; i < sliders.Length && i < labels.Length; i++)
+        {
+            if (sliders[i] == null || labels[i] == null) continue;
+            labels[i]!.Text = $"%{(int)sliders[i]!.Value}";
+        }
+    }
+
+    private void UpdateFanCurveStatusText()
+    {
+        if (TxtFanCurveStatus == null) return;
+        if (!_fanCurveEnabled)
+        {
+            TxtFanCurveStatus.Text = Loc.T("Kapalı");
+            return;
+        }
+        TxtFanCurveStatus.Text = _fanCurveLastTemperatureC > 0
+            ? Loc.T($"CPU {_fanCurveLastTemperatureC} °C · fan %{_fanCurveLastPercent}")
+            : Loc.T("Sıcaklık bekleniyor…");
+    }
+
+    private void SliderFanCurve_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        UpdateFanCurveLabels();
+        RenderFanCurve();
+        if (!IsLoaded || _isInitializingUi || _isUpdatingFanCurveUi) return;
+
+        _appSettings.FanCurvePoints = ReadFanCurveFromEditor();
+        // A new shape means the next evaluation must write again, even if the target happens to match.
+        _fanCurveEvaluator = _fanCurveEnabled ? new FanCurveEvaluator(_appSettings.BuildFanCurve()) : null;
+
+        _fanCurveApplyTimer ??= CreateFanCurveApplyTimer();
+        _fanCurveApplyTimer.Stop();
+        _fanCurveApplyTimer.Start();
+    }
+
+    private DispatcherTimer CreateFanCurveApplyTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        timer.Tick += async (s, e) =>
+        {
+            timer.Stop();
+            SaveSettings();
+            if (!_fanCurveEnabled || _isGameSessionActive) return;
+            await ApplyFanCurveAsync(_fanCurveLastTemperatureC);
+        };
+        return timer;
+    }
+
+    /// <summary>
+    /// One step of the curve: takes the temperature the poll already fetched and writes a new custom fan speed
+    /// only when the evaluator says it is worth it. Never runs during a game session (the game profile owns the
+    /// fans) and never writes when the sensor has no reading.
+    /// </summary>
+    private async Task ApplyFanCurveAsync(int cpuTemperatureC)
+    {
+        if (!_fanCurveEnabled || _isInitializingUi || _isGameSessionActive) return;
+        if (_fanCurveEvaluator == null || cpuTemperatureC <= 0) return;
+
+        _fanCurveLastTemperatureC = cpuTemperatureC;
+
+        // While the curve is on it owns the fans. Anything else holding a different mode — NitroSense, the mode
+        // key, a restore that ran while the curve was suspended — is taken back here, at the speed this
+        // temperature asks for. Turning the curve off is the one way to hand the fans back.
+        if (_currentFanMode != FanMode.Custom)
+        {
+            int percent = _fanCurveEvaluator.Curve.PercentAt(cpuTemperatureC);
+            _agentClient.CustomFanCpuPercent = percent;
+            _agentClient.CustomFanGpuPercent = percent;
+            if (!await _agentClient.SetFanModeAsync(FanMode.Custom)) return;
+
+            _currentFanMode = FanMode.Custom;
+            _fanCurveLastPercent = percent;
+            UpdateFanButtonsUi(_currentFanMode);
+            UpdateFanCurveStatusText();
+            return;
+        }
+
+        int? target = _fanCurveEvaluator.Evaluate(cpuTemperatureC, DateTime.UtcNow);
+        if (target is null) return;
+
+        _agentClient.CustomFanCpuPercent = target.Value;
+        _agentClient.CustomFanGpuPercent = target.Value;
+        if (!await _agentClient.SetFanModeAsync(FanMode.Custom))
+        {
+            // Do not believe a write that did not land: the next poll tries again.
+            _fanCurveEvaluator.Reset();
+            return;
+        }
+
+        _fanCurveLastPercent = target.Value;
+        UpdateFanCurveStatusText();
+    }
+
+    /// <summary>
+    /// Turns the curve on or off. On, it takes the fans at the speed the current temperature asks for; off, it
+    /// hands them back to the firmware instead of leaving them pinned at the last curve speed.
+    /// </summary>
+    internal async Task<bool> SetFanCurveEnabledAsync(bool enabled, bool quiet = false)
+    {
+        if (enabled == _fanCurveEnabled)
+        {
+            UpdateFanButtonsUi(_currentFanMode);
+            return true;
+        }
+
+        if (enabled)
+        {
+            _fanCurveEnabled = true;
+            _appSettings.FanCurveEnabled = true;
+            _fanCurveEvaluator = new FanCurveEvaluator(_appSettings.BuildFanCurve());
+            SaveSettings();
+            UpdateFanButtonsUi(_currentFanMode);
+
+            int percent = _fanCurveLastTemperatureC > 0
+                ? _fanCurveEvaluator.Curve.PercentAt(_fanCurveLastTemperatureC)
+                : _appSettings.CustomFanCpuPercent;
+            _agentClient.CustomFanCpuPercent = percent;
+            _agentClient.CustomFanGpuPercent = percent;
+            if (!await _agentClient.SetFanModeAsync(FanMode.Custom))
+            {
+                DisableFanCurveState();
+                UpdateFanButtonsUi(_currentFanMode);
+                if (!quiet) ShowToast(Loc.T("Fan eğrisi başlatılamadı."), false);
+                return false;
+            }
+
+            _currentFanMode = FanMode.Custom;
+            _fanCurveLastPercent = percent;
+            // The power automation restores this fan mode on an adapter change, so it has to know the curve owns it.
+            _powerAutomationService?.UpdateManualFanMode(FanMode.Custom);
+            UpdateFanButtonsUi(_currentFanMode);
+            UpdateFanCurveStatusText();
+            if (!quiet) ShowToast(Loc.T("Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor."));
+            return true;
+        }
+
+        DisableFanCurveState();
+
+        bool ok = await _agentClient.SetFanModeAsync(FanMode.Auto);
+        if (ok)
+        {
+            _currentFanMode = FanMode.Auto;
+            _powerAutomationService?.UpdateManualFanMode(FanMode.Auto);
+        }
+        LoadCustomFanSettings();
+        UpdateFanButtonsUi(_currentFanMode);
+        if (!quiet) ShowToast(ok ? Loc.T("Fan eğrisi kapandı; fanlar otomatik moda döndü.") : Loc.T("Fan eğrisi kapandı."), ok);
+        return ok;
+    }
+
+    /// <summary>Forgets the curve without touching the fans. The caller decides what mode they should be in.</summary>
+    private void DisableFanCurveState()
+    {
+        _fanCurveEnabled = false;
+        _appSettings.FanCurveEnabled = false;
+        _fanCurveEvaluator = null;
+        SaveSettings();
+        UpdateFanCurveStatusText();
+    }
+
+    private async void BtnFanCurve_Click(object sender, RoutedEventArgs e)
+    {
+        await SetFanCurveEnabledAsync(!_fanCurveEnabled);
+    }
+
+    private void CanvasFanCurve_SizeChanged(object sender, SizeChangedEventArgs e) => RenderFanCurve();
+
+    /// <summary>
+    /// Draws the curve on the recording strip: temperature across (30–100 °C), fan speed up (30–100 %), one ink
+    /// trace through the anchors and a vermilion mark where the machine is right now.
+    /// </summary>
+    private void RenderFanCurve()
+    {
+        if (CanvasFanCurve == null || CanvasFanCurveGrid == null || FanCurveLine == null) return;
+
+        double width = CanvasFanCurve.ActualWidth;
+        double height = CanvasFanCurve.ActualHeight;
+        if (width < 40 || height < 30) return;
+
+        var rule = TryFindResource("Rule") as WpfBrush ?? System.Windows.Media.Brushes.Gray;
+        var ink = TryFindResource("Ink") as WpfBrush ?? System.Windows.Media.Brushes.Black;
+
+        const double padX = 6, padY = 6;
+        double plotW = width - padX * 2;
+        double plotH = height - padY * 2;
+
+        double X(double temperatureC) =>
+            padX + (Math.Clamp(temperatureC, FanCurve.MinTemperatureC, FanCurve.MaxTemperatureC) - FanCurve.MinTemperatureC)
+            / (double)(FanCurve.MaxTemperatureC - FanCurve.MinTemperatureC) * plotW;
+        double Y(double percent) =>
+            padY + (1 - (Math.Clamp(percent, FanCurve.MinPercent, FanCurve.MaxPercent) - FanCurve.MinPercent)
+            / (double)(FanCurve.MaxPercent - FanCurve.MinPercent)) * plotH;
+
+        // Grid: one vertical rule per anchor temperature, three horizontal rules for the speed bands.
+        CanvasFanCurveGrid.Children.Clear();
+        foreach (int temperature in FanCurve.AnchorTemperatures)
+        {
+            double x = X(temperature);
+            CanvasFanCurveGrid.Children.Add(new WpfLine
+            {
+                X1 = x, X2 = x, Y1 = padY, Y2 = padY + plotH,
+                Stroke = rule, StrokeThickness = 1, SnapsToDevicePixels = true
+            });
+        }
+        foreach (int percent in new[] { FanCurve.MinPercent, 65, FanCurve.MaxPercent })
+        {
+            double y = Y(percent);
+            CanvasFanCurveGrid.Children.Add(new WpfLine
+            {
+                X1 = padX, X2 = padX + plotW, Y1 = y, Y2 = y,
+                Stroke = rule, StrokeThickness = 1, SnapsToDevicePixels = true
+            });
+        }
+
+        // The trace: the anchors the editor holds, joined straight, plus the flat ends the curve really has.
+        var curve = new FanCurve(ReadFanCurveFromEditor());
+        var points = new PointCollection
+        {
+            new WpfPoint(X(FanCurve.MinTemperatureC), Y(curve.PercentAt(FanCurve.MinTemperatureC)))
+        };
+        foreach (var anchor in curve.Points)
+            points.Add(new WpfPoint(X(anchor.TemperatureC), Y(anchor.Percent)));
+        points.Add(new WpfPoint(X(FanCurve.MaxTemperatureC), Y(curve.PercentAt(FanCurve.MaxTemperatureC))));
+        FanCurveLine.Points = points;
+        FanCurveLine.Stroke = ink;
+
+        // Where the machine is right now.
+        if (FanCurveMarker != null)
+        {
+            if (_fanCurveEnabled && _fanCurveLastTemperatureC > 0)
+            {
+                FanCurveMarker.Visibility = Visibility.Visible;
+                Canvas.SetLeft(FanCurveMarker, X(_fanCurveLastTemperatureC) - FanCurveMarker.Width / 2);
+                Canvas.SetTop(FanCurveMarker, Y(_fanCurveLastPercent) - FanCurveMarker.Height / 2);
+            }
+            else
+            {
+                FanCurveMarker.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
     private bool? _lastServiceTelemetryAvailable;
     private static string ServiceUnavailableText => Loc.T("-- (Servis yok)");
 
@@ -1530,6 +1858,15 @@ public partial class MainWindow : Window
                 _hardwareService.EnrichMonitorData(data, gpuAsleepPerService: data.GpuTemperature <= 0);
             }
             _telemetrySampleIndex++;
+
+            // The software fan curve follows the temperature this poll already fetched. The last reading is kept
+            // even while the curve is off, so turning it on acts on the current temperature instead of waiting.
+            if (data.CpuTemperature > 0) _fanCurveLastTemperatureC = data.CpuTemperature;
+            if (_fanCurveEnabled)
+            {
+                await ApplyFanCurveAsync(data.CpuTemperature);
+                UpdateFanCurveStatusText();
+            }
 
             bool isWindowVisible = IsVisible && WindowState != WindowState.Minimized;
             bool isGpuSleeping = data.GpuTemperature <= 0;
@@ -5102,6 +5439,23 @@ public partial class MainWindow : Window
             {
                 System.Diagnostics.Trace.WriteLine("Eco revert on exit incomplete; persisted state will be restored next start.");
             }
+
+            // The curve cannot run once the window is gone: hand the fans back to the firmware instead of leaving
+            // them pinned at whatever speed the last reading asked for. The setting stays on, so the next start
+            // takes the fans again.
+            if (_fanCurveEnabled)
+            {
+                if (await _agentClient.SetFanModeAsync(FanMode.Auto))
+                {
+                    _currentFanMode = FanMode.Auto;
+                    _powerAutomationService?.UpdateManualFanMode(FanMode.Auto);
+                }
+                else
+                {
+                    AppLog.Warn("Fan eğrisi", "Çıkışta fanlar otomatik moda döndürülemedi.");
+                }
+            }
+
             FinishExit();
         }
         catch (Exception ex) { ShowToast(Loc.T($"Çıkış tamamlanamadı: {ex.Message}"), false); }
@@ -5338,6 +5692,10 @@ public partial class MainWindow : Window
 
     internal async Task<bool> SetManualFanModeAsync(FanMode mode)
     {
+        // Choosing a fan mode by hand is a statement that the curve should stop: otherwise the next poll would
+        // take the fans straight back and the button would look broken.
+        if (_fanCurveEnabled) DisableFanCurveState();
+
         await _gameProfileTransitionLock.WaitAsync();
         try
         {
@@ -5346,6 +5704,8 @@ public partial class MainWindow : Window
             {
                 _currentFanMode = mode;
                 UpdateDesktopBaselineForManualChange(fan: mode);
+                // The curve panel has to close the moment the user picks another mode, not on the next sync.
+                UpdateFanButtonsUi(mode);
                 ShowToast(mode switch
                 {
                     FanMode.Auto => Loc.T("Otomatik fan eğrisi etkinleştirildi."),

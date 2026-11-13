@@ -788,5 +788,16 @@
  "✕": "✕",
  "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Kunci pengaturan Acer Agent tidak ditemukan; komputer ini tidak memiliki catatan switch MUX.",
  "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "Backup optimasi tidak dapat dibaca; berkas tidak ditimpa.",
- "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Backup optimasi tidak dapat ditulis; tidak ada pengaturan yang diubah."
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Backup optimasi tidak dapat ditulis; tidak ada pengaturan yang diubah.",
+ "Fan hızını CPU sıcaklığına göre kendisi ayarlar.": "Mengatur kecepatan kipas sendiri dari suhu CPU.",
+ "Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.": "Kurva kipas aktif: kecepatan kipas mengikuti suhu CPU.",
+ "Fan eğrisi başlatılamadı.": "Kurva kipas tidak dapat dimulai.",
+ "Fan eğrisi kapandı; fanlar otomatik moda döndü.": "Kurva kipas mati; kipas kembali ke otomatis.",
+ "Fan eğrisi kapandı.": "Kurva kipas mati.",
+ "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Kurva kipas mati: mode kipas diubah dari tempat lain.",
+ "Sıcaklık bekleniyor…": "Menunggu suhu…",
+ "CPU {0} °C · fan %{1}": "CPU {0} °C · kipas {1}%",
+ "Eğri": "Kurva",
+ "FAN EĞRİSİ": "KURVA KIPAS",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Kurva mengikuti suhu CPU: kipas langsung berputar lebih cepat saat suhu naik, dan baru melambat setelah melewati pita histeresis. Selama sesi game, pengaturan kipas profil game yang berlaku."
 }
