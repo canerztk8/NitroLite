@@ -11,6 +11,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfButton = System.Windows.Controls.Button;
 using WpfComboBox = System.Windows.Controls.ComboBox;
@@ -7233,6 +7234,28 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowToast(Loc.T($"Günlük klasörü açılamadı: {ex.Message}"), false);
+        }
+    }
+
+    /// <summary>
+    /// Writes the hardware report next to the settings file and opens the folder, because the file is useless until
+    /// the user can attach it to an issue. The toast names the file so it can be found in a crowded folder.
+    /// </summary>
+    private void BtnHardwareReport_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = HardwareReport.WriteToDirectory(AppPaths.DataDirectory);
+            ShowToast(Loc.T($"Donanım raporu kaydedildi: {Path.GetFileName(path)}"), true);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = AppPaths.DataDirectory,
+                UseShellExecute = true
+            })?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            ShowToast(Loc.T($"Donanım raporu yazılamadı: {ex.Message}"), false);
         }
     }
 

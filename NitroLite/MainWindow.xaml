@@ -2216,6 +2216,21 @@
                                                 <Button x:Name="BtnReportBug" Content="Hata bildir" Click="BtnReportBug_Click" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
                                             </StackPanel>
                                         </Grid>
+
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,12,0,12" />
+
+                                        <!-- Diagnostics: the file a maintainer asks for when a model-specific bug is reported -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <TextBlock Text="Donanım raporu" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Model, BIOS, Acer servisleri ve WMI durumunu bir dosyaya yazar. Hata bildirirken bu dosyayı ekleyin. Seri numarası, kullanıcı adı ve dosya yolu içermez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnHardwareReport" Grid.Column="1" Content="Raporu dışa aktar" Click="BtnHardwareReport_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

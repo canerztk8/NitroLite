@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite;
 
@@ -56,6 +57,14 @@ public partial class App : System.Windows.Application
             if (HasFlag(e.Args, "--restore-optimize"))
             {
                 Environment.Exit(RunCliTask("--restore-optimize", SystemToolsService.RestoreOptimizePcAsync, e.Args));
+                return;
+            }
+
+            // Read-only diagnostic: prints what NitroLite can see about this laptop. No --yes, because it changes
+            // nothing; a user pasting the output into an issue is the whole point.
+            if (HasFlag(e.Args, "--hardware-report"))
+            {
+                Environment.Exit(RunHardwareReport(e.Args));
                 return;
             }
 
@@ -302,6 +311,43 @@ public partial class App : System.Windows.Application
 
     private static bool HasFlag(string[] args, params string[] names) =>
         args.Any(a => names.Any(n => a.Equals(n, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// Prints the hardware report to stdout, or writes it to a folder when <c>--out &lt;dir&gt;</c> is given.
+    /// <c>--json</c> switches the stdout format. Read-only, so it needs no confirmation flag.
+    /// </summary>
+    private static int RunHardwareReport(string[] args)
+    {
+        UseUtf8Console();
+        try
+        {
+            var outDir = ValueAfter(args, "--out");
+            if (!string.IsNullOrWhiteSpace(outDir))
+            {
+                var path = HardwareReport.WriteToDirectory(outDir);
+                Console.WriteLine(path);
+                return 0;
+            }
+
+            Console.WriteLine(HasFlag(args, "--json") ? HardwareReport.BuildJson() : HardwareReport.BuildText());
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(Loc.T($"Donanım raporu oluşturulamadı: {ex.Message}"));
+            return 1;
+        }
+    }
+
+    /// <summary>The argument following <paramref name="name"/>, or "" when the flag is absent or last.</summary>
+    private static string ValueAfter(string[] args, string name)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase)) return args[i + 1];
+        }
+        return "";
+    }
 
     /// <summary>
     /// Runs one maintenance command with a hard timeout. The old code called Wait(45000) and then .Result, which

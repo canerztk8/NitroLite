@@ -825,5 +825,11 @@
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} harus antara 1 dan 4: '{1}'.",
  "Fan {0}": "Kipas {0}",
  "Profil seçilmedi": "Tidak ada profil dipilih",
- "Sistem varsayılanı": "Bawaan sistem"
+ "Sistem varsayılanı": "Bawaan sistem",
+ "Donanım raporu": "Laporan perangkat keras",
+ "Model, BIOS, Acer servisleri ve WMI durumunu bir dosyaya yazar. Hata bildirirken bu dosyayı ekleyin. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Menulis model, BIOS, layanan Acer, dan status WMI ke sebuah berkas. Lampirkan saat melaporkan bug. Tidak berisi nomor seri, nama pengguna, atau jalur berkas.",
+ "Raporu dışa aktar": "Ekspor laporan",
+ "Donanım raporu kaydedildi: {0}": "Laporan perangkat keras disimpan: {0}",
+ "Donanım raporu yazılamadı: {0}": "Laporan perangkat keras tidak dapat ditulis: {0}",
+ "Donanım raporu oluşturulamadı: {0}": "Laporan perangkat keras tidak dapat dibuat: {0}"
 }

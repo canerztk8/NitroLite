@@ -825,5 +825,11 @@
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} 1-4 के बीच होना चाहिए: '{1}'।",
  "Fan {0}": "फ़ैन {0}",
  "Profil seçilmedi": "कोई प्रोफ़ाइल चयनित नहीं",
- "Sistem varsayılanı": "सिस्टम डिफ़ॉल्ट"
+ "Sistem varsayılanı": "सिस्टम डिफ़ॉल्ट",
+ "Donanım raporu": "हार्डवेयर रिपोर्ट",
+ "Model, BIOS, Acer servisleri ve WMI durumunu bir dosyaya yazar. Hata bildirirken bu dosyayı ekleyin. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "मॉडल, BIOS, Acer सेवाएँ और WMI स्थिति को एक फ़ाइल में लिखता है। बग रिपोर्ट करते समय इसे संलग्न करें। इसमें सीरियल नंबर, उपयोगकर्ता नाम या फ़ाइल पथ नहीं होता।",
+ "Raporu dışa aktar": "रिपोर्ट निर्यात करें",
+ "Donanım raporu kaydedildi: {0}": "हार्डवेयर रिपोर्ट सहेजी गई: {0}",
+ "Donanım raporu yazılamadı: {0}": "हार्डवेयर रिपोर्ट लिखी नहीं जा सकी: {0}",
+ "Donanım raporu oluşturulamadı: {0}": "हार्डवेयर रिपोर्ट बनाई नहीं जा सकी: {0}"
 }

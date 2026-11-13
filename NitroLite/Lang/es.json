@@ -825,5 +825,11 @@
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} debe estar entre 1 y 4: '{1}'.",
  "Fan {0}": "Ventilador {0}",
  "Profil seçilmedi": "Ningún perfil seleccionado",
- "Sistem varsayılanı": "Predeterminado del sistema"
+ "Sistem varsayılanı": "Predeterminado del sistema",
+ "Donanım raporu": "Informe de hardware",
+ "Model, BIOS, Acer servisleri ve WMI durumunu bir dosyaya yazar. Hata bildirirken bu dosyayı ekleyin. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Escribe el modelo, la BIOS, los servicios de Acer y el estado de WMI en un archivo. Adjúntalo al informar de un error. No contiene número de serie, nombre de usuario ni rutas de archivo.",
+ "Raporu dışa aktar": "Exportar informe",
+ "Donanım raporu kaydedildi: {0}": "Informe de hardware guardado: {0}",
+ "Donanım raporu yazılamadı: {0}": "No se pudo escribir el informe de hardware: {0}",
+ "Donanım raporu oluşturulamadı: {0}": "No se pudo generar el informe de hardware: {0}"
 }

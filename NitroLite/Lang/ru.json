@@ -825,5 +825,11 @@
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} должен быть от 1 до 4: '{1}'.",
  "Fan {0}": "Вентилятор {0}",
  "Profil seçilmedi": "Профиль не выбран",
- "Sistem varsayılanı": "Системная тема"
+ "Sistem varsayılanı": "Системная тема",
+ "Donanım raporu": "Отчёт об оборудовании",
+ "Model, BIOS, Acer servisleri ve WMI durumunu bir dosyaya yazar. Hata bildirirken bu dosyayı ekleyin. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Записывает модель, BIOS, службы Acer и состояние WMI в файл. Приложите его при сообщении об ошибке. Не содержит серийного номера, имени пользователя и путей к файлам.",
+ "Raporu dışa aktar": "Экспортировать отчёт",
+ "Donanım raporu kaydedildi: {0}": "Отчёт об оборудовании сохранён: {0}",
+ "Donanım raporu yazılamadı: {0}": "Не удалось записать отчёт об оборудовании: {0}",
+ "Donanım raporu oluşturulamadı: {0}": "Не удалось создать отчёт об оборудовании: {0}"
 }
