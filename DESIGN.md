@@ -188,6 +188,17 @@ WPF'te harf aralığı ayarı yok; mikro etiketlerin ferahlığı büyük harf v
 - Slider: 3px ray, **8×16px** kare tutamak, rayın iki ucunda 4px pay (tutamak kenarda kırpılmaz).
 - Mod satırının sol işareti **3×18px** dikdörtgen; gezinme işareti **5×5px** kare.
 
+## Icon
+
+Simge, dünyanın tek karelik özeti: `paper-deep` zemin, tek `ink` iz, izin ucunda `vermilion` nokta. Gradyan, parlama, çerçeve, yuvarlatılmış köşe yok — simge de bir kağıt şeridi gibi karedir.
+
+- **Zemin** `paper-deep` tam kare. `paper` değil: beyaz Gezgin zemininde kenarı okunur, koyu görev çubuğunda öne çıkar.
+- **İz** `ink`, tuvalin 72/1024'ü kalınlığında, yuvarlak eklemli. Soldan kenara girer, sağda noktada biter: kayıt sürüyor, kalem şu anda orada.
+- **Nokta** `vermilion`, çapı 136/1024, izin bittiği yerde. Simgedeki tek renk; başka hiçbir öğe renk taşımaz.
+- **Tek olay.** İz bir tane taşır: hızlı yükseliş, derin dönüş, tabana dönüş. İkinci bir olay 16px'te gürültüye dönüşür, eklenmez.
+- **Boyutlar** 16 / 20 / 24 / 32 / 40 / 48 / 64 / 96 / 128 / 256. Simge 16px'te tek sivri olarak okunuyorsa doğrudur; her değişiklik bu boyutta kontrol edilir.
+- Simge temaya göre değişmez. Tek `app.ico` pencereyi, tepsiyi ve exe'yi besler.
+
 ## Components
 
 **Kayıt şeridi (imza)** — ekranın üstünde 72px yüksekliğinde `paper-deep` bant, 1px `rule` çerçeve. İçinde son 60 saniyenin sürekli `ink` izi (1.4px), sağ kenarda kesikli vermilyon "şimdi" çizgisi, mod değişimlerinde vermilyon dikey tik. Üstünde mikro etiketler: solda "KAYIT · 42 SANİYE", sağda "ARALIK 58–71 °C" ve "ŞİMDİ 64 °C". Veri yokken ortada "Kayıt bekleniyor" yazar, boş bir çizgi çizilmez.
