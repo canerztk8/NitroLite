@@ -353,25 +353,33 @@ public static class UpdateService
 
     /// <summary>
     /// The prefilled GitHub issue body: version, Windows build and laptop model, nothing that identifies the user.
+    /// The labels follow the UI language, because the person filing the report is the one reading this page; the
+    /// language line tells the maintainer which language the report arrived in.
     /// </summary>
     public static string BuildIssueBody(string version, string windows, string model, string language)
     {
+        string happened = Loc.T("Ne oldu");
+        string expected = Loc.T("Ne bekliyordun");
+        string steps = Loc.T("Nasıl tekrar üretilir");
+        string laptop = Loc.T("Dizüstü");
+        string languageLabel = Loc.T("Dil");
+
         var lines = new List<string>
         {
-            "**What happened**",
+            $"**{happened}**",
             "",
             "",
-            "**What you expected**",
+            $"**{expected}**",
             "",
             "",
-            "**Steps to reproduce**",
+            $"**{steps}**",
             "1. ",
             "",
             "---",
             $"NitroLite: {version}",
             $"Windows: {windows}",
-            $"Laptop: {model}",
-            $"Language: {language}"
+            $"{laptop}: {model}",
+            $"{languageLabel}: {language}"
         };
         return string.Join("\n", lines);
     }
@@ -381,8 +389,8 @@ public static class UpdateService
         $"{NewIssueUrl}?title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body)}";
 
     /// <summary>
-    /// The laptop model Windows reports, for the prefilled issue. "unknown" when WMI cannot answer, so the body
-    /// never carries an empty field.
+    /// The laptop model Windows reports, for the prefilled issue. A localised "unknown" when WMI cannot answer, so
+    /// the body never carries an empty field.
     /// </summary>
     public static string GetMachineModel()
     {
@@ -399,6 +407,6 @@ public static class UpdateService
             }
         }
         catch { }
-        return "unknown";
+        return Loc.T("Bilinmiyor");
     }
 }

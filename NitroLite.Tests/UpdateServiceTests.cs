@@ -502,15 +502,48 @@ public class UpdateServiceTests : IDisposable
     [Fact]
     public void BuildIssueBody_CarriesTheFourFactsAndNothingThatIdentifiesTheUser()
     {
-        var body = UpdateService.BuildIssueBody("v1.2.0", "Microsoft Windows 11 Pro", "Acer Nitro AN515-58", "Deutsch");
+        string original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage("en");
+            var body = UpdateService.BuildIssueBody("v1.2.0", "Microsoft Windows 11 Pro", "Acer Nitro AN515-58", "Deutsch");
 
-        Assert.Contains("NitroLite: v1.2.0", body);
-        Assert.Contains("Windows: Microsoft Windows 11 Pro", body);
-        Assert.Contains("Laptop: Acer Nitro AN515-58", body);
-        Assert.Contains("Language: Deutsch", body);
-        Assert.Contains("**What happened**", body);
-        Assert.Contains("**Steps to reproduce**", body);
-        Assert.DoesNotContain(Environment.UserName, body);
+            Assert.Contains("NitroLite: v1.2.0", body);
+            Assert.Contains("Windows: Microsoft Windows 11 Pro", body);
+            Assert.Contains("Laptop: Acer Nitro AN515-58", body);
+            Assert.Contains("Language: Deutsch", body);
+            Assert.Contains("**What happened**", body);
+            Assert.Contains("**Steps to reproduce**", body);
+            Assert.DoesNotContain(Environment.UserName, body);
+        }
+        finally { Loc.SetLanguage(original); }
+    }
+
+    [Theory]
+    [InlineData("tr", "Ne oldu", "Dizüstü")]
+    [InlineData("en", "What happened", "Laptop")]
+    [InlineData("de", "Was ist passiert", "Notebook")]
+    [InlineData("es", "Qué ocurrió", "Portátil")]
+    [InlineData("ru", "Что произошло", "Ноутбук")]
+    [InlineData("pt", "O que aconteceu", "Notebook")]
+    [InlineData("hi", "क्या हुआ", "लैपटॉप")]
+    [InlineData("id", "Apa yang terjadi", "Laptop")]
+    public void BuildIssueBody_FollowsTheSelectedLanguage(string code, string happened, string laptop)
+    {
+        // The person filing the report is the one reading the prefilled page, so its labels follow their language.
+        string original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage(code);
+            var body = UpdateService.BuildIssueBody("v1.2.0", "Windows 11", "Acer Nitro AN515-58", "Deutsch");
+
+            Assert.Contains($"**{happened}**", body);
+            Assert.Contains($"{laptop}: Acer Nitro AN515-58", body);
+            Assert.Contains("NitroLite: v1.2.0", body);
+            Assert.Contains("Windows: Windows 11", body);
+            if (code != "en") Assert.DoesNotContain("**What happened**", body);
+        }
+        finally { Loc.SetLanguage(original); }
     }
 
     [Fact]
