@@ -136,6 +136,7 @@ public partial class MainWindow : Window
 
     private LightingConfig _lighting = new();
     private bool _isApplyingPreset = false;
+    private bool _isRebuildingEffectList = false;
     private bool _isUpdatingGameUi = false;
     private bool _isInitializingUi = true;
     private bool _isPolling = false;
@@ -4811,14 +4812,55 @@ public partial class MainWindow : Window
     {
         for (int i = 0; i < CmbRgbEffect.Items.Count; i++)
         {
-            if (CmbRgbEffect.Items[i] is ComboBoxItem item && item.Content is string text)
+            if (CmbRgbEffect.Items[i] is not ComboBoxItem item) continue;
+            var name = item.Tag as string ?? (item.Content as string)?.Split(' ')[0];
+            if (string.Equals(name, effect, StringComparison.OrdinalIgnoreCase))
             {
-                if (text.StartsWith(effect, StringComparison.OrdinalIgnoreCase))
-                {
-                    CmbRgbEffect.SelectedIndex = i;
-                    break;
-                }
+                CmbRgbEffect.SelectedIndex = i;
+                break;
             }
+        }
+    }
+
+    /// <summary>
+    /// The effect name behind the current selection: from Tag when the list was rebuilt from the device report, and
+    /// from the label prefix when it is still the list the XAML carries.
+    /// </summary>
+    private string? SelectedEffectName()
+    {
+        if (CmbRgbEffect?.SelectedItem is not ComboBoxItem item) return null;
+        if (item.Tag is string tag && tag.Length > 0) return tag;
+        return item.Content is string text ? text.Split(' ')[0] : null;
+    }
+
+    /// <summary>
+    /// Replaces the effect dropdown with the effects this keyboard reports. An empty result leaves the XAML list in
+    /// place: a probe that named almost nothing is not evidence that the keyboard has almost nothing.
+    /// </summary>
+    private void RebuildEffectList()
+    {
+        if (CmbRgbEffect == null) return;
+        var offered = LightingPolicy.OfferedEffects(_keyboardCapability?.Effects.Select(e => e.Name));
+        if (offered.Count == 0) return;
+
+        var current = SelectedEffectName() ?? _lighting.Effect;
+        _isRebuildingEffectList = true;
+        try
+        {
+            CmbRgbEffect.Items.Clear();
+            foreach (var name in offered)
+            {
+                CmbRgbEffect.Items.Add(new ComboBoxItem
+                {
+                    Content = LightingPolicy.EffectDisplayName(name),
+                    Tag = name
+                });
+            }
+            UpdateEffectComboBox(current);
+        }
+        finally
+        {
+            _isRebuildingEffectList = false;
         }
     }
 
@@ -5318,6 +5360,10 @@ public partial class MainWindow : Window
         var capability = _keyboardCapability;
         bool showZones = capability == null || capability.HasZoneColors;
         CardZonePreview.Visibility = showZones ? Visibility.Visible : Visibility.Collapsed;
+
+        // The dropdown follows the same report: offering an effect the keyboard does not have only produces a
+        // rejected command and a toast.
+        RebuildEffectList();
 
         if (TxtKeyboardCapabilityNote == null) return;
         if (showZones)
@@ -6268,11 +6314,11 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (!IsLoaded || _isInitializingUi || _isApplyingPreset) return;
+            if (!IsLoaded || _isInitializingUi || _isApplyingPreset || _isRebuildingEffectList) return;
             CancelActiveLightingReassertion();
-            if (CmbRgbEffect.SelectedItem is ComboBoxItem item && item.Content is string text)
+            var effectName = SelectedEffectName();
+            if (effectName != null)
             {
-                var effectName = text.Split(' ')[0];
                 if (effectName.Equals("OFF", StringComparison.OrdinalIgnoreCase))
                 {
                     await TurnOffLightsAsync();

@@ -151,4 +151,42 @@ public class KeyboardCapabilityTests
         Assert.True(cap.ZoneCount >= 0);
         Assert.All(cap.Effects, e => Assert.False(string.IsNullOrWhiteSpace(e.Name)));
     }
+    [Fact]
+    public void OfferedEffects_KeepsWhatTheDeviceReportsAndPutsOffLast()
+    {
+        var offered = LightingPolicy.OfferedEffects(new[] { "STATIC", "WAVE", "BREATHING", "NEON" });
+        Assert.Equal(new[] { "STATIC", "WAVE", "BREATHING", "NEON", "OFF" }, offered);
+    }
+
+    [Fact]
+    public void OfferedEffects_DropsDirectBecauseNitroLiteDrivesZonesThroughStatic()
+    {
+        var offered = LightingPolicy.OfferedEffects(new[] { "DIRECT", "STATIC", "WAVE", "BREATHING" });
+        Assert.DoesNotContain("DIRECT", offered);
+        Assert.Equal("OFF", offered[^1]);
+    }
+
+    [Fact]
+    public void OfferedEffects_IsEmptyWhenTheReportIsTooThinToActOn()
+    {
+        // A garbled or partial answer must not leave the user with one option.
+        Assert.Empty(LightingPolicy.OfferedEffects(null));
+        Assert.Empty(LightingPolicy.OfferedEffects(Array.Empty<string>()));
+        Assert.Empty(LightingPolicy.OfferedEffects(new[] { "STATIC", "WAVE" }));
+        Assert.Empty(LightingPolicy.OfferedEffects(new[] { "DIRECT", "OFF" }));
+    }
+
+    [Fact]
+    public void OfferedEffects_RemovesDuplicatesAndIgnoresBlanks()
+    {
+        var offered = LightingPolicy.OfferedEffects(new[] { "STATIC", " static ", "", "WAVE", "BREATHING" });
+        Assert.Equal(new[] { "STATIC", "WAVE", "BREATHING", "OFF" }, offered);
+    }
+
+    [Fact]
+    public void EffectDisplayName_KeepsAnUnknownNameAsTheDeviceReportsIt()
+    {
+        Assert.Equal("SOMETHING_NEW", LightingPolicy.EffectDisplayName("SOMETHING_NEW"));
+        Assert.Contains("STATIC", LightingPolicy.EffectDisplayName("STATIC"));
+    }
 }

@@ -27,6 +27,55 @@ public static class LightingPolicy
         string.Equals(effect, "STATIC", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The label shown for a device effect name. The catalogue key is the Turkish source label the XAML already
+    /// carries, so a rebuilt list reads exactly like the one it replaces. A name the catalogue does not know is
+    /// shown as the device reports it rather than hidden.
+    /// </summary>
+    public static string EffectDisplayName(string effect) => effect.ToUpperInvariant() switch
+    {
+        "STATIC" => Loc.T("STATIC (Sabit Renk)"),
+        "WAVE" => Loc.T("WAVE (Dalga)"),
+        "BREATHING" => Loc.T("BREATHING (Nefes)"),
+        "NEON" => Loc.T("NEON (Neon Geçiş)"),
+        "SHIFTING" => Loc.T("SHIFTING (Renk Kayması)"),
+        "ZOOM" => Loc.T("ZOOM (Büyüme)"),
+        "METEOR" => Loc.T("METEOR (Kayan Işık)"),
+        "TWINKLING" => Loc.T("TWINKLING (Yıldız Parıltısı)"),
+        "OFF" => Loc.T("OFF (Işık Kapalı)"),
+        _ => effect
+    };
+
+    /// <summary>
+    /// The effects the dropdown should offer for a keyboard that reported <paramref name="reported"/>, or an empty
+    /// list when the report is too thin to act on.
+    /// <para>
+    /// DIRECT is left out: NitroLite drives per-zone colours through STATIC, and offering a second path to the same
+    /// LEDs would be a behaviour nobody has tested. OFF is always last, because it is NitroLite's own "brightness
+    /// zero" rather than a device effect.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<string> OfferedEffects(IEnumerable<string>? reported)
+    {
+        var list = new List<string>();
+        if (reported != null)
+        {
+            foreach (var name in reported)
+            {
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                var upper = name.Trim().ToUpperInvariant();
+                if (upper is "DIRECT" or "OFF") continue;
+                if (!list.Contains(upper)) list.Add(upper);
+            }
+        }
+
+        // A response that names almost nothing is not evidence that the keyboard has almost nothing: the caller
+        // keeps the full list rather than leave the user with one option.
+        if (list.Count < 3) return Array.Empty<string>();
+        list.Add("OFF");
+        return list;
+    }
+
+    /// <summary>
     /// Directions the effect supports (1 right, 2 left, 3 up, 4 down). WAVE reports left/right and up/down,
     /// SHIFTING left/right only; other effects have none.
     /// </summary>
