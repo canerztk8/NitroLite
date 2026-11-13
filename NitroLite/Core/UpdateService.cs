@@ -64,8 +64,15 @@ public static class UpdateService
     /// <summary>
     /// True when NitroLite runs from the published single-file package. A development build has a real assembly
     /// path, and updating it would replace a build the developer is working on.
+    /// <para>
+    /// The empty string is the signal, not a fallback: the single-file host has no assembly on disk, so
+    /// <see cref="System.Reflection.Assembly.Location"/> returns "". IL3000 warns about exactly that, which is why
+    /// the warning is suppressed here rather than worked around.
+    /// </para>
     /// </summary>
+#pragma warning disable IL3000 // Assembly.Location is empty in a single-file app; that is the test.
     public static bool IsPackaged => string.IsNullOrEmpty(typeof(UpdateService).Assembly.Location);
+#pragma warning restore IL3000
 
     /// <summary>The version this build reports, from the project file.</summary>
     public static Version CurrentVersion =>
