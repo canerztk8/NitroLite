@@ -833,5 +833,6 @@
  "Donanım raporu oluşturulamadı: {0}": "हार्डवेयर रिपोर्ट बनाई नहीं जा सकी: {0}",
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "इस कीबोर्ड में एक ही ज़ोन है; सभी कुंजियाँ एक ही रंग लेती हैं।",
  "Bu modelde klavye aydınlatması bildirilmedi.": "इस मॉडल ने कीबोर्ड बैकलाइट की जानकारी नहीं दी।",
- "Dinamik aydınlatma efektleri ve donanım profilleri.": "गतिशील लाइटिंग प्रभाव और हार्डवेयर प्रोफ़ाइल।"
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "गतिशील लाइटिंग प्रभाव और हार्डवेयर प्रोफ़ाइल।",
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) नहीं मिला; इस कंप्यूटर पर चार्ज सीमा सेट नहीं की जा सकती।"
 }

@@ -833,5 +833,6 @@
  "Donanım raporu oluşturulamadı: {0}": "Не удалось создать отчёт об оборудовании: {0}",
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "У этой клавиатуры одна зона; все клавиши подсвечиваются одним цветом.",
  "Bu modelde klavye aydınlatması bildirilmedi.": "Эта модель не сообщила о подсветке клавиатуры.",
- "Dinamik aydınlatma efektleri ve donanım profilleri.": "Динамические эффекты подсветки и аппаратные профили."
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "Динамические эффекты подсветки и аппаратные профили.",
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) не найден; ограничение зарядки на этом компьютере настроить нельзя."
 }

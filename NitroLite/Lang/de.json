@@ -833,5 +833,6 @@
  "Donanım raporu oluşturulamadı: {0}": "Hardwarebericht konnte nicht erstellt werden: {0}",
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "Diese Tastatur hat eine einzige Zone; alle Tasten erhalten dieselbe Farbe.",
  "Bu modelde klavye aydınlatması bildirilmedi.": "Dieses Modell meldet keine Tastaturbeleuchtung.",
- "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamische Beleuchtungseffekte und Hardwareprofile."
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamische Beleuchtungseffekte und Hardwareprofile.",
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) wurde nicht gefunden; das Ladelimit lässt sich auf diesem Computer nicht einstellen."
 }

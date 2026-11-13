@@ -27,6 +27,13 @@ public enum BatteryChargeMode
 }
 
 /// <summary>
+/// What the battery page should show for the charge limit. <see cref="Available"/> is false when the agent did not
+/// answer, which is not the same as "the limit is off": the checkbox must then be disabled rather than claim a
+/// limit nothing enforces.
+/// </summary>
+public readonly record struct ChargeLimitUiState(bool Available, bool Limited);
+
+/// <summary>
 /// Minimal client for the AcerCCAgent WebSocket service (wss://localhost:4343), used the same way NitroSense
 /// does to read and change the battery charge limit. The handshake proves to the agent that the caller speaks
 /// its protocol: the request carries {Question, Key} encrypted with key A, and the agent answers with the
@@ -53,6 +60,15 @@ public class CareCenterClient
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
     public string? LastError { get; private set; }
+
+    /// <summary>
+    /// Turns a reported charge mode into what the battery page shows. A null mode means the agent did not answer,
+    /// so the limit is not controllable here and the checkbox must not claim it is.
+    /// </summary>
+    public static ChargeLimitUiState DescribeChargeLimit(BatteryChargeMode? mode) =>
+        mode.HasValue
+            ? new ChargeLimitUiState(true, mode.Value == BatteryChargeMode.Optimized80)
+            : new ChargeLimitUiState(false, false);
 
     public virtual async Task<BatteryChargeMode?> GetBatteryChargeModeAsync()
     {

@@ -833,5 +833,6 @@
  "Donanım raporu oluşturulamadı: {0}": "Could not build the hardware report: {0}",
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "This keyboard has a single zone; every key takes the same colour.",
  "Bu modelde klavye aydınlatması bildirilmedi.": "This model reported no keyboard lighting.",
- "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamic lighting effects and hardware profiles."
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamic lighting effects and hardware profiles.",
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) was not found; the charge limit cannot be set on this computer."
 }

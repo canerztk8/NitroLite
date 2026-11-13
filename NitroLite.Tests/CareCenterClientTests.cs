@@ -47,4 +47,24 @@ public class CareCenterClientTests
         Assert.Equal(1, (int)BatteryChargeMode.Full);
         Assert.Equal(2, (int)BatteryChargeMode.Adaptive);
     }
+
+    [Fact]
+    public void DescribeChargeLimit_NoAnswerMeansNotControllable()
+    {
+        // A machine without AcerCCAgent must not show a ticked box for a limit nothing enforces.
+        var state = CareCenterClient.DescribeChargeLimit(null);
+        Assert.False(state.Available);
+        Assert.False(state.Limited);
+    }
+
+    [Theory]
+    [InlineData(BatteryChargeMode.Optimized80, true)]
+    [InlineData(BatteryChargeMode.Full, false)]
+    [InlineData(BatteryChargeMode.Adaptive, false)]
+    public void DescribeChargeLimit_ReportsTheLimitOnlyForOptimized80(BatteryChargeMode mode, bool expected)
+    {
+        var state = CareCenterClient.DescribeChargeLimit(mode);
+        Assert.True(state.Available);
+        Assert.Equal(expected, state.Limited);
+    }
 }

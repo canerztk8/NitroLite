@@ -5868,6 +5868,9 @@ public partial class MainWindow : Window
         {
             await RefreshBatteryHealthAsync();
             await RefreshStorageHealthUi();
+            // Acer Care Center may have been installed since the last look; the checkbox stays disabled until a
+            // probe succeeds, so retry while it is still marked unavailable.
+            if (_chargeLimitAvailable == false) await SyncChargeLimitFromCareCenterAsync();
         }
     }
 
@@ -6396,6 +6399,12 @@ public partial class MainWindow : Window
     private readonly CareCenterClient _careCenterClient = new();
     private bool _isSyncingWatchdogUi;
 
+    /// <summary>
+    /// Whether AcerCCAgent answered at least once. Null until the first probe. False means the charge limit cannot
+    /// be set on this machine, so the checkbox is disabled rather than left claiming a limit nothing enforces.
+    /// </summary>
+    private bool? _chargeLimitAvailable;
+
     private void SetWatchdogCheckboxSilently(bool isChecked)
     {
         if (ChkWatchdog == null) return;
@@ -6414,14 +6423,32 @@ public partial class MainWindow : Window
         try
         {
             var mode = await _careCenterClient.GetBatteryChargeModeAsync();
-            if (!mode.HasValue || Dispatcher.HasShutdownStarted) return;
-            bool limited = mode.Value == BatteryChargeMode.Optimized80;
+            if (Dispatcher.HasShutdownStarted) return;
+
+            var state = CareCenterClient.DescribeChargeLimit(mode);
             await Dispatcher.InvokeAsync(() =>
             {
-                SetWatchdogCheckboxSilently(limited);
-                if (_appSettings.BatteryWatchdogEnabled != limited)
+                _chargeLimitAvailable = state.Available;
+                if (ChkWatchdog != null) ChkWatchdog.IsEnabled = state.Available;
+                // The hint explains where the limit lives; with no agent it would contradict the note below it.
+                if (TxtChargeLimitHint != null)
                 {
-                    _appSettings.BatteryWatchdogEnabled = limited;
+                    TxtChargeLimitHint.Visibility = state.Available ? Visibility.Visible : Visibility.Collapsed;
+                }
+                if (TxtChargeLimitNote != null)
+                {
+                    TxtChargeLimitNote.Text = state.Available
+                        ? ""
+                        : Loc.T("Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.");
+                    TxtChargeLimitNote.Visibility = state.Available ? Visibility.Collapsed : Visibility.Visible;
+                }
+
+                // No agent, no limit: a ticked box would claim a charge limit the machine does not have, and the
+                // watchdog would then raise an overcharge alert that nothing is preventing.
+                SetWatchdogCheckboxSilently(state.Limited);
+                if (state.Available && _appSettings.BatteryWatchdogEnabled != state.Limited)
+                {
+                    _appSettings.BatteryWatchdogEnabled = state.Limited;
                     SaveSettings();
                 }
             });

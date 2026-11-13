@@ -1770,7 +1770,8 @@
                                             </Border>
 
                                             <CheckBox x:Name="ChkWatchdog" Content="%80 şarj koruma sınırını uygula" Checked="ChkWatchdog_Changed" Unchecked="ChkWatchdog_Changed" IsChecked="True" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" Margin="0,4" />
-                                            <TextBlock Text="Şarj sınırı Acer Care Center üzerinden ayarlanır ve bilgisayar yeniden başlasa da korunur." Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="TxtChargeLimitHint" Text="Şarj sınırı Acer Care Center üzerinden ayarlanır ve bilgisayar yeniden başlasa da korunur." Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="TxtChargeLimitNote" Text="" Visibility="Collapsed" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
 
                                             <Separator Background="{StaticResource BorderDark}" Margin="0,8,0,8" />
                                             <TextBlock Text="Pilde Çalışma Güç Profili (DC Modu):" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,4" />
