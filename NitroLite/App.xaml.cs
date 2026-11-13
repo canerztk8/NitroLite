@@ -58,6 +58,14 @@ public partial class App : System.Windows.Application
                 Environment.Exit(RunCliTask("--restore-optimize", SystemToolsService.RestoreOptimizePcAsync, e.Args));
                 return;
             }
+
+            // One-shot hardware commands: a script, a launcher or a macro pad changes the mode without opening the
+            // window. No mutex, because a running NitroLite picks the change up as an external change on its next poll.
+            if (CliCommands.IsHardwareCommand(e.Args))
+            {
+                Environment.Exit(RunHardwareCommand(e.Args));
+                return;
+            }
         }
 
         var options = StartupOptions.Parse(e.Args);
@@ -301,6 +309,7 @@ public partial class App : System.Windows.Application
     /// </summary>
     private static int RunCliTask(string command, Func<Task<ToolExecutionResult>> start, string[] args)
     {
+        UseUtf8Console();
         if (!HasFlag(args, "--yes", "-y", "--force"))
         {
             Console.Error.WriteLine(Loc.T($"{command} sistem ayarlarını değiştirir. Onaylamak için --yes ekleyin:"));
@@ -336,6 +345,116 @@ public partial class App : System.Windows.Application
         var result = task.Result;
         if (!string.IsNullOrWhiteSpace(result.Message)) Console.Error.WriteLine(result.Message);
         return result.Success ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The console defaults to the machine's OEM code page, which turns every Turkish, German or Russian message
+    /// into question marks. UTF-8 is what the catalogs are written in. Never throws: a redirected stream or a
+    /// console that refuses the change must not stop the command.
+    /// </summary>
+    private static void UseUtf8Console()
+    {
+        try
+        {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Runs <c>--mode</c>, <c>--fan</c> or <c>--profile</c> against the hardware and exits. Deliberately does not
+    /// touch the settings file: a script changing the mode must not rewrite the user's saved preferences, and the
+    /// window (if it is open) treats the result as an external change, exactly like a change made in NitroSense.
+    /// <para>
+    /// The work runs on a thread-pool thread. OnStartup runs on the dispatcher, and blocking that thread on an
+    /// async call whose continuations want the dispatcher is a deadlock, not a slow command.
+    /// </para>
+    /// </summary>
+    private static int RunHardwareCommand(string[] args)
+    {
+        UseUtf8Console();
+        try
+        {
+            var task = Task.Run(() => RunHardwareCommandAsync(args));
+            if (!task.Wait(TimeSpan.FromSeconds(30)))
+            {
+                Console.Error.WriteLine(Loc.T("Komut 30 saniyede tamamlanmadı."));
+                return 2;
+            }
+            return task.Result;
+        }
+        catch (AggregateException ex)
+        {
+            Console.Error.WriteLine(Loc.T($"Komut başarısız: {ex.GetBaseException().Message}"));
+            return 1;
+        }
+    }
+
+    private static async Task<int> RunHardwareCommandAsync(string[] args)
+    {
+        var loaded = LoadStartupSettings();
+        Loc.SetLanguage(Loc.ResolveStartupLanguage(loaded.Settings.Language, loaded.Source == SettingsLoadSource.Defaults));
+
+        if (!CliCommands.TryParse(args, out var command, out var error))
+        {
+            Console.Error.WriteLine(error);
+            return 3;
+        }
+
+        if (command.IsEmpty)
+        {
+            Console.Error.WriteLine(Loc.T("Uygulanacak bir komut yok."));
+            return 3;
+        }
+
+        int exit = 0;
+
+        if (command.Mode is { } mode)
+        {
+            using var agent = new AcerAgentClient();
+            if (await agent.SetOperatingModeAsync(mode))
+            {
+                Console.WriteLine(Loc.T($"Çalışma modu: {ModePolicy.DisplayName(mode)}"));
+            }
+            else
+            {
+                Console.Error.WriteLine(Loc.T($"Çalışma modu değiştirilemedi: {ModePolicy.DisplayName(mode)}"));
+                exit = 1;
+            }
+        }
+
+        if (command.Fan is { } fan)
+        {
+            using var agent = new AcerAgentClient();
+            int percent = command.FanPercent ?? loaded.Settings.CustomFanCpuPercent;
+            if (await agent.SetFanModeAsync(fan, percent, percent))
+            {
+                Console.WriteLine(fan == FanMode.Custom
+                    ? Loc.T($"Fan: {ModePolicy.FanDisplayName(fan)} %{percent}")
+                    : Loc.T($"Fan: {ModePolicy.FanDisplayName(fan)}"));
+            }
+            else
+            {
+                Console.Error.WriteLine(Loc.T($"Fan modu değiştirilemedi: {ModePolicy.FanDisplayName(fan)}"));
+                exit = 1;
+            }
+        }
+
+        if (command.MouseProfile is { } mouseProfile)
+        {
+            var mouse = new AtkMouseService();
+            if (mouse.SwitchProfile(mouseProfile))
+            {
+                Console.WriteLine(Loc.T($"Fare profili: Config {mouseProfile}"));
+            }
+            else
+            {
+                Console.Error.WriteLine(Loc.T($"Fare profili değiştirilemedi: Config {mouseProfile}"));
+                exit = 1;
+            }
+        }
+
+        return exit;
     }
 
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)

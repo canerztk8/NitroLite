@@ -89,6 +89,20 @@ Every Acer and Windows maintenance task runs from the **System Services & Tools*
 - **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`
   and `--restore-optimize`. Commands that change system settings ask for confirmation:
   `NitroLite.exe --optimize-pc --yes`.
+- **One-shot hardware commands:** `--mode`, `--fan` and `--profile` change the machine and exit without opening the
+  window, so a script, a launcher or a macro pad can drive them. They never write to `settings.json`; a running
+  NitroLite picks the change up as an external change on its next poll.
+
+  ```bat
+  NitroLite.exe --mode turbo
+  NitroLite.exe --mode balanced --fan auto
+  NitroLite.exe --fan 45
+  NitroLite.exe --profile 2
+  ```
+
+  `--mode` takes `turbo`, `performance`, `balanced`, `quiet` or `eco`. `--fan` takes `auto`, `max`, `custom` or a
+  percentage from 30 to 100 (which means custom at that speed). `--profile` takes an ATK mouse config from 1 to 4.
+  Exit codes: `0` applied, `1` the hardware refused, `2` timed out, `3` the command line was wrong.
 
 ### If the Acer service is not running
 When AASSvc does not answer, NitroLite keeps showing what Windows and the NVIDIA driver can report (CPU usage, RAM,

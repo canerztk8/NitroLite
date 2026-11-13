@@ -49,4 +49,12 @@ public static class ModePolicy
         4 => Loc.T("Verimli"),
         _ => Loc.T($"Diğer (Windows değeri {(int)mode})")
     };
+
+    public static string FanDisplayName(FanMode mode) => mode switch
+    {
+        FanMode.Auto => Loc.T("Otomatik"),
+        FanMode.Max => Loc.T("Maksimum"),
+        FanMode.Custom => Loc.T("Özel"),
+        _ => Loc.T($"Fan {(int)mode}")
+    };
 }
