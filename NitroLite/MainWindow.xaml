@@ -934,7 +934,7 @@
 
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                             <!-- Items are filled only from the modes AASSvc reports as supported (SUPPORT_GPU_MODE_CAPABILITY). -->
-                                            <ComboBox x:Name="CmbGpuMode" Width="230" Margin="0,0,8,0" IsEnabled="False" />
+                                            <ComboBox x:Name="CmbGpuMode" MinWidth="230" MaxWidth="340" Margin="0,0,8,0" IsEnabled="False" />
                                             <Button x:Name="BtnApplyGpuMode" IsEnabled="False" Content="Modu Uygula" Click="BtnApplyGpuMode_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,7" Cursor="Hand" FontWeight="SemiBold" FontSize="11" ToolTip="Seçilen GPU modunu uygular." />
                                         </StackPanel>
                                     </Grid>
@@ -976,7 +976,7 @@
                                                     <TextBlock Text="Oyunlar kapandığında veya masaüstü kullanımında farenin otomatik döneceği varsayılan donanım profili." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <ComboBox x:Name="CmbDefaultAtkMouseProfile" Width="180" Margin="0,0,8,0" SelectionChanged="CmbDefaultAtkMouseProfile_SelectionChanged">
+                                                    <ComboBox x:Name="CmbDefaultAtkMouseProfile" MinWidth="180" MaxWidth="320" Margin="0,0,8,0" SelectionChanged="CmbDefaultAtkMouseProfile_SelectionChanged">
                                                         <ComboBoxItem Content="Config 1 (Önerilen)" Tag="1" />
                                                         <ComboBoxItem Content="Config 2" Tag="2" />
                                                         <ComboBoxItem Content="Config 3" Tag="3" />
@@ -1241,7 +1241,7 @@
                                             </StackPanel>
 
                                             <!-- Metric Selection Dropdown -->
-                                            <ComboBox x:Name="CmbChartMetric" Width="240" SelectionChanged="CmbChartMetric_SelectionChanged" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <ComboBox x:Name="CmbChartMetric" MinWidth="240" MaxWidth="340" SelectionChanged="CmbChartMetric_SelectionChanged" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                 <ComboBoxItem Content="CPU Sıcaklığı (°C)" Tag="CPU_TEMP" IsSelected="True" />
                                                 <ComboBoxItem Content="GPU Sıcaklığı (°C)" Tag="GPU_TEMP" />
                                                 <ComboBoxItem Content="CPU Güç Tüketimi (W, tahmini)" Tag="CPU_WATT" />
