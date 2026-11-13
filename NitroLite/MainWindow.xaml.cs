@@ -154,7 +154,12 @@ public partial class MainWindow : Window
             File.WriteAllText(tmp, json);
             File.Move(tmp, GameSessionRecoveryFile, overwrite: true);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Without this file a crash mid-game leaves the game profile applied with nothing to undo it, so the
+            // failure has to be in the log.
+            AppLog.Warn("Oyun oturumu kurtarma durumu kaydedilemedi", $"{GameSessionRecoveryFile}: {ex.Message}");
+        }
     }
 
     internal void ClearGameSessionRecoveryState()
@@ -179,7 +184,12 @@ public partial class MainWindow : Window
                 return JsonSerializer.Deserialize<GameSessionRecoveryState>(json);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // A file that cannot be read means the app forgets it was in a game session; say so rather than
+            // starting as if the last run ended cleanly.
+            AppLog.Warn("Oyun oturumu kurtarma durumu okunamadı", $"{GameSessionRecoveryFile}: {ex.Message}");
+        }
         return null;
     }
     private AppSettings _appSettings = new();
@@ -939,7 +949,11 @@ public partial class MainWindow : Window
             File.WriteAllText(tmp, json);
             File.Move(tmp, ActiveRgbConfigFile, overwrite: true);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // The keyboard keeps the last applied lighting, but the next start would not know what it was.
+            AppLog.Warn("Etkin aydınlatma durumu kaydedilemedi", $"{ActiveRgbConfigFile}: {ex.Message}");
+        }
     }
 
     private void OnSystemPowerModeChanged(object sender, PowerModeChangedEventArgs e)
@@ -1169,7 +1183,9 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"ReassertOperatingModeAsync error: {ex.Message}");
+            // Trace only reaches a debugger; a mode that silently failed to reassert is exactly what a bug report
+            // needs to show.
+            AppLog.Warn("Çalışma modu yeniden uygulanamadı", ex.Message);
         }
         finally
         {
@@ -3669,7 +3685,12 @@ public partial class MainWindow : Window
                 _gameProfileTransitionLock.Release();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // A game profile that fails to apply or undo leaves the machine in the wrong mode with no
+            // other signal, so the reason has to reach the log.
+            AppLog.Warn("Oyun profili uygulanamadı", ex.Message);
+        }
     }
 
     private async void OnGameEnded(GameProfile profile)
@@ -3937,7 +3958,12 @@ public partial class MainWindow : Window
                 _gameProfileTransitionLock.Release();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // A game profile that fails to apply or undo leaves the machine in the wrong mode with no
+            // other signal, so the reason has to reach the log.
+            AppLog.Warn("Oyun profili geri alınamadı", ex.Message);
+        }
     }
 
     public async Task<bool> RetryPendingDesktopRestoreAsync()
@@ -5657,7 +5683,11 @@ public partial class MainWindow : Window
                 SetBacklightTimeoutCheckboxSilently(state.Value);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // The checkbox then shows the default instead of what the device actually does.
+            AppLog.Warn("Aydınlatma zaman aşımı aygıttan okunamadı", ex.Message);
+        }
     }
 
     private async void ChkBacklightTimeout_Changed(object sender, RoutedEventArgs e)
@@ -5714,7 +5744,11 @@ public partial class MainWindow : Window
                 }
             });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // The checkbox then claims a charge limit the machine may not have.
+            AppLog.Warn("Pil şarj sınırı Care Center'dan okunamadı", ex.Message);
+        }
     }
 
     private async void ChkWatchdog_Changed(object sender, RoutedEventArgs e)

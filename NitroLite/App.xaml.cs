@@ -140,7 +140,12 @@ public partial class App : System.Windows.Application
             };
             thread.Start();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Without this listener a second launch cannot bring the running window forward; the app still works,
+            // but the user sees nothing happen and needs the log to explain why.
+            WriteLog("Single-instance wake-up listener could not start", ex.ToString());
+        }
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 

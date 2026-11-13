@@ -383,7 +383,12 @@ public class CpuPowerService : IDisposable
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // The powercfg path below is the fallback, so the boost mode still gets set; the reason the
+                    // WMI path failed is what a bug report needs.
+                    AppLog.Warn("CPU boost WMI yolundan ayarlanamadı", ex.Message);
+                }
 
                 return SetBoostModePowerCfg(mode, targetAc, targetDc);
             });

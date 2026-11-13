@@ -124,7 +124,12 @@ public class PowerAutomationService : IDisposable
             File.WriteAllText(tmp, json);
             File.Move(tmp, path, overwrite: true);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Without this file a crash on battery leaves the Eco settings applied with nothing to restore them
+            // from, so the failure must be in the log even though the running session still recovers in memory.
+            AppLog.Warn("Eco durumu kaydedilemedi", $"{path}: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -719,9 +724,12 @@ public class PowerAutomationService : IDisposable
         try
         {
             bool modeOk = false, boostOk = false, fanOk = false;
-            try { modeOk = await _agentClient.SetOperatingModeAsync(_savedOperatingModeBeforeDc); } catch { }
-            try { boostOk = await RestoreBoostAfterEcoAsync(false, _savedCpuBoostBeforeDc); } catch { }
-            try { fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeDc); } catch { }
+            try { modeOk = await _agentClient.SetOperatingModeAsync(_savedOperatingModeBeforeDc); }
+            catch (Exception ex) { AppLog.Warn("Çıkışta çalışma modu geri alınamadı", ex.Message); }
+            try { boostOk = await RestoreBoostAfterEcoAsync(false, _savedCpuBoostBeforeDc); }
+            catch (Exception ex) { AppLog.Warn("Çıkışta CPU boost geri alınamadı", ex.Message); }
+            try { fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeDc); }
+            catch (Exception ex) { AppLog.Warn("Çıkışta fan modu geri alınamadı", ex.Message); }
 
             RestorePanelRefreshRateAfterEco();
 

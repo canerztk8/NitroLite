@@ -344,7 +344,12 @@ public static class UpdateService
                     if (File.Exists(destination)) File.Delete(destination);
                     if (File.Exists(backup)) File.Move(backup, destination);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // A rollback that fails leaves the install folder in the state this whole method exists to
+                    // prevent, so it has to be in the log even though the original exception is what the user sees.
+                    AppLog.Error("Güncelleme geri alınamadı", $"{destination}: {ex.Message}");
+                }
             }
             foreach (var (pending, _) in prepared) TryDelete(pending);
             throw;

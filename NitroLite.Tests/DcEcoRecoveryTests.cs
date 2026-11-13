@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -129,6 +129,35 @@ public class DcEcoRecoveryTests
         finally
         {
             if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task PersistEcoState_LogsWhenTheBaselineCannotBeWritten()
+    {
+        // A file where the folder should be makes the write fail. Without the log line the user would only see
+        // that the desktop settings were not restored after a crash, with nothing to explain it.
+        var blocker = Path.Combine(Path.GetTempPath(), $"nitrolite_eco_block_{Guid.NewGuid():N}");
+        File.WriteAllText(blocker, "not a folder");
+        var logFile = Path.Combine(AppPaths.DataDirectory, "nitrolite.log");
+        var before = File.Exists(logFile) ? new FileInfo(logFile).Length : 0;
+
+        try
+        {
+            var cpu = new RecordingCpuPowerService();
+            var service = CreateService(cpu, Path.Combine(blocker, "state.json"));
+
+            await service.ProcessPowerTransitionAsync(isAc: false);
+
+            Assert.True(File.Exists(logFile), "nothing was logged");
+            using var stream = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            stream.Seek(before, SeekOrigin.Begin);
+            using var reader = new StreamReader(stream);
+            Assert.Contains("Eco durumu kaydedilemedi", reader.ReadToEnd());
+        }
+        finally
+        {
+            try { File.Delete(blocker); } catch { }
         }
     }
 }

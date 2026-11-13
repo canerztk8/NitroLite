@@ -134,7 +134,12 @@ public static class SettingsManager
             {
                 File.Copy(filePath, backupPath, overwrite: true);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // The write below still goes ahead, but a corrupt settings file would now have no copy to fall
+                // back to, so the failure has to be visible in the log.
+                AppLog.Warn("Ayarlar yedeği yazılamadı", $"{backupPath}: {ex.Message}");
+            }
         }
 
         File.Move(tempPath, filePath, overwrite: true);
