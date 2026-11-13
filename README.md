@@ -1,131 +1,220 @@
-﻿# NitroLite 🚀
+# NitroLite
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-810-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-901-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**NitroLite**, Acer Nitro dizüstü bilgisayarlar (öncelikle **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070) için NitroSense'in yerini alan, hafif ve açık kaynaklı bir kontrol merkezidir. NitroSense'in kullandığı Acer servisleriyle (AcerAgentService, Acer Care Center) aynı protokolleri kullanır; ağır Electron arayüzünü çalıştırmaz.
+**NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
+**Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It speaks the same protocols as the Acer services NitroSense
+uses (`AcerAgentService`, Acer Care Center) and does not ship an Electron shell.
 
-**Ölçülen kaynak kullanımı** (AN16-41, tepside, Release): ~74 MB çalışma kümesi, boşta bir çekirdeğin yaklaşık %0,6'sı. Simge durumundayken telemetri 3 saniyede bir okunur.
+**Measured footprint** (AN16-41, in the tray, Release build): about 74 MB working set and roughly 0.6 % of one core
+at idle. Telemetry is read every 3 seconds while minimised.
 
----
-
-## 🌟 Özellikler
-
-### 1. Çalışma Modları ve Fan
-- **5 güç modu:** Sessiz, Dengeli, Performans, Turbo ve Eco. Komutlar `AcerAgentService` (AASSvc, `127.0.0.1:46933`) üzerinden NitroSense ile aynı protokolle gönderilir.
-- **Fan:** Otomatik eğri, maksimum devir veya özel sabit hız (CPU ve GPU fanı ayrı ayrı %30–100).
-- **Mod tuşu:** Klavyedeki mod/Turbo tuşu NitroSense gibi modlar arasında geçiş yapar (adaptörde Dengeli → Performans → Turbo → Sessiz; pilde Dengeli ↔ Sessiz).
-- Mod okunamazsa arayüz "Bilinmiyor" gösterir; varsayılan bir mod uydurmaz.
-
-### 2. İşlemci Boost Yönetimi
-- Windows güç planındaki işlemci boost ayarını (PerfBoostMode) değiştirir: Agresif, Verimli veya Devre dışı. Devre dışı modda işlemci temel saat hızının üzerine çıkmaz; sıcaklık ve fan gürültüsü düşer.
-
-### 3. GPU Modu (MUX)
-- NitroSense gibi, servisin bildirdiği modlar (`SUPPORT_GPU_MODE_CAPABILITY`) arasından seçim yapılır: Otomatik, Optimus, Yalnızca NVIDIA. Yeni mod yeniden başlatmadan sonra geçerli olur; NitroLite isterseniz yeniden başlatmayı da başlatır. Servis mod bildirmezse seçim kilitli kalır. NitroLite kayıt defterindeki MUX ayarlarını değiştirmez.
-
-### 4. Oyun Algılama ve Oyuna Özel Profiller
-- Kurulu oyunları (Steam ve yaygın kütüphane klasörleri) tarar; çalışan oyunu 2 saniyede bir kontrol eder.
-- Her oyun için çalışma modu, CPU boost, fan ve fare profili tanımlanabilir. Oyundan çıkınca masaüstü ayarlarına dönülür.
-
-### 5. ATK / VXE Fare Entegrasyonu (isteğe bağlı)
-- HID üzerinden Config 1–4 arasında profil değiştirme, oyuna özel profil ve oyun bitince varsayılan profile dönüş.
-
-### 6. Pil
-- **%80 şarj sınırı:** Acer Care Center (`AcerCCAgent`, `wss://localhost:4343`) üzerinden NitroSense ile aynı şekilde ayarlanır ve geri okunarak doğrulanır. Care Center kurulu değilse bu seçenek çalışmaz.
-- **Telemetri:** Anlık şarj/deşarj gücü, tahmini kalan süre, tam şarj kapasitesi ve aşınma oranı. Windows'un bildirmediği değerler "(tahmini)" etiketiyle gösterilir.
-- **Pilde otomatik Eco:** Pile geçince düşük güç modu ve (isteğe bağlı) ana ekranda 60 Hz; adaptör takılınca önceki ayarlar geri yüklenir. Uygulama çökerse bu durum bir sonraki açılışta onarılır.
-
-### 6b. Bekleme Belleğini Boşaltma
-- Windows'un önbellekte tuttuğu bekleme listesini boş belleğe çevirir; çalışan programların belleğine dokunmaz. Kartta anlık bekleme / boş bellek miktarı görünür.
-- İlk kullanımda bir kerelik kurulum (tek UAC onayı), sonra butona her basışta sormadan çalışır.
-- İsteğe bağlı otomatik mod: gerçek boş bellek 1 GB'ın altına düşüp bekleme listesi 1 GB'ı aşınca, en fazla 5 dakikada bir (oyun sırasında da).
-
-### 7. OSD (Ekran Üstü Gösterge)
-- Üç satır: CPU (sıcaklık, tahmini güç, frekans, kullanım), GPU (sıcaklık, güç, frekans, VRAM), RAM ve fan.
-- Oyuna DLL enjekte etmez; yalnızca her zaman üstte duran şeffaf bir penceredir. Dört köşeye yerleştirilebilir.
-
-### 8. Klavye RGB (4 bölge)
-- Statik, nefes, dalga, neon, kaydırma, zoom, meteor ve pırıltı efektleri; kendi profillerinizi kaydetme.
-- Uykudan dönüşte ve oturum açılışında ayar yeniden uygulanır. 30 saniyelik boşta kapanma ayarı cihazdan okunur.
-
-### 9. Sağlık Sekmesi
-- Pil, SSD ve termal durum kartları. SMART erişimi olmayan disk sıcaklıkları ve termal macun/fan yatağı tahminleri "(tahmini)" olarak işaretlidir.
-
-### 10. Entegre Sistem & Onarım Araçları (Tek Bir Merkezde)
-Harici `.bat`, `.ps1` veya ayrı `.exe` araçlarına gerek kalmadan, tüm Acer ve Windows bakım/onarım işlemleri doğrudan **Sistem Servisleri ve Araçlar** sekmesinden tek tıkla yürütülür:
-- **Klavye RGB Servisini Onar:** Sürücü deposundaki güncel `AcerLightingService.exe` yolunu kayıt defterine bağlar ve servisleri onarır.
-- **Acer & NitroSense Servislerini Onar:** Sürücü deposundaki `AcerCentralService` ve `AcerLightingService` yollarını günceller, çakışan süreçleri sonlandırır ve servisleri yeniden başlatır.
-- **MUX Switch Kaydını Onar:** `discrete_gpu_support = 1` anahtarını doğrular, eski kalıcı oturum görevlerini temizler ve Quick Access servisini başlatır.
-- **Windows & Sistem Optimizasyonu:** HAGS (GPU donanım hızlandırma), NVMe TRIM, telemetri görevlerini devre dışı bırakma ve arka plan servis temizliği uygular. Değiştirdiği her ayarı (`optimize_backup.json`) yedekler; **Geri Al** düğmesi servis başlangıç türlerini, HAGS değerini ve telemetri görevlerini yedekten geri yükler.
-- **Komut Satırı Desteği:** `NitroLite.exe` üzerinden doğrudan `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`, `--restore-optimize` veya `--purge-standby` bayraklarıyla komut satırından da çalıştırılabilir. Sistem ayarlarını değiştiren komutlar onay ister: `NitroLite.exe --optimize-pc --yes`.
-
-### Acer servisi kapalıysa
-AASSvc yanıt vermezse NitroLite, Windows ve NVIDIA sürücüsünden okunabilen verileri (CPU kullanımı, RAM, GPU) göstermeye devam eder. Yalnızca serviste bulunan sensörler "Servis yok" olarak işaretlenir.
+*Türkçe README: [README.tr.md](README.tr.md)*
 
 ---
 
-## 🏗️ Yapı
+## Features
+
+### 1. Operating modes and fan
+- **Five power modes:** Quiet, Balanced, Performance, Turbo and Eco. Commands go through `AcerAgentService` (AASSvc,
+  `127.0.0.1:46933`) using the same protocol as NitroSense.
+- **Fan:** automatic curve, maximum speed, or a fixed custom speed (CPU and GPU fan separately, 30–100 %).
+- **Mode key:** the keyboard's mode/Turbo key cycles modes the way NitroSense does (on AC: Balanced → Performance →
+  Turbo → Quiet; on battery: Balanced ↔ Quiet).
+- If the mode cannot be read, the UI says "Unknown" instead of inventing a default.
+
+### 2. CPU boost control
+- Changes the processor boost setting in the active Windows power plan (PerfBoostMode): Aggressive, Efficient or
+  Disabled. Disabled keeps the CPU at or below its base clock, which lowers temperature and fan noise.
+
+### 3. GPU mode (MUX)
+- Like NitroSense, the choice is limited to the modes the service reports (`SUPPORT_GPU_MODE_CAPABILITY`):
+  Automatic, Optimus, NVIDIA only. A new mode takes effect after a restart, and NitroLite can start that restart for
+  you. If the service reports no modes, the choice stays locked. NitroLite never edits the MUX registry keys itself.
+
+### 4. Game detection and per-game profiles
+- Scans installed games (Steam and the common library folders) and checks for a running game every 2 seconds.
+- Each game can define a power mode, CPU boost, fan setting and mouse profile. Leaving the game restores the desktop
+  settings.
+
+### 5. ATK / VXE mouse integration (optional)
+- Switches between Config 1–4 over HID, applies a per-game profile, and returns to the default profile when the game
+  ends.
+
+### 6. Battery
+- **80 % charge limit:** set through Acer Care Center (`AcerCCAgent`, `wss://localhost:4343`) the same way NitroSense
+  does, then read back to confirm. Without Care Center installed this option does nothing.
+- **Telemetry:** live charge/discharge power, estimated time remaining, full-charge capacity and wear level. Values
+  Windows does not report are labelled "(estimated)".
+- **Automatic Eco on battery:** switching to battery applies a low-power mode and (optionally) 60 Hz on the internal
+  display; plugging back in restores the previous settings. If the app crashes, the state is repaired on the next
+  launch.
+
+### 6b. Standby memory purge
+- Converts the standby list Windows keeps cached into free memory without touching the memory of running programs.
+  The card shows the current standby and free amounts.
+- The first use needs a one-time setup (a single UAC prompt); after that the button runs without asking.
+- Optional automatic mode: when real free memory drops below 1 GB and the standby list exceeds 1 GB, it runs at most
+  once every 5 minutes, including during a game.
+
+### 7. OSD (on-screen display)
+- Three lines: CPU (temperature, estimated power, clock, usage), GPU (temperature, power, clock, VRAM), RAM and fan.
+- No DLL is injected into the game; it is only a transparent always-on-top window. It can sit in any of the four
+  corners.
+
+### 8. Keyboard RGB (4 zones)
+- Static, breathing, wave, neon, slide, zoom, meteor and sparkle effects, plus your own saved profiles.
+- The setting is reapplied after sleep and at sign-in. The 30-second idle timeout is read from the device.
+
+### 9. Health page
+- Battery, SSD and thermal cards. Disk temperatures without SMART access, and thermal paste/fan bearing estimates,
+  are marked "(estimated)".
+
+### 10. Integrated system and repair tools
+Every Acer and Windows maintenance task runs from the **System Services & Tools** page with one click — no external
+`.bat`, `.ps1` or separate `.exe`:
+- **Repair the keyboard RGB service:** points the registry at the current `AcerLightingService.exe` in the driver
+  store and repairs the services.
+- **Repair Acer & NitroSense services:** updates the `AcerCentralService` and `AcerLightingService` paths, stops
+  conflicting processes and restarts the services.
+- **Repair the MUX switch entry:** verifies `discrete_gpu_support = 1`, clears stale persistent session tasks and
+  starts the Quick Access service.
+- **Windows & system optimisation:** HAGS (GPU hardware scheduling), NVMe TRIM, disabling telemetry tasks and
+  background service cleanup. Every change is backed up to `optimize_backup.json`; **Restore** puts service start
+  types, the HAGS value and the telemetry tasks back.
+- **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`,
+  `--restore-optimize` and `--purge-standby`. Commands that change system settings ask for confirmation:
+  `NitroLite.exe --optimize-pc --yes`.
+
+### If the Acer service is not running
+When AASSvc does not answer, NitroLite keeps showing what Windows and the NVIDIA driver can report (CPU usage, RAM,
+GPU). Only the sensors that live in the service are marked "No service".
+
+---
+
+## Languages
+
+The interface is written in English and translated into seven more languages. Pick one in **Settings → Language**;
+NitroLite restarts itself in about a second to apply it.
+
+| | | | |
+|---|---|---|---|
+| English | Türkçe | Deutsch | Español |
+| Русский | Português | हिन्दी | Bahasa Indonesia |
+
+- On first launch NitroLite follows the Windows display language when it is one of the eight, and falls back to
+  English otherwise.
+- Numbers, percentages and dates follow the chosen language.
+- Technical terms (Turbo, Boost, OSD, MUX) stay untranslated.
+- The translations were written by the author, not by native speakers. If a word reads wrong in your language,
+  please [open a translation issue](https://github.com/canerztk8/NitroLite/issues/new?title=Translation%20correction&labels=translation)
+  with the language and the correct text.
+
+## Theme
+
+**Settings → Theme** switches between the light "paper" theme and a dark theme built from the same accent colours.
+The OSD is dark in both. Like the language, the theme applies after a quick restart.
+
+## Updating
+
+NitroLite checks GitHub for a newer release 30 seconds after launch and then every 6 hours; the check can be turned
+off in Settings. When a new version exists, an **Update v1.x.x** button appears next to the version label at the top
+left. One click downloads the package, compares its SHA-256 against the digest GitHub publishes, swaps the
+executable and restarts.
+
+- Nothing is downloaded during a game session.
+- A development build never updates itself; the button opens the release page instead.
+- If the folder is not writable, NitroLite says so and opens the release page.
+- NitroLite is unsigned, so trust rests on HTTPS to GitHub plus the digest check. If the GitHub account were
+  compromised, that check would not save you — two-factor authentication on the account is the real protection.
+
+You can still update by hand: close NitroLite from the tray, extract the new zip over the same folder, and your
+settings stay where they are in `%LOCALAPPDATA%\NitroLite`.
+
+## Reporting a bug
+
+**Settings → Report a bug** opens a GitHub issue with the version, Windows build, laptop model and language already
+filled in. You see the text before anything is sent, and you can edit it. No user name, file path or log content is
+added. Next to it, **Open log folder** takes you to the log if you want to paste an excerpt yourself.
+
+---
+
+## Architecture
 
 ```
 NitroLite
 ├── Core/
-│   ├── AcerAgentClient.cs          # AASSvc TCP protokolü (mod, fan, GPU, RGB, telemetri, olaylar)
-│   ├── CareCenterClient.cs         # Acer Care Center WebSocket istemcisi (%80 şarj sınırı)
-│   ├── AtkMouseService.cs          # ATK / VXE fare HID protokolü
-│   ├── BatteryWatchdogService.cs   # Pil durumu, sağlık ve deşarj telemetrisi
-│   ├── CpuPowerService.cs          # Windows güç planı CPU boost ayarı
-│   ├── PowerAutomationService.cs   # Adaptör/pil geçişleri ve Eco kurtarma
-│   ├── GameDetectionService.cs     # Oyun tarama ve algılama
-│   ├── HardwareMonitorService.cs   # NVML (GPU) ve Windows yedek telemetrisi
-│   ├── StorageHealthService.cs     # Disk sağlık ve doluluk bilgisi
-│   ├── ThermalHealthService.cs     # Termal geçmiş ve tahminler
-│   ├── DebloatService.cs           # Acer arka plan servislerini kapatma / geri yükleme, otomatik başlatma
-│   ├── MemoryCleanerService.cs     # Bekleme belleği ölçümü ve boşaltma
-│   ├── StandbyPurgeTask.cs         # Sormadan boşaltma için bir kerelik yönetici görevi
-│   ├── SystemToolsService.cs       # Klavye, Acer servisi, MUX ve Windows optimizasyon onarım motoru
-│   ├── AppPaths.cs                 # Veri klasörü ve sistem aracı yolları
-│   └── TelemetryFormatter.cs       # Değer biçimlendirme ve "tahmini" etiketleri
-├── OsdOverlayWindow.xaml           # OSD penceresi
-├── MainWindow.xaml                 # Ana arayüz
-└── App.xaml                        # Tek örnek kontrolü, CLI bayrakları ve hata kaydı
+│   ├── AcerAgentClient.cs          # AASSvc TCP protocol (mode, fan, GPU, RGB, telemetry, events)
+│   ├── CareCenterClient.cs         # Acer Care Center WebSocket client (80 % charge limit)
+│   ├── AtkMouseService.cs          # ATK / VXE mouse HID protocol
+│   ├── BatteryWatchdogService.cs   # Battery state, health and discharge telemetry
+│   ├── CpuPowerService.cs          # Windows power plan CPU boost setting
+│   ├── PowerAutomationService.cs   # AC/battery transitions and Eco recovery
+│   ├── GameDetectionService.cs     # Game scanning and detection
+│   ├── HardwareMonitorService.cs   # NVML (GPU) and Windows fallback telemetry
+│   ├── StorageHealthService.cs     # Disk health and free space
+│   ├── ThermalHealthService.cs     # Thermal history and estimates
+│   ├── DebloatService.cs           # Acer background services, autostart
+│   ├── MemoryCleanerService.cs     # Standby memory measurement and purge
+│   ├── StandbyPurgeTask.cs         # One-time admin task for prompt-free purging
+│   ├── SystemToolsService.cs       # Keyboard, Acer service, MUX and Windows repair engine
+│   ├── Loc.cs / LocXaml.cs         # Translation catalogues and the {loc:T} markup extension
+│   ├── ThemeManager.cs             # Light and dark palettes
+│   ├── UpdateService.cs            # GitHub release check, digest verification, executable swap
+│   ├── AppPaths.cs                 # Data folder and system tool paths
+│   └── TelemetryFormatter.cs       # Value formatting and "(estimated)" labels
+├── Lang/                           # en, tr, de, es, ru, pt, hi, id
+├── Themes/                         # Light.xaml, Dark.xaml
+├── OsdOverlayWindow.xaml           # OSD window
+├── MainWindow.xaml                 # Main interface
+└── App.xaml                        # Single instance, CLI flags, error logging
 ```
 
-**Veri konumu:** Ayarlar, oyun profilleri, RGB profilleri, termal geçmiş ve günlük dosyası `%LOCALAPPDATA%\NitroLite` altında tutulur. Eski sürümlerin exe yanındaki dosyaları ilk açılışta buraya kopyalanır.
+**Data location:** settings, game profiles, RGB profiles, thermal history and the log live in
+`%LOCALAPPDATA%\NitroLite`. Files that older versions kept next to the exe are copied there on first launch.
 
 ---
 
-## 📥 Kurulum (indir ve çalıştır)
+## Install (download and run)
 
-1. **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** sayfasından `NitroLite-v1.1.0-win-x64.zip` dosyasını indirin.
-2. Zip'i **kalıcı bir klasöre** çıkarın, örneğin `C:\Users\<kullanıcı>\Programlar\NitroLite`. "İndirilenler" klasöründe bırakmayın: "Windows açılışında otomatik çalıştır" seçeneği exe'nin bulunduğu yeri hatırlar.
-3. `NitroLite\NitroLite.exe` dosyasını açın. Kurulum sihirbazı yok, **.NET kurmanız gerekmez**; çalışma zamanı exe'nin içindedir.
-4. Windows "**Windows bilgisayarınızı korudu**" (SmartScreen) derse **Ek bilgi → Yine de çalıştır**'a tıklayın. NitroLite dijital olarak imzalanmamış açık kaynaklı bir uygulama olduğu için bu uyarı çıkar.
+1. Download `NitroLite-v1.2.0-win-x64.zip` from the
+   **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page.
+2. Extract it to a **permanent folder**, for example `C:\Users\<you>\Programs\NitroLite`. Do not leave it in
+   Downloads: "run at Windows startup" remembers where the exe lives.
+3. Open `NitroLite\NitroLite.exe`. There is no installer and **no .NET install needed**; the runtime is inside the
+   exe.
+4. If Windows says "**Windows protected your PC**" (SmartScreen), click **More info → Run anyway**. The warning
+   appears because NitroLite is an unsigned open-source application.
 
-Pencereyi kapatınca NitroLite sistem tepsisinde çalışmaya devam eder. Tamamen kapatmak için tepsi simgesine sağ tıklayıp **Çıkış**'ı seçin.
+Closing the window keeps NitroLite running in the system tray. To quit completely, right-click the tray icon and
+choose **Exit**.
 
-### Gereksinimler
-- **Windows 11** (Windows 10 x64 da çalışır), 64 bit.
-- **Acer servisleri:** `AcerAgentService` (mod, fan, RGB, telemetri) ve isteğe bağlı olarak Acer Care Center (%80 şarj sınırı). Bunlar NitroSense ile birlikte gelir. NitroSense arayüzünün açık olması gerekmez, ama kaldırılmamış olmalıdır.
-- **Test edilen donanım:** Acer Nitro 16 AN16-41. Diğer Nitro / Predator modellerinde servisin desteklediğine göre bazı özellikler kilitli kalabilir.
+### Requirements
+- **Windows 11** (Windows 10 x64 also works), 64-bit.
+- **Acer services:** `AcerAgentService` (mode, fan, RGB, telemetry) and optionally Acer Care Center (80 % charge
+  limit). They ship with NitroSense. The NitroSense UI does not need to be open, but it must not be uninstalled.
+- **Tested hardware:** Acer Nitro 16 AN16-41. On other Nitro / Predator models some features may stay locked,
+  depending on what the service supports.
 
-### Yönetici izni ne zaman istenir?
-NitroLite normal kullanıcı olarak çalışır. Windows yalnızca şu işlemlerde onay (UAC) sorar:
-- **Bekleme belleğini boşaltma:** İlk kullanımda bir kerelik kurulum. Sonrasında sormadan çalışır. Kurulum, yalnızca bu işi yapan küçük programı `C:\Program Files\NitroLite\StandbyPurge` klasörüne koyar ve `\NitroLite\StandbyPurge` adlı bir Windows görevi kaydeder.
-- **Acer arka plan servislerini kapatma / geri yükleme.**
+### When does it ask for administrator rights?
+NitroLite runs as a normal user. Windows asks for confirmation (UAC) only for:
+- **Standby memory purge:** a one-time setup on first use, after which it runs without asking. The setup places the
+  small helper program in `C:\Program Files\NitroLite\StandbyPurge` and registers a Windows task named
+  `\NitroLite\StandbyPurge`.
+- **Disabling / restoring Acer background services.**
 
-### Güncelleme
-NitroLite'ı tepsiden kapatın, yeni zip'i aynı klasöre çıkarıp dosyaların üzerine yazın. Ayarlarınız `%LOCALAPPDATA%\NitroLite` altında durduğu için korunur. Bekleme belleği aracı değiştiyse RAM kartı "Kurulum güncellenmeli" der ve bir kez onay ister.
-
-### Kaldırma
-1. RAM kartındaki **"Sormadan çalıştırma kurulumunu kaldır"** bağlantısına tıklayın (kurulum yaptıysanız).
-2. Sistem Servisleri sayfasında **"Windows açılışında otomatik çalıştır"** seçeneğini kapatın. Servisleri kapattıysanız **"Servisleri Geri Yükle"**'ye basın.
-3. NitroLite'ı tepsiden kapatıp klasörünü silin. Ayarları da silmek için `%LOCALAPPDATA%\NitroLite` klasörünü silin.
+### Uninstall
+1. Click **"Remove the prompt-free setup"** on the RAM card (if you set it up).
+2. On the System Services page, turn off **"Run at Windows startup"**. If you disabled services, press
+   **"Restore services"**.
+3. Quit NitroLite from the tray and delete its folder. To remove the settings too, delete `%LOCALAPPDATA%\NitroLite`.
 
 ---
 
-## 🛠️ Kaynaktan Derleme
+## Build from source
 
 ```powershell
 git clone https://github.com/canerztk8/NitroLite.git
@@ -135,28 +224,33 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 dotnet build -c Release NitroLite/NitroLite.csproj
 ```
 
-Çalıştırılabilir dosya: `NitroLite/bin/Release/net10.0-windows/NitroLite.exe` (bu derleme [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) ister).
+The executable is `NitroLite/bin/Release/net10.0-windows/NitroLite.exe` (this build needs the
+[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)).
 
-**İndirilebilir paketi üretmek için:**
+**To produce the downloadable package:**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 ```
 
-`artifacts\NitroLite-v<sürüm>-win-x64.zip` oluşur. İçinde .NET gerektirmeyen tek dosyalık `NitroLite.exe` ve Native AOT ile derlenmiş bekleme belleği aracı vardır. Betik, .NET çalışma zamanını yamalı sürüme (10.0.14, CVE-2026-111497 düzeltmesi) sabitler. Native AOT için Visual Studio Build Tools'ta "C++ ile masaüstü geliştirme" bileşeni gerekir.
+This writes `artifacts\NitroLite-v<version>-win-x64.zip`: a self-contained single-file `NitroLite.exe` plus the
+standby-purge helper compiled with Native AOT. The script pins the .NET runtime to the patched version (10.0.14,
+CVE-2026-111497) and refuses to package a build that does not reference it. Native AOT needs the "Desktop development
+with C++" component of the Visual Studio Build Tools.
 
 ---
 
-## 🧪 Testler
+## Tests
 
-810 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+901 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
-- Testler kendi geçici veri klasörünü kullanır (`NITROLITE_DATA_DIR`); gerçek ayarlarınıza dokunmaz.
-- Gerçek sistemi değiştiren 6 test (bekleme belleğini boşaltma, bağlı farenin profilini değiştirme, güç planı ayarı) varsayılan olarak atlanır. Bunları çalıştırmak için:
+- The tests use their own temporary data folder (`NITROLITE_DATA_DIR`) and never touch your real settings.
+- Six tests that change the real system (standby purge, changing a connected mouse's profile, power plan changes) are
+  skipped by default. To run them:
 
 ```powershell
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
@@ -164,6 +258,21 @@ $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/Nit
 
 ---
 
-## 📄 Lisans
+## How many people use it
 
-Bu proje [MIT Lisansı](LICENSE) kapsamındadır.
+NitroLite contains **no telemetry** — no counter, no analytics, no phone-home. The only numbers are the ones GitHub
+already keeps, and `scripts/stats.ps1` prints them:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\stats.ps1
+```
+
+It shows downloads per release (public) and the 14-day repository traffic — views, unique visitors, clones — which
+GitHub returns only to the repository owner. Requires the [GitHub CLI](https://cli.github.com) and a one-time
+`gh auth login`.
+
+---
+
+## License
+
+This project is released under the [MIT License](LICENSE).

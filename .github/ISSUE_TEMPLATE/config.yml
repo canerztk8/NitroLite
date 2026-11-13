@@ -1,0 +1,11 @@
+# Blank issues stay enabled on purpose: the "Report a bug" button inside NitroLite opens
+# issues/new?title=...&body=... with the version, Windows build, laptop model and language already filled in.
+# That prefilled page is a blank issue, so turning blank issues off would break the button.
+blank_issues_enabled: true
+contact_links:
+  - name: NitroLite releases
+    url: https://github.com/canerztk8/NitroLite/releases
+    about: Download the latest version, or check whether your problem is already fixed.
+  - name: Translation correction
+    url: https://github.com/canerztk8/NitroLite/issues/new?title=Translation%20correction&labels=translation
+    about: A word or sentence reads wrong in your language. Tell us the language and the correct text.

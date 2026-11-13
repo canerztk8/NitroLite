@@ -1,0 +1,108 @@
+name: Bug report
+description: Something in NitroLite does not work as it should.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The four fields at the bottom are filled in automatically when
+        you use **Report a bug** inside NitroLite; if you opened this page by hand, please fill them in.
+
+        Nothing here is collected automatically. No user name, file path or log content is sent.
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What did NitroLite do? Include the exact message if one appeared.
+      placeholder: I switched to Performance mode and the fan stayed at 40 %.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead.
+      placeholder: The fan should have ramped up within a few seconds.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from a fresh launch if you can.
+      placeholder: |
+        1. Open NitroLite
+        2. Go to Operating Modes
+        3. Click Performance
+        4. Watch the fan speed
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: NitroLite version
+      description: Shown at the top left of the window and in Settings.
+      placeholder: v1.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver` if you are not sure.
+      placeholder: Windows 11 Pro 24H2 (26100)
+    validations:
+      required: true
+
+  - type: input
+    id: laptop
+    attributes:
+      label: Laptop model
+      description: The exact model matters — NitroLite talks to Acer hardware that differs between models.
+      placeholder: Acer Nitro AN515-58
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      description: The language NitroLite was running in.
+      options:
+        - English
+        - Türkçe
+        - Deutsch
+        - Español
+        - Русский
+        - Português
+        - हिन्दी
+        - Bahasa Indonesia
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt (optional)
+      description: |
+        Settings → **Open log folder**. Paste only the lines around the problem, and read them first: the log can
+        contain your Windows user name in a file path.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am on the latest release.
+          required: true
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true

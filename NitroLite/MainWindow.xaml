@@ -587,7 +587,7 @@
                 <Grid Margin="18,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="NitroLite" Foreground="{StaticResource Ink}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
-                        <TextBlock x:Name="TxtAppVersion" Text="v1.1" Foreground="{StaticResource InkFaint}" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="TxtAppVersion" Text="v1.2" Foreground="{StaticResource InkFaint}" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" />
                         <!-- Appears only when GitHub reports a newer release; the update runs from here. -->
                         <Button x:Name="BtnUpdateNow" Click="BtnUpdateNow_Click" Visibility="Collapsed" Margin="10,0,0,0" VerticalAlignment="Center" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="8,3" Cursor="Hand" FontSize="10" FontWeight="SemiBold" WindowChrome.IsHitTestVisibleInChrome="True">
                             <TextBlock x:Name="TxtUpdateNow" Text="Güncelle" />
@@ -2010,7 +2010,7 @@
                                         <Grid Margin="0,0,0,12">
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock Text="Sürüm" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock x:Name="TxtSettingsVersion" Text="v1.1" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                                <TextBlock x:Name="TxtSettingsVersion" Text="v1.2" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <Button x:Name="BtnCheckUpdates" Content="Şimdi denetle" Click="BtnCheckUpdates_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
                                         </Grid>
