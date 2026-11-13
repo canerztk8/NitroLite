@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -264,6 +264,54 @@ public class GameDetectionServiceTests
         var bfv = service.GetProfile("bfv");
         Assert.NotNull(bfv);
         Assert.Equal("Battlefield V", bfv.DisplayName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TruncatedProfileFileFallsBackToDefaultsInsteadOfBlockingSaves(string content)
+    {
+        // A 0-byte game_profiles.json used to raise a JsonException, set ProfileLoadError and make every later
+        // SaveProfile return false with no way back. There is no user data in an empty file, so it must heal.
+        string file = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, content);
+            using var service = new GameDetectionService(file);
+
+            Assert.Null(service.ProfileLoadError);
+            Assert.NotEmpty(service.GetProfiles());
+            Assert.True(service.SaveProfile(new GameProfile { ExeName = "sample", DisplayName = "Sample" }));
+            Assert.NotNull(service.GetProfile("sample"));
+        }
+        finally { File.Delete(file); }
+    }
+
+    [Fact]
+    public void MissingProfileFileStartsFromDefaultsAndStaysWritable()
+    {
+        string file = Path.Combine(Path.GetTempPath(), "nitrolite-profiles-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            using var service = new GameDetectionService(file);
+            Assert.Null(service.ProfileLoadError);
+            Assert.NotEmpty(service.GetProfiles());
+            Assert.True(File.Exists(file));
+        }
+        finally { try { File.Delete(file); } catch { } }
+    }
+
+    [Fact]
+    public void IsProcessIdAliveByName_FindsTheCurrentProcessAndRejectsAStalePid()
+    {
+        // The fast path falls back to this when the game's handle is unreadable. It must not report a closed game
+        // as alive (that pinned game mode forever) and must not report a live one as gone.
+        using var self = Process.GetCurrentProcess();
+        Assert.True(GameDetectionService.IsProcessIdAliveByName(self.ProcessName, self.Id));
+        Assert.True(GameDetectionService.IsProcessIdAliveByName(self.ProcessName + ".exe", self.Id));
+
+        // A PID that cannot belong to the current process name.
+        Assert.False(GameDetectionService.IsProcessIdAliveByName("nitrolite-no-such-game", self.Id));
     }
 
     [Theory]

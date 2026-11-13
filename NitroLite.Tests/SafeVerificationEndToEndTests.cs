@@ -320,6 +320,45 @@ public class SafeVerificationEndToEndTests
         });
     }
 
+    [Fact]
+    public Task ManualChangeAfterFailedRestore_DropsTheStaleCrashRecord() => RunInStaAsync(async () =>
+    {
+        // A game ends with the CPU boost restore failing, so active_game_session.json stays behind. The user then
+        // picks a boost value by hand. That satisfies the last pending step, and the crash record has to go with
+        // it: otherwise the next start would restore the pre-game value over the choice the user just made.
+        var mockAgent = new TestAcerAgentClient();
+        var mockCpu = new TestCpuPowerService();
+        using var gameService = new GameDetectionService();
+        var window = new MainWindow(mockAgent, mockCpu, gameService, new AtkMouseService(),
+            settings: new AppSettings(), isTestHarness: true);
+
+        var game = new GameProfile
+        {
+            ExeName = "testgame",
+            DisplayName = "Test Game",
+            TargetMode = OperatingMode.Turbo,
+            TargetCpuBoost = CpuBoostMode.Disabled,
+            TargetFanMode = FanMode.Max
+        };
+
+        await window.HandleGameStartedAsync(game);
+        Assert.True(window.IsGameSessionActive);
+
+        mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(false);
+        await window.HandleGameEndedAsync(game);
+
+        Assert.True(window.PendingCpuBoostRestore);
+        Assert.True(window.HasPendingDesktopRestore);
+        Assert.NotNull(window.LoadGameSessionRecoveryState());
+
+        mockCpu.OnSetBoostModeAsync = (m, ac, dc) => Task.FromResult(true);
+        Assert.True(await window.SetManualCpuBoostAsync(CpuBoostMode.Efficient));
+
+        Assert.False(window.PendingCpuBoostRestore);
+        Assert.False(window.HasPendingDesktopRestore);
+        Assert.Null(window.LoadGameSessionRecoveryState());
+    });
+
     #endregion
 
     #region Test Case 3: Tray Retry Interrupted by New Game

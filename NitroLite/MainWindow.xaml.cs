@@ -678,6 +678,13 @@ public partial class MainWindow : Window
             await RefreshServiceListAsync();
             ChkAutoStart.IsChecked = _debloatService.IsNitroLiteAutoStartEnabled();
         }
+        catch (Exception ex)
+        {
+            // A failure here used to leave the window half-initialised with no explanation: the constructor's
+            // fire-and-forget call swallowed it and the Loaded handler turned it into a crash.
+            AppLog.Error("Başlangıç yüklenemedi", ex.ToString());
+            ShowToast($"Başlangıç ayarları yüklenemedi: {ex.Message}", false);
+        }
         finally
         {
             _isInitializingUi = false;
@@ -2175,7 +2182,19 @@ public partial class MainWindow : Window
             _powerAutomationService?.UpdateManualFanMode(fan.Value);
         }
 
-        _hasPendingDesktopRestore = HasPendingDesktopRestore;
+        // Recomputed from the individual steps, not from HasPendingDesktopRestore: that property includes
+        // _hasPendingDesktopRestore itself, so assigning it here could never clear the flag after a failed restore.
+        _hasPendingDesktopRestore = _interruptedGameRecovery != null ||
+                                    _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore ||
+                                    _pendingMouseRestore || (_powerAutomationService?.HasPendingAcRestore == true);
+        // A manual change can satisfy the last outstanding step. The crash record has to go with it, or the next
+        // start would restore the pre-game values over the choice the user just made.
+        if (!HasPendingDesktopRestore)
+        {
+            _hasGameBaselineCaptured = false;
+            _activeGameRecovery = null;
+            ClearGameSessionRecoveryState();
+        }
         UpdateTrayRetryMenuItemState();
     }
 

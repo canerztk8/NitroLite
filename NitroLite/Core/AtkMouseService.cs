@@ -182,63 +182,6 @@ public class AtkMouseService
         return buffer;
     }
 
-    private bool SendPacketToMatchingDevice(string vidMatch, string colMatch, byte[] packet)
-    {
-        lock (_hardwareLock)
-        {
-            Guid hidGuid;
-            HidD_GetHidGuid(out hidGuid);
-
-            IntPtr hDevInfo = SetupDiGetClassDevs(ref hidGuid, null, IntPtr.Zero, 0x10 | 0x02);
-            if (hDevInfo == IntPtr.Zero) return false;
-
-            bool success = false;
-            try
-            {
-                SP_DEVICE_INTERFACE_DATA ifData = new SP_DEVICE_INTERFACE_DATA();
-                ifData.cbSize = (uint)Marshal.SizeOf(ifData);
-
-                for (uint i = 0; SetupDiEnumDeviceInterfaces(hDevInfo, IntPtr.Zero, ref hidGuid, i, ref ifData); i++)
-                {
-                    uint reqSize = 0;
-                    SetupDiGetDeviceInterfaceDetail(hDevInfo, ref ifData, IntPtr.Zero, 0, ref reqSize, IntPtr.Zero);
-                    if (reqSize == 0) continue;
-
-                    IntPtr detail = Marshal.AllocHGlobal((int)reqSize);
-                    try
-                    {
-                        Marshal.WriteInt32(detail, IntPtr.Size == 8 ? 8 : 5);
-                        if (SetupDiGetDeviceInterfaceDetail(hDevInfo, ref ifData, detail, reqSize, ref reqSize, IntPtr.Zero))
-                        {
-                            IntPtr pPath = new IntPtr(detail.ToInt64() + 4);
-                            string? path = Marshal.PtrToStringAuto(pPath);
-                            if (!string.IsNullOrEmpty(path) &&
-                                path.Contains(vidMatch, StringComparison.OrdinalIgnoreCase) &&
-                                path.Contains(colMatch, StringComparison.OrdinalIgnoreCase))
-                            {
-                                if (WritePacketToDevice(path, packet))
-                                {
-                                    success = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        Marshal.FreeHGlobal(detail);
-                    }
-                }
-            }
-            finally
-            {
-                SetupDiDestroyDeviceInfoList(hDevInfo);
-            }
-
-            return success;
-        }
-    }
-
     private byte[]? SendAndReceivePacket(string vidMatch, string colMatch, byte[] packet, byte expectedCmdId, out AtkMouseResult result)
     {
         lock (_hardwareLock)
@@ -305,90 +248,6 @@ public class AtkMouseService
             }
 
             return null;
-        }
-    }
-
-    private bool WritePacketToDevice(string devicePath, byte[] packet)
-    {
-        SafeFileHandle handle = CreateFile(
-            devicePath,
-            GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            IntPtr.Zero,
-            OPEN_EXISTING,
-            FILE_FLAG_OVERLAPPED,
-            IntPtr.Zero);
-
-        if (handle.IsInvalid) return false;
-
-        try
-        {
-            HidD_FlushQueue(handle);
-
-            // 1. Overlapped WriteFile first: the wait inside bounds it. HidD_SetOutputReport is a blocking IOCTL
-            //    with no timeout, so a wedged device could hang the caller forever.
-            if (TryOverlappedWrite(handle, packet)) return true;
-
-            // 2. Last resort: the synchronous HID API. Some devices only accept this path, and it has no timeout.
-            return HidD_SetOutputReport(handle, packet, packet.Length);
-        }
-        catch
-        {
-            return false;
-        }
-        finally
-        {
-            handle.Close();
-        }
-    }
-
-    /// <summary>Writes one report through an overlapped WriteFile, bounded by a 500 ms wait.</summary>
-    private static bool TryOverlappedWrite(SafeFileHandle handle, byte[] packet)
-    {
-        IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
-        if (hEvent == IntPtr.Zero) return false;
-
-        GCHandle packetHandle = GCHandle.Alloc(packet, GCHandleType.Pinned);
-        bool ioPending = false;
-        NativeOverlapped ov = new NativeOverlapped { EventHandle = hEvent };
-        try
-        {
-            uint written;
-            bool ok = WriteFile(handle, packet, (uint)packet.Length, out written, ref ov);
-            if (ok) return true;
-
-            int err = Marshal.GetLastWin32Error();
-            if (err != ERROR_IO_PENDING) return false;
-
-            ioPending = true;
-            uint waitRes = WaitForSingleObject(hEvent, 500);
-            if (waitRes != WAIT_OBJECT_0) return false;
-
-            if (GetOverlappedResult(handle, ref ov, out written, false) && written > 0)
-            {
-                ioPending = false;
-                return true;
-            }
-            return false;
-        }
-        finally
-        {
-            try
-            {
-                if (ioPending)
-                {
-                    CancelIoEx(handle, ref ov);
-                    // Per Microsoft CancelIoEx documentation: must wait for cancelled I/O to fully complete
-                    // so kernel driver releases the buffer and NativeOverlapped before handles/memory are freed.
-                    GetOverlappedResult(handle, ref ov, out _, true);
-                }
-            }
-            catch { }
-            finally
-            {
-                CloseHandle(hEvent);
-                if (packetHandle.IsAllocated) packetHandle.Free();
-            }
         }
     }
 
@@ -605,9 +464,6 @@ public class AtkMouseService
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool ReadFile(SafeFileHandle hFile, [Out] byte[] lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, ref NativeOverlapped lpOverlapped);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool WriteFile(SafeFileHandle hFile, byte[] lpBuffer, uint nNumberOfBytesToWrite, out uint lpNumberOfBytesWritten, ref NativeOverlapped lpOverlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetOverlappedResult(SafeFileHandle hFile, ref NativeOverlapped lpOverlapped, out uint lpNumberOfBytesTransferred, bool bWait);

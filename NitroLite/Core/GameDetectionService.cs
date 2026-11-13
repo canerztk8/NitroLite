@@ -747,6 +747,43 @@ public class GameDetectionService : IDisposable
         return CpuBoostMode.Efficient;
     }
 
+    /// <summary>
+    /// True when <paramref name="pid"/> is still running under <paramref name="exeName"/>. Reads the process list
+    /// instead of opening a handle on the process, so an elevated or protected game stays observable. Returns true
+    /// when the list itself cannot be read: dropping a live session on a guess would flap the mode.
+    /// </summary>
+    internal static bool IsProcessIdAliveByName(string exeName, int pid)
+    {
+        Process[]? named = null;
+        try
+        {
+            named = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exeName));
+            foreach (var candidate in named)
+            {
+                try
+                {
+                    if (candidate.Id == pid) return true;
+                }
+                catch { }
+            }
+            return false;
+        }
+        catch
+        {
+            return true;
+        }
+        finally
+        {
+            if (named != null)
+            {
+                for (int i = 0; i < named.Length; i++)
+                {
+                    try { named[i]?.Dispose(); } catch { }
+                }
+            }
+        }
+    }
+
     private void ScanProcesses()
     {
         if (Interlocked.CompareExchange(ref _isScanning, 1, 0) != 0) return;
@@ -782,8 +819,10 @@ public class GameDetectionService : IDisposable
                 }
                 catch
                 {
-                    // Access denied or transient state; assume alive to prevent false toggling
-                    isStillAlive = true;
+                    // Access denied or a transient state. Assuming "alive" here pinned game mode forever when the
+                    // game closed while its handle stayed unreadable, so fall back to a name lookup, which needs
+                    // no handle on the game process.
+                    isStillAlive = IsProcessIdAliveByName(currentProfile.ExeName, activePid);
                 }
 
                 if (isStillAlive)
@@ -900,25 +939,44 @@ public class GameDetectionService : IDisposable
         lock (_profiles)
         {
             _profiles.Clear();
+            string json;
             try
             {
-                var json = File.ReadAllText(_profilesFile);
-                var list = JsonSerializer.Deserialize<List<GameProfile>>(json);
-                if (list != null && list.All(p => p != null && !string.IsNullOrWhiteSpace(p.ExeName)))
-                {
-                    _profiles.AddRange(list);
-                    return;
-                }
-                throw new JsonException("Geçersiz oyun profili listesi.");
+                json = File.ReadAllText(_profilesFile);
             }
-            catch (FileNotFoundException) { }
-            catch (DirectoryNotFoundException) { }
+            catch (FileNotFoundException) { json = ""; }
+            catch (DirectoryNotFoundException) { json = ""; }
             catch (Exception ex)
             {
+                // Unreadable (locked, permissions): keep the error and refuse to overwrite what cannot be read.
                 ProfileLoadError = $"Oyun profilleri okunamadı: {ex.Message}";
                 AppLog.Warn("Oyun profilleri okunamadı", $"{_profilesFile}: {ex}");
                 App.WriteLog("Oyun profili dosyası", ex.Message);
                 return;
+            }
+
+            // An empty file is a truncated write, not a profile list. It used to raise a JsonException and block
+            // profile saving for good; there is no user data in it, so start from the defaults instead.
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                try
+                {
+                    var list = JsonSerializer.Deserialize<List<GameProfile>>(json);
+                    if (list != null && list.All(p => p != null && !string.IsNullOrWhiteSpace(p.ExeName)))
+                    {
+                        _profiles.AddRange(list);
+                        return;
+                    }
+                    throw new JsonException("Geçersiz oyun profili listesi.");
+                }
+                catch (Exception ex)
+                {
+                    // A corrupt file is kept as-is and saving stays blocked: it may hold profiles the user added.
+                    ProfileLoadError = $"Oyun profilleri okunamadı: {ex.Message}";
+                    AppLog.Warn("Oyun profilleri okunamadı", $"{_profilesFile}: {ex}");
+                    App.WriteLog("Oyun profili dosyası", ex.Message);
+                    return;
+                }
             }
 
             // Default fallback popular game profiles

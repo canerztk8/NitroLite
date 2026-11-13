@@ -29,8 +29,6 @@ public class BatteryWatchdogService : IDisposable
     [DllImport("kernel32.dll")]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
-    private static readonly object _fileLock = new();
-
     private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(3));
     private readonly CancellationTokenSource _cts = new();
 
@@ -40,6 +38,8 @@ public class BatteryWatchdogService : IDisposable
     private bool _isDisposed = false;
     private double _smoothedDischargeRateMw = 0.0;
     private bool _emaInitialized = false;
+    // Counts game-session ticks so the ~235 ms WMI query runs every fifth tick on battery instead of every tick.
+    private int _gameSessionWmiTick = 0;
 
     public bool WatchdogEnabled { get; set; } = true;
     public bool IsGameSessionActive { get; set; } = false;
@@ -104,6 +104,11 @@ public class BatteryWatchdogService : IDisposable
             {
                 break;
             }
+            catch (ObjectDisposedException)
+            {
+                // Dispose() released the timer or the token source while this wait was still pending.
+                break;
+            }
         }
     }
 
@@ -144,17 +149,41 @@ public class BatteryWatchdogService : IDisposable
             info.IsOvercharged = WatchdogEnabled && info.IsPluggedIn && info.BatteryPercent > 80;
         }
 
-        // GAMING OPTIMIZATION: When gaming and connected to AC, bypass heavy WMI queries (~235 ms)
-        // to guarantee 0% DPC latency and zero background CPU interrupts.
-        if (IsGameSessionActive && info.IsPluggedIn)
+        // GAMING OPTIMIZATION: the WMI query below costs ~235 ms. On AC during a game session it is skipped
+        // entirely; on battery it runs once every five ticks (15 s) so the discharge rate stays a real reading
+        // without paying the cost every 3 s.
+        if (IsGameSessionActive)
         {
-            info.IsDischarging = false;
-            info.DischargeRateWatts = 0.0;
-            info.ChargeRateWatts = 0.0;
-            info.SmoothedDischargeRateWatts = 0.0;
-            info.TemperatureCelsius = null;
-            info.ChargeRateUnknown = true;
-            return info;
+            if (info.IsPluggedIn)
+            {
+                info.IsDischarging = false;
+                info.DischargeRateWatts = 0.0;
+                info.ChargeRateWatts = 0.0;
+                info.SmoothedDischargeRateWatts = 0.0;
+                info.TemperatureCelsius = null;
+                info.ChargeRateUnknown = true;
+                return info;
+            }
+
+            if (++_gameSessionWmiTick % 5 != 0)
+            {
+                // Reuse the last measured rate: a running game on battery is discharging, so reporting 0 W would
+                // be wrong. The OS estimate from GetSystemPowerStatus stays as the remaining-time figure.
+                info.IsDischarging = true;
+                if (CurrentStatus.IsDischarging)
+                {
+                    info.DischargeRateWatts = CurrentStatus.DischargeRateWatts;
+                    info.DischargeRateMilliwatts = CurrentStatus.DischargeRateMilliwatts;
+                    info.SmoothedDischargeRateWatts = CurrentStatus.SmoothedDischargeRateWatts;
+                    info.RemainingCapacityMWh = CurrentStatus.RemainingCapacityMWh;
+                }
+                info.ChargeRateUnknown = true;
+                return info;
+            }
+        }
+        else
+        {
+            _gameSessionWmiTick = 0;
         }
 
         // Live Real-Time Discharge / Charge Rate via in-process WMI with full disposal
