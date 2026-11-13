@@ -186,8 +186,10 @@ public partial class App : System.Windows.Application
             // tree once right after InitializeComponent, and every StaticResource in the XAML resolves against the
             // merged theme dictionary.
             var startup = LoadStartupSettings();
-            Loc.SetLanguage(ResolveStartupLanguage(startup));
+            var (language, persistLanguage) = ResolveStartupLanguage(startup);
+            Loc.SetLanguage(language);
             ThemeManager.Apply(startup.Settings.Theme);
+            if (persistLanguage) PersistStartupLanguage(startup, language);
 
             // An update renames the previous executable instead of overwriting it; the process that owned it is gone
             // by now, so the leftover can go.
@@ -232,15 +234,33 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// The language to start in. A chosen language wins. A settings file written before v1.2 has no language field
-    /// and its user has been reading Turkish, so it stays Turkish; a fresh install follows the Windows display
-    /// language, falling back to English.
+    /// The language to start in, and whether that choice has to be written back. See
+    /// <see cref="Loc.ResolveStartupLanguage"/> for the rule; the write is what keeps the second launch honest.
     /// </summary>
-    private static string ResolveStartupLanguage(SettingsLoadResult result)
+    private static (string Language, bool Persist) ResolveStartupLanguage(SettingsLoadResult result)
     {
-        if (Loc.IsSupported(result.Settings.Language)) return result.Settings.Language!;
-        if (result.Source != SettingsLoadSource.Defaults) return Loc.SourceLanguage;
-        return Loc.DetectSystemLanguage();
+        var freshInstall = result.Source == SettingsLoadSource.Defaults;
+        var language = Loc.ResolveStartupLanguage(result.Settings.Language, freshInstall);
+        return (language, !Loc.IsSupported(result.Settings.Language));
+    }
+
+    /// <summary>
+    /// Writes the language chosen at startup so the next launch reads it instead of guessing. Never throws: a
+    /// read-only data folder must not stop the window from opening, and a corrupt settings file is left alone so the
+    /// user can still inspect it.
+    /// </summary>
+    private static void PersistStartupLanguage(SettingsLoadResult result, string language)
+    {
+        if (result.PrimaryCorrupt) return;
+        try
+        {
+            result.Settings.Language = language;
+            SettingsManager.SaveSettingsAtomic(AppPaths.GetDataFile("settings.json"), result.Settings);
+        }
+        catch (Exception ex)
+        {
+            WriteLog("Dil kaydedilemedi", ex.Message);
+        }
     }
 
     /// <summary>

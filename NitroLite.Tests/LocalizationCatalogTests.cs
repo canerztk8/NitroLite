@@ -269,6 +269,47 @@ public class LocalizationCatalogTests
         Assert.True(Loc.IsSupported("EN"));
     }
 
+    [Theory]
+    [InlineData("de", true, "en-US", "de")]
+    [InlineData("EN", true, "tr-TR", "en")]
+    [InlineData("hi", false, "de-DE", "hi")]
+    public void ResolveStartupLanguage_KeepsAStoredChoice(
+        string stored, bool freshInstall, string windowsCulture, string expected)
+    {
+        Assert.Equal(expected, Loc.ResolveStartupLanguage(stored, freshInstall, new CultureInfo(windowsCulture)));
+    }
+
+    [Theory]
+    [InlineData("en-US", "en")]
+    [InlineData("de-DE", "de")]
+    [InlineData("ja-JP", "en")]
+    public void ResolveStartupLanguage_FreshInstallFollowsWindows(string windowsCulture, string expected)
+    {
+        Assert.Equal(expected, Loc.ResolveStartupLanguage(null, freshInstall: true, new CultureInfo(windowsCulture)));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("zz")]
+    public void ResolveStartupLanguage_AnExistingFileWithoutAChoiceStaysTurkish(string? stored)
+    {
+        // A settings file written before v1.2 has no language field, and its user has been reading Turkish. The
+        // Windows display language must not override that.
+        Assert.Equal("tr", Loc.ResolveStartupLanguage(stored, freshInstall: false, new CultureInfo("en-US")));
+    }
+
+    [Fact]
+    public void ResolveStartupLanguage_IsStableAcrossLaunchesOnceStored()
+    {
+        // The bug this guards: a fresh English install wrote language:null, and the second launch then looked like a
+        // pre-v1.2 file and switched to Turkish. Storing the resolved language breaks that loop.
+        var first = Loc.ResolveStartupLanguage(null, freshInstall: true, new CultureInfo("en-US"));
+        var second = Loc.ResolveStartupLanguage(first, freshInstall: false, new CultureInfo("en-US"));
+        Assert.Equal("en", first);
+        Assert.Equal("en", second);
+    }
+
     [Fact]
     public void EveryCatalogueEntryIsReachableThroughTheLookup()
     {

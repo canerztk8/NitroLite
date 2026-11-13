@@ -70,6 +70,21 @@ public static class Loc
     }
 
     /// <summary>
+    /// The language to start in. A stored choice wins. A settings file written before v1.2 has no language field and
+    /// its user has been reading Turkish, so it stays Turkish; a fresh install follows the Windows display language.
+    /// <para>
+    /// The caller has to store the result: on the next launch a fresh install and a pre-v1.2 file look identical
+    /// (both have no language), and the second case must stay Turkish. Without the write, an English install would
+    /// switch to Turkish on its second run.
+    /// </para>
+    /// </summary>
+    public static string ResolveStartupLanguage(string? stored, bool freshInstall, CultureInfo? uiCulture = null)
+    {
+        if (IsSupported(stored)) return stored!.ToLowerInvariant();
+        return freshInstall ? DetectSystemLanguage(uiCulture) : SourceLanguage;
+    }
+
+    /// <summary>
     /// Selects the UI language. Unknown codes select English. Number formats are not switched: NitroLite shows
     /// measurements with a decimal point in every language (TelemetryFormatter), and where the percent sign goes
     /// ("%50" or "50%") is part of each translated template.

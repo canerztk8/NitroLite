@@ -190,6 +190,38 @@ public class UpdateServiceTests : IDisposable
     }
 
     [Fact]
+    public void ExtractToStaging_AcceptsBackslashEntryNames()
+    {
+        // Compress-Archive under Windows PowerShell writes "NitroLite\StandbyPurge\...", while PowerShell 7 writes
+        // forward slashes. The release script runs under either, so both shapes have to extract.
+        var zip = Path_("backslash.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            foreach (var name in new[]
+                     {
+                         @"NitroLite\NitroLite.exe",
+                         @"NitroLite\StandbyPurge\NitroLite.StandbyPurge.exe",
+                         @"NitroLite\StandbyPurge\native-aot.marker",
+                         @"NitroLite\LICENSE"
+                     })
+            {
+                var entry = archive.CreateEntry(name);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(name);
+            }
+        }
+
+        var staging = UpdateService.ExtractToStaging(zip);
+        try
+        {
+            Assert.True(File.Exists(Path.Combine(staging, "NitroLite.exe")));
+            Assert.True(File.Exists(Path.Combine(staging, "StandbyPurge", "NitroLite.StandbyPurge.exe")));
+            Assert.True(File.Exists(Path.Combine(staging, "LICENSE")));
+        }
+        finally { UpdateService.CleanUp(staging); }
+    }
+
+    [Fact]
     public void ExtractToStaging_RefusesAFileTheReleaseNeverContains()
     {
         var ex = Assert.Throws<InvalidDataException>(() =>
@@ -227,6 +259,30 @@ public class UpdateServiceTests : IDisposable
         try
         {
             Assert.False(Directory.Exists(Path.Combine(staging, "Other")));
+        }
+        finally { UpdateService.CleanUp(staging); }
+    }
+
+    [ReleasePackageFact]
+    public void ExtractToStaging_AcceptsTheRealReleasePackage()
+    {
+        // The archive the release script actually produced, not a hand-built one. This is the check that would have
+        // caught the updater expecting the StandbyPurge helper next to NitroLite.exe.
+        var package = ReleasePackage.Find();
+        Assert.NotNull(package);
+
+        var staging = UpdateService.ExtractToStaging(package!);
+        try
+        {
+            foreach (var required in UpdateService.PackageFiles)
+                Assert.True(File.Exists(Path.Combine(staging, required)), $"{required} was not extracted");
+
+            // Nothing else may appear: the allowlist is the whole point.
+            var extracted = Directory.GetFiles(staging, "*", SearchOption.AllDirectories)
+                .Select(file => Path.GetRelativePath(staging, file).Replace('\\', '/'))
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(UpdateService.PackageFiles.OrderBy(name => name, StringComparer.Ordinal).ToArray(), extracted);
         }
         finally { UpdateService.CleanUp(staging); }
     }
