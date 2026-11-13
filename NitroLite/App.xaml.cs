@@ -189,6 +189,10 @@ public partial class App : System.Windows.Application
             Loc.SetLanguage(ResolveStartupLanguage(startup));
             ThemeManager.Apply(startup.Settings.Theme);
 
+            // An update renames the previous executable instead of overwriting it; the process that owned it is gone
+            // by now, so the leftover can go.
+            UpdateService.CleanUpPreviousVersion();
+
             var win = new MainWindow(startMinimized);
             MainWindow = win;
             if (!startMinimized)

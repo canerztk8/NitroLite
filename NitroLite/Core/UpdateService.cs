@@ -43,8 +43,17 @@ public static class UpdateService
     public const string Owner = "canerztk8";
     public const string Repository = "NitroLite";
 
-    /// <summary>The files the release package is allowed to contain. Anything else is refused, not extracted.</summary>
-    public static readonly string[] PackageFiles = { "NitroLite.exe", "NitroLite.StandbyPurge.exe", "native-aot.marker" };
+    /// <summary>
+    /// The files the release package is allowed to contain, as paths relative to the package root. Anything else is
+    /// refused, not extracted. The helper lives in its own folder because the app looks for it there.
+    /// </summary>
+    public static readonly string[] PackageFiles =
+    {
+        "NitroLite.exe",
+        "StandbyPurge/NitroLite.StandbyPurge.exe",
+        "StandbyPurge/native-aot.marker",
+        "LICENSE"
+    };
 
     public static string LatestReleaseApi => $"https://api.github.com/repos/{Owner}/{Repository}/releases/latest";
     public static string ReleasePageUrl => $"https://github.com/{Owner}/{Repository}/releases/latest";
@@ -150,32 +159,41 @@ public static class UpdateService
         new(version.Major, version.Minor, Math.Max(version.Build, 0));
 
     /// <summary>
-    /// Downloads the package to a temporary file, reporting 0..1 progress. The caller verifies it before use.
+    /// Downloads the package to a temporary file, reporting 0..1 progress. The caller verifies it before use. A
+    /// failed or interrupted download leaves nothing behind.
     /// </summary>
     public static async Task<string> DownloadAsync(
         UpdateInfo info, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
         var target = Path.Combine(Path.GetTempPath(), $"NitroLite-update-{Guid.NewGuid():N}.zip");
-        using var response = await Http.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        var total = response.Content.Headers.ContentLength ?? info.SizeBytes;
-        await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
-        await using (var destination = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+        try
         {
-            var buffer = new byte[81920];
-            long copied = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-            {
-                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                copied += read;
-                if (total > 0) progress?.Report(Math.Clamp((double)copied / total, 0, 1));
-            }
-        }
+            using var response = await Http.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
 
-        return target;
+            var total = response.Content.Headers.ContentLength ?? info.SizeBytes;
+            await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+            await using (var destination = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+            {
+                var buffer = new byte[81920];
+                long copied = 0;
+                int read;
+                while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+                {
+                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    copied += read;
+                    if (total > 0) progress?.Report(Math.Clamp((double)copied / total, 0, 1));
+                }
+            }
+
+            return target;
+        }
+        catch
+        {
+            CleanUp(target);
+            throw;
+        }
     }
 
     /// <summary>SHA-256 of a file, lower-case hex.</summary>
@@ -237,7 +255,7 @@ public static class UpdateService
             entry.ExtractToFile(destination, overwrite: true);
         }
 
-        foreach (var required in new[] { "NitroLite.exe", "NitroLite.StandbyPurge.exe" })
+        foreach (var required in new[] { "NitroLite.exe", "StandbyPurge/NitroLite.StandbyPurge.exe" })
         {
             if (!File.Exists(Path.Combine(staging, required)))
                 throw new InvalidDataException($"The package does not contain {required}.");
@@ -247,20 +265,25 @@ public static class UpdateService
     }
 
     /// <summary>
-    /// Copies the staged files over the install folder. The running executable cannot be overwritten, so it is
-    /// renamed to <c>.old</c> first and renamed back if the copy fails. Returns the path of the new executable.
+    /// Copies the staged files over the install folder, keeping the package's folder layout. The running executable
+    /// cannot be overwritten, so it is renamed to <c>.old</c> first and renamed back if the copy fails. Returns the
+    /// path of the new executable.
     /// </summary>
     public static string InstallFromStaging(string staging, string installDirectory)
     {
         var target = Path.Combine(installDirectory, "NitroLite.exe");
         var backup = target + ".old";
 
-        // Everything except the executable can be replaced in place.
-        foreach (var file in Directory.GetFiles(staging))
+        // Everything except the executable can be replaced in place. Sub-folders (the StandbyPurge helper) are
+        // recreated so the app finds them where it expects them.
+        foreach (var file in Directory.GetFiles(staging, "*", SearchOption.AllDirectories))
         {
-            var name = Path.GetFileName(file);
-            if (string.Equals(name, "NitroLite.exe", StringComparison.OrdinalIgnoreCase)) continue;
-            File.Copy(file, Path.Combine(installDirectory, name), overwrite: true);
+            var relative = Path.GetRelativePath(staging, file);
+            if (string.Equals(relative, "NitroLite.exe", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var destination = Path.Combine(installDirectory, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file, destination, overwrite: true);
         }
 
         if (File.Exists(backup))
@@ -286,6 +309,20 @@ public static class UpdateService
         }
 
         return target;
+    }
+
+    /// <summary>
+    /// Deletes the <c>NitroLite.exe.old</c> an update leaves behind. Called once at startup: by then the process
+    /// that owned the file has exited, so the delete succeeds and the install folder does not keep a stale copy.
+    /// </summary>
+    public static void CleanUpPreviousVersion()
+    {
+        try
+        {
+            var backup = Path.Combine(AppContext.BaseDirectory, "NitroLite.exe.old");
+            if (File.Exists(backup)) File.Delete(backup);
+        }
+        catch { }
     }
 
     /// <summary>Starts the freshly installed executable. The caller shuts this process down afterwards.</summary>
