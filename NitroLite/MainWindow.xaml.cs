@@ -6132,7 +6132,7 @@ public partial class MainWindow : Window
     {
         if (_serviceOperationBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            Loc.T("Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+            Loc.T("Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
             Loc.T("MUX Switch Kaydını Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 

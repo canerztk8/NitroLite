@@ -330,7 +330,7 @@
  "Gerekli Acer servis dosyalari (AcerCentralService / AcerLightingService) surucu deposunda bulunamadi veya imzalari gecerli degil.": "The required Acer service files (AcerCentralService / AcerLightingService) were not found in the driver store or their signatures are not valid.",
  "Gereksiz Acer arka plan servislerini kapatın, NitroSense'i yönetin ve NitroLite'ın başlangıç davranışını ayarlayın.": "Turn off unnecessary Acer background services, manage NitroSense and set how NitroLite starts.",
  "Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Unnecessary customer-experience telemetry tasks will be turned off, HAGS (hardware-accelerated GPU scheduling) will be enabled, NVMe TRIM will run and idle background services will be set to manual. Administrator permission will be requested.\n\nContinue?",
- "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir.": "Turns off unnecessary telemetry tasks, enables HAGS (GPU hardware scheduling), runs NVMe TRIM and cleans up background services. Every changed setting is backed up.",
+ "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir; HAGS yeniden başlatmadan sonra etkin olur.": "Turns off unnecessary telemetry tasks, enables HAGS (GPU hardware scheduling), runs NVMe TRIM and cleans up background services. Every changed setting is backed up. HAGS takes effect after a restart.",
  "Geri Al": "Undo",
  "Geri al": "Undo",
  "Geri alma hatası: {0}": "Undo error: {0}",
@@ -384,7 +384,7 @@
  "Kararlı, Termal iletkenlik nominal": "Stable, thermal conductivity nominal",
  "Kaydı Onar": "Repair Registration",
  "Kayıt bekleniyor": "Waiting for recording",
- "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "The discrete_gpu_support (1) value will be verified in the registry, leftover temporary logon tasks will be cleaned up and the Quick Access service will be started. Administrator permission will be requested.\n\nContinue?",
+ "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "The discrete_gpu_support (1) value will be verified in the registry, leftover temporary logon tasks will be cleaned up and the Quick Access service will be started. NitroSense will be closed if it is running. Administrator permission will be requested.\n\nContinue?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "The folder is not writable; download the update manually.",
  "Klavye Aydınlatması": "Keyboard Backlight",
  "Klavye RGB Aydınlatma Kontrolü": "Keyboard RGB Lighting Control",
@@ -810,5 +810,8 @@
  "–": "–",
  "●": "●",
  "♥": "♥",
- "✕": "✕"
+ "✕": "✕",
+ "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "The Acer Agent settings key was not found; this computer has no MUX switch record.",
+ "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "The optimization backup could not be read; it was not overwritten.",
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "The optimization backup could not be written; no setting was changed."
 }

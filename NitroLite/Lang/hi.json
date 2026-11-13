@@ -330,7 +330,7 @@
  "Gerekli Acer servis dosyalari (AcerCentralService / AcerLightingService) surucu deposunda bulunamadi veya imzalari gecerli degil.": "आवश्यक Acer सेवा फ़ाइलें (AcerCentralService / AcerLightingService) ड्राइवर स्टोर में नहीं मिलीं या उनके हस्ताक्षर मान्य नहीं हैं।",
  "Gereksiz Acer arka plan servislerini kapatın, NitroSense'i yönetin ve NitroLite'ın başlangıç davranışını ayarlayın.": "अनावश्यक Acer पृष्ठभूमि सेवाएँ बंद करें, NitroSense प्रबंधित करें और तय करें कि NitroLite कैसे शुरू हो।",
  "Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "अनावश्यक ग्राहक-अनुभव टेलीमेट्री कार्य बंद किए जाएँगे, HAGS (हार्डवेयर-त्वरित GPU शेड्यूलिंग) सक्षम किया जाएगा, NVMe TRIM चलेगा और निष्क्रिय पृष्ठभूमि सेवाएँ मैन्युअल पर सेट की जाएँगी। व्यवस्थापक अनुमति माँगी जाएगी।\n\nजारी रखें?",
- "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir.": "अनावश्यक टेलीमेट्री कार्य बंद करता है, HAGS (GPU हार्डवेयर शेड्यूलिंग) सक्षम करता है, NVMe TRIM चलाता है और पृष्ठभूमि सेवाएँ साफ़ करता है। बदली गई हर सेटिंग का बैकअप लिया जाता है।",
+ "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir; HAGS yeniden başlatmadan sonra etkin olur.": "अनावश्यक टेलीमेट्री कार्य बंद करता है, HAGS (GPU हार्डवेयर शेड्यूलिंग) सक्षम करता है, NVMe TRIM चलाता है और पृष्ठभूमि सेवाएँ साफ़ करता है। बदली गई हर सेटिंग का बैकअप लिया जाता है। HAGS पुनः आरंभ के बाद प्रभावी होता है।",
  "Geri Al": "पूर्ववत करें",
  "Geri al": "पूर्ववत करें",
  "Geri alma hatası: {0}": "पूर्ववत करने में त्रुटि: {0}",
@@ -384,7 +384,7 @@
  "Kararlı, Termal iletkenlik nominal": "स्थिर, तापीय चालकता नाममात्र",
  "Kaydı Onar": "पंजीकरण की मरम्मत करें",
  "Kayıt bekleniyor": "रिकॉर्डिंग की प्रतीक्षा",
- "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "रजिस्ट्री में discrete_gpu_support (1) मान सत्यापित किया जाएगा, बचे हुए अस्थायी लॉगऑन कार्य साफ़ किए जाएँगे और Quick Access सेवा शुरू की जाएगी। व्यवस्थापक अनुमति माँगी जाएगी।\n\nजारी रखें?",
+ "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "रजिस्ट्री में discrete_gpu_support (1) मान सत्यापित किया जाएगा, बचे हुए अस्थायी लॉगऑन कार्य साफ़ किए जाएँगे और Quick Access सेवा शुरू की जाएगी। NitroSense चल रहा हो तो बंद किया जाएगा। व्यवस्थापक अनुमति माँगी जाएगी।\n\nजारी रखें?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "फ़ोल्डर में लिखा नहीं जा सकता; अपडेट मैन्युअल रूप से डाउनलोड करें।",
  "Klavye Aydınlatması": "कीबोर्ड बैकलाइट",
  "Klavye RGB Aydınlatma Kontrolü": "कीबोर्ड RGB लाइटिंग नियंत्रण",
@@ -810,5 +810,8 @@
  "–": "–",
  "●": "●",
  "♥": "♥",
- "✕": "✕"
+ "✕": "✕",
+ "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Acer Agent सेटिंग्स कुंजी नहीं मिली; इस कंप्यूटर में MUX स्विच रिकॉर्ड नहीं है।",
+ "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "अनुकूलन बैकअप पढ़ा नहीं जा सका; उसे अधिलेखित नहीं किया गया।",
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "अनुकूलन बैकअप लिखा नहीं जा सका; कोई सेटिंग नहीं बदली गई।"
 }

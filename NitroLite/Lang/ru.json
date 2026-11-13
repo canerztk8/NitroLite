@@ -330,7 +330,7 @@
  "Gerekli Acer servis dosyalari (AcerCentralService / AcerLightingService) surucu deposunda bulunamadi veya imzalari gecerli degil.": "Необходимые файлы служб Acer (AcerCentralService / AcerLightingService) не найдены в хранилище драйверов или их подписи недействительны.",
  "Gereksiz Acer arka plan servislerini kapatın, NitroSense'i yönetin ve NitroLite'ın başlangıç davranışını ayarlayın.": "Отключайте ненужные фоновые службы Acer, управляйте NitroSense и настраивайте запуск NitroLite.",
  "Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Ненужные задачи телеметрии клиентского опыта будут отключены, HAGS (аппаратное планирование GPU) будет включено, NVMe TRIM будет выполнен, а простаивающие фоновые службы будут переведены в ручной режим. Потребуется разрешение администратора.\n\nПродолжить?",
- "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir.": "Отключает ненужные задачи телеметрии, включает HAGS (аппаратное планирование GPU), выполняет NVMe TRIM и очищает фоновые службы. Каждая изменённая настройка сохраняется в резервную копию.",
+ "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir; HAGS yeniden başlatmadan sonra etkin olur.": "Отключает ненужные задачи телеметрии, включает HAGS (аппаратное планирование GPU), выполняет NVMe TRIM и очищает фоновые службы. Каждая изменённая настройка сохраняется в резервную копию. HAGS вступает в силу после перезапуска.",
  "Geri Al": "Отменить",
  "Geri al": "Отменить",
  "Geri alma hatası: {0}": "Ошибка отмены: {0}",
@@ -384,7 +384,7 @@
  "Kararlı, Termal iletkenlik nominal": "Стабильно, теплопроводность в норме",
  "Kaydı Onar": "Восстановить регистрацию",
  "Kayıt bekleniyor": "Ожидание записи",
- "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Значение discrete_gpu_support (1) будет проверено в реестре, оставшиеся временные задачи входа в систему будут удалены, а служба Quick Access запущена. Потребуется разрешение администратора.\n\nПродолжить?",
+ "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Значение discrete_gpu_support (1) будет проверено в реестре, оставшиеся временные задачи входа в систему будут удалены, а служба Quick Access запущена. NitroSense будет закрыт, если он запущен. Потребуется разрешение администратора.\n\nПродолжить?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "В папку нельзя записать; загрузите обновление вручную.",
  "Klavye Aydınlatması": "Подсветка клавиатуры",
  "Klavye RGB Aydınlatma Kontrolü": "Управление RGB-подсветкой клавиатуры",
@@ -810,5 +810,8 @@
  "–": "–",
  "●": "●",
  "♥": "♥",
- "✕": "✕"
+ "✕": "✕",
+ "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Ключ настроек Acer Agent не найден; на этом компьютере нет записи о переключателе MUX.",
+ "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "Не удалось прочитать резервную копию оптимизации; она не была перезаписана.",
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Не удалось записать резервную копию оптимизации; ни один параметр не изменён."
 }

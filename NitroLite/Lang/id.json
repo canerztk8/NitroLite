@@ -330,7 +330,7 @@
  "Gerekli Acer servis dosyalari (AcerCentralService / AcerLightingService) surucu deposunda bulunamadi veya imzalari gecerli degil.": "Berkas layanan Acer yang diperlukan (AcerCentralService / AcerLightingService) tidak ditemukan di penyimpanan driver atau tanda tangannya tidak valid.",
  "Gereksiz Acer arka plan servislerini kapatın, NitroSense'i yönetin ve NitroLite'ın başlangıç davranışını ayarlayın.": "Matikan layanan latar belakang Acer yang tidak perlu, kelola NitroSense, dan atur cara NitroLite dimulai.",
  "Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Tugas telemetri pengalaman pelanggan yang tidak perlu akan dimatikan, HAGS (penjadwalan GPU dengan akselerasi perangkat keras) akan diaktifkan, NVMe TRIM akan dijalankan, dan layanan latar belakang yang menganggur akan diatur ke manual. Izin administrator akan diminta.\n\nLanjutkan?",
- "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir.": "Mematikan tugas telemetri yang tidak perlu, mengaktifkan HAGS (penjadwalan perangkat keras GPU), menjalankan NVMe TRIM, dan membersihkan layanan latar belakang. Setiap pengaturan yang diubah dicadangkan.",
+ "Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir; HAGS yeniden başlatmadan sonra etkin olur.": "Mematikan tugas telemetri yang tidak perlu, mengaktifkan HAGS (penjadwalan perangkat keras GPU), menjalankan NVMe TRIM, dan membersihkan layanan latar belakang. Setiap pengaturan yang diubah dicadangkan. HAGS berlaku setelah mulai ulang.",
  "Geri Al": "Urungkan",
  "Geri al": "Urungkan",
  "Geri alma hatası: {0}": "Kesalahan saat mengurungkan: {0}",
@@ -384,7 +384,7 @@
  "Kararlı, Termal iletkenlik nominal": "Stabil, konduktivitas termal nominal",
  "Kaydı Onar": "Perbaiki Pendaftaran",
  "Kayıt bekleniyor": "Menunggu perekaman",
- "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Nilai discrete_gpu_support (1) akan diverifikasi di registri, tugas logon sementara yang tersisa akan dibersihkan, dan layanan Quick Access akan dimulai. Izin administrator akan diminta.\n\nLanjutkan?",
+ "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Nilai discrete_gpu_support (1) akan diverifikasi di registri, tugas logon sementara yang tersisa akan dibersihkan, dan layanan Quick Access akan dimulai. NitroSense akan ditutup jika sedang berjalan. Izin administrator akan diminta.\n\nLanjutkan?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "Folder tidak dapat ditulisi; unduh pembaruan secara manual.",
  "Klavye Aydınlatması": "Lampu Latar Keyboard",
  "Klavye RGB Aydınlatma Kontrolü": "Kontrol Pencahayaan RGB Keyboard",
@@ -810,5 +810,8 @@
  "–": "–",
  "●": "●",
  "♥": "♥",
- "✕": "✕"
+ "✕": "✕",
+ "Acer Agent ayar anahtari bulunamadi; bu bilgisayarda MUX switch kaydi yok.": "Kunci pengaturan Acer Agent tidak ditemukan; komputer ini tidak memiliki catatan switch MUX.",
+ "Optimizasyon yedeği okunamadı; üzerine yazılmadı.": "Backup optimasi tidak dapat dibaca; berkas tidak ditimpa.",
+ "Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.": "Backup optimasi tidak dapat ditulis; tidak ada pengaturan yang diubah."
 }
