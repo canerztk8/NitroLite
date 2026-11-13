@@ -271,6 +271,43 @@ public class UpdateServiceTests : IDisposable
         finally { UpdateService.CleanUp(staging); }
     }
 
+    [ReleasePackageFact]
+    public void FullUpdateFlow_TakesTheRealPackageIntoAnEmptyInstallFolder()
+    {
+        var package = ReleasePackage.Find();
+        Assert.NotNull(package);
+
+        var staging = UpdateService.ExtractToStaging(package!);
+        var install = Path_("install-e2e");
+        Directory.CreateDirectory(install);
+        try
+        {
+            var target = UpdateService.InstallFromStaging(staging, install);
+
+            Assert.Equal(Path.Combine(install, "NitroLite.exe"), target);
+            foreach (var relative in UpdateService.PackageFiles)
+            {
+                var path = Path.Combine(install, relative.Replace('/', Path.DirectorySeparatorChar));
+                Assert.True(File.Exists(path), $"{relative} was not installed");
+                Assert.True(new FileInfo(path).Length > 0, $"{relative} is empty");
+            }
+
+            // The installed executable is the one the package carried, not a truncated copy.
+            Assert.Equal(
+                new FileInfo(Path.Combine(staging, "NitroLite.exe")).Length,
+                new FileInfo(target).Length);
+
+            // A successful install leaves no temporary files behind.
+            Assert.Empty(Directory.GetFiles(install, "*.new", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(install, "*.old", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            UpdateService.CleanUp(staging);
+            UpdateService.CleanUp(install);
+        }
+    }
+
     // ---- install -------------------------------------------------------------------------------------------
 
     private string InstallFolder()
@@ -280,7 +317,6 @@ public class UpdateServiceTests : IDisposable
         File.WriteAllText(Path.Combine(install, "NitroLite.exe"), "old exe");
         return install;
     }
-
     private string StagingFolder(string exeContent = "new exe")
     {
         var staging = Path_("stage");
@@ -335,6 +371,58 @@ public class UpdateServiceTests : IDisposable
         UpdateService.InstallFromStaging(StagingFolder(), install);
 
         Assert.Equal("old exe", File.ReadAllText(Path.Combine(install, "NitroLite.exe.old")));
+    }
+
+    [Fact]
+    public void InstallFromStaging_LeavesTheInstallFolderUntouchedWhenPreparationFails()
+    {
+        var install = InstallFolder();
+        File.WriteAllText(Path.Combine(install, "LICENSE"), "old licence");
+
+        var staging = StagingFolder();
+        Directory.CreateDirectory(Path.Combine(staging, "tools"));
+        File.WriteAllText(Path.Combine(staging, "tools", "WinMemoryCleaner.exe"), "cleaner");
+
+        // A file where the package needs a folder makes the prepare phase fail.
+        File.WriteAllText(Path.Combine(install, "tools"), "not a folder");
+
+        Assert.ThrowsAny<Exception>(() => UpdateService.InstallFromStaging(staging, install));
+
+        Assert.Equal("old exe", File.ReadAllText(Path.Combine(install, "NitroLite.exe")));
+        Assert.Equal("old licence", File.ReadAllText(Path.Combine(install, "LICENSE")));
+        Assert.False(File.Exists(Path.Combine(install, "NitroLite.exe.old")));
+        Assert.Empty(Directory.GetFiles(install, "*.new", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void InstallFromStaging_RollsBackTheFilesItAlreadySwapped()
+    {
+        var install = InstallFolder();
+        File.WriteAllText(Path.Combine(install, "LICENSE"), "old licence");
+
+        // A directory where the package wants to write LICENSE makes the commit phase fail after the executable
+        // has already been swapped in.
+        File.Delete(Path.Combine(install, "LICENSE"));
+        Directory.CreateDirectory(Path.Combine(install, "LICENSE"));
+
+        Assert.ThrowsAny<Exception>(() => UpdateService.InstallFromStaging(StagingFolder(), install));
+
+        Assert.Equal("old exe", File.ReadAllText(Path.Combine(install, "NitroLite.exe")));
+        Assert.False(File.Exists(Path.Combine(install, "NitroLite.exe.old")));
+        Assert.Empty(Directory.GetFiles(install, "*.new", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void InstallFromStaging_LeavesNoTemporaryFilesBehind()
+    {
+        var install = InstallFolder();
+        UpdateService.InstallFromStaging(StagingFolder(), install);
+
+        Assert.Empty(Directory.GetFiles(install, "*.new", SearchOption.AllDirectories));
+        // The executable's backup is the one file that must stay: this process is still running from it.
+        Assert.Equal(
+            new[] { Path.Combine(install, "NitroLite.exe.old") },
+            Directory.GetFiles(install, "*.old", SearchOption.AllDirectories));
     }
 
     // ---- download ------------------------------------------------------------------------------------------
@@ -463,6 +551,39 @@ public class UpdateServiceTests : IDisposable
 
         // Nothing to delete is not an error.
         UpdateService.CleanUpPreviousVersion();
+    }
+
+    [Fact]
+    public void CleanUpPreviousVersion_SweepsEveryPackageFileButNothingElse()
+    {
+        var stale = new List<string>();
+        foreach (var relative in UpdateService.PackageFiles)
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            foreach (var suffix in new[] { ".old", ".new" })
+            {
+                File.WriteAllText(path + suffix, "stale");
+                stale.Add(path + suffix);
+            }
+        }
+
+        // A user file that happens to end in .old must survive the sweep.
+        var userFile = Path.Combine(AppContext.BaseDirectory, "my-notes.old");
+        File.WriteAllText(userFile, "keep me");
+
+        try
+        {
+            UpdateService.CleanUpPreviousVersion();
+
+            Assert.All(stale, path => Assert.False(File.Exists(path), path));
+            Assert.True(File.Exists(userFile));
+        }
+        finally
+        {
+            foreach (var path in stale) { try { File.Delete(path); } catch { } }
+            try { File.Delete(userFile); } catch { }
+        }
     }
 
     // ---- issue report --------------------------------------------------------------------------------------

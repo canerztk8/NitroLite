@@ -267,63 +267,118 @@ public static class UpdateService
     }
 
     /// <summary>
-    /// Copies the staged files over the install folder, keeping the package's folder layout. The running executable
-    /// cannot be overwritten, so it is renamed to <c>.old</c> first and renamed back if the copy fails. Returns the
-    /// path of the new executable.
+    /// Copies the staged files over the install folder, keeping the package's folder layout. Returns the path of the
+    /// new executable.
     /// </summary>
+    /// <remarks>
+    /// The install is a two-phase commit, because a half-applied update is worse than a refused one: the old code
+    /// copied the data files first and swapped the executable last, so a failure in between left a new LICENSE and
+    /// a new WinMemoryCleaner next to the old NitroLite.exe, and nothing put them back.
+    /// <list type="number">
+    /// <item>Prepare: every staged file is copied next to its destination under a <c>.new</c> name. A failure here
+    /// deletes those copies and leaves the install folder exactly as it was.</item>
+    /// <item>Commit: each destination is moved aside to <c>.old</c> and its <c>.new</c> takes its place. A failure
+    /// rolls every completed swap back.</item>
+    /// <item>Clean up: the <c>.old</c> files go, except the executable's, which this process is still running
+    /// from; <see cref="CleanUpPreviousVersion"/> deletes that one at the next start.</item>
+    /// </list>
+    /// </remarks>
     public static string InstallFromStaging(string staging, string installDirectory)
     {
         var target = Path.Combine(installDirectory, "NitroLite.exe");
-        var backup = target + ".old";
 
-        // Everything except the executable can be replaced in place.
-        foreach (var file in Directory.GetFiles(staging, "*", SearchOption.AllDirectories))
-        {
-            var relative = Path.GetRelativePath(staging, file);
-            if (string.Equals(relative, "NitroLite.exe", StringComparison.OrdinalIgnoreCase)) continue;
+        var staged = Directory.GetFiles(staging, "*", SearchOption.AllDirectories)
+            .Select(file => (Source: file, Relative: Path.GetRelativePath(staging, file)))
+            .ToList();
 
-            var destination = Path.Combine(installDirectory, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination, overwrite: true);
-        }
+        if (!staged.Any(f => string.Equals(f.Relative, "NitroLite.exe", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("The staging folder does not contain NitroLite.exe.");
 
-        if (File.Exists(backup))
-        {
-            try { File.Delete(backup); } catch { }
-        }
-
-        File.Move(target, backup);
+        // Phase 1 — prepare. Nothing in the install folder is touched yet.
+        var prepared = new List<(string Pending, string Destination)>();
         try
         {
-            File.Copy(Path.Combine(staging, "NitroLite.exe"), target, overwrite: false);
+            foreach (var (source, relative) in staged)
+            {
+                var destination = Path.Combine(installDirectory, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                var pending = destination + ".new";
+                TryDelete(pending);
+                File.Copy(source, pending, overwrite: true);
+                prepared.Add((pending, destination));
+            }
         }
         catch
         {
-            // Put the old executable back so the user is never left without a working NitroLite.
-            try
-            {
-                if (File.Exists(target)) File.Delete(target);
-                File.Move(backup, target);
-            }
-            catch { }
+            foreach (var (pending, _) in prepared) TryDelete(pending);
             throw;
+        }
+
+        // Phase 2 — commit. Each pair is recorded before the second move, so a failure between the two moves is
+        // still rolled back.
+        var committed = new List<(string Destination, string Backup)>();
+        try
+        {
+            foreach (var (pending, destination) in prepared)
+            {
+                var backup = destination + ".old";
+                // A stale backup from an earlier run is in the way. The executable's may still be the image this
+                // process runs from, so it is the one case where a failed delete is tolerated.
+                if (File.Exists(backup))
+                {
+                    if (string.Equals(destination, target, StringComparison.OrdinalIgnoreCase)) TryDelete(backup);
+                    else File.Delete(backup);
+                }
+
+                if (File.Exists(destination)) File.Move(destination, backup);
+                committed.Add((destination, backup));
+                File.Move(pending, destination);
+            }
+        }
+        catch
+        {
+            foreach (var (destination, backup) in Enumerable.Reverse(committed))
+            {
+                try
+                {
+                    if (File.Exists(destination)) File.Delete(destination);
+                    if (File.Exists(backup)) File.Move(backup, destination);
+                }
+                catch { }
+            }
+            foreach (var (pending, _) in prepared) TryDelete(pending);
+            throw;
+        }
+
+        // Phase 3 — clean up. The executable's backup stays until the next start.
+        foreach (var (destination, backup) in committed)
+        {
+            if (string.Equals(destination, target, StringComparison.OrdinalIgnoreCase)) continue;
+            TryDelete(backup);
         }
 
         return target;
     }
 
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
     /// <summary>
-    /// Deletes the <c>NitroLite.exe.old</c> an update leaves behind. Called once at startup: by then the process
-    /// that owned the file has exited, so the delete succeeds and the install folder does not keep a stale copy.
+    /// Deletes the <c>.old</c> and <c>.new</c> files an update leaves behind. Called once at startup: by then the
+    /// process that owned the executable has exited, so the delete succeeds and the install folder does not keep a
+    /// stale copy. Only the package's own files are swept, so a user file that happens to end in <c>.old</c> is
+    /// never touched.
     /// </summary>
     public static void CleanUpPreviousVersion()
     {
-        try
+        foreach (var relative in PackageFiles)
         {
-            var backup = Path.Combine(AppContext.BaseDirectory, "NitroLite.exe.old");
-            if (File.Exists(backup)) File.Delete(backup);
+            var path = Path.Combine(AppContext.BaseDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
+            TryDelete(path + ".old");
+            TryDelete(path + ".new");
         }
-        catch { }
     }
 
     /// <summary>Starts the freshly installed executable. The caller shuts this process down afterwards.</summary>
