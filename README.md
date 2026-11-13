@@ -254,6 +254,27 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
+### Screenshots
+
+`scripts/screenshot.ps1` captures pages without you having to open the app, centre it and grab the
+window by hand. It starts NitroLite against a throwaway data folder, parks the window in a corner,
+walks the pages, captures each one with `PrintWindow`, then closes the app and deletes the folder.
+Your real settings are never read or written.
+
+```powershell
+# every page, dark theme, German
+powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -All -Theme dark -Language de
+
+# one page, into a folder of your choice
+powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -Page NavBattery -Out C:\temp\pil
+```
+
+Pages are addressed by `AutomationId` (`NavModes`, `NavMonitoring`, `NavRgb`, `NavBattery`,
+`NavDebloat`), not by their visible label, so the same command works in all eight languages.
+`-Position bottom` pushes the window behind whatever you already have open. There is no fully
+invisible mode: WPF stops rendering a window that is completely off-screen, and `PrintWindow` then
+returns a stale frame.
+
 ---
 
 ## How many people use it

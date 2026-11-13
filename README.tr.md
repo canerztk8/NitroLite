@@ -252,6 +252,26 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
+### Ekran görüntüsü
+
+`scripts/screenshot.ps1`, uygulamayı açıp ekranın ortasına koyup elle görüntü almanıza gerek bırakmaz.
+NitroLite'ı kendi geçici veri klasörüyle başlatır, pencereyi köşeye park eder, sayfaları gezer, her
+birini `PrintWindow` ile yakalar, sonra uygulamayı kapatıp klasörü siler. Gerçek ayarlarınız hiç
+okunmaz, hiç yazılmaz.
+
+```powershell
+# beş sayfa, koyu tema, Almanca
+powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -All -Theme dark -Language de
+
+# tek sayfa, istediğiniz klasöre
+powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -Page NavBattery -Out C:\temp\pil
+```
+
+Sayfalar görünen etiketle değil `AutomationId` ile seçilir (`NavModes`, `NavMonitoring`, `NavRgb`,
+`NavBattery`, `NavDebloat`), yani aynı komut sekiz dilde de çalışır. `-Position bottom` pencereyi açık
+olan her şeyin arkasına iter. Tamamen görünmez bir mod yok: WPF ekran dışında kalan pencereyi
+çizmez, `PrintWindow` da o zaman bayat kare döndürür.
+
 ---
 
 ## Kaç kişi kullanıyor
