@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -165,8 +165,35 @@ public class PowerAutomationService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes the pending-restore flags under the same lock the manual setters use. The transition lock serialises
+    /// the operations, but the fields are also written from the UI thread (manual mode/boost/fan changes), so they
+    /// need one lock of their own.
+    /// </summary>
+    private void SetPendingRestore(bool? mode = null, bool? cpu = null, bool? fan = null)
+    {
+        lock (_stateSyncLock)
+        {
+            if (mode.HasValue) _pendingAcModeRestore = mode.Value;
+            if (cpu.HasValue) _pendingAcCpuRestore = cpu.Value;
+            if (fan.HasValue) _pendingAcFanRestore = fan.Value;
+        }
+    }
+
+    private void ClearEcoBaseline()
+    {
+        lock (_stateSyncLock)
+        {
+            _isDcEcoActive = false;
+            _savedDcBoostBeforeEco = null;
+        }
+    }
+
     public bool IsDcEcoActive => _isDcEcoActive;
     public bool HasPendingAcRestore => _pendingAcModeRestore || _pendingAcCpuRestore || _pendingAcFanRestore;
+    internal bool HasPendingPanelRestore => _lastAcStatus && _savedRefreshRateBeforeEco.HasValue;
+    /// <summary>True while a battery Eco pass still has steps that failed and must be retried.</summary>
+    public bool HasPendingDcApply => _pendingDcApply;
     public bool PendingAcModeRestore => _pendingAcModeRestore;
     public bool PendingAcCpuRestore => _pendingAcCpuRestore;
     public bool PendingAcFanRestore => _pendingAcFanRestore;
@@ -337,7 +364,7 @@ public class PowerAutomationService : IDisposable
         try
         {
             if (_isDisposed) return;
-            if (isAc == _lastAcStatus && _hasEvaluatedInitialState && !HasPendingAcRestore && !_pendingDcApply && _lastPreference == _settings.DcPowerMode && _lastRefreshPreference == _settings.AutoRefreshRateSwitching)
+            if (isAc == _lastAcStatus && _hasEvaluatedInitialState && !HasPendingAcRestore && !HasPendingPanelRestore && !_pendingDcApply && _lastPreference == _settings.DcPowerMode && _lastRefreshPreference == _settings.AutoRefreshRateSwitching)
             {
                 return;
             }
@@ -361,7 +388,7 @@ public class PowerAutomationService : IDisposable
                         try { _savedDcBoostBeforeEco = _cpuPowerService.QueryBoostModeExact(false); }
                         catch { _savedDcBoostBeforeEco = null; }
                     }
-                    _isDcEcoActive = true;
+                    lock (_stateSyncLock) { _isDcEcoActive = true; }
                     PersistEcoState();
 
                     bool modeOk = false;
@@ -386,25 +413,32 @@ public class PowerAutomationService : IDisposable
                     }
                     catch { fanOk = false; }
 
+                    bool refreshOk = true;
                     if (_settings.AutoRefreshRateSwitching)
                     {
                         // Built-in panel only. Remember its rate so AC restores exactly that, not "maximum".
                         int before = _displayService.GetCurrentRefreshRate();
-                        if (before > 60 && _displayService.SetRefreshRate(60))
+                        // 0 = no built-in panel right now (lid closed, external monitor only): there is nothing to
+                        // lower, and treating it as a failure left Eco permanently "partial".
+                        refreshOk = before <= 60 || _displayService.SetRefreshRate(60);
+                        if (before > 60 && refreshOk)
                         {
                             _savedRefreshRateBeforeEco = before;
                             PersistEcoState();
                         }
                     }
 
-                    _pendingDcApply = !modeOk || !boostOk || !fanOk;
+                    _pendingDcApply = !modeOk || !boostOk || !fanOk || !refreshOk;
                     var failed = new System.Collections.Generic.List<string>();
                     if (!modeOk) failed.Add("Sessiz Mod");
                     if (!boostOk) failed.Add("CPU Boost (Devre Dışı)");
                     if (!fanOk) failed.Add("Fan Modu (Auto)");
+                    if (!refreshOk) failed.Add("60 Hz ekran yenileme hızı");
 
                     string message = failed.Count == 0
-                        ? "Pilde Çalışma (Eco Modu): 60Hz, Sessiz Fan ve Güç Tasarrufu uygulandı."
+                        ? (_settings.AutoRefreshRateSwitching
+                            ? "Pilde Çalışma (Eco Modu): Güç tasarrufu ve 60 Hz ekran ayarı etkin."
+                            : "Pilde Çalışma (Eco Modu): Güç tasarrufu uygulandı.")
                         : $"Pilde Çalışma (Kısmi Eco): Uygulanamayan ayarlar: {string.Join(", ", failed)}";
 
                     PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
@@ -422,7 +456,7 @@ public class PowerAutomationService : IDisposable
                 else
                 {
                     // Balanced mode: retain active settings (NitroSense behavior)
-                    _isDcEcoActive = false;
+                    lock (_stateSyncLock) { _isDcEcoActive = false; }
                     PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                     {
                         IsAc = false,
@@ -440,6 +474,7 @@ public class PowerAutomationService : IDisposable
             {
                 // Transition to AC (Adapter Connected)
                 bool allRestored = true;
+                bool restoreAttempted = false;
                 var failed = new System.Collections.Generic.List<string>();
 
                 bool modeOk = false;
@@ -451,6 +486,7 @@ public class PowerAutomationService : IDisposable
 
                 if (_isDcEcoActive || HasPendingAcRestore)
                 {
+                    restoreAttempted = true;
                     bool isGame = IsGameSessionActive?.Invoke() == true;
                     var activeGame = GetActiveGameProfile?.Invoke();
 
@@ -465,7 +501,7 @@ public class PowerAutomationService : IDisposable
                             modeOk = await _agentClient.SetOperatingModeAsync(targetMode);
                         }
                         catch { modeOk = false; }
-                        _pendingAcModeRestore = !modeOk;
+                        SetPendingRestore(mode: !modeOk);
                         if (!modeOk) failed.Add("Çalışma Modu");
                     }
 
@@ -476,7 +512,7 @@ public class PowerAutomationService : IDisposable
                             boostOk = await RestoreBoostAfterEcoAsync(isGame && activeGame != null, targetBoost);
                         }
                         catch { boostOk = false; }
-                        _pendingAcCpuRestore = !boostOk;
+                        SetPendingRestore(cpu: !boostOk);
                         if (!boostOk) failed.Add("CPU Boost");
                         if (boostOk && !(isGame && activeGame != null))
                         {
@@ -492,14 +528,13 @@ public class PowerAutomationService : IDisposable
                             fanOk = await _agentClient.SetFanModeAsync(targetFan);
                         }
                         catch { fanOk = false; }
-                        _pendingAcFanRestore = !fanOk;
+                        SetPendingRestore(fan: !fanOk);
                         if (!fanOk) failed.Add("Fan Modu");
                     }
 
                     if (!_pendingAcModeRestore && !_pendingAcCpuRestore && !_pendingAcFanRestore)
                     {
-                        _isDcEcoActive = false;
-                        _savedDcBoostBeforeEco = null;
+                        ClearEcoBaseline();
                     }
                     else
                     {
@@ -511,12 +546,19 @@ public class PowerAutomationService : IDisposable
                 // Only undo what Eco did: restore the panel rate it lowered. If Eco never changed it, the display
                 // is left alone (it used to be forced to its maximum on every AC event, including startup).
                 int? restoredRate = RestorePanelRefreshRateAfterEco();
+                if (HasPendingPanelRestore)
+                {
+                    allRestored = false;
+                    failed.Add("Ekran yenileme hızı");
+                }
 
-                string message = allRestored
-                    ? (restoredRate.HasValue
-                        ? $"Adaptör Bağlandı: Önceki profil ve {restoredRate}Hz ekran tazeleme hızı geri yüklendi."
-                        : "Adaptör Bağlandı: Önceki profil geri yüklendi.")
-                    : $"Adaptör Bağlandı (Kısmi Geri Yükleme): Geri yüklenemeyen ayarlar: {string.Join(", ", failed)}";
+                string message = !restoreAttempted && !restoredRate.HasValue
+                    ? "Adaptör Bağlandı: Değişiklik gerekmedi."
+                    : allRestored
+                        ? (restoredRate.HasValue
+                            ? $"Adaptör Bağlandı: Önceki profil ve {restoredRate}Hz ekran tazeleme hızı geri yüklendi."
+                            : "Adaptör Bağlandı: Önceki profil geri yüklendi.")
+                        : $"Adaptör Bağlandı (Kısmi Geri Yükleme): Geri yüklenemeyen ayarlar: {string.Join(", ", failed)}";
 
                 PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                 {
@@ -567,7 +609,7 @@ public class PowerAutomationService : IDisposable
                 try { ok = await _agentClient.SetOperatingModeAsync(targetMode); } catch { ok = false; }
                 if (ok)
                 {
-                    _pendingAcModeRestore = false;
+                    SetPendingRestore(mode: false);
                     modeAppliedThisRun = true;
                 }
             }
@@ -579,7 +621,7 @@ public class PowerAutomationService : IDisposable
                 try { ok = await RestoreBoostAfterEcoAsync(gameTarget, targetBoost); } catch { ok = false; }
                 if (ok)
                 {
-                    _pendingAcCpuRestore = false;
+                    SetPendingRestore(cpu: false);
                     boostAppliedThisRun = true;
                     if (!gameTarget) targetBoost = _cpuPowerService.CurrentMode;
                 }
@@ -591,15 +633,14 @@ public class PowerAutomationService : IDisposable
                 try { ok = await _agentClient.SetFanModeAsync(targetFan); } catch { ok = false; }
                 if (ok)
                 {
-                    _pendingAcFanRestore = false;
+                    SetPendingRestore(fan: false);
                     fanAppliedThisRun = true;
                 }
             }
 
             if (!HasPendingAcRestore)
             {
-                _isDcEcoActive = false;
-                _savedDcBoostBeforeEco = null;
+                ClearEcoBaseline();
             }
             PersistEcoState();
 
@@ -660,8 +701,10 @@ public class PowerAutomationService : IDisposable
         {
             return _cpuPowerService.SetBoostModeAsync(targetBoost);
         }
-        var dcTarget = _savedDcBoostBeforeEco ?? _savedCpuBoostBeforeDc;
-        return _cpuPowerService.SetBoostModeAsync(dcTarget, targetAc: false, targetDc: true);
+        // Never fall back to the AC baseline: writing it into the DC slot would give the battery a value the user
+        // never had there. An unknown DC value means "leave the battery value alone".
+        if (!_savedDcBoostBeforeEco.HasValue) return Task.FromResult(true);
+        return _cpuPowerService.SetBoostModeAsync(_savedDcBoostBeforeEco.Value, targetAc: false, targetDc: true);
     }
 
     /// <summary>
@@ -685,9 +728,8 @@ public class PowerAutomationService : IDisposable
             bool ok = modeOk && boostOk && fanOk;
             if (ok)
             {
-                _isDcEcoActive = false;
-                _pendingAcModeRestore = _pendingAcCpuRestore = _pendingAcFanRestore = false;
-                _savedDcBoostBeforeEco = null;
+                SetPendingRestore(mode: false, cpu: false, fan: false);
+                ClearEcoBaseline();
             }
             PersistEcoState();
             return ok;

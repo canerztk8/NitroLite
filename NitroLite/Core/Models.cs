@@ -1,3 +1,4 @@
+﻿using System.IO;
 using System.Text.Json.Serialization;
 
 namespace NitroLite.Core;
@@ -76,6 +77,13 @@ public class MonitorData
     public double CpuPowerWatts { get; set; }
     public double VramUsedMB { get; set; }
     public double VramTotalMB { get; set; }
+
+    /// <summary>
+    /// True when NVML answered for this sample. False means the GPU power/VRAM/clock values are unknown, not zero:
+    /// a running GPU is never at 0 W, so "0" must not be shown as a reading.
+    /// </summary>
+    [JsonIgnore]
+    public bool GpuMetricsAvailable { get; set; }
 
     public DateTime Timestamp { get; set; } = DateTime.Now;
 }
@@ -163,6 +171,13 @@ public class GameProfile
     public string InstallPath { get; set; } = "";
     public bool AutoApply { get; set; } = true;
     public int TargetAtkMouseProfile { get; set; } = 0; // 0: Değiştirme / Pasif, 1..4: Config 1..4
+
+    /// <summary>
+    /// False when the recorded executable is gone (game uninstalled or moved). A profile without a path is
+    /// treated as installed: it was added by hand and there is nothing to check.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsInstalled => string.IsNullOrWhiteSpace(InstallPath) || File.Exists(InstallPath);
 }
 
 public enum ThermalStatusLevel
@@ -207,6 +222,9 @@ public class AppSettings
     public bool IsBacklightOff { get; set; } = false;
     public string? SelectedRgbPreset { get; set; }
 
+    [JsonPropertyName("last_operating_mode")]
+    public OperatingMode? LastOperatingMode { get; set; }
+
     [JsonPropertyName("dc_power_mode")]
     public DcPowerProfilePreference DcPowerMode { get; set; } = DcPowerProfilePreference.Eco;
 
@@ -241,9 +259,13 @@ public class AppSettings
 public class GameSessionRecoveryState
 {
     public bool IsActive { get; set; }
+    public bool RestoreMode { get; set; } = true;
+    public bool RestoreFan { get; set; } = true;
     public OperatingMode SavedMode { get; set; } = OperatingMode.Default;
     public CpuBoostMode SavedBoost { get; set; } = CpuBoostMode.Aggressive;
+    public CpuBoostMode? SavedAcBoost { get; set; }
+    public CpuBoostMode? SavedDcBoost { get; set; }
     public FanMode SavedFan { get; set; } = FanMode.Auto;
-    public int SavedMouseProfile { get; set; } = 1;
+    public int SavedMouseProfile { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

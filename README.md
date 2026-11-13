@@ -1,8 +1,8 @@
-# NitroLite 🚀
+﻿# NitroLite 🚀
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-759-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-810-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (öncelikle **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070) için NitroSense'in yerini alan, hafif ve açık kaynaklı bir kontrol merkezidir. NitroSense'in kullandığı Acer servisleriyle (AcerAgentService, Acer Care Center) aynı protokolleri kullanır; ağır Electron arayüzünü çalıştırmaz.
@@ -53,6 +53,14 @@
 ### 9. Sağlık Sekmesi
 - Pil, SSD ve termal durum kartları. SMART erişimi olmayan disk sıcaklıkları ve termal macun/fan yatağı tahminleri "(tahmini)" olarak işaretlidir.
 
+### 10. Entegre Sistem & Onarım Araçları (Tek Bir Merkezde)
+Harici `.bat`, `.ps1` veya ayrı `.exe` araçlarına gerek kalmadan, tüm Acer ve Windows bakım/onarım işlemleri doğrudan **Sistem Servisleri ve Araçlar** sekmesinden tek tıkla yürütülür:
+- **Klavye RGB Servisini Onar:** Sürücü deposundaki güncel `AcerLightingService.exe` yolunu kayıt defterine bağlar ve servisleri onarır.
+- **Acer & NitroSense Servislerini Onar:** Sürücü deposundaki `AcerCentralService` ve `AcerLightingService` yollarını günceller, çakışan süreçleri sonlandırır ve servisleri yeniden başlatır.
+- **MUX Switch Kaydını Onar:** `discrete_gpu_support = 1` anahtarını doğrular, eski kalıcı oturum görevlerini temizler ve Quick Access servisini başlatır.
+- **Windows & Sistem Optimizasyonu:** HAGS (GPU donanım hızlandırma), NVMe TRIM, telemetri görevlerini devre dışı bırakma ve arka plan servis temizliği uygular. Değiştirdiği her ayarı (`optimize_backup.json`) yedekler; **Geri Al** düğmesi servis başlangıç türlerini, HAGS değerini ve telemetri görevlerini yedekten geri yükler.
+- **Komut Satırı Desteği:** `NitroLite.exe` üzerinden doğrudan `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`, `--restore-optimize` veya `--purge-standby` bayraklarıyla komut satırından da çalıştırılabilir. Sistem ayarlarını değiştiren komutlar onay ister: `NitroLite.exe --optimize-pc --yes`.
+
 ### Acer servisi kapalıysa
 AASSvc yanıt vermezse NitroLite, Windows ve NVIDIA sürücüsünden okunabilen verileri (CPU kullanımı, RAM, GPU) göstermeye devam eder. Yalnızca serviste bulunan sensörler "Servis yok" olarak işaretlenir.
 
@@ -76,11 +84,12 @@ NitroLite
 │   ├── DebloatService.cs           # Acer arka plan servislerini kapatma / geri yükleme, otomatik başlatma
 │   ├── MemoryCleanerService.cs     # Bekleme belleği ölçümü ve boşaltma
 │   ├── StandbyPurgeTask.cs         # Sormadan boşaltma için bir kerelik yönetici görevi
+│   ├── SystemToolsService.cs       # Klavye, Acer servisi, MUX ve Windows optimizasyon onarım motoru
 │   ├── AppPaths.cs                 # Veri klasörü ve sistem aracı yolları
 │   └── TelemetryFormatter.cs       # Değer biçimlendirme ve "tahmini" etiketleri
 ├── OsdOverlayWindow.xaml           # OSD penceresi
 ├── MainWindow.xaml                 # Ana arayüz
-└── App.xaml                        # Tek örnek kontrolü ve hata kaydı
+└── App.xaml                        # Tek örnek kontrolü, CLI bayrakları ve hata kaydı
 ```
 
 **Veri konumu:** Ayarlar, oyun profilleri, RGB profilleri, termal geçmiş ve günlük dosyası `%LOCALAPPDATA%\NitroLite` altında tutulur. Eski sürümlerin exe yanındaki dosyaları ilk açılışta buraya kopyalanır.
@@ -140,7 +149,7 @@ powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 
 ## 🧪 Testler
 
-759 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+810 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

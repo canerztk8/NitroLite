@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Management;
@@ -40,14 +40,40 @@ public static class HardwareInfoService
 {
     private static readonly object Gate = new();
     private static HardwareInfo? _cached;
+    private static HardwareInfo? _lastEmptyResult;
+    private static DateTime _lastEmptyReadUtc = DateTime.MinValue;
+
+    /// <summary>An empty read is retried at most this often, so a starting WMI service is not hammered.</summary>
+    private static readonly TimeSpan EmptyReadRetryInterval = TimeSpan.FromSeconds(30);
 
     public static HardwareInfo Get()
     {
         lock (Gate)
         {
-            return _cached ??= Read();
+            if (_cached != null) return _cached;
+
+            // A transient WMI failure (the service is still starting, or the query timed out) must not be cached
+            // for the whole session: that would leave the monitoring page without CPU/RAM labels until restart.
+            var now = DateTime.UtcNow;
+            if (_lastEmptyReadUtc != DateTime.MinValue && now - _lastEmptyReadUtc < EmptyReadRetryInterval)
+                return _lastEmptyResult ?? new HardwareInfo();
+
+            var info = Read();
+            if (HasData(info))
+            {
+                _cached = info;
+                return info;
+            }
+
+            _lastEmptyReadUtc = now;
+            _lastEmptyResult = info;
+            return info;
         }
     }
+
+    /// <summary>True when the read produced anything worth caching.</summary>
+    private static bool HasData(HardwareInfo info) =>
+        !string.IsNullOrWhiteSpace(info.CpuName) || info.CpuCores > 0 || info.MemoryModules > 0;
 
     /// <summary>SMBIOS memory type codes (Win32_PhysicalMemory.SMBIOSMemoryType).</summary>
     public static string MemoryTypeName(int smbiosType) => smbiosType switch

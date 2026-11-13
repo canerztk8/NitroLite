@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -431,8 +431,7 @@ public class DebloatService
                 });
                 if (p != null)
                 {
-                    var output = p.StandardOutput.ReadToEnd();
-                    p.WaitForExit(2000);
+                    var output = ReadOutputWithTimeout(p, 2000);
                     var parsed = ParseScQueryOutput(output);
                     if (!string.IsNullOrEmpty(parsed))
                     {
@@ -443,6 +442,31 @@ public class DebloatService
             catch { }
         }
         return map;
+    }
+
+    /// <summary>
+    /// Reads a child process' stdout with a hard timeout. A synchronous ReadToEnd() blocked forever when the tool
+    /// hung, so the WaitForExit() that followed it never ran and the caller froze.
+    /// </summary>
+    private static string ReadOutputWithTimeout(Process process, int timeoutMs)
+    {
+        try
+        {
+            var readTask = process.StandardOutput.ReadToEndAsync();
+            if (!readTask.Wait(timeoutMs))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                // Killing the process closes the pipe; give the read a moment to return what it already has.
+                readTask.Wait(500);
+                return readTask.IsCompletedSuccessfully ? readTask.Result : string.Empty;
+            }
+            process.WaitForExit(500);
+            return readTask.Result;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     public static bool IsActiveTaskState(string? state)
@@ -493,8 +517,7 @@ public class DebloatService
             });
             if (p != null)
             {
-                var output = p.StandardOutput.ReadToEnd();
-                p.WaitForExit(2000);
+                var output = ReadOutputWithTimeout(p, 2000);
                 if (output.Contains("Ready", StringComparison.OrdinalIgnoreCase) ||
                     output.Contains("Enabled", StringComparison.OrdinalIgnoreCase) ||
                     output.Contains("Hazır", StringComparison.OrdinalIgnoreCase) ||

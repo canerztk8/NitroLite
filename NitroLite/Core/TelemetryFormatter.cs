@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 
 namespace NitroLite.Core;
@@ -34,9 +34,11 @@ public static class TelemetryFormatter
     /// <summary>
     /// Formats GPU temperature in °C, distinguishing between active reading and D3cold deep sleep.
     /// </summary>
-    public static string FormatGpuTemperature(double temp, bool isSleeping = false)
+    public static string FormatGpuTemperature(double temp, bool isSleeping = false, bool available = true)
     {
-        if (isSleeping || temp <= 0) return "0 °C (Uyku / D3cold)";
+        if (isSleeping) return "0 °C (Uyku / D3cold)";
+        // No reading is not the same as a sleeping GPU: a running GPU is never at 0 °C.
+        if (!available || temp <= 0) return "-- °C";
         return $"{Math.Round(temp):F0} °C";
     }
 
@@ -87,9 +89,11 @@ public static class TelemetryFormatter
     /// <summary>
     /// Formats GPU power consumption in Watts, handling D3cold state.
     /// </summary>
-    public static string FormatGpuPower(double watts, bool isSleeping = false)
+    public static string FormatGpuPower(double watts, bool isSleeping = false, bool available = true)
     {
-        if (isSleeping || watts <= 0) return "0.0 W (D3cold)";
+        if (isSleeping) return "0.0 W (D3cold)";
+        // A running GPU is never at 0 W: that value means the sensor could not be read.
+        if (!available || watts <= 0) return "-- W";
         return string.Format(CultureInfo.InvariantCulture, "{0:F1} W", watts);
     }
 
@@ -106,9 +110,10 @@ public static class TelemetryFormatter
     /// <summary>
     /// Formats GPU core clock in MHz (e.g. "2100 MHz" or "0 MHz (Uyku)").
     /// </summary>
-    public static string FormatGpuFrequency(double freqMhz, bool isSleeping = false)
+    public static string FormatGpuFrequency(double freqMhz, bool isSleeping = false, bool available = true)
     {
-        if (isSleeping || freqMhz <= 0) return "0 MHz (Uyku)";
+        if (isSleeping) return "0 MHz (Uyku)";
+        if (!available || freqMhz <= 0) return "-- MHz";
         return $"{Math.Round(freqMhz):F0} MHz";
     }
 
@@ -127,9 +132,10 @@ public static class TelemetryFormatter
     /// <summary>
     /// Formats GPU VRAM usage (e.g. "2048 MB / 8192 MB (%25)").
     /// </summary>
-    public static string FormatVramUsage(double usedMB, double totalMB, bool isSleeping = false)
+    public static string FormatVramUsage(double usedMB, double totalMB, bool isSleeping = false, bool available = true)
     {
-        if (isSleeping || (totalMB <= 0 && usedMB <= 0)) return "0 MB / 0 MB (D3cold)";
+        if (isSleeping) return "0 MB / 0 MB (D3cold)";
+        if (!available || (totalMB <= 0 && usedMB <= 0)) return "-- MB";
         if (totalMB <= 0) return $"{Math.Round(usedMB):F0} MB";
         double pct = Math.Round((usedMB / totalMB) * 100.0, 0);
         return $"{Math.Round(usedMB):F0} MB / {Math.Round(totalMB):F0} MB (%{pct:F0})";
@@ -172,7 +178,7 @@ public static class TelemetryFormatter
 
     /// <summary>
     /// Formats battery power flow rate distinguishing discharging, AC charging, AC saturated, and idle on battery.
-    /// When discharging with known milliwatts, renders dual-unit format: "{0:F1} W ({1:N0} mW)".
+    /// When discharging with known milliwatts, renders dual-unit format: "{0:F1} W ({1:F0} mW)".
     /// Preserves full backward-compatible output if milliwatts are not provided.
     /// </summary>
     public static string FormatBatteryPowerFlow(BatteryStatusInfo? status, bool includeMilliwatts = true)
@@ -181,14 +187,18 @@ public static class TelemetryFormatter
 
         if (status.IsDischarging && (status.DischargeRateWatts > 0 || status.DischargeRateMilliwatts > 0))
         {
+            // Prefer the smoothed rate: the raw value jumps on every 3 s sample.
+            double watts = status.SmoothedDischargeRateWatts > 0
+                ? status.SmoothedDischargeRateWatts
+                : (status.DischargeRateWatts > 0 ? status.DischargeRateWatts : status.DischargeRateMilliwatts / 1000.0);
+
             if (includeMilliwatts && status.DischargeRateMilliwatts > 0)
             {
-                double watts = status.DischargeRateWatts > 0 ? status.DischargeRateWatts : status.DischargeRateMilliwatts / 1000.0;
-                return string.Format(CultureInfo.InvariantCulture, "{0:F1} W ({1:N0} mW)", watts, (long)status.DischargeRateMilliwatts);
+                // F0, not N0: a thousands separator here reads as a decimal comma in Turkish.
+                return string.Format(CultureInfo.InvariantCulture, "{0:F1} W ({1:F0} mW)", watts, (long)status.DischargeRateMilliwatts);
             }
 
-            double w = status.DischargeRateWatts > 0 ? status.DischargeRateWatts : status.DischargeRateMilliwatts / 1000.0;
-            return string.Format(CultureInfo.InvariantCulture, "{0:F1} W (Deşarj Oluyor)", w);
+            return string.Format(CultureInfo.InvariantCulture, "{0:F1} W (Deşarj Oluyor)", watts);
         }
 
         if (status.IsCharging && status.ChargeRateWatts > 0)

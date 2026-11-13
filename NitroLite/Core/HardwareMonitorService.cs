@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -236,11 +236,13 @@ public class HardwareMonitorService : IDisposable
                 if (NvmlDeviceGetPowerUsage(_gpuDevice, out uint milliwatts) == 0)
                 {
                     data.GpuPowerWatts = Math.Round(milliwatts / 1000.0, 1);
+                    data.GpuMetricsAvailable = true;
                 }
                 else
                 {
-                    // Device might be in D3cold deep sleep
+                    // The query failed: the value is unknown, not zero.
                     data.GpuPowerWatts = 0.0;
+                    data.GpuMetricsAvailable = false;
                 }
 
                 if (NvmlDeviceGetMemoryInfo(_gpuDevice, out NvmlMemory mem) == 0)
@@ -269,11 +271,13 @@ public class HardwareMonitorService : IDisposable
                 // NVML communication failed (e.g. RTD3 transition); mark for retry
                 _gpuDevice = IntPtr.Zero;
                 _nvmlInitialized = false;
+                data.GpuMetricsAvailable = false;
             }
         }
         else
         {
             data.GpuPowerWatts = 0.0;
+            data.GpuMetricsAvailable = false;
         }
 
         // 3. Fallbacks for missing RAM and CPU metrics

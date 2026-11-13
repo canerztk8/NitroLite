@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using NitroLite.Core;
 using Xunit;
 
@@ -79,8 +79,10 @@ public class TelemetryFormatterTests
         Assert.Equal("62 °C", TelemetryFormatter.FormatGpuTemperature(62.1, false));
 
         // When in D3cold sleep state (0 °C or isSleeping = true)
-        Assert.Equal("0 °C (Uyku / D3cold)", TelemetryFormatter.FormatGpuTemperature(0.0, false));
-        Assert.Equal("0 °C (Uyku / D3cold)", TelemetryFormatter.FormatGpuTemperature(-1.0, false));
+        // No reading is not a sleeping GPU: show it as unknown.
+        Assert.Equal("-- °C", TelemetryFormatter.FormatGpuTemperature(0.0, false));
+        Assert.Equal("-- °C", TelemetryFormatter.FormatGpuTemperature(-1.0, false));
+        Assert.Equal("-- °C", TelemetryFormatter.FormatGpuTemperature(62.0, false, available: false));
         Assert.Equal("0 °C (Uyku / D3cold)", TelemetryFormatter.FormatGpuTemperature(55.0, true));
     }
 
@@ -99,8 +101,10 @@ public class TelemetryFormatterTests
         Assert.Equal("85.5 W", TelemetryFormatter.FormatGpuPower(85.5, false));
 
         // When asleep or 0 W
-        Assert.Equal("0.0 W (D3cold)", TelemetryFormatter.FormatGpuPower(0.0, false));
-        Assert.Equal("0.0 W (D3cold)", TelemetryFormatter.FormatGpuPower(-5.0, false));
+        // A running GPU is never at 0 W: that is a missing reading, not D3cold.
+        Assert.Equal("-- W", TelemetryFormatter.FormatGpuPower(0.0, false));
+        Assert.Equal("-- W", TelemetryFormatter.FormatGpuPower(-5.0, false));
+        Assert.Equal("-- W", TelemetryFormatter.FormatGpuPower(85.5, false, available: false));
         Assert.Equal("0.0 W (D3cold)", TelemetryFormatter.FormatGpuPower(85.5, true));
     }
 
@@ -117,8 +121,9 @@ public class TelemetryFormatterTests
     public void FormatGpuFrequency_ActiveAndSleepClocks_FormatsExpectedText()
     {
         Assert.Equal("2100 MHz", TelemetryFormatter.FormatGpuFrequency(2100.0, false));
-        Assert.Equal("0 MHz (Uyku)", TelemetryFormatter.FormatGpuFrequency(0.0, false));
-        Assert.Equal("0 MHz (Uyku)", TelemetryFormatter.FormatGpuFrequency(-50.0, false));
+        Assert.Equal("-- MHz", TelemetryFormatter.FormatGpuFrequency(0.0, false));
+        Assert.Equal("-- MHz", TelemetryFormatter.FormatGpuFrequency(-50.0, false));
+        Assert.Equal("-- MHz", TelemetryFormatter.FormatGpuFrequency(2100.0, false, available: false));
         Assert.Equal("0 MHz (Uyku)", TelemetryFormatter.FormatGpuFrequency(2100.0, true));
     }
 
@@ -142,7 +147,8 @@ public class TelemetryFormatterTests
         Assert.Equal("2048 MB / 8192 MB (%25)", TelemetryFormatter.FormatVramUsage(2048, 8192, false));
 
         // When sleeping in D3cold
-        Assert.Equal("0 MB / 0 MB (D3cold)", TelemetryFormatter.FormatVramUsage(0, 0, false));
+        Assert.Equal("-- MB", TelemetryFormatter.FormatVramUsage(0, 0, false));
+        Assert.Equal("-- MB", TelemetryFormatter.FormatVramUsage(2048, 8192, false, available: false));
         Assert.Equal("0 MB / 0 MB (D3cold)", TelemetryFormatter.FormatVramUsage(2048, 8192, true));
     }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NitroLite.Core;
 using Xunit;
 
@@ -106,7 +106,8 @@ public class BatteryTelemetryTests
         };
 
         string flow = TelemetryFormatter.FormatBatteryPowerFlow(status);
-        Assert.Equal("14.8 W (14,820 mW)", flow);
+        // No thousands separator: "14,820" reads as 14.82 to a Turkish reader.
+        Assert.Equal("14.8 W (14820 mW)", flow);
     }
 
     [Fact]

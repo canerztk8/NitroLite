@@ -1,4 +1,4 @@
-<Window x:Class="NitroLite.MainWindow"
+﻿<Window x:Class="NitroLite.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="NitroLite" 
@@ -313,7 +313,7 @@
                         <RadioButton x:Name="NavMonitoring" Style="{StaticResource NavButton}" Content="Donanım İzleme &amp; OSD" Checked="Nav_Checked" />
                         <RadioButton x:Name="NavRgb" Style="{StaticResource NavButton}" Content="Klavye Aydınlatması" Checked="Nav_Checked" />
                         <RadioButton x:Name="NavBattery" Style="{StaticResource NavButton}" Content="Pil &amp; Termal Sağlık" Checked="Nav_Checked" />
-                        <RadioButton x:Name="NavDebloat" Style="{StaticResource NavButton}" Content="Sistem Servisleri &amp; Ayarlar" Checked="Nav_Checked" />
+                        <RadioButton x:Name="NavDebloat" Style="{StaticResource NavButton}" Content="Sistem Servisleri &amp; Araçlar" Checked="Nav_Checked" />
 
                         <Separator Background="{StaticResource BorderDark}" Margin="8,16" />
 
@@ -338,8 +338,13 @@
                                     <TextBlock x:Name="TxtSideCpuBoost" Text="Agresif" Foreground="{StaticResource AccentRed}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right" />
                                 </Grid>
                                 <Grid x:Name="RowSideMouseProfile" Margin="0,3" Visibility="Collapsed">
-                                    <TextBlock Text="Fare Profili:" Foreground="{StaticResource TextSecondary}" FontSize="11" />
-                                    <TextBlock x:Name="TxtSideMouseProfile" Text="Config 1" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right" />
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Fare Profili:" Foreground="{StaticResource TextSecondary}" FontSize="11" />
+                                    <!-- Two columns + trimming: a long failure text used to overlap the label. -->
+                                    <TextBlock Grid.Column="1" x:Name="TxtSideMouseProfile" Text="Config 1" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="6,0,0,0" />
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -659,8 +664,14 @@
 
                                                 <!-- Save Profile Action Button & Description -->
                                                 <Grid>
-                                                    <TextBlock Text="Oyun açılışında ilgili ayarlar otomatik uygulanır, kapanışta masaüstü profili geri yüklenir." Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="0,0,230,0" TextWrapping="Wrap" />
-                                                    <Button x:Name="BtnSaveGameProfile" Content="Yapılandırmayı Kaydet" Click="BtnSaveGameProfile_Click" Background="{StaticResource AccentCyan}" Foreground="#0F1115" FontWeight="Bold" Padding="14,8" HorizontalAlignment="Right" Cursor="Hand" FontSize="11" BorderThickness="0" />
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <CheckBox x:Name="ChkGameAutoApply" Grid.Column="0" Content="Otomatik uygula" IsChecked="True" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,14,0" Cursor="Hand" ToolTip="Kapalıysa bu oyun başladığında profil uygulanmaz; yalnızca elle çalıştırılabilir." />
+                                                    <TextBlock Grid.Column="1" Text="Oyun açılışında ilgili ayarlar otomatik uygulanır, kapanışta masaüstü profili geri yüklenir." Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="0,0,14,0" TextWrapping="Wrap" />
+                                                    <Button x:Name="BtnSaveGameProfile" Grid.Column="2" Content="Yapılandırmayı Kaydet" Click="BtnSaveGameProfile_Click" Background="{StaticResource AccentCyan}" Foreground="#0F1115" FontWeight="Bold" Padding="14,8" HorizontalAlignment="Right" Cursor="Hand" FontSize="11" BorderThickness="0" />
                                                 </Grid>
                                             </StackPanel>
                                         </Border>
@@ -898,6 +909,11 @@
                             <StackPanel>
                                 <TextBlock Text="Klavye RGB Aydınlatma Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
                                 <TextBlock Text="Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
+
+                                <!-- Shown only when the Acer service explicitly reports no controllable lighting. -->
+                                <Border x:Name="BannerLightingUnsupported" Visibility="Collapsed" Background="#2A1B28" BorderBrush="{StaticResource AccentRed}" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,16">
+                                    <TextBlock x:Name="TxtLightingUnsupported" TextWrapping="Wrap" Foreground="{StaticResource AccentRed}" FontSize="11" />
+                                </Border>
 
                                 <!-- 4 Zones Visual Preview -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
@@ -1151,6 +1167,7 @@
                                                     <TextBlock Text="Termal Direnç Tahmini" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                                     <TextBlock x:Name="TxtPasteHealthPercent" Text="--" Foreground="{StaticResource AccentGreen}" FontSize="18" FontWeight="Bold" Margin="0,4" />
                                                     <TextBlock x:Name="TxtThermalResistance" Text="--" Foreground="{StaticResource TextSecondary}" FontSize="10" />
+                                                    <TextBlock x:Name="TxtThermalSampleAge" Text="" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" />
                                                 </StackPanel>
                                             </Border>
 
@@ -1409,6 +1426,77 @@
                                         </StackPanel>
                                         <Button x:Name="BtnKillNitroSense" Grid.Column="1" Content="NitroSense'i Kapat" Click="BtnKillNitroSense_Click" Background="#2A1B28" Foreground="{StaticResource AccentRed}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,8" Cursor="Hand" VerticalAlignment="Center" FontSize="11" />
                                     </Grid>
+                                </Border>
+
+                                <!-- SYSTEM & SERVICE REPAIR TOOLS (UNIFIED ENGINE) -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,12">
+                                            <StackPanel>
+                                                <TextBlock Text="Sistem ve Donanım Onarım Araçları" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                                <TextBlock Text="Acer servis uyuşmazlıkları, klavye aydınlatma sorunları, MUX switch ve sistem arka plan optimizasyonlarını harici betiklere veya ayrı exe'lere gerek kalmadan doğrudan uygulayın." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <!-- Tool 1: Fix Keyboard Lighting -->
+                                        <Grid Margin="0,4,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                <TextBlock Text="Klavye RGB Servisini Onar" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="AcerLightingService kaydını sürücü deposuyla eşitler, klavye RGB servisini yeniden başlatır." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnFixLighting" Grid.Column="1" Content="Servisi Onar" Click="BtnFixLighting_Click" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,6" Cursor="Hand" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,8" />
+
+                                        <!-- Tool 2: Fix Acer Central / Agent Services -->
+                                        <Grid Margin="0,4,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                <TextBlock Text="Acer &amp; NitroSense Servislerini Onar" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="AASSvc ve Acer Central servislerini en güncel sürücü paketine bağlar, arka plan çakışmalarını giderir." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnFixAcerServices" Grid.Column="1" Content="Servisleri Onar" Click="BtnFixAcerServices_Click" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,6" Cursor="Hand" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,8" />
+
+                                        <!-- Tool 3: Restore MUX Switch Registry -->
+                                        <Grid Margin="0,4,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                <TextBlock Text="MUX Switch Kaydını Onar" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="discrete_gpu_support kayıt defteri anahtarını doğrular, gereksiz eski oturum açılış görevlerini kaldırır." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnRestoreMux" Grid.Column="1" Content="Kaydı Onar" Click="BtnRestoreMux_Click" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="12,6" Cursor="Hand" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,8" />
+
+                                        <!-- Tool 4: Optimize PC & Background Debloat -->
+                                        <Grid Margin="0,4,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                <TextBlock Text="Windows &amp; Sistem Optimizasyonu" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Gereksiz telemetri görevlerini kapatır, HAGS (GPU donanım zamanlama) açar, NVMe TRIM ve arka plan temizliği yapar. Değiştirilen her ayar yedeklenir." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnRestoreOptimize" Grid.Column="1" Content="Geri Al" Click="BtnRestoreOptimize_Click" Background="#222733" Foreground="{StaticResource AccentCyan}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Optimizasyonun değiştirdiği servis, HAGS ve görev ayarlarını yedekten geri yükler." />
+                                            <Button x:Name="BtnOptimizePc" Grid.Column="2" Content="Optimize Et" Click="BtnOptimizePc_Click" Background="#222733" Foreground="{StaticResource AccentGreen}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <TextBlock x:Name="TxtRepairToolsStatus" Text="" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+                                    </StackPanel>
                                 </Border>
 
                                 <!-- APP STARTUP SETTINGS -->

@@ -1,6 +1,9 @@
-using System;
+﻿using System;
+using System.IO;
+using System.Net.Security;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -107,14 +110,53 @@ public class CareCenterClient
         catch { return null; }
     }
 
+    /// <summary>File holding the SHA-256 thumbprint of the agent certificate seen on first use.</summary>
+    internal const string CertificatePinFile = "carecenter_cert.pin";
+
+    /// <summary>
+    /// Trust-on-first-use pin for the self-signed agent certificate. The first connection records the thumbprint;
+    /// later connections must present the same one. Delete the pin file to re-trust a rotated certificate.
+    /// </summary>
+    private bool IsPinnedCertificate(X509Certificate certificate)
+    {
+        try
+        {
+            var thumbprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
+            var path = AppPaths.GetDataFile(CertificatePinFile);
+            if (File.Exists(path))
+            {
+                var pinned = File.ReadAllText(path).Trim();
+                if (string.Equals(pinned, thumbprint, StringComparison.OrdinalIgnoreCase)) return true;
+                LastError = "Care Center sertifikası daha önce güvenilen sertifikadan farklı; bağlantı reddedildi.";
+                AppLog.Warn("Care Center sertifika sabitlemesi tutmadı",
+                    $"Beklenen: {pinned}{Environment.NewLine}Gelen: {thumbprint}{Environment.NewLine}" +
+                    $"Sertifika yenilendiyse {path} dosyasını silin.");
+                return false;
+            }
+            File.WriteAllText(path, thumbprint);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Connects, performs the handshake, sends one request and returns its response (null on any failure).</summary>
     private async Task<JsonNode?> RunAsync(JsonObject request)
     {
         LastError = null;
         using var cts = new CancellationTokenSource(Timeout);
         using var ws = new ClientWebSocket();
-        // The agent uses a self-signed certificate for localhost. Accept it only for this loopback endpoint.
-        ws.Options.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        // The agent uses a self-signed certificate for localhost, so the chain cannot be validated. Pin the
+        // certificate on first use instead of accepting anything: another local process that binds 4343 while
+        // AcerCCAgent is stopped must not be able to answer for it.
+        ws.Options.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
+        {
+            if (certificate == null) return false;
+            if (errors == SslPolicyErrors.None) return true;
+            return IsPinnedCertificate(certificate);
+        };
 
         try
         {
@@ -174,7 +216,11 @@ public class CareCenterClient
         {
             if (ws.State == WebSocketState.Open)
             {
-                try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None); } catch { }
+                // Never wait on the peer's Close frame without a bound: an agent that stops answering would
+                // otherwise hang this call (and the caller's finally block) forever.
+                using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, closeCts.Token); }
+                catch { try { ws.Abort(); } catch { } }
             }
         }
     }

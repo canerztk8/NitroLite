@@ -1,62 +1,112 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 
 namespace NitroLite.Core;
 
+/// <summary>Where the settings that are now in use actually came from.</summary>
+public enum SettingsLoadSource
+{
+    Defaults,
+    Primary,
+    Backup,
+    Legacy
+}
+
+/// <summary>Result of a settings load, including whether the primary file had to be discarded.</summary>
+public sealed class SettingsLoadResult
+{
+    public AppSettings Settings { get; init; } = new();
+    public SettingsLoadSource Source { get; init; } = SettingsLoadSource.Defaults;
+
+    /// <summary>True when the primary file existed but could not be read or parsed.</summary>
+    public bool PrimaryCorrupt { get; init; }
+
+    /// <summary>Why the primary file was rejected, for the log and the user-facing warning.</summary>
+    public string? PrimaryError { get; init; }
+}
+
 public static class SettingsManager
 {
     public static AppSettings LoadSettingsWithFallback(string primaryPath, string? backupPath = null, string? legacyPath = null)
+        => LoadSettings(primaryPath, backupPath, legacyPath).Settings;
+
+    /// <summary>
+    /// Loads settings from the primary file, then the backup, then the legacy file, then defaults. The returned
+    /// result says which one won and whether the primary file was corrupt, so the caller can tell the user
+    /// instead of silently starting from defaults.
+    /// </summary>
+    public static SettingsLoadResult LoadSettings(string primaryPath, string? backupPath = null, string? legacyPath = null)
     {
         backupPath ??= primaryPath + ".bak";
+
+        bool primaryCorrupt = false;
+        string? primaryError = null;
 
         // 1. Try Primary settings file
         if (File.Exists(primaryPath))
         {
-            try
-            {
-                var json = File.ReadAllText(primaryPath);
-                if (!string.IsNullOrWhiteSpace(json))
-                {
-                    var s = JsonSerializer.Deserialize<AppSettings>(json);
-                    if (s != null) return s;
-                }
-            }
-            catch { }
+            var (settings, error) = TryRead(primaryPath);
+            if (settings != null)
+                return new SettingsLoadResult { Settings = settings, Source = SettingsLoadSource.Primary };
+
+            primaryCorrupt = true;
+            primaryError = error;
+            AppLog.Warn("Ayarlar dosyası okunamadı", $"{primaryPath}: {error}");
         }
 
         // 2. Try Backup settings file (.bak)
         if (!string.IsNullOrEmpty(backupPath) && File.Exists(backupPath))
         {
-            try
-            {
-                var json = File.ReadAllText(backupPath);
-                if (!string.IsNullOrWhiteSpace(json))
+            var (settings, _) = TryRead(backupPath);
+            if (settings != null)
+                return new SettingsLoadResult
                 {
-                    var s = JsonSerializer.Deserialize<AppSettings>(json);
-                    if (s != null) return s;
-                }
-            }
-            catch { }
+                    Settings = settings,
+                    Source = SettingsLoadSource.Backup,
+                    PrimaryCorrupt = primaryCorrupt,
+                    PrimaryError = primaryError
+                };
         }
 
         // 3. Try Legacy settings file (e.g. config.json)
         if (!string.IsNullOrEmpty(legacyPath) && File.Exists(legacyPath))
         {
-            try
-            {
-                var json = File.ReadAllText(legacyPath);
-                if (!string.IsNullOrWhiteSpace(json))
+            var (settings, _) = TryRead(legacyPath);
+            if (settings != null)
+                return new SettingsLoadResult
                 {
-                    var s = JsonSerializer.Deserialize<AppSettings>(json);
-                    if (s != null) return s;
-                }
-            }
-            catch { }
+                    Settings = settings,
+                    Source = SettingsLoadSource.Legacy,
+                    PrimaryCorrupt = primaryCorrupt,
+                    PrimaryError = primaryError
+                };
         }
 
         // 4. Default settings
-        return new AppSettings();
+        return new SettingsLoadResult
+        {
+            Settings = new AppSettings(),
+            Source = SettingsLoadSource.Defaults,
+            PrimaryCorrupt = primaryCorrupt,
+            PrimaryError = primaryError
+        };
+    }
+
+    /// <summary>Reads one settings file; returns null settings plus the reason when it cannot be used.</summary>
+    private static (AppSettings? Settings, string? Error) TryRead(string path)
+    {
+        try
+        {
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json)) return (null, "dosya boş");
+            var parsed = JsonSerializer.Deserialize<AppSettings>(json);
+            return parsed != null ? (parsed, null) : (null, "içerik okunamadı");
+        }
+        catch (Exception ex)
+        {
+            return (null, ex.Message);
+        }
     }
 
     public static void SaveSettingsAtomic(string filePath, AppSettings settings)

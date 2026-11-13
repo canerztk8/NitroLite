@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -46,6 +47,8 @@ public class ThermalHealthReport
     public bool HasLoadMeasurement { get; set; }
     /// <summary>True once an idle sample exists (now or in history).</summary>
     public bool HasIdleMeasurement { get; set; }
+    /// <summary>"yyyy-MM-dd" of the newest sustained-load sample, or null when none exists yet.</summary>
+    public string? LastLoadMeasurementDate { get; set; }
     /// <summary>Fan life rating the "bearing" percentage is based on (hours).</summary>
     public double FanRatedHours { get; set; } = 50000;
 }
@@ -328,6 +331,7 @@ public class ThermalHealthService
         double loadTemp;
         bool hasLoad;
         bool hasIdle;
+        string? lastLoadDate;
 
         lock (_syncLock)
         {
@@ -342,6 +346,10 @@ public class ThermalHealthService
             var lastIdleDay = _data.DailyHistory.LastOrDefault(d => d.AvgIdleCpuTemp > 0);
             hasLoad = _loadThermalRatios.Count > 0 || lastLoadDay != null;
             hasIdle = _idleCpuTemps.Count > 0 || lastIdleDay != null;
+            // A live sample is from today; otherwise the newest history entry is the last real measurement.
+            lastLoadDate = _loadThermalRatios.Count > 0
+                ? DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                : lastLoadDay?.Date;
 
             currentRatio = _loadThermalRatios.Count > 0
                 ? Math.Round(_loadThermalRatios.Average(), 2)
@@ -418,6 +426,7 @@ public class ThermalHealthService
                 : "Henüz yük altında ölçüm yok. Değerlendirme, işlemci bir süre yük altında (oyun, derleme vb.) çalıştıktan sonra oluşur.",
             HasLoadMeasurement = hasLoad,
             HasIdleMeasurement = hasIdle,
+            LastLoadMeasurementDate = lastLoadDate,
             FanRatedHours = 50000
         };
     }
@@ -430,6 +439,28 @@ public class ThermalHealthService
             _data.DailyHistory.AddRange(history);
         }
     }
+
+    /// <summary>
+    /// Combines the current-state recommendation with the multi-day trend. The paste-health verdict only
+    /// looks at today's resistance, so on its own it can say "bakım gerekmemektedir" while the trend card
+    /// right above it says "Bakım Önerilebilir".
+    /// </summary>
+    public static string BuildRecommendation(string currentStateRecommendation, ThermalStabilityTrend trend)
+    {
+        if (trend.DaysCount > 0 && trend.StatusLevel >= ThermalStatusLevel.Degraded)
+        {
+            return "Termal direnç son günlerde artış eğiliminde. Mevcut değer hâlâ kabul edilebilir sınırda olsa da " +
+                   "soğutma ızgaralarının temizliği ve termal arayüz kontrolü önerilir.";
+        }
+
+        return currentStateRecommendation;
+    }
+
+    /// <summary>Parses a "yyyy-MM-dd" history key; an unreadable key counts as the first day.</summary>
+    private static DateTime ParseDay(string date) =>
+        DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            ? parsed
+            : DateTime.MinValue;
 
     public ThermalStabilityTrend GetStabilityTrend(int days = 30)
     {
@@ -487,12 +518,20 @@ public class ThermalHealthService
             };
         }
 
-        // Ordinary Least Squares Linear Regression over N days
+        // Ordinary Least Squares Linear Regression over real calendar days. Using the sample index made the
+        // slope "per measurement" instead of "per day" whenever the app was closed between samples.
+        var xs = new double[n];
+        DateTime firstDay = ParseDay(entries[0].Date);
+        for (int i = 0; i < n; i++)
+        {
+            xs[i] = (ParseDay(entries[i].Date) - firstDay).TotalDays;
+        }
+
         double sumX = 0;
         double sumY = 0;
         for (int i = 0; i < n; i++)
         {
-            sumX += i;
+            sumX += xs[i];
             sumY += entries[i].ThermalResistanceRatio;
         }
 
@@ -505,7 +544,7 @@ public class ThermalHealthService
 
         for (int i = 0; i < n; i++)
         {
-            double diffX = i - meanX;
+            double diffX = xs[i] - meanX;
             double diffY = entries[i].ThermalResistanceRatio - meanY;
             numerator += diffX * diffY;
             denominator += diffX * diffX;

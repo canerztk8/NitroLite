@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,7 +13,7 @@ namespace NitroLite.Core;
 
 public class GameDetectionService : IDisposable
 {
-    private static readonly string ProfilesFile = AppPaths.GetDataFile("game_profiles.json");
+    private readonly string _profilesFile;
 
     private readonly List<GameProfile> _profiles = new();
     private readonly System.Threading.Timer _scanTimer;
@@ -21,6 +21,7 @@ public class GameDetectionService : IDisposable
     private GameProfile? _activeGameProfile;
     private int _activeProcessId = 0;
     private int _isScanning = 0;
+    public string? ProfileLoadError { get; private set; }
 
     private bool _autoGameModeEnabled = true;
 
@@ -107,19 +108,12 @@ public class GameDetectionService : IDisposable
     public event Action<GameProfile>? GameStarted;
     public event Action<GameProfile>? GameEnded;
 
-    public GameDetectionService()
-    {
-        LoadProfiles();
+    public GameDetectionService() : this(AppPaths.GetDataFile("game_profiles.json")) { }
 
-        // Move recursive filesystem game discovery to background task to guarantee instant UI startup
-        Task.Run(() =>
-        {
-            try
-            {
-                ScanAndAddInstalledGames();
-            }
-            catch { }
-        });
+    internal GameDetectionService(string profilesFile)
+    {
+        _profilesFile = profilesFile;
+        LoadProfiles();
 
         // Background high-performance thread timer (zero WPF UI thread blocking)
         _scanTimer = new System.Threading.Timer(OnScanTimerTick, null, TimeSpan.FromSeconds(2.0), TimeSpan.FromSeconds(2.0));
@@ -138,13 +132,55 @@ public class GameDetectionService : IDisposable
         }
     }
 
-    public GameProfile? GetProfile(string exeName)
+    /// <summary>
+    /// Looks a profile up by executable name. When <paramref name="installPath"/> is given only the exact
+    /// (exe, path) pair matches, so two games that both ship a "Game.exe" stay separate.
+    /// </summary>
+    public GameProfile? GetProfile(string exeName, string? installPath = null)
     {
         var clean = Path.GetFileNameWithoutExtension(exeName).Trim();
         lock (_profiles)
         {
+            if (!string.IsNullOrWhiteSpace(installPath))
+            {
+                return _profiles.FirstOrDefault(p =>
+                    p.ExeName.Equals(clean, StringComparison.OrdinalIgnoreCase) && PathsEqual(p.InstallPath, installPath));
+            }
             return _profiles.FirstOrDefault(p => p.ExeName.Equals(clean, StringComparison.OrdinalIgnoreCase));
         }
+    }
+
+    /// <summary>Compares two install paths, tolerating a missing or malformed one.</summary>
+    private static bool PathsEqual(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Finds the profile a save should update. A known install path is part of the identity; a profile that has
+    /// no path yet adopts the incoming one instead of turning into a duplicate.
+    /// </summary>
+    private GameProfile? FindExistingProfile(string cleanExe, string? installPath)
+    {
+        if (!string.IsNullOrWhiteSpace(installPath))
+        {
+            var exact = _profiles.FirstOrDefault(p =>
+                p.ExeName.Equals(cleanExe, StringComparison.OrdinalIgnoreCase) && PathsEqual(p.InstallPath, installPath));
+            if (exact != null) return exact;
+
+            return _profiles.FirstOrDefault(p =>
+                p.ExeName.Equals(cleanExe, StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(p.InstallPath));
+        }
+
+        return _profiles.FirstOrDefault(p => p.ExeName.Equals(cleanExe, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Adds or updates a profile. Returns false if it could not be written to disk.</summary>
@@ -152,6 +188,7 @@ public class GameDetectionService : IDisposable
     {
         lock (_profiles)
         {
+            if (ProfileLoadError != null) return false;
             var cleanExe = Path.GetFileNameWithoutExtension(profile.ExeName).Trim();
             profile.ExeName = cleanExe;
 
@@ -160,7 +197,7 @@ public class GameDetectionService : IDisposable
                 profile.DisplayName = cleanExe;
             }
 
-            var existing = _profiles.FirstOrDefault(p => p.ExeName.Equals(cleanExe, StringComparison.OrdinalIgnoreCase));
+            var existing = FindExistingProfile(cleanExe, profile.InstallPath);
             if (existing != null)
             {
                 existing.DisplayName = profile.DisplayName;
@@ -179,17 +216,18 @@ public class GameDetectionService : IDisposable
         }
     }
 
-    public bool DeleteProfile(string exeName)
+    public bool DeleteProfile(string exeName, string? installPath = null)
     {
         lock (_profiles)
         {
             var clean = Path.GetFileNameWithoutExtension(exeName).Trim();
-            var item = _profiles.FirstOrDefault(p => p.ExeName.Equals(clean, StringComparison.OrdinalIgnoreCase));
+            var item = FindExistingProfile(clean, installPath);
             if (item != null)
             {
-                _profiles.Remove(item);
-                PersistProfiles();
-                return true;
+                int index = _profiles.IndexOf(item);
+                _profiles.RemoveAt(index);
+                if (PersistProfiles()) return true;
+                _profiles.Insert(index, item);
             }
             return false;
         }
@@ -260,8 +298,23 @@ public class GameDetectionService : IDisposable
         "conhost", "cmd", "powershell", "pwsh", "windowsterminal", "notepad", "mspaint",
         "chrome", "msedge", "firefox", "opera", "brave", "discord", "spotify", "teams", "ms-teams", "slack",
         "steam", "steamwebhelper", "epicgameslauncher", "battle.net", "eadesktop", "ubisoftconnect", "galaxyclient",
-        "code", "devenv", "nitrolite", "nitrosense", "obs64", "onedrive"
+        "code", "devenv", "nitrolite", "nitrosense", "obs64", "onedrive",
+        // Background tools that ship inside game libraries (Steam "common" folders) and stay running:
+        // a Turbo profile for one of them would pin the machine to Turbo on the desktop.
+        "wallpaper32", "wallpaper64", "ui32", "ui64", "vrmonitor", "vrserver", "vrcompositor", "vrwebhelper",
+        "losslessscaling", "rtss", "rtsshooksloader64", "msiafterburner", "nvcontainer", "gamebar", "xboxgamebar",
+        "medal", "overwolf", "obs32", "voicemod", "armourycrate", "icue", "signalrgb", "openrgb", "hwinfo64"
     };
+
+    /// <summary>
+    /// True for programs that are always running and must never get a game profile: a profile for one of
+    /// them would keep the machine in game mode permanently. Accepts a bare name or a file name with ".exe".
+    /// </summary>
+    public static bool IsNonGameExecutable(string? exeName)
+    {
+        if (string.IsNullOrWhiteSpace(exeName)) return false;
+        return NonGameExecutables.Contains(Path.GetFileNameWithoutExtension(exeName));
+    }
 
     /// <summary>
     /// Checks a user-picked file before it becomes a game profile. Returns an error message, or null if it is fine.
@@ -274,7 +327,7 @@ public class GameDetectionService : IDisposable
             return "Yalnızca .exe dosyaları oyun olarak eklenebilir.";
 
         var name = Path.GetFileNameWithoutExtension(path);
-        if (NonGameExecutables.Contains(name))
+        if (IsNonGameExecutable(name))
             return $"'{name}.exe' bir oyun değil ve sürekli çalıştığı için oyun modunu kalıcı olarak açık tutar.";
 
         try
@@ -414,102 +467,238 @@ public class GameDetectionService : IDisposable
         return 3;
     }
 
-    public int ScanAndAddInstalledGames()
+    /// <summary>
+    /// Every directory that may hold one game: Steam library "common" folders, Epic install locations and the
+    /// usual per-drive game folders. Discovered from the registry and the launchers' own manifests instead of a
+    /// hardcoded list, so a library on E: or a non-default Steam install is found too.
+    /// </summary>
+    private static List<string> CollectGameDirectories()
     {
-        int addedCount = 0;
-        var searchRoots = new List<string>
-        {
-            @"C:\Program Files (x86)\Steam\steamapps\common",
-            @"D:\SteamLibrary\steamapps\common",
-            @"D:\Games",
-            @"C:\Riot Games",
-            @"C:\Program Files\Epic Games",
-            @"C:\Games"
-        };
+        var roots = new List<string>();
+        var direct = new List<string>();
 
-        // Also check if Steam has other libraries via libraryfolders.vdf
-        try
+        static void Add(List<string> list, string? path)
         {
-            var vdfPath = @"C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf";
-            if (File.Exists(vdfPath))
+            if (string.IsNullOrWhiteSpace(path)) return;
+            string full;
+            try { full = Path.GetFullPath(path); } catch { return; }
+            if (!Directory.Exists(full)) return;
+            if (!list.Contains(full, StringComparer.OrdinalIgnoreCase)) list.Add(full);
+        }
+
+        foreach (var common in GetSteamLibraryCommonFolders()) Add(roots, common);
+        foreach (var install in GetEpicInstallLocations()) Add(direct, install);
+
+        foreach (var drive in GetFixedDriveRoots())
+        {
+            Add(roots, Path.Combine(drive, "Games"));
+            Add(roots, Path.Combine(drive, "SteamLibrary", "steamapps", "common"));
+            Add(roots, Path.Combine(drive, "Epic Games"));
+        }
+        Add(roots, @"C:\Riot Games");
+        Add(roots, @"C:\Program Files\Epic Games");
+
+        var gameDirs = new List<string>(direct);
+        var options = new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+        };
+        foreach (var root in roots)
+        {
+            try
             {
-                var content = File.ReadAllText(vdfPath);
-                var matches = Regex.Matches(content, @"""path""\s+""([^""]+)""");
-                foreach (Match m in matches)
+                foreach (var dir in Directory.GetDirectories(root, "*", options))
                 {
-                    var p = m.Groups[1].Value.Replace(@"\\", @"\");
-                    var common = Path.Combine(p, "steamapps", "common");
-                    if (Directory.Exists(common) && !searchRoots.Contains(common, StringComparer.OrdinalIgnoreCase))
-                    {
-                        searchRoots.Add(common);
-                    }
+                    if (!gameDirs.Contains(dir, StringComparer.OrdinalIgnoreCase)) gameDirs.Add(dir);
                 }
             }
+            catch { }
+        }
+
+        return gameDirs;
+    }
+
+    /// <summary>Steam install roots from the registry, with the classic paths as a fallback.</summary>
+    private static List<string> GetSteamRoots()
+    {
+        var roots = new List<string>();
+
+        void Add(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            var trimmed = path.Trim().Trim('"');
+            if (trimmed.Length == 0) return;
+            if (!roots.Contains(trimmed, StringComparer.OrdinalIgnoreCase)) roots.Add(trimmed);
+        }
+
+        try
+        {
+            using var hkcu = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            Add(hkcu?.GetValue("SteamPath") as string);
+        }
+        catch { }
+        try
+        {
+            using var hklm = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Valve\Steam");
+            Add(hklm?.GetValue("InstallPath") as string);
+        }
+        catch { }
+        try
+        {
+            using var hklm = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Valve\Steam");
+            Add(hklm?.GetValue("InstallPath") as string);
         }
         catch { }
 
-        // Scan folders
-        foreach (var root in searchRoots)
+        Add(@"C:\Program Files (x86)\Steam");
+        Add(@"C:\Program Files\Steam");
+        return roots;
+    }
+
+    /// <summary>Every "steamapps\common" folder Steam knows about, including extra library drives.</summary>
+    private static List<string> GetSteamLibraryCommonFolders()
+    {
+        var result = new List<string>();
+        foreach (var root in GetSteamRoots())
         {
-            if (!Directory.Exists(root)) continue;
+            var vdf = Path.Combine(root, "steamapps", "libraryfolders.vdf");
+            string content;
+            try
+            {
+                if (!File.Exists(vdf)) continue;
+                content = File.ReadAllText(vdf);
+            }
+            catch { continue; }
+
+            // Newer Steam writes "path" "D:\SteamLibrary"; older builds used the library index as the key.
+            foreach (Match m in Regex.Matches(content, @"""(?:path|\d+)""\s+""([^""]+)"""))
+            {
+                var library = m.Groups[1].Value.Replace(@"\\", @"\");
+                // App ids and sizes are also quoted number pairs; only real paths are worth probing.
+                if (!library.Contains(':') && !library.StartsWith('/')) continue;
+                var common = Path.Combine(library, "steamapps", "common");
+                if (Directory.Exists(common) && !result.Contains(common, StringComparer.OrdinalIgnoreCase))
+                    result.Add(common);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Install locations from the Epic Games Launcher manifests (*.item).</summary>
+    private static List<string> GetEpicInstallLocations()
+    {
+        var result = new List<string>();
+        var manifests = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "Epic", "EpicGamesLauncher", "Data", "Manifests");
+        if (!Directory.Exists(manifests)) return result;
+
+        string[] files;
+        try { files = Directory.GetFiles(manifests, "*.item"); }
+        catch { return result; }
+
+        foreach (var file in files)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(file));
+                if (!doc.RootElement.TryGetProperty("InstallLocation", out var element)) continue;
+                var location = element.GetString();
+                if (string.IsNullOrWhiteSpace(location)) continue;
+                if (Directory.Exists(location) && !result.Contains(location, StringComparer.OrdinalIgnoreCase))
+                    result.Add(location);
+            }
+            catch { }
+        }
+        return result;
+    }
+
+    /// <summary>Roots of the fixed drives, so a game library on any drive is scanned.</summary>
+    private static List<string> GetFixedDriveRoots()
+    {
+        var result = new List<string>();
+        DriveInfo[] drives;
+        try { drives = DriveInfo.GetDrives(); }
+        catch { return result; }
+
+        foreach (var drive in drives)
+        {
+            try
+            {
+                if (drive.DriveType != DriveType.Fixed || !drive.IsReady) continue;
+                result.Add(drive.RootDirectory.FullName);
+            }
+            catch { }
+        }
+        return result;
+    }
+
+    public int ScanAndAddInstalledGames()
+    {
+        if (ProfileLoadError != null) return 0;
+        int addedCount = 0;
+        // Scan folders
+        foreach (var dir in CollectGameDirectories())
+        {
+            var dirName = Path.GetFileName(dir);
+            if (dirName.Equals("Steamworks Shared", StringComparison.OrdinalIgnoreCase) ||
+                dirName.Equals("Steam Controller Configs", StringComparison.OrdinalIgnoreCase) ||
+                dirName.Equals("DirectX", StringComparison.OrdinalIgnoreCase))
+                continue;
 
             try
             {
-                var subDirs = Directory.GetDirectories(root);
-                foreach (var dir in subDirs)
+                var allExes = Directory.GetFiles(dir, "*.exe", new EnumerationOptions
                 {
-                    var dirName = Path.GetFileName(dir);
-                    if (dirName.Equals("Steamworks Shared", StringComparison.OrdinalIgnoreCase) ||
-                        dirName.Equals("Steam Controller Configs", StringComparison.OrdinalIgnoreCase) ||
-                        dirName.Equals("DirectX", StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    RecurseSubdirectories = true,
+                    // One unreadable subfolder must not hide the whole game.
+                    IgnoreInaccessible = true,
+                    AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+                });
+                var validCandidates = new List<string>();
 
+                foreach (var exe in allExes)
+                {
                     try
                     {
-                        var allExes = Directory.GetFiles(dir, "*.exe", SearchOption.AllDirectories);
-                        var validCandidates = new List<string>();
-
-                        foreach (var exe in allExes)
-                        {
-                            try
-                            {
-                                var fi = new FileInfo(exe);
-                                if (fi.Length < 1024 * 1024) continue; // Skip small helper stubs (< 1MB)
-                                var name = Path.GetFileNameWithoutExtension(exe);
-                                if (IsJunkOrHelperExecutable(name, exe)) continue;
-                                validCandidates.Add(exe);
-                            }
-                            catch { }
-                        }
-
-                        if (validCandidates.Count > 0)
-                        {
-                            // Pick the single authoritative canonical executable for this game directory
-                            var bestExe = PickBestGameExecutable(dirName, validCandidates);
-                            var bestName = Path.GetFileNameWithoutExtension(bestExe);
-                            var friendlyName = CleanGameDisplayName(dirName, bestName);
-
-                            lock (_profiles)
-                            {
-                                if (!_profiles.Any(p => p.ExeName.Equals(bestName, StringComparison.OrdinalIgnoreCase) ||
-                                                        p.DisplayName.Equals(friendlyName, StringComparison.OrdinalIgnoreCase)))
-                                {
-                                    _profiles.Add(new GameProfile
-                                    {
-                                        ExeName = bestName,
-                                        DisplayName = friendlyName,
-                                        TargetMode = OperatingMode.Turbo,
-                                        TargetCpuBoost = DetermineOptimalCpuBoost(bestName),
-                                        TargetFanMode = FanMode.Auto,
-                                        InstallPath = bestExe,
-                                        AutoApply = true
-                                    });
-                                    addedCount++;
-                                }
-                            }
-                        }
+                        var fi = new FileInfo(exe);
+                        if (fi.Length < 1024 * 1024) continue; // Skip small helper stubs (< 1MB)
+                        var name = Path.GetFileNameWithoutExtension(exe);
+                        if (IsJunkOrHelperExecutable(name, exe)) continue;
+                        // Same rule as the manual picker: a program that is always running would keep
+                        // the machine in game mode permanently.
+                        if (IsNonGameExecutable(name)) continue;
+                        validCandidates.Add(exe);
                     }
                     catch { }
+                }
+
+                if (validCandidates.Count > 0)
+                {
+                    // Pick the single authoritative canonical executable for this game directory
+                    var bestExe = PickBestGameExecutable(dirName, validCandidates);
+                    var bestName = Path.GetFileNameWithoutExtension(bestExe);
+                    var friendlyName = CleanGameDisplayName(dirName, bestName);
+
+                    lock (_profiles)
+                    {
+                        if (!_profiles.Any(p => p.ExeName.Equals(bestName, StringComparison.OrdinalIgnoreCase) ||
+                                                p.DisplayName.Equals(friendlyName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            _profiles.Add(new GameProfile
+                            {
+                                ExeName = bestName,
+                                DisplayName = friendlyName,
+                                TargetMode = OperatingMode.Turbo,
+                                TargetCpuBoost = DetermineOptimalCpuBoost(bestName),
+                                TargetFanMode = FanMode.Auto,
+                                InstallPath = bestExe,
+                                AutoApply = true
+                            });
+                            addedCount++;
+                        }
+                    }
                 }
             }
             catch { }
@@ -640,6 +829,10 @@ public class GameDetectionService : IDisposable
                     {
                         var name = p.ProcessName;
                         var cleanName = Path.GetFileNameWithoutExtension(name);
+                        // A profile for a program that is always running (OBS, Steam, a browser) would pin the
+                        // machine to game mode permanently. The scan and the manual picker already refuse these,
+                        // but a profile saved by an older version can still be in game_profiles.json.
+                        if (IsNonGameExecutable(cleanName)) continue;
                         var match = _profiles.FirstOrDefault(prof => 
                             prof.AutoApply && (
                                 prof.ExeName.Equals(name, StringComparison.OrdinalIgnoreCase) ||
@@ -709,19 +902,24 @@ public class GameDetectionService : IDisposable
             _profiles.Clear();
             try
             {
-                if (File.Exists(ProfilesFile))
+                var json = File.ReadAllText(_profilesFile);
+                var list = JsonSerializer.Deserialize<List<GameProfile>>(json);
+                if (list != null && list.All(p => p != null && !string.IsNullOrWhiteSpace(p.ExeName)))
                 {
-                    var json = File.ReadAllText(ProfilesFile);
-                    var list = JsonSerializer.Deserialize<List<GameProfile>>(json);
-                    if (list != null && list.Count > 0)
-                    {
-                        // Load user profiles as-is; never prune them silently on startup.
-                        _profiles.AddRange(list);
-                        return;
-                    }
+                    _profiles.AddRange(list);
+                    return;
                 }
+                throw new JsonException("Geçersiz oyun profili listesi.");
             }
-            catch { }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (Exception ex)
+            {
+                ProfileLoadError = $"Oyun profilleri okunamadı: {ex.Message}";
+                AppLog.Warn("Oyun profilleri okunamadı", $"{_profilesFile}: {ex}");
+                App.WriteLog("Oyun profili dosyası", ex.Message);
+                return;
+            }
 
             // Default fallback popular game profiles
             AddDefaultProfiles();
@@ -824,17 +1022,26 @@ public class GameDetectionService : IDisposable
 
     private bool PersistProfiles()
     {
-        try
+        lock (_profiles)
         {
-            var json = JsonSerializer.Serialize(_profiles, new JsonSerializerOptions { WriteIndented = true });
-            var tempFile = ProfilesFile + ".tmp";
-            File.WriteAllText(tempFile, json);
-            File.Move(tempFile, ProfilesFile, overwrite: true);
-            return true;
-        }
-        catch
-        {
-            return false;
+            if (ProfileLoadError != null) return false;
+            var tempFile = _profilesFile + ".tmp." + Guid.NewGuid().ToString("N");
+            try
+            {
+                var json = JsonSerializer.Serialize(_profiles, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(tempFile, json);
+                File.Move(tempFile, _profilesFile, overwrite: true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                App.WriteLog("Oyun profilleri kaydedilemedi", ex.Message);
+                return false;
+            }
+            finally
+            {
+                try { File.Delete(tempFile); } catch { }
+            }
         }
     }
 

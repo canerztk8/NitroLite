@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Management;
@@ -134,8 +134,10 @@ public class BatteryWatchdogService : IDisposable
         if (GetSystemPowerStatus(out var status))
         {
             info.IsPluggedIn = status.ACLineStatus == 1;
-            info.BatteryPercent = status.BatteryLifePercent <= 100 ? status.BatteryLifePercent : 0;
-            info.IsCharging = (status.BatteryFlag & 8) != 0;
+            // 255 is the "unknown" sentinel for both fields. Turning it into 0 % and "charging" reported a flat,
+            // charging battery whenever the status could not be read.
+            info.BatteryPercent = status.BatteryLifePercent <= 100 ? status.BatteryLifePercent : -1;
+            info.IsCharging = status.BatteryFlag != 255 && (status.BatteryFlag & 8) != 0;
             info.EstimatedRemainingMinutes = status.BatteryLifeTime > 0 ? status.BatteryLifeTime / 60 : -1;
             info.IsWatchdogActive = WatchdogEnabled;
             // Only meaningful while the 80 % limit is on: with it off, charging to 100 % is the user's choice.
@@ -195,35 +197,10 @@ public class BatteryWatchdogService : IDisposable
         }
         catch { }
 
-        // Battery temperature via ACPI ThermalZone or thermodynamic wattage model
-        try
-        {
-            using var tzSearcher = new ManagementObjectSearcher(
-                @"root\WMI",
-                "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature");
-            using var tzResults = tzSearcher.Get();
-            foreach (ManagementObject tz in tzResults)
-            {
-                using (tz)
-                {
-                    if (tz["CurrentTemperature"] != null)
-                    {
-                        // Tenths of Kelvin: (val - 2732) / 10.0
-                        double rawK = Convert.ToDouble(tz["CurrentTemperature"]);
-                        double c = (rawK - 2732.0) / 10.0;
-                        if (c >= 15.0 && c <= 85.0)
-                        {
-                            // ACPI thermal zone is not identified as the battery; do not publish it.
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        catch { }
-
         // No battery temperature sensor is exposed on this model: leave it unknown ("--") instead of the old
-        // wattage-based guess (28.5 °C + W × 0.08) that was shown in the component matrix.
+        // wattage-based guess (28.5 °C + W × 0.08) that was shown in the component matrix. The ACPI thermal-zone
+        // query that used to run here every 3 s was removed: its result was never published, and the WMI call is
+        // slow enough to matter in a loop this tight.
         return info;
     }
 
@@ -444,71 +421,81 @@ public class BatteryWatchdogService : IDisposable
     /// <summary>Starts the load. Returns false (nothing started) on AC power or when already at or below 80 %.</summary>
     public bool StartSafeDischarge()
     {
-        var info = UpdateStatus();
+        CancellationTokenSource cts;
         lock (_dischargeLock)
         {
+            if (_isDisposed) return false;
             if (_isDischarging) return true;
-
-            // Do not attempt discharge while connected to AC power, or when there is nothing to discharge.
-            if (info.IsPluggedIn || info.BatteryPercent <= 80) return false;
-
+            if (!GetSystemPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent is <= 80 or > 100)
+                return false;
             _isDischarging = true;
-            _dischargeCts?.Cancel();
-            _dischargeCts?.Dispose();
-            var cts = new CancellationTokenSource();
+            cts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
             _dischargeCts = cts;
-            var token = cts.Token;
-
-            Task.Run(async () =>
-            {
-                var workerCount = 2;
-                var workers = new Task[workerCount];
-
-                for (int i = 0; i < workerCount; i++)
-                {
-                    workers[i] = Task.Run(() =>
-                    {
-                        try
-                        {
-                            while (!token.IsCancellationRequested)
-                            {
-                                double d = 1.0001;
-                                for (int j = 0; j < 50000; j++)
-                                {
-                                    d = Math.Sin(d) * Math.Cos(d);
-                                }
-                                Thread.Sleep(5);
-                            }
-                        }
-                        catch (OperationCanceledException) { }
-                    }, token);
-                }
-
-                try
-                {
-                    while (!token.IsCancellationRequested)
-                    {
-                        var s = UpdateStatus();
-                        // Stop immediately if AC connected or discharge target (<= 80%) is reached
-                        if (s.IsPluggedIn || s.BatteryPercent <= 80)
-                        {
-                            StopSafeDischarge();
-                            if (!s.IsPluggedIn && s.BatteryPercent <= 80)
-                            {
-                                try { SystemSounds.Asterisk.Play(); } catch { }
-                                DischargeTargetReached?.Invoke();
-                            }
-                            break;
-                        }
-
-                        await Task.Delay(2000, token);
-                    }
-                }
-                catch (OperationCanceledException) { }
-            }, token);
         }
-        DischargeStateChanged?.Invoke(true);
+        try { DischargeStateChanged?.Invoke(true); }
+        finally { _ = RunDischargeAsync(cts); }
         return true;
+    }
+
+    private async Task RunDischargeAsync(CancellationTokenSource cts)
+    {
+        var token = cts.Token;
+        var workers = new Task[2];
+        for (int i = 0; i < workers.Length; i++)
+        {
+            workers[i] = Task.Run(() =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    double d = 1.0001;
+                    for (int j = 0; j < 50000; j++) d = Math.Sin(d) * Math.Cos(d);
+                    Thread.Sleep(5);
+                }
+            });
+        }
+
+        bool reachedTarget = false;
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                // This safety check needs only adapter and charge state. WMI telemetry must not block it.
+                if (!GetSystemPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent > 100)
+                    break;
+                if (power.BatteryLifePercent <= 80)
+                {
+                    reachedTarget = true;
+                    break;
+                }
+                await Task.Delay(500, token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally
+        {
+            cts.Cancel();
+            await Task.WhenAll(workers).ConfigureAwait(false);
+            bool notify;
+            lock (_dischargeLock)
+            {
+                notify = ReferenceEquals(_dischargeCts, cts);
+                if (notify)
+                {
+                    _dischargeCts = null;
+                    _isDischarging = false;
+                }
+                cts.Dispose();
+            }
+            if (notify)
+            {
+                DischargeStateChanged?.Invoke(false);
+                if (reachedTarget)
+                {
+                    try { SystemSounds.Asterisk.Play(); } catch { }
+                    DischargeTargetReached?.Invoke();
+                }
+            }
+        }
     }
 
     public void StopSafeDischarge()
@@ -520,11 +507,11 @@ public class BatteryWatchdogService : IDisposable
             try
             {
                 _dischargeCts?.Cancel();
+                _dischargeCts = null;
             }
             catch { }
         }
         DischargeStateChanged?.Invoke(false);
-        UpdateStatus();
     }
 
     public void Dispose()
@@ -545,8 +532,8 @@ public class BatteryWatchdogService : IDisposable
             try
             {
                 _dischargeCts?.Cancel();
-                _dischargeCts?.Dispose();
                 _dischargeCts = null;
+                _isDischarging = false;
             }
             catch { }
         }

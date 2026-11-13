@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -233,9 +233,10 @@ public class StorageHealthService
                         }
                         else
                         {
-                            // Unpartitioned or unmounted drive: 0 used, all space available
+                            // Unpartitioned or unmounted drive: nothing is used, so all of it is free. Reporting
+                            // 0 free made an empty disk look completely full.
                             usedBytes = 0;
-                            freeBytes = 0;
+                            freeBytes = totalBytes;
                         }
 
                         double totalGB = Math.Round(totalBytes / (1024.0 * 1024.0 * 1024.0), 1);
@@ -258,13 +259,11 @@ public class StorageHealthService
                             // "healthy" is shown as the status, the wear percentage stays unknown instead of a claimed 100 %.
                             estHealth = -1;
                         }
-                        else if (health == 1)
+                        else if (health == 1 || health == 2)
                         {
-                            estHealth = 70;
-                        }
-                        else if (health == 2)
-                        {
-                            estHealth = 30;
+                            // Windows only reports a status here, not a wear figure. Inventing 70 % / 30 % made a
+                            // guess look like a measurement; the status text below carries the real information.
+                            estHealth = -1;
                         }
                         else
                         {
@@ -340,6 +339,16 @@ public class StorageHealthService
                             int index = Convert.ToInt32(disk["Index"] ?? 0);
                             string model = disk["Model"]?.ToString() ?? $"Disk {index}";
                             long sizeBytes = Convert.ToInt64(disk["Size"] ?? 0);
+                            // Win32_DiskDrive reports the interface, not the media type: map it instead of
+                            // claiming every disk is NVMe.
+                            string interfaceType = disk["InterfaceType"]?.ToString() ?? string.Empty;
+                            string busType = interfaceType.ToUpperInvariant() switch
+                            {
+                                "SCSI" or "IDE" => "SATA",
+                                "USB" => "USB",
+                                "1394" => "FireWire",
+                                _ => "Bilinmiyor"
+                            };
 
                             // Dynamically map partition letters for this index
                             var resolvedLetters = new List<string>();
@@ -402,7 +411,7 @@ public class StorageHealthService
                                 DiskNumber = index,
                                 Model = model,
                                 DriveLetter = displayLetter,
-                                BusType = "NVMe",
+                                BusType = busType,
                                 TotalCapacityGB = totalGB,
                                 UsedCapacityGB = usedGB,
                                 FreeCapacityGB = freeGB,
@@ -439,7 +448,7 @@ public class StorageHealthService
                         DiskNumber = diskIndex,
                         Model = $"Sabit Sürücü ({driveLetter}:)",
                         DriveLetter = driveLetter,
-                        BusType = "SSD",
+                        BusType = "Bilinmiyor",
                         TotalCapacityGB = totalGB,
                         UsedCapacityGB = usedGB,
                         FreeCapacityGB = freeGB,

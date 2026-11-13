@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 
 namespace NitroLite.Core;
@@ -20,6 +20,9 @@ public class RgbProfileService
     private static readonly string PresetsFile = AppPaths.GetDataFile("rgb_presets.json");
     private readonly List<RgbPreset> _presets = new();
     private readonly object _presetsLock = new();
+
+    /// <summary>Set when the presets file existed but could not be read, so the UI can say so.</summary>
+    public string? LoadError { get; private set; }
 
     public RgbProfileService()
     {
@@ -83,17 +86,19 @@ public class RgbProfileService
         }
     }
 
+    /// <summary>Deletes a user preset. Returns false when it does not exist or could not be written to disk.</summary>
     public bool DeletePreset(string name)
     {
         lock (_presetsLock)
         {
             var item = _presets.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !p.IsBuiltIn);
-            if (item != null)
-            {
-                _presets.Remove(item);
-                Persist();
-                return true;
-            }
+            if (item == null) return false;
+
+            int index = _presets.IndexOf(item);
+            _presets.RemoveAt(index);
+            // A failed write would bring the preset back on the next start, so undo the removal and report it.
+            if (Persist()) return true;
+            _presets.Insert(index, item);
             return false;
         }
     }
@@ -235,7 +240,12 @@ public class RgbProfileService
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Custom presets are gone until the file is fixed; say so instead of pretending they loaded.
+                LoadError = $"RGB profil dosyası okunamadı ({ex.Message}); yalnızca fabrika profilleri yüklendi.";
+                AppLog.Warn("RGB profilleri okunamadı", $"{PresetsFile}: {ex}");
+            }
         }
     }
 
@@ -249,7 +259,7 @@ public class RgbProfileService
                 custom = _presets.Where(p => !p.IsBuiltIn).ToList();
             }
             var json = JsonSerializer.Serialize(custom, new JsonSerializerOptions { WriteIndented = true });
-            var tempFile = PresetsFile + ".tmp";
+            var tempFile = PresetsFile + ".tmp." + Guid.NewGuid().ToString("N");
             File.WriteAllText(tempFile, json);
             File.Move(tempFile, PresetsFile, overwrite: true);
             return true;

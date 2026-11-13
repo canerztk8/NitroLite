@@ -552,9 +552,11 @@ public class VerifiedDefectsRegressionTests
 
         Assert.NotNull(method);
 
-        // Call WriteAndReadPacket with an invalid device path; should return null cleanly
-        var result = method.Invoke(service, new object[] { $@"\\.\NonExistentDevice_{Guid.NewGuid():N}", packet, (byte)14 });
+        var arguments = new object[] { $@"\\.\NonExistentDevice_{Guid.NewGuid():N}", packet,
+            AtkMouseService.CMD_GET_CURRENT_CONFIG, AtkMouseResult.Confirmed };
+        var result = method.Invoke(service, arguments);
         Assert.Null(result);
+        Assert.Equal(AtkMouseResult.CommunicationError, arguments[3]);
     }
 
     [Theory]

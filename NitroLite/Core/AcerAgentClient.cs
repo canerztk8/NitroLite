@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -71,7 +72,8 @@ public class AcerAgentClient : IDisposable
         try { _client?.Dispose(); } catch { }
         _stream = null;
         _client = null;
-        _pending.SetLength(0);
+        // Dispose() may already have released the buffer; clearing it then would throw.
+        try { _pending.SetLength(0); } catch (ObjectDisposedException) { }
     }
 
     public virtual async Task<bool> EnsureConnectedAsync()
@@ -89,8 +91,14 @@ public class AcerAgentClient : IDisposable
 
     private async Task<bool> EnsureConnectedInternalAsync()
     {
+        if (IsDisposed) return false;
+
         if (_client != null && _client.Connected && _stream != null)
             return true;
+
+        // AASSvc is often absent (not installed, stopped, or still starting). Retrying on every telemetry tick
+        // stalled each request for the full connect timeout, so back off exponentially between attempts.
+        if (DateTime.UtcNow < _nextConnectAttemptUtc) return false;
 
         Disconnect();
 
@@ -105,16 +113,40 @@ public class AcerAgentClient : IDisposable
             var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" }, "VERSION");
             if (!IsSuccessResult(initResp))
             {
+                AppLog.Warn("AcerAgentService el sıkışması reddedildi", $"VERSION yanıtı: {initResp ?? "(boş)"}");
                 Disconnect();
+                RegisterConnectFailure();
                 return false;
             }
+
+            ResetConnectBackoff();
             return true;
         }
         catch
         {
             Disconnect();
+            RegisterConnectFailure();
             return false;
         }
+    }
+
+    /// <summary>Clears the reconnect backoff after a successful connect or a connection that was alive.</summary>
+    private void ResetConnectBackoff()
+    {
+        _consecutiveConnectFailures = 0;
+        _nextConnectAttemptUtc = DateTime.MinValue;
+    }
+
+    /// <summary>Grows the delay between connect attempts: 1, 2, 4, 8, 16, then 30 seconds.</summary>
+    private void RegisterConnectFailure()
+    {
+        _consecutiveConnectFailures = Math.Min(_consecutiveConnectFailures + 1, 10);
+        double seconds = Math.Min(MaxConnectBackoffSeconds, Math.Pow(2, _consecutiveConnectFailures - 1));
+        _nextConnectAttemptUtc = DateTime.UtcNow.AddSeconds(seconds);
+
+        // Only the first failure of a streak: AASSvc being absent is normal and must not fill the log.
+        if (_consecutiveConnectFailures == 1)
+            AppLog.Warn("AcerAgentService bağlantısı kurulamadı", $"{Host}:{Port} - yeniden deneme geri çekilmesiyle devam ediliyor.");
     }
 
     public const int MaxResponseSizeBytes = 1024 * 1024; // 1 MB upper bound to prevent unbounded memory allocation
@@ -295,7 +327,7 @@ public class AcerAgentClient : IDisposable
 
     private async Task<string?> SendRawAsync(uint packetId, object payload, string expectedRequest)
     {
-        if (_stream == null) return null;
+        if (IsDisposed || _stream == null) return null;
 
         try
         {
@@ -332,13 +364,16 @@ public class AcerAgentClient : IDisposable
                 int read = await _stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ioCts.Token);
                 if (read <= 0)
                 {
+                    // The connection was alive, so the next request should try to reconnect immediately.
                     Disconnect();
+                    ResetConnectBackoff();
                     return null;
                 }
 
                 if (_pending.Length + read > MaxResponseSizeBytes)
                 {
                     Disconnect();
+                    ResetConnectBackoff();
                     return null;
                 }
 
@@ -350,6 +385,7 @@ public class AcerAgentClient : IDisposable
         {
             // On timeout or I/O error, disconnect so late bytes cannot be mistaken for the next response.
             Disconnect();
+            ResetConnectBackoff();
             return null;
         }
     }
@@ -402,10 +438,7 @@ public class AcerAgentClient : IDisposable
             if (!await EnsureConnectedInternalAsync()) return null;
 
             var resp = await SendRawAsync(PacketGetMonitorData, new { }, "GET_MONITOR_DATA");
-            var dataNode = GetSuccessData(resp);
-            if (dataNode == null) return null;
-
-            return JsonSerializer.Deserialize<MonitorData>(dataNode.ToJsonString());
+            return ParseMonitorData(GetSuccessData(resp));
         }
         catch
         {
@@ -415,6 +448,55 @@ public class AcerAgentClient : IDisposable
         {
             _lock.Release();
         }
+    }
+
+    /// <summary>
+    /// Reads the monitor payload field by field. A single malformed or missing field used to make the whole
+    /// JsonSerializer.Deserialize call throw, which blanked every value on the monitoring page for that tick.
+    /// </summary>
+    public static MonitorData? ParseMonitorData(JsonNode? dataNode)
+    {
+        if (dataNode is not JsonObject obj) return null;
+
+        return new MonitorData
+        {
+            CpuTemperature = ReadInt(obj, "CPU_TEMPERATURE"),
+            GpuTemperature = ReadInt(obj, "GPU1_TEMPERATURE"),
+            SysTemperature = ReadInt(obj, "SYS1_TEMPERATURE"),
+            CpuFanSpeed = ReadInt(obj, "CPU_FANSPEED"),
+            GpuFanSpeed = ReadInt(obj, "GPU1_FANSPEED"),
+            SysFanSpeed = ReadInt(obj, "SYS1_FANSPEED"),
+            CpuUsage = ReadDouble(obj, "CPU_USAGE"),
+            GpuUsage = ReadDouble(obj, "GPU1_USAGE"),
+            RamUsage = ReadDouble(obj, "RAM_USAGE"),
+            RamTotalMB = ReadDouble(obj, "RAM_TOTAL"),
+            CpuFrequencyMHz = ReadDouble(obj, "CPU_FREQUENCY"),
+            GpuFrequencyMHz = ReadDouble(obj, "GPU1_FREQUENCY"),
+            CpuCores = ReadInt(obj, "CPU_CORE_AMOUNT")
+        };
+    }
+
+    private static int ReadInt(JsonObject obj, string name)
+    {
+        double value = ReadDouble(obj, name);
+        if (value <= 0) return 0;
+        return value >= int.MaxValue ? int.MaxValue : (int)Math.Round(value);
+    }
+
+    /// <summary>Reads one numeric field, accepting numbers and numeric strings; anything else counts as 0.</summary>
+    private static double ReadDouble(JsonObject obj, string name)
+    {
+        if (obj[name] is not JsonValue value) return 0;
+        try
+        {
+            if (value.TryGetValue<double>(out var number)) return double.IsFinite(number) ? number : 0;
+            if (value.TryGetValue<long>(out var integer)) return integer;
+            if (value.TryGetValue<string>(out var text) &&
+                double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                return double.IsFinite(parsed) ? parsed : 0;
+        }
+        catch { }
+        return 0;
     }
 
     /// <summary>Reads the operating mode. Returns null when the service is unreachable or rejects the query.</summary>
@@ -504,34 +586,6 @@ public class AcerAgentClient : IDisposable
         catch
         {
             return false;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    /// <summary>
-    /// SUPPORT_GPU_MODE: NitroSense only offers GPU mode switching when this returns data[0] == 1.
-    /// Returns true/false from the service, or null if the query failed.
-    /// </summary>
-    public virtual async Task<bool?> GetSupportGpuModeAsync()
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            if (!await EnsureConnectedInternalAsync()) return null;
-
-            var resp = await SendFunctionAsync(PacketInitialization, "SUPPORT_GPU_MODE");
-            if (GetSuccessData(resp) is JsonArray arr && arr.Count > 0)
-            {
-                return arr[0]?.GetValue<int>() == 1;
-            }
-            return null;
-        }
-        catch
-        {
-            return null;
         }
         finally
         {
@@ -635,6 +689,61 @@ public class AcerAgentClient : IDisposable
         {
             _lock.Release();
         }
+    }
+
+    /// <summary>
+    /// Asks the agent whether this machine has controllable keyboard lighting (packet 40). Returns null when the
+    /// agent does not answer or answers in an unexpected shape: an unknown capability must never disable the tab.
+    /// </summary>
+    public virtual async Task<bool?> GetLightingCapabilityAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+
+            var resp = await SendFunctionAsync(PacketGetLightingCapability, "LIGHTING_CAPABILITY");
+            var data = GetSuccessData(resp);
+            if (data == null) return null;
+
+            // Depending on the model the agent answers with a bare flag or a one-element array.
+            if (data is JsonArray arr) return arr.Count > 0 && arr[0] != null && ReadCapabilityFlag(arr[0]!);
+            return ReadCapabilityFlag(data);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>Reads a capability answer that may be a bool, 0/1, "true"/"1" or an object wrapping one of those.</summary>
+    private static bool ReadCapabilityFlag(JsonNode node)
+    {
+        try
+        {
+            if (node is JsonObject obj)
+            {
+                foreach (var key in new[] { "support", "supported", "capability", "value", "lighting", "result" })
+                {
+                    if (obj[key] is JsonNode inner) return ReadCapabilityFlag(inner);
+                }
+                return false;
+            }
+
+            if (node is JsonValue value)
+            {
+                if (value.TryGetValue<bool>(out var flag)) return flag;
+                if (value.TryGetValue<int>(out var number)) return number != 0;
+                if (value.TryGetValue<string>(out var text))
+                    return text == "1" || text.Equals("true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch { }
+        return false;
     }
 
     public async Task<LightingConfig?> GetLightingConfigAsync()
@@ -820,6 +929,12 @@ public class AcerAgentClient : IDisposable
     }
 
     private int _disposed;
+
+    private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+
+    private int _consecutiveConnectFailures;
+    private DateTime _nextConnectAttemptUtc = DateTime.MinValue;
+    private const double MaxConnectBackoffSeconds = 30;
 
     public void Dispose()
     {

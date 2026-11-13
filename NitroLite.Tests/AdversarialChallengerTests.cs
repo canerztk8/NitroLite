@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -350,8 +350,8 @@ public class AdversarialChallengerTests
     // =========================================================================
 
     [Theory]
-    [InlineData(0.0, false, "0 °C (Uyku / D3cold)")]
-    [InlineData(-10.0, false, "0 °C (Uyku / D3cold)")]
+    [InlineData(0.0, false, "-- °C")]
+    [InlineData(-10.0, false, "-- °C")]
     [InlineData(55.0, true, "0 °C (Uyku / D3cold)")]
     [InlineData(62.4, false, "62 °C")]
     public void TelemetryFormatter_GpuTemperature_FormatsD3coldSleepStateCleanly(
@@ -362,8 +362,8 @@ public class AdversarialChallengerTests
     }
 
     [Theory]
-    [InlineData(0.0, false, "0.0 W (D3cold)")]
-    [InlineData(-5.0, false, "0.0 W (D3cold)")]
+    [InlineData(0.0, false, "-- W")]
+    [InlineData(-5.0, false, "-- W")]
     [InlineData(75.0, true, "0.0 W (D3cold)")]
     [InlineData(85.3, false, "85.3 W")]
     public void TelemetryFormatter_GpuPower_FormatsD3coldSleepStateCleanly(

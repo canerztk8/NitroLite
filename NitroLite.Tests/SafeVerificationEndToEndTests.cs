@@ -57,6 +57,8 @@ public class SafeVerificationEndToEndTests
 
         public override Task<OperatingMode> GetOperatingModeAsync() => Task.FromResult(CurrentMode);
 
+        public override Task<OperatingMode?> TryGetOperatingModeAsync() => Task.FromResult<OperatingMode?>(CurrentMode);
+
         public override async Task<bool> SetOperatingModeAsync(OperatingMode mode)
         {
             ModeHistory.Add(mode);
@@ -1736,6 +1738,98 @@ function global:Disable-ScheduledTask {
         });
     }
 
+    [Fact]
+    public Task InterruptedGameRecovery_KeepsFailedFanAndRestoresBoostPerPowerSource() => RunInStaAsync(async () =>
+    {
+        var writes = new List<(CpuBoostMode Mode, bool Ac, bool Dc)>();
+        int modeCalls = 0, fanCalls = 0;
+        var agent = new TestAcerAgentClient
+        {
+            OnSetOperatingModeAsync = _ => { modeCalls++; return Task.FromResult(true); },
+            OnSetFanModeAsync = _ => Task.FromResult(++fanCalls > 1)
+        };
+        var cpu = new TestCpuPowerService
+        {
+            OnSetBoostModeAsync = (mode, ac, dc) => { writes.Add((mode, ac, dc)); return Task.FromResult(true); }
+        };
+        using var game = new GameDetectionService();
+        var window = new MainWindow(agent, cpu, game, new AtkMouseService(),
+            settings: new AppSettings(), isTestHarness: true);
+        var state = new GameSessionRecoveryState
+        {
+            IsActive = true,
+            SavedAcBoost = CpuBoostMode.Aggressive,
+            SavedDcBoost = CpuBoostMode.Disabled
+        };
+
+        Assert.False(await window.RestoreInterruptedGameAsync(state));
+        var pending = window.LoadGameSessionRecoveryState();
+        Assert.NotNull(pending);
+        Assert.True(pending.RestoreFan);
+        Assert.False(pending.RestoreMode);
+        Assert.Null(pending.SavedAcBoost);
+        Assert.Null(pending.SavedDcBoost);
+
+        Assert.True(await window.RestoreInterruptedGameAsync(pending));
+        Assert.Null(window.LoadGameSessionRecoveryState());
+        Assert.Equal(1, modeCalls);
+        Assert.Equal(2, fanCalls);
+        Assert.Equal(new[] { (CpuBoostMode.Aggressive, true, false), (CpuBoostMode.Disabled, false, true) }, writes);
+    });
+
+    [Fact]
+    public Task DesktopMouseProfile_RetriesWhenReceiverStartsResponding() => RunInStaAsync(async () =>
+    {
+        var profiles = new List<int>();
+        var window = new MainWindow(new TestAcerAgentClient(), new TestCpuPowerService(),
+            new GameDetectionService(), new AtkMouseService(),
+            settings: new AppSettings { AtkMouseIntegrationEnabled = true },
+            mouseProfileSwitcher: profile =>
+            {
+                profiles.Add(profile);
+                return profiles.Count > 1;
+            }, isTestHarness: true);
+
+        Assert.Equal(AtkMouseResult.NoResponse, await window.ApplyDesktopMouseProfileAsync(1));
+        await window.RetryPendingDesktopMouseProfileIfDueAsync(long.MaxValue);
+        await window.RetryPendingDesktopMouseProfileIfDueAsync(long.MaxValue);
+
+        Assert.Equal(new[] { 1, 1 }, profiles);
+    });
+
+    [Fact]
+    public Task DesktopMouseProfile_QueuedRetryYieldsToNewerSelection() => RunInStaAsync(async () =>
+    {
+        var profiles = new List<int>();
+        var window = new MainWindow(new TestAcerAgentClient(), new TestCpuPowerService(),
+            new GameDetectionService(), new AtkMouseService(),
+            settings: new AppSettings { AtkMouseIntegrationEnabled = true },
+            mouseProfileSwitcher: profile =>
+            {
+                profiles.Add(profile);
+                return profile == 2;
+            }, isTestHarness: true);
+
+        Assert.Equal(AtkMouseResult.NoResponse, await window.ApplyDesktopMouseProfileAsync(1));
+
+        await window.GameProfileTransitionLock.WaitAsync();
+        Task oldRetry;
+        Task<AtkMouseResult?> newRequest;
+        try
+        {
+            oldRetry = window.RetryPendingDesktopMouseProfileIfDueAsync(long.MaxValue);
+            newRequest = window.ApplyDesktopMouseProfileAsync(2);
+        }
+        finally
+        {
+            window.GameProfileTransitionLock.Release();
+        }
+
+        await oldRetry;
+        Assert.Equal(AtkMouseResult.Confirmed, await newRequest);
+        Assert.Equal(new[] { 1, 2 }, profiles);
+    });
+
     // Bug 3: Balanced DC mode AC reconnect fires event with Applied=true when no commands were sent.
     // Fix: when !_isDcEcoActive && !HasPendingAcRestore, all Applied flags must be false.
     [Fact]
@@ -2365,6 +2459,95 @@ function global:Disable-ScheduledTask {
             Assert.Equal(CpuBoostMode.Efficient, mockCpu.CurrentMode);
             Assert.Equal(FanMode.Auto, window.CurrentFanMode);
             Assert.False(window.PowerAutomation.IsDcEcoActive);
+        });
+    }
+
+    [Fact]
+    public void TestCase_OperatingMode_PersistsAndLoadsThroughSettingsManager()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), $"settings_mode_test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        string primaryPath = Path.Combine(tempDir, "settings.json");
+        try
+        {
+            var initial = new AppSettings
+            {
+                LastOperatingMode = OperatingMode.Extreme
+            };
+            SettingsManager.SaveSettingsAtomic(primaryPath, initial);
+            Assert.True(File.Exists(primaryPath));
+
+            var loaded = SettingsManager.LoadSettingsWithFallback(primaryPath);
+            Assert.Equal(OperatingMode.Extreme, loaded.LastOperatingMode);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task TestCase_StartupOperatingModeRestoration_OverridesEcBalancedDefault()
+    {
+        await RunInStaAsync(async () =>
+        {
+            // Device initially boots into Default (Balanced) as Acer EC does on cold boot/reboot
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings
+            {
+                LastOperatingMode = OperatingMode.Extreme
+            };
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.PowerStateProvider = () => (OnAc: true, BatteryPercent: 90);
+
+            // Run startup mode restoration
+            await window.RestoreStartupOperatingModeAsync();
+
+            // Hardware must have been switched to Extreme, UI updated, baseline synced
+            Assert.Equal(OperatingMode.Extreme, mockAgent.CurrentMode);
+            Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+            Assert.Equal(OperatingMode.Extreme, window.SavedModeBeforeGame);
+        });
+    }
+
+    [Fact]
+    public async Task TestCase_SetManualModeAsync_PersistsToAppSettings()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
+            var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
+            var gameService = new GameDetectionService();
+            var mouseService = new AtkMouseService();
+            var settings = new AppSettings();
+
+            var window = new MainWindow(
+                mockAgent,
+                mockCpu,
+                gameService,
+                mouseService,
+                settings: settings,
+                mouseProfileSwitcher: p => true,
+                isTestHarness: true);
+
+            window.PowerStateProvider = () => (OnAc: true, BatteryPercent: 100);
+
+            bool ok = await window.SetManualModeAsync(OperatingMode.Extreme);
+            Assert.True(ok);
+            Assert.Equal(OperatingMode.Extreme, window.CurrentMode);
+            Assert.Equal(OperatingMode.Extreme, window.CurrentAppSettings.LastOperatingMode);
         });
     }
 

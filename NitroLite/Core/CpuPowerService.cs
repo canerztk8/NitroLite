@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -14,7 +14,7 @@ public enum CpuBoostMode
     Efficient = 4    // Windows PerfBoostMode 4 "Efficient Aggressive": boost on, efficiency-biased; no fixed frequency cap
 }
 
-public class CpuPowerService
+public class CpuPowerService : IDisposable
 {
     private const string SubProcessorGuid = "54533251-82be-4824-96c1-47b60b740d00";
     private const string PerfBoostModeGuid = "be337238-0d82-4146-a960-4f3749d470c7";
@@ -444,6 +444,8 @@ public class CpuPowerService
         try
         {
             var val = (int)mode;
+            // Remember the AC value so a failed DC write can be rolled back instead of leaving the plan half-changed.
+            var previousAc = targetAc ? QueryBoostModeExact(true) : null;
 
             if (targetAc)
             {
@@ -458,6 +460,13 @@ public class CpuPowerService
             {
                 if (!RunPowerCfg($"/setdcvalueindex SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid} {val}"))
                 {
+                    // The AC value was already written: put it back so a failed call does not leave the plan
+                    // half-changed while the caller reports a plain failure.
+                    if (previousAc.HasValue)
+                    {
+                        RunPowerCfg($"/setacvalueindex SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid} {(int)previousAc.Value}");
+                        RunPowerCfg("/setactive SCHEME_CURRENT");
+                    }
                     UpdateCurrentModeAfterFailure(targetAc, targetDc);
                     return false;
                 }
@@ -538,5 +547,18 @@ public class CpuPowerService
         {
             p?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Releases a powercfg process that could not be killed on timeout. Without this the process outlives the app
+    /// and every later boost write stays blocked.
+    /// </summary>
+    public void Dispose()
+    {
+        var hanging = _hangingProcess;
+        _hangingProcess = null;
+        if (hanging == null) return;
+        try { if (!hanging.HasExited) hanging.Kill(entireProcessTree: true); } catch { }
+        try { hanging.Dispose(); } catch { }
     }
 }

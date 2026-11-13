@@ -1,10 +1,20 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
 namespace NitroLite.Core;
+
+internal enum AtkMouseResult
+{
+    Confirmed,
+    ReceiverNotFound,
+    NoResponse,
+    CommunicationError,
+    ProfileNotConfirmed,
+    Rejected
+}
 
 public class AtkMouseService
 {
@@ -19,6 +29,7 @@ public class AtkMouseService
     private const uint WAIT_TIMEOUT = 0x00000102;
     private const uint WAIT_FAILED = 0xFFFFFFFF;
     private const int ERROR_IO_PENDING = 997;
+    private const int ERROR_NO_MORE_ITEMS = 259;
     private const int ERROR_OPERATION_ABORTED = 995;
 
     // ATK Official Vendor ID (14139 in decimal).
@@ -48,9 +59,11 @@ public class AtkMouseService
     /// </summary>
     /// <param name="configNumber">1-indexed configuration number (1..4 corresponding to Config File 1..4)</param>
     /// <returns>True if the command was successfully written and accepted by mouse hardware, false otherwise.</returns>
-    public bool SwitchProfile(int configNumber)
+    public bool SwitchProfile(int configNumber) => ApplyProfile(configNumber) == AtkMouseResult.Confirmed;
+
+    internal AtkMouseResult ApplyProfile(int configNumber)
     {
-        if (configNumber < 1 || configNumber > 4) return false;
+        if (configNumber < 1 || configNumber > 4) return AtkMouseResult.Rejected;
 
         byte configIndex = (byte)(configNumber - 1); // 0=Config File1, 1=Config File2, 2=Config File3, 3=Config File4
 
@@ -60,43 +73,42 @@ public class AtkMouseService
             byte[] packet = BuildSetCurrentConfigPacket(configIndex);
 
             // Send strictly to ATK hardware (VID_373B) matching col05 endpoint and verify ACK
-            byte[]? ack = SendAndReceivePacket("vid_" + VID_ATK, "col05", packet, CMD_SET_CURRENT_CONFIG);
-            if (ack != null && ack.Length >= 7 && ack[1] == CMD_SET_CURRENT_CONFIG && ack[2] == 0)
+            byte[]? ack = SendAndReceivePacket("vid_" + VID_ATK, "col05", packet, CMD_SET_CURRENT_CONFIG, out var result);
+            if (ack != null)
             {
+                if (ack[2] != 0) return AtkMouseResult.Rejected;
                 CurrentActiveProfile = configNumber;
                 HasConfirmedProfile = true;
-                return true;
+                return AtkMouseResult.Confirmed;
             }
 
-            // An explicit negative acknowledgement is a failure. A missing acknowledgement
-            // is only successful if a separate read verifies the requested profile.
-            if (ack == null && QueryCurrentProfile() == configNumber)
-            {
-                CurrentActiveProfile = configNumber;
-                HasConfirmedProfile = true;
-                return true;
-            }
+            // A sent command with no acknowledgement may still have applied.
+            if (result != AtkMouseResult.NoResponse) return result;
+            int? current = QueryCurrentProfile(out var queryResult);
+            if (current == configNumber) return AtkMouseResult.Confirmed;
+            return current.HasValue ? AtkMouseResult.ProfileNotConfirmed : queryResult;
         }
         catch
         {
-            return false;
+            return AtkMouseResult.CommunicationError;
         }
-
-        return false;
     }
 
     /// <summary>
     /// Queries the currently active onboard configuration file from the ATK mouse hardware.
     /// </summary>
     /// <returns>1-indexed configuration number (1..4), or null if query fails.</returns>
-    public int? QueryCurrentProfile()
+    public int? QueryCurrentProfile() => QueryCurrentProfile(out _);
+
+    internal int? QueryCurrentProfile(out AtkMouseResult result)
     {
+        result = AtkMouseResult.CommunicationError;
         try
         {
             byte[] queryPacket = BuildGetCurrentConfigPacket();
             for (int attempt = 0; attempt < 3; attempt++)
             {
-                byte[]? response = SendAndReceivePacket("vid_" + VID_ATK, "col05", queryPacket, CMD_GET_CURRENT_CONFIG);
+                byte[]? response = SendAndReceivePacket("vid_" + VID_ATK, "col05", queryPacket, CMD_GET_CURRENT_CONFIG, out result);
                 if (response != null && response.Length >= 7 && response[1] == CMD_GET_CURRENT_CONFIG && response[2] == 0)
                 {
                     byte activeIdx = response[6];
@@ -108,10 +120,12 @@ public class AtkMouseService
                         return activeNumber;
                     }
                 }
+                if (response != null) result = AtkMouseResult.ProfileNotConfirmed;
+                if (result == AtkMouseResult.ReceiverNotFound) return null;
                 if (attempt < 2) Thread.Sleep(100);
             }
         }
-        catch { }
+        catch { result = AtkMouseResult.CommunicationError; }
 
         return null;
     }
@@ -225,15 +239,18 @@ public class AtkMouseService
         }
     }
 
-    private byte[]? SendAndReceivePacket(string vidMatch, string colMatch, byte[] packet, byte expectedCmdId)
+    private byte[]? SendAndReceivePacket(string vidMatch, string colMatch, byte[] packet, byte expectedCmdId, out AtkMouseResult result)
     {
         lock (_hardwareLock)
         {
             Guid hidGuid;
             HidD_GetHidGuid(out hidGuid);
 
+            result = AtkMouseResult.CommunicationError;
             IntPtr hDevInfo = SetupDiGetClassDevs(ref hidGuid, null, IntPtr.Zero, 0x10 | 0x02);
-            if (hDevInfo == IntPtr.Zero) return null;
+            if (hDevInfo == IntPtr.Zero || hDevInfo == new IntPtr(-1)) return null;
+            bool matched = false;
+            bool enumerationFailed = false;
 
             try
             {
@@ -244,12 +261,16 @@ public class AtkMouseService
                 {
                     uint reqSize = 0;
                     SetupDiGetDeviceInterfaceDetail(hDevInfo, ref ifData, IntPtr.Zero, 0, ref reqSize, IntPtr.Zero);
-                    if (reqSize == 0) continue;
+                    if (reqSize == 0)
+                    {
+                        enumerationFailed = true;
+                        continue;
+                    }
 
                     IntPtr detail = Marshal.AllocHGlobal((int)reqSize);
                     try
                     {
-                        Marshal.WriteInt32(detail, IntPtr.Size == 8 ? 8 : 5);
+                        Marshal.WriteInt32(detail, IntPtr.Size == 8 ? 8 : 6);
                         if (SetupDiGetDeviceInterfaceDetail(hDevInfo, ref ifData, detail, reqSize, ref reqSize, IntPtr.Zero))
                         {
                             IntPtr pPath = new IntPtr(detail.ToInt64() + 4);
@@ -258,16 +279,25 @@ public class AtkMouseService
                                 path.Contains(vidMatch, StringComparison.OrdinalIgnoreCase) &&
                                 path.Contains(colMatch, StringComparison.OrdinalIgnoreCase))
                             {
-                                var response = WriteAndReadPacket(path, packet, expectedCmdId);
-                                if (response != null) return response;
+                                matched = true;
+                                var response = WriteAndReadPacket(path, packet, expectedCmdId, out var deviceResult);
+                                if (response != null)
+                                {
+                                    result = AtkMouseResult.Confirmed;
+                                    return response;
+                                }
+                                if (deviceResult == AtkMouseResult.NoResponse) result = deviceResult;
                             }
                         }
+                        else enumerationFailed = true;
                     }
                     finally
                     {
                         Marshal.FreeHGlobal(detail);
                     }
                 }
+                if (!matched && !enumerationFailed && Marshal.GetLastWin32Error() == ERROR_NO_MORE_ITEMS)
+                    result = AtkMouseResult.ReceiverNotFound;
             }
             finally
             {
@@ -295,64 +325,12 @@ public class AtkMouseService
         {
             HidD_FlushQueue(handle);
 
-            // 1. Try native HidD_SetOutputReport
-            if (HidD_SetOutputReport(handle, packet, packet.Length))
-            {
-                return true;
-            }
+            // 1. Overlapped WriteFile first: the wait inside bounds it. HidD_SetOutputReport is a blocking IOCTL
+            //    with no timeout, so a wedged device could hang the caller forever.
+            if (TryOverlappedWrite(handle, packet)) return true;
 
-            // 2. Fallback to async Overlapped WriteFile
-            IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
-            if (hEvent == IntPtr.Zero) return false;
-
-            GCHandle packetHandle = GCHandle.Alloc(packet, GCHandleType.Pinned);
-            bool ioPending = false;
-            NativeOverlapped ov = new NativeOverlapped { EventHandle = hEvent };
-            try
-            {
-                uint written;
-                bool ok = WriteFile(handle, packet, (uint)packet.Length, out written, ref ov);
-                if (ok) return true;
-
-                int err = Marshal.GetLastWin32Error();
-                if (err == ERROR_IO_PENDING)
-                {
-                    ioPending = true;
-                    uint waitRes = WaitForSingleObject(hEvent, 500);
-                    if (waitRes == WAIT_OBJECT_0)
-                    {
-                        if (GetOverlappedResult(handle, ref ov, out written, false) && written > 0)
-                        {
-                            ioPending = false;
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-            }
-            finally
-            {
-                try
-                {
-                    if (ioPending)
-                    {
-                        CancelIoEx(handle, ref ov);
-                        // Per Microsoft CancelIoEx documentation: must wait for cancelled I/O to fully complete
-                        // so kernel driver releases the buffer and NativeOverlapped before handles/memory are freed.
-                        GetOverlappedResult(handle, ref ov, out _, true);
-                        ioPending = false;
-                    }
-                }
-                catch { }
-                finally
-                {
-                    CloseHandle(hEvent);
-                    if (packetHandle.IsAllocated)
-                    {
-                        packetHandle.Free();
-                    }
-                }
-            }
+            // 2. Last resort: the synchronous HID API. Some devices only accept this path, and it has no timeout.
+            return HidD_SetOutputReport(handle, packet, packet.Length);
         }
         catch
         {
@@ -362,13 +340,62 @@ public class AtkMouseService
         {
             handle.Close();
         }
-
-        return false;
     }
 
-    private byte[]? WriteAndReadPacket(string devicePath, byte[] packet, byte expectedCmdId)
+    /// <summary>Writes one report through an overlapped WriteFile, bounded by a 500 ms wait.</summary>
+    private static bool TryOverlappedWrite(SafeFileHandle handle, byte[] packet)
     {
-        SafeFileHandle handle = CreateFile(
+        IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
+        if (hEvent == IntPtr.Zero) return false;
+
+        GCHandle packetHandle = GCHandle.Alloc(packet, GCHandleType.Pinned);
+        bool ioPending = false;
+        NativeOverlapped ov = new NativeOverlapped { EventHandle = hEvent };
+        try
+        {
+            uint written;
+            bool ok = WriteFile(handle, packet, (uint)packet.Length, out written, ref ov);
+            if (ok) return true;
+
+            int err = Marshal.GetLastWin32Error();
+            if (err != ERROR_IO_PENDING) return false;
+
+            ioPending = true;
+            uint waitRes = WaitForSingleObject(hEvent, 500);
+            if (waitRes != WAIT_OBJECT_0) return false;
+
+            if (GetOverlappedResult(handle, ref ov, out written, false) && written > 0)
+            {
+                ioPending = false;
+                return true;
+            }
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (ioPending)
+                {
+                    CancelIoEx(handle, ref ov);
+                    // Per Microsoft CancelIoEx documentation: must wait for cancelled I/O to fully complete
+                    // so kernel driver releases the buffer and NativeOverlapped before handles/memory are freed.
+                    GetOverlappedResult(handle, ref ov, out _, true);
+                }
+            }
+            catch { }
+            finally
+            {
+                CloseHandle(hEvent);
+                if (packetHandle.IsAllocated) packetHandle.Free();
+            }
+        }
+    }
+
+    private byte[]? WriteAndReadPacket(string devicePath, byte[] packet, byte expectedCmdId, out AtkMouseResult result)
+    {
+        result = AtkMouseResult.CommunicationError;
+        using SafeFileHandle handle = CreateFile(
             devicePath,
             GENERIC_READ | GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -386,7 +413,12 @@ public class AtkMouseService
             return null;
         }
 
-        byte[] rxBuf = new byte[packet.Length];
+        // The device's own input report length, not the outgoing packet length: a longer report made ReadFile
+        // fail with ERROR_INVALID_PARAMETER and the mouse looked unresponsive.
+        int inputLength = GetInputReportLength(handle);
+        if (inputLength <= 0) inputLength = packet.Length;
+
+        byte[] rxBuf = new byte[inputLength];
         GCHandle rxBufHandle = GCHandle.Alloc(rxBuf, GCHandleType.Pinned);
         NativeOverlapped ov = new NativeOverlapped { EventHandle = hEvent };
         bool ioPending = false;
@@ -396,7 +428,7 @@ public class AtkMouseService
             HidD_FlushQueue(handle);
 
             uint readBytes = 0;
-            bool readOk = ReadFile(handle, rxBuf, (uint)packet.Length, out readBytes, ref ov);
+            bool readOk = ReadFile(handle, rxBuf, (uint)inputLength, out readBytes, ref ov);
             if (!readOk)
             {
                 int err = Marshal.GetLastWin32Error();
@@ -423,6 +455,7 @@ public class AtkMouseService
                 // Transmission failed; exit early. Finally block safely cancels and drains pending ReadFile.
                 return null;
             }
+            result = AtkMouseResult.NoResponse;
 
             // Wait for response packet
             if (ioPending)
@@ -441,8 +474,10 @@ public class AtkMouseService
                     else
                     {
                         ioPending = false;
+                        result = AtkMouseResult.CommunicationError;
                     }
                 }
+                else if (waitRes == WAIT_FAILED) result = AtkMouseResult.CommunicationError;
                 // If waitRes == WAIT_TIMEOUT or WAIT_FAILED, ioPending remains true to be canceled in finally
             }
             else if (readBytes > 0)
@@ -455,6 +490,7 @@ public class AtkMouseService
         }
         catch
         {
+            result = AtkMouseResult.CommunicationError;
             return null;
         }
         finally
@@ -488,7 +524,60 @@ public class AtkMouseService
         return null;
     }
 
+    /// <summary>Input report length the device declares, or 0 when its caps cannot be read.</summary>
+    private static int GetInputReportLength(SafeFileHandle handle)
+    {
+        if (!HidD_GetPreparsedData(handle, out IntPtr preparsed) || preparsed == IntPtr.Zero) return 0;
+        try
+        {
+            return HidP_GetCaps(preparsed, out HIDP_CAPS caps) == HIDP_STATUS_SUCCESS
+                ? caps.InputReportByteLength
+                : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+        finally
+        {
+            HidD_FreePreparsedData(preparsed);
+        }
+    }
+
     #region Win32 P/Invoke
+
+    private const int HIDP_STATUS_SUCCESS = 0x00110000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HIDP_CAPS
+    {
+        public ushort Usage;
+        public ushort UsagePage;
+        public ushort InputReportByteLength;
+        public ushort OutputReportByteLength;
+        public ushort FeatureReportByteLength;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 17)]
+        public ushort[] Reserved;
+        public ushort NumberLinkCollectionNodes;
+        public ushort NumberInputButtonCaps;
+        public ushort NumberInputValueCaps;
+        public ushort NumberInputDataIndices;
+        public ushort NumberOutputButtonCaps;
+        public ushort NumberOutputValueCaps;
+        public ushort NumberOutputDataIndices;
+        public ushort NumberFeatureButtonCaps;
+        public ushort NumberFeatureValueCaps;
+        public ushort NumberFeatureDataIndices;
+    }
+
+    [DllImport("hid.dll", SetLastError = true)]
+    private static extern bool HidD_GetPreparsedData(SafeFileHandle hidDeviceObject, out IntPtr preparsedData);
+
+    [DllImport("hid.dll", SetLastError = true)]
+    private static extern bool HidD_FreePreparsedData(IntPtr preparsedData);
+
+    [DllImport("hid.dll")]
+    private static extern int HidP_GetCaps(IntPtr preparsedData, out HIDP_CAPS capabilities);
 
     [DllImport("hid.dll", SetLastError = true)]
     private static extern void HidD_GetHidGuid(out Guid hidGuid);

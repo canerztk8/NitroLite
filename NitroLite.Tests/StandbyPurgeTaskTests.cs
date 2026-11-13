@@ -54,6 +54,8 @@ public class StandbyPurgeTaskTests : IDisposable
         File.Delete(Path.Combine(Bundled, "NitroLite.StandbyPurge.dll"));
         File.Delete(Path.Combine(Bundled, "NitroLite.StandbyPurge.runtimeconfig.json"));
         var task = Create(GoodTask);
+        Assert.Empty(task.BundledHelperFiles());
+        File.WriteAllText(Path.Combine(Bundled, StandbyPurgeTask.NativeHelperMarker), "Native AOT");
         Assert.Equal(new[] { StandbyPurgeTask.HelperExeName }, task.BundledHelperFiles());
 
         Directory.CreateDirectory(Installed);

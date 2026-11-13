@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using NitroLite.Core;
@@ -9,6 +10,24 @@ namespace NitroLite.Tests;
 
 public class GameDetectionServiceTests
 {
+    [Theory]
+    [InlineData("[]", false)]
+    [InlineData("{broken", true)]
+    public void ExistingEmptyOrInvalidProfileFileIsPreserved(string content, bool invalid)
+    {
+        string file = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, content);
+            using var service = new GameDetectionService(file);
+            Assert.Empty(service.GetProfiles());
+            Assert.Equal(invalid, service.ProfileLoadError != null);
+            if (invalid) Assert.False(service.SaveProfile(new GameProfile { ExeName = "sample" }));
+            Assert.Equal(content, File.ReadAllText(file));
+        }
+        finally { File.Delete(file); }
+    }
+
     [Fact]
     public void GameProfile_JsonSerialization_RoundtripsAllPropertiesAccurately()
     {
@@ -245,5 +264,31 @@ public class GameDetectionServiceTests
         var bfv = service.GetProfile("bfv");
         Assert.NotNull(bfv);
         Assert.Equal("Battlefield V", bfv.DisplayName);
+    }
+
+    [Theory]
+    [InlineData("obs64")]
+    [InlineData("obs64.exe")]
+    [InlineData("OBS64")]
+    [InlineData("steam")]
+    [InlineData("chrome.exe")]
+    [InlineData("discord")]
+    [InlineData("msiafterburner")]
+    public void IsNonGameExecutable_RejectsAlwaysRunningPrograms(string exeName)
+    {
+        // A profile for one of these would keep the machine in game mode permanently.
+        Assert.True(GameDetectionService.IsNonGameExecutable(exeName));
+    }
+
+    [Theory]
+    [InlineData("cs2")]
+    [InlineData("Cyberpunk2077.exe")]
+    [InlineData("b1-Win64-Shipping")]
+    [InlineData("Overlord")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void IsNonGameExecutable_AcceptsRealGamesAndEmptyInput(string? exeName)
+    {
+        Assert.False(GameDetectionService.IsNonGameExecutable(exeName));
     }
 }

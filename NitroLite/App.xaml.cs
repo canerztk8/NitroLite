@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Windows;
@@ -24,6 +24,48 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 0. Headless CLI Tool & Maintenance Commands (run without mutex or GUI)
+        if (e.Args != null && e.Args.Length > 0)
+        {
+            if (HasFlag(e.Args, "--purge-standby", "--standby-purge"))
+            {
+                Environment.Exit(MemoryCleanerService.PurgeStandbyDirect());
+                return;
+            }
+
+            // These change system state (service registrations, GPU mode, temp files), so they need an explicit
+            // --yes: a stray shortcut or script must not be able to run them silently.
+            if (HasFlag(e.Args, "--fix-lighting"))
+            {
+                Environment.Exit(RunCliTask("--fix-lighting", SystemToolsService.FixKeyboardLightingAsync, e.Args));
+                return;
+            }
+
+            if (HasFlag(e.Args, "--fix-services"))
+            {
+                Environment.Exit(RunCliTask("--fix-services", SystemToolsService.FixAcerServicesAsync, e.Args));
+                return;
+            }
+
+            if (HasFlag(e.Args, "--restore-mux"))
+            {
+                Environment.Exit(RunCliTask("--restore-mux", SystemToolsService.RestoreMuxSwitchAsync, e.Args));
+                return;
+            }
+
+            if (HasFlag(e.Args, "--optimize-pc"))
+            {
+                Environment.Exit(RunCliTask("--optimize-pc", SystemToolsService.OptimizePcAsync, e.Args));
+                return;
+            }
+
+            if (HasFlag(e.Args, "--restore-optimize"))
+            {
+                Environment.Exit(RunCliTask("--restore-optimize", SystemToolsService.RestoreOptimizePcAsync, e.Args));
+                return;
+            }
+        }
+
         var options = StartupOptions.Parse(e.Args);
 
         // 1. Single Instance Check via Mutex
@@ -154,23 +196,56 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private const long MaxLogBytes = 1024 * 1024;
+    /// <summary>
+    /// Appends to the log without ever throwing (handlers run during crashes). Shares one lock and one rotation
+    /// policy with <see cref="AppLog"/> so the two writers cannot interleave or rotate over each other.
+    /// </summary>
+    internal static void WriteLog(string title, string? details) => AppLog.Error(title, details);
+
+    private static bool HasFlag(string[] args, params string[] names) =>
+        args.Any(a => names.Any(n => a.Equals(n, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
-    /// Appends to the log without ever throwing (handlers run during crashes), rotating it at 1 MB.
+    /// Runs one maintenance command with a hard timeout. The old code called Wait(45000) and then .Result, which
+    /// blocked forever when the timeout expired instead of reporting it.
     /// </summary>
-    internal static void WriteLog(string title, string? details)
+    private static int RunCliTask(string command, Func<Task<ToolExecutionResult>> start, string[] args)
     {
+        if (!HasFlag(args, "--yes", "-y", "--force"))
+        {
+            Console.Error.WriteLine($"{command} sistem ayarlarını değiştirir. Onaylamak için --yes ekleyin:");
+            Console.Error.WriteLine($"  NitroLite.exe {command} --yes");
+            return 3;
+        }
+
+        Task<ToolExecutionResult> task;
         try
         {
-            var info = new FileInfo(LogFile);
-            if (info.Exists && info.Length > MaxLogBytes)
-            {
-                File.Move(LogFile, LogFile + ".old", overwrite: true);
-            }
-            File.AppendAllText(LogFile, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {title}:\n{details}\n\n");
+            task = start();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"{command} başlatılamadı: {ex.Message}");
+            return 1;
+        }
+
+        try
+        {
+            if (!task.Wait(45000))
+            {
+                Console.Error.WriteLine($"{command} 45 saniyede tamamlanmadı.");
+                return 2;
+            }
+        }
+        catch (AggregateException ex)
+        {
+            Console.Error.WriteLine($"{command} başarısız: {ex.GetBaseException().Message}");
+            return 1;
+        }
+
+        var result = task.Result;
+        if (!string.IsNullOrWhiteSpace(result.Message)) Console.Error.WriteLine(result.Message);
+        return result.Success ? 0 : 1;
     }
 
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)

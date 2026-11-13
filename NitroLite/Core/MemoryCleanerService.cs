@@ -95,6 +95,7 @@ public class MemoryCleanerService
     private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
     private const uint TOKEN_QUERY = 0x0008;
     private const int SE_PRIVILEGE_ENABLED = 0x00000002;
+    private const int ERROR_NOT_ALL_ASSIGNED = 1300;
 
     private DateTime _lastAutoCleanTime = DateTime.MinValue;
 
@@ -221,16 +222,36 @@ public class MemoryCleanerService
         var memAfter = new MEMORYSTATUSEX();
         GlobalMemoryStatusEx(memAfter);
 
-        // A purge moves standby pages to the free list; "available" counts both, so measure the free list.
-        double freedGb = listsBefore.HasValue && listsAfter.HasValue
-            ? listsAfter.Value.FreeGigabytes - listsBefore.Value.FreeGigabytes
-            : ((long)memAfter.ullAvailPhys - (long)memBefore.ullAvailPhys) / (1024.0 * 1024.0 * 1024.0);
+        // Standby list purge specifically flushes cached pages from the Windows Standby list.
+        // It cannot and does not free more than what existed in the standby list prior to the purge.
+        // Measuring general Free/Zero page count fluctuates wildly (e.g. 14 GB of already-zeroed RAM),
+        // giving false figures. We accurately measure how much the standby list actually decreased.
+        double freedGb = 0;
+        if (listsBefore.HasValue && listsAfter.HasValue)
+        {
+            double standbyDecreased = listsBefore.Value.StandbyGigabytes - listsAfter.Value.StandbyGigabytes;
+            double freeGained = listsAfter.Value.FreeGigabytes - listsBefore.Value.FreeGigabytes;
+
+            if (standbyDecreased > 0)
+            {
+                freedGb = Math.Min(standbyDecreased, listsBefore.Value.StandbyGigabytes);
+            }
+            else if (freeGained > 0 && listsBefore.Value.StandbyGigabytes > 0)
+            {
+                freedGb = Math.Min(freeGained, listsBefore.Value.StandbyGigabytes);
+            }
+        }
+        else if (listsBefore.HasValue && listsBefore.Value.StandbyGigabytes > 0)
+        {
+            freedGb = listsBefore.Value.StandbyGigabytes;
+        }
+
         result.FreedMegabytes = freedGb > 0 ? Math.Round(freedGb * 1024.0, 1) : 0;
         result.AvailableGigabytes = Math.Round(memAfter.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 2);
         return result;
     }
 
-    private static bool TryPurgeStandbyList()
+    public static int PurgeStandbyDirect()
     {
         try
         {
@@ -246,20 +267,26 @@ public class MemoryCleanerService
                             Luid = luid,
                             Attributes = SE_PRIVILEGE_ENABLED
                         };
-                        AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                        if (!AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero) ||
+                            Marshal.GetLastWin32Error() == ERROR_NOT_ALL_ASSIGNED)
+                        {
+                            return 2; // PrivilegeMissing
+                        }
                     }
+                    else return 2;
                 }
                 finally
                 {
                     CloseHandle(token);
                 }
             }
+            else return 2;
 
             GCHandle handle = GCHandle.Alloc(MemoryPurgeStandbyList, GCHandleType.Pinned);
             try
             {
                 uint status = NtSetSystemInformation(SystemMemoryListInformation, handle.AddrOfPinnedObject(), Marshal.SizeOf(typeof(int)));
-                return status == 0;
+                return status == 0 ? 0 : 3; // 0 = Purged, 3 = PurgeRefused
             }
             finally
             {
@@ -268,8 +295,10 @@ public class MemoryCleanerService
         }
         catch
         {
-            return false;
+            return 4; // UnexpectedError
         }
     }
+
+    private static bool TryPurgeStandbyList() => PurgeStandbyDirect() == 0;
 
 }

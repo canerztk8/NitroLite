@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Win32;
@@ -92,14 +92,28 @@ public partial class OsdOverlayWindow : Window
         base.OnClosing(e);
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        // Apply 64-bit safe click-through and non-activating window flags
+        base.OnSourceInitialized(e);
+        // The handle exists here and the window is not visible yet, so the overlay never takes focus from a
+        // full-screen game on its first Show().
+        ApplyOverlayStyles();
+    }
+
+    private void ApplyOverlayStyles()
+    {
+        // 64-bit safe click-through and non-activating window flags.
         var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
         IntPtr exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
         long newExStyle = exStyle.ToInt64() | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(newExStyle));
+    }
 
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Safety net: re-apply in case the style was reset, then position the window.
+        ApplyOverlayStyles();
         UpdatePosition();
     }
 
@@ -193,16 +207,16 @@ public partial class OsdOverlayWindow : Window
 
             // GPU & Sleep State Handling
             bool isGpuSleeping = data.GpuTemperature <= 0;
-            TxtOsdGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
-            TxtOsdGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping);
-            TxtOsdGpuFreq.Text = TelemetryFormatter.FormatGpuFrequency(data.GpuFrequencyMHz, isGpuSleeping);
-            TxtOsdVram.Text = TelemetryFormatter.FormatVramUsage(data.VramUsedMB, data.VramTotalMB, isGpuSleeping);
+            TxtOsdGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping, data.GpuMetricsAvailable);
+            TxtOsdGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping, data.GpuMetricsAvailable);
+            TxtOsdGpuFreq.Text = TelemetryFormatter.FormatGpuFrequency(data.GpuFrequencyMHz, isGpuSleeping, data.GpuMetricsAvailable);
+            TxtOsdVram.Text = TelemetryFormatter.FormatVramUsage(data.VramUsedMB, data.VramTotalMB, isGpuSleeping, data.GpuMetricsAvailable);
 
             // RAM & Fans
             if (data.RamTotalMB > 0)
             {
                 double ramUsedGB = (data.RamTotalMB * (data.RamUsage / 100.0)) / 1024.0;
-                TxtOsdRam.Text = $"{ramUsedGB:F1}GB";
+                TxtOsdRam.Text = FormattableString.Invariant($"{ramUsedGB:F1} GB");
             }
             else
             {

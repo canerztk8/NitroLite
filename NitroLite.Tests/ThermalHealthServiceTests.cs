@@ -295,4 +295,39 @@ public class ThermalHealthServiceTests
         Assert.Equal("-0.002 °C/W/gün", TelemetryFormatter.FormatThermalSlope(-0.002));
         Assert.Equal("%98.7", TelemetryFormatter.FormatStabilityScore(98.7));
     }
+
+    private const string NominalRecommendation =
+        "Termal direnç ve ısı transferi nominal tolerans sınırları içindedir. Bakım gerekmemektedir.";
+
+    [Theory]
+    [InlineData(ThermalStatusLevel.Degraded)]
+    [InlineData(ThermalStatusLevel.Critical)]
+    public void BuildRecommendation_DegradingTrend_DoesNotClaimNoMaintenanceNeeded(ThermalStatusLevel level)
+    {
+        var trend = new ThermalStabilityTrend { DaysCount = 5, StatusLevel = level };
+
+        string result = ThermalHealthService.BuildRecommendation(NominalRecommendation, trend);
+
+        Assert.DoesNotContain("Bakım gerekmemektedir", result);
+        Assert.Contains("artış eğiliminde", result);
+    }
+
+    [Theory]
+    [InlineData(ThermalStatusLevel.Excellent)]
+    [InlineData(ThermalStatusLevel.Good)]
+    public void BuildRecommendation_StableTrend_KeepsCurrentStateRecommendation(ThermalStatusLevel level)
+    {
+        var trend = new ThermalStabilityTrend { DaysCount = 5, StatusLevel = level };
+
+        Assert.Equal(NominalRecommendation, ThermalHealthService.BuildRecommendation(NominalRecommendation, trend));
+    }
+
+    [Fact]
+    public void BuildRecommendation_NoMeasuredDay_KeepsCurrentStateRecommendation()
+    {
+        // DaysCount == 0 means no sustained-load sample yet; the trend must not override the verdict.
+        var trend = new ThermalStabilityTrend { DaysCount = 0, StatusLevel = ThermalStatusLevel.Critical };
+
+        Assert.Equal(NominalRecommendation, ThermalHealthService.BuildRecommendation(NominalRecommendation, trend));
+    }
 }

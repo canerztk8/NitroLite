@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 using System.IO;
 using System.Media;
 using System.Text.Json;
@@ -74,7 +75,11 @@ public partial class MainWindow : Window
     private int _gameSessionGeneration = 0;
     private readonly SemaphoreSlim _gameProfileTransitionLock = new(1, 1);
 
-    public bool HasPendingDesktopRestore => _hasPendingDesktopRestore || _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore || _pendingMouseRestore || (_powerAutomationService?.HasPendingAcRestore == true);
+    private GameSessionRecoveryState? _interruptedGameRecovery;
+    private GameSessionRecoveryState? _activeGameRecovery;
+    private long _nextGameRecoveryAttempt;
+    private long _nextPanelRestoreAttempt;
+    public bool HasPendingDesktopRestore => _interruptedGameRecovery != null || _hasPendingDesktopRestore || _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore || _pendingMouseRestore || (_powerAutomationService?.HasPendingAcRestore == true);
     internal bool PendingModeRestore => _pendingModeRestore;
     internal bool PendingCpuBoostRestore => _pendingCpuBoostRestore;
     internal bool PendingFanRestore => _pendingFanRestore;
@@ -86,6 +91,7 @@ public partial class MainWindow : Window
     internal bool HasGameBaselineCaptured => _hasGameBaselineCaptured;
     internal FanMode CurrentFanMode => _currentFanMode;
     internal OperatingMode CurrentMode => _currentMode;
+    internal AppSettings CurrentAppSettings => _appSettings;
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
     internal bool IsGameSessionActive => _isGameSessionActive;
     internal int GameSessionGeneration => _gameSessionGeneration;
@@ -520,33 +526,21 @@ public partial class MainWindow : Window
             var recovery = LoadGameSessionRecoveryState();
             if (recovery != null && recovery.IsActive)
             {
-                try
-                {
-                    _currentMode = recovery.SavedMode;
-                    await _agentClient.SetOperatingModeAsync(recovery.SavedMode);
-                    await _cpuPowerService.SetBoostModeAsync(recovery.SavedBoost);
-                    await _agentClient.SetFanModeAsync(recovery.SavedFan);
-                    if (_appSettings.AtkMouseIntegrationEnabled && recovery.SavedMouseProfile >= 1 && recovery.SavedMouseProfile <= 4)
-                    {
-                        await SwitchMouseProfileInternalAsync(recovery.SavedMouseProfile);
-                    }
-                    ClearGameSessionRecoveryState();
-                    ShowToast("Önceki oyun oturumu beklenmedik şekilde kapandı; masaüstü ayarları geri yüklendi.");
-                }
-                catch { }
+                _interruptedGameRecovery = recovery;
+                await RetryPendingDesktopRestoreAsync();
             }
 
-            // 1. Initial Mode
-            var initialMode = await _agentClient.TryGetOperatingModeAsync();
-            if (initialMode.HasValue)
+            // 0.2 Eco baseline left behind by a crash or exit on battery. Load it before the startup mode is
+            // written: RestoreStartupOperatingModeAsync persists the manual mode, which deletes this file and
+            // loses the desktop settings the battery Eco pass still has to restore.
+            if (_powerAutomationService!.RestorePersistedEcoState())
             {
-                UpdateModeUi(initialMode.Value);
+                System.Diagnostics.Trace.WriteLine("Recovered persisted battery Eco baseline.");
             }
-            else
-            {
-                // Do not claim "Dengeli" when the service did not answer; no card is highlighted.
-                ShowUnknownModeUi();
-            }
+
+            // 1. Initial Mode (Restore saved manual mode or query hardware)
+            await RestoreStartupOperatingModeAsync();
+            _ = ReassertOperatingModeAsync(isBoot: true);
 
             // 1.0 Initial fan mode: read it instead of assuming Auto (NitroSense may have left it on Max).
             var initialFan = await _agentClient.GetFanModeAsync();
@@ -627,6 +621,10 @@ public partial class MainWindow : Window
                 }
             }
 
+            // 2.0b Ask the agent whether this model has controllable lighting at all. Only an explicit "no"
+            // disables the controls; an unanswered query leaves the tab exactly as it was.
+            _ = RefreshLightingCapabilityAsync();
+
             // 2.1 Staged Background Reassertion for Cold Boot / Windows Logon
             _ = ReassertKeyboardLightingAsync(isBoot: true);
 
@@ -644,19 +642,25 @@ public partial class MainWindow : Window
 
             // 5. Configured Games list & Default Mouse Profile
             PopulateConfiguredGames();
+            if (_gameService.ProfileLoadError is { } profileLoadError) ShowToast(profileLoadError, false);
             InitializeDefaultMouseProfileUi();
+
+            // Tell the user once when settings or RGB presets had to be recovered from a corrupt file.
+            var startupNotices = new List<string>();
+            if (_settingsRecoveryNotice is { } recoveryNotice) startupNotices.Add(recoveryNotice);
+            if (_rgbProfileService.LoadError is { } rgbLoadError) startupNotices.Add(rgbLoadError);
+            if (startupNotices.Count > 0)
+            {
+                _settingsRecoveryNotice = null;
+                ShowToast(string.Join(" ", startupNotices), false);
+            }
 
             // 6. Battery Health Details, Thermal Paste / Fan & Storage Health
             await RefreshBatteryHealthAsync();
             RefreshThermalHealthUi();
             await RefreshStorageHealthUi();
 
-            // Eco baseline left behind by a crash or exit on battery: load it so the evaluation below
-            // restores the desktop settings when running on the adapter.
-            if (_powerAutomationService!.RestorePersistedEcoState())
-            {
-                System.Diagnostics.Trace.WriteLine("Recovered persisted battery Eco baseline.");
-            }
+            // Eco baseline was already loaded before the startup mode was written (step 0.2).
             await _powerAutomationService.EvaluatePowerStateAsync();
 
             // 7. Services page state. An existing autostart entry is kept working (moved exe, --minimized flag in
@@ -671,12 +675,79 @@ public partial class MainWindow : Window
         }
     }
 
+    internal async Task<bool> RestoreInterruptedGameAsync(GameSessionRecoveryState recovery)
+    {
+        if (recovery.RestoreMode && await _agentClient.SetOperatingModeAsync(recovery.SavedMode))
+        {
+            recovery.RestoreMode = false;
+            UpdateModeUi(recovery.SavedMode);
+        }
+        if (recovery.SavedAcBoost is { } ac &&
+            await _cpuPowerService.SetBoostModeAsync(ac, targetAc: true, targetDc: false))
+            recovery.SavedAcBoost = null;
+        if (recovery.SavedDcBoost is { } dc &&
+            await _cpuPowerService.SetBoostModeAsync(dc, targetAc: false, targetDc: true))
+            recovery.SavedDcBoost = null;
+        if (recovery.RestoreFan && await _agentClient.SetFanModeAsync(recovery.SavedFan))
+        {
+            recovery.RestoreFan = false;
+            _currentFanMode = recovery.SavedFan;
+            UpdateFanButtonsUi(recovery.SavedFan);
+        }
+        if (!_appSettings.AtkMouseIntegrationEnabled) recovery.SavedMouseProfile = 0;
+        if (recovery.SavedMouseProfile is >= 1 and <= 4)
+        {
+            int target = _appSettings.DefaultAtkMouseProfile > 0
+                ? _appSettings.DefaultAtkMouseProfile : recovery.SavedMouseProfile;
+            if (await SwitchMouseProfileInternalAsync(target))
+            {
+                UpdateSideMouseProfileStatus(target);
+                recovery.SavedMouseProfile = 0;
+            }
+        }
+        else recovery.SavedMouseProfile = 0;
+
+        var pending = new List<string>();
+        if (recovery.RestoreMode) pending.Add("güç modu");
+        if (recovery.SavedAcBoost.HasValue) pending.Add("priz CPU boost");
+        if (recovery.SavedDcBoost.HasValue) pending.Add("pil CPU boost");
+        if (recovery.RestoreFan) pending.Add("fan modu");
+        if (recovery.SavedMouseProfile > 0) pending.Add("fare profili");
+        if (pending.Count == 0)
+        {
+            _interruptedGameRecovery = null;
+            ClearGameSessionRecoveryState();
+            ShowToast("Önceki oyun oturumundan doğrulanabilir ayarlar geri yüklendi.");
+        }
+        else
+        {
+            _nextGameRecoveryAttempt = Environment.TickCount64 + 10000;
+            SaveGameSessionRecoveryState(recovery);
+            ShowToast($"Geri yükleme bekleniyor: {string.Join(", ", pending)}.", false);
+        }
+        UpdateTrayRetryMenuItemState();
+        return pending.Count == 0;
+    }
+
     private void LoadSettings()
     {
-        var loadedSettings = SettingsManager.LoadSettingsWithFallback(AppSettingsConfigFile, AppSettingsConfigFile + ".bak", LegacyConfigFile);
+        var loadResult = SettingsManager.LoadSettings(AppSettingsConfigFile, AppSettingsConfigFile + ".bak", LegacyConfigFile);
+        var loadedSettings = loadResult.Settings;
         foreach (var property in typeof(AppSettings).GetProperties())
             if (property.CanRead && property.CanWrite) property.SetValue(_appSettings, property.GetValue(loadedSettings));
         _settingsLoaded = true;
+
+        // A corrupt settings file used to fall back to defaults silently: the user lost every preference with no
+        // explanation. Remember it here and tell them once the window is up.
+        if (loadResult.PrimaryCorrupt)
+        {
+            _settingsRecoveryNotice = loadResult.Source switch
+            {
+                SettingsLoadSource.Backup => "Ayarlar dosyası bozuktu; yedekten (.bak) geri yüklendi.",
+                SettingsLoadSource.Legacy => "Ayarlar dosyası bozuktu; eski config.json dosyasından geri yüklendi.",
+                _ => "Ayarlar dosyası bozuktu ve yedeği de yoktu; varsayılan ayarlarla başlandı."
+            };
+        }
 
         // Immediately sync _lighting with loaded settings so it is never uninitialized
         if (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset))
@@ -810,9 +881,9 @@ public partial class MainWindow : Window
     // and OnClosing → SaveWindowPosition used to write those defaults over the user's real settings.
     private bool _settingsLoaded;
 
-    private void SaveSettings()
+    private bool SaveSettings()
     {
-        if (!_settingsLoaded) return;
+        if (!_settingsLoaded) return false;
         try
         {
             if (!_isInitializingUi && _lighting != null)
@@ -830,9 +901,15 @@ public partial class MainWindow : Window
             {
                 SettingsManager.SaveSettingsAtomic(LegacyConfigFile, _appSettings);
             }
-            catch { }
+            catch (Exception ex) { App.WriteLog("Eski ayar kopyası kaydedilemedi", ex.Message); }
+            return true;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            App.WriteLog("Ayarlar kaydedilemedi", ex.Message);
+            ShowToast("Ayarlar diske kaydedilemedi. Değişiklikler bu oturumla sınırlı kalabilir.", false);
+            return false;
+        }
     }
 
     private void SaveActiveRgbState()
@@ -852,6 +929,10 @@ public partial class MainWindow : Window
         if (e.Mode == PowerModes.Resume)
         {
             _ = ReassertKeyboardLightingAsync();
+            _ = ReassertOperatingModeAsync(isBoot: false);
+            // The adapter may have been plugged or unplugged while suspended, and Windows does not always raise
+            // StatusChange on resume: re-evaluate the power state explicitly.
+            _ = _powerAutomationService?.EvaluatePowerStateAsync();
         }
     }
 
@@ -860,6 +941,7 @@ public partial class MainWindow : Window
         if (e.Reason == SessionSwitchReason.SessionUnlock || e.Reason == SessionSwitchReason.SessionLogon)
         {
             _ = ReassertKeyboardLightingAsync();
+            _ = ReassertOperatingModeAsync(isBoot: false);
         }
     }
 
@@ -938,6 +1020,149 @@ public partial class MainWindow : Window
         }
     }
 
+    private CancellationTokenSource? _modeReassertCts;
+
+    public void CancelActiveOperatingModeReassertion()
+    {
+        try
+        {
+            _modeReassertCts?.Cancel();
+            _modeReassertCts?.Dispose();
+            _modeReassertCts = null;
+        }
+        catch { }
+    }
+
+    internal async Task RestoreStartupOperatingModeAsync()
+    {
+        OperatingMode? modeToApply = null;
+        OperatingMode? preferredMode = null;
+        bool ecoBaselinePending = _powerAutomationService is { } pendingAutomation &&
+                                  (pendingAutomation.IsDcEcoActive || pendingAutomation.HasPendingAcRestore);
+
+        if (_appSettings.LastOperatingMode.HasValue)
+        {
+            var preferred = _appSettings.LastOperatingMode.Value;
+            preferredMode = preferred;
+            var (onAc, percent) = PowerStateProvider();
+            var targetMode = ModePolicy.ClampForPower(preferred, onAc, percent);
+
+            // Inform PowerAutomationService of the preferred AC baseline. Skip it while a recovered battery Eco
+            // baseline is still pending: UpdateManualOperatingMode clears the pending restore flags and would
+            // drop the desktop settings the Eco pass has to put back.
+            if (!ecoBaselinePending)
+            {
+                _powerAutomationService?.UpdateManualOperatingMode(preferred);
+            }
+
+            bool restored = false;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                var cur = await _agentClient.TryGetOperatingModeAsync();
+                if (cur.HasValue && cur.Value == targetMode)
+                {
+                    restored = true;
+                    modeToApply = targetMode;
+                    break;
+                }
+
+                if (await _agentClient.SetOperatingModeAsync(targetMode))
+                {
+                    restored = true;
+                    modeToApply = targetMode;
+                    break;
+                }
+
+                await Task.Delay(250);
+            }
+
+            if (!restored)
+            {
+                modeToApply = await _agentClient.TryGetOperatingModeAsync();
+            }
+        }
+        else
+        {
+            modeToApply = await _agentClient.TryGetOperatingModeAsync();
+            if (modeToApply.HasValue)
+            {
+                _appSettings.LastOperatingMode = modeToApply.Value;
+                SaveSettings();
+            }
+        }
+
+        if (modeToApply.HasValue)
+        {
+            UpdateModeUi(modeToApply.Value);
+            // The desktop baseline is the user's preferred mode, not the value clamped for the current power
+            // source: on battery Turbo is applied as Default, but plugging in must restore Turbo. Skip it while
+            // a recovered Eco baseline is pending so the pending restore flags survive.
+            if (!ecoBaselinePending)
+            {
+                UpdateDesktopBaselineForManualChange(mode: preferredMode ?? modeToApply.Value);
+            }
+        }
+        else
+        {
+            ShowUnknownModeUi();
+        }
+    }
+
+    public async Task ReassertOperatingModeAsync(bool isBoot = false)
+    {
+        if (!_appSettings.LastOperatingMode.HasValue) return;
+        if (_debloatService.IsNitroSenseRunning()) return;
+
+        CancelActiveOperatingModeReassertion();
+        var cts = new CancellationTokenSource();
+        _modeReassertCts = cts;
+        var token = cts.Token;
+
+        int[] delays = isBoot
+            ? new[] { 1000, 3000, 7000, 15000 }
+            : new[] { 500, 1500 };
+
+        try
+        {
+            foreach (var delay in delays)
+            {
+                await Task.Delay(delay, token);
+                if (token.IsCancellationRequested || _isExiting || _isGameSessionActive) return;
+
+                var (onAc, percent) = PowerStateProvider();
+                var targetMode = ModePolicy.ClampForPower(_appSettings.LastOperatingMode.Value, onAc, percent);
+
+                var currentMode = await _agentClient.TryGetOperatingModeAsync();
+                if (currentMode.HasValue && currentMode.Value != targetMode)
+                {
+                    if (await _agentClient.SetOperatingModeAsync(targetMode))
+                    {
+                        if (!_isExiting && !Dispatcher.HasShutdownStarted)
+                        {
+                            Dispatcher.Invoke(() =>
+                            {
+                                UpdateModeUi(targetMode);
+                                UpdateDesktopBaselineForManualChange(mode: targetMode);
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"ReassertOperatingModeAsync error: {ex.Message}");
+        }
+        finally
+        {
+            if (ReferenceEquals(_modeReassertCts, cts))
+            {
+                _modeReassertCts = null;
+            }
+        }
+    }
+
     public void ShowToast(string message, bool isSuccess = true, bool trayBalloon = true)
     {
         ToastHandler?.Invoke(message, isSuccess);
@@ -952,7 +1177,7 @@ public partial class MainWindow : Window
             // success. Show it as a Windows notification instead.
             if (!IsVisible || WindowState == WindowState.Minimized)
             {
-                if (!trayBalloon || _notifyIcon == null || _isExiting || _isInitializingUi) return;
+                if (!trayBalloon || _notifyIcon == null || _isExiting || _isInitializingUi || _isGameSessionActive) return;
                 try
                 {
                     _notifyIcon.ShowBalloonTip(isSuccess ? 2500 : 4000, "NitroLite", message,
@@ -1030,8 +1255,16 @@ public partial class MainWindow : Window
             var mode = await _agentClient.TryGetOperatingModeAsync();
             if (mode.HasValue && mode.Value != _currentMode)
             {
-                UpdateModeUi(mode.Value);
-                if (!_isGameSessionActive) UpdateDesktopBaselineForManualChange(mode: mode.Value);
+                // If a boot/resume reassertion is in progress for a saved mode, do not treat the EC's boot default as a user change
+                if (_modeReassertCts != null && _appSettings.LastOperatingMode.HasValue && mode.Value != _appSettings.LastOperatingMode.Value)
+                {
+                    // Ignore transient EC default while reassertion is running
+                }
+                else
+                {
+                    UpdateModeUi(mode.Value);
+                    if (!_isGameSessionActive) UpdateDesktopBaselineForManualChange(mode: mode.Value);
+                }
             }
 
             var fan = await _agentClient.GetFanModeAsync();
@@ -1235,7 +1468,7 @@ public partial class MainWindow : Window
             {
                 // Titlebar / Sidebar
                 TxtSideCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
-                TxtSideGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
+                TxtSideGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping, data.GpuMetricsAvailable);
                 TxtSideCpuFan.Text = TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed);
 
                 // Sub-Component Thermal Matrix: Motherboard / VRM (SYS1_TEMPERATURE)
@@ -1257,33 +1490,33 @@ public partial class MainWindow : Window
                 TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts) + " (tahmini)";
                 SetBarValueGrowing(BarMonCpuPower, data.CpuPowerWatts, 10);
 
-                TxtMonCpuUsage.Text = $"{data.CpuUsage:F1} %";
+                TxtMonCpuUsage.Text = FormattableString.Invariant($"{data.CpuUsage:F1} %");
                 BarMonCpuUsage.Value = data.CpuUsage;
 
                 TxtMonCpuFreqGhz.Text = TelemetryFormatter.FormatCpuFrequency(data.CpuFrequencyMHz);
                 SetBarValueGrowing(BarMonCpuFreq, data.CpuFrequencyMHz, 100);
 
                 // Tab 2: Monitoring - GPU
-                TxtMonGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping);
+                TxtMonGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping, data.GpuMetricsAvailable);
                 BarMonGpuTemp.Value = data.GpuTemperature;
 
-                TxtMonGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping);
+                TxtMonGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping, data.GpuMetricsAvailable);
                 SetBarValueGrowing(BarMonGpuPower, data.GpuPowerWatts, 10);
 
-                TxtMonGpuUsage.Text = $"{data.GpuUsage:F1} %";
+                TxtMonGpuUsage.Text = FormattableString.Invariant($"{data.GpuUsage:F1} %");
                 BarMonGpuUsage.Value = data.GpuUsage;
 
                 BarMonVram.Maximum = data.VramTotalMB > 0 ? data.VramTotalMB : 8192;
                 BarMonVram.Value = Math.Min(data.VramUsedMB, BarMonVram.Maximum);
-                TxtMonVram.Text = TelemetryFormatter.FormatVramUsage(data.VramUsedMB, data.VramTotalMB, isGpuSleeping);
+                TxtMonVram.Text = TelemetryFormatter.FormatVramUsage(data.VramUsedMB, data.VramTotalMB, isGpuSleeping, data.GpuMetricsAvailable);
 
                 // RAM
                 if (data.RamTotalMB > 0)
                 {
                     var ramUsedGB = (data.RamTotalMB * (data.RamUsage / 100.0)) / 1024.0;
                     var ramTotalGB = data.RamTotalMB / 1024.0;
-                    TxtMonRamDetail.Text = $"{ramUsedGB:F1} GB / {ramTotalGB:F1} GB";
-                    TxtMonRamPercent.Text = $"{data.RamUsage:F1} %";
+                    TxtMonRamDetail.Text = FormattableString.Invariant($"{ramUsedGB:F1} GB / {ramTotalGB:F1} GB");
+                    TxtMonRamPercent.Text = FormattableString.Invariant($"{data.RamUsage:F1} %");
                     BarMonRam.Value = data.RamUsage;
                 }
                 else
@@ -1319,8 +1552,26 @@ public partial class MainWindow : Window
                 _ = RunAutoRamCleanAsync();
             }
 
-            // Startup mouse profile that failed because the wireless mouse was asleep.
-            RetryPendingMouseStartupIfDue();
+            _ = RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64);
+            _ = RetryPendingGameMouseProfileAsync(Environment.TickCount64);
+            // Retry a desktop restore that failed or was interrupted, even without a crash record: the pending
+            // flags are the source of truth. The AC restore has its own retry below.
+            bool pendingGameRestore = _interruptedGameRecovery != null || _hasPendingDesktopRestore ||
+                                      _pendingModeRestore || _pendingCpuBoostRestore || _pendingFanRestore || _pendingMouseRestore;
+            if (!_isInitializingUi && pendingGameRestore && Environment.TickCount64 >= _nextGameRecoveryAttempt)
+            {
+                _nextGameRecoveryAttempt = Environment.TickCount64 + 10000;
+                _ = RetryPendingDesktopRestoreAsync();
+            }
+            // A failed Eco step (mode/boost/fan) or a lowered panel rate is retried here: nothing else calls
+            // EvaluatePowerStateAsync until the next power event.
+            if (!_isInitializingUi && _powerAutomationService is { } automation &&
+                (automation.HasPendingPanelRestore || automation.HasPendingDcApply) &&
+                Environment.TickCount64 >= _nextPanelRestoreAttempt)
+            {
+                _nextPanelRestoreAttempt = Environment.TickCount64 + 15000;
+                _ = automation.EvaluatePowerStateAsync();
+            }
 
             if (!isFallback)
             {
@@ -1362,7 +1613,7 @@ public partial class MainWindow : Window
                         finally { _isUpdatingGameUi = false; }
                         UpdateSelectedGameDetails();
                     }
-                    else if (_gameService.GetProfile(activeGame.ExeName) != null)
+                    else if (_gameService.GetProfile(activeGame.ExeName, activeGame.InstallPath) != null)
                     {
                         // The active game is not in the displayed snapshot (list changed underneath); rebuild it.
                         PopulateConfiguredGames(activeGame.ExeName);
@@ -1489,10 +1740,10 @@ public partial class MainWindow : Window
         double avg = values.Average();
 
         bool isFine = _selectedChartMetric is "CPU_GHZ" or "VRAM_GB";
-        TxtChartCurrentVal.Text = isFine ? $"{current:F2} {unit}" : $"{current:F1} {unit}";
-        TxtChartMinVal.Text = isFine ? $"{min:F2} {unit}" : $"{min:F1} {unit}";
-        TxtChartMaxVal.Text = isFine ? $"{max:F2} {unit}" : $"{max:F1} {unit}";
-        TxtChartAvgVal.Text = isFine ? $"{avg:F2} {unit}" : $"{avg:F1} {unit}";
+        TxtChartCurrentVal.Text = isFine ? FormattableString.Invariant($"{current:F2} {unit}") : FormattableString.Invariant($"{current:F1} {unit}");
+        TxtChartMinVal.Text = isFine ? FormattableString.Invariant($"{min:F2} {unit}") : FormattableString.Invariant($"{min:F1} {unit}");
+        TxtChartMaxVal.Text = isFine ? FormattableString.Invariant($"{max:F2} {unit}") : FormattableString.Invariant($"{max:F1} {unit}");
+        TxtChartAvgVal.Text = isFine ? FormattableString.Invariant($"{avg:F2} {unit}") : FormattableString.Invariant($"{avg:F1} {unit}");
 
         double rangeMin;
         double rangeMax;
@@ -1555,11 +1806,11 @@ public partial class MainWindow : Window
 
         // Update grid reference labels
         if (TxtChartGridTop != null)
-            TxtChartGridTop.Text = isFine ? $"{rangeMax:F1} {unit}" : $"{(int)rangeMax} {unit}";
+            TxtChartGridTop.Text = isFine ? FormattableString.Invariant($"{rangeMax:F1} {unit}") : $"{(int)rangeMax} {unit}";
         if (TxtChartGridMid != null)
-            TxtChartGridMid.Text = isFine ? $"{((rangeMin + rangeMax) / 2.0):F1} {unit}" : $"{(int)((rangeMin + rangeMax) / 2.0)} {unit}";
+            TxtChartGridMid.Text = isFine ? FormattableString.Invariant($"{((rangeMin + rangeMax) / 2.0):F1} {unit}") : $"{(int)((rangeMin + rangeMax) / 2.0)} {unit}";
         if (TxtChartGridBottom != null)
-            TxtChartGridBottom.Text = isFine ? $"{rangeMin:F1} {unit}" : $"{(int)rangeMin} {unit}";
+            TxtChartGridBottom.Text = isFine ? FormattableString.Invariant($"{rangeMin:F1} {unit}") : $"{(int)rangeMin} {unit}";
 
         double range = rangeMax - rangeMin;
         if (range <= 0) range = 1;
@@ -1736,6 +1987,11 @@ public partial class MainWindow : Window
             _savedModeBeforeGame = mode.Value;
             _pendingModeRestore = false;
             _powerAutomationService?.UpdateManualOperatingMode(mode.Value);
+            if (!_isInitializingUi && _settingsLoaded)
+            {
+                _appSettings.LastOperatingMode = mode.Value;
+                SaveSettings();
+            }
         }
 
         if (boost.HasValue)
@@ -1800,6 +2056,17 @@ public partial class MainWindow : Window
     {
         if (!isBatteryEco)
         {
+            if (_activeGameRecovery is { } baseline)
+            {
+                if (baseline.SavedAcBoost is { } common && baseline.SavedDcBoost == common)
+                    return await ApplyCpuBoostModeAsync(common);
+                bool restoreAc = baseline.SavedAcBoost is not { } savedAc ||
+                    await _cpuPowerService.SetBoostModeAsync(savedAc, targetAc: true, targetDc: false);
+                bool restoreDc = baseline.SavedDcBoost is not { } savedDc ||
+                    await _cpuPowerService.SetBoostModeAsync(savedDc, targetAc: false, targetDc: true);
+                if (restoreAc && restoreDc) UpdateBoostUi(_cpuPowerService.CurrentMode);
+                return restoreAc && restoreDc;
+            }
             return await ApplyCpuBoostModeAsync(target);
         }
 
@@ -1828,6 +2095,17 @@ public partial class MainWindow : Window
             ShowToast($"CPU boost modu uygulanamadı: {ModePolicy.BoostDisplayName(mode)}", false);
             return false;
         }
+    }
+
+    private async Task<bool> ApplyGameBoostModeAsync(CpuBoostMode mode)
+    {
+        if (_activeGameRecovery is not { } baseline) return await ApplyCpuBoostModeAsync(mode);
+        bool ac = baseline.SavedAcBoost.HasValue;
+        bool dc = baseline.SavedDcBoost.HasValue;
+        if (!ac && !dc) return false;
+        bool applied = await _cpuPowerService.SetBoostModeAsync(mode, targetAc: ac, targetDc: dc);
+        if (applied) UpdateBoostUi(_cpuPowerService.CurrentMode);
+        return applied;
     }
 
     // ==========================================
@@ -2128,6 +2406,10 @@ public partial class MainWindow : Window
     // can change at any time (background scan, deletes), so the combo's SelectedIndex must never be used
     // to index a freshly fetched GetProfiles() list; resolve the selection through this snapshot instead.
     private List<string> _configuredGameExeNames = new();
+    private List<GameProfile> _configuredGameProfiles = new();
+
+    /// <summary>Set when the settings file had to be recovered; shown once after startup.</summary>
+    private string? _settingsRecoveryNotice;
 
     private string? GetSelectedGameExeName()
     {
@@ -2139,8 +2421,10 @@ public partial class MainWindow : Window
 
     private GameProfile? GetSelectedGameProfile()
     {
-        var exe = GetSelectedGameExeName();
-        return exe == null ? null : _gameService.GetProfile(exe);
+        if (CmbConfiguredGames == null) return null;
+        int idx = CmbConfiguredGames.SelectedIndex;
+        var snapshot = _configuredGameProfiles;
+        return idx >= 0 && idx < snapshot.Count ? snapshot[idx] : null;
     }
 
     private void SelectConfiguredGame(string exeName)
@@ -2156,15 +2440,19 @@ public partial class MainWindow : Window
 
         var profiles = _gameService.GetProfiles();
         var displayList = profiles.Select(p =>
-            string.Equals(p.DisplayName, p.ExeName, StringComparison.OrdinalIgnoreCase)
+        {
+            var label = string.Equals(p.DisplayName, p.ExeName, StringComparison.OrdinalIgnoreCase)
                 ? p.DisplayName
-                : $"{p.DisplayName} ({p.ExeName})"
-        ).ToList();
+                : $"{p.DisplayName} ({p.ExeName})";
+            // A profile whose exe is gone can never trigger; say so instead of silently doing nothing.
+            return p.IsInstalled ? label : $"{label} - kurulu değil";
+        }).ToList();
 
         _isUpdatingGameUi = true;
         try
         {
             _configuredGameExeNames = profiles.Select(p => p.ExeName).ToList();
+            _configuredGameProfiles = profiles;
             CmbConfiguredGames.ItemsSource = displayList;
 
             // Automatically prioritize currently running/active game if no specific selection was requested
@@ -2206,9 +2494,10 @@ public partial class MainWindow : Window
             ? $" [{profile.DisplayName} - ŞU AN OYNANIYOR]" 
             : $" [{profile.DisplayName}]";
         TxtSelectedGameNameBadge.Foreground = (SolidColorBrush)FindResource(isCurrentlyActive ? "AccentGreen" : "TextSecondary");
-        TxtSelectedGameExePath.Text = string.IsNullOrEmpty(profile.InstallPath) 
-            ? $"{profile.ExeName}.exe" 
+        var pathText = string.IsNullOrEmpty(profile.InstallPath)
+            ? $"{profile.ExeName}.exe"
             : (profile.InstallPath.Length > 48 ? "..." + profile.InstallPath[^45..] : profile.InstallPath);
+        TxtSelectedGameExePath.Text = profile.IsInstalled ? pathText : pathText + "  (dosya bulunamadı)";
 
         // 1. Target Operating Mode ComboBox
         SetComboBoxByTag(CmbGameTargetMode, profile.TargetMode.ToString());
@@ -2219,7 +2508,10 @@ public partial class MainWindow : Window
         // 3. Target Fan Mode ComboBox
         SetComboBoxByTag(CmbGameTargetFan, profile.TargetFanMode.ToString());
 
-        // 4. Target ATK Mouse Profile ComboBox
+        // 4. Auto-apply toggle
+        if (ChkGameAutoApply != null) ChkGameAutoApply.IsChecked = profile.AutoApply;
+
+        // 5. Target ATK Mouse Profile ComboBox
         if (CmbGameAtkMouseProfile != null)
         {
             var targetIdx = profile.TargetAtkMouseProfile;
@@ -2229,15 +2521,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> SwitchMouseProfileInternalAsync(int targetProfile)
+    private Task<AtkMouseResult> ApplyMouseProfileOnWorkerAsync(int targetProfile)
     {
-        bool ok = MouseProfileSwitcher != null
-            ? await Task.Run(() => MouseProfileSwitcher(targetProfile))
-            : await Task.Run(() => _atkMouseService.SwitchProfile(targetProfile));
-        // Any confirmed switch (test button, "Uygula", a game) supersedes a pending startup retry.
-        if (ok) SetPendingMouseStartup(null);
-        return ok;
+        var switcher = MouseProfileSwitcher;
+        return Task.Run(() => switcher == null
+            ? _atkMouseService.ApplyProfile(targetProfile)
+            : switcher(targetProfile) ? AtkMouseResult.Confirmed : AtkMouseResult.NoResponse);
     }
+
+    private async Task<bool> SwitchMouseProfileInternalAsync(int targetProfile) =>
+        await ApplyMouseProfileOnWorkerAsync(targetProfile) == AtkMouseResult.Confirmed;
 
     private async void BtnTestMouseProfile_Click(object sender, RoutedEventArgs e)
     {
@@ -2250,11 +2543,16 @@ public partial class MainWindow : Window
         }
 
         if (BtnTestMouseProfile != null) BtnTestMouseProfile.IsEnabled = false;
+        var previousRequest = _pendingDesktopMouseRequest;
+        await _gameProfileTransitionLock.WaitAsync();
         try
         {
-            bool success = await SwitchMouseProfileInternalAsync(selectedIdx);
-            if (success)
+            if (!_appSettings.AtkMouseIntegrationEnabled) return;
+            var result = await ApplyMouseProfileOnWorkerAsync(selectedIdx);
+            if (result == AtkMouseResult.Confirmed)
             {
+                if (ReferenceEquals(_pendingDesktopMouseRequest, previousRequest))
+                    _pendingDesktopMouseRequest = null;
                 if (!_isGameSessionActive)
                 {
                     _savedMouseProfileBeforeGame = selectedIdx;
@@ -2264,11 +2562,12 @@ public partial class MainWindow : Window
             }
             else
             {
-                ShowToast("ATK A9 fareye erişilemedi veya alıcı yanıt vermedi.", false);
+                ShowToast(DescribeMouseFailure(result), false);
             }
         }
         finally
         {
+            _gameProfileTransitionLock.Release();
             if (BtnTestMouseProfile != null) BtnTestMouseProfile.IsEnabled = true;
         }
     }
@@ -2294,60 +2593,181 @@ public partial class MainWindow : Window
         }
 
         // Nothing is shown as active until the mouse itself confirms it.
-        UpdateDefaultMouseProfileBadge(profile, confirmed: null);
         UpdateSideMouseProfileStatus(0);
-        _ = ApplyStartupMouseProfileAsync(profile);
+        _ = ApplyDesktopMouseProfileAsync(profile);
     }
 
-    /// <summary>
-    /// Startup mouse profile: switches to the default (1..4) or, for "keep last used", reads the current profile.
-    /// Runs under the same transition lock as game sessions so it cannot interleave with a game starting.
-    /// </summary>
-    private async Task ApplyStartupMouseProfileAsync(int profile)
+    private static readonly TimeSpan MouseRetryInterval = TimeSpan.FromSeconds(5);
+
+    private sealed class DesktopMouseRequest(int profile)
     {
+        public int Profile { get; } = profile;
+        public long NextAttemptAt { get; set; } = long.MaxValue;
+    }
+
+    private DesktopMouseRequest? _pendingDesktopMouseRequest;
+
+    internal Task<AtkMouseResult?> ApplyDesktopMouseProfileAsync(int profile)
+    {
+        var request = new DesktopMouseRequest(profile);
+        _pendingDesktopMouseRequest = request;
+        UpdateDefaultMouseProfileBadge(profile, confirmed: false);
+        return TryApplyDesktopMouseProfileAsync(request);
+    }
+
+    internal async Task RetryPendingDesktopMouseProfileIfDueAsync(long now)
+    {
+        if (_pendingDesktopMouseRequest is not { } request || now < request.NextAttemptAt ||
+            _isGameSessionActive || !_appSettings.AtkMouseIntegrationEnabled) return;
+
+        // Only one attempt for this request may wait on the transition lock at a time.
+        request.NextAttemptAt = long.MaxValue;
+        await TryApplyDesktopMouseProfileAsync(request);
+    }
+
+    private async Task<AtkMouseResult?> TryApplyDesktopMouseProfileAsync(DesktopMouseRequest request)
+    {
+        await _gameProfileTransitionLock.WaitAsync();
         try
         {
-            await _gameProfileTransitionLock.WaitAsync();
-            try
+            // A newer selection can replace this request while we wait for a game transition.
+            if (!ReferenceEquals(_pendingDesktopMouseRequest, request) || !_appSettings.AtkMouseIntegrationEnabled)
+                return null;
+
+            int profile = request.Profile;
+            if (_isGameSessionActive)
             {
-                if (profile >= 1 && profile <= 4)
+                request.NextAttemptAt = Environment.TickCount64;
+                UpdateDefaultMouseProfileBadge(profile, confirmed: false, status: "Oyun bitince uygulanacak");
+                return null;
+            }
+
+            int? activeProfile = null;
+            AtkMouseResult result;
+            if (profile > 0)
+            {
+                result = await ApplyMouseProfileOnWorkerAsync(profile);
+                if (result == AtkMouseResult.Confirmed)
                 {
-                    if (_isGameSessionActive) return; // the game profile owns the mouse now
-                    bool ok = await SwitchMouseProfileInternalAsync(profile);
-                    if (ok && !_isGameSessionActive)
-                    {
-                        _savedMouseProfileBeforeGame = profile;
-                    }
-                    SetPendingMouseStartup(ok ? null : profile);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        UpdateDefaultMouseProfileBadge(profile, confirmed: ok);
-                        UpdateSideMouseProfileStatus(ok ? profile : 0, waiting: !ok);
-                    });
-                }
-                else
-                {
-                    int? current = MouseProfileSwitcher != null ? null : await Task.Run(() => _atkMouseService.QueryCurrentProfile());
-                    SetPendingMouseStartup(current.HasValue || MouseProfileSwitcher != null ? null : 0);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        UpdateDefaultMouseProfileBadge(profile);
-                        UpdateSideMouseProfileStatus(current ?? 0, waiting: !current.HasValue && MouseProfileSwitcher == null);
-                    });
+                    activeProfile = profile;
+                    _savedMouseProfileBeforeGame = profile;
                 }
             }
-            finally
+            else if (MouseProfileSwitcher == null)
             {
-                _gameProfileTransitionLock.Release();
+                (activeProfile, result) = await Task.Run(() =>
+                {
+                    int? current = _atkMouseService.QueryCurrentProfile(out var readResult);
+                    return (current, readResult);
+                });
             }
+            else result = AtkMouseResult.Confirmed;
+
+            if (!ReferenceEquals(_pendingDesktopMouseRequest, request) || !_appSettings.AtkMouseIntegrationEnabled)
+                return null;
+
+            if (result is AtkMouseResult.Confirmed or AtkMouseResult.Rejected)
+                _pendingDesktopMouseRequest = null;
+            else
+                request.NextAttemptAt = Environment.TickCount64 + (long)MouseRetryInterval.TotalMilliseconds;
+
+            UpdateDefaultMouseProfileBadge(profile,
+                confirmed: result == AtkMouseResult.Confirmed,
+                status: result switch
+                {
+                    AtkMouseResult.Confirmed => null,
+                    AtkMouseResult.Rejected => "Reddedildi",
+                    _ => "Uygulama bekleniyor"
+                },
+                tooltip: result == AtkMouseResult.Confirmed ? null : DescribeMouseFailure(result));
+            UpdateSideMouseProfileStatus(activeProfile ?? 0, failure: result);
+            return result;
         }
-        catch
+        catch (Exception ex)
         {
-            // Best effort; the badges stay in their "not confirmed" state.
+            if (ReferenceEquals(_pendingDesktopMouseRequest, request))
+                request.NextAttemptAt = Environment.TickCount64 + (long)MouseRetryInterval.TotalMilliseconds;
+            App.WriteLog("ATK fare profili", ex.Message);
+            return AtkMouseResult.CommunicationError;
+        }
+        finally
+        {
+            _gameProfileTransitionLock.Release();
         }
     }
 
-    private void UpdateSideMouseProfileStatus(int profile, bool waiting = false)
+    private static string DescribeMouseFailure(AtkMouseResult result) => result switch
+    {
+        AtkMouseResult.ReceiverNotFound => "ATK alıcısı bulunamadı",
+        AtkMouseResult.NoResponse => "Fare yanıt vermedi",
+        AtkMouseResult.Rejected => "Fare profil değişikliğini reddetti",
+        AtkMouseResult.ProfileNotConfirmed => "Fare profili doğrulanamadı",
+        _ => "ATK alıcısıyla iletişim kurulamadı"
+    };
+
+    /// <summary>
+    /// Compact variant for the sidebar status card, where the value shares a ~160 px row with its label.
+    /// The full text is still used in toasts and tooltips.
+    /// </summary>
+    private static string DescribeMouseFailureShort(AtkMouseResult result) => result switch
+    {
+        AtkMouseResult.ReceiverNotFound => "Alıcı yok",
+        AtkMouseResult.NoResponse => "Yanıt yok",
+        AtkMouseResult.Rejected => "Reddedildi",
+        AtkMouseResult.ProfileNotConfirmed => "Doğrulanamadı",
+        _ => "İletişim hatası"
+    };
+
+    private (int Generation, int Profile, int Remaining, long Due)? _pendingGameMouseProfile;
+
+    private async Task<AtkMouseResult> TryApplyGameMouseProfileAsync(int target, int generation)
+    {
+        // In keep-last mode, never change the mouse unless its desktop profile is known.
+        if (_savedMouseProfileBeforeGame == 0)
+        {
+            if (MouseProfileSwitcher != null) return AtkMouseResult.ProfileNotConfirmed;
+            var (current, result) = await Task.Run(() =>
+            {
+                int? profile = _atkMouseService.QueryCurrentProfile(out var status);
+                return (profile, status);
+            });
+            if (!current.HasValue) return result;
+            if (generation != _gameSessionGeneration || !_appSettings.AtkMouseIntegrationEnabled)
+                return AtkMouseResult.Rejected;
+            _savedMouseProfileBeforeGame = current.Value;
+            if (_activeGameRecovery is { } recovery)
+            {
+                recovery.SavedMouseProfile = current.Value;
+                SaveGameSessionRecoveryState(recovery);
+            }
+        }
+        return await ApplyMouseProfileOnWorkerAsync(target);
+    }
+
+    private async Task RetryPendingGameMouseProfileAsync(long now)
+    {
+        if (_pendingGameMouseProfile is not { } request || now < request.Due) return;
+        _pendingGameMouseProfile = null;
+        await _gameProfileTransitionLock.WaitAsync();
+        try
+        {
+            if (!_isGameSessionActive || !_gameService.AutoGameModeEnabled || !_appSettings.AtkMouseIntegrationEnabled ||
+                request.Generation != _gameSessionGeneration) return;
+            var result = await TryApplyGameMouseProfileAsync(request.Profile, request.Generation);
+            if (result == AtkMouseResult.Confirmed)
+            {
+                _isMouseProfileSwitchedForGame = true;
+                UpdateSideMouseProfileStatus(request.Profile);
+            }
+            else if (result != AtkMouseResult.Rejected && request.Remaining > 1)
+                _pendingGameMouseProfile = (request.Generation, request.Profile, request.Remaining - 1,
+                    Environment.TickCount64 + 3000);
+        }
+        catch (Exception ex) { App.WriteLog("Oyun fare profili", ex.Message); }
+        finally { _gameProfileTransitionLock.Release(); }
+    }
+
+    private void UpdateSideMouseProfileStatus(int profile, AtkMouseResult failure = AtkMouseResult.Confirmed)
     {
         if (TxtSideMouseProfile == null) return;
         if (profile >= 1 && profile <= 4)
@@ -2358,46 +2778,12 @@ public partial class MainWindow : Window
         }
         else
         {
-            TxtSideMouseProfile.Text = waiting ? "Fare uykuda" : "Bilinmiyor";
+            TxtSideMouseProfile.Text = failure == AtkMouseResult.Confirmed ? "Bilinmiyor" : DescribeMouseFailureShort(failure);
             TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
-            TxtSideMouseProfile.ToolTip = waiting
-                ? "Kablosuz fare boştayken alıcı yanıt vermez. Fareyi oynattığınızda NitroLite profili otomatik uygular (30 sn'de bir denenir)."
+            TxtSideMouseProfile.ToolTip = failure == AtkMouseResult.NoResponse
+                ? "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin."
                 : null;
         }
-    }
-
-    // ---------------------------------------------------------------- startup mouse profile retry
-    // A wireless ATK mouse that is asleep does not answer, so the startup profile (or the read of the current one)
-    // fails. Measured on the AN16-41: asleep → no reply at all; moved → every query answered within ~15 ms.
-    // Retry from the telemetry loop until it answers instead of leaving "Ulaşılamadı" until the next restart.
-
-    private static readonly TimeSpan MouseRetryInterval = TimeSpan.FromSeconds(30);
-    private int? _pendingMouseStartupProfile;      // 1..4 = apply this profile, 0 = only read the current one
-    private DateTime _nextMouseRetry = DateTime.MaxValue;
-    private int _mouseRetryRunning;
-
-    private void SetPendingMouseStartup(int? profile)
-    {
-        _pendingMouseStartupProfile = profile;
-        _nextMouseRetry = profile.HasValue ? DateTime.Now + MouseRetryInterval : DateTime.MaxValue;
-    }
-
-    /// <summary>Called from the telemetry loop; cheap unless a retry is due.</summary>
-    private void RetryPendingMouseStartupIfDue()
-    {
-        if (_pendingMouseStartupProfile is not int profile || DateTime.Now < _nextMouseRetry) return;
-        if (!_appSettings.AtkMouseIntegrationEnabled || _isGameSessionActive)
-        {
-            if (!_appSettings.AtkMouseIntegrationEnabled) SetPendingMouseStartup(null);
-            return;
-        }
-        if (Interlocked.Exchange(ref _mouseRetryRunning, 1) != 0) return;
-        _nextMouseRetry = DateTime.Now + MouseRetryInterval;
-        _ = Task.Run(async () =>
-        {
-            try { await ApplyStartupMouseProfileAsync(profile); }
-            finally { Interlocked.Exchange(ref _mouseRetryRunning, 0); }
-        });
     }
 
     private void UpdateAtkMouseIntegrationVisibility(bool enabled)
@@ -2448,6 +2834,7 @@ public partial class MainWindow : Window
         }
         else
         {
+            _pendingDesktopMouseRequest = null;
             // Acquire the lock FIRST, then check flags.
             // If a mouse command is in-flight (running under the lock), it hasn't set
             // _isMouseProfileSwitchedForGame yet — reading flags before acquiring would see false
@@ -2490,19 +2877,14 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <param name="confirmed">true = the mouse accepted the switch, false = it did not answer,
-    /// null = not confirmed yet (only the setting is known).</param>
-    private void UpdateDefaultMouseProfileBadge(int profile, bool? confirmed = true)
+    private void UpdateDefaultMouseProfileBadge(int profile, bool confirmed = true, string? status = null, string? tooltip = null)
     {
         if (TxtDefaultMouseProfileStatus == null) return;
+        TxtDefaultMouseProfileStatus.ToolTip = tooltip;
         if (profile >= 1 && profile <= 4)
         {
-            (string suffix, string brushKey) = confirmed switch
-            {
-                true => ("Aktif", "AccentGreen"),
-                false => ("Yanıt yok: fare uykuda olabilir", "AccentRed"),
-                null => ("Uygulanıyor…", "TextSecondary")
-            };
+            string suffix = status ?? (confirmed ? "Aktif" : "Uygulanıyor…");
+            string brushKey = confirmed ? "AccentGreen" : "TextSecondary";
             TxtDefaultMouseProfileStatus.Text = $"Config {profile} ({suffix})";
             TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
         }
@@ -2518,13 +2900,13 @@ public partial class MainWindow : Window
         if (_isInitializingUi || CmbDefaultAtkMouseProfile == null) return;
         if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int val))
         {
+            if (val != _appSettings.DefaultAtkMouseProfile) _pendingDesktopMouseRequest = null;
             _appSettings.DefaultAtkMouseProfile = val;
             SaveSettings();
-            if (val >= 1 && val <= 4 && TxtDefaultMouseProfileStatus != null)
+            if (val >= 1 && val <= 4)
             {
                 // Saved as the default, but not sent to the mouse until "Uygula" (or the next game exit).
-                TxtDefaultMouseProfileStatus.Text = $"Config {val} (Uygula'ya basın)";
-                TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+                UpdateDefaultMouseProfileBadge(val, confirmed: false, status: "Uygula'ya basın");
             }
             else
             {
@@ -2543,32 +2925,30 @@ public partial class MainWindow : Window
         }
 
         _appSettings.DefaultAtkMouseProfile = val;
-        SaveSettings();
+        bool saved = SaveSettings();
+        string saveStatus = saved ? $"Config {val} kaydedildi" : $"Config {val} diske kaydedilemedi";
 
         if (val >= 1 && val <= 4)
         {
             if (BtnApplyDefaultMouseProfile != null) BtnApplyDefaultMouseProfile.IsEnabled = false;
             try
             {
-                bool ok = await SwitchMouseProfileInternalAsync(val);
-                if (ok)
+                var result = await ApplyDesktopMouseProfileAsync(val);
+                if (result == AtkMouseResult.Confirmed)
                 {
-                    if (!_isGameSessionActive)
-                    {
-                        _savedMouseProfileBeforeGame = val;
-                    }
-                    UpdateDefaultMouseProfileBadge(val);
-                    UpdateSideMouseProfileStatus(val);
-                    ShowToast($"Varsayılan fare profili Config {val} olarak ayarlandı ve donanıma uygulandı.");
+                    ShowToast($"{saveStatus}. Fareye uygulandı.", saved);
                 }
-                else
+                else if (result is AtkMouseResult.Rejected)
                 {
-                    if (TxtDefaultMouseProfileStatus != null)
-                    {
-                        TxtDefaultMouseProfileStatus.Text = $"Config {val} (Ulaşılamadı)";
-                        TxtDefaultMouseProfileStatus.Foreground = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
-                    }
-                    ShowToast($"Varsayılan profil Config {val} kaydedildi (Fare alıcısına ulaşılamadı).", false);
+                    ShowToast($"{saveStatus}. {DescribeMouseFailure(result.Value)}.", false);
+                }
+                else if (result.HasValue)
+                {
+                    ShowToast($"{saveStatus}. {DescribeMouseFailure(result.Value)}. Tekrar denenecek.", false);
+                }
+                else if (_pendingDesktopMouseRequest?.Profile == val && _isGameSessionActive)
+                {
+                    ShowToast($"{saveStatus}. Oyun bitince uygulanacak.", saved);
                 }
             }
             finally
@@ -2578,8 +2958,9 @@ public partial class MainWindow : Window
         }
         else
         {
+            _pendingDesktopMouseRequest = null;
             UpdateDefaultMouseProfileBadge(val);
-            ShowToast("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi.");
+            if (saved) ShowToast("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi.");
         }
     }
 
@@ -2641,7 +3022,10 @@ public partial class MainWindow : Window
                 if (Enum.TryParse<FanMode>(fanTag, out var f)) profile.TargetFanMode = f;
             }
 
-            // 4. ATK Mouse Profile
+            // 4. Auto-apply toggle
+            if (ChkGameAutoApply != null) profile.AutoApply = ChkGameAutoApply.IsChecked == true;
+
+            // 5. ATK Mouse Profile
             if (CmbGameAtkMouseProfile != null && CmbGameAtkMouseProfile.SelectedIndex >= 0)
             {
                 profile.TargetAtkMouseProfile = CmbGameAtkMouseProfile.SelectedIndex;
@@ -2687,7 +3071,7 @@ public partial class MainWindow : Window
             bool modeOk = await SwitchModeAsync(ModePolicy.ClampForPower(profile.TargetMode, liveOnAc, liveBattery));
             if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
 
-            bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
+            bool boostOk = await ApplyGameBoostModeAsync(profile.TargetCpuBoost);
             if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
 
             bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
@@ -2700,7 +3084,10 @@ public partial class MainWindow : Window
             bool mouseOk = true;
             if (_appSettings.AtkMouseIntegrationEnabled && profile.TargetAtkMouseProfile > 0)
             {
-                mouseOk = await SwitchMouseProfileInternalAsync(profile.TargetAtkMouseProfile);
+                var mouseResult = await TryApplyGameMouseProfileAsync(profile.TargetAtkMouseProfile, saveGen);
+                mouseOk = mouseResult == AtkMouseResult.Confirmed;
+                if (!mouseOk && mouseResult != AtkMouseResult.Rejected)
+                    _pendingGameMouseProfile = (saveGen, profile.TargetAtkMouseProfile, 3, Environment.TickCount64 + 3000);
                 if (mouseOk)
                 {
                     _isMouseProfileSwitchedForGame = true;
@@ -2827,7 +3214,7 @@ public partial class MainWindow : Window
         var exeName = Path.GetFileNameWithoutExtension(dlg.FileName);
 
         // Already configured: keep the user's settings instead of overwriting them with defaults.
-        var existing = _gameService.GetProfile(exeName);
+        var existing = _gameService.GetProfile(exeName, dlg.FileName);
         if (existing != null)
         {
             PopulateConfiguredGames(existing.ExeName);
@@ -2870,9 +3257,10 @@ public partial class MainWindow : Window
 
         if (confirm == MessageBoxResult.Yes)
         {
-            _gameService.DeleteProfile(profile.ExeName);
+            bool deleted = _gameService.DeleteProfile(profile.ExeName, profile.InstallPath);
             PopulateConfiguredGames();
-            ShowToast($"'{profile.DisplayName}' profili silindi.");
+            ShowToast(deleted ? $"'{profile.DisplayName}' profili silindi."
+                : $"'{profile.DisplayName}' profili silinemedi.", deleted);
         }
     }
 
@@ -2898,12 +3286,16 @@ public partial class MainWindow : Window
             try
             {
                 if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+                CancelActiveOperatingModeReassertion();
 
                 Func<Task> work = async () =>
                 {
                     if (Dispatcher.HasShutdownStarted || sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
                     try
                     {
+                        if (_interruptedGameRecovery is { } interrupted && !await RestoreInterruptedGameAsync(interrupted)) return;
+                        if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+
                         // Automatically sync dropdown to currently running game
                         if (CmbConfiguredGames != null)
                         {
@@ -2933,10 +3325,29 @@ public partial class MainWindow : Window
                             else
                             {
                                 _savedModeBeforeGame = _currentMode;
-                                _savedCpuBoostBeforeGame = _cpuPowerService.CurrentMode;
+                                // CurrentMode keeps its initial value when the query failed; ask the power plan
+                                // directly instead of restoring a boost value the user never had.
+                                _savedCpuBoostBeforeGame = _cpuPowerService.IsModeVerified
+                                    ? _cpuPowerService.CurrentMode
+                                    : (await Task.Run(() => _cpuPowerService.QueryBoostModeExact(true)) ?? _cpuPowerService.CurrentMode);
                                 _savedFanModeBeforeGame = _currentFanMode;
                             }
-                            _savedMouseProfileBeforeGame = _atkMouseService.CurrentActiveProfile > 0 ? _atkMouseService.CurrentActiveProfile : 1;
+                            _savedMouseProfileBeforeGame = _appSettings.DefaultAtkMouseProfile > 0
+                                ? _appSettings.DefaultAtkMouseProfile : 0;
+                            var (savedAc, savedDc) = await Task.Run(() =>
+                                (_cpuPowerService.QueryBoostModeExact(true), _cpuPowerService.QueryBoostModeExact(false)));
+                            if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
+
+                            _activeGameRecovery = new GameSessionRecoveryState
+                            {
+                                IsActive = true,
+                                SavedMode = _savedModeBeforeGame,
+                                SavedBoost = _savedCpuBoostBeforeGame,
+                                SavedAcBoost = savedAc,
+                                SavedDcBoost = savedDc,
+                                SavedFan = _savedFanModeBeforeGame,
+                                SavedMouseProfile = _appSettings.AtkMouseIntegrationEnabled ? _savedMouseProfileBeforeGame : 0
+                            };
                             _hasGameBaselineCaptured = true;
                         }
 
@@ -2947,15 +3358,7 @@ public partial class MainWindow : Window
                         _batteryService.IsGameSessionActive = true;
                         UpdateTrayRetryMenuItemState();
 
-                        SaveGameSessionRecoveryState(new GameSessionRecoveryState
-                        {
-                            IsActive = true,
-                            SavedMode = _savedModeBeforeGame,
-                            SavedBoost = _savedCpuBoostBeforeGame,
-                            SavedFan = _savedFanModeBeforeGame,
-                            SavedMouseProfile = _savedMouseProfileBeforeGame,
-                            Timestamp = DateTime.UtcNow
-                        });
+                        if (_activeGameRecovery is { } baseline) SaveGameSessionRecoveryState(baseline);
 
                         var boostName = ModePolicy.BoostDisplayName(profile.TargetCpuBoost);
 
@@ -2964,8 +3367,9 @@ public partial class MainWindow : Window
                         if (_appSettings.AtkMouseIntegrationEnabled && profile.TargetAtkMouseProfile > 0)
                         {
                             if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
-                            bool mouseOk = await SwitchMouseProfileInternalAsync(profile.TargetAtkMouseProfile);
-                            if (mouseOk)
+
+                            var mouseResult = await TryApplyGameMouseProfileAsync(profile.TargetAtkMouseProfile, sessionGen);
+                            if (mouseResult == AtkMouseResult.Confirmed)
                             {
                                 _isMouseProfileSwitchedForGame = true;
                                 mouseSwitchedThisTurn = true;
@@ -2974,7 +3378,9 @@ public partial class MainWindow : Window
                             }
                             else
                             {
-                                ShowToast("Oyun fare profiline geçilemedi.", false);
+                                if (mouseResult != AtkMouseResult.Rejected)
+                                    _pendingGameMouseProfile = (sessionGen, profile.TargetAtkMouseProfile, 3, Environment.TickCount64 + 3000);
+                                ShowToast($"Oyun fare profili: {DescribeMouseFailure(mouseResult)}.", false);
                             }
 
                             if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled)
@@ -3001,7 +3407,7 @@ public partial class MainWindow : Window
                         bool modeOk = await SwitchModeAsync(gameMode);
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
 
-                        bool boostOk = await ApplyCpuBoostModeAsync(profile.TargetCpuBoost);
+                        bool boostOk = await ApplyGameBoostModeAsync(profile.TargetCpuBoost);
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
 
                         bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
@@ -3032,15 +3438,9 @@ public partial class MainWindow : Window
                             }
                         }
 
-                        if (allCoreOk)
+                        if (!allCoreOk)
                         {
-                            _notifyIcon?.ShowBalloonTip(3000, "NitroLite", 
-                                $"{profile.DisplayName} algılandı. Profil: {profile.TargetMode} / {boostName}{mouseInfo}", 
-                                System.Windows.Forms.ToolTipIcon.Info);
-                        }
-                        else
-                        {
-                            ShowToast($"'{profile.DisplayName}' profilinin bazı donanım ayarları uygulanamadı.", false);
+                            ShowToast($"'{profile.DisplayName}' profilinin bazı donanım ayarları uygulanamadı.", false, trayBalloon: false);
                         }
                     }
                     catch (Exception ex)
@@ -3091,6 +3491,7 @@ public partial class MainWindow : Window
 
     internal async Task HandleGameEndedAsync(GameProfile profile)
     {
+        if (!_isGameSessionActive && _interruptedGameRecovery != null) return;
         if (Dispatcher.HasShutdownStarted) return;
         int endGen = Interlocked.Increment(ref _gameSessionGeneration);
         try
@@ -3225,6 +3626,7 @@ public partial class MainWindow : Window
                             if (allSucceeded)
                             {
                                 _hasGameBaselineCaptured = false; // Allow next game start to capture a fresh baseline
+                                _activeGameRecovery = null;
                                 ClearGameSessionRecoveryState();
                             }
 
@@ -3245,9 +3647,8 @@ public partial class MainWindow : Window
                                     ? $"Pilde Eco profili (Quiet / Boost Devre Dışı{restoredMouseInfo})" 
                                     : $"Varsayılan profil ({_savedModeBeforeGame}{restoredMouseInfo})";
 
-                                _notifyIcon?.ShowBalloonTip(2500, "NitroLite", 
-                                    $"{profile.DisplayName} sonlandırıldı. {restoredSummary} geri yüklendi.", 
-                                    System.Windows.Forms.ToolTipIcon.Info);
+                                // Game ended notification removed
+
                                 ShowToast(isBatteryEco ? "Pilde Eco profili uygulandı (Masaüstü ayarları adaptör için saklandı)." : "Masaüstü ayarları başarıyla geri yüklendi.", trayBalloon: false);
                             }
                             else
@@ -3358,6 +3759,9 @@ public partial class MainWindow : Window
                 if (Dispatcher.HasShutdownStarted || _isGameSessionActive || retryGen != _gameSessionGeneration)
                     return false;
 
+                if (_interruptedGameRecovery is { } interrupted)
+                    return await RestoreInterruptedGameAsync(interrupted);
+
                 var failed = new List<string>();
                 var targets = GetEffectiveRestoreTargets();
 
@@ -3451,6 +3855,7 @@ public partial class MainWindow : Window
                 if (allSucceeded)
                 {
                     _hasGameBaselineCaptured = false;
+                    _activeGameRecovery = null;
                     ClearGameSessionRecoveryState();
                     if (TxtGameStatus != null)
                     {
@@ -3693,7 +4098,7 @@ public partial class MainWindow : Window
             bool wearEstimated = details.IsDesignCapacityEstimated || details.IsFullChargeCapacityEstimated;
 
             if (TxtBatHealthPercent != null)
-                TxtBatHealthPercent.Text = measured ? TelemetryFormatter.MarkEstimated($"{details.HealthPercent:F1} %", wearEstimated) : "--";
+                TxtBatHealthPercent.Text = measured ? TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.HealthPercent:F1} %"), wearEstimated) : "--";
             if (TxtBatHealthNote != null)
                 TxtBatHealthNote.Text = !measured ? "Kapasite okunamadı"
                     : details.HealthPercent >= 80 ? "İyi"
@@ -3701,7 +4106,7 @@ public partial class MainWindow : Window
                     : "Değişim önerilir";
 
             if (TxtBatWearPercent != null)
-                TxtBatWearPercent.Text = measured ? TelemetryFormatter.MarkEstimated($"{details.WearLevelPercent:F1} %", wearEstimated) : "--";
+                TxtBatWearPercent.Text = measured ? TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.WearLevelPercent:F1} %"), wearEstimated) : "--";
             if (TxtBatWearNote != null)
                 TxtBatWearNote.Text = !measured ? "--"
                     : details.WearLevelPercent < 10 ? "Düşük aşınma (< %10)"
@@ -3710,12 +4115,12 @@ public partial class MainWindow : Window
 
             if (TxtBatFullChargeCap != null)
                 TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0
-                    ? TelemetryFormatter.MarkEstimated($"{details.FullChargeCapacityMWh:N0} mWh", details.IsFullChargeCapacityEstimated)
+                    ? TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.FullChargeCapacityMWh:F0} mWh"), details.IsFullChargeCapacityEstimated)
                     : "--";
 
             if (TxtBatDesignCap != null)
                 TxtBatDesignCap.Text = details.DesignCapacityMWh > 0
-                    ? "Fabrika: " + TelemetryFormatter.MarkEstimated($"{details.DesignCapacityMWh:N0} mWh", details.IsDesignCapacityEstimated)
+                    ? "Fabrika: " + TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.DesignCapacityMWh:F0} mWh"), details.IsDesignCapacityEstimated)
                     : "Fabrika: --";
 
             if (TxtBatCycleCount != null)
@@ -3790,7 +4195,7 @@ public partial class MainWindow : Window
                         : $" ({d0.BusType} - {d0.Firmware})";
                 }
                 if (TxtDrive0Detail != null) TxtDrive0Detail.Text = TelemetryFormatter.FormatDiskCapacity(d0.UsedCapacityGB, d0.TotalCapacityGB);
-                if (TxtDrive0Free != null) TxtDrive0Free.Text = $"{d0.FreeCapacityGB:F1} GB Boş Alan";
+                if (TxtDrive0Free != null) TxtDrive0Free.Text = FormattableString.Invariant($"{d0.FreeCapacityGB:F1} GB Boş Alan");
                 if (BarDrive0 != null)
                 {
                     BarDrive0.Value = d0.UsedPercent;
@@ -3798,7 +4203,9 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive0HealthBadge != null)
                 {
-                    TxtDrive0HealthBadge.Text = d0.EstHealthPercent >= 0 ? $"Sağlık: %{d0.EstHealthPercent}" : "Aşınma ölçülemiyor (yönetici izni gerekli)";
+                    TxtDrive0HealthBadge.Text = d0.EstHealthPercent >= 0
+                        ? $"Sağlık: %{d0.EstHealthPercent}"
+                        : (string.IsNullOrWhiteSpace(d0.HealthDesc) ? "Aşınma ölçülemiyor (yönetici izni gerekli)" : d0.HealthDesc);
                 }
                 if (TxtDrive0Temp != null)
                 {
@@ -3833,7 +4240,7 @@ public partial class MainWindow : Window
                         : $" ({d1.BusType} - {d1.Firmware})";
                 }
                 if (TxtDrive1Detail != null) TxtDrive1Detail.Text = TelemetryFormatter.FormatDiskCapacity(d1.UsedCapacityGB, d1.TotalCapacityGB);
-                if (TxtDrive1Free != null) TxtDrive1Free.Text = $"{d1.FreeCapacityGB:F1} GB Boş Alan";
+                if (TxtDrive1Free != null) TxtDrive1Free.Text = FormattableString.Invariant($"{d1.FreeCapacityGB:F1} GB Boş Alan");
                 if (BarDrive1 != null)
                 {
                     BarDrive1.Value = d1.UsedPercent;
@@ -3841,7 +4248,9 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive1HealthBadge != null)
                 {
-                    TxtDrive1HealthBadge.Text = d1.EstHealthPercent >= 0 ? $"Sağlık: %{d1.EstHealthPercent}" : "Aşınma ölçülemiyor (yönetici izni gerekli)";
+                    TxtDrive1HealthBadge.Text = d1.EstHealthPercent >= 0
+                        ? $"Sağlık: %{d1.EstHealthPercent}"
+                        : (string.IsNullOrWhiteSpace(d1.HealthDesc) ? "Aşınma ölçülemiyor (yönetici izni gerekli)" : d1.HealthDesc);
                 }
                 if (TxtDrive1Temp != null)
                 {
@@ -3879,6 +4288,47 @@ public partial class MainWindow : Window
                     TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary");
                 }
             }
+        });
+    }
+
+    /// <summary>Turns the "yyyy-MM-dd" of the last sustained-load sample into an age hint for the UI.</summary>
+    private static string DescribeSampleAge(string? sampleDate)
+    {
+        if (string.IsNullOrWhiteSpace(sampleDate)) return "";
+        if (!DateTime.TryParseExact(sampleDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            return "";
+
+        int days = (DateTime.Today - day.Date).Days;
+        if (days <= 0) return "Bugün ölçüldü";
+        if (days == 1) return "Dün ölçüldü";
+        return FormattableString.Invariant($"{days} gün önce ölçüldü");
+    }
+
+    /// <summary>
+    /// Shows a warning on the RGB tab when the Acer service explicitly reports that this model has no
+    /// controllable keyboard lighting. A null answer (service absent, unknown reply) changes nothing.
+    /// </summary>
+    private async Task RefreshLightingCapabilityAsync()
+    {
+        bool? supported;
+        try
+        {
+            supported = await _agentClient.GetLightingCapabilityAsync();
+        }
+        catch
+        {
+            return;
+        }
+
+        if (supported != false) return;
+
+        Dispatcher.Invoke(() =>
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+            if (BannerLightingUnsupported != null) BannerLightingUnsupported.Visibility = Visibility.Visible;
+            if (TxtLightingUnsupported != null)
+                TxtLightingUnsupported.Text = "Acer servisi bu modelde denetlenebilir klavye aydınlatması bildirmedi. "
+                    + "Aşağıdaki denetimler etkisiz kalabilir; RGB servisini onarmayı deneyebilirsiniz.";
         });
     }
 
@@ -3944,7 +4394,7 @@ public partial class MainWindow : Window
             bool hasLoad = report.HasLoadMeasurement;
             if (TxtPasteHealthPercent != null)
             {
-                TxtPasteHealthPercent.Text = hasLoad ? $"~{report.PasteHealthPercent:F1} %" : "Ölçüm yok";
+                TxtPasteHealthPercent.Text = hasLoad ? FormattableString.Invariant($"~{report.PasteHealthPercent:F1} %") : "Ölçüm yok";
                 TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
                     : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
@@ -3953,24 +4403,27 @@ public partial class MainWindow : Window
             {
                 string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? " (Normal)" : " (Yüksek)");
                 TxtThermalResistance.Text = hasLoad
-                    ? $"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}"
+                    ? FormattableString.Invariant($"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}")
                     : "Yük altında örnek bekleniyor";
             }
 
+            if (TxtThermalSampleAge != null)
+                TxtThermalSampleAge.Text = DescribeSampleAge(report.LastLoadMeasurementDate);
+
             if (TxtActiveFanHours != null)
-                TxtActiveFanHours.Text = $"{report.ActiveFanHours:F1} Saat";
+                TxtActiveFanHours.Text = FormattableString.Invariant($"{report.ActiveFanHours:F1} Saat");
 
             if (TxtAvgFanRpm != null)
                 TxtAvgFanRpm.Text = report.AvgFanRpm > 0 ? $"Ortalama: {report.AvgFanRpm} RPM" : "Ortalama: --";
 
             if (TxtPassiveFanHours != null)
-                TxtPassiveFanHours.Text = $"{report.PassiveFanHours:F1} Saat";
+                TxtPassiveFanHours.Text = FormattableString.Invariant($"{report.PassiveFanHours:F1} Saat");
 
             if (TxtFanBearingHealth != null)
-                TxtFanBearingHealth.Text = $"~{report.FanBearingHealthPercent:F1} %";
+                TxtFanBearingHealth.Text = FormattableString.Invariant($"~{report.FanBearingHealthPercent:F1} %");
 
             if (TxtFanRatedLife != null)
-                TxtFanRatedLife.Text = $"Varsayılan fan ömrü {report.FanRatedHours:N0} saat; yalnızca NitroLite açıkken sayılan çalışma süresinden (tahmini)";
+                TxtFanRatedLife.Text = FormattableString.Invariant($"Varsayılan fan ömrü {report.FanRatedHours:F0} saat; yalnızca NitroLite açıkken sayılan çalışma süresinden (tahmini)");
 
             if (TxtThermalBadge != null)
             {
@@ -3980,8 +4433,12 @@ public partial class MainWindow : Window
             }
 
             if (TxtThermalRecommendation != null)
-                TxtThermalRecommendation.Text = report.Recommendation +
+            {
+                // report.Recommendation only looks at the current resistance, so it can say "bakım
+                // gerekmemektedir" while the trend card right above says "Bakım Önerilebilir".
+                TxtThermalRecommendation.Text = ThermalHealthService.BuildRecommendation(report.Recommendation, trend) +
                     " Not: Bu değerlendirme deneysel bir tahmindir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.";
+            }
         });
     }
 
@@ -4013,9 +4470,11 @@ public partial class MainWindow : Window
 
             UpdateHighPowerAvailabilityUi();
 
-            TxtBatteryHeader.Text = $"{status.BatteryPercent}%";
-            TxtBatLevelBig.Text = $"{status.BatteryPercent}%";
-            BarBatBig.Value = status.BatteryPercent;
+            // -1 means Windows could not report the level; show it as unknown instead of a flat battery.
+            bool levelKnown = status.BatteryPercent >= 0;
+            TxtBatteryHeader.Text = levelKnown ? $"{status.BatteryPercent}%" : "-- %";
+            TxtBatLevelBig.Text = levelKnown ? $"{status.BatteryPercent}%" : "-- %";
+            BarBatBig.Value = levelKnown ? status.BatteryPercent : 0;
 
             // Windows keeps its "charging" flag set while the 80 % limit holds the battery at 0 W, so decide by the
             // actual charge current when it was read.
@@ -4534,6 +4993,8 @@ public partial class MainWindow : Window
     private void FinishExit()
     {
         _isExiting = true;
+        CancelActiveLightingReassertion();
+        CancelActiveOperatingModeReassertion();
         SaveWindowPosition();
 
         _batteryService.StatusUpdated -= OnBatteryStatusUpdated;
@@ -4558,6 +5019,7 @@ public partial class MainWindow : Window
             _osdWindow.Close();
         }
         _powerAutomationService?.Dispose();
+        _cpuPowerService.Dispose();
         _gameService.Dispose();
         _batteryService.Dispose();
         _agentClient.Dispose();
@@ -4581,6 +5043,7 @@ public partial class MainWindow : Window
             _thermalService.SaveData();
             _hardwareService.Dispose();
             _powerAutomationService?.Dispose();
+            _cpuPowerService.Dispose();
             _gameService.Dispose();
             _batteryService.Dispose();
             _agentClient.Dispose();
@@ -4696,6 +5159,8 @@ public partial class MainWindow : Window
             return false;
         }
 
+        CancelActiveOperatingModeReassertion();
+
         await _gameProfileTransitionLock.WaitAsync();
         try
         {
@@ -4704,6 +5169,8 @@ public partial class MainWindow : Window
             {
                 _currentMode = mode;
                 UpdateDesktopBaselineForManualChange(mode: mode);
+                _appSettings.LastOperatingMode = mode;
+                SaveSettings();
             }
             return ok;
         }
@@ -4739,7 +5206,7 @@ public partial class MainWindow : Window
             if (ok)
             {
                 UpdateModeUi(mode);
-                ShowToast($"Çalışma modu: {ModePolicy.DisplayName(mode)}");
+                ShowToast($"Çalışma modu: {ModePolicy.DisplayName(mode)}", isSuccess: true, trayBalloon: false);
                 return true;
             }
             else
@@ -5396,6 +5863,169 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void BtnFixLighting_Click(object sender, RoutedEventArgs e)
+    {
+        if (_serviceOperationBusy) return;
+        var confirm = System.Windows.MessageBox.Show(this,
+            "AcerLightingService kayıt defteri yolu ve başlangıç türü sürücü deposuyla eşitlenecek, ardından klavye servisi yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
+            "Klavye RGB Servisini Onar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        SetRepairToolBusy(true, "Klavye aydınlatma servisi onarılıyor...");
+        try
+        {
+            var res = await SystemToolsService.FixKeyboardLightingAsync();
+            SetRepairToolStatus(res.Success, res.Message);
+            ShowToast(res.Message, res.Success);
+            await RefreshServiceListAsync();
+        }
+        catch (Exception ex)
+        {
+            SetRepairToolStatus(false, $"Hata: {ex.Message}");
+            ShowToast($"Onarım hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            SetRepairToolBusy(false);
+        }
+    }
+
+    private async void BtnFixAcerServices_Click(object sender, RoutedEventArgs e)
+    {
+        if (_serviceOperationBusy) return;
+        var confirm = System.Windows.MessageBox.Show(this,
+            "AcerCentralService ve AcerLightingService en güncel sürücü paketine bağlanacak, çakışan eski servis süreçleri kapatılıp servisler yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
+            "Acer & NitroSense Servislerini Onar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        SetRepairToolBusy(true, "Acer arka plan servisleri güncelleniyor ve onarılıyor...");
+        try
+        {
+            var res = await SystemToolsService.FixAcerServicesAsync();
+            SetRepairToolStatus(res.Success, res.Message);
+            ShowToast(res.Message, res.Success);
+            await RefreshServiceListAsync();
+        }
+        catch (Exception ex)
+        {
+            SetRepairToolStatus(false, $"Hata: {ex.Message}");
+            ShowToast($"Onarım hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            SetRepairToolBusy(false);
+        }
+    }
+
+    private async void BtnRestoreMux_Click(object sender, RoutedEventArgs e)
+    {
+        if (_serviceOperationBusy) return;
+        var confirm = System.Windows.MessageBox.Show(this,
+            "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
+            "MUX Switch Kaydını Onar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        SetRepairToolBusy(true, "MUX switch kaydı ve servisleri düzenleniyor...");
+        try
+        {
+            var res = await SystemToolsService.RestoreMuxSwitchAsync();
+            SetRepairToolStatus(res.Success, res.Message);
+            ShowToast(res.Message, res.Success);
+        }
+        catch (Exception ex)
+        {
+            SetRepairToolStatus(false, $"Hata: {ex.Message}");
+            ShowToast($"MUX onarım hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            SetRepairToolBusy(false);
+        }
+    }
+
+    private async void BtnOptimizePc_Click(object sender, RoutedEventArgs e)
+    {
+        if (_serviceOperationBusy) return;
+        var confirm = System.Windows.MessageBox.Show(this,
+            "Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
+            "Windows & Sistem Optimizasyonu", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        SetRepairToolBusy(true, "Sistem ve arka plan optimizasyonları uygulanıyor...");
+        try
+        {
+            var res = await SystemToolsService.OptimizePcAsync();
+            SetRepairToolStatus(res.Success, res.Message);
+            ShowToast(res.Message, res.Success);
+        }
+        catch (Exception ex)
+        {
+            SetRepairToolStatus(false, $"Hata: {ex.Message}");
+            ShowToast($"Optimizasyon hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            SetRepairToolBusy(false);
+        }
+    }
+
+    private async void BtnRestoreOptimize_Click(object sender, RoutedEventArgs e)
+    {
+        if (_serviceOperationBusy) return;
+        var confirm = System.Windows.MessageBox.Show(this,
+            "Optimizasyonun değiştirdiği servis başlangıç türleri, HAGS ayarı ve telemetri görevleri yedekten geri yüklenecek. Yönetici izni istenecek.\n\nDevam edilsin mi?",
+            "Optimizasyonu Geri Al", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        SetRepairToolBusy(true, "Optimizasyon öncesi ayarlar geri yükleniyor...");
+        try
+        {
+            var res = await SystemToolsService.RestoreOptimizePcAsync();
+            SetRepairToolStatus(res.Success, res.Message);
+            ShowToast(res.Message, res.Success);
+        }
+        catch (Exception ex)
+        {
+            SetRepairToolStatus(false, $"Hata: {ex.Message}");
+            ShowToast($"Geri alma hatası: {ex.Message}", false);
+        }
+        finally
+        {
+            SetRepairToolBusy(false);
+        }
+    }
+
+    private void SetRepairToolBusy(bool busy, string? status = null)
+    {
+        _serviceOperationBusy = busy;
+        UpdateServiceButtons();
+        if (BtnFixLighting != null) BtnFixLighting.IsEnabled = !busy;
+        if (BtnFixAcerServices != null) BtnFixAcerServices.IsEnabled = !busy;
+        if (BtnRestoreMux != null) BtnRestoreMux.IsEnabled = !busy;
+        if (BtnOptimizePc != null) BtnOptimizePc.IsEnabled = !busy;
+        if (BtnRestoreOptimize != null) BtnRestoreOptimize.IsEnabled = !busy;
+
+        if (TxtRepairToolsStatus != null)
+        {
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                TxtRepairToolsStatus.Text = status;
+                TxtRepairToolsStatus.Foreground = (System.Windows.Media.Brush)FindResource("AccentCyan");
+                TxtRepairToolsStatus.Visibility = Visibility.Visible;
+            }
+        }
+    }
+
+    private void SetRepairToolStatus(bool success, string message)
+    {
+        if (TxtRepairToolsStatus != null)
+        {
+            TxtRepairToolsStatus.Text = (success ? "● " : "▲ ") + message;
+            TxtRepairToolsStatus.Foreground = (System.Windows.Media.Brush)FindResource(success ? "AccentGreen" : "AccentRed");
+            TxtRepairToolsStatus.Visibility = Visibility.Visible;
+        }
+    }
+
     private void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkAutoStart == null) return;
@@ -5540,11 +6170,18 @@ public partial class MainWindow : Window
         }
 
         string freedStr = res.FreedMegabytes >= 1024
-            ? $"{res.FreedMegabytes / 1024.0:F1} GB"
+            ? FormattableString.Invariant($"{res.FreedMegabytes / 1024.0:F1} GB")
             : $"{res.FreedMegabytes:F0} MB";
-        if (!automatic || res.FreedMegabytes > 150)
-            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe geçti.", trayBalloon: !automatic);
-        SetRamCleanStatus($" ({freedStr} boşaltıldı)", "AccentGreen");
+        if (res.FreedMegabytes <= 0)
+        {
+            ShowToast("Bekleme belleği zaten temiz (boşaltılacak önbellek yok).", isSuccess: true, trayBalloon: false);
+            SetRamCleanStatus(" (Zaten temiz)", "AccentGreen");
+        }
+        else
+        {
+            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe aktarıldı.", isSuccess: true, trayBalloon: false);
+            SetRamCleanStatus($" ({freedStr} boşaltıldı)", "AccentGreen");
+        }
         UpdateMemoryListText();
     }
 
@@ -5602,7 +6239,7 @@ public partial class MainWindow : Window
         if (TxtRamCleanNote == null) return;
         var lists = MemoryCleanerService.ReadMemoryLists();
         string sizes = lists.HasValue
-            ? $"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. "
+            ? FormattableString.Invariant($"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. ")
             : "";
         TxtRamCleanNote.Text = sizes + "Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz. "
                                + "Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.";

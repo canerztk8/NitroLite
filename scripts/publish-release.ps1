@@ -73,9 +73,10 @@ Invoke-Step "StandbyPurge helper (Native AOT, runtime $RuntimeVersion)" {
 }
 
 # Ship only what the app needs.
+Set-Content -LiteralPath (Join-Path $stage 'StandbyPurge\native-aot.marker') -Value 'NitroLite.StandbyPurge Native AOT' -Encoding ascii
 Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item -Force
 $unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
-    $_.Name -notin 'NitroLite.exe', 'NitroLite.StandbyPurge.exe'
+    $_.Name -notin 'NitroLite.exe', 'NitroLite.StandbyPurge.exe', 'native-aot.marker'
 }
 if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
 

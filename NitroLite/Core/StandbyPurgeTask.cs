@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
@@ -31,6 +31,7 @@ public class StandbyPurgeTask
     public const string TaskFolder = @"\NitroLite";
     public const string TaskName = "StandbyPurge";
     public const string HelperExeName = "NitroLite.StandbyPurge.exe";
+    internal const string NativeHelperMarker = "native-aot.marker";
     /// <summary>
     /// Files the helper may consist of. A normal build is framework-dependent (exe + dll + runtimeconfig, needs the
     /// .NET runtime); the release package ships a Native AOT build that is the exe alone and needs no runtime.
@@ -48,8 +49,9 @@ public class StandbyPurgeTask
         if (!File.Exists(Path.Combine(BundledDirectory, HelperExeName))) return Array.Empty<string>();
         var files = CandidateFiles.Where(f => File.Exists(Path.Combine(BundledDirectory, f))).ToArray();
         // A framework-dependent exe without its dll/runtimeconfig would not start: treat as missing.
-        bool frameworkDependent = files.Length > 1;
-        if (frameworkDependent && files.Length != CandidateFiles.Length) return Array.Empty<string>();
+        if (files.Length != CandidateFiles.Length &&
+            !(files.Length == 1 && File.Exists(Path.Combine(BundledDirectory, NativeHelperMarker))))
+            return Array.Empty<string>();
         return files;
     }
 
@@ -183,11 +185,46 @@ public class StandbyPurgeTask
     private static string Quote(string s) => "'" + s.Replace("'", "''") + "'";
 
     /// <summary>
+    /// The elevated scripts copy into and (on uninstall) recursively delete <see cref="InstallDirectory"/>, so a
+    /// drive root or a Windows folder must never reach them.
+    /// </summary>
+    private void EnsureSafeInstallDirectory()
+    {
+        string full;
+        try { full = Path.GetFullPath(InstallDirectory); }
+        catch (Exception ex) { throw new ArgumentException($"Geçersiz kurulum klasörü: {InstallDirectory}", nameof(InstallDirectory), ex); }
+
+        var trimmed = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? "";
+        if (trimmed.Length == 0 || string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException($"Kurulum klasörü bir sürücü kökü olamaz: {full}", nameof(InstallDirectory));
+
+        var protectedRoots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            Environment.GetFolderPath(Environment.SpecialFolder.SystemX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+        };
+        foreach (var candidate in protectedRoots)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            var normalized = Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(trimmed, normalized, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"Kurulum klasörü sistem klasörü olamaz: {full}", nameof(InstallDirectory));
+        }
+    }
+
+    /// <summary>
     /// Elevated script: copy the helper to Program Files, check every copied file against the hash NitroLite
     /// computed just before (the source folder is user-writable), then register the task for <paramref name="userId"/>.
     /// </summary>
     public string GenerateInstallScript(string userId, IReadOnlyList<string> files, string[] expectedHashes, string errorLogPath)
     {
+        EnsureSafeInstallDirectory();
         if (!SafeUserName.IsMatch(userId)) throw new ArgumentException($"Geçersiz kullanıcı adı: {userId}", nameof(userId));
         if (files.Count == 0 || files[0] != HelperExeName || files.Any(f => !CandidateFiles.Contains(f)))
             throw new ArgumentException("Geçersiz yardımcı dosya listesi.", nameof(files));
@@ -196,17 +233,19 @@ public class StandbyPurgeTask
 
         var sb = new System.Text.StringBuilder();
         sb.Append($"$errLog = {Quote(errorLogPath)}; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
-        sb.Append("try { ");
         sb.Append($"$src = {Quote(BundledDirectory)}; $dst = {Quote(InstallDirectory)}; ");
-        sb.Append("if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction Stop }; ");
-        sb.Append("New-Item -ItemType Directory -Path $dst -Force -ErrorAction Stop | Out-Null; ");
+        sb.Append("$id = [guid]::NewGuid().ToString('N'); $stage = $dst + '.stage.' + $id; $backup = $dst + '.backup.' + $id; ");
+        sb.Append("$swapped = $false; $backedUp = $false; try { ");
+        sb.Append("New-Item -ItemType Directory -Path $stage -Force -ErrorAction Stop | Out-Null; ");
         for (int i = 0; i < files.Count; i++)
         {
             var f = Quote(files[i]);
-            sb.Append($"Copy-Item -LiteralPath (Join-Path $src {f}) -Destination (Join-Path $dst {f}) -Force -ErrorAction Stop; ");
-            sb.Append($"if ((Get-FileHash -LiteralPath (Join-Path $dst {f}) -Algorithm SHA256).Hash -ne '{expectedHashes[i]}') " +
-                      $"{{ Remove-Item -LiteralPath $dst -Recurse -Force; throw ('Kopyalanan dosya doğrulanamadı: ' + {f}) }}; ");
+            sb.Append($"Copy-Item -LiteralPath (Join-Path $src {f}) -Destination (Join-Path $stage {f}) -Force -ErrorAction Stop; ");
+            sb.Append($"if ((Get-FileHash -LiteralPath (Join-Path $stage {f}) -Algorithm SHA256 -ErrorAction Stop).Hash -ne '{expectedHashes[i]}') " +
+                      $"{{ throw ('Kopyalanan dosya doğrulanamadı: ' + {f}) }}; ");
         }
+        sb.Append("if (Test-Path -LiteralPath $dst) { [IO.Directory]::Move($dst, $backup); $backedUp = $true }; ");
+        sb.Append("[IO.Directory]::Move($stage, $dst); $swapped = $true; ");
         sb.Append($"$exe = Join-Path $dst {Quote(HelperExeName)}; ");
         sb.Append("$action = New-ScheduledTaskAction -Execute $exe; ");
         sb.Append($"$principal = New-ScheduledTaskPrincipal -UserId {Quote(userId)} -LogonType Interactive -RunLevel Highest; ");
@@ -214,13 +253,18 @@ public class StandbyPurgeTask
                   "-ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable:$false; ");
         sb.Append($"Register-ScheduledTask -TaskPath '{TaskFolder}\\' -TaskName '{TaskName}' -Action $action -Principal $principal " +
                   "-Settings $settings -Description 'NitroLite: bekleme belleğini boşaltır (yalnızca NitroLite tarafından elle veya otomatik başlatılır).' -Force -ErrorAction Stop | Out-Null; ");
-        sb.Append("exit 0 ");
-        sb.Append("} catch { $_.Exception.Message | Out-File -FilePath $errLog -Encoding utf8; exit 1 }");
+        sb.Append("if ($backedUp) { Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue }; exit 0 ");
+        sb.Append("} catch { $failure = $_.Exception.Message; try { ");
+        sb.Append("if ($swapped) { [IO.Directory]::Move($dst, $stage) }; if ($backedUp) { [IO.Directory]::Move($backup, $dst) } ");
+        sb.Append("} catch { $failure += ('; eski yardımcı geri alınamadı: ' + $_.Exception.Message) }; ");
+        sb.Append("$failure | Out-File -FilePath $errLog -Encoding utf8; exit 1 ");
+        sb.Append("} finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue } }");
         return sb.ToString();
     }
 
     public string GenerateUninstallScript(string errorLogPath)
     {
+        EnsureSafeInstallDirectory();
         var sb = new System.Text.StringBuilder();
         sb.Append($"$errLog = {Quote(errorLogPath)}; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; $errs = @(); ");
         sb.Append($"try {{ $t = Get-ScheduledTask -TaskPath '{TaskFolder}\\' -TaskName '{TaskName}' -ErrorAction SilentlyContinue; " +
