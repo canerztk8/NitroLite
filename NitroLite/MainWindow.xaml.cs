@@ -6184,8 +6184,8 @@ public partial class MainWindow : Window
         }
         else
         {
-            ShowToast(Loc.T($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe aktarıldı."), isSuccess: true, trayBalloon: false);
-            SetRamCleanStatus(Loc.T($" ({freedStr} boşaltıldı)"), "AccentGreen");
+            ShowToast(Loc.T($"Önbellek boşaltıldı: {freedStr} serbest bırakıldı (kullanılan RAM değişmez)."), isSuccess: true, trayBalloon: false);
+            SetRamCleanStatus(Loc.T($" ({freedStr} serbest bırakıldı)"), "AccentGreen");
         }
         UpdateMemoryListText();
     }
@@ -6223,7 +6223,7 @@ public partial class MainWindow : Window
         string sizes = lists.HasValue
             ? Loc.TInv($"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. ")
             : "";
-        TxtRamCleanNote.Text = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz. ")
+        TxtRamCleanNote.Text = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz, bu yüzden kullanılan RAM çubuğu değişmez. ")
                                + Loc.T("Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.");
     }
 
