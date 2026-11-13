@@ -50,7 +50,7 @@ public static class HardwareReport
     };
 
     /// <summary>Builds the plain-text report. Never throws: a failed section is reported as unavailable.</summary>
-    public static string BuildText(KeyboardCapability? keyboard = null)
+    public static string BuildText(DeviceCapabilities? capabilities = null)
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
@@ -104,6 +104,7 @@ public static class HardwareReport
         sb.AppendLine();
 
         sb.AppendLine("KEYBOARD");
+        var keyboard = capabilities?.Keyboard;
         if (keyboard == null)
         {
             sb.AppendLine("  (the Acer service did not answer)");
@@ -117,6 +118,20 @@ public static class HardwareReport
         }
         sb.AppendLine();
 
+        sb.AppendLine("CAPABILITIES");
+        AppendField(sb, "Modes", capabilities?.OperatingModes == null
+            ? ""
+            : string.Join(", ", capabilities.OperatingModes.Select(m => m.ToString())));
+        AppendField(sb, "GPU modes", capabilities?.GpuModeCapability?.ToString(CultureInfo.InvariantCulture) ?? "");
+        AppendField(sb, "Fan", capabilities?.FanMode?.ToString() ?? "");
+        AppendField(sb, "Backlight", capabilities?.LightingCapability switch
+        {
+            true => "yes",
+            false => "no",
+            null => ""
+        });
+        sb.AppendLine();
+
         sb.AppendLine("ACER WMI");
         sb.AppendLine($"  AcerGamingFunction             {wmi.Summary}");
         if (wmi.Methods.Count > 0)
@@ -128,7 +143,7 @@ public static class HardwareReport
     }
 
     /// <summary>Builds the same data as JSON, for anyone who wants to script against it.</summary>
-    public static string BuildJson(KeyboardCapability? keyboard = null)
+    public static string BuildJson(DeviceCapabilities? capabilities = null)
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
@@ -178,7 +193,8 @@ public static class HardwareReport
                 ["memorySpeedMts"] = hardware.MemorySpeedMts,
                 ["memoryType"] = hardware.MemoryType
             },
-            ["keyboard"] = BuildKeyboardNode(keyboard),
+            ["keyboard"] = BuildKeyboardNode(capabilities?.Keyboard),
+            ["capabilities"] = BuildCapabilitiesNode(capabilities),
             ["acerServices"] = services,
             ["acerWmi"] = BuildWmiNode(wmi)
         };
@@ -217,6 +233,28 @@ public static class HardwareReport
     }
 
     /// <summary>
+    /// The capability section. A null member is written as <c>null</c> rather than an empty list, so a reader can
+    /// tell "the service did not answer" from "the machine offers nothing".
+    /// </summary>
+    private static JsonObject BuildCapabilitiesNode(DeviceCapabilities? capabilities)
+    {
+        JsonArray? modes = null;
+        if (capabilities?.OperatingModes != null)
+        {
+            modes = new JsonArray();
+            foreach (var mode in capabilities.OperatingModes) modes.Add(mode.ToString());
+        }
+
+        return new JsonObject
+        {
+            ["operatingModes"] = modes,
+            ["gpuModeCapability"] = capabilities?.GpuModeCapability,
+            ["fanMode"] = capabilities?.FanMode?.ToString(),
+            ["backlightControllable"] = capabilities?.LightingCapability
+        };
+    }
+
+    /// <summary>
     /// The WMI section. <c>providerVersion</c> is only written when the description actually carried one, so the
     /// file never shows an empty field that looks like a failed read.
     /// </summary>
@@ -250,15 +288,15 @@ public static class HardwareReport
     /// Writes both formats into <paramref name="directory"/> and returns the text file's path. Throws only when the
     /// directory itself cannot be written, which the caller turns into a message.
     /// </summary>
-    public static string WriteToDirectory(string directory, KeyboardCapability? keyboard = null)
+    public static string WriteToDirectory(string directory, DeviceCapabilities? capabilities = null)
     {
         Directory.CreateDirectory(directory);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var textPath = Path.Combine(directory, $"hardware-report-{stamp}.txt");
         var jsonPath = Path.Combine(directory, $"hardware-report-{stamp}.json");
 
-        File.WriteAllText(textPath, BuildText(keyboard), new UTF8Encoding(false));
-        try { File.WriteAllText(jsonPath, BuildJson(keyboard), new UTF8Encoding(false)); }
+        File.WriteAllText(textPath, BuildText(capabilities), new UTF8Encoding(false));
+        try { File.WriteAllText(jsonPath, BuildJson(capabilities), new UTF8Encoding(false)); }
         catch { /* the text file is the deliverable; JSON is a convenience */ }
 
         return textPath;

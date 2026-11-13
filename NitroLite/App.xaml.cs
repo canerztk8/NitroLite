@@ -321,18 +321,18 @@ public partial class App : System.Windows.Application
         UseUtf8Console();
         try
         {
-            var keyboard = ReadKeyboardCapability();
+            var capabilities = ReadCapabilities();
             var outDir = ValueAfter(args, "--out");
             if (!string.IsNullOrWhiteSpace(outDir))
             {
-                var path = HardwareReport.WriteToDirectory(outDir, keyboard);
+                var path = HardwareReport.WriteToDirectory(outDir, capabilities);
                 Console.WriteLine(path);
                 return 0;
             }
 
             Console.WriteLine(HasFlag(args, "--json")
-                ? HardwareReport.BuildJson(keyboard)
-                : HardwareReport.BuildText(keyboard));
+                ? HardwareReport.BuildJson(capabilities)
+                : HardwareReport.BuildText(capabilities));
             return 0;
         }
         catch (Exception ex)
@@ -343,16 +343,16 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Asks AASSvc what the keyboard can do, with a hard five-second cap. The report is still useful without it, so
+    /// Asks AASSvc what this machine can do, with a hard eight-second cap. The report is still useful without it, so
     /// a service that is not running, or one that hangs, must not hold the command open.
     /// </summary>
-    private static KeyboardCapability? ReadKeyboardCapability()
+    private static DeviceCapabilities? ReadCapabilities()
     {
         try
         {
             using var client = new AcerAgentClient();
-            var task = Task.Run(() => client.GetKeyboardCapabilityAsync());
-            return task.Wait(TimeSpan.FromSeconds(5)) ? task.Result : null;
+            var task = Task.Run(() => DeviceCapabilities.ProbeAsync(client));
+            return task.Wait(TimeSpan.FromSeconds(8)) ? task.Result : null;
         }
         catch
         {

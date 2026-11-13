@@ -7424,7 +7424,16 @@ public partial class MainWindow : Window
     {
         try
         {
-            var path = HardwareReport.WriteToDirectory(AppPaths.DataDirectory, _keyboardCapability);
+            // The report is the artefact a user attaches to an issue, so it carries every capability the service
+            // reported, not just the keyboard the page happens to have probed.
+            var capabilities = new DeviceCapabilities
+            {
+                Keyboard = _keyboardCapability,
+                OperatingModes = _supportedModes,
+                GpuModeCapability = _supportedGpuCapability,
+                FanMode = _currentFanModeValue
+            };
+            var path = HardwareReport.WriteToDirectory(AppPaths.DataDirectory, capabilities);
             ShowToast(Loc.T($"Donanım raporu kaydedildi: {Path.GetFileName(path)}"), true);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {

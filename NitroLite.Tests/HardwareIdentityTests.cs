@@ -185,6 +185,65 @@ public class HardwareIdentityTests
         Assert.True(root.TryGetProperty("acerWmi", out _));
     }
 
+    /// <summary>The lines between two section headings, so an assertion cannot match a word further down.</summary>
+    private static string Section(string text, string from, string to)
+    {
+        var start = text.IndexOf(from, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"section {from} missing");
+        var end = text.IndexOf(to, start, StringComparison.Ordinal);
+        Assert.True(end > start, $"section {to} missing after {from}");
+        return text[start..end];
+    }
+
+    [Fact]
+    public void HardwareReport_TextWritesTheCapabilitySection()
+    {
+        var capabilities = new DeviceCapabilities
+        {
+            OperatingModes = new[] { OperatingMode.Quiet, OperatingMode.Turbo },
+            GpuModeCapability = 7,
+            FanMode = FanMode.Auto,
+            LightingCapability = true
+        };
+
+        var text = HardwareReport.BuildText(capabilities);
+        Assert.Contains("CAPABILITIES", text);
+        Assert.Contains("Quiet, Turbo", text);
+        Assert.Contains("Backlight", text);
+        Assert.Contains("yes", text);
+    }
+
+    [Fact]
+    public void HardwareReport_TextOmitsAFieldTheServiceDidNotAnswer()
+    {
+        // A missing answer must not be written down as a missing feature.
+        var text = HardwareReport.BuildText(new DeviceCapabilities { FanMode = FanMode.Max });
+        var section = Section(text, "CAPABILITIES", "ACER WMI");
+        Assert.Contains("Max", section);
+        Assert.DoesNotContain("Backlight", section);
+        Assert.DoesNotContain("GPU modes", section);
+        Assert.DoesNotContain("Modes", section);
+    }
+
+    [Fact]
+    public void HardwareReport_JsonWritesNullForAnUnansweredCapability()
+    {
+        var json = HardwareReport.BuildJson(new DeviceCapabilities { GpuModeCapability = 3 });
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var capabilities = doc.RootElement.GetProperty("capabilities");
+        Assert.Equal(3, capabilities.GetProperty("gpuModeCapability").GetInt32());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, capabilities.GetProperty("operatingModes").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, capabilities.GetProperty("backlightControllable").ValueKind);
+    }
+
+    [Fact]
+    public void HardwareReport_JsonKeepsTheKeyboardNodeNullWhenNothingWasProbed()
+    {
+        var json = HardwareReport.BuildJson();
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, doc.RootElement.GetProperty("keyboard").ValueKind);
+    }
+
     [Fact]
     public void FormatMemory_JoinsOnlyThePartsThatWereRead()
     {
