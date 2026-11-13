@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-866-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-987-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
@@ -21,7 +21,13 @@ at idle. Telemetry is read every 3 seconds while minimised.
 ### 1. Operating modes and fan
 - **Five power modes:** Quiet, Balanced, Performance, Turbo and Eco. Commands go through `AcerAgentService` (AASSvc,
   `127.0.0.1:46933`) using the same protocol as NitroSense.
-- **Fan:** automatic curve, maximum speed, or a fixed custom speed (CPU and GPU fan separately, 30–100 %).
+- **Fan:** automatic curve, maximum speed, a fixed custom speed (CPU and GPU fan separately, 30–100 %), or a
+  **software fan curve** you draw yourself.
+- **Software fan curve:** six points from 40 °C to 90 °C, each mapping a temperature to a fan speed. NitroLite reads
+  the CPU temperature every few seconds and moves the fan to the matching speed. A 3 °C hysteresis and a minimum
+  dwell time keep it from hunting up and down on a temperature that sits on a step. The curve is drawn as a trace
+  that always matches the sliders, and the current operating point is marked on it. The default curve is quieter
+  than the stock automatic one below 70 °C and louder above 80 °C.
 - **Mode key:** the keyboard's mode/Turbo key cycles modes the way NitroSense does (on AC: Balanced → Performance →
   Turbo → Quiet; on battery: Balanced ↔ Quiet).
 - If the mode cannot be read, the UI says "Unknown" instead of inventing a default.
@@ -39,6 +45,8 @@ at idle. Telemetry is read every 3 seconds while minimised.
 - Scans installed games (Steam and the common library folders) and checks for a running game every 2 seconds.
 - Each game can define a power mode, CPU boost, fan setting and mouse profile. Leaving the game restores the desktop
   settings.
+- A game can also carry its **own fan curve** instead of a fixed speed, so a demanding title gets a louder curve than
+  the desktop one. Turning it off falls back to the fan setting above.
 
 ### 5. ATK / VXE mouse integration (optional)
 - Switches between Config 1–4 over HID, applies a per-game profile, and returns to the default profile when the game
@@ -73,6 +81,14 @@ at idle. Telemetry is read every 3 seconds while minimised.
 ### 9. Health page
 - Battery, SSD and thermal cards. Disk temperatures without SMART access, and thermal paste/fan bearing estimates,
   are marked "(estimated)".
+
+### 9b. Display comfort (VisionCare)
+- Warms the display white point from 6500 K (neutral) down to 1900 K so a screen is easier to read at night.
+- Works through the display gamma ramp, a GDI call every Windows machine has: no driver, no overlay, nothing for an
+  anti-cheat to look at. Each monitor is handled separately, so an external screen is covered too.
+- The ramp that was there before the first write is captured and put back when you press **Reset** or quit, so
+  NitroLite does not leave a screen tinted. If it is killed while a tint is applied, the tint stays until the next
+  launch or a display mode change; **Reset** is there for exactly that case.
 
 ### 10. Integrated system and repair tools
 Every Acer and Windows maintenance task runs from the **System Services & Tools** page with one click — no external
@@ -226,6 +242,28 @@ NitroLite runs as a normal user. Windows asks for confirmation (UAC) only for:
 
 ---
 
+## Trust and code signing
+
+**NitroLite is not code-signed.** A Windows code-signing certificate that SmartScreen accepts costs a few hundred
+dollars a year and needs a registered business, which this project does not have. So the exe carries no publisher
+signature, and Windows shows "Windows protected your PC" the first time you run it. That warning is about the missing
+signature, not about anything found in the file.
+
+What you can check instead, without trusting the author:
+
+| Check | How |
+|---|---|
+| The download came from this repository | The link on the Releases page points at `github.com/canerztk8/NitroLite`; HTTPS to GitHub is the transport. |
+| The file is the one that was published | `Get-FileHash NitroLite-v1.2.0-win-x64.zip -Algorithm SHA256` and compare it with the digest GitHub lists on the release. |
+| The source matches the binary | Build it yourself from the tag; `scripts\publish-release.ps1` is the same script that produced the release. |
+| The updater does not take a shortcut | It compares the downloaded package's SHA-256 against the digest GitHub publishes and refuses to swap the exe on a mismatch. |
+
+The honest limit: if this GitHub account were taken over, an attacker could publish a release and its digest together,
+and the digest check would pass. Two-factor authentication on the account is what actually protects you, not the
+signature. If you need a signed binary, build from source and sign it with your own certificate.
+
+---
+
 ## Build from source
 
 ```powershell
@@ -254,7 +292,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-866 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+987 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

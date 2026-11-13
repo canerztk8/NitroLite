@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-866-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-987-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (geliştirme **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070
@@ -22,7 +22,13 @@ arayüzünü çalıştırmaz.
 ### 1. Çalışma modları ve fan
 - **Beş güç modu:** Sessiz, Dengeli, Performans, Turbo ve Eco. Komutlar `AcerAgentService` (AASSvc,
   `127.0.0.1:46933`) üzerinden NitroSense ile aynı protokolle gönderilir.
-- **Fan:** Otomatik eğri, maksimum devir veya özel sabit hız (CPU ve GPU fanı ayrı ayrı %30–100).
+- **Fan:** Otomatik eğri, maksimum devir, özel sabit hız (CPU ve GPU fanı ayrı ayrı %30–100) veya kendi çizdiğiniz
+  **yazılım fan eğrisi**.
+- **Yazılım fan eğrisi:** 40 °C ile 90 °C arasında altı nokta; her nokta bir sıcaklığı fan hızına eşler. NitroLite
+  işlemci sıcaklığını birkaç saniyede bir okur ve fanı karşılık gelen hıza taşır. 3 °C histerezis ve en az bekleme
+  süresi, bir basamağa oturan sıcaklıkta fanın inip çıkmasını engeller. Eğri, kaydırıcılarla her zaman aynı olan bir
+  çizgi olarak çizilir ve o anki çalışma noktası üzerinde işaretlenir. Varsayılan eğri 70 °C altında stok otomatik
+  eğriden daha sessiz, 80 °C üstünde daha yüksektir.
 - **Mod tuşu:** Klavyedeki mod/Turbo tuşu NitroSense gibi modlar arasında geçiş yapar (adaptörde Dengeli → Performans
   → Turbo → Sessiz; pilde Dengeli ↔ Sessiz).
 - Mod okunamazsa arayüz "Bilinmiyor" gösterir; varsayılan bir mod uydurmaz.
@@ -40,6 +46,8 @@ arayüzünü çalıştırmaz.
 - Kurulu oyunları (Steam ve yaygın kütüphane klasörleri) tarar; çalışan oyunu 2 saniyede bir kontrol eder.
 - Her oyun için çalışma modu, CPU boost, fan ve fare profili tanımlanabilir. Oyundan çıkınca masaüstü ayarlarına
   dönülür.
+- Bir oyun sabit hız yerine **kendi fan eğrisini** de taşıyabilir; böylece ağır bir oyun masaüstünden daha yüksek bir
+  eğri alır. Kapatılırsa yukarıdaki fan ayarı geçerli olur.
 
 ### 5. ATK / VXE fare entegrasyonu (isteğe bağlı)
 - HID üzerinden Config 1–4 arasında profil değiştirme, oyuna özel profil ve oyun bitince varsayılan profile dönüş.
@@ -72,6 +80,14 @@ arayüzünü çalıştırmaz.
 ### 9. Sağlık sekmesi
 - Pil, SSD ve termal durum kartları. SMART erişimi olmayan disk sıcaklıkları ve termal macun/fan yatağı tahminleri
   "(tahmini)" olarak işaretlidir.
+
+### 9b. Görüntü konforu (VisionCare)
+- Ekranın beyaz noktasını 6500 K (nötr) ile 1900 K arasında ısıtır; gece okumayı kolaylaştırır.
+- Ekranın gama rampası üzerinden çalışır; bu her Windows makinesinde bulunan bir GDI çağrısıdır: sürücü yok, kaplama
+  yok, anti-cheat'in bakacağı bir şey yok. Her monitör ayrı ele alınır, harici ekran da kapsanır.
+- İlk yazmadan önceki rampa saklanır ve **Sıfırla**'ya bastığınızda ya da uygulamadan çıktığınızda geri konur; yani
+  NitroLite ekranı renkli bırakmaz. Renk uygulanmışken uygulama zorla kapatılırsa renk bir sonraki açılışa veya ekran
+  modu değişimine kadar kalır; **Sıfırla** tam bu durum için vardır.
 
 ### 10. Entegre sistem ve onarım araçları
 Harici `.bat`, `.ps1` veya ayrı `.exe` araçlarına gerek kalmadan, tüm Acer ve Windows bakım/onarım işlemleri
@@ -204,10 +220,32 @@ NitroLite normal kullanıcı olarak çalışır. Windows yalnızca şu işlemler
 - **Acer arka plan servislerini kapatma / geri yükleme.**
 
 ### Kaldırma
-1. Paketle gelen WinMemoryCleaner klasörle birlikte silinir; geride ayrıca bir şey kalmaz.
-2. Sistem Servisleri sayfasında **"Windows açılışında otomatik çalıştır"** seçeneğini kapatın. Servisleri
+1. Sistem Servisleri sayfasında **"Windows açılışında otomatik çalıştır"** seçeneğini kapatın. Servisleri
    kapattıysanız **"Servisleri Geri Yükle"**'ye basın.
-3. NitroLite'ı tepsiden kapatıp klasörünü silin. Ayarları da silmek için `%LOCALAPPDATA%\NitroLite` klasörünü silin.
+2. NitroLite'ı tepsiden kapatıp klasörünü silin. Ayarları da silmek için `%LOCALAPPDATA%\NitroLite` klasörünü silin.
+   Paketle gelen WinMemoryCleaner klasörle birlikte silinir; geride ayrıca bir şey kalmaz.
+
+---
+
+## Güven ve kod imzalama
+
+**NitroLite kod imzalı değil.** SmartScreen'in kabul ettiği bir Windows kod imzalama sertifikası yılda birkaç yüz
+dolar tutar ve kayıtlı bir şirket ister; bu projede ikisi de yok. Bu yüzden exe'de yayıncı imzası yoktur ve Windows
+ilk çalıştırmada "Windows kişisel bilgisayarınızı korudu" uyarısını gösterir. Bu uyarı eksik imza hakkındadır,
+dosyada bulunan bir şey hakkında değil.
+
+Bunun yerine, yazara güvenmeden şunları kontrol edebilirsiniz:
+
+| Kontrol | Nasıl |
+|---|---|
+| İndirme bu depodan geldi | Releases sayfasındaki bağlantı `github.com/canerztk8/NitroLite` adresini gösterir; taşıma GitHub'a HTTPS'tir. |
+| Dosya yayınlanan dosya | `Get-FileHash NitroLite-v1.2.0-win-x64.zip -Algorithm SHA256` çıktısını GitHub'ın sürümde listelediği özetle karşılaştırın. |
+| Kaynak ikiliyle aynı | Etiketten kendiniz derleyin; `scripts\publish-release.ps1` sürümü üreten betiğin aynısıdır. |
+| Güncelleyici kısa yol almıyor | İndirilen paketin SHA-256'sını GitHub'ın yayınladığı özetle karşılaştırır, tutmazsa exe'yi değiştirmez. |
+
+Dürüst sınır: bu GitHub hesabı ele geçirilirse saldırgan bir sürümü ve onun özetini birlikte yayınlayabilir, özet
+kontrolü geçer. Sizi gerçekte koruyan şey imza değil, hesapta açık iki adımlı doğrulamadır. İmzalı bir ikili
+gerekiyorsa kaynaktan derleyip kendi sertifikanızla imzalayın.
 
 ---
 
@@ -238,7 +276,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-866 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+987 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
