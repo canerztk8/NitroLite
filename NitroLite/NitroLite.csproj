@@ -21,6 +21,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- One catalogue per language, embedded so the single-file package needs no loose files. Loc.LoadCatalog
+         finds them by the ".Lang.<code>.json" suffix. Turkish has no file: the source text is the key. -->
+    <EmbeddedResource Include="Lang\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.14" />
   </ItemGroup>
 

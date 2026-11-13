@@ -157,8 +157,11 @@ public static class Loc
         }
         catch (FormatException)
         {
-            // A broken translation (bad placeholder) must never take a message away: show the original.
-            return string.Format(provider, template, args);
+            // A broken translation (bad placeholder) must never take a message away: show the original. The
+            // original can fail too when a call site passes a value its own format specifier cannot take, and
+            // even then the message is worth more than an exception.
+            try { return string.Format(provider, template, args); }
+            catch (FormatException) { return template; }
         }
     }
 }

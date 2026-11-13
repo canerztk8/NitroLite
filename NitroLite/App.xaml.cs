@@ -182,6 +182,13 @@ public partial class App : System.Windows.Application
 
             bool startMinimized = options.StartMinimized;
 
+            // The language and the palette have to be chosen before the window is built: LocXaml translates the
+            // tree once right after InitializeComponent, and every StaticResource in the XAML resolves against the
+            // merged theme dictionary.
+            var startup = LoadStartupSettings();
+            Loc.SetLanguage(ResolveStartupLanguage(startup));
+            ThemeManager.Apply(startup.Settings.Theme);
+
             var win = new MainWindow(startMinimized);
             MainWindow = win;
             if (!startMinimized)
@@ -204,6 +211,32 @@ public partial class App : System.Windows.Application
             catch { }
             Shutdown(1);
         }
+    }
+
+    /// <summary>Reads the settings once at startup; a broken file must never stop the window from opening.</summary>
+    private static SettingsLoadResult LoadStartupSettings()
+    {
+        try
+        {
+            var primary = AppPaths.GetDataFile("settings.json");
+            return SettingsManager.LoadSettings(primary, primary + ".bak", ConfigFile);
+        }
+        catch
+        {
+            return new SettingsLoadResult();
+        }
+    }
+
+    /// <summary>
+    /// The language to start in. A chosen language wins. A settings file written before v1.2 has no language field
+    /// and its user has been reading Turkish, so it stays Turkish; a fresh install follows the Windows display
+    /// language, falling back to English.
+    /// </summary>
+    private static string ResolveStartupLanguage(SettingsLoadResult result)
+    {
+        if (Loc.IsSupported(result.Settings.Language)) return result.Settings.Language!;
+        if (result.Source != SettingsLoadSource.Defaults) return Loc.SourceLanguage;
+        return Loc.DetectSystemLanguage();
     }
 
     /// <summary>
@@ -290,6 +323,25 @@ public partial class App : System.Windows.Application
             if (MainWindow is MainWindow win)
             {
                 win.FastExitForSessionEnding();
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Gives up the single-instance mutex so a replacement process can start before this one has finished exiting.
+    /// Used by the in-app updater and by the language and theme restart. <see cref="OnExit"/> then finds nothing to
+    /// release.
+    /// </summary>
+    internal static void ReleaseSingleInstanceMutex()
+    {
+        try
+        {
+            if (_mutex != null)
+            {
+                _mutex.ReleaseMutex();
+                _mutex.Dispose();
+                _mutex = null;
             }
         }
         catch { }

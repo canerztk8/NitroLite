@@ -32,6 +32,14 @@ public enum DcPowerProfilePreference
     Balanced = 1  // Retain active settings (NitroSense behavior)
 }
 
+/// <summary>Colour world of the window. The OSD is always dark and does not follow this.</summary>
+public enum AppTheme
+{
+    /// <summary>The light "recording paper" surface NitroLite shipped with.</summary>
+    Light = 0,
+    Dark = 1
+}
+
 public class MonitorData
 {
     [JsonPropertyName("CPU_TEMPERATURE")]
@@ -242,6 +250,20 @@ public class AppSettings
 
     [JsonPropertyName("battery_watchdog_enabled")]
     public bool BatteryWatchdogEnabled { get; set; } = true;
+
+    /// <summary>
+    /// UI language code (see <see cref="Loc.Languages"/>). Null means the user has not chosen one: a fresh install
+    /// follows the Windows display language, and a settings file written before v1.2 stays Turkish.
+    /// </summary>
+    [JsonPropertyName("language")]
+    public string? Language { get; set; }
+
+    [JsonPropertyName("theme")]
+    public AppTheme Theme { get; set; } = AppTheme.Light;
+
+    /// <summary>Ask GitHub for a newer release shortly after start and every six hours.</summary>
+    [JsonPropertyName("auto_update_check")]
+    public bool AutoUpdateCheck { get; set; } = true;
 
     // Custom fan speeds (%), used when the fan mode is "Özel". Kept within MinCustomFanPercent..100.
     [JsonPropertyName("custom_fan_cpu_percent")]

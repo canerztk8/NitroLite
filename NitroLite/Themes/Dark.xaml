@@ -1,0 +1,45 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The same recording paper after dark. The stock turns to a warm graphite, the ink to a bone white,
+         and the vermilion is lifted a step so it still reads as "now" against the darker ground. Every
+         brush is solid, exactly as in Themes/Light.xaml: no gradients, no effects, no transparency
+         layers, so the window stays as cheap to render as it is in daylight. -->
+
+    <SolidColorBrush x:Key="BgDark" Color="#15130F" />
+    <SolidColorBrush x:Key="CardBg" Color="#1B1813" />
+    <SolidColorBrush x:Key="CardBgHover" Color="#24201A" />
+    <SolidColorBrush x:Key="BorderDark" Color="#2E2A22" />
+    <SolidColorBrush x:Key="BorderStrong" Color="#443E33" />
+    <SolidColorBrush x:Key="PanelBg" Color="#1E1B15" />
+    <SolidColorBrush x:Key="RailBg" Color="#1A1712" />
+    <SolidColorBrush x:Key="AccentRed" Color="#E05A48" />
+    <SolidColorBrush x:Key="AccentCyan" Color="#EDE6D8" />
+    <!-- The one live signal: a pen mark that is still moving. Everything else is ink. -->
+    <SolidColorBrush x:Key="Live" Color="#E05A48" />
+    <SolidColorBrush x:Key="AccentGreen" Color="#9DB06A" />
+    <SolidColorBrush x:Key="AccentPurple" Color="#7FA0B8" />
+    <SolidColorBrush x:Key="TextPrimary" Color="#EDE6D8" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#B8AE9C" />
+    <SolidColorBrush x:Key="TextMuted" Color="#8A8071" />
+    <SolidColorBrush x:Key="OnAccent" Color="#15130F" />
+    <SolidColorBrush x:Key="WarnBg" Color="#2A2118" />
+
+    <!-- The world's own names, for the parts written fresh. -->
+    <SolidColorBrush x:Key="Paper" Color="#15130F" />
+    <SolidColorBrush x:Key="PaperDeep" Color="#1E1B15" />
+    <SolidColorBrush x:Key="Ink" Color="#EDE6D8" />
+    <SolidColorBrush x:Key="InkSoft" Color="#B8AE9C" />
+    <SolidColorBrush x:Key="InkFaint" Color="#8A8071" />
+    <SolidColorBrush x:Key="Rule" Color="#2E2A22" />
+    <SolidColorBrush x:Key="RuleStrong" Color="#443E33" />
+    <SolidColorBrush x:Key="Vermilion" Color="#E05A48" />
+    <SolidColorBrush x:Key="Slate" Color="#7FA0B8" />
+    <SolidColorBrush x:Key="Olive" Color="#9DB06A" />
+    <!-- The one link in the window: the author's name in the rail. -->
+    <SolidColorBrush x:Key="Link" Color="#8FB4DC" />
+
+    <!-- The telemetry graph's wash: ink at 6 % over the paper. -->
+    <SolidColorBrush x:Key="ChartFill" Color="#14EDE6D8" />
+
+</ResourceDictionary>

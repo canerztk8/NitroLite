@@ -65,6 +65,7 @@ public partial class OsdOverlayWindow : Window
     public OsdOverlayWindow()
     {
         InitializeComponent();
+        LocXaml.Apply(this);
         Loaded += OnLoaded;
         SizeChanged += (s, e) => UpdatePosition();
         // Resolution, scaling or monitor changes: put the OSD back in its corner (or on the primary

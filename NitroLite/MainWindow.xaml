@@ -7,8 +7,8 @@
         MinHeight="730" MinWidth="1060"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
-        Background="#F2EDE3"
-        Foreground="#1B1917"
+        Background="{DynamicResource Paper}"
+        Foreground="{DynamicResource Ink}"
         ResizeMode="CanResize"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
@@ -25,45 +25,9 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- Departure Board: a split-flap board read in a dim room. Two inks on a deep ground, one amber
-             for the row that has flipped, red only where something is actually wrong. Every brush is
-             solid: no gradients, no effects, so the window stays cheap to render. Legacy key names are
-             kept so the code-behind keeps resolving them; the values are the new palette. -->
-        <!-- Kandilli Sismograf Kağıdı: a drum recorder's paper. Warm cream stock owns the whole
-             surface, one ink carries the body, and a single vermilion marks "now" and anything
-             critical. Every brush is solid: no gradients, no effects, no transparency layers, so
-             the window stays cheap to render. Legacy key names are kept so the code-behind keeps
-             resolving them; the values are the new palette. -->
-        <SolidColorBrush x:Key="BgDark" Color="#F2EDE3" />
-        <SolidColorBrush x:Key="CardBg" Color="#F8F4EB" />
-        <SolidColorBrush x:Key="CardBgHover" Color="#EDE6D8" />
-        <SolidColorBrush x:Key="BorderDark" Color="#D5CBB8" />
-        <SolidColorBrush x:Key="BorderStrong" Color="#B8AB93" />
-        <SolidColorBrush x:Key="PanelBg" Color="#E8E0D2" />
-        <SolidColorBrush x:Key="RailBg" Color="#EAE3D5" />
-        <SolidColorBrush x:Key="AccentRed" Color="#9B2C1F" />
-        <SolidColorBrush x:Key="AccentCyan" Color="#1B1917" />
-        <!-- The one live signal: a pen mark that is still moving. Everything else is ink. -->
-        <SolidColorBrush x:Key="Live" Color="#C0392B" />
-        <SolidColorBrush x:Key="AccentGreen" Color="#5F6B3E" />
-        <SolidColorBrush x:Key="AccentPurple" Color="#4A6274" />
-        <SolidColorBrush x:Key="TextPrimary" Color="#1B1917" />
-        <SolidColorBrush x:Key="TextSecondary" Color="#4A4238" />
-        <SolidColorBrush x:Key="TextMuted" Color="#6E6558" />
-        <SolidColorBrush x:Key="OnAccent" Color="#F7F2E8" />
-        <SolidColorBrush x:Key="WarnBg" Color="#F0E2D2" />
-
-        <!-- The world's own names, for the parts written fresh. -->
-        <SolidColorBrush x:Key="Paper" Color="#F2EDE3" />
-        <SolidColorBrush x:Key="PaperDeep" Color="#E8E0D2" />
-        <SolidColorBrush x:Key="Ink" Color="#1B1917" />
-        <SolidColorBrush x:Key="InkSoft" Color="#4A4238" />
-        <SolidColorBrush x:Key="InkFaint" Color="#6E6558" />
-        <SolidColorBrush x:Key="Rule" Color="#D5CBB8" />
-        <SolidColorBrush x:Key="RuleStrong" Color="#B8AB93" />
-        <SolidColorBrush x:Key="Vermilion" Color="#C0392B" />
-        <SolidColorBrush x:Key="Slate" Color="#4A6274" />
-        <SolidColorBrush x:Key="Olive" Color="#5F6B3E" />
+        <!-- The palette lives in Themes/Light.xaml and Themes/Dark.xaml, merged into Application.Resources
+             before this window is built, so every StaticResource below resolves to the chosen theme. The
+             styles stay here: they are the same in both themes and only point at the brushes. -->
 
         <!-- Figures are recorded, labels are written: the margin scale and every readout are set in
              a tabular face, the prose stays in the platform's humanist sans. -->
@@ -615,6 +579,10 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="NitroLite" Foreground="{StaticResource Ink}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                         <TextBlock x:Name="TxtAppVersion" Text="v1.1" Foreground="{StaticResource InkFaint}" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        <!-- Appears only when GitHub reports a newer release; the update runs from here. -->
+                        <Button x:Name="BtnUpdateNow" Click="BtnUpdateNow_Click" Visibility="Collapsed" Margin="10,0,0,0" VerticalAlignment="Center" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="8,3" Cursor="Hand" FontSize="10" FontWeight="SemiBold" WindowChrome.IsHitTestVisibleInChrome="True">
+                            <TextBlock x:Name="TxtUpdateNow" Text="Güncelle" />
+                        </Button>
                     </StackPanel>
 
                     <!-- Right Controls: live figures + window buttons. No boxes: the figures sit on the
@@ -677,6 +645,12 @@
 
                         <!-- The rail's readout: a ruled column of live figures, not a card. -->
                         <StackPanel Grid.Row="2">
+                            <!-- The signature sits above the readout, on the same margin as the labels. -->
+                            <TextBlock Margin="10,0,10,10" FontSize="10" TextWrapping="Wrap">
+                                <Run Text="♥" Foreground="{StaticResource Vermilion}" />
+                                <Run Text=" Made with love · " Foreground="{StaticResource InkFaint}" />
+                                <Hyperlink Click="LinkAuthor_Click" Foreground="{StaticResource Link}" TextDecorations="None" Cursor="Hand"><Run Text="Caner" /></Hyperlink>
+                            </TextBlock>
                             <Border Background="{StaticResource Rule}" Height="1" Margin="10,0,10,10" />
                             <TextBlock Text="SİSTEM" Style="{StaticResource LabelCaps}" Margin="10,0,0,6" />
                             <Grid Margin="10,3">
@@ -1287,7 +1261,7 @@
                                                     <Border BorderBrush="{StaticResource BorderDark}" BorderThickness="0,1,0,0" VerticalAlignment="Top" Margin="0,164,0,0" />
 
                                                     <Canvas x:Name="CanvasHistoryChart" ClipToBounds="True">
-                                                        <Polygon x:Name="ChartArea" Fill="#104A4238" StrokeThickness="0" />
+                                                        <Polygon x:Name="ChartArea" Fill="{StaticResource ChartFill}" StrokeThickness="0" />
                                                         <Polyline x:Name="ChartLine" Stroke="{StaticResource Ink}" StrokeThickness="1.5" StrokeLineJoin="Round" />
                                                         <Ellipse x:Name="ChartDot" Width="7" Height="7" Fill="{StaticResource Live}" Stroke="{StaticResource PaperDeep}" StrokeThickness="1.5" />
                                                     </Canvas>
@@ -1972,6 +1946,78 @@
                                                 <TextBlock Text="ATK fare donanım protokolünü, profil geçişlerini ve oyuna özel fare profili atamalarını etkinleştirir." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
                                             </StackPanel>
                                             <CheckBox x:Name="ChkAtkMouseIntegration" Checked="ChkAtkMouseIntegration_Changed" Unchecked="ChkAtkMouseIntegration_Changed" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- NITROLITE SETTINGS: language, theme, update checks, feedback -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,16,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="NitroLite Ayarları" Style="{StaticResource SectionTitle}" />
+                                        <TextBlock Text="Arayüz dili, tema, güncelleme denetimi ve geri bildirim." Style="{StaticResource BodyText}" Margin="0,2,0,14" />
+
+                                        <!-- Language -->
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <TextBlock Text="Arayüz dili" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Değiştirdiğinizde NitroLite yeni dille yeniden başlar. Oyun sırasında bir sonraki açılışa bırakılır." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ComboBox x:Name="CmbLanguage" Grid.Column="1" Width="200" VerticalAlignment="Center" SelectionChanged="CmbLanguage_SelectionChanged" />
+                                        </Grid>
+
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,12" />
+
+                                        <!-- Theme -->
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <TextBlock Text="Tema" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Tema değiştiğinde NitroLite yeniden başlar." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ComboBox x:Name="CmbTheme" Grid.Column="1" Width="200" VerticalAlignment="Center" SelectionChanged="CmbTheme_SelectionChanged" />
+                                        </Grid>
+
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,12" />
+
+                                        <!-- Automatic update check -->
+                                        <Grid Margin="0,0,0,12">
+                                            <StackPanel Margin="0,0,16,0">
+                                                <TextBlock Text="Güncellemeleri otomatik denetle" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Açılıştan 30 saniye sonra ve 6 saatte bir GitHub'a bakar. İnternet yoksa sessizce geçer." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <CheckBox x:Name="ChkAutoUpdateCheck" Checked="ChkAutoUpdateCheck_Changed" Unchecked="ChkAutoUpdateCheck_Changed" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,12" />
+
+                                        <!-- Version and a manual check -->
+                                        <Grid Margin="0,0,0,12">
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="Sürüm" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock x:Name="TxtSettingsVersion" Text="v1.1" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnCheckUpdates" Content="Şimdi denetle" Click="BtnCheckUpdates_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                        </Grid>
+
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,12" />
+
+                                        <!-- Feedback: a prefilled GitHub issue, no telemetry -->
+                                        <Grid>
+                                            <StackPanel Margin="0,0,16,0">
+                                                <TextBlock Text="Hata bildir" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <Button x:Name="BtnOpenLogs" Content="Günlük klasörünü aç" Click="BtnOpenLogs_Click" Background="Transparent" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" Cursor="Hand" FontSize="11" Margin="0,0,8,0" />
+                                                <Button x:Name="BtnReportBug" Content="Hata bildir" Click="BtnReportBug_Click" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                            </StackPanel>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
