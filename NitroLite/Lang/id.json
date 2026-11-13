@@ -274,7 +274,6 @@
  "Döngü: --": "Siklus: --",
  "Döngü: {0}": "Siklus: {0}",
  "Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)": "Tata Letak Pencahayaan Empat Zona (klik zona untuk mengubah warnanya)",
- "Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri.": "Tata letak RGB empat zona, efek pencahayaan dinamis, dan profil perangkat keras.",
  "Düşük aşınma (< %10)": "Keausan rendah (< 10%)",
  "ECO": "ECO",
  "Eco": "Eco",
@@ -831,5 +830,8 @@
  "Raporu dışa aktar": "Ekspor laporan",
  "Donanım raporu kaydedildi: {0}": "Laporan perangkat keras disimpan: {0}",
  "Donanım raporu yazılamadı: {0}": "Laporan perangkat keras tidak dapat ditulis: {0}",
- "Donanım raporu oluşturulamadı: {0}": "Laporan perangkat keras tidak dapat dibuat: {0}"
+ "Donanım raporu oluşturulamadı: {0}": "Laporan perangkat keras tidak dapat dibuat: {0}",
+ "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "Keyboard ini hanya memiliki satu zona; semua tombol memakai warna yang sama.",
+ "Bu modelde klavye aydınlatması bildirilmedi.": "Model ini tidak melaporkan pencahayaan keyboard.",
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "Efek pencahayaan dinamis dan profil perangkat keras."
 }

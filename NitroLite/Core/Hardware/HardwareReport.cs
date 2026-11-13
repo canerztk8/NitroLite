@@ -50,7 +50,7 @@ public static class HardwareReport
     };
 
     /// <summary>Builds the plain-text report. Never throws: a failed section is reported as unavailable.</summary>
-    public static string BuildText()
+    public static string BuildText(KeyboardCapability? keyboard = null)
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
@@ -103,6 +103,20 @@ public static class HardwareReport
         }
         sb.AppendLine();
 
+        sb.AppendLine("KEYBOARD");
+        if (keyboard == null)
+        {
+            sb.AppendLine("  (the Acer service did not answer)");
+        }
+        else
+        {
+            AppendField(sb, "Device", keyboard.DeviceName);
+            AppendField(sb, "Type", keyboard.DeviceType > 0 ? keyboard.DeviceType.ToString(CultureInfo.InvariantCulture) : "");
+            AppendField(sb, "Zones", keyboard.HasLighting ? keyboard.ZoneCount.ToString(CultureInfo.InvariantCulture) : "none");
+            AppendField(sb, "Effects", string.Join(", ", keyboard.Effects.Select(e => e.Name)));
+        }
+        sb.AppendLine();
+
         sb.AppendLine("ACER WMI");
         sb.AppendLine($"  AcerGamingFunction             {wmi.Summary}");
         if (wmi.Methods.Count > 0)
@@ -114,7 +128,7 @@ public static class HardwareReport
     }
 
     /// <summary>Builds the same data as JSON, for anyone who wants to script against it.</summary>
-    public static string BuildJson()
+    public static string BuildJson(KeyboardCapability? keyboard = null)
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
@@ -164,11 +178,42 @@ public static class HardwareReport
                 ["memorySpeedMts"] = hardware.MemorySpeedMts,
                 ["memoryType"] = hardware.MemoryType
             },
+            ["keyboard"] = BuildKeyboardNode(keyboard),
             ["acerServices"] = services,
             ["acerWmi"] = BuildWmiNode(wmi)
         };
 
         return root.ToJsonString(JsonOptions);
+    }
+
+    /// <summary>
+    /// The keyboard section. A null capability is written as <c>null</c> rather than an empty object, so a reader can
+    /// tell "the service did not answer" from "the keyboard has no lighting".
+    /// </summary>
+    private static JsonNode? BuildKeyboardNode(KeyboardCapability? keyboard)
+    {
+        if (keyboard == null) return null;
+
+        var effects = new JsonArray();
+        foreach (var effect in keyboard.Effects)
+        {
+            effects.Add(new JsonObject
+            {
+                ["name"] = effect.Name,
+                ["maxColors"] = effect.MaxColors,
+                ["minSpeed"] = effect.MinSpeed,
+                ["maxSpeed"] = effect.MaxSpeed
+            });
+        }
+
+        return new JsonObject
+        {
+            ["deviceName"] = keyboard.DeviceName,
+            ["deviceType"] = keyboard.DeviceType,
+            ["zones"] = keyboard.ZoneCount,
+            ["hasLighting"] = keyboard.HasLighting,
+            ["effects"] = effects
+        };
     }
 
     /// <summary>
@@ -205,15 +250,15 @@ public static class HardwareReport
     /// Writes both formats into <paramref name="directory"/> and returns the text file's path. Throws only when the
     /// directory itself cannot be written, which the caller turns into a message.
     /// </summary>
-    public static string WriteToDirectory(string directory)
+    public static string WriteToDirectory(string directory, KeyboardCapability? keyboard = null)
     {
         Directory.CreateDirectory(directory);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var textPath = Path.Combine(directory, $"hardware-report-{stamp}.txt");
         var jsonPath = Path.Combine(directory, $"hardware-report-{stamp}.json");
 
-        File.WriteAllText(textPath, BuildText(), new UTF8Encoding(false));
-        try { File.WriteAllText(jsonPath, BuildJson(), new UTF8Encoding(false)); }
+        File.WriteAllText(textPath, BuildText(keyboard), new UTF8Encoding(false));
+        try { File.WriteAllText(jsonPath, BuildJson(keyboard), new UTF8Encoding(false)); }
         catch { /* the text file is the deliverable; JSON is a convenience */ }
 
         return textPath;

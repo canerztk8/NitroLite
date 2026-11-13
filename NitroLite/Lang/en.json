@@ -274,7 +274,6 @@
  "Döngü: --": "Cycles: --",
  "Döngü: {0}": "Cycles: {0}",
  "Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)": "Four-Zone Lighting Layout (click a zone to change its colour)",
- "Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri.": "Four-zone RGB layout, dynamic lighting effects and hardware profiles.",
  "Düşük aşınma (< %10)": "Low wear (< 10%)",
  "ECO": "ECO",
  "Eco": "Eco",
@@ -831,5 +830,8 @@
  "Raporu dışa aktar": "Export report",
  "Donanım raporu kaydedildi: {0}": "Hardware report saved: {0}",
  "Donanım raporu yazılamadı: {0}": "Could not write the hardware report: {0}",
- "Donanım raporu oluşturulamadı: {0}": "Could not build the hardware report: {0}"
+ "Donanım raporu oluşturulamadı: {0}": "Could not build the hardware report: {0}",
+ "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "This keyboard has a single zone; every key takes the same colour.",
+ "Bu modelde klavye aydınlatması bildirilmedi.": "This model reported no keyboard lighting.",
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamic lighting effects and hardware profiles."
 }

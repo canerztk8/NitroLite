@@ -582,6 +582,9 @@ public partial class MainWindow : Window
             // without Turbo never shows the button, not even for the first frame.
             await RefreshModeCapabilityAsync();
 
+            // 1.16 What the keyboard can do, so a single-zone deck never shows a four-zone picker.
+            await RefreshKeyboardCapabilityAsync();
+
             // 2. Initial Lighting (Check settings.json, then active_rgb_state.json)
             bool restoredSavedRgb = false;
 
@@ -2825,6 +2828,12 @@ public partial class MainWindow : Window
     /// query that failed must never take a working control away from the user.
     /// </summary>
     private IReadOnlyList<OperatingMode>? _supportedModes;
+
+    /// <summary>
+    /// What the keyboard reported about itself, or null when the service did not answer. Null keeps the four-zone
+    /// UI, because a failed query is not evidence that the keyboard is single-zone.
+    /// </summary>
+    private KeyboardCapability? _keyboardCapability;
 
     public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)    {
         int mask = 1 << (int)mode;
@@ -5280,6 +5289,53 @@ public partial class MainWindow : Window
     private (bool Allowed, bool OnAc, OperatingMode Mode)? _lastModeAvailability;
 
     /// <summary>
+    /// Asks the keyboard what it can do. The Nitro line ships four-zone RGB, single-zone RGB, single-colour
+    /// backlight and no lighting at all; the four-zone picker only makes sense on the first. A null answer leaves
+    /// the UI exactly as it was, because a failed query is not evidence that the keyboard is single-zone.
+    /// </summary>
+    public async Task RefreshKeyboardCapabilityAsync()
+    {
+        try
+        {
+            _keyboardCapability = await _agentClient.GetKeyboardCapabilityAsync();
+        }
+        catch
+        {
+            _keyboardCapability = null;
+        }
+
+        ApplyKeyboardCapabilityUi();
+    }
+
+    /// <summary>
+    /// Hides the per-zone picker on a keyboard that cannot take a colour per zone. Only a positive answer from the
+    /// device hides it: an unknown capability keeps the card, so a service hiccup never costs the user a control.
+    /// </summary>
+    private void ApplyKeyboardCapabilityUi()
+    {
+        if (CardZonePreview == null) return;
+
+        var capability = _keyboardCapability;
+        bool showZones = capability == null || capability.HasZoneColors;
+        CardZonePreview.Visibility = showZones ? Visibility.Visible : Visibility.Collapsed;
+
+        if (TxtKeyboardCapabilityNote == null) return;
+        if (showZones)
+        {
+            TxtKeyboardCapabilityNote.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // The note sits outside the card on purpose: it explains the missing picker, so hiding the card must not
+        // hide the explanation with it. It is a separate element from TxtZonePreviewNote, which carries the
+        // per-effect notes and would otherwise overwrite this one on the next refresh.
+        TxtKeyboardCapabilityNote.Text = capability!.HasLighting
+            ? Loc.T("Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.")
+            : Loc.T("Bu modelde klavye aydınlatması bildirilmedi.");
+        TxtKeyboardCapabilityNote.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
     /// Asks the service which operating modes this model has. Nitro models differ: a Nitro V 15 without Turbo must
     /// not offer a Turbo button that the firmware rejects. A null answer leaves <see cref="_supportedModes"/> null,
     /// which <see cref="ModePolicy.IsModeSupported"/> reads as "unknown, show everything".
@@ -7295,7 +7351,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var path = HardwareReport.WriteToDirectory(AppPaths.DataDirectory);
+            var path = HardwareReport.WriteToDirectory(AppPaths.DataDirectory, _keyboardCapability);
             ShowToast(Loc.T($"Donanım raporu kaydedildi: {Path.GetFileName(path)}"), true);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {

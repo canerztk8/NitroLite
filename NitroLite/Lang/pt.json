@@ -274,7 +274,6 @@
  "Döngü: --": "Ciclos: --",
  "Döngü: {0}": "Ciclos: {0}",
  "Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)": "Layout de Iluminação em Quatro Zonas (clique em uma zona para alterar a cor)",
- "Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri.": "Layout RGB de quatro zonas, efeitos de iluminação dinâmicos e perfis de hardware.",
  "Düşük aşınma (< %10)": "Desgaste baixo (< 10%)",
  "ECO": "ECO",
  "Eco": "Eco",
@@ -831,5 +830,8 @@
  "Raporu dışa aktar": "Exportar relatório",
  "Donanım raporu kaydedildi: {0}": "Relatório de hardware guardado: {0}",
  "Donanım raporu yazılamadı: {0}": "Não foi possível gravar o relatório de hardware: {0}",
- "Donanım raporu oluşturulamadı: {0}": "Não foi possível criar o relatório de hardware: {0}"
+ "Donanım raporu oluşturulamadı: {0}": "Não foi possível criar o relatório de hardware: {0}",
+ "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "Este teclado tem uma única zona; todas as teclas recebem a mesma cor.",
+ "Bu modelde klavye aydınlatması bildirilmedi.": "Este modelo não reportou iluminação de teclado.",
+ "Dinamik aydınlatma efektleri ve donanım profilleri.": "Efeitos de iluminação dinâmicos e perfis de hardware."
 }

@@ -1566,7 +1566,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                         <TextBlock Text="Klavye RGB Aydınlatma Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                        <TextBlock Text="Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="TxtLightingSubtitle" Text="Dinamik aydınlatma efektleri ve donanım profilleri." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <Button Grid.Column="1" x:Name="BtnTurnOffLights" Content="Aydınlatmayı Kapat" Click="BtnTurnOffLights_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Cursor="Hand" />
                                 </Grid>
@@ -1577,7 +1577,7 @@
                                 </Border>
 
                                 <!-- 4 Zones Visual Preview -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
+                                <Border x:Name="CardZonePreview" Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
                                         <TextBlock Text="Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="0,0,0,10" />
                                         <UniformGrid Columns="4">
@@ -1601,6 +1601,7 @@
                                         <TextBlock x:Name="TxtZonePreviewNote" Text="" Visibility="Collapsed" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="3,8,3,0" />
                                     </StackPanel>
                                 </Border>
+                                <TextBlock x:Name="TxtKeyboardCapabilityNote" Text="" Visibility="Collapsed" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
 
                                 <!-- MODULE 4: RGB PRESET MANAGER CARD -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">

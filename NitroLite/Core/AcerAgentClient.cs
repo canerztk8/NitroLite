@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite.Core;
 
@@ -606,6 +607,31 @@ public class AcerAgentClient : IDisposable
                 return capArr[0]?.GetValue<int>();
             }
             return null;
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// What the keyboard can do, from GET_CONNECTED_DEVICE. Null when the service did not answer, which callers
+    /// must read as "unknown" and keep the four-zone UI: a failed query is not evidence that the keyboard is
+    /// single-zone.
+    /// </summary>
+    public virtual async Task<KeyboardCapability?> GetKeyboardCapabilityAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+
+            var resp = await SendFunctionAsync(PacketGetConnectedDevice, "GET_CONNECTED_DEVICE");
+            return KeyboardCapability.Parse(GetSuccessData(resp));
         }
         catch
         {
