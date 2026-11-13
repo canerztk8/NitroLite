@@ -1,4 +1,7 @@
-﻿namespace NitroLite.Core;
+﻿using System.Collections.Generic;
+using System.Linq;
+
+namespace NitroLite.Core;
 
 /// <summary>
 /// Operating-mode rules and display names shared by the mode cards, tray menu, mode key and game profiles.
@@ -30,6 +33,14 @@ public static class ModePolicy
     /// </summary>
     public static (bool ShowHighPower, bool ShowEco) VisibleModeGroups(bool onAc, OperatingMode active) =>
         (onAc || IsHighPowerMode(active), !onAc || active == OperatingMode.Eco);
+
+    /// <summary>
+    /// True when the machine offers <paramref name="mode"/>. A null or empty list means the device never told us
+    /// which modes it has, and then every mode stays available: a capability query that failed is not evidence that
+    /// a feature is missing, and hiding a working control is worse than showing one that turns out to be a no-op.
+    /// </summary>
+    public static bool IsModeSupported(IReadOnlyCollection<OperatingMode>? supported, OperatingMode mode) =>
+        supported == null || supported.Count == 0 || supported.Contains(mode);
 
     /// <summary>Used for automatic changes (game profiles): a blocked high-power target falls back to Balanced.</summary>
     public static OperatingMode ClampForPower(OperatingMode mode, bool onAc, int? batteryPercent) =>

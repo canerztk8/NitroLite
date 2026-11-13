@@ -578,6 +578,10 @@ public partial class MainWindow : Window
             // 1.1 Initial GPU Mode (MUX Switch)
             await RefreshGpuModeAsync();
 
+            // 1.15 Which operating modes this model actually offers. Read before the mode cards settle so a Nitro
+            // without Turbo never shows the button, not even for the first frame.
+            await RefreshModeCapabilityAsync();
+
             // 2. Initial Lighting (Check settings.json, then active_rgb_state.json)
             bool restoredSavedRgb = false;
 
@@ -2816,8 +2820,13 @@ public partial class MainWindow : Window
 
     private int? _supportedGpuCapability;
 
-    public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)
-    {
+    /// <summary>
+    /// Modes this model offers, or null when the service did not say. Null means "show everything": a capability
+    /// query that failed must never take a working control away from the user.
+    /// </summary>
+    private IReadOnlyList<OperatingMode>? _supportedModes;
+
+    public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)    {
         int mask = 1 << (int)mode;
         return (capabilityBitmask & mask) != 0;
     }
@@ -5271,10 +5280,31 @@ public partial class MainWindow : Window
     private (bool Allowed, bool OnAc, OperatingMode Mode)? _lastModeAvailability;
 
     /// <summary>
+    /// Asks the service which operating modes this model has. Nitro models differ: a Nitro V 15 without Turbo must
+    /// not offer a Turbo button that the firmware rejects. A null answer leaves <see cref="_supportedModes"/> null,
+    /// which <see cref="ModePolicy.IsModeSupported"/> reads as "unknown, show everything".
+    /// </summary>
+    public async Task RefreshModeCapabilityAsync()
+    {
+        try
+        {
+            _supportedModes = await _agentClient.GetOperatingModesAsync();
+        }
+        catch
+        {
+            _supportedModes = null;
+        }
+
+        // The cached availability tuple would short-circuit the redraw, so drop it before asking for one.
+        _lastModeAvailability = null;
+        UpdateHighPowerAvailabilityUi();
+    }
+
+    /// <summary>
     /// Shows each mode group only where it can be used: Turbo/Performance need the AC adapter (NitroSense also
-    /// wants 40 % battery), Eco is a battery mode. The row that is active stays visible even when its group is
-    /// hidden, so the list always marks the mode the machine is actually in. Called on mode changes, battery
-    /// status updates and the periodic state poll.
+    /// wants 40 % battery), Eco is a battery mode, and a mode the model does not offer is hidden outright. The row
+    /// that is active stays visible even when its group is hidden, so the list always marks the mode the machine is
+    /// actually in. Called on mode changes, battery status updates and the periodic state poll.
     /// </summary>
     private void UpdateHighPowerAvailabilityUi()
     {
@@ -5286,17 +5316,37 @@ public partial class MainWindow : Window
         _lastModeAvailability = state;
 
         var (showHighPower, showEco) = ModePolicy.VisibleModeGroups(onAc, _currentMode);
+
+        // Per-mode, not per-group: a model can offer Performance and not Turbo.
+        bool showExtreme = showHighPower && ModePolicy.IsModeSupported(_supportedModes, OperatingMode.Extreme);
+        bool showTurbo = showHighPower && ModePolicy.IsModeSupported(_supportedModes, OperatingMode.Turbo);
+        bool showQuiet = ModePolicy.IsModeSupported(_supportedModes, OperatingMode.Quiet);
+        bool showDefault = ModePolicy.IsModeSupported(_supportedModes, OperatingMode.Default);
+        bool showEcoMode = showEco && ModePolicy.IsModeSupported(_supportedModes, OperatingMode.Eco);
+
+        foreach (var (card, visible) in new[]
+                 {
+                     (BtnModeQuiet, showQuiet),
+                     (BtnModeDefault, showDefault),
+                     (BtnModeExtreme, showExtreme),
+                     (BtnModeTurbo, showTurbo)
+                 })
+        {
+            if (card == null) continue;
+            card.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // Only the high-power pair is gated on the adapter; Quiet and Balanced work on battery too.
         foreach (var card in new[] { BtnModeExtreme, BtnModeTurbo })
         {
             if (card == null) continue;
-            card.Visibility = showHighPower ? Visibility.Visible : Visibility.Collapsed;
             card.IsEnabled = allowed;
             card.Opacity = allowed ? 1.0 : 0.45;
             card.ToolTip = allowed ? null : ModePolicy.HighPowerBlockedMessage;
         }
 
         if (BtnModeEco != null)
-            BtnModeEco.Visibility = showEco ? Visibility.Visible : Visibility.Collapsed;
+            BtnModeEco.Visibility = showEcoMode ? Visibility.Visible : Visibility.Collapsed;
 
         if (TxtModeLockNote != null)
         {

@@ -618,6 +618,52 @@ public class AcerAgentClient : IDisposable
     }
 
     /// <summary>
+    /// The operating modes this machine actually offers, from SUPPORT_OPERATING_MODE_CAPABILITY. Null when the
+    /// service did not answer, which callers must read as "unknown" and keep every mode visible: a failed query is
+    /// not evidence that a mode is missing.
+    /// </summary>
+    public virtual async Task<IReadOnlyList<OperatingMode>?> GetOperatingModesAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+
+            var resp = await SendFunctionAsync(PacketInitialization, "SUPPORT_OPERATING_MODE_CAPABILITY");
+            var data = GetSuccessData(resp);
+            return data == null ? null : ParseOperatingModes(data);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reads the capability array, e.g. <c>[0, 1, 4, 5, 6]</c>. Numbers that are not a known <see cref="OperatingMode"/>
+    /// are dropped rather than cast: a future firmware mode must not turn into a random existing one.
+    /// </summary>
+    internal static IReadOnlyList<OperatingMode> ParseOperatingModes(JsonNode? data)
+    {
+        var modes = new List<OperatingMode>();
+        if (data is not JsonArray array) return modes;
+
+        foreach (var item in array)
+        {
+            if (item is not JsonValue value) continue;
+            if (!value.TryGetValue<int>(out var number)) continue;
+            if (!Enum.IsDefined(typeof(OperatingMode), number)) continue;
+            var mode = (OperatingMode)number;
+            if (!modes.Contains(mode)) modes.Add(mode);
+        }
+        return modes;
+    }
+
+    /// <summary>
     /// Builds the FAN_CONTROL parameter in the format used by NitroSense and accepted by AASSvc:
     /// { mode, custom_fan_data: [ { fan_custom_auto, fan_custom_speed (0-100 %), fan_index, fan_name } ] }.
     /// </summary>
