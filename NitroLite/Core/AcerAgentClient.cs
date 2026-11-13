@@ -721,7 +721,7 @@ public class AcerAgentClient : IDisposable
     }
 
     /// <summary>Reads a capability answer that may be a bool, 0/1, "true"/"1" or an object wrapping one of those.</summary>
-    private static bool ReadCapabilityFlag(JsonNode node)
+    internal static bool ReadCapabilityFlag(JsonNode node)
     {
         try
         {
@@ -739,7 +739,11 @@ public class AcerAgentClient : IDisposable
                 if (value.TryGetValue<bool>(out var flag)) return flag;
                 if (value.TryGetValue<int>(out var number)) return number != 0;
                 if (value.TryGetValue<string>(out var text))
-                    return text == "1" || text.Equals("true", StringComparison.OrdinalIgnoreCase);
+                {
+                    // "2" has to mean the same thing as 2: the numeric form is already read as "non-zero is true".
+                    if (int.TryParse(text, out var numeric)) return numeric != 0;
+                    return text.Equals("true", StringComparison.OrdinalIgnoreCase);
+                }
             }
         }
         catch { }

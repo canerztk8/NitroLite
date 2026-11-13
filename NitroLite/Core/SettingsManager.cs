@@ -101,7 +101,11 @@ public static class SettingsManager
             var json = File.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(json)) return (null, Loc.T("dosya boş"));
             var parsed = JsonSerializer.Deserialize<AppSettings>(json);
-            return parsed != null ? (parsed, null) : (null, Loc.T("içerik okunamadı"));
+            if (parsed == null) return (null, Loc.T("içerik okunamadı"));
+            // A number that is a valid JSON value is a valid enum value to System.Text.Json even when the enum has
+            // no such member, so the range check has to happen here rather than at every use.
+            parsed.Normalize();
+            return (parsed, null);
         }
         catch (Exception ex)
         {

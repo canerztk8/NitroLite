@@ -409,8 +409,9 @@ if ($null -ne $backup.services) {
 if ($null -ne $backup.hags) {
     try {
         $hagsValue = [int]$backup.hags
-        if ($hagsValue -lt 0) {
-            # The value did not exist before the optimization, so leaving it at 2 would keep HAGS on forever.
+        if ($hagsValue -lt 0 -or $hagsValue -gt 2) {
+            # -1 means the value did not exist before the optimization; anything above 2 is not a value Windows
+            # accepts. Both are undone by removing the value, which returns HAGS to its default (off).
             Remove-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name 'HwSchMode' -ErrorAction SilentlyContinue
         } else {
             Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name 'HwSchMode' `

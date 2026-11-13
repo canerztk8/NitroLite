@@ -26,11 +26,17 @@ public static class TelemetryFormatter
     private static readonly CultureInfo TrCulture = new("tr-TR");
 
     /// <summary>
+    /// Highest temperature a laptop CPU or GPU can report. Anything above it is a sentinel from a sensor that did
+    /// not answer (0xFF is common), not a reading, and must not be shown as one.
+    /// </summary>
+    public const double MaxPlausibleTemperature = 120.0;
+
+    /// <summary>
     /// Formats CPU temperature in °C, handling 0 or uninitialized values cleanly.
     /// </summary>
     public static string FormatCpuTemperature(double temp)
     {
-        if (temp <= 0) return "-- °C"; // no reading (a running CPU is never at 0 °C)
+        if (temp <= 0 || temp > MaxPlausibleTemperature) return "-- °C"; // no reading (a running CPU is never at 0 °C)
         return $"{Math.Round(temp):F0} °C";
     }
 
@@ -41,7 +47,7 @@ public static class TelemetryFormatter
     {
         if (isSleeping) return "0 °C (Uyku / D3cold)";
         // No reading is not the same as a sleeping GPU: a running GPU is never at 0 °C.
-        if (!available || temp <= 0) return "-- °C";
+        if (!available || temp <= 0 || temp > MaxPlausibleTemperature) return "-- °C";
         return $"{Math.Round(temp):F0} °C";
     }
 

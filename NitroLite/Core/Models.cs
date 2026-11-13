@@ -276,6 +276,32 @@ public class AppSettings
     public const int MinCustomFanPercent = 30;
 
     public static int ClampCustomFanPercent(int value) => Math.Clamp(value, MinCustomFanPercent, 100);
+
+    /// <summary>
+    /// Brings every value that came out of a settings file back into the range the app can act on.
+    /// System.Text.Json accepts any number for an enum, so a hand-edited or half-written file can carry
+    /// (OperatingMode)99 or a fan speed of 400 without failing to parse. Nothing here invents a preference:
+    /// an unusable value falls back to the same default a fresh install would use.
+    /// <para>
+    /// <see cref="SelectedChartMetric"/> is deliberately left alone: it is a display preference, the graph already
+    /// falls back to CPU temperature for a metric it does not know, and rewriting it would silently discard what
+    /// the user chose.
+    /// </para>
+    /// </summary>
+    public void Normalize()
+    {
+        if (!Enum.IsDefined(Theme)) Theme = AppTheme.Light;
+        if (LastOperatingMode.HasValue && !Enum.IsDefined(LastOperatingMode.Value)) LastOperatingMode = null;
+        if (!Enum.IsDefined(DcPowerMode)) DcPowerMode = DcPowerProfilePreference.Eco;
+
+        OsdCorner = ((OsdCorner % 4) + 4) % 4;
+        if (OsdMonitor < 0) OsdMonitor = 0;
+        DefaultAtkMouseProfile = Math.Clamp(DefaultAtkMouseProfile, 0, 4);
+        CustomFanCpuPercent = ClampCustomFanPercent(CustomFanCpuPercent);
+        CustomFanGpuPercent = ClampCustomFanPercent(CustomFanGpuPercent);
+
+        if (Language != null && !Loc.IsSupported(Language)) Language = null;
+    }
 }
 
 public class GameSessionRecoveryState
