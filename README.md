@@ -1,4 +1,4 @@
-# NitroLite
+﻿# NitroLite
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
@@ -156,10 +156,8 @@ NitroLite
 │   ├── GameDetectionService.cs     # Game scanning and detection
 │   ├── HardwareMonitorService.cs   # NVML (GPU) and Windows fallback telemetry
 │   ├── StorageHealthService.cs     # Disk health and free space
-│   ├── ThermalHealthService.cs     # Thermal history and estimates
 │   ├── DebloatService.cs           # Acer background services, autostart
-│   ├── MemoryCleanerService.cs     # Standby memory measurement and purge
-│   ├── StandbyPurgeTask.cs         # One-time admin task for prompt-free purging
+│   ├── MemoryCleanerService.cs     # Standby memory measurement; launches WinMemoryCleaner
 │   ├── SystemToolsService.cs       # Keyboard, Acer service, MUX and Windows repair engine
 │   ├── Loc.cs / LocXaml.cs         # Translation catalogues and the {loc:T} markup extension
 │   ├── ThemeManager.cs             # Light and dark palettes
@@ -201,16 +199,15 @@ choose **Exit**.
 
 ### When does it ask for administrator rights?
 NitroLite runs as a normal user. Windows asks for confirmation (UAC) only for:
-- **Standby memory purge:** a one-time setup on first use, after which it runs without asking. The setup places the
-  small helper program in `C:\Program Files\NitroLite\StandbyPurge` and registers a Windows task named
-  `\NitroLite\StandbyPurge`.
+- **Standby memory purge:** WinMemoryCleaner needs administrator rights to release the standby list, so Windows
+  asks each time you press the button.
 - **Disabling / restoring Acer background services.**
 
 ### Uninstall
-1. Click **"Remove the prompt-free setup"** on the RAM card (if you set it up).
-2. On the System Services page, turn off **"Run at Windows startup"**. If you disabled services, press
+1. On the System Services page, turn off **"Run at Windows startup"**. If you disabled services, press
    **"Restore services"**.
-3. Quit NitroLite from the tray and delete its folder. To remove the settings too, delete `%LOCALAPPDATA%\NitroLite`.
+2. Quit NitroLite from the tray and delete its folder. To remove the settings too, delete `%LOCALAPPDATA%\NitroLite`.
+3. If you installed WinMemoryCleaner for the RAM card, uninstall it separately; NitroLite never bundled it.
 
 ---
 

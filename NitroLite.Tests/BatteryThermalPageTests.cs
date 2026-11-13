@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using NitroLite.Core;
 using Xunit;
@@ -46,74 +46,5 @@ public class BatteryIdentityTests
     public void ChemistryCodesMapToNames(int code, string expected)
     {
         Assert.Equal(expected, BatteryWatchdogService.BatteryChemistryName(code));
-    }
-}
-
-public class ThermalSeedCleanupTests
-{
-    [Fact]
-    public void LegacySeed_IsRemovedOnce()
-    {
-        var data = new ThermalHealthData
-        {
-            DataVersion = 0,
-            TotalFanActiveSeconds = 144000 + 3600,
-            TotalFanPassiveSeconds = 86400 + 1800,
-            AccumulatedFanRpm = 388800000 + 1000,
-            DailyHistory = new List<DailyThermalSummary>
-            {
-                new() { Date = "2026-11-01", AvgIdleCpuTemp = 44.0, AvgIdleGpuTemp = 41.5, AvgLoadCpuTemp = 68.5, AvgLoadGpuTemp = 65.0, ThermalResistanceRatio = 1.95 },
-                new() { Date = "2026-11-02", AvgIdleCpuTemp = 47.3, AvgLoadCpuTemp = 81.0, ThermalResistanceRatio = 2.31 }
-            }
-        };
-
-        Assert.True(ThermalHealthService.RemoveLegacySeed(data));
-        Assert.Equal(3600, data.TotalFanActiveSeconds);
-        Assert.Equal(1800, data.TotalFanPassiveSeconds);
-        Assert.Equal(0, data.DailyHistory[0].ThermalResistanceRatio);   // invented day → no measurement
-        Assert.Equal(0, data.DailyHistory[0].AvgIdleCpuTemp);
-        Assert.Equal(2.31, data.DailyHistory[1].ThermalResistanceRatio); // real day kept
-        Assert.Equal(47.3, data.DailyHistory[1].AvgIdleCpuTemp);
-        Assert.Equal(2, data.DataVersion);
-
-        Assert.False(ThermalHealthService.RemoveLegacySeed(data));       // second run changes nothing
-        Assert.Equal(3600, data.TotalFanActiveSeconds);
-    }
-
-    [Fact]
-    public void WithoutAnyLoadSample_ReportSaysNoMeasurement()
-    {
-        // History holds only "no measurement" days and this instance has no in-memory samples.
-        var service = new ThermalHealthService();
-        service.SetDailyHistoryForTesting(new List<DailyThermalSummary>
-        {
-            new() { Date = "2026-11-01", ThermalResistanceRatio = 0, AvgIdleCpuTemp = 0 }
-        });
-        var report = service.GetReport();
-        Assert.False(report.HasLoadMeasurement);
-        Assert.False(report.HasIdleMeasurement);
-        Assert.Contains("Henüz yük altında ölçüm yok", report.Recommendation);
-    }
-
-    [Fact]
-    public void NewDataFile_HasNoInventedRuntimeOrDays()
-    {
-        var fresh = new ThermalHealthData { DataVersion = 2 };
-        Assert.Equal(0, fresh.TotalFanActiveSeconds);
-        Assert.Equal(0, fresh.TotalFanPassiveSeconds);
-        Assert.Empty(fresh.DailyHistory);
-    }
-
-    [Fact]
-    public void Trend_IgnoresDaysWithoutALoadMeasurement()
-    {
-        var service = new ThermalHealthService();
-        service.SetDailyHistoryForTesting(new List<DailyThermalSummary>
-        {
-            new() { Date = "2026-11-01", ThermalResistanceRatio = 0 },
-            new() { Date = "2026-11-02", ThermalResistanceRatio = 2.0 },
-            new() { Date = "2026-11-03", ThermalResistanceRatio = 0 }
-        });
-        Assert.Equal(1, service.GetStabilityTrend(30).DaysCount);
     }
 }

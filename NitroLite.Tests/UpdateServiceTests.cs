@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -154,7 +154,7 @@ public class UpdateServiceTests : IDisposable
     // ---- extraction ----------------------------------------------------------------------------------------
 
     /// <summary>Builds a zip shaped exactly like scripts/publish-release.ps1 produces.</summary>
-    private string BuildPackage(string? extraEntry = null, bool includeHelper = true, string? helperPath = null)
+    private string BuildPackage(string? extraEntry = null)
     {
         var zip = Path_("NitroLite-v1.2.0-win-x64.zip");
         using var archive = ZipFile.Open(zip, ZipArchiveMode.Create);
@@ -167,8 +167,6 @@ public class UpdateServiceTests : IDisposable
         }
 
         Add("NitroLite/NitroLite.exe", "new exe");
-        if (includeHelper) Add(helperPath ?? "NitroLite/StandbyPurge/NitroLite.StandbyPurge.exe", "helper");
-        Add("NitroLite/StandbyPurge/native-aot.marker", "Native AOT");
         Add("NitroLite/LICENSE", "MIT");
         if (extraEntry != null) Add(extraEntry, "surprise");
         return zip;
@@ -181,8 +179,6 @@ public class UpdateServiceTests : IDisposable
         try
         {
             Assert.True(File.Exists(Path.Combine(staging, "NitroLite.exe")));
-            Assert.True(File.Exists(Path.Combine(staging, "StandbyPurge", "NitroLite.StandbyPurge.exe")));
-            Assert.True(File.Exists(Path.Combine(staging, "StandbyPurge", "native-aot.marker")));
             Assert.True(File.Exists(Path.Combine(staging, "LICENSE")));
             Assert.Equal("new exe", File.ReadAllText(Path.Combine(staging, "NitroLite.exe")));
         }
@@ -192,7 +188,7 @@ public class UpdateServiceTests : IDisposable
     [Fact]
     public void ExtractToStaging_AcceptsBackslashEntryNames()
     {
-        // Compress-Archive under Windows PowerShell writes "NitroLite\StandbyPurge\...", while PowerShell 7 writes
+        // Compress-Archive under Windows PowerShell writes "NitroLite\NitroLite.exe", while PowerShell 7 writes
         // forward slashes. The release script runs under either, so both shapes have to extract.
         var zip = Path_("backslash.zip");
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
@@ -200,8 +196,6 @@ public class UpdateServiceTests : IDisposable
             foreach (var name in new[]
                      {
                          @"NitroLite\NitroLite.exe",
-                         @"NitroLite\StandbyPurge\NitroLite.StandbyPurge.exe",
-                         @"NitroLite\StandbyPurge\native-aot.marker",
                          @"NitroLite\LICENSE"
                      })
             {
@@ -215,7 +209,6 @@ public class UpdateServiceTests : IDisposable
         try
         {
             Assert.True(File.Exists(Path.Combine(staging, "NitroLite.exe")));
-            Assert.True(File.Exists(Path.Combine(staging, "StandbyPurge", "NitroLite.StandbyPurge.exe")));
             Assert.True(File.Exists(Path.Combine(staging, "LICENSE")));
         }
         finally { UpdateService.CleanUp(staging); }
@@ -227,14 +220,6 @@ public class UpdateServiceTests : IDisposable
         var ex = Assert.Throws<InvalidDataException>(() =>
             UpdateService.ExtractToStaging(BuildPackage("NitroLite/evil.dll")));
         Assert.Contains("evil.dll", ex.Message);
-    }
-
-    [Fact]
-    public void ExtractToStaging_RefusesAPackageWithoutTheHelper()
-    {
-        var ex = Assert.Throws<InvalidDataException>(() =>
-            UpdateService.ExtractToStaging(BuildPackage(includeHelper: false)));
-        Assert.Contains("StandbyPurge", ex.Message);
     }
 
     [Fact]
@@ -266,8 +251,7 @@ public class UpdateServiceTests : IDisposable
     [ReleasePackageFact]
     public void ExtractToStaging_AcceptsTheRealReleasePackage()
     {
-        // The archive the release script actually produced, not a hand-built one. This is the check that would have
-        // caught the updater expecting the StandbyPurge helper next to NitroLite.exe.
+        // The archive the release script actually produced, not a hand-built one.
         var package = ReleasePackage.Find();
         Assert.NotNull(package);
 
@@ -300,10 +284,8 @@ public class UpdateServiceTests : IDisposable
     private string StagingFolder(string exeContent = "new exe")
     {
         var staging = Path_("stage");
-        Directory.CreateDirectory(Path.Combine(staging, "StandbyPurge"));
+        Directory.CreateDirectory(staging);
         File.WriteAllText(Path.Combine(staging, "NitroLite.exe"), exeContent);
-        File.WriteAllText(Path.Combine(staging, "StandbyPurge", "NitroLite.StandbyPurge.exe"), "helper");
-        File.WriteAllText(Path.Combine(staging, "StandbyPurge", "native-aot.marker"), "Native AOT");
         File.WriteAllText(Path.Combine(staging, "LICENSE"), "MIT");
         return staging;
     }
@@ -320,26 +302,12 @@ public class UpdateServiceTests : IDisposable
     }
 
     [Fact]
-    public void InstallFromStaging_RecreatesTheHelperFolder()
+    public void InstallFromStaging_RecreatesTheLicenceFile()
     {
         var install = InstallFolder();
         UpdateService.InstallFromStaging(StagingFolder(), install);
 
-        Assert.Equal("helper", File.ReadAllText(Path.Combine(install, "StandbyPurge", "NitroLite.StandbyPurge.exe")));
-        Assert.True(File.Exists(Path.Combine(install, "StandbyPurge", "native-aot.marker")));
         Assert.True(File.Exists(Path.Combine(install, "LICENSE")));
-    }
-
-    [Fact]
-    public void InstallFromStaging_OverwritesAPreviousHelper()
-    {
-        var install = InstallFolder();
-        Directory.CreateDirectory(Path.Combine(install, "StandbyPurge"));
-        File.WriteAllText(Path.Combine(install, "StandbyPurge", "NitroLite.StandbyPurge.exe"), "stale helper");
-
-        UpdateService.InstallFromStaging(StagingFolder(), install);
-
-        Assert.Equal("helper", File.ReadAllText(Path.Combine(install, "StandbyPurge", "NitroLite.StandbyPurge.exe")));
     }
 
     [Fact]
@@ -583,8 +551,6 @@ public class UpdateServiceTests : IDisposable
             new[]
             {
                 "NitroLite.exe",
-                "StandbyPurge/NitroLite.StandbyPurge.exe",
-                "StandbyPurge/native-aot.marker",
                 "LICENSE"
             },
             UpdateService.PackageFiles);

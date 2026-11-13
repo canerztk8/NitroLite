@@ -27,12 +27,6 @@ public partial class App : System.Windows.Application
         // 0. Headless CLI Tool & Maintenance Commands (run without mutex or GUI)
         if (e.Args != null && e.Args.Length > 0)
         {
-            if (HasFlag(e.Args, "--purge-standby", "--standby-purge"))
-            {
-                Environment.Exit(MemoryCleanerService.PurgeStandbyDirect());
-                return;
-            }
-
             // These change system state (service registrations, GPU mode, temp files), so they need an explicit
             // --yes: a stray shortcut or script must not be able to run them silently.
             if (HasFlag(e.Args, "--fix-lighting"))

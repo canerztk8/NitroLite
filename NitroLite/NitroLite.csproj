@@ -31,14 +31,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Build order only: the helper builds itself into bin\...\StandbyPurge for the one-time setup to copy. -->
-    <!-- Publish settings (runtime, self-contained, single file) must not reach the helper: the release script
-         builds it separately as a Native AOT exe (scripts/publish-release.ps1). -->
-    <ProjectReference Include="..\NitroLite.StandbyPurge\NitroLite.StandbyPurge.csproj" ReferenceOutputAssembly="false"
-                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishSingleFile;IncludeNativeLibrariesForSelfExtract;RuntimeFrameworkVersion;PublishDir;DebugType" />
-  </ItemGroup>
-
-  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>NitroLite.Tests</_Parameter1>
     </AssemblyAttribute>

@@ -194,48 +194,4 @@ public class AuditRound2Tests
         }
         finally { File.Delete(existing); }
     }
-
-    // ---------------------------------------------------------------- install folder validation
-
-    [Theory]
-    [InlineData(@"C:\")]
-    [InlineData(@"C:\Windows")]
-    [InlineData(@"C:\Program Files")]
-    public void UninstallScriptRefusesADangerousInstallFolder(string folder)
-    {
-        var task = new StandbyPurgeTask { InstallDirectory = folder };
-        Assert.Throws<ArgumentException>(() => task.GenerateUninstallScript(@"C:\Temp\err.log"));
-        Assert.Throws<ArgumentException>(() => task.GenerateInstallScript(
-            "caner", new[] { StandbyPurgeTask.HelperExeName }, new[] { new string('A', 64) }, @"C:\Temp\err.log"));
-    }
-
-    // ---------------------------------------------------------------- thermal sample age
-
-    [Fact]
-    public void ThermalReportExposesTheLastLoadMeasurementDate()
-    {
-        string root = Path.Combine(Path.GetTempPath(), "nl_thermal_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        string previous = Environment.GetEnvironmentVariable("NITROLITE_DATA_DIR") ?? "";
-        try
-        {
-            Environment.SetEnvironmentVariable("NITROLITE_DATA_DIR", root);
-            var service = new ThermalHealthService();
-            service.SetDailyHistoryForTesting(new[]
-            {
-                new DailyThermalSummary { Date = "2026-10-01", ThermalResistanceRatio = 2.10, AvgLoadCpuTemp = 70 },
-                new DailyThermalSummary { Date = "2026-10-05", ThermalResistanceRatio = 2.20, AvgLoadCpuTemp = 72 }
-            });
-
-            var report = service.GetReport();
-
-            Assert.True(report.HasLoadMeasurement);
-            Assert.Equal("2026-10-05", report.LastLoadMeasurementDate);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("NITROLITE_DATA_DIR", previous);
-            try { Directory.Delete(root, true); } catch { }
-        }
-    }
 }

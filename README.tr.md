@@ -1,4 +1,4 @@
-# NitroLite
+﻿# NitroLite
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
@@ -55,9 +55,10 @@ arayüzünü çalıştırmaz.
 ### 6b. Bekleme belleğini boşaltma
 - Windows'un önbellekte tuttuğu bekleme listesini boş belleğe çevirir; çalışan programların belleğine dokunmaz.
   Kartta anlık bekleme / boş bellek miktarı görünür.
-- İlk kullanımda bir kerelik kurulum (tek UAC onayı), sonra butona her basışta sormadan çalışır.
-- İsteğe bağlı otomatik mod: gerçek boş bellek 1 GB'ın altına düşüp bekleme listesi 1 GB'ı aşınca, en fazla 5
-  dakikada bir (oyun sırasında da).
+- Boşaltmayı [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) yapar. NitroLite bu aracı
+  paketlemez (GPL-3.0); kurulu değilse kart resmi indirme sayfasını açar. Kurulum: `winget install \
+  IgorMundstein.WinMemoryCleaner`.
+- Araç yönetici izni ister, bu yüzden Windows her basışta UAC sorar.
 
 ### 7. OSD (ekran üstü gösterge)
 - Üç satır: CPU (sıcaklık, tahmini güç, frekans, kullanım), GPU (sıcaklık, güç, frekans, VRAM), RAM ve fan.
@@ -153,10 +154,8 @@ NitroLite
 │   ├── GameDetectionService.cs     # Oyun tarama ve algılama
 │   ├── HardwareMonitorService.cs   # NVML (GPU) ve Windows yedek telemetrisi
 │   ├── StorageHealthService.cs     # Disk sağlık ve doluluk bilgisi
-│   ├── ThermalHealthService.cs     # Termal geçmiş ve tahminler
 │   ├── DebloatService.cs           # Acer arka plan servisleri, otomatik başlatma
-│   ├── MemoryCleanerService.cs     # Bekleme belleği ölçümü ve boşaltma
-│   ├── StandbyPurgeTask.cs         # Sormadan boşaltma için bir kerelik yönetici görevi
+│   ├── MemoryCleanerService.cs     # Bekleme belleği ölçümü; WinMemoryCleaner'ı çalıştırır
 │   ├── SystemToolsService.cs       # Klavye, Acer servisi, MUX ve Windows onarım motoru
 │   ├── Loc.cs / LocXaml.cs         # Çeviri katalogları ve {loc:T} işaretleme uzantısı
 │   ├── ThemeManager.cs             # Açık ve koyu paletler
@@ -199,13 +198,12 @@ tıklayıp **Çıkış**'ı seçin.
 
 ### Yönetici izni ne zaman istenir?
 NitroLite normal kullanıcı olarak çalışır. Windows yalnızca şu işlemlerde onay (UAC) sorar:
-- **Bekleme belleğini boşaltma:** İlk kullanımda bir kerelik kurulum. Sonrasında sormadan çalışır. Kurulum, yalnızca
-  bu işi yapan küçük programı `C:\Program Files\NitroLite\StandbyPurge` klasörüne koyar ve `\NitroLite\StandbyPurge`
-  adlı bir Windows görevi kaydeder.
+- **Bekleme belleğini boşaltma:** WinMemoryCleaner bekleme listesini boşaltmak için yönetici izni ister, bu yüzden
+  Windows her basışta sorar.
 - **Acer arka plan servislerini kapatma / geri yükleme.**
 
 ### Kaldırma
-1. RAM kartındaki **"Sormadan çalıştırma kurulumunu kaldır"** bağlantısına tıklayın (kurulum yaptıysanız).
+1. RAM kartı için WinMemoryCleaner kurduysanız onu ayrıca kaldırın; NitroLite bu aracı hiçbir zaman paketlemedi.
 2. Sistem Servisleri sayfasında **"Windows açılışında otomatik çalıştır"** seçeneğini kapatın. Servisleri
    kapattıysanız **"Servisleri Geri Yükle"**'ye basın.
 3. NitroLite'ı tepsiden kapatıp klasörünü silin. Ayarları da silmek için `%LOCALAPPDATA%\NitroLite` klasörünü silin.
@@ -231,10 +229,9 @@ dotnet build -c Release NitroLite/NitroLite.csproj
 powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 ```
 
-`artifacts\NitroLite-v<sürüm>-win-x64.zip` oluşur. İçinde .NET gerektirmeyen tek dosyalık `NitroLite.exe` ve Native
-AOT ile derlenmiş bekleme belleği aracı vardır. Betik, .NET çalışma zamanını yamalı sürüme (10.0.14,
-CVE-2026-111497 düzeltmesi) sabitler ve bu sürüme başvurmayan bir derlemeyi paketlemeyi reddeder. Native AOT için
-Visual Studio Build Tools'ta "C++ ile masaüstü geliştirme" bileşeni gerekir.
+`artifacts\NitroLite-v<sürüm>-win-x64.zip` oluşur. İçinde .NET gerektirmeyen tek dosyalık `NitroLite.exe` vardır.
+Betik, .NET çalışma zamanını yamalı sürüme (10.0.14, CVE-2026-111497 düzeltmesi) sabitler ve bu sürüme
+başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ---
 
@@ -247,8 +244,8 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
 - Testler kendi geçici veri klasörünü kullanır (`NITROLITE_DATA_DIR`); gerçek ayarlarınıza dokunmaz.
-- Gerçek sistemi değiştiren 6 test (bekleme belleğini boşaltma, bağlı farenin profilini değiştirme, güç planı
-  ayarı) varsayılan olarak atlanır. Bunları çalıştırmak için:
+- Gerçek sistemi değiştiren testler (bağlı farenin profilini değiştirme, güç planı ayarı) varsayılan olarak
+  atlanır. Bunları çalıştırmak için:
 
 ```powershell
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj

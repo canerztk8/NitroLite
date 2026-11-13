@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -343,59 +343,6 @@ public class VerifiedDefectsRegressionTests
     // =========================================================================
     // DEFECT 4: SettingsManager Backup Preservation During Corrupted Recovery
     // =========================================================================
-
-    [Fact]
-    public void Defect4_SaveSettingsAtomic_WhenPrimarySettingsCorrupted_PreservesValidBackupFile()
-    {
-        string tempDir = Path.Combine(Path.GetTempPath(), $"settings_corrupt_test_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-        string primaryPath = Path.Combine(tempDir, "settings.json");
-        string backupPath = primaryPath + ".bak";
-
-        try
-        {
-            // 1. Establish a valid historical backup (.bak) with distinct values
-            var validHistorical = new AppSettings
-            {
-                SelectedChartMetric = "GPU_POWER",
-                AutoRamCleanerEnabled = true,
-                DefaultAtkMouseProfile = 3,
-                AutoRefreshRateSwitching = false
-            };
-            File.WriteAllText(backupPath, JsonSerializer.Serialize(validHistorical, new JsonSerializerOptions { WriteIndented = true }));
-
-            // 2. Corrupt the primary settings file on disk (malformed non-parsable content)
-            File.WriteAllText(primaryPath, "{ CORRUPTED_NON_PARSABLE_JSON_DATA !@#$%^&*()_+= }");
-
-            // 3. Application loads settings with fallback (recovers gracefully from .bak)
-            var loaded = SettingsManager.LoadSettingsWithFallback(primaryPath, backupPath);
-            Assert.Equal("GPU_POWER", loaded.SelectedChartMetric);
-            Assert.True(loaded.AutoRamCleanerEnabled);
-            Assert.Equal(3, loaded.DefaultAtkMouseProfile);
-
-            // 4. Application saves updated settings
-            loaded.SelectedChartMetric = "CPU_TEMP";
-            SettingsManager.SaveSettingsAtomic(primaryPath, loaded);
-
-            // 5. Verify backup file was NOT overwritten with the corrupted primary file data!
-            Assert.True(File.Exists(backupPath), "Backup file must still exist after saving.");
-            string backupRawContent = File.ReadAllText(backupPath);
-            Assert.DoesNotContain("CORRUPTED_NON_PARSABLE_JSON_DATA", backupRawContent);
-
-            var bakLoaded = SettingsManager.LoadSettingsWithFallback(backupPath);
-            Assert.Equal("GPU_POWER", bakLoaded.SelectedChartMetric);
-            Assert.True(bakLoaded.AutoRamCleanerEnabled);
-            Assert.Equal(3, bakLoaded.DefaultAtkMouseProfile);
-
-            // 6. Verify primary file now contains freshly written valid settings
-            var primaryLoaded = SettingsManager.LoadSettingsWithFallback(primaryPath);
-            Assert.Equal("CPU_TEMP", primaryLoaded.SelectedChartMetric);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-        }
-    }
 
     [Fact]
     public void Defect4_SaveSettingsAtomic_WhenPrimaryFileZeroBytes_PreservesValidBackupFile()

@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Media;
 using System.Text.Json;
@@ -27,9 +28,6 @@ public partial class MainWindow : Window
     private readonly RgbProfileService _rgbProfileService;
     private readonly HardwareMonitorService _hardwareService;
     private readonly MemoryCleanerService _memoryService;
-    // No-prompt standby purge (elevated scheduled task); null in the test harness so tests never start it.
-    private readonly StandbyPurgeTask? _purgeTask;
-    private readonly ThermalHealthService _thermalService;
     private readonly StorageHealthService _storageService;
     private readonly IDisplayRefreshRateService _displayService;
     private AtkMouseService _atkMouseService;
@@ -183,7 +181,6 @@ public partial class MainWindow : Window
         return null;
     }
     private AppSettings _appSettings = new();
-    private int _selectedTrendDays = 30;
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
@@ -228,9 +225,7 @@ public partial class MainWindow : Window
         _gameService = new();
         _rgbProfileService = new();
         _hardwareService = new();
-        _purgeTask = new StandbyPurgeTask();
-        _memoryService = new() { PurgeTask = _purgeTask };
-        _thermalService = new();
+        _memoryService = new();
         _storageService = new();
         _displayService = new DisplayRefreshRateService();
         _atkMouseService = new();
@@ -275,7 +270,6 @@ public partial class MainWindow : Window
         _rgbProfileService = new RgbProfileService();
         _hardwareService = hardwareService ?? (isTestHarness ? new HardwareMonitorService(initNvml: false) : new HardwareMonitorService());
         _memoryService = new MemoryCleanerService();
-        _thermalService = new ThermalHealthService();
         _storageService = new StorageHealthService();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
@@ -671,7 +665,6 @@ public partial class MainWindow : Window
 
             // 6. Battery Health Details, Thermal Paste / Fan & Storage Health
             await RefreshBatteryHealthAsync();
-            RefreshThermalHealthUi();
             await RefreshStorageHealthUi();
 
             // Eco baseline was already loaded before the startup mode was written (step 0.2).
@@ -811,7 +804,6 @@ public partial class MainWindow : Window
             ChkAtkMouseIntegration.IsChecked = _appSettings.AtkMouseIntegrationEnabled;
         }
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
-        ChkAutoRamClean.IsChecked = _appSettings.AutoRamCleanerEnabled;
         LoadCustomFanSettings();
         _ = RefreshRamCleanStateAsync();
 
@@ -1518,7 +1510,6 @@ public partial class MainWindow : Window
                 // Enrich with GPU Wattage, VRAM and CPU Package Power
                 // GPU1_TEMPERATURE 0 from AASSvc means the dGPU is powered down; do not wake it via NVML.
                 _hardwareService.EnrichMonitorData(data, gpuAsleepPerService: data.GpuTemperature <= 0);
-                _thermalService.RecordSample(data);
             }
             _telemetrySampleIndex++;
 
@@ -1606,15 +1597,6 @@ public partial class MainWindow : Window
                 _notifyIcon.Text = tip.Length > 63 ? tip[..63] : tip;
             }
 
-            // Automatic standby purge when real free memory is low and the standby list is large (games included: that
-            // is where the stutter happens). Only when the purge can run (elevated or no-prompt task ready); not awaited
-            // here so the telemetry loop keeps running while it works.
-            if (_appSettings.AutoRamCleanerEnabled && _ramCleanAvailable && !_ramCleanBusy
-                && _memoryService.ShouldAutoClean(MemoryCleanerService.ReadMemoryLists()))
-            {
-                _ = RunAutoRamCleanAsync();
-            }
-
             _ = RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64);
             _ = RetryPendingGameMouseProfileAsync(Environment.TickCount64);
             // Retry a desktop restore that failed or was interrupted, even without a crash record: the pending
@@ -1693,11 +1675,6 @@ public partial class MainWindow : Window
                 await SyncDeviceStateAsync();
             }
 
-            // Periodically refresh thermal health card if Battery & Health tab is active (every 5 samples)
-            if (TabBattery?.Visibility == Visibility.Visible && (_telemetrySampleIndex % 5 == 0))
-            {
-                RefreshThermalHealthUi();
-            }
         }
         }
         finally
@@ -4356,21 +4333,6 @@ public partial class MainWindow : Window
         });
     }
 
-    private async void BtnRefreshBatHealth_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            await RefreshBatteryHealthAsync();
-            RefreshThermalHealthUi();
-            await RefreshStorageHealthUi();
-            ShowToast(Loc.T("Donanım sağlık telemetrisi güncellendi."));
-        }
-        catch (Exception ex)
-        {
-            ShowToast(Loc.T($"Telemetri güncellenemedi: {ex.Message}"), false);
-        }
-    }
-
     private async Task RefreshStorageHealthUi()
     {
         var drives = await Task.Run(() => _storageService.GetDrives());
@@ -4492,19 +4454,6 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>Turns the "yyyy-MM-dd" of the last sustained-load sample into an age hint for the UI.</summary>
-    private static string DescribeSampleAge(string? sampleDate)
-    {
-        if (string.IsNullOrWhiteSpace(sampleDate)) return "";
-        if (!DateTime.TryParseExact(sampleDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
-            return "";
-
-        int days = (DateTime.Today - day.Date).Days;
-        if (days <= 0) return Loc.T("Bugün ölçüldü");
-        if (days == 1) return Loc.T("Dün ölçüldü");
-        return Loc.TInv($"{days} gün önce ölçüldü");
-    }
-
     /// <summary>
     /// Shows a warning on the RGB tab when the Acer service explicitly reports that this model has no
     /// controllable keyboard lighting. A null answer (service absent, unknown reply) changes nothing.
@@ -4531,125 +4480,6 @@ public partial class MainWindow : Window
                 TxtLightingUnsupported.Text = Loc.T("Acer servisi bu modelde denetlenebilir klavye aydınlatması bildirmedi. "
                     + "Aşağıdaki denetimler etkisiz kalabilir; RGB servisini onarmayı deneyebilirsiniz.");
         });
-    }
-
-    private void RefreshThermalHealthUi()
-    {
-        var report = _thermalService.GetReport();
-        var trend = _thermalService.GetStabilityTrend(_selectedTrendDays);
-        if (Dispatcher.HasShutdownStarted) return;
-        Dispatcher.Invoke(() =>
-        {
-            if (Dispatcher.HasShutdownStarted) return;
-
-            // 14 / 30 Day Thermal Stability Trend UI
-            if (trend.DaysCount == 0)
-            {
-                // No day with a sustained-load measurement yet: show that instead of a 100 % score.
-                if (TxtStabilityScore != null) { TxtStabilityScore.Text = "--"; TxtStabilityScore.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
-                if (TxtStabilityStatus != null) TxtStabilityStatus.Text = Loc.T("Veri toplanıyor (yük altında ölçüm yapılan gün yok)");
-                if (TxtStabilitySlope != null) TxtStabilitySlope.Text = Loc.T("Eğim: --");
-                if (TxtStabilityBadge != null) { TxtStabilityBadge.Text = Loc.T("Veri yok"); TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
-                if (BarStabilityScore != null) BarStabilityScore.Value = 0;
-            }
-            else if (TxtStabilityScore != null)
-            {
-                // The score is a measurement, so it stays in ink; the verdict is the badge beside it.
-                TxtStabilityScore.Text = "~" + TelemetryFormatter.FormatStabilityScore(trend.StabilityScorePercent);
-            }
-
-            // Thermal resistance uses the estimated CPU power (no package power sensor), so every value
-            // derived from it in this card is shown as an estimate.
-            if (trend.DaysCount > 0 && TxtStabilityStatus != null)
-            {
-                TxtStabilityStatus.Text = Loc.T("Tahmini: ") + trend.StatusText;
-            }
-
-            if (trend.DaysCount > 0 && TxtStabilitySlope != null)
-            {
-                string slopeState = trend.DegradationSlopePerDay <= 0.005 ? Loc.T(" (Stabil)") : Loc.T(" (Artış Eğiliminde)");
-                TxtStabilitySlope.Text = Loc.T($"Eğim: {TelemetryFormatter.FormatThermalSlope(trend.DegradationSlopePerDay)}{slopeState}");
-            }
-
-            if (trend.DaysCount > 0 && TxtStabilityBadge != null)
-            {
-                TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? Loc.T("Nominal (tahmini)") :
-                    (trend.StatusLevel == ThermalStatusLevel.Good ? Loc.T("Kararlı (tahmini)") : Loc.T("Bakım Önerilebilir (tahmini)"));
-                TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource(
-                    trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
-                    (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
-            }
-
-            if (trend.DaysCount > 0 && BarStabilityScore != null)
-            {
-                // The bar is a measurement, so it is drawn in ink; the verdict lives in the badge text.
-                BarStabilityScore.Value = trend.StabilityScorePercent;
-            }
-
-            // Everything in this card is derived from the estimated CPU power (no package power sensor) or from
-            // fan runtime counted by NitroLite. Without a sustained-load sample there is nothing to show yet.
-            bool hasLoad = report.HasLoadMeasurement;
-            if (TxtPasteHealthPercent != null)
-            {
-                TxtPasteHealthPercent.Text = hasLoad ? FormattableString.Invariant($"~{report.PasteHealthPercent:F1} %") : Loc.T("Ölçüm yok");
-                TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
-                    : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
-            }
-
-            if (TxtThermalResistance != null)
-            {
-                string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? Loc.T(" (Normal)") : Loc.T(" (Yüksek)"));
-                TxtThermalResistance.Text = hasLoad
-                    ? Loc.TInv($"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}")
-                    : Loc.T("Yük altında örnek bekleniyor");
-            }
-
-            if (TxtThermalSampleAge != null)
-                TxtThermalSampleAge.Text = DescribeSampleAge(report.LastLoadMeasurementDate);
-
-            if (TxtActiveFanHours != null)
-                TxtActiveFanHours.Text = FormattableString.Invariant($"{report.ActiveFanHours:F1} Saat");
-
-            if (TxtAvgFanRpm != null)
-                TxtAvgFanRpm.Text = report.AvgFanRpm > 0 ? Loc.T($"Ortalama: {report.AvgFanRpm} RPM") : Loc.T("Ortalama: --");
-
-            if (TxtPassiveFanHours != null)
-                TxtPassiveFanHours.Text = FormattableString.Invariant($"{report.PassiveFanHours:F1} Saat");
-
-            if (TxtFanBearingHealth != null)
-                TxtFanBearingHealth.Text = FormattableString.Invariant($"~{report.FanBearingHealthPercent:F1} %");
-
-            if (TxtFanRatedLife != null)
-                TxtFanRatedLife.Text = Loc.TInv($"Varsayılan fan ömrü {report.FanRatedHours:F0} saat; yalnızca NitroLite açıkken sayılan çalışma süresinden (tahmini)");
-
-            if (TxtThermalBadge != null)
-            {
-                TxtThermalBadge.Text = hasLoad ? Loc.T("Tahmini: ") + report.PasteHealthStatus : Loc.T("Veri toplanıyor");
-                TxtThermalBadge.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
-                    : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
-            }
-
-            if (TxtThermalRecommendation != null)
-            {
-                // report.Recommendation only looks at the current resistance, so it can say "bakım
-                // gerekmemektedir" while the trend card right above says "Bakım Önerilebilir".
-                TxtThermalRecommendation.Text = ThermalHealthService.BuildRecommendation(report.Recommendation, trend) +
-                    Loc.T(" Not: Bu değerlendirme deneysel bir tahmindir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.");
-            }
-        });
-    }
-
-    private void RadioTrendPeriod_Checked(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.RadioButton rb && rb.Tag != null && int.TryParse(rb.Tag.ToString(), out int days))
-        {
-            _selectedTrendDays = days;
-            if (TxtStabilityDaysSubtitle != null)
-            {
-                TxtStabilityDaysSubtitle.Text = Loc.T($" (Son {days} Günlük Veri Seti)");
-            }
-            RefreshThermalHealthUi();
-        }
     }
 
     private void OnBatteryStatusUpdated(BatteryStatusInfo status)
@@ -5222,7 +5052,6 @@ public partial class MainWindow : Window
         _pollTimer?.Stop();
         _toastTimer?.Stop();
 
-        _thermalService.SaveData();
         _hardwareService.Dispose();
         if (_osdWindow != null)
         {
@@ -5251,7 +5080,6 @@ public partial class MainWindow : Window
             }
             _pollTimer?.Stop();
             _toastTimer?.Stop();
-            _thermalService.SaveData();
             _hardwareService.Dispose();
             _powerAutomationService?.Dispose();
             _cpuPowerService.Dispose();
@@ -5287,7 +5115,6 @@ public partial class MainWindow : Window
         if (NavBattery.IsChecked == true)
         {
             await RefreshBatteryHealthAsync();
-            RefreshThermalHealthUi();
             await RefreshStorageHealthUi();
         }
     }
@@ -6285,6 +6112,9 @@ public partial class MainWindow : Window
     }
 
     private bool _ramCleanBusy;
+    // True while the status line shows the outcome of the last clean. A flag, not a text search: the status
+    // text is translated, so looking for a Turkish word only worked in Turkish.
+    private bool _ramCleanResultShown;
 
     private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)
     {
@@ -6293,21 +6123,10 @@ public partial class MainWindow : Window
         if (BtnCleanRamCache != null) BtnCleanRamCache.Opacity = 0.45;
         try
         {
-            if (!_ramCleanIsAdmin && _purgeTask != null)
-            {
-                var state = await Task.Run(() => _purgeTask.GetState());
-                if (state == StandbyPurgeTaskState.Unavailable)
-                {
-                    ShowToast(Loc.T("Temizleme yardımcısı NitroLite klasöründe bulunamadı; NitroLite'ı yeniden derleyin."), false);
-                    return;
-                }
-                if (state != StandbyPurgeTaskState.Ready && !await RunPurgeSetupAsync(state)) return;
-            }
-
             _ramCleanResultShown = false;
             SetRamCleanStatus(Loc.T(" (Boşaltılıyor…)"), "TextSecondary");
             var res = await _memoryService.CleanMemoryAsync();
-            ShowMemoryCleanResult(res, automatic: false);
+            ShowMemoryCleanResult(res);
         }
         catch (Exception ex)
         {
@@ -6320,83 +6139,44 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Asks once, then installs the no-prompt purge task (one UAC prompt). Returns true when it is ready.</summary>
-    private async Task<bool> RunPurgeSetupAsync(StandbyPurgeTaskState state)
+    /// <summary>Opens the official WinMemoryCleaner release page; NitroLite never downloads or bundles it.</summary>
+    private void BtnGetMemoryCleaner_Click(object sender, RoutedEventArgs e)
     {
-        if (_purgeTask == null) return false;
-        string text = state == StandbyPurgeTaskState.NeedsUpdate
-            ? Loc.T("Sormadan temizleme kurulumu bu NitroLite sürümüyle uyuşmuyor ve güncellenmesi gerekiyor.\n\n" +
-              "Windows bir kez yönetici izni (UAC) isteyecek. Sonrasında temizleme yine sormadan çalışır.\n\nGüncellensin mi?")
-            : Loc.T("Bekleme belleğini boşaltmak yönetici yetkisi ister. Her seferinde sormaması için bir kerelik kurulum yapılacak:\n\n" +
-              "• Yalnızca bekleme belleğini boşaltan küçük bir program C:\\Program Files\\NitroLite klasörüne kopyalanır.\n" +
-              "• Onu yönetici yetkisiyle çalıştıran bir Windows görevi (\\NitroLite\\StandbyPurge) kaydedilir. Görev kendiliğinden çalışmaz; yalnızca NitroLite başlatır.\n\n" +
-              "Windows şimdi bir kez yönetici izni (UAC) isteyecek. Sonrasında butona her bastığınızda sormadan çalışır. " +
-              "Bu karttaki \"Kurulumu kaldır\" ile tamamen silebilirsiniz.\n\nKurulum yapılsın mı?");
-        var confirm = System.Windows.MessageBox.Show(this, text, Loc.T("Sormadan Bellek Temizleme"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return false;
-
-        SetRamCleanStatus(Loc.T(" (Kuruluyor…)"), "TextSecondary");
-        bool ok = await _purgeTask.InstallAsync();
-        if (!ok)
-        {
-            ShowToast(Loc.T($"Kurulum yapılamadı: {_purgeTask.LastError}"), false);
-            return false;
-        }
-        ShowToast(Loc.T("Kurulum tamam. Bekleme belleği artık sormadan boşaltılacak."));
-        return true;
-    }
-
-    private async void BtnRemovePurgeTask_Click(object sender, RoutedEventArgs e)
-    {
-        if (_purgeTask == null || _ramCleanBusy) return;
-        var confirm = System.Windows.MessageBox.Show(this,
-            Loc.T("Sormadan temizleme kurulumu kaldırılacak (Windows görevi ve C:\\Program Files\\NitroLite\\StandbyPurge klasörü silinir).\n\n" +
-            "Windows bir kez yönetici izni (UAC) isteyecek. Devam edilsin mi?"),
-            Loc.T("Kurulumu Kaldır"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
-
-        _ramCleanBusy = true;
         try
         {
-            bool ok = await _purgeTask.UninstallAsync();
-            ShowToast(ok ? Loc.T("Sormadan temizleme kurulumu kaldırıldı.") : Loc.T($"Kaldırılamadı: {_purgeTask.LastError}"), ok);
+            Process.Start(new ProcessStartInfo(MemoryCleanerService.ToolReleasesUrl) { UseShellExecute = true });
         }
-        finally
+        catch (Exception ex)
         {
-            _ramCleanBusy = false;
-            await RefreshRamCleanStateAsync();
+            ShowToast(Loc.T($"Bağlantı açılamadı: {ex.Message}"), false);
         }
     }
 
-    private void ShowMemoryCleanResult(MemoryCleanerResult res, bool automatic)
+    private void ShowMemoryCleanResult(MemoryCleanerResult res)
     {
-        if (res.RequiresAdministrator)
+        if (res.ToolMissing)
         {
-            if (!automatic)
-                ShowToast(Loc.T("Bekleme belleğini boşaltmak için bir kerelik kurulum gerekiyor (butona basınca başlar)."), false);
+            ShowToast(Loc.T("WinMemoryCleaner kurulu değil. Buton, resmi indirme sayfasını açar."), false);
+            SetRamCleanStatus(Loc.T(" (Araç kurulu değil)"), "TextSecondary");
             return;
         }
-        _ramCleanResultShown = true;
-        if (!res.StandbyPurged)
+        if (res.ElevationRefused)
         {
-            if (!automatic)
-            {
-                string why = res.TaskExitCode switch
-                {
-                    2 => Loc.T("görev yönetici yetkisi alamadı (hesap yönetici olmayabilir)"),
-                    3 => Loc.T("Windows boşaltmayı reddetti"),
-                    null => res.Error ?? Loc.T("görev çalışmadı"),
-                    _ => Loc.T($"hata kodu {res.TaskExitCode}")
-                };
-                ShowToast(Loc.T($"Bekleme belleği boşaltılamadı: {why}."), false);
-            }
+            ShowToast(Loc.T("Yönetici izni verilmedi; bekleme belleği boşaltılmadı."), false);
+            SetRamCleanStatus(Loc.T(" (İzin verilmedi)"), "TextSecondary");
+            return;
+        }
+        if (!res.Cleaned)
+        {
+            ShowToast(Loc.T($"Bekleme belleği boşaltılamadı: {res.Error}"), false);
             SetRamCleanStatus(Loc.T(" (Başarısız)"), "AccentRed");
             return;
         }
 
+        _ramCleanResultShown = true;
         string freedStr = res.FreedMegabytes >= 1024
             ? FormattableString.Invariant($"{res.FreedMegabytes / 1024.0:F1} GB")
-            : $"{res.FreedMegabytes:F0} MB";
+            : FormattableString.Invariant($"{res.FreedMegabytes:F0} MB");
         if (res.FreedMegabytes <= 0)
         {
             ShowToast(Loc.T("Bekleme belleği zaten temiz (boşaltılacak önbellek yok)."), isSuccess: true, trayBalloon: false);
@@ -6417,47 +6197,22 @@ public partial class MainWindow : Window
         TxtRamCleanStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
     }
 
-    private readonly bool _ramCleanIsAdmin = MemoryCleanerService.IsRunningAsAdministrator();
-    // Admin, or the no-prompt task is installed and current: the purge (manual and automatic) works.
-    private bool _ramCleanAvailable;
-    // True while the status line shows the outcome of the last purge. A flag, not a text search: the status text is
-    // translated, so looking for "boşaltıldı" only worked in Turkish.
-    private bool _ramCleanResultShown;
-
-    /// <summary>Reads the task state off the UI thread and updates the card (status, auto checkbox, remove link).</summary>
-    private async Task RefreshRamCleanStateAsync(bool keepResultText = false)
+    /// <summary>Points the card at whichever state the machine is in: tool present, or a link to get it.</summary>
+    private Task RefreshRamCleanStateAsync(bool keepResultText = false)
     {
-        StandbyPurgeTaskState? state = null;
-        if (!_ramCleanIsAdmin && _purgeTask != null)
-        {
-            try { state = await Task.Run(() => _purgeTask.GetState()); } catch { state = null; }
-        }
-        _ramCleanAvailable = _ramCleanIsAdmin || state == StandbyPurgeTaskState.Ready;
+        bool installed = MemoryCleanerService.FindTool() != null;
 
-        if (BtnCleanRamCache != null)
-        {
-            // Never disabled: the custom button template renders a disabled button as an empty white box.
-            BtnCleanRamCache.Opacity = 1.0;
-            BtnCleanRamCache.Content = _ramCleanAvailable || state == null ? Loc.T("Bekleme Belleğini Boşalt") : Loc.T("Kur ve Boşalt");
-        }
-        if (ChkAutoRamClean != null) ChkAutoRamClean.IsEnabled = _ramCleanAvailable;
-        if (BtnRemovePurgeTask != null)
-            BtnRemovePurgeTask.Visibility = state is StandbyPurgeTaskState.Ready or StandbyPurgeTaskState.NeedsUpdate
-                ? Visibility.Visible : Visibility.Collapsed;
+        if (BtnCleanRamCache != null) BtnCleanRamCache.Opacity = 1.0;
+        if (BtnGetMemoryCleaner != null)
+            BtnGetMemoryCleaner.Visibility = installed ? Visibility.Collapsed : Visibility.Visible;
 
-        bool showingResult = keepResultText && _ramCleanResultShown;
-        if (!showingResult)
+        if (!(keepResultText && _ramCleanResultShown))
         {
-            if (_ramCleanIsAdmin) SetRamCleanStatus(Loc.T(" (Hazır)"), "AccentGreen");
-            else switch (state)
-            {
-                case StandbyPurgeTaskState.Ready: SetRamCleanStatus(Loc.T(" (Hazır · sormadan çalışır)"), "AccentGreen"); break;
-                case StandbyPurgeTaskState.NeedsUpdate: SetRamCleanStatus(Loc.T(" (Kurulum güncellenmeli)"), "AccentRed"); break;
-                case StandbyPurgeTaskState.Unavailable: SetRamCleanStatus(Loc.T(" (Yardımcı dosya eksik)"), "AccentRed"); break;
-                default: SetRamCleanStatus(Loc.T(" (Bir kerelik kurulum gerekli)"), "TextSecondary"); break;
-            }
+            if (installed) SetRamCleanStatus(Loc.T(" (Hazır)"), "AccentGreen");
+            else SetRamCleanStatus(Loc.T(" (Araç kurulu değil)"), "TextSecondary");
         }
         UpdateMemoryListText();
+        return Task.CompletedTask;
     }
 
     /// <summary>Live standby/free sizes in the RAM card (readable without administrator rights).</summary>
@@ -6470,32 +6225,6 @@ public partial class MainWindow : Window
             : "";
         TxtRamCleanNote.Text = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz. ")
                                + Loc.T("Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.");
-    }
-
-    private int _autoRamCleanRunning;
-
-    /// <summary>Runs the automatic purge without blocking the telemetry loop.</summary>
-    private async Task RunAutoRamCleanAsync()
-    {
-        if (Interlocked.Exchange(ref _autoRamCleanRunning, 1) != 0) return;
-        try
-        {
-            var res = await _memoryService.CleanMemoryAsync();
-            if (!Dispatcher.HasShutdownStarted) ShowMemoryCleanResult(res, automatic: true);
-        }
-        catch { }
-        finally
-        {
-            Interlocked.Exchange(ref _autoRamCleanRunning, 0);
-        }
-    }
-
-    private void ChkAutoRamClean_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!IsLoaded || _isInitializingUi || ChkAutoRamClean == null) return;
-        _appSettings.AutoRamCleanerEnabled = ChkAutoRamClean.IsChecked == true;
-        SaveSettings();
-        ShowToast(_appSettings.AutoRamCleanerEnabled ? Loc.T("Otomatik bellek temizleme etkin") : Loc.T("Otomatik bellek temizleme devre dışı"));
     }
 
     private async void CmbDcPowerMode_SelectionChanged(object sender, SelectionChangedEventArgs e)

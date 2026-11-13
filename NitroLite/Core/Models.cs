@@ -214,7 +214,6 @@ public class AppSettings
     public bool StartMinimized { get; set; } = false;
     public bool OsdEnabled { get; set; } = false;
     public string SelectedChartMetric { get; set; } = "CPU_TEMP";
-    public bool AutoRamCleanerEnabled { get; set; } = false;
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
     // Normal (restored) window size; null = default 1060 x 730.

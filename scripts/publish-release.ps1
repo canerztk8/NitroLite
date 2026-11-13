@@ -1,14 +1,11 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds the downloadable NitroLite package: artifacts\NitroLite-v<version>-win-x64.zip
 
 .DESCRIPTION
     - NitroLite.exe: self-contained single file (no .NET install needed on the target PC).
-    - StandbyPurge\NitroLite.StandbyPurge.exe: Native AOT (no .NET runtime needed); used by the one-time
-      "no prompt" standby-purge setup.
-    - Both are pinned to a patched .NET runtime ($RuntimeVersion). 10.0.14 fixes CVE-2026-111497 (Brotli decoder,
+    - Pinned to a patched .NET runtime ($RuntimeVersion). 10.0.14 fixes CVE-2026-111497 (Brotli decoder,
       GHSA-p3jp-9v83-76w9); the SDK's bundled 10.0.12 is affected, so never ship a package built without the pin.
-    Native AOT needs the MSVC linker (Visual Studio Build Tools, "Desktop development with C++").
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
@@ -44,8 +41,7 @@ function Invoke-Step([string]$title, [scriptblock]$block) {
 if (Test-Path $artifacts) { Remove-Item $artifacts -Recurse -Force }
 # Always publish from a clean win-x64 build: an incremental build once kept a stale g.resources without app.ico,
 # and the packaged window then failed to open. (The normal Release build folder is left alone.)
-foreach ($p in 'NitroLite\obj\Release\net10.0-windows\win-x64', 'NitroLite\bin\Release\net10.0-windows\win-x64',
-               'NitroLite.StandbyPurge\obj\Release\net10.0-windows\win-x64') {
+foreach ($p in 'NitroLite\obj\Release\net10.0-windows\win-x64', 'NitroLite\bin\Release\net10.0-windows\win-x64') {
     $full = Join-Path $root $p
     if (Test-Path $full) { Remove-Item $full -Recurse -Force }
 }
@@ -62,21 +58,10 @@ Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
         -o $stage --nologo
 }
 
-# The SDK copies a referenced exe project's runtimeconfig next to the main exe even with
-# ReferenceOutputAssembly=false; the helper ships in its own folder instead.
-Get-ChildItem $stage -File -Filter 'NitroLite.StandbyPurge.*' | Remove-Item -Force
-
-Invoke-Step "StandbyPurge helper (Native AOT, runtime $RuntimeVersion)" {
-    dotnet publish NitroLite.StandbyPurge/NitroLite.StandbyPurge.csproj -c Release -r win-x64 `
-        -p:PublishAot=true -p:RuntimeFrameworkVersion=$RuntimeVersion -p:DebugType=none `
-        -p:OutDir="$work\purge-bin\" -o (Join-Path $stage 'StandbyPurge') --nologo
-}
-
 # Ship only what the app needs.
-Set-Content -LiteralPath (Join-Path $stage 'StandbyPurge\native-aot.marker') -Value 'NitroLite.StandbyPurge Native AOT' -Encoding ascii
 Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item -Force
 $unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
-    $_.Name -notin 'NitroLite.exe', 'NitroLite.StandbyPurge.exe', 'native-aot.marker'
+    $_.Name -notin 'NitroLite.exe'
 }
 if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
 

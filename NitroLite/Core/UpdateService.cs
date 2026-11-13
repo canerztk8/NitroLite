@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -50,8 +50,6 @@ public static class UpdateService
     public static readonly string[] PackageFiles =
     {
         "NitroLite.exe",
-        "StandbyPurge/NitroLite.StandbyPurge.exe",
-        "StandbyPurge/native-aot.marker",
         "LICENSE"
     };
 
@@ -255,7 +253,7 @@ public static class UpdateService
             entry.ExtractToFile(destination, overwrite: true);
         }
 
-        foreach (var required in new[] { "NitroLite.exe", "StandbyPurge/NitroLite.StandbyPurge.exe" })
+        foreach (var required in new[] { "NitroLite.exe" })
         {
             if (!File.Exists(Path.Combine(staging, required)))
                 throw new InvalidDataException($"The package does not contain {required}.");
@@ -274,8 +272,7 @@ public static class UpdateService
         var target = Path.Combine(installDirectory, "NitroLite.exe");
         var backup = target + ".old";
 
-        // Everything except the executable can be replaced in place. Sub-folders (the StandbyPurge helper) are
-        // recreated so the app finds them where it expects them.
+        // Everything except the executable can be replaced in place.
         foreach (var file in Directory.GetFiles(staging, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(staging, file);

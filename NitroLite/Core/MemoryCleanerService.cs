@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -7,70 +9,52 @@ namespace NitroLite.Core;
 
 public class MemoryCleanerResult
 {
-    /// <summary>Growth of free memory (free + zeroed pages) caused by the purge.</summary>
+    /// <summary>Drop of the standby list caused by the clean, in megabytes.</summary>
     public double FreedMegabytes { get; set; }
     public double AvailableGigabytes { get; set; }
-    /// <summary>Kept for compatibility; other processes are no longer trimmed, so this is always 0.</summary>
-    public int ProcessesOptimized { get; set; }
-    public bool StandbyPurged { get; set; }
-    /// <summary>True when no purge was possible: not elevated and the no-prompt task is not set up (see <see cref="TaskState"/>).</summary>
-    public bool RequiresAdministrator { get; set; }
-    /// <summary>State of the no-prompt task when NitroLite is not elevated; null when it was not consulted.</summary>
-    public StandbyPurgeTaskState? TaskState { get; set; }
-    /// <summary>Exit code of the purge helper run by the task (0 = purged); null when the task did not run or finish.</summary>
-    public int? TaskExitCode { get; set; }
+    /// <summary>True when the standby list was actually released.</summary>
+    public bool Cleaned { get; set; }
+    /// <summary>True when WinMemoryCleaner is not installed; the caller offers the download page.</summary>
+    public bool ToolMissing { get; set; }
+    /// <summary>True when the elevation prompt was dismissed, so nothing ran.</summary>
+    public bool ElevationRefused { get; set; }
+    /// <summary>Exit code of WinMemoryCleaner; null when it did not run or the code could not be read.</summary>
+    public int? ExitCode { get; set; }
+    /// <summary>Technical failure text, not localized; the caller wraps it in a translated sentence.</summary>
     public string? Error { get; set; }
 }
 
 /// <summary>Sizes of the Windows memory lists, readable without administrator rights.</summary>
 public readonly record struct MemoryListSizes(double FreeGigabytes, double StandbyGigabytes);
 
+/// <summary>
+/// Releases the Windows standby list through WinMemoryCleaner
+/// (github.com/IgorMundstein/WinMemoryCleaner).
+/// </summary>
+/// <remarks>
+/// WinMemoryCleaner is GPL-3.0 and NitroLite is MIT, so the tool is deliberately not bundled, downloaded or
+/// redistributed: NitroLite only launches an installation the user already has, and points at the official
+/// release page when it is missing. That keeps NitroLite's licence intact and leaves the tool's updates to
+/// its own author.
+/// </remarks>
 public class MemoryCleanerService
 {
-    [DllImport("ntdll.dll")]
-    private static extern uint NtSetSystemInformation(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength);
+    public const string ToolFileName = "WinMemoryCleaner.exe";
+    public const string ToolProjectUrl = "https://github.com/IgorMundstein/WinMemoryCleaner";
+    public const string ToolReleasesUrl = "https://github.com/IgorMundstein/WinMemoryCleaner/releases/latest";
+    public const string ToolWingetId = "IgorMundstein.WinMemoryCleaner";
+
+    /// <summary>
+    /// Only the standby list. WinMemoryCleaner's own demonstration uses this area alone, and trimming the
+    /// working sets of other processes would only push their pages back into the list we just released.
+    /// </summary>
+    public const string CleanArguments = "/StandbyList";
 
     [DllImport("ntdll.dll")]
     private static extern int NtQuerySystemInformation(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength, out int ReturnLength);
 
-    /// <summary>
-    /// Runs the purge through the elevated scheduled task when NitroLite itself is not elevated.
-    /// Null (the default) keeps the old behaviour: purge only when elevated.
-    /// </summary>
-    public StandbyPurgeTask? PurgeTask { get; set; }
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
-
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-    private static extern bool LookupPrivilegeValue(string? lpSystemName, string lpName, out LUID lpLuid);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    private static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, int BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool CloseHandle(IntPtr hObject);
-
-    [DllImport("kernel32.dll")]
-    private static extern IntPtr GetCurrentProcess();
-
-    [DllImport("kernel32.dll")]
-    private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct LUID
-    {
-        public uint LowPart;
-        public int HighPart;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct TOKEN_PRIVILEGES
-    {
-        public int PrivilegeCount;
-        public LUID Luid;
-        public int Attributes;
-    }
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
     public class MEMORYSTATUSEX
@@ -86,45 +70,9 @@ public class MemoryCleanerService
         public ulong ullAvailExtendedVirtual;
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
-
     private const int SystemMemoryListInformation = 80;
-    private const int MemoryPurgeStandbyList = 4;
 
-    private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
-    private const uint TOKEN_QUERY = 0x0008;
-    private const int SE_PRIVILEGE_ENABLED = 0x00000002;
-    private const int ERROR_NOT_ALL_ASSIGNED = 1300;
-
-    private DateTime _lastAutoCleanTime = DateTime.MinValue;
-
-    /// <summary>Automatic purge: real free memory below this…</summary>
-    public const double AutoCleanFreeBelowGb = 1.0;
-    /// <summary>…while the standby list holds more than this (otherwise a purge would free nothing).</summary>
-    public const double AutoCleanStandbyAboveGb = 1.0;
-    public static readonly TimeSpan AutoCleanInterval = TimeSpan.FromMinutes(5);
-
-    /// <summary>
-    /// Automatic purge rule (the same idea as ISLC): purge when the real free list is low while the standby list is
-    /// large. That is the situation where Windows hands standby pages back slowly and games stutter. The "RAM used %"
-    /// figure cannot see it: it counts standby as available, so it shows ~55% while only 1 GB is truly free.
-    /// It also runs during games: that is where the stutter happens, and the purge itself takes ~0.2 s.
-    /// At most once per <see cref="AutoCleanInterval"/>; a manual clean also resets the interval.
-    /// </summary>
-    public bool ShouldAutoClean(MemoryListSizes? lists)
-    {
-        if (lists is not { } l) return false;
-        if (DateTime.Now - _lastAutoCleanTime < AutoCleanInterval) return false;
-        return l.FreeGigabytes < AutoCleanFreeBelowGb && l.StandbyGigabytes > AutoCleanStandbyAboveGb;
-    }
-
-    public async Task<MemoryCleanerResult> CleanMemoryAsync(int? excludePid = null, string? excludeProcessName = null)
-    {
-        return await Task.Run(() => CleanMemory(excludePid, excludeProcessName));
-    }
-
-    /// <summary>True when the current process runs elevated (needed to purge the standby list).</summary>
+    /// <summary>True when the current process runs elevated; WinMemoryCleaner needs that to release the list.</summary>
     public static bool IsRunningAsAdministrator()
     {
         try
@@ -168,137 +116,148 @@ public class MemoryCleanerService
         }
     }
 
-    /// <summary>
-    /// Purges the Windows standby list and trims NitroLite's own memory. Elevated: directly. Not elevated: through
-    /// the no-prompt scheduled task when <see cref="PurgeTask"/> is set and installed; otherwise nothing is purged.
-    /// </summary>
-    /// <remarks>
-    /// It does not empty the working sets of other processes. That only pushes their memory to the standby list
-    /// (which Windows already counts as available), and every program, a game included, then stutters while paging
-    /// it back in. The parameters are kept for compatibility and are not used.
-    /// </remarks>
-    public MemoryCleanerResult CleanMemory(int? excludePid = null, string? excludeProcessName = null)
+    /// <summary>Full path of an installed WinMemoryCleaner, or null when it is not on this machine.</summary>
+    public static string? FindTool()
     {
-        _lastAutoCleanTime = DateTime.Now;
-        var result = new MemoryCleanerResult();
-
-        var listsBefore = ReadMemoryLists();
-        var memBefore = new MEMORYSTATUSEX();
-        GlobalMemoryStatusEx(memBefore);
-
-        if (IsRunningAsAdministrator())
+        foreach (string candidate in ToolCandidates())
         {
-            result.StandbyPurged = TryPurgeStandbyList();
-        }
-        else if (PurgeTask != null)
-        {
-            var state = PurgeTask.GetState();
-            result.TaskState = state;
-            if (state == StandbyPurgeTaskState.Ready)
+            try
             {
-                result.TaskExitCode = PurgeTask.RunAsync().GetAwaiter().GetResult();
-                result.StandbyPurged = result.TaskExitCode == 0;
-                if (!result.StandbyPurged) result.Error = PurgeTask.LastError;
+                if (File.Exists(candidate)) return candidate;
             }
-            else
+            catch
             {
-                result.RequiresAdministrator = true;
+                // A malformed PATH entry must not stop the search.
             }
         }
-        else
-        {
-            result.RequiresAdministrator = true;
-        }
+        return null;
+    }
 
-        // Gently trim NitroLite's own heap
+    private static IEnumerable<string> ToolCandidates()
+    {
+        // A portable copy the user dropped into NitroLite's own data folder.
+        string dataDirectory;
         try
         {
-            GC.Collect(2, GCCollectionMode.Aggressive, false, false);
-            SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
+            dataDirectory = AppPaths.DataDirectory;
         }
-        catch { }
+        catch
+        {
+            dataDirectory = "";
+        }
+        if (!string.IsNullOrEmpty(dataDirectory))
+            yield return Path.Combine(dataDirectory, "tools", ToolFileName);
+
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrEmpty(local))
+        {
+            // The winget shim.
+            yield return Path.Combine(local, "Microsoft", "WinGet", "Links", ToolFileName);
+        }
+
+        string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrEmpty(programFiles))
+            yield return Path.Combine(programFiles, "WinMemoryCleaner", ToolFileName);
+
+        string? path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(path)) yield break;
+        foreach (string entry in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string directory = entry.Trim().Trim('"');
+            if (directory.Length == 0) continue;
+            string full;
+            try
+            {
+                full = Path.Combine(directory, ToolFileName);
+            }
+            catch
+            {
+                continue;
+            }
+            yield return full;
+        }
+    }
+
+    /// <summary>
+    /// Runs WinMemoryCleaner with <see cref="CleanArguments"/> and reports how much the standby list shrank.
+    /// Asks for elevation when NitroLite itself is not elevated.
+    /// </summary>
+    public async Task<MemoryCleanerResult> CleanMemoryAsync()
+    {
+        var result = new MemoryCleanerResult();
+
+        string? tool = FindTool();
+        if (tool == null)
+        {
+            result.ToolMissing = true;
+            return result;
+        }
+
+        var listsBefore = ReadMemoryLists();
+
+        try
+        {
+            var startInfo = new ProcessStartInfo(tool)
+            {
+                UseShellExecute = true,
+                Arguments = CleanArguments,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            if (!IsRunningAsAdministrator()) startInfo.Verb = "runas";
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                result.Error = "WinMemoryCleaner did not start.";
+                return result;
+            }
+
+            // An elevated process started through the shell does not always hand back a waitable handle, so the
+            // wait is best-effort: the standby drop below is what decides the outcome either way.
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                await process.WaitForExitAsync(timeout.Token);
+                result.ExitCode = process.ExitCode;
+            }
+            catch (OperationCanceledException)
+            {
+                result.Error = "WinMemoryCleaner did not finish within 30 seconds.";
+            }
+            catch
+            {
+                // No waitable handle; fall through and measure.
+            }
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // ERROR_CANCELLED: the elevation prompt was dismissed.
+            result.ElevationRefused = true;
+            return result;
+        }
+        catch (Exception ex)
+        {
+            result.Error = ex.Message;
+            return result;
+        }
 
         var listsAfter = ReadMemoryLists();
         var memAfter = new MEMORYSTATUSEX();
         GlobalMemoryStatusEx(memAfter);
 
-        // Standby list purge specifically flushes cached pages from the Windows Standby list.
-        // It cannot and does not free more than what existed in the standby list prior to the purge.
-        // Measuring general Free/Zero page count fluctuates wildly (e.g. 14 GB of already-zeroed RAM),
-        // giving false figures. We accurately measure how much the standby list actually decreased.
+        // The standby list is the only thing this clean touches, so its drop is the honest figure. Free/zero
+        // page counts swing by gigabytes on their own and would report a saving that never happened.
         double freedGb = 0;
         if (listsBefore.HasValue && listsAfter.HasValue)
         {
             double standbyDecreased = listsBefore.Value.StandbyGigabytes - listsAfter.Value.StandbyGigabytes;
-            double freeGained = listsAfter.Value.FreeGigabytes - listsBefore.Value.FreeGigabytes;
-
-            if (standbyDecreased > 0)
-            {
-                freedGb = Math.Min(standbyDecreased, listsBefore.Value.StandbyGigabytes);
-            }
-            else if (freeGained > 0 && listsBefore.Value.StandbyGigabytes > 0)
-            {
-                freedGb = Math.Min(freeGained, listsBefore.Value.StandbyGigabytes);
-            }
-        }
-        else if (listsBefore.HasValue && listsBefore.Value.StandbyGigabytes > 0)
-        {
-            freedGb = listsBefore.Value.StandbyGigabytes;
+            if (standbyDecreased > 0) freedGb = Math.Min(standbyDecreased, listsBefore.Value.StandbyGigabytes);
         }
 
         result.FreedMegabytes = freedGb > 0 ? Math.Round(freedGb * 1024.0, 1) : 0;
         result.AvailableGigabytes = Math.Round(memAfter.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 2);
+        result.Cleaned = result.Error == null && result.ExitCode is null or 0;
+        if (!result.Cleaned && result.Error == null) result.Error = $"WinMemoryCleaner exited with code {result.ExitCode}.";
         return result;
     }
-
-    public static int PurgeStandbyDirect()
-    {
-        try
-        {
-            if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token))
-            {
-                try
-                {
-                    if (LookupPrivilegeValue(null, "SeProfileSingleProcessPrivilege", out LUID luid))
-                    {
-                        var tp = new TOKEN_PRIVILEGES
-                        {
-                            PrivilegeCount = 1,
-                            Luid = luid,
-                            Attributes = SE_PRIVILEGE_ENABLED
-                        };
-                        if (!AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero) ||
-                            Marshal.GetLastWin32Error() == ERROR_NOT_ALL_ASSIGNED)
-                        {
-                            return 2; // PrivilegeMissing
-                        }
-                    }
-                    else return 2;
-                }
-                finally
-                {
-                    CloseHandle(token);
-                }
-            }
-            else return 2;
-
-            GCHandle handle = GCHandle.Alloc(MemoryPurgeStandbyList, GCHandleType.Pinned);
-            try
-            {
-                uint status = NtSetSystemInformation(SystemMemoryListInformation, handle.AddrOfPinnedObject(), Marshal.SizeOf(typeof(int)));
-                return status == 0 ? 0 : 3; // 0 = Purged, 3 = PurgeRefused
-            }
-            finally
-            {
-                handle.Free();
-            }
-        }
-        catch
-        {
-            return 4; // UnexpectedError
-        }
-    }
-
-    private static bool TryPurgeStandbyList() => PurgeStandbyDirect() == 0;
-
 }

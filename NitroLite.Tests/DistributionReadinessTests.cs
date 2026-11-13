@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Threading;
 using NitroLite.Core;
@@ -36,23 +36,5 @@ public class DistributionReadinessTests
     {
         var roots = new[] { @"C:\Users\x\AppData\Local\Temp\" };
         Assert.Equal(expected, DebloatService.IsTemporaryLocation(exe, roots));
-    }
-
-    [Fact]
-    public void ThermalDayKeys_DoNotDependOnTheUsersCalendar()
-    {
-        // th-TH uses the Buddhist calendar (year + 543): a culture-formatted key would be "2569-…" and
-        // could never be parsed back or matched against days recorded under another locale.
-        var previous = Thread.CurrentThread.CurrentCulture;
-        try
-        {
-            Thread.CurrentThread.CurrentCulture = new CultureInfo("th-TH");
-            var summary = new DailyThermalSummary();
-            Assert.Equal(DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), summary.Date);
-        }
-        finally
-        {
-            Thread.CurrentThread.CurrentCulture = previous;
-        }
     }
 }

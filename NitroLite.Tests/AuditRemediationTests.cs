@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -78,25 +78,6 @@ public class AuditRemediationTests
     // =========================================================================
     // R2. Memory Cleaner Game Guard & Default State
     // =========================================================================
-
-    [Fact]
-    public void AppSettings_AutoRamCleanerEnabled_DefaultsToFalse()
-    {
-        var settings = new AppSettings();
-        // Requirement R2: Disable automatic RAM cleaning by default
-        Assert.False(settings.AutoRamCleanerEnabled, "AutoRamCleanerEnabled should default to false to protect gaming performance");
-    }
-
-    [Fact]
-    public void MemoryCleaner_ShouldAutoClean_DependsOnRealFreeMemoryNotOnGames()
-    {
-        var cleaner = new MemoryCleanerService();
-
-        // The rule no longer looks at games: the standby-list stutter it prevents happens in games.
-        // It looks at the real free list and the standby list.
-        Assert.True(cleaner.ShouldAutoClean(new MemoryListSizes(0.6, 9.0)), "Low free memory with a large standby list must trigger a purge");
-        Assert.False(cleaner.ShouldAutoClean(new MemoryListSizes(6.0, 9.0)), "Enough free memory must not trigger a purge");
-    }
 
     // =========================================================================
     // R3. Acer Agent Client Framing & Robust Communication
@@ -226,7 +207,7 @@ public class AuditRemediationTests
 
         try
         {
-            var s1 = new AppSettings { SelectedChartMetric = "GPU_POWER", AutoRamCleanerEnabled = false };
+            var s1 = new AppSettings { SelectedChartMetric = "GPU_POWER" };
             SettingsManager.SaveSettingsAtomic(primaryPath, s1);
 
             Assert.True(File.Exists(primaryPath));
@@ -234,7 +215,7 @@ public class AuditRemediationTests
             Assert.Equal("GPU_POWER", loaded.SelectedChartMetric);
 
             // Second save should maintain backup
-            var s2 = new AppSettings { SelectedChartMetric = "CPU_TEMP", AutoRamCleanerEnabled = true };
+            var s2 = new AppSettings { SelectedChartMetric = "CPU_TEMP" };
             SettingsManager.SaveSettingsAtomic(primaryPath, s2);
 
             string bakPath = primaryPath + ".bak";

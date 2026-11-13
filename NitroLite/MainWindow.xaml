@@ -1220,12 +1220,11 @@
                                                         <TextBlock Text="Bekleme Belleğini Boşaltma" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
                                                         <TextBlock x:Name="TxtRamCleanStatus" Text=" (Hazır)" Foreground="{StaticResource AccentGreen}" FontSize="11" FontWeight="Bold" Margin="4,0,0,0" />
                                                     </StackPanel>
-                                                    <CheckBox x:Name="ChkAutoRamClean" Content="Otomatik: gerçek boş bellek 1 GB altına düşüp bekleme listesi 1 GB üstündeyse (en fazla 5 dakikada bir, oyunda da)" IsChecked="False" Checked="ChkAutoRamClean_Changed" Unchecked="ChkAutoRamClean_Changed" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" />
                                                     <TextBlock x:Name="TxtRamCleanNote" Text="Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir. Çalışan programların belleğine dokunmaz." Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                                    <Button x:Name="BtnRemovePurgeTask" Content="Sormadan çalıştırma kurulumunu kaldır" Click="BtnRemovePurgeTask_Click" Visibility="Collapsed" HorizontalAlignment="Left" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{StaticResource TextMuted}" FontSize="10" Cursor="Hand" ToolTip="Windows görevini ve C:\Program Files\NitroLite\StandbyPurge klasörünü siler (bir kez yönetici izni ister)." />
+                                                    <Button x:Name="BtnGetMemoryCleaner" Content="WinMemoryCleaner'ı indir (ücretsiz, GPL-3.0)" Click="BtnGetMemoryCleaner_Click" Visibility="Collapsed" HorizontalAlignment="Left" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{StaticResource Link}" FontSize="10" Cursor="Hand" ToolTip="NitroLite bu aracı paketlemez; resmi GitHub sürüm sayfasını açar." />
                                                 </StackPanel>
 
-                                                <Button x:Name="BtnCleanRamCache" Grid.Column="1" Content="Bekleme Belleğini Boşalt" Click="BtnCleanRamCache_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,7" FontWeight="SemiBold" FontSize="11" Cursor="Hand" VerticalAlignment="Center" ToolTip="Windows bekleme listesini boşaltır. İlk kullanımda bir kerelik kurulum (yönetici izni) ister, sonra sormadan çalışır. Çalışan programların belleğini diske itmez." />
+                                                <Button x:Name="BtnCleanRamCache" Grid.Column="1" Content="Bekleme Belleğini Boşalt" Click="BtnCleanRamCache_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,7" FontWeight="SemiBold" FontSize="11" Cursor="Hand" VerticalAlignment="Center" ToolTip="WinMemoryCleaner ile Windows bekleme listesini boşaltır. Yönetici izni ister. Çalışan programların belleğini diske itmez." />
                                             </Grid>
                                         </Border>
                                     </StackPanel>
@@ -1536,7 +1535,6 @@
                                                 <TextBlock Text="Batarya Kapasite ve Aşınma Durumu" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
                                                 <TextBlock x:Name="TxtBatIdentity" Text="Windows (WMI) üzerinden okunan kapasite ve gerilim." TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
                                             </StackPanel>
-                                            <Button x:Name="BtnRefreshBatHealth" Content="Verileri Güncelle" Click="BtnRefreshBatHealth_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="10,6" HorizontalAlignment="Right" Cursor="Hand" FontSize="11" />
                                         </Grid>
 
                                         <UniformGrid Columns="4">
@@ -1580,142 +1578,51 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- TERMAL MACUN, PUTTY & FAN SAĞLIK RAPORU (ÖMÜR & TREND) -->
+                                <!-- ALT BİLEŞEN TERMAL TELEMETRİ MATRİSİ (VRM, NVMe SSD'ler, PİL) -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
-                                        <Grid Margin="0,0,0,12">
-                                            <StackPanel>
-                                                <TextBlock Text="Termal Analiz ve Fan Çalışma Süresi (deneysel tahmin)" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                                <TextBlock Text="CPU gücü sensörle ölçülemediği için termal direnç tahmini güçten hesaplanır; fan süreleri yalnızca NitroLite açıkken sayılır." TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <TextBlock x:Name="TxtThermalBadge" Text="--" Foreground="{StaticResource InkSoft}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        <Grid Margin="0,0,0,10">
+                                            <TextBlock Text="Bileşen Sıcaklık Matrisi" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                            <TextBlock Text="Acer servisi, Windows ve disk sürücülerinden; okunamayan değerler -- olarak gösterilir." Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>
 
-                                        <UniformGrid Columns="4" Margin="0,0,0,12">
-                                            <!-- Paste / Thermal Putty Health -->
-                                            <Border BorderBrush="{StaticResource BorderDark}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,0,20,0">
+                                        <UniformGrid Columns="4">
+                                            <!-- Motherboard / VRM -->
+                                            <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
-                                                    <TextBlock Text="Termal Direnç Tahmini" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtPasteHealthPercent" Text="--" Foreground="{StaticResource AccentGreen}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-                                                    <TextBlock x:Name="TxtThermalResistance" Text="--" Foreground="{StaticResource TextSecondary}" FontSize="10" />
-                                                    <TextBlock x:Name="TxtThermalSampleAge" Text="" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" />
+                                                    <TextBlock Text="Sistem (SYS1)" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
+                                                    <TextBlock x:Name="TxtSubMoboTemp" Text="-- °C" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock Text="Acer servisi sensörü" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Active Fan Run Hours -->
-                                            <Border BorderBrush="{StaticResource BorderDark}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,0,20,0">
+                                            <!-- NVMe SSD 1 (990 Pro) -->
+                                            <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
-                                                    <TextBlock Text="Aktif Fan Çalışma Süresi" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtActiveFanHours" Text="-- Saat" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-                                                    <TextBlock x:Name="TxtAvgFanRpm" Text="Ortalama: --" Foreground="{StaticResource TextSecondary}" FontSize="10" />
+                                                    <TextBlock x:Name="TxtSubSsd1Label" Text="Disk 1" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
+                                                    <TextBlock x:Name="TxtSubSsd1Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock x:Name="TxtSubSsd1Name" Text="--" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Passive / Silent Zero RPM Hours -->
-                                            <Border BorderBrush="{StaticResource BorderDark}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,0,20,0">
+                                            <!-- NVMe SSD 2 (PM9A1) -->
+                                            <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
-                                                    <TextBlock Text="Pasif Soğutma Süresi" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtPassiveFanHours" Text="-- Saat" Foreground="{StaticResource AccentCyan}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-                                                    <TextBlock Text="Fanlar dururken (0 RPM)" Foreground="{StaticResource TextSecondary}" FontSize="10" />
+                                                    <TextBlock x:Name="TxtSubSsd2Label" Text="Disk 2" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
+                                                    <TextBlock x:Name="TxtSubSsd2Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock x:Name="TxtSubSsd2Name" Text="--" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Fan Bearing & Motor Health -->
-                                            <Border BorderBrush="{StaticResource BorderDark}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,0,20,0">
+                                            <!-- Battery Pack -->
+                                            <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
-                                                    <TextBlock Text="Fan Ömrü Tahmini" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtFanBearingHealth" Text="--" Foreground="{StaticResource AccentGreen}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-                                                    <TextBlock x:Name="TxtFanRatedLife" Text="--" Foreground="{StaticResource TextSecondary}" FontSize="10" TextWrapping="Wrap" />
+                                                    <TextBlock Text="Pil" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
+                                                    <TextBlock x:Name="TxtSubBatteryTemp" Text="-- °C" Foreground="{StaticResource AccentCyan}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock x:Name="TxtSubBatteryName" Text="Sıcaklık sensörü bildirilmiyor" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
                                         </UniformGrid>
-
-                                        <!-- 14 / 30 GÜN TERMAL KARARLILIK & YAŞLANMA TRENDİ GÖSTERGESİ -->
-                                        <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,12,0,0" Margin="0,0,0,14">
-                                            <StackPanel>
-                                                <Grid Margin="0,0,0,8">
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="Termal Kararlılık ve Trend Analizi" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
-                                                        <TextBlock x:Name="TxtStabilityDaysSubtitle" Text=" (30 Günlük Veri)" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center" Margin="6,0,0,0" />
-                                                    </StackPanel>
-                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                        <RadioButton x:Name="RadioTrend14Days" Content="14 Gün" Tag="14" Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,0,12,0" Checked="RadioTrendPeriod_Checked" />
-                                                        <RadioButton x:Name="RadioTrend30Days" Content="30 Gün" Tag="30" Foreground="{StaticResource TextSecondary}" FontSize="11" IsChecked="True" Checked="RadioTrendPeriod_Checked" />
-                                                    </StackPanel>
-                                                </Grid>
-
-                                                <Grid Margin="0,0,0,6">
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock x:Name="TxtStabilityScore" Text="--" Foreground="{StaticResource Ink}" FontSize="16" FontWeight="Bold" Margin="0,0,10,0" />
-                                                        <StackPanel VerticalAlignment="Center">
-                                                            <TextBlock x:Name="TxtStabilityStatus" Text="--" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
-                                                            <TextBlock x:Name="TxtStabilitySlope" Text="--" Foreground="{StaticResource TextMuted}" FontSize="10" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                    <TextBlock x:Name="TxtStabilityBadge" Text="--" Foreground="{StaticResource InkSoft}" FontWeight="SemiBold" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                                </Grid>
-
-                                                <ProgressBar x:Name="BarStabilityScore" Height="5" Maximum="100" Value="98.7" Background="{StaticResource Rule}" Foreground="{StaticResource Ink}" BorderThickness="0" />
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- ALT BİLEŞEN TERMAL TELEMETRİ MATRİSİ (VRM, NVMe SSD'ler, PİL) -->
-                                        <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,12,0,0" Margin="0,0,0,14">
-                                            <StackPanel>
-                                                <Grid Margin="0,0,0,8">
-                                                    <TextBlock Text="Bileşen Sıcaklık Matrisi" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
-                                                    <TextBlock Text="Acer servisi, Windows ve disk sürücülerinden; okunamayan değerler -- olarak gösterilir." Foreground="{StaticResource TextMuted}" FontSize="10" HorizontalAlignment="Right" />
-                                                </Grid>
-
-                                                <UniformGrid Columns="4">
-                                                    <!-- Motherboard / VRM -->
-                                                    <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
-                                                        <StackPanel>
-                                                            <TextBlock Text="Sistem (SYS1)" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                            <TextBlock x:Name="TxtSubMoboTemp" Text="-- °C" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                            <TextBlock Text="Acer servisi sensörü" Foreground="{StaticResource TextSecondary}" FontSize="9" />
-                                                        </StackPanel>
-                                                    </Border>
-
-                                                    <!-- NVMe SSD 1 (990 Pro) -->
-                                                    <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
-                                                        <StackPanel>
-                                                            <TextBlock x:Name="TxtSubSsd1Label" Text="Disk 1" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                            <TextBlock x:Name="TxtSubSsd1Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                            <TextBlock x:Name="TxtSubSsd1Name" Text="--" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
-                                                        </StackPanel>
-                                                    </Border>
-
-                                                    <!-- NVMe SSD 2 (PM9A1) -->
-                                                    <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
-                                                        <StackPanel>
-                                                            <TextBlock x:Name="TxtSubSsd2Label" Text="Disk 2" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                            <TextBlock x:Name="TxtSubSsd2Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                            <TextBlock x:Name="TxtSubSsd2Name" Text="--" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
-                                                        </StackPanel>
-                                                    </Border>
-
-                                                    <!-- Battery Pack -->
-                                                    <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
-                                                        <StackPanel>
-                                                            <TextBlock Text="Pil" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                            <TextBlock x:Name="TxtSubBatteryTemp" Text="-- °C" Foreground="{StaticResource AccentCyan}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                            <TextBlock x:Name="TxtSubBatteryName" Text="Sıcaklık sensörü bildirilmiyor" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
-                                                        </StackPanel>
-                                                    </Border>
-                                                </UniformGrid>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Analysis & Proactive Maintenance Recommendation Box -->
-                                        <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,12,0,0">
-                                            <Grid>
-                                                <StackPanel>
-                                                    <TextBlock Text="Termal Durum Özeti:" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,2" />
-                                                    <TextBlock x:Name="TxtThermalRecommendation" Text="--" Foreground="{StaticResource TextPrimary}" FontSize="11" TextWrapping="Wrap" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
                                     </StackPanel>
                                 </Border>
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -241,54 +241,6 @@ public class AdversarialLifecycleAndPersistenceTests
     // =========================================================================
     // 2. SETTINGS PERSISTENCE & CORRUPTION RESILIENCE
     // =========================================================================
-
-    [Fact]
-    public void SettingsPersistence_MissingSettingsFile_SafelyFallsBackToLegacyConfig()
-    {
-        var tempDir = Path.Combine(Path.GetTempPath(), $"nitrolite_test_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            var settingsPath = Path.Combine(tempDir, "settings.json");
-            var legacyPath = Path.Combine(tempDir, "config.json");
-
-            // Write legacy config with StartMinimized: true and NO rgb settings
-            string legacyJson = @"{
-                ""StartMinimized"": true,
-                ""OsdEnabled"": false,
-                ""SelectedChartMetric"": ""CPU_TEMP"",
-                ""AutoRamCleanerEnabled"": true,
-                ""WindowLeft"": 200.0,
-                ""WindowTop"": 150.0
-            }";
-            File.WriteAllText(legacyPath, legacyJson);
-
-            // Replicate LoadSettings logic from MainWindow.xaml.cs:
-            AppSettings appSettings = new();
-            if (File.Exists(settingsPath))
-            {
-                var json = File.ReadAllText(settingsPath);
-                var s = JsonSerializer.Deserialize<AppSettings>(json);
-                if (s != null) appSettings = s;
-            }
-            else if (File.Exists(legacyPath))
-            {
-                var json = File.ReadAllText(legacyPath);
-                var s = JsonSerializer.Deserialize<AppSettings>(json);
-                if (s != null) appSettings = s;
-            }
-
-            Assert.True(appSettings.StartMinimized);
-            Assert.False(appSettings.IsBacklightOff);
-            Assert.Null(appSettings.KeyboardLighting);
-            Assert.Equal(200.0, appSettings.WindowLeft);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
-        }
-    }
 
     [Fact]
     public void SettingsPersistence_EmptySettingsFile_HandledGracefullyWithoutCrash()

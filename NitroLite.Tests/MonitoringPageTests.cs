@@ -1,4 +1,4 @@
-using NitroLite;
+﻿using NitroLite;
 using NitroLite.Core;
 using Xunit;
 
@@ -75,21 +75,5 @@ public class ChartValueTests
         Assert.Null(MainWindow.GetChartValue("CPU_TEMP", d));
         Assert.Null(MainWindow.GetChartValue("CPU_GHZ", d));
         Assert.Equal(0, MainWindow.GetChartValue("CPU_USAGE", d));
-    }
-}
-
-public class MemoryCleanerSafetyTests
-{
-    [Fact]
-    public void CleanMemory_NeverTrimsOtherProcesses()
-    {
-        // Safe to run: the cleaner only purges the standby list (when elevated) and trims NitroLite's own heap.
-        var result = new MemoryCleanerService().CleanMemory();
-        Assert.Equal(0, result.ProcessesOptimized);
-        if (!MemoryCleanerService.IsRunningAsAdministrator())
-        {
-            Assert.True(result.RequiresAdministrator);
-            Assert.False(result.StandbyPurged);
-        }
     }
 }

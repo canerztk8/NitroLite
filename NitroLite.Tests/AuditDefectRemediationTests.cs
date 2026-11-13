@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -89,59 +89,6 @@ public class AuditDefectRemediationTests
         });
 
         await Task.WhenAll(readTask, writeTask);
-        Assert.Empty(exceptions);
-    }
-
-    [Fact]
-    public async Task ThermalHealthService_ConcurrentRecordAndSave_ThreadSafe()
-    {
-        var service = new ThermalHealthService();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        var exceptions = new List<Exception>();
-
-        var sample = new MonitorData
-        {
-            CpuTemperature = 50,
-            CpuFanSpeed = 2200,
-            GpuFanSpeed = 2200,
-            CpuUsage = 30.0,
-            CpuPowerWatts = 25.0,
-            SysTemperature = 28
-        };
-
-        var recordTask = Task.Run(() =>
-        {
-            while (!cts.Token.IsCancellationRequested)
-            {
-                try
-                {
-                    service.RecordSample(sample, 1);
-                }
-                catch (Exception ex)
-                {
-                    lock (exceptions) exceptions.Add(ex);
-                }
-            }
-        });
-
-        var saveTask = Task.Run(() =>
-        {
-            while (!cts.Token.IsCancellationRequested)
-            {
-                try
-                {
-                    service.SaveData();
-                    var report = service.GetReport();
-                    Assert.NotNull(report);
-                }
-                catch (Exception ex)
-                {
-                    lock (exceptions) exceptions.Add(ex);
-                }
-            }
-        });
-
-        await Task.WhenAll(recordTask, saveTask);
         Assert.Empty(exceptions);
     }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -235,13 +235,5 @@ public class SystemToolsServiceTests : IDisposable
             await p.WaitForExitAsync();
             Assert.True(p.ExitCode == 0, $"{name} is not valid PowerShell: {stderr}");
         }
-    }
-
-    [Fact]
-    public void PurgeStandbyDirect_ReturnsValidExitCode()
-    {
-        // PurgeStandbyDirect should run safely and return 0 (if elevated), 2 (if privilege missing), or 3/4
-        int code = MemoryCleanerService.PurgeStandbyDirect();
-        Assert.Contains(code, new[] { 0, 2, 3, 4 });
     }
 }
