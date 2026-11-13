@@ -458,6 +458,15 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="10,8" />
             <Setter Property="Cursor" Value="Hand" />
+            <!-- The rail is 200 px wide and a translated label can be longer than the Turkish one
+                 ("Мониторинг оборудования"), so the label wraps instead of being clipped. -->
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">

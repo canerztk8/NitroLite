@@ -21,17 +21,30 @@ public static class LocXaml
     private const int MaxDepth = 64;
 
     /// <summary>Walks <paramref name="root"/> and replaces every translatable text with its translation.</summary>
+    /// <remarks>
+    /// A translation is a convenience, never a precondition: if the walk fails the window still opens, in the
+    /// source language, and the failure is logged. Losing the window over a missing string would be far worse.
+    /// </remarks>
     public static void Apply(DependencyObject? root)
     {
         if (root == null || Loc.Language == Loc.SourceLanguage) return;
-        Walk(root, new HashSet<DependencyObject>(), 0);
+        try
+        {
+            Walk(root, new HashSet<DependencyObject>(), 0);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("LocXaml", ex.ToString());
+        }
     }
 
     private static void Walk(DependencyObject node, HashSet<DependencyObject> seen, int depth)
     {
         if (depth > MaxDepth || !seen.Add(node)) return;
 
-        Translate(node);
+        // One element that refuses to be translated must not cost the rest of the window its translation.
+        try { Translate(node); }
+        catch (Exception ex) { AppLog.Error("LocXaml", ex.ToString()); }
 
         // ItemsControl.Items holds the ComboBoxItems before the drop-down is ever opened, so they are not in the
         // visual tree yet; Content/Header can be a panel that the visual tree does reach, but walking them here
@@ -116,9 +129,16 @@ public static class LocXaml
     /// Translates the runs of a TextBlock one by one. <see cref="Span"/> covers Hyperlink and Bold, so a link inside
     /// a sentence keeps its own text and its own styling.
     /// </summary>
+    /// <remarks>
+    /// The collection is copied first: writing <see cref="Run.Text"/> rebuilds the run's content and bumps the
+    /// parent collection's version, which makes an enumerator over it throw on the next step.
+    /// </remarks>
     private static void TranslateInlines(InlineCollection inlines)
     {
-        foreach (var inline in inlines)
+        var snapshot = new List<Inline>(inlines.Count);
+        foreach (var inline in inlines) snapshot.Add(inline);
+
+        foreach (var inline in snapshot)
         {
             if (inline is Run run)
             {
