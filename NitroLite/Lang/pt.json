@@ -817,5 +817,22 @@
  "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Desliga a temperatura de cor e devolve o ecrã ao neutro.",
  "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Devolve o ecrã à temperatura de cor neutra e desliga a funcionalidade.",
  "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "Não foi possível aplicar a temperatura de cor do ecrã neste controlador.",
- "Ekran nötr renk sıcaklığına döndü.": "O ecrã voltou à temperatura de cor neutra."
+ "Ekran nötr renk sıcaklığına döndü.": "O ecrã voltou à temperatura de cor neutra.",
+ "Komut 30 saniyede tamamlanmadı.": "O comando não terminou em 30 segundos.",
+ "Komut başarısız: {0}": "O comando falhou: {0}",
+ "Uygulanacak bir komut yok.": "Não há nenhum comando para aplicar.",
+ "Fan: {0} %{1}": "Ventoinha: {0} {1} %",
+ "Fan: {0}": "Ventoinha: {0}",
+ "Fan modu değiştirilemedi: {0}": "Não foi possível alterar o modo da ventoinha: {0}",
+ "Fare profili: Config {0}": "Perfil do rato: Config {0}",
+ "Fare profili değiştirilemedi: Config {0}": "Não foi possível alterar o perfil do rato: Config {0}",
+ "NitroLite: Acer servisi yanıt vermiyor | CPU: %{0}": "NitroLite: o serviço Acer não responde | CPU: {0} %",
+ "KAYIT · {0} SANİYE": "REGISTO · {0} SEGUNDOS",
+ "Güncelleme indiriliyor… %{0}": "A transferir atualização… {0} %",
+ "{0} bir değer bekliyor.": "{0} espera um valor.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: turbo, performance, balanced, quiet.": "Não há um valor válido para {0}: '{1}'. Use: turbo, performance, balanced, quiet.",
+ "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "A percentagem de {0} deve estar entre {1} e {2}: '{3}'.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "Não há um valor válido para {0}: '{1}'. Use: auto, max, custom ou uma percentagem entre {2} e {3}.",
+ "{0} 1-4 arasında olmalı: '{1}'.": "{0} deve estar entre 1 e 4: '{1}'.",
+ "Fan {0}": "Ventoinha {0}"
 }

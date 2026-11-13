@@ -817,5 +817,22 @@
  "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "रंग तापमान बंद करता है और स्क्रीन को तटस्थ पर लौटाता है।",
  "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "स्क्रीन को तटस्थ रंग तापमान पर लौटाता है और सुविधा बंद करता है।",
  "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "इस ड्राइवर पर स्क्रीन का रंग तापमान लागू नहीं हो सका।",
- "Ekran nötr renk sıcaklığına döndü.": "स्क्रीन तटस्थ रंग तापमान पर लौट आई।"
+ "Ekran nötr renk sıcaklığına döndü.": "स्क्रीन तटस्थ रंग तापमान पर लौट आई।",
+ "Komut 30 saniyede tamamlanmadı.": "कमांड 30 सेकंड में पूरा नहीं हुआ।",
+ "Komut başarısız: {0}": "कमांड विफल: {0}",
+ "Uygulanacak bir komut yok.": "लागू करने के लिए कोई कमांड नहीं है।",
+ "Fan: {0} %{1}": "फ़ैन: {0} {1}%",
+ "Fan: {0}": "फ़ैन: {0}",
+ "Fan modu değiştirilemedi: {0}": "फ़ैन मोड बदला नहीं जा सका: {0}",
+ "Fare profili: Config {0}": "माउस प्रोफ़ाइल: Config {0}",
+ "Fare profili değiştirilemedi: Config {0}": "माउस प्रोफ़ाइल बदला नहीं जा सका: Config {0}",
+ "NitroLite: Acer servisi yanıt vermiyor | CPU: %{0}": "NitroLite: Acer सेवा जवाब नहीं दे रही | CPU: {0}%",
+ "KAYIT · {0} SANİYE": "रिकॉर्ड · {0} सेकंड",
+ "Güncelleme indiriliyor… %{0}": "अपडेट डाउनलोड हो रहा है… {0}%",
+ "{0} bir değer bekliyor.": "{0} को एक मान चाहिए।",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: turbo, performance, balanced, quiet.": "{0} के लिए कोई मान्य मान नहीं: '{1}'। उपयोग करें: turbo, performance, balanced, quiet.",
+ "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "{0} का प्रतिशत {1}-{2} के बीच होना चाहिए: '{3}'।",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "{0} के लिए कोई मान्य मान नहीं: '{1}'। उपयोग करें: auto, max, custom या {2}-{3} के बीच का प्रतिशत।",
+ "{0} 1-4 arasında olmalı: '{1}'.": "{0} 1-4 के बीच होना चाहिए: '{1}'।",
+ "Fan {0}": "फ़ैन {0}"
 }

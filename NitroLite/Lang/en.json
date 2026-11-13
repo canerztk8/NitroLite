@@ -817,5 +817,22 @@
  "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Turns the colour temperature off and returns the screen to neutral.",
  "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Returns the screen to neutral colour temperature and turns the feature off.",
  "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "The display colour temperature could not be applied on this driver.",
- "Ekran nötr renk sıcaklığına döndü.": "The screen is back to neutral colour temperature."
+ "Ekran nötr renk sıcaklığına döndü.": "The screen is back to neutral colour temperature.",
+ "Komut 30 saniyede tamamlanmadı.": "The command did not finish within 30 seconds.",
+ "Komut başarısız: {0}": "Command failed: {0}",
+ "Uygulanacak bir komut yok.": "There is no command to apply.",
+ "Fan: {0} %{1}": "Fan: {0} {1}%",
+ "Fan: {0}": "Fan: {0}",
+ "Fan modu değiştirilemedi: {0}": "Could not change the fan mode: {0}",
+ "Fare profili: Config {0}": "Mouse profile: Config {0}",
+ "Fare profili değiştirilemedi: Config {0}": "Could not change the mouse profile: Config {0}",
+ "NitroLite: Acer servisi yanıt vermiyor | CPU: %{0}": "NitroLite: Acer service not responding | CPU: {0}%",
+ "KAYIT · {0} SANİYE": "RECORD · {0} SECONDS",
+ "Güncelleme indiriliyor… %{0}": "Downloading update… {0}%",
+ "{0} bir değer bekliyor.": "{0} expects a value.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: turbo, performance, balanced, quiet.": "No valid value for {0}: '{1}'. Use: turbo, performance, balanced, quiet.",
+ "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "The {0} percentage must be between {1} and {2}: '{3}'.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "No valid value for {0}: '{1}'. Use: auto, max, custom, or a percentage between {2} and {3}.",
+ "{0} 1-4 arasında olmalı: '{1}'.": "{0} must be between 1 and 4: '{1}'.",
+ "Fan {0}": "Fan {0}"
 }

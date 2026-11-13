@@ -817,5 +817,22 @@
  "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Schaltet die Farbtemperatur aus und stellt den Bildschirm auf neutral zurück.",
  "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Stellt den Bildschirm auf neutrale Farbtemperatur zurück und schaltet die Funktion aus.",
  "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "Die Bildschirm-Farbtemperatur konnte mit diesem Treiber nicht angewendet werden.",
- "Ekran nötr renk sıcaklığına döndü.": "Der Bildschirm ist wieder auf neutraler Farbtemperatur."
+ "Ekran nötr renk sıcaklığına döndü.": "Der Bildschirm ist wieder auf neutraler Farbtemperatur.",
+ "Komut 30 saniyede tamamlanmadı.": "Der Befehl wurde nicht innerhalb von 30 Sekunden abgeschlossen.",
+ "Komut başarısız: {0}": "Befehl fehlgeschlagen: {0}",
+ "Uygulanacak bir komut yok.": "Es gibt keinen Befehl zum Ausführen.",
+ "Fan: {0} %{1}": "Lüfter: {0} {1} %",
+ "Fan: {0}": "Lüfter: {0}",
+ "Fan modu değiştirilemedi: {0}": "Lüftermodus konnte nicht geändert werden: {0}",
+ "Fare profili: Config {0}": "Mausprofil: Config {0}",
+ "Fare profili değiştirilemedi: Config {0}": "Mausprofil konnte nicht geändert werden: Config {0}",
+ "NitroLite: Acer servisi yanıt vermiyor | CPU: %{0}": "NitroLite: Acer-Dienst antwortet nicht | CPU: {0} %",
+ "KAYIT · {0} SANİYE": "AUFZEICHNUNG · {0} SEKUNDEN",
+ "Güncelleme indiriliyor… %{0}": "Update wird heruntergeladen… {0} %",
+ "{0} bir değer bekliyor.": "{0} erwartet einen Wert.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: turbo, performance, balanced, quiet.": "Kein gültiger Wert für {0}: '{1}'. Verwenden Sie: turbo, performance, balanced, quiet.",
+ "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "Der Prozentwert für {0} muss zwischen {1} und {2} liegen: '{3}'.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "Kein gültiger Wert für {0}: '{1}'. Verwenden Sie: auto, max, custom oder einen Prozentwert zwischen {2} und {3}.",
+ "{0} 1-4 arasında olmalı: '{1}'.": "{0} muss zwischen 1 und 4 liegen: '{1}'.",
+ "Fan {0}": "Lüfter {0}"
 }

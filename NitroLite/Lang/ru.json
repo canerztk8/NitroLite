@@ -817,5 +817,22 @@
  "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Выключает цветовую температуру и возвращает экран к нейтральному.",
  "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Возвращает экран к нейтральной цветовой температуре и выключает функцию.",
  "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "Не удалось применить цветовую температуру экрана на этом драйвере.",
- "Ekran nötr renk sıcaklığına döndü.": "Экран вернулся к нейтральной цветовой температуре."
+ "Ekran nötr renk sıcaklığına döndü.": "Экран вернулся к нейтральной цветовой температуре.",
+ "Komut 30 saniyede tamamlanmadı.": "Команда не завершилась за 30 секунд.",
+ "Komut başarısız: {0}": "Команда не выполнена: {0}",
+ "Uygulanacak bir komut yok.": "Нет команды для выполнения.",
+ "Fan: {0} %{1}": "Вентилятор: {0} {1} %",
+ "Fan: {0}": "Вентилятор: {0}",
+ "Fan modu değiştirilemedi: {0}": "Не удалось изменить режим вентилятора: {0}",
+ "Fare profili: Config {0}": "Профиль мыши: Config {0}",
+ "Fare profili değiştirilemedi: Config {0}": "Не удалось изменить профиль мыши: Config {0}",
+ "NitroLite: Acer servisi yanıt vermiyor | CPU: %{0}": "NitroLite: служба Acer не отвечает | CPU: {0} %",
+ "KAYIT · {0} SANİYE": "ЗАПИСЬ · {0} СЕКУНД",
+ "Güncelleme indiriliyor… %{0}": "Загрузка обновления… {0} %",
+ "{0} bir değer bekliyor.": "{0} ожидает значение.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: turbo, performance, balanced, quiet.": "Недопустимое значение для {0}: '{1}'. Используйте: turbo, performance, balanced, quiet.",
+ "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "Процент для {0} должен быть от {1} до {2}: '{3}'.",
+ "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "Недопустимое значение для {0}: '{1}'. Используйте: auto, max, custom или процент от {2} до {3}.",
+ "{0} 1-4 arasında olmalı: '{1}'.": "{0} должен быть от 1 до 4: '{1}'.",
+ "Fan {0}": "Вентилятор {0}"
 }
