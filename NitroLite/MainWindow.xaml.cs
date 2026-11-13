@@ -6234,6 +6234,18 @@ public partial class MainWindow : Window
     {
         if (!IsLoaded || _isInitializingUi || ChkAutoStart == null) return;
         bool enable = ChkAutoStart.IsChecked == true;
+
+        // Started from inside the downloaded zip (or any temp folder): Windows deletes that copy later and the
+        // autostart entry would point at nothing. Ask for a permanent folder instead of registering it.
+        if (enable && DebloatService.IsTemporaryLocation(Environment.ProcessPath))
+        {
+            _isInitializingUi = true;
+            try { ChkAutoStart.IsChecked = false; }
+            finally { _isInitializingUi = false; }
+            ShowToast("NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın.", false);
+            return;
+        }
+
         if (_debloatService.SetNitroLiteAutoStart(enable, _appSettings.StartMinimized))
         {
             ShowToast(enable ? "Windows açılışında otomatik çalıştırma etkin" : "Windows açılışında çalıştırma kapatıldı");

@@ -158,7 +158,17 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (s, args) =>
         {
             WriteLog("Dispatcher Exception", args.Exception.ToString());
-            args.Handled = false;
+            // An exception in one click or timer handler must not take the whole app down: NitroLite holds hardware
+            // state (game profile, Eco baseline, fan mode) that a crash leaves for the next start to repair.
+            // Keep running and tell the user, unless errors arrive in a burst (a handler failing on every tick),
+            // where continuing would only loop.
+            args.Handled = ShouldSurviveUiException(DateTime.UtcNow) && MainWindow is MainWindow { IsLoaded: true };
+            if (!args.Handled) return;
+            try
+            {
+                ((MainWindow)MainWindow).ShowToast("Beklenmeyen bir hata oluştu; ayrıntılar günlük dosyasına yazıldı.", false);
+            }
+            catch { }
         };
 
         TaskScheduler.UnobservedTaskException += (s, args) =>
@@ -201,6 +211,30 @@ public partial class App : System.Windows.Application
     /// policy with <see cref="AppLog"/> so the two writers cannot interleave or rotate over each other.
     /// </summary>
     internal static void WriteLog(string title, string? details) => AppLog.Error(title, details);
+
+    private static readonly Queue<DateTime> RecentUiExceptions = new();
+    internal const int MaxUiExceptionsPerWindow = 5;
+    internal static readonly TimeSpan UiExceptionWindow = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// True while UI exceptions are occasional. More than <see cref="MaxUiExceptionsPerWindow"/> within
+    /// <see cref="UiExceptionWindow"/> means something fails repeatedly; then the app is allowed to crash.
+    /// </summary>
+    internal static bool ShouldSurviveUiException(DateTime utcNow)
+    {
+        lock (RecentUiExceptions)
+        {
+            while (RecentUiExceptions.Count > 0 && utcNow - RecentUiExceptions.Peek() > UiExceptionWindow)
+                RecentUiExceptions.Dequeue();
+            RecentUiExceptions.Enqueue(utcNow);
+            return RecentUiExceptions.Count <= MaxUiExceptionsPerWindow;
+        }
+    }
+
+    internal static void ResetUiExceptionHistoryForTesting()
+    {
+        lock (RecentUiExceptions) RecentUiExceptions.Clear();
+    }
 
     private static bool HasFlag(string[] args, params string[] names) =>
         args.Any(a => names.Any(n => a.Equals(n, StringComparison.OrdinalIgnoreCase)));

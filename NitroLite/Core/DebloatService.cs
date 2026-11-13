@@ -1174,6 +1174,32 @@ public class DebloatService
         }
     }
 
+    /// <summary>
+    /// True when <paramref name="exePath"/> lies under the user's or Windows' temp folder, e.g. an exe started
+    /// straight out of a zip in Explorer. Such a copy disappears, so it must not be registered for autostart.
+    /// </summary>
+    public static bool IsTemporaryLocation(string? exePath, IEnumerable<string>? tempRoots = null)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return false;
+        try
+        {
+            var full = Path.GetFullPath(exePath);
+            tempRoots ??= new[]
+            {
+                Path.GetTempPath(),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
+            };
+            foreach (var root in tempRoots)
+            {
+                if (string.IsNullOrWhiteSpace(root)) continue;
+                var normalized = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                if (full.StartsWith(normalized, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
     public static string BuildAutoStartCommand(string exePath, bool startMinimized) =>
         startMinimized ? $"\"{exePath}\" --autostart --minimized" : $"\"{exePath}\" --autostart";
 

@@ -9,7 +9,7 @@ namespace NitroLite.Core;
 
 public class DailyThermalSummary
 {
-    public string Date { get; set; } = DateTime.Now.ToString("yyyy-MM-dd");
+    public string Date { get; set; } = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     public double AvgIdleCpuTemp { get; set; } = 44.5;
     public double AvgIdleGpuTemp { get; set; } = 41.0;
     public double AvgLoadCpuTemp { get; set; } = 68.5;
@@ -62,7 +62,7 @@ public class ThermalHealthService
     private int _consecutiveLoadTicks = 0;
     private int _consecutiveIdleTicks = 0;
 
-    private string _currentDayString = DateTime.Now.ToString("yyyy-MM-dd");
+    private string _currentDayString = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     private long _todayFanActiveSeconds = 0;
     private long _todayFanPassiveSeconds = 0;
     private DateTime? _lastSampleTime;
@@ -183,7 +183,7 @@ public class ThermalHealthService
         _lastSampleTime = DateTime.UtcNow;
 
         // Verify day boundary
-        var todayStr = DateTime.Now.ToString("yyyy-MM-dd");
+        var todayStr = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         if (todayStr != _currentDayString)
         {
             _currentDayString = todayStr;
@@ -287,7 +287,7 @@ public class ThermalHealthService
     {
         lock (_syncLock)
         {
-            var todayStr = DateTime.Now.ToString("yyyy-MM-dd");
+            var todayStr = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var summary = _data.DailyHistory.FirstOrDefault(d => d.Date == todayStr);
             if (summary == null)
             {
