@@ -967,7 +967,9 @@ public class GameDetectionService : IDisposable
                         _profiles.AddRange(list);
                         return;
                     }
-                    throw new JsonException("Geçersiz oyun profili listesi.");
+                    // Localised: this message reaches the user inside ProfileLoadError, unlike the
+                    // JsonException text the serializer itself produces.
+                    throw new JsonException(Loc.T("Geçersiz oyun profili listesi."));
                 }
                 catch (Exception ex)
                 {

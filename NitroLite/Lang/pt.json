@@ -340,6 +340,7 @@
  "Geçersiz dosya özeti.": "Hash de arquivo inválido.",
  "Geçersiz kullanıcı adı: {0}": "Nome de usuário inválido: {0}",
  "Geçersiz kurulum klasörü: {0}": "Pasta de instalação inválida: {0}",
+ "Geçersiz oyun profili listesi.": "Lista de perfis de jogo inválida.",
  "Geçersiz yardımcı dosya listesi.": "Lista de arquivos auxiliares inválida.",
  "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Abre uma issue no GitHub com a versão, a compilação do Windows e o modelo do notebook já preenchidos. Seu nome de usuário e caminhos de arquivo não são incluídos.",
  "Görev Zamanlayıcı kullanılamıyor.": "O Agendador de Tarefas não está disponível.",

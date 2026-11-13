@@ -288,6 +288,29 @@ public class GameDetectionServiceTests
     }
 
     [Fact]
+    public void UnusableProfileListReportsTheReasonInTheSelectedLanguage()
+    {
+        // The file parses but holds no usable entry, so the service raises its own message. That message
+        // reaches the user inside ProfileLoadError, so it has to follow the selected language.
+        string file = Path.GetTempFileName();
+        string original = Loc.Language;
+        try
+        {
+            File.WriteAllText(file, "[{\"ExeName\":\"\"}]");
+            Loc.SetLanguage("de");
+            using var service = new GameDetectionService(file);
+
+            Assert.NotNull(service.ProfileLoadError);
+            Assert.Contains("Ungültige Spielliste", service.ProfileLoadError);
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
     public void MissingProfileFileStartsFromDefaultsAndStaysWritable()
     {
         string file = Path.Combine(Path.GetTempPath(), "nitrolite-profiles-" + Guid.NewGuid().ToString("N") + ".json");

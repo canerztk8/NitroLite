@@ -340,6 +340,7 @@
  "Geçersiz dosya özeti.": "Invalid file digest.",
  "Geçersiz kullanıcı adı: {0}": "Invalid user name: {0}",
  "Geçersiz kurulum klasörü: {0}": "Invalid install folder: {0}",
+ "Geçersiz oyun profili listesi.": "Invalid game profile list.",
  "Geçersiz yardımcı dosya listesi.": "Invalid helper file list.",
  "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Opens a GitHub issue with the version, Windows build and laptop model filled in. Your user name and file paths are not included.",
  "Görev Zamanlayıcı kullanılamıyor.": "Task Scheduler is not available.",

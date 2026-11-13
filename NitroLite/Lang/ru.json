@@ -340,6 +340,7 @@
  "Geçersiz dosya özeti.": "Недопустимый дайджест файла.",
  "Geçersiz kullanıcı adı: {0}": "Недопустимое имя пользователя: {0}",
  "Geçersiz kurulum klasörü: {0}": "Недопустимая папка установки: {0}",
+ "Geçersiz oyun profili listesi.": "Недопустимый список игровых профилей.",
  "Geçersiz yardımcı dosya listesi.": "Недопустимый список вспомогательных файлов.",
  "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Открывает задачу на GitHub с уже заполненными версией, сборкой Windows и моделью ноутбука. Имя пользователя и пути к файлам не добавляются.",
  "Görev Zamanlayıcı kullanılamıyor.": "Планировщик задач недоступен.",

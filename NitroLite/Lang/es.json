@@ -340,6 +340,7 @@
  "Geçersiz dosya özeti.": "Resumen del archivo no válido.",
  "Geçersiz kullanıcı adı: {0}": "Nombre de usuario no válido: {0}",
  "Geçersiz kurulum klasörü: {0}": "Carpeta de instalación no válida: {0}",
+ "Geçersiz oyun profili listesi.": "Lista de perfiles de juego no válida.",
  "Geçersiz yardımcı dosya listesi.": "Lista de archivos auxiliares no válida.",
  "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Abre un informe en GitHub con la versión, la compilación de Windows y el modelo del portátil ya rellenados. No se incluyen tu nombre de usuario ni rutas de archivo.",
  "Görev Zamanlayıcı kullanılamıyor.": "El Programador de tareas no está disponible.",
