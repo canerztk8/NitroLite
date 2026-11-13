@@ -258,7 +258,7 @@
  "Donanım Telemetrisi ve OSD Göstergesi": "Telemetri Perangkat Keras dan OSD",
  "Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar.": "Batas daya perangkat keras, profil fan, dan konfigurasi per game.",
  "Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar.": "Menjaga batas pengisian pada 80% untuk melindungi kesehatan baterai dan menyediakan pengosongan terkendali.",
- "Donanım İzleme & OSD": "Pemantauan Perangkat Keras & OSD",
+ "Donanım İzleme & OSD": "Hardware & OSD",
  "Dosya bulunamadı.": "Berkas tidak ditemukan.",
  "Dosya yolu okunamadı.": "Jalur berkas tidak dapat dibaca.",
  "Doğrulanamadı": "Tidak terverifikasi",
@@ -380,7 +380,7 @@
  "Kayıt bekleniyor": "Menunggu perekaman",
  "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Nilai discrete_gpu_support (1) akan diverifikasi di registri, tugas logon sementara yang tersisa akan dibersihkan, dan layanan Quick Access akan dimulai. NitroSense akan ditutup jika sedang berjalan. Izin administrator akan diminta.\n\nLanjutkan?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "Folder tidak dapat ditulisi; unduh pembaruan secara manual.",
- "Klavye Aydınlatması": "Lampu Latar Keyboard",
+ "Klavye Aydınlatması": "Lampu Keyboard",
  "Klavye RGB Aydınlatma Kontrolü": "Kontrol Pencahayaan RGB Keyboard",
  "Klavye RGB Servisini Onar": "Perbaiki Layanan RGB Keyboard",
  "Klavye aydınlatma servisi (AcerLightingService) başarıyla onarıldı ve başlatıldı.": "Layanan lampu latar keyboard (AcerLightingService) berhasil diperbaiki dan dimulai.",
@@ -507,7 +507,7 @@
  "Performans Kaybı, Termal direnç artış eğiliminde": "Kehilangan performa, hambatan termal cenderung naik",
  "Pil": "Baterai",
  "Pil %{0} seviyesine ulaştı (%80 eşiği aşıldı).": "Baterai mencapai {0}% (ambang 80% terlampaui).",
- "Pil & Termal Sağlık": "Kesehatan Baterai & Termal",
+ "Pil & Termal Sağlık": "Baterai & Termal",
  "Pil Gerilimi": "Tegangan Baterai",
  "Pil Sağlığı": "Kesehatan Baterai",
  "Pil seviyesi %80 hedef sınırına indirildi.": "Level baterai diturunkan ke batas target 80%.",
@@ -592,7 +592,7 @@
  "Silmek için listeden bir profil seçin.": "Pilih profil dari daftar untuk menghapusnya.",
  "Sistem (SYS1)": "Sistem (SYS1)",
  "Sistem Belleği (RAM)": "Memori Sistem (RAM)",
- "Sistem Servisleri & Araçlar": "Layanan & Alat Sistem",
+ "Sistem Servisleri & Araçlar": "Layanan & Alat",
  "Sistem Servisleri ve Başlangıç Ayarları": "Layanan Sistem dan Pengaturan Startup",
  "Sistem Sıcaklığı": "Suhu Sistem",
  "Sistem ve Donanım Onarım Araçları": "Alat Perbaikan Sistem dan Perangkat Keras",
@@ -834,5 +834,6 @@
  "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "Persentase {0} harus antara {1} dan {2}: '{3}'.",
  "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "Tidak ada nilai yang valid untuk {0}: '{1}'. Gunakan: auto, max, custom, atau persentase antara {2} dan {3}.",
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} harus antara 1 dan 4: '{1}'.",
- "Fan {0}": "Kipas {0}"
+ "Fan {0}": "Kipas {0}",
+ "Profil seçilmedi": "Tidak ada profil dipilih"
 }

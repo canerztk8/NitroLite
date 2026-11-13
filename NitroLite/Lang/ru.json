@@ -258,7 +258,7 @@
  "Donanım Telemetrisi ve OSD Göstergesi": "Телеметрия оборудования и OSD",
  "Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar.": "Аппаратные лимиты мощности, профили вентиляторов и конфигурации для отдельных игр.",
  "Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar.": "Удерживает предел заряда на уровне 80% для защиты батареи и обеспечивает контролируемую разрядку.",
- "Donanım İzleme & OSD": "Мониторинг оборудования и OSD",
+ "Donanım İzleme & OSD": "Оборудование и OSD",
  "Dosya bulunamadı.": "Файл не найден.",
  "Dosya yolu okunamadı.": "Не удалось прочитать путь к файлу.",
  "Doğrulanamadı": "Не проверено",
@@ -380,7 +380,7 @@
  "Kayıt bekleniyor": "Ожидание записи",
  "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Значение discrete_gpu_support (1) будет проверено в реестре, оставшиеся временные задачи входа в систему будут удалены, а служба Quick Access запущена. NitroSense будет закрыт, если он запущен. Потребуется разрешение администратора.\n\nПродолжить?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "В папку нельзя записать; загрузите обновление вручную.",
- "Klavye Aydınlatması": "Подсветка клавиатуры",
+ "Klavye Aydınlatması": "Подсветка",
  "Klavye RGB Aydınlatma Kontrolü": "Управление RGB-подсветкой клавиатуры",
  "Klavye RGB Servisini Onar": "Восстановить службу RGB клавиатуры",
  "Klavye aydınlatma servisi (AcerLightingService) başarıyla onarıldı ve başlatıldı.": "Служба подсветки клавиатуры (AcerLightingService) успешно восстановлена и запущена.",
@@ -507,7 +507,7 @@
  "Performans Kaybı, Termal direnç artış eğiliminde": "Потеря производительности, тепловое сопротивление растёт",
  "Pil": "Батарея",
  "Pil %{0} seviyesine ulaştı (%80 eşiği aşıldı).": "Заряд батареи достиг {0}% (превышен порог 80%).",
- "Pil & Termal Sağlık": "Батарея и тепловое состояние",
+ "Pil & Termal Sağlık": "Батарея и тепло",
  "Pil Gerilimi": "Напряжение батареи",
  "Pil Sağlığı": "Состояние батареи",
  "Pil seviyesi %80 hedef sınırına indirildi.": "Уровень заряда снижен до целевого предела 80%.",
@@ -592,7 +592,7 @@
  "Silmek için listeden bir profil seçin.": "Выберите профиль в списке, чтобы удалить его.",
  "Sistem (SYS1)": "Система (SYS1)",
  "Sistem Belleği (RAM)": "Системная память (RAM)",
- "Sistem Servisleri & Araçlar": "Системные службы и инструменты",
+ "Sistem Servisleri & Araçlar": "Службы и утилиты",
  "Sistem Servisleri ve Başlangıç Ayarları": "Системные службы и настройки запуска",
  "Sistem Sıcaklığı": "Температура системы",
  "Sistem ve Donanım Onarım Araçları": "Инструменты восстановления системы и оборудования",
@@ -834,5 +834,6 @@
  "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "Процент для {0} должен быть от {1} до {2}: '{3}'.",
  "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "Недопустимое значение для {0}: '{1}'. Используйте: auto, max, custom или процент от {2} до {3}.",
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} должен быть от 1 до 4: '{1}'.",
- "Fan {0}": "Вентилятор {0}"
+ "Fan {0}": "Вентилятор {0}",
+ "Profil seçilmedi": "Профиль не выбран"
 }

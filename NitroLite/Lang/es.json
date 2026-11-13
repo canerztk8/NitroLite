@@ -258,7 +258,7 @@
  "Donanım Telemetrisi ve OSD Göstergesi": "Telemetría del hardware y OSD",
  "Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar.": "Límites de energía del hardware, perfiles de ventilador y configuraciones por juego.",
  "Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar.": "Mantiene el límite de carga en el 80% para proteger la salud de la batería y permite una descarga controlada.",
- "Donanım İzleme & OSD": "Monitorización del hardware y OSD",
+ "Donanım İzleme & OSD": "Hardware y OSD",
  "Dosya bulunamadı.": "Archivo no encontrado.",
  "Dosya yolu okunamadı.": "No se pudo leer la ruta del archivo.",
  "Doğrulanamadı": "Sin verificar",
@@ -380,7 +380,7 @@
  "Kayıt bekleniyor": "En espera de grabación",
  "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?": "Se verificará el valor discrete_gpu_support (1) en el registro, se limpiarán las tareas de inicio de sesión temporales que hayan quedado y se iniciará el servicio de acceso rápido. Se cerrará NitroSense si está abierto. Se solicitarán permisos de administrador.\n\n¿Desea continuar?",
  "Klasöre yazılamıyor; güncellemeyi elle indirin.": "No se puede escribir en la carpeta; descarga la actualización manualmente.",
- "Klavye Aydınlatması": "Retroiluminación del teclado",
+ "Klavye Aydınlatması": "Luz del teclado",
  "Klavye RGB Aydınlatma Kontrolü": "Control de iluminación RGB del teclado",
  "Klavye RGB Servisini Onar": "Reparar el servicio RGB del teclado",
  "Klavye aydınlatma servisi (AcerLightingService) başarıyla onarıldı ve başlatıldı.": "El servicio de retroiluminación del teclado (AcerLightingService) se reparó y se inició correctamente.",
@@ -507,7 +507,7 @@
  "Performans Kaybı, Termal direnç artış eğiliminde": "Pérdida de rendimiento, la resistencia térmica sube",
  "Pil": "Batería",
  "Pil %{0} seviyesine ulaştı (%80 eşiği aşıldı).": "La batería alcanzó el {0}% (se superó el umbral del 80%).",
- "Pil & Termal Sağlık": "Estado de la batería y térmico",
+ "Pil & Termal Sağlık": "Batería y térmica",
  "Pil Gerilimi": "Voltaje de la batería",
  "Pil Sağlığı": "Estado de la batería",
  "Pil seviyesi %80 hedef sınırına indirildi.": "Nivel de batería reducido hasta el límite objetivo del 80%.",
@@ -592,7 +592,7 @@
  "Silmek için listeden bir profil seçin.": "Seleccione un perfil de la lista para eliminarlo.",
  "Sistem (SYS1)": "Sistema (SYS1)",
  "Sistem Belleği (RAM)": "Memoria del sistema (RAM)",
- "Sistem Servisleri & Araçlar": "Servicios y herramientas del sistema",
+ "Sistem Servisleri & Araçlar": "Servicios y utilidades",
  "Sistem Servisleri ve Başlangıç Ayarları": "Servicios del sistema y ajustes de inicio",
  "Sistem Sıcaklığı": "Temperatura del sistema",
  "Sistem ve Donanım Onarım Araçları": "Herramientas de reparación del sistema y del hardware",
@@ -834,5 +834,6 @@
  "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "El porcentaje de {0} debe estar entre {1} y {2}: '{3}'.",
  "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "No hay un valor válido para {0}: '{1}'. Usa: auto, max, custom o un porcentaje entre {2} y {3}.",
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} debe estar entre 1 y 4: '{1}'.",
- "Fan {0}": "Ventilador {0}"
+ "Fan {0}": "Ventilador {0}",
+ "Profil seçilmedi": "Ningún perfil seleccionado"
 }

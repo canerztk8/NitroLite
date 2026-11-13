@@ -285,8 +285,12 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type CheckBox}">
-                        <StackPanel Orientation="Horizontal" Background="Transparent">
-                            <Border x:Name="box" Width="14" Height="14" CornerRadius="1"
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" x:Name="box" Width="14" Height="14" CornerRadius="1"
                                     Background="Transparent"
                                     BorderBrush="{StaticResource RuleStrong}" BorderThickness="1"
                                     VerticalAlignment="Center">
@@ -296,8 +300,8 @@
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
                                       Visibility="Collapsed" />
                             </Border>
-                            <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
-                        </StackPanel>
+                            <ContentPresenter Grid.Column="1" Margin="7,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource InkSoft}" />
@@ -325,16 +329,20 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type RadioButton}">
-                        <StackPanel Orientation="Horizontal" Background="Transparent">
-                            <Border x:Name="box" Width="14" Height="14" CornerRadius="1"
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" x:Name="box" Width="14" Height="14" CornerRadius="1"
                                     Background="Transparent"
                                     BorderBrush="{StaticResource RuleStrong}" BorderThickness="1"
                                     VerticalAlignment="Center">
                                 <Border x:Name="dot" Width="6" Height="6" CornerRadius="0"
                                         Background="{StaticResource OnAccent}" Visibility="Collapsed" />
                             </Border>
-                            <ContentPresenter Margin="7,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
-                        </StackPanel>
+                            <ContentPresenter Grid.Column="1" Margin="7,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource InkSoft}" />
@@ -745,7 +753,7 @@
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Çalışma Modları" Foreground="{StaticResource Ink}" FontSize="18" FontWeight="SemiBold" />
-                                <TextBlock Text="Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar." Foreground="{StaticResource InkSoft}" FontSize="12" Margin="0,4,0,0" />
+                                <TextBlock Text="Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar." Foreground="{StaticResource InkSoft}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
 
                                 <!-- THE RECORDING: the last 60 seconds of CPU temperature as a continuous
                                      ink trace, a vermilion "now" edge, and a tick wherever the mode
@@ -1312,13 +1320,17 @@
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <Grid Margin="0,0,0,14">
-                                    <StackPanel>
-                                        <TextBlock Text="Donanım Telemetrisi ve OSD Göstergesi" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
-                                        <TextBlock Text="AASSvc ve NVML sensör arabirimlerinden gerçek zamanlı donanım telemetrisi." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,0" />
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                        <TextBlock Text="Donanım Telemetrisi ve OSD Göstergesi" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="AASSvc ve NVML sensör arabirimlerinden gerçek zamanlı donanım telemetrisi." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
 
                                     <!-- OSD Overlay Controls -->
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                         <Button x:Name="BtnToggleOsd" Content="Ekran Üstü Gösterge (OSD)" Click="BtnToggleOsd_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,7" FontWeight="SemiBold" FontSize="11" Cursor="Hand" ToolTip="Oyun esnasında donanım kullanım verilerini ekranda gösterir." />
                                         <Button x:Name="BtnCycleOsdCorner" Content="Konum Değiştir" Click="BtnCycleOsdCorner_Click" Margin="8,0,0,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="10,7" FontWeight="SemiBold" FontSize="11" Cursor="Hand" ToolTip="OSD katmanını ekran köşeleri arasında taşır." />
                                     </StackPanel>
@@ -1328,10 +1340,18 @@
                                     <!-- CPU CARD -->
                                     <Border Style="{StaticResource CardBorder}" Margin="0,0,6,0">
                                         <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                <TextBlock x:Name="TxtMonCpuName" Text="İşlemci" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                                <TextBlock x:Name="TxtCpuCoreCount" Text=" (16 Çekirdek)" Foreground="{StaticResource TextMuted}" FontSize="12" />
-                                            </StackPanel>
+                                            <!-- The CPU name is a full marketing string ("AMD Ryzen 7 7840HS w/ Radeon 780M
+                                                 Graphics") and the core count follows it. In a horizontal StackPanel
+                                                 neither is constrained, so the pair ran past the card edge; the star
+                                                 column wraps the name at a word boundary and keeps the count whole. -->
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="TxtMonCpuName" Text="İşlemci" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Column="1" x:Name="TxtCpuCoreCount" Text=" (16 Çekirdek)" Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Top" />
+                                            </Grid>
                                             
                                             <!-- Temp -->
                                             <Grid Margin="0,3">
@@ -1366,7 +1386,7 @@
                                     <!-- GPU CARD -->
                                     <Border Style="{StaticResource CardBorder}" Margin="6,0,0,0">
                                         <StackPanel>
-                                            <TextBlock x:Name="TxtMonGpuName" Text="Ekran Kartı" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,8" />
+                                            <TextBlock x:Name="TxtMonGpuName" Text="Ekran Kartı" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             
                                             <!-- Temp -->
                                             <Grid Margin="0,3">
@@ -1452,13 +1472,17 @@
                                 <Border Style="{StaticResource CardBorder}">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,10">
-                                            <StackPanel>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                                 <TextBlock Text="Telemetri Geçmiş Grafiği" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
-                                                <TextBlock Text="Seçili metriğin son 60 saniyesi. Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                                <TextBlock Text="Seçili metriğin son 60 saniyesi. Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
 
                                             <!-- Metric Selection Dropdown -->
-                                            <ComboBox x:Name="CmbChartMetric" MinWidth="240" MaxWidth="340" SelectionChanged="CmbChartMetric_SelectionChanged" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <ComboBox Grid.Column="1" x:Name="CmbChartMetric" MinWidth="240" MaxWidth="340" SelectionChanged="CmbChartMetric_SelectionChanged" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                 <ComboBoxItem Content="CPU Sıcaklığı (°C)" Tag="CPU_TEMP" IsSelected="True" />
                                                 <ComboBoxItem Content="GPU Sıcaklığı (°C)" Tag="GPU_TEMP" />
                                                 <ComboBoxItem Content="CPU Güç Tüketimi (W, tahmini)" Tag="CPU_WATT" />
@@ -1560,11 +1584,15 @@
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <Grid Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <TextBlock Text="Klavye RGB Aydınlatma Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
-                                        <TextBlock Text="Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,0" />
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                        <TextBlock Text="Klavye RGB Aydınlatma Kontrolü" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="Dört bölgeli RGB renk dizilimi, dinamik aydınlatma efektleri ve donanım profilleri." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button x:Name="BtnTurnOffLights" Content="Aydınlatmayı Kapat" Click="BtnTurnOffLights_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Cursor="Hand" />
+                                    <Button Grid.Column="1" x:Name="BtnTurnOffLights" Content="Aydınlatmayı Kapat" Click="BtnTurnOffLights_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Cursor="Hand" />
                                 </Grid>
 
                                 <!-- Shown only when the Acer service explicitly reports no controllable lighting. -->
@@ -1616,8 +1644,24 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
 
-                                            <!-- Preset Dropdown -->
-                                            <ComboBox x:Name="CmbRgbPresets" Grid.Column="0" SelectionChanged="CmbRgbPresets_SelectionChanged" VerticalAlignment="Center" />
+                                            <!-- Preset Dropdown. The list is left unselected when the keyboard is in a
+                                                 state no preset describes, which used to read as an empty, broken
+                                                 control; the hint is a sibling shown only while nothing is selected. -->
+                                            <Grid Grid.Column="0">
+                                                <ComboBox x:Name="CmbRgbPresets" SelectionChanged="CmbRgbPresets_SelectionChanged" VerticalAlignment="Center" />
+                                                <TextBlock Text="Profil seçilmedi" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="11,0,26,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="{x:Type TextBlock}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding SelectedItem, ElementName=CmbRgbPresets}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Grid>
 
                                             <!-- Save Custom Preset input. The hint is a sibling, not a watermark, so it
                                                  can never end up inside a saved profile name. -->
@@ -1716,7 +1760,7 @@
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Pil Şarj Sınırı ve Güvenli Deşarj" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
-                                <TextBlock Text="Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" />
+                                <TextBlock Text="Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar." Foreground="{StaticResource TextSecondary}" FontSize="12" Margin="0,4,0,16" TextWrapping="Wrap" />
 
                                 <UniformGrid Columns="2" Margin="0,0,0,16">
                                     <!-- BATTERY STATUS CARD -->
@@ -1732,12 +1776,19 @@
 
                                             <!-- Live Real-Time Discharge / Charge Rate Indicator -->
                                             <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,0,10">
+                                                <!-- Two columns, not one cell with a right-aligned sibling: a translated
+                                                     "remaining time" is longer than the Turkish one and used to run under
+                                                     the card's edge. The star column keeps the figure clear of it. -->
                                                 <Grid>
-                                                    <StackPanel>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
                                                         <TextBlock Text="Anlık Güç Akışı:" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
-                                                        <TextBlock x:Name="TxtBatDischargeRate" Text="0.0 W (Adaptörde)" Foreground="{StaticResource AccentCyan}" FontSize="14" FontWeight="Bold" Margin="0,2,0,0" />
+                                                        <TextBlock x:Name="TxtBatDischargeRate" Text="0.0 W (Adaptörde)" Foreground="{StaticResource AccentCyan}" FontSize="14" FontWeight="Bold" Margin="0,2,0,0" TextWrapping="Wrap" />
                                                     </StackPanel>
-                                                    <TextBlock x:Name="TxtBatRemainingTime" Text="Kalan Süre: --" Foreground="{StaticResource TextSecondary}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="1" x:Name="TxtBatRemainingTime" Text="Kalan Süre: --" Foreground="{StaticResource TextSecondary}" FontSize="11" MaxWidth="200" Margin="12,0,0,0" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
                                                 </Grid>
                                             </Border>
 
@@ -1750,7 +1801,11 @@
                                                 <ComboBoxItem Content="Eco Modu (60Hz + Sessiz Fan + Güç Tasarrufu)" Tag="Eco" IsSelected="True" />
                                                 <ComboBoxItem Content="Dengeli Mod (Mevcut Ayarları Koru)" Tag="Balanced" />
                                             </ComboBox>
-                                            <CheckBox x:Name="ChkAutoRefreshRate" Content="Pilde laptop ekranını 60 Hz'e al (adaptörde önceki hıza döner; harici monitörlere dokunmaz)" Checked="ChkAutoRefreshRate_Changed" Unchecked="ChkAutoRefreshRate_Changed" IsChecked="True" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="11" Margin="0,2" />
+                                            <CheckBox x:Name="ChkAutoRefreshRate" Checked="ChkAutoRefreshRate_Changed" Unchecked="ChkAutoRefreshRate_Changed" IsChecked="True" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="11" Margin="0,2">
+                                                <!-- A CheckBox renders a string Content on one unbroken line; the German
+                                                     sentence is twice the Turkish one and was clipped mid-word. -->
+                                                <TextBlock Text="Pilde laptop ekranını 60 Hz'e al (adaptörde önceki hıza döner; harici monitörlere dokunmaz)" TextWrapping="Wrap" />
+                                            </CheckBox>
                                         </StackPanel>
                                     </Border>
 
@@ -1803,8 +1858,8 @@
                                                 <StackPanel>
                                                     <TextBlock Text="Tam Şarj Kapasitesi" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                                     <TextBlock x:Name="TxtBatFullChargeCap" Text="--" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="Bold" Margin="0,6,0,2" />
-                                                    <TextBlock x:Name="TxtBatDesignCap" Text="Fabrika: --" Foreground="{StaticResource TextMuted}" FontSize="10" />
-                                                    <TextBlock x:Name="TxtBatCycleCount" Text="Döngü: --" Foreground="{StaticResource TextMuted}" FontSize="10" />
+                                                    <TextBlock x:Name="TxtBatDesignCap" Text="Fabrika: --" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" />
+                                                    <TextBlock x:Name="TxtBatCycleCount" Text="Döngü: --" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" />
                                                 </StackPanel>
                                             </Border>
 
@@ -1824,8 +1879,12 @@
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,10">
-                                            <TextBlock Text="Bileşen Sıcaklık Matrisi" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                            <TextBlock Text="Acer servisi, Windows ve disk sürücülerinden; okunamayan değerler -- olarak gösterilir." Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Bileşen Sıcaklık Matrisi" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="Acer servisi, Windows ve disk sürücülerinden; okunamayan değerler -- olarak gösterilir." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="16,0,0,0" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>
 
                                         <UniformGrid Columns="4">
@@ -1843,7 +1902,7 @@
                                                 <StackPanel>
                                                     <TextBlock x:Name="TxtSubSsd1Label" Text="Disk 1" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
                                                     <TextBlock x:Name="TxtSubSsd1Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                    <TextBlock x:Name="TxtSubSsd1Name" Text="--" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
+                                                    <TextBlock x:Name="TxtSubSsd1Name" Text="--" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
 
@@ -1852,7 +1911,7 @@
                                                 <StackPanel>
                                                     <TextBlock x:Name="TxtSubSsd2Label" Text="Disk 2" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
                                                     <TextBlock x:Name="TxtSubSsd2Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                    <TextBlock x:Name="TxtSubSsd2Name" Text="--" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
+                                                    <TextBlock x:Name="TxtSubSsd2Name" Text="--" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
 
@@ -1861,7 +1920,7 @@
                                                 <StackPanel>
                                                     <TextBlock Text="Pil" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
                                                     <TextBlock x:Name="TxtSubBatteryTemp" Text="-- °C" Foreground="{StaticResource AccentCyan}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                    <TextBlock x:Name="TxtSubBatteryName" Text="Sıcaklık sensörü bildirilmiyor" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondary}" FontSize="9" />
+                                                    <TextBlock x:Name="TxtSubBatteryName" Text="Sıcaklık sensörü bildirilmiyor" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
                                         </UniformGrid>

@@ -258,7 +258,7 @@
  "Donanım Telemetrisi ve OSD Göstergesi": "Hardware Telemetry and OSD",
  "Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar.": "Hardware power limits, fan profiles and per-game configurations.",
  "Donanım pil sağlığını korumak için şarj sınırını %80 seviyesinde tutar ve kontrollü deşarj sağlar.": "Keeps the charge limit at 80% to protect battery health and provides controlled discharge.",
- "Donanım İzleme & OSD": "Hardware Monitoring & OSD",
+ "Donanım İzleme & OSD": "Hardware & OSD",
  "Dosya bulunamadı.": "File not found.",
  "Dosya yolu okunamadı.": "The file path could not be read.",
  "Doğrulanamadı": "Not verified",
@@ -507,7 +507,7 @@
  "Performans Kaybı, Termal direnç artış eğiliminde": "Performance Loss, thermal resistance trending up",
  "Pil": "Battery",
  "Pil %{0} seviyesine ulaştı (%80 eşiği aşıldı).": "Battery reached {0}% (the 80% threshold was exceeded).",
- "Pil & Termal Sağlık": "Battery & Thermal Health",
+ "Pil & Termal Sağlık": "Battery & Thermal",
  "Pil Gerilimi": "Battery Voltage",
  "Pil Sağlığı": "Battery Health",
  "Pil seviyesi %80 hedef sınırına indirildi.": "Battery level brought down to the 80% target limit.",
@@ -592,7 +592,7 @@
  "Silmek için listeden bir profil seçin.": "Select a profile from the list to delete it.",
  "Sistem (SYS1)": "System (SYS1)",
  "Sistem Belleği (RAM)": "System Memory (RAM)",
- "Sistem Servisleri & Araçlar": "System Services & Tools",
+ "Sistem Servisleri & Araçlar": "Services & Tools",
  "Sistem Servisleri ve Başlangıç Ayarları": "System Services and Startup Settings",
  "Sistem Sıcaklığı": "System Temperature",
  "Sistem ve Donanım Onarım Araçları": "System and Hardware Repair Tools",
@@ -834,5 +834,6 @@
  "{0} yüzdesi {1}-{2} arasında olmalı: '{3}'.": "The {0} percentage must be between {1} and {2}: '{3}'.",
  "{0} için geçerli bir değer yok: '{1}'. Kullanın: auto, max, custom veya {2}-{3} arası bir yüzde.": "No valid value for {0}: '{1}'. Use: auto, max, custom, or a percentage between {2} and {3}.",
  "{0} 1-4 arasında olmalı: '{1}'.": "{0} must be between 1 and 4: '{1}'.",
- "Fan {0}": "Fan {0}"
+ "Fan {0}": "Fan {0}",
+ "Profil seçilmedi": "No profile selected"
 }
