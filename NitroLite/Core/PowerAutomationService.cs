@@ -431,15 +431,15 @@ public class PowerAutomationService : IDisposable
                     _pendingDcApply = !modeOk || !boostOk || !fanOk || !refreshOk;
                     var failed = new System.Collections.Generic.List<string>();
                     if (!modeOk) failed.Add("Sessiz Mod");
-                    if (!boostOk) failed.Add("CPU Boost (Devre Dışı)");
+                    if (!boostOk) failed.Add(Loc.T("CPU Boost (Devre Dışı)"));
                     if (!fanOk) failed.Add("Fan Modu (Auto)");
-                    if (!refreshOk) failed.Add("60 Hz ekran yenileme hızı");
+                    if (!refreshOk) failed.Add(Loc.T("60 Hz ekran yenileme hızı"));
 
                     string message = failed.Count == 0
                         ? (_settings.AutoRefreshRateSwitching
-                            ? "Pilde Çalışma (Eco Modu): Güç tasarrufu ve 60 Hz ekran ayarı etkin."
-                            : "Pilde Çalışma (Eco Modu): Güç tasarrufu uygulandı.")
-                        : $"Pilde Çalışma (Kısmi Eco): Uygulanamayan ayarlar: {string.Join(", ", failed)}";
+                            ? Loc.T("Pilde Çalışma (Eco Modu): Güç tasarrufu ve 60 Hz ekran ayarı etkin.")
+                            : Loc.T("Pilde Çalışma (Eco Modu): Güç tasarrufu uygulandı."))
+                        : Loc.T($"Pilde Çalışma (Kısmi Eco): Uygulanamayan ayarlar: {string.Join(", ", failed)}");
 
                     PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                     {
@@ -460,7 +460,7 @@ public class PowerAutomationService : IDisposable
                     PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                     {
                         IsAc = false,
-                        Message = "Pilde Çalışma (Dengeli Mod): Mevcut donanım ayarları korundu.",
+                        Message = Loc.T("Pilde Çalışma (Dengeli Mod): Mevcut donanım ayarları korundu."),
                         ModeApplied = true,
                         VerifiedMode = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
                         BoostApplied = true,
@@ -502,7 +502,7 @@ public class PowerAutomationService : IDisposable
                         }
                         catch { modeOk = false; }
                         SetPendingRestore(mode: !modeOk);
-                        if (!modeOk) failed.Add("Çalışma Modu");
+                        if (!modeOk) failed.Add(Loc.T("Çalışma Modu"));
                     }
 
                     if (_pendingAcCpuRestore || _isDcEcoActive)
@@ -549,16 +549,16 @@ public class PowerAutomationService : IDisposable
                 if (HasPendingPanelRestore)
                 {
                     allRestored = false;
-                    failed.Add("Ekran yenileme hızı");
+                    failed.Add(Loc.T("Ekran yenileme hızı"));
                 }
 
                 string message = !restoreAttempted && !restoredRate.HasValue
-                    ? "Adaptör Bağlandı: Değişiklik gerekmedi."
+                    ? Loc.T("Adaptör Bağlandı: Değişiklik gerekmedi.")
                     : allRestored
                         ? (restoredRate.HasValue
-                            ? $"Adaptör Bağlandı: Önceki profil ve {restoredRate}Hz ekran tazeleme hızı geri yüklendi."
-                            : "Adaptör Bağlandı: Önceki profil geri yüklendi.")
-                        : $"Adaptör Bağlandı (Kısmi Geri Yükleme): Geri yüklenemeyen ayarlar: {string.Join(", ", failed)}";
+                            ? Loc.T($"Adaptör Bağlandı: Önceki profil ve {restoredRate}Hz ekran tazeleme hızı geri yüklendi.")
+                            : Loc.T("Adaptör Bağlandı: Önceki profil geri yüklendi."))
+                        : Loc.T($"Adaptör Bağlandı (Kısmi Geri Yükleme): Geri yüklenemeyen ayarlar: {string.Join(", ", failed)}");
 
                 PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                 {
@@ -650,8 +650,8 @@ public class PowerAutomationService : IDisposable
             if (modeAppliedThisRun || boostAppliedThisRun || fanAppliedThisRun)
             {
                 string message = !HasPendingAcRestore
-                    ? "Adaptör ayarları başarıyla yeniden uygulandı."
-                    : "Adaptör ayarları kısmen uygulandı.";
+                    ? Loc.T("Adaptör ayarları başarıyla yeniden uygulandı.")
+                    : Loc.T("Adaptör ayarları kısmen uygulandı.");
 
                 PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                 {

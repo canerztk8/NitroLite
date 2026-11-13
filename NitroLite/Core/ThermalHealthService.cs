@@ -34,7 +34,7 @@ public class ThermalHealthData
 public class ThermalHealthReport
 {
     public double PasteHealthPercent { get; set; } = 98.5;
-    public string PasteHealthStatus { get; set; } = "Normal (Termal Direnç Nominal)";
+    public string PasteHealthStatus { get; set; } = Loc.T("Normal (Termal Direnç Nominal)");
     public double ThermalResistanceRatio { get; set; } = 1.95;
     public double ActiveFanHours { get; set; } = 40.0;
     public double PassiveFanHours { get; set; } = 24.0;
@@ -42,7 +42,7 @@ public class ThermalHealthReport
     public double FanBearingHealthPercent { get; set; } = 99.2;
     public double RecentIdleTemp { get; set; } = 44.0;
     public double RecentLoadTemp { get; set; } = 68.5;
-    public string Recommendation { get; set; } = "Termal direnç ve ısı transferi nominal tolerans sınırları içindedir. Bakım gerekmemektedir.";
+    public string Recommendation { get; set; } = Loc.T("Termal direnç ve ısı transferi nominal tolerans sınırları içindedir. Bakım gerekmemektedir.");
     /// <summary>True once a sustained-load sample exists (now or in history); otherwise the ratio/paste values are only the reference baseline.</summary>
     public bool HasLoadMeasurement { get; set; }
     /// <summary>True once an idle sample exists (now or in history).</summary>
@@ -396,18 +396,18 @@ public class ThermalHealthService
 
         if (pasteHealth >= 93.0)
         {
-            statusText = "Normal (Termal Direnç Nominal)";
-            recommendation = "Termal direnç ve ısı transferi nominal tolerans sınırları içindedir. Bakım gerekmemektedir.";
+            statusText = Loc.T("Normal (Termal Direnç Nominal)");
+            recommendation = Loc.T("Termal direnç ve ısı transferi nominal tolerans sınırları içindedir. Bakım gerekmemektedir.");
         }
         else if (pasteHealth >= 82.0)
         {
-            statusText = "İyi Seviyede (Kararlı Isı İletimi)";
-            recommendation = "Termal verimlilik kararlı. Soğutma ızgaralarının temiz tutulması önerilir.";
+            statusText = Loc.T("İyi Seviyede (Kararlı Isı İletimi)");
+            recommendation = Loc.T("Termal verimlilik kararlı. Soğutma ızgaralarının temiz tutulması önerilir.");
         }
         else
         {
-            statusText = "Dikkat (Termal Verimlilik Azaldı)";
-            recommendation = "İşlemci termal direnci yükseldi. Soğutma bloğu temizliği veya termal arayüz bakımı önerilir.";
+            statusText = Loc.T("Dikkat (Termal Verimlilik Azaldı)");
+            recommendation = Loc.T("İşlemci termal direnci yükseldi. Soğutma bloğu temizliği veya termal arayüz bakımı önerilir.");
         }
 
         return new ThermalHealthReport
@@ -423,7 +423,7 @@ public class ThermalHealthService
             RecentLoadTemp = loadTemp,
             Recommendation = hasLoad
                 ? recommendation
-                : "Henüz yük altında ölçüm yok. Değerlendirme, işlemci bir süre yük altında (oyun, derleme vb.) çalıştıktan sonra oluşur.",
+                : Loc.T("Henüz yük altında ölçüm yok. Değerlendirme, işlemci bir süre yük altında (oyun, derleme vb.) çalıştıktan sonra oluşur."),
             HasLoadMeasurement = hasLoad,
             HasIdleMeasurement = hasIdle,
             LastLoadMeasurementDate = lastLoadDate,
@@ -449,8 +449,8 @@ public class ThermalHealthService
     {
         if (trend.DaysCount > 0 && trend.StatusLevel >= ThermalStatusLevel.Degraded)
         {
-            return "Termal direnç son günlerde artış eğiliminde. Mevcut değer hâlâ kabul edilebilir sınırda olsa da " +
-                   "soğutma ızgaralarının temizliği ve termal arayüz kontrolü önerilir.";
+            return Loc.T("Termal direnç son günlerde artış eğiliminde. Mevcut değer hâlâ kabul edilebilir sınırda olsa da " +
+                   "soğutma ızgaralarının temizliği ve termal arayüz kontrolü önerilir.");
         }
 
         return currentStateRecommendation;
@@ -483,7 +483,7 @@ public class ThermalHealthService
                 DaysCount = 0,
                 StabilityScorePercent = 100.0,
                 DegradationSlopePerDay = 0.0,
-                StatusText = "Veri toplanıyor (Yeterli gün kaydı yok)",
+                StatusText = Loc.T("Veri toplanıyor (Yeterli gün kaydı yok)"),
                 StatusLevel = ThermalStatusLevel.Excellent,
                 CurrentRatio = 0, // no measured day yet
                 BaselineRatio = baseline,
@@ -501,8 +501,8 @@ public class ThermalHealthService
                 ? ThermalStatusLevel.Excellent 
                 : (score >= 85.0 ? ThermalStatusLevel.Good : (score >= 70.0 ? ThermalStatusLevel.Degraded : ThermalStatusLevel.Critical));
             string singleText = score >= 95.0 
-                ? "Kararlı, Termal iletkenlik nominal" 
-                : (score >= 85.0 ? "İyi Seviyede, Kararlı ısı iletimi" : (score >= 70.0 ? "Performans Kaybı, Termal direnç artış eğiliminde" : "Kritik, Termal macun kurumuş / bakım gerekli"));
+                ? Loc.T("Kararlı, Termal iletkenlik nominal") 
+                : (score >= 85.0 ? Loc.T("İyi Seviyede, Kararlı ısı iletimi") : (score >= 70.0 ? Loc.T("Performans Kaybı, Termal direnç artış eğiliminde") : Loc.T("Kritik, Termal macun kurumuş / bakım gerekli")));
 
             return new ThermalStabilityTrend
             {
@@ -567,22 +567,22 @@ public class ThermalHealthService
         if (stabilityScore >= 95.0)
         {
             level = ThermalStatusLevel.Excellent;
-            statusText = "Kararlı, Termal iletkenlik nominal";
+            statusText = Loc.T("Kararlı, Termal iletkenlik nominal");
         }
         else if (stabilityScore >= 85.0)
         {
             level = ThermalStatusLevel.Good;
-            statusText = "İyi Seviyede, Kararlı ısı iletimi";
+            statusText = Loc.T("İyi Seviyede, Kararlı ısı iletimi");
         }
         else if (stabilityScore >= 70.0)
         {
             level = ThermalStatusLevel.Degraded;
-            statusText = "Performans Kaybı, Termal direnç artış eğiliminde";
+            statusText = Loc.T("Performans Kaybı, Termal direnç artış eğiliminde");
         }
         else
         {
             level = ThermalStatusLevel.Critical;
-            statusText = "Kritik, Termal macun kurumuş / bakım gerekli";
+            statusText = Loc.T("Kritik, Termal macun kurumuş / bakım gerekli");
         }
 
         return new ThermalStabilityTrend

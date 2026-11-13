@@ -220,10 +220,10 @@ public partial class OsdOverlayWindow : Window
             }
             else
             {
-                TxtOsdRam.Text = "-- GB";
+                TxtOsdRam.Text = Loc.T("-- GB");
             }
 
-            TxtOsdFan.Text = $"FAN: {TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed)}";
+            TxtOsdFan.Text = Loc.T($"FAN: {TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed)}");
         });
     }
 

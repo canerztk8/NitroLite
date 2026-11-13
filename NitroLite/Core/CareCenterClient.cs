@@ -86,7 +86,7 @@ public class CareCenterClient
         var readBack = await GetBatteryChargeModeAsync();
         if (readBack != mode)
         {
-            LastError ??= $"Care Center ayarı doğrulanamadı (okunan: {readBack?.ToString() ?? "yok"}).";
+            LastError ??= Loc.T($"Care Center ayarı doğrulanamadı (okunan: {readBack?.ToString() ?? "yok"}).");
             return false;
         }
         return true;
@@ -127,7 +127,7 @@ public class CareCenterClient
             {
                 var pinned = File.ReadAllText(path).Trim();
                 if (string.Equals(pinned, thumbprint, StringComparison.OrdinalIgnoreCase)) return true;
-                LastError = "Care Center sertifikası daha önce güvenilen sertifikadan farklı; bağlantı reddedildi.";
+                LastError = Loc.T("Care Center sertifikası daha önce güvenilen sertifikadan farklı; bağlantı reddedildi.");
                 AppLog.Warn("Care Center sertifika sabitlemesi tutmadı",
                     $"Beklenen: {pinned}{Environment.NewLine}Gelen: {thumbprint}{Environment.NewLine}" +
                     $"Sertifika yenilendiyse {path} dosyasını silin.");
@@ -175,7 +175,7 @@ public class CareCenterClient
             if (auth?["PacketType"]?.GetValue<int>() != PacketAuth ||
                 auth["Data"]?.GetValue<string>() != ExpectedAuthAnswer())
             {
-                LastError = "Care Center el sıkışması başarısız.";
+                LastError = Loc.T("Care Center el sıkışması başarısız.");
                 return null;
             }
 
@@ -188,7 +188,7 @@ public class CareCenterClient
                 var msg = await ReceiveAsync(ws, cts.Token);
                 if (msg == null)
                 {
-                    LastError = "Care Center bağlantısı kapandı.";
+                    LastError = Loc.T("Care Center bağlantısı kapandı.");
                     return null;
                 }
                 if (msg["Session"]?.GetValue<string>() != session) continue; // Notify / unrelated packets
@@ -197,19 +197,19 @@ public class CareCenterClient
                 if (type == PacketResponse) return msg;
                 if (type == PacketError)
                 {
-                    LastError = $"Care Center hata kodu: {msg["ErrorCode"]}";
+                    LastError = Loc.T($"Care Center hata kodu: {msg["ErrorCode"]}");
                     return null;
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            LastError = "Care Center yanıt vermedi (zaman aşımı).";
+            LastError = Loc.T("Care Center yanıt vermedi (zaman aşımı).");
             return null;
         }
         catch (Exception ex)
         {
-            LastError = $"Care Center hizmetine (AcerCCAgent) bağlanılamadı: {ex.Message}";
+            LastError = Loc.T($"Care Center hizmetine (AcerCCAgent) bağlanılamadı: {ex.Message}");
             return null;
         }
         finally

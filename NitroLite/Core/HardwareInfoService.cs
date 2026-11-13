@@ -20,8 +20,8 @@ public sealed class HardwareInfo
     /// <summary>e.g. "8 çekirdek / 16 iş parçacığı"; falls back to the thread count from AASSvc.</summary>
     public string FormatCoreText(int fallbackThreads)
     {
-        if (CpuCores > 0 && CpuThreads > 0) return $"{CpuCores} çekirdek / {CpuThreads} iş parçacığı";
-        return fallbackThreads > 0 ? $"{fallbackThreads} iş parçacığı" : "";
+        if (CpuCores > 0 && CpuThreads > 0) return Loc.T($"{CpuCores} çekirdek / {CpuThreads} iş parçacığı");
+        return fallbackThreads > 0 ? Loc.T($"{fallbackThreads} iş parçacığı") : "";
     }
 
     /// <summary>e.g. "DDR5 5600 MT/s · 2 modül · 32 GB" (modules, not channels: Windows does not report channels).</summary>
@@ -30,9 +30,9 @@ public sealed class HardwareInfo
         var parts = new List<string>();
         var typeSpeed = string.Join(" ", new[] { MemoryType, MemorySpeedMts > 0 ? $"{MemorySpeedMts} MT/s" : "" }.Where(s => s.Length > 0));
         if (typeSpeed.Length > 0) parts.Add(typeSpeed);
-        if (MemoryModules > 0) parts.Add($"{MemoryModules} modül");
+        if (MemoryModules > 0) parts.Add(Loc.T($"{MemoryModules} modül"));
         if (MemoryTotalGb > 0) parts.Add($"{MemoryTotalGb:0.#} GB");
-        return parts.Count > 0 ? string.Join(" · ", parts) : "Bellek bilgisi okunamadı";
+        return parts.Count > 0 ? string.Join(" · ", parts) : Loc.T("Bellek bilgisi okunamadı");
     }
 }
 

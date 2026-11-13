@@ -421,12 +421,12 @@ public class BatteryWatchdogService : IDisposable
     /// <summary>Win32_Battery.Chemistry codes.</summary>
     public static string BatteryChemistryName(int code) => code switch
     {
-        3 => "Kurşun asit",
-        4 => "Nikel kadmiyum",
-        5 => "Nikel metal hidrit",
-        6 => "Lityum-iyon",
-        7 => "Çinko hava",
-        8 => "Lityum polimer",
+        3 => Loc.T("Kurşun asit"),
+        4 => Loc.T("Nikel kadmiyum"),
+        5 => Loc.T("Nikel metal hidrit"),
+        6 => Loc.T("Lityum-iyon"),
+        7 => Loc.T("Çinko hava"),
+        8 => Loc.T("Lityum polimer"),
         _ => ""
     };
 

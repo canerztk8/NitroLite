@@ -8,7 +8,10 @@ namespace NitroLite.Core;
 /// </summary>
 public static class TelemetryFormatter
 {
-    public const string EstimatedSuffix = " (tahmini)";
+    /// <summary>Source text of the estimate marker; <see cref="EstimatedSuffix"/> translates it.</summary>
+    internal const string EstimatedSuffixSource = " (tahmini)";
+
+    public static string EstimatedSuffix => Loc.T(EstimatedSuffixSource);
 
     /// <summary>
     /// Marks a value that comes from a model or a fixed baseline instead of a sensor reading.
@@ -198,20 +201,20 @@ public static class TelemetryFormatter
                 return string.Format(CultureInfo.InvariantCulture, "{0:F1} W ({1:F0} mW)", watts, (long)status.DischargeRateMilliwatts);
             }
 
-            return string.Format(CultureInfo.InvariantCulture, "{0:F1} W (Deşarj Oluyor)", watts);
+            return string.Format(CultureInfo.InvariantCulture, Loc.T("{0:F1} W (Deşarj Oluyor)"), watts);
         }
 
         if (status.IsCharging && status.ChargeRateWatts > 0)
         {
-            return string.Format(CultureInfo.InvariantCulture, "{0:F1} W (Şarj Oluyor)", status.ChargeRateWatts);
+            return string.Format(CultureInfo.InvariantCulture, Loc.T("{0:F1} W (Şarj Oluyor)"), status.ChargeRateWatts);
         }
 
         if (status.IsPluggedIn)
         {
-            return "0.0 W (Adaptörde / Doygun)";
+            return Loc.T("0.0 W (Adaptörde / Doygun)");
         }
 
-        return "0.0 W (Pilde / Boşta)";
+        return Loc.T("0.0 W (Pilde / Boşta)");
     }
 
     /// <summary>
@@ -221,9 +224,9 @@ public static class TelemetryFormatter
     {
         if (minutes <= 0 || minutes > 1440)
         {
-            if (isCharging) return "Hesaplanıyor...";
-            if (isPluggedIn) return "Adaptöre Bağlı";
-            return "Hesaplanıyor...";
+            if (isCharging) return Loc.T("Hesaplanıyor...");
+            if (isPluggedIn) return Loc.T("Adaptöre Bağlı");
+            return Loc.T("Hesaplanıyor...");
         }
 
         int hours = minutes / 60;
@@ -269,7 +272,7 @@ public static class TelemetryFormatter
     public static string FormatThermalSlope(double slope)
     {
         string sign = slope >= 0 ? "+" : "";
-        return string.Format(CultureInfo.InvariantCulture, "{0}{1:F3} °C/W/gün", sign, slope);
+        return string.Format(CultureInfo.InvariantCulture, Loc.T("{0}{1:F3} °C/W/gün"), sign, slope);
     }
 
     /// <summary>

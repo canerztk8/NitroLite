@@ -161,7 +161,7 @@ public class DebloatService
                 {
                     if (!_activePowerShellProcess.HasExited)
                     {
-                        errorMessage = "Önceki PowerShell işlemi hâlâ devam ediyor (durum belirsiz). Lütfen işlemin tamamlanmasını bekleyin.";
+                        errorMessage = Loc.T("Önceki PowerShell işlemi hâlâ devam ediyor (durum belirsiz). Lütfen işlemin tamamlanmasını bekleyin.");
                         return true;
                     }
                     _activePowerShellProcess.Dispose();
@@ -213,7 +213,7 @@ public class DebloatService
                     {
                         Name = name,
                         DisplayName = name,
-                        Status = "Kurulu değil",
+                        Status = Loc.T("Kurulu değil"),
                         StartType = "Disabled",
                         IsDisabled = true
                     });
@@ -225,7 +225,7 @@ public class DebloatService
                 {
                     Name = name,
                     DisplayName = name,
-                    Status = "Bilinmiyor",
+                    Status = Loc.T("Bilinmiyor"),
                     StartType = "Disabled",
                     IsDisabled = true
                 });
@@ -237,10 +237,10 @@ public class DebloatService
     /// <summary>Text for the status list: the start type matters as much as the live state.</summary>
     public static string DescribeStatus(string? liveStatus, string startType)
     {
-        if (string.Equals(startType, "Disabled", StringComparison.OrdinalIgnoreCase)) return "Devre dışı";
-        if (liveStatus == "Running") return "Çalışıyor";
+        if (string.Equals(startType, "Disabled", StringComparison.OrdinalIgnoreCase)) return Loc.T("Devre dışı");
+        if (liveStatus == "Running") return Loc.T("Çalışıyor");
         if (liveStatus == "Stopped")
-            return string.Equals(startType, "Manual", StringComparison.OrdinalIgnoreCase) ? "Durduruldu (elle başlar)" : "Durduruldu";
+            return string.Equals(startType, "Manual", StringComparison.OrdinalIgnoreCase) ? Loc.T("Durduruldu (elle başlar)") : Loc.T("Durduruldu");
         return "Bilinmiyor";
     }
 
@@ -556,7 +556,7 @@ public class DebloatService
         }
         catch (Exception ex)
         {
-            LastError = $"Servis yedek dosyası bozuk: {ex.Message}";
+            LastError = Loc.T($"Servis yedek dosyası bozuk: {ex.Message}");
         }
         return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
@@ -578,7 +578,7 @@ public class DebloatService
         }
         catch (Exception ex)
         {
-            LastError = $"Servis yedeği kaydedilemedi: {ex.Message}";
+            LastError = Loc.T($"Servis yedeği kaydedilemedi: {ex.Message}");
             return false;
         }
     }
@@ -614,7 +614,7 @@ public class DebloatService
                                  "  if ($task) { " +
                                  "    Disable-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; " +
                                  "    $vTask = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; " +
-                                 "    if ($vTask.State -ne 'Disabled') { throw 'NitroSenseLauncher görevi devre dışı bırakılamadı.' }; " +
+                                 "    if ($vTask.State -ne 'Disabled') { throw '" + Loc.Ps("NitroSenseLauncher görevi devre dışı bırakılamadı.") + "' }; " +
                                  "  } " +
                                  "} catch { $errs += ('Task:NitroSenseLauncher: ' + $_.Exception.Message) }; ";
         }
@@ -629,8 +629,8 @@ public class DebloatService
                "      if ($svc.Status -eq 'Running') { Stop-Service -Name $s -Force -ErrorAction Stop }; " +
                "      if ($svc.StartType -ne 'Disabled') { Set-Service -Name $s -StartupType Disabled -ErrorAction Stop }; " +
                "      $vSvc = Get-Service -Name $s -ErrorAction Stop; " +
-               "      if ($vSvc.Status -ne 'Stopped') { throw 'Servis durdurulamadı veya hâlâ çalışıyor.' }; " +
-               "      if ($vSvc.StartType -ne 'Disabled') { throw 'Servis başlangıç türü devre dışı bırakılamadı.' }; " +
+               "      if ($vSvc.Status -ne 'Stopped') { throw '" + Loc.Ps("Servis durdurulamadı veya hâlâ çalışıyor.") + "' }; " +
+               "      if ($vSvc.StartType -ne 'Disabled') { throw '" + Loc.Ps("Servis başlangıç türü devre dışı bırakılamadı.") + "' }; " +
                "    } " +
                "  } catch { " +
                "    $errs += ($s + ': ' + $_.Exception.Message) " +
@@ -640,8 +640,13 @@ public class DebloatService
                "if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }";
     }
 
-    public const string NoBackupMessage = "Geri yükleme iptal: kayıtlı servis yedeği yok.";
-    public const string AlreadyDisabledMessage = "Servislerin hepsi zaten devre dışı; değişiklik yapılmadı.";
+    // Source text, kept as constants so the PowerShell builder and the tests can compare against it; the public
+    // members translate it for the user.
+    internal const string NoBackupSource = "Geri yükleme iptal: kayıtlı servis yedeği yok.";
+    internal const string AlreadyDisabledSource = "Servislerin hepsi zaten devre dışı; değişiklik yapılmadı.";
+
+    public static string NoBackupMessage => Loc.T(NoBackupSource);
+    public static string AlreadyDisabledMessage => Loc.T(AlreadyDisabledSource);
 
     /// <summary>
     /// Restores Acer's install-time configuration (<see cref="FactoryStartTypes"/>) when no backup exists.
@@ -664,7 +669,7 @@ public class DebloatService
             sb.Append($"Set-Service -Name '{s}' -StartupType {canonicalType} -ErrorAction Stop; ");
             sb.Append($"Start-Service -Name '{s}' -ErrorAction SilentlyContinue; ");
             sb.Append($"$vSvc = Get-Service -Name '{s}' -ErrorAction Stop; ");
-            sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw 'Servis başlangıç türü doğrulanamadı: {s}' }}; ");
+            sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw '{Loc.Ps($"Servis başlangıç türü doğrulanamadı: {s}")}' }}; ");
             sb.Append("} ");
             sb.Append("} catch { ");
             sb.Append($"$errs += ('{s}: ' + $_.Exception.Message); ");
@@ -716,7 +721,7 @@ public class DebloatService
 
         if (backupState == null || backupState.Count == 0 || !(Tier1Services.Any(s => backupState.ContainsKey(s) && !string.IsNullOrWhiteSpace(backupState[s])) || (backupState.TryGetValue("Task:NitroSenseLauncher", out var onlyTask) && (IsActiveTaskState(onlyTask) || IsDisabledTaskState(onlyTask)))))
         {
-            sb.Append("$errs += '" + NoBackupMessage + "'; ");
+            sb.Append("$errs += '" + Loc.Ps(NoBackupSource) + "'; ");
             sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
             return sb.ToString();
         }
@@ -744,7 +749,7 @@ public class DebloatService
 
             sb.Append("try { ");
             sb.Append($"$svc = Get-Service -Name '{s}' -ErrorAction Stop; ");
-            sb.Append($"if (-not $svc) {{ throw 'Servis bulunamadı: {s}' }}; ");
+            sb.Append($"if (-not $svc) {{ throw '{Loc.Ps($"Servis bulunamadı: {s}")}' }}; ");
             if (canonicalType.Equals("Disabled", StringComparison.OrdinalIgnoreCase) && shouldStart)
             {
                 // Windows SCM prohibits starting a Disabled service (Error 1058).
@@ -767,14 +772,14 @@ public class DebloatService
                 }
             }
             sb.Append($"$vSvc = Get-Service -Name '{s}' -ErrorAction Stop; ");
-            sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw 'Servis başlangıç türü doğrulanamadı: {s}' }}; ");
+            sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw '{Loc.Ps($"Servis başlangıç türü doğrulanamadı: {s}")}' }}; ");
             if (shouldStart)
             {
-                sb.Append($"if ($vSvc.Status -ne 'Running') {{ throw 'Servis çalışma durumu doğrulanamadı: {s}' }}; ");
+                sb.Append($"if ($vSvc.Status -ne 'Running') {{ throw '{Loc.Ps($"Servis çalışma durumu doğrulanamadı: {s}")}' }}; ");
             }
             else
             {
-                sb.Append($"if ($vSvc.Status -ne 'Stopped') {{ throw 'Servis çalışma durumu doğrulanamadı: {s}' }}; ");
+                sb.Append($"if ($vSvc.Status -ne 'Stopped') {{ throw '{Loc.Ps($"Servis çalışma durumu doğrulanamadı: {s}")}' }}; ");
             }
             sb.Append("} catch { ");
             sb.Append($"$errs += ('{s}: ' + $_.Exception.Message); ");
@@ -787,10 +792,10 @@ public class DebloatService
             {
                 sb.Append("try { ");
                 sb.Append("  $task = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; ");
-                sb.Append("  if (-not $task) { throw 'NitroSenseLauncher görevi bulunamadı.' }; ");
+                sb.Append("  if (-not $task) { throw '" + Loc.Ps("NitroSenseLauncher görevi bulunamadı.") + "' }; ");
                 sb.Append("  Enable-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; ");
                 sb.Append("  $vTask = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; ");
-                sb.Append("  if ($vTask.State -eq 'Disabled') { throw 'NitroSenseLauncher görevi etkinleştirilemedi veya doğrulanamadı.' }; ");
+                sb.Append("  if ($vTask.State -eq 'Disabled') { throw '" + Loc.Ps("NitroSenseLauncher görevi etkinleştirilemedi veya doğrulanamadı.") + "' }; ");
                 sb.Append("} catch { ");
                 sb.Append("  $errs += ('Task:NitroSenseLauncher: ' + $_.Exception.Message); ");
                 sb.Append("}; ");
@@ -799,10 +804,10 @@ public class DebloatService
             {
                 sb.Append("try { ");
                 sb.Append("  $task = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; ");
-                sb.Append("  if (-not $task) { throw 'NitroSenseLauncher görevi bulunamadı.' }; ");
+                sb.Append("  if (-not $task) { throw '" + Loc.Ps("NitroSenseLauncher görevi bulunamadı.") + "' }; ");
                 sb.Append("  Disable-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; ");
                 sb.Append("  $vTask = Get-ScheduledTask -TaskName 'NitroSenseLauncher' -ErrorAction Stop; ");
-                sb.Append("  if ($vTask.State -ne 'Disabled') { throw 'NitroSenseLauncher görevi devre dışı bırakılamadı veya doğrulanamadı.' }; ");
+                sb.Append("  if ($vTask.State -ne 'Disabled') { throw '" + Loc.Ps("NitroSenseLauncher görevi devre dışı bırakılamadı veya doğrulanamadı.") + "' }; ");
                 sb.Append("} catch { ");
                 sb.Append("  $errs += ('Task:NitroSenseLauncher: ' + $_.Exception.Message); ");
                 sb.Append("}; ");
@@ -839,7 +844,7 @@ public class DebloatService
 
                 if (runnerExit != 0 && string.IsNullOrEmpty(LastError))
                 {
-                    LastError = $"PowerShell işlemi {runnerExit} çıkış koduyla bitti.";
+                    LastError = Loc.T($"PowerShell işlemi {runnerExit} çıkış koduyla bitti.");
                 }
 
                 return runnerExit == 0;
@@ -871,7 +876,7 @@ public class DebloatService
                 p = Process.Start(psi);
                 if (p == null)
                 {
-                    LastError = "PowerShell işlemi başlatılamadı.";
+                    LastError = Loc.T("PowerShell işlemi başlatılamadı.");
                     return false;
                 }
 
@@ -885,7 +890,7 @@ public class DebloatService
                 {
                     // Timed out: do NOT access p.ExitCode to avoid InvalidOperationException.
                     // Retain p in _activePowerShellProcess to block subsequent operations until it exits.
-                    LastError = $"PowerShell işlemi {PowerShellTimeoutMs / 1000} saniye içinde tamamlanamadı ve arka planda devam ediyor. Süreç sonlanana kadar yeni işlem başlatılamaz.";
+                    LastError = Loc.T($"PowerShell işlemi {PowerShellTimeoutMs / 1000} saniye içinde tamamlanamadı ve arka planda devam ediyor. Süreç sonlanana kadar yeni işlem başlatılamaz.");
                     return false;
                 }
 
@@ -896,7 +901,7 @@ public class DebloatService
                 }
                 catch (Exception ex)
                 {
-                    LastError = $"PowerShell çıkış kodu okunamadı: {ex.Message}";
+                    LastError = Loc.T($"PowerShell çıkış kodu okunamadı: {ex.Message}");
                 }
 
                 lock (_processLock)
@@ -922,7 +927,7 @@ public class DebloatService
 
                 if (exitCode != 0 && string.IsNullOrEmpty(LastError))
                 {
-                    LastError = $"PowerShell işlemi {exitCode} çıkış koduyla bitti.";
+                    LastError = Loc.T($"PowerShell işlemi {exitCode} çıkış koduyla bitti.");
                 }
 
                 return exitCode == 0;
@@ -982,7 +987,7 @@ public class DebloatService
                 // If backup file exists on disk but is invalid / corrupt, do NOT overwrite it!
                 if (File.Exists(BackupStateFilePath))
                 {
-                    LastError = $"İşlem iptal: '{BackupStateFilePath}' konumundaki servis yedeği geçersiz veya bozuk; üzerine yazılmadı. Dosyayı kontrol edin.";
+                    LastError = Loc.T($"İşlem iptal: '{BackupStateFilePath}' konumundaki servis yedeği geçersiz veya bozuk; üzerine yazılmadı. Dosyayı kontrol edin.");
                     return false;
                 }
 
@@ -1015,7 +1020,7 @@ public class DebloatService
                 // Abort service shutdown if backup state cannot be written
                 if (!SaveBackupState(existingBackup))
                 {
-                    LastError = $"İşlem iptal: servis yedeği diske yazılamadı. {LastError}".Trim();
+                    LastError = Loc.T($"İşlem iptal: servis yedeği diske yazılamadı. {LastError}").Trim();
                     return false;
                 }
 
@@ -1028,12 +1033,12 @@ public class DebloatService
                 {
                     if (!existingBackup.ContainsKey(svc) || !IsValidStartupType(existingBackup[svc]))
                     {
-                        LastError = $"İşlem iptal: '{svc}' servisinin yedeğinde başlangıç türü eksik.";
+                        LastError = Loc.T($"İşlem iptal: '{svc}' servisinin yedeğinde başlangıç türü eksik.");
                         return false;
                     }
                     if (!existingBackup.ContainsKey(svc + ":Status") || string.IsNullOrWhiteSpace(existingBackup[svc + ":Status"]))
                     {
-                        LastError = $"İşlem iptal: '{svc}' servisinin yedeğinde çalışma durumu eksik.";
+                        LastError = Loc.T($"İşlem iptal: '{svc}' servisinin yedeğinde çalışma durumu eksik.");
                         return false;
                     }
                 }
@@ -1047,7 +1052,7 @@ public class DebloatService
                         !existingBackup.TryGetValue(svc + ":Status", out var savedStatus) ||
                         (savedStatus != "Running" && savedStatus != "Stopped"))
                     {
-                        LastError = $"İşlem iptal: mevcut yedekte '{svc}' servisinin kaydı geçersiz.";
+                        LastError = Loc.T($"İşlem iptal: mevcut yedekte '{svc}' servisinin kaydı geçersiz.");
                         return false;
                     }
                 }
@@ -1096,7 +1101,7 @@ public class DebloatService
             {
                 if (!IsValidStartupType(backup[svc]))
                 {
-                    LastError = $"Geri yükleme iptal: yedekte '{svc}' için geçersiz başlangıç türü '{backup[svc]}'.";
+                    LastError = Loc.T($"Geri yükleme iptal: yedekte '{svc}' için geçersiz başlangıç türü '{backup[svc]}'.");
                     return false;
                 }
             }

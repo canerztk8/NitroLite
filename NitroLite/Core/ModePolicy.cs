@@ -1,4 +1,4 @@
-namespace NitroLite.Core;
+﻿namespace NitroLite.Core;
 
 /// <summary>
 /// Operating-mode rules and display names shared by the mode cards, tray menu, mode key and game profiles.
@@ -8,8 +8,10 @@ public static class ModePolicy
     /// <summary>NitroSense: Turbo/Performance need the AC adapter and at least 40 % battery.</summary>
     public const int MinBatteryPercentForHighPower = 40;
 
-    public const string HighPowerBlockedMessage =
+    internal const string HighPowerBlockedSource =
         "Turbo ve Performans modları yalnızca adaptör takılıyken ve pil en az %40 iken kullanılabilir (NitroSense kuralı).";
+
+    public static string HighPowerBlockedMessage => Loc.T(HighPowerBlockedSource);
 
     public static bool IsHighPowerMode(OperatingMode mode) =>
         mode == OperatingMode.Turbo || mode == OperatingMode.Extreme;
@@ -41,10 +43,10 @@ public static class ModePolicy
     /// </summary>
     public static string BoostDisplayName(CpuBoostMode mode) => (int)mode switch
     {
-        0 => "Devre Dışı",
-        1 => "Windows Varsayılanı",
-        2 => "Agresif",
-        4 => "Verimli",
-        _ => $"Diğer (Windows değeri {(int)mode})"
+        0 => Loc.T("Devre Dışı"),
+        1 => Loc.T("Windows Varsayılanı"),
+        2 => Loc.T("Agresif"),
+        4 => Loc.T("Verimli"),
+        _ => Loc.T($"Diğer (Windows değeri {(int)mode})")
     };
 }

@@ -21,7 +21,7 @@ public class StorageDriveInfo
     // MSFT_PhysicalDisk.HealthStatus: 0 = Healthy, 1 = Warning, 2 = Unhealthy, 5 = Unknown
     public const int HealthUnknown = 5;
     public int HealthStatus { get; set; }
-    public string HealthDesc { get; set; } = "Sağlıklı (Nominal)";
+    public string HealthDesc { get; set; } = Loc.T("Sağlıklı (Nominal)");
     public int EstHealthPercent { get; set; } = 100;
     public int? Temperature { get; set; }
     // True when Temperature is a model baseline (no SMART reading available without admin rights).
@@ -273,19 +273,19 @@ public class StorageHealthService
                         string healthDesc;
                         if (health == 0)
                         {
-                            healthDesc = estHealth >= 90 ? "Sağlıklı (Nominal)" : "Sağlıklı (Kondisyon İyi)";
+                            healthDesc = estHealth >= 90 ? Loc.T("Sağlıklı (Nominal)") : Loc.T("Sağlıklı (Kondisyon İyi)");
                         }
                         else if (health == 1)
                         {
-                            healthDesc = "Uyarı (Sürücü Kontrolü Gerekli)";
+                            healthDesc = Loc.T("Uyarı (Sürücü Kontrolü Gerekli)");
                         }
                         else if (health == 2)
                         {
-                            healthDesc = "Kritik (Acil Yedekleme Önerilir)";
+                            healthDesc = Loc.T("Kritik (Acil Yedekleme Önerilir)");
                         }
                         else
                         {
-                            healthDesc = "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)";
+                            healthDesc = Loc.T("Bilinmiyor (Sürücü sağlık durumu bildirmiyor)");
                         }
 
                         int? driveTemp = null;
@@ -417,7 +417,7 @@ public class StorageHealthService
                                 FreeCapacityGB = freeGB,
                                 UsedPercent = usedPercent,
                                 HealthStatus = StorageDriveInfo.HealthUnknown,
-                                HealthDesc = "Bilinmiyor (Sağlık verisi okunamadı)",
+                                HealthDesc = Loc.T("Bilinmiyor (Sağlık verisi okunamadı)"),
                                 EstHealthPercent = -1,
                                 Temperature = null,
                                 IsTemperatureEstimated = false
@@ -446,7 +446,7 @@ public class StorageHealthService
                     list.Add(new StorageDriveInfo
                     {
                         DiskNumber = diskIndex,
-                        Model = $"Sabit Sürücü ({driveLetter}:)",
+                        Model = Loc.T($"Sabit Sürücü ({driveLetter}:)"),
                         DriveLetter = driveLetter,
                         BusType = "Bilinmiyor",
                         TotalCapacityGB = totalGB,
@@ -454,7 +454,7 @@ public class StorageHealthService
                         FreeCapacityGB = freeGB,
                         UsedPercent = totalGB > 0 ? Math.Round((usedGB / totalGB) * 100.0, 1) : 0,
                         HealthStatus = StorageDriveInfo.HealthUnknown,
-                        HealthDesc = "Bilinmiyor (Sağlık verisi okunamadı)",
+                        HealthDesc = Loc.T("Bilinmiyor (Sağlık verisi okunamadı)"),
                         EstHealthPercent = -1,
                         Temperature = null,
                         IsTemperatureEstimated = false

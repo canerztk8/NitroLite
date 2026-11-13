@@ -69,7 +69,7 @@ foreach ($d in $dirs) {
     # The path is written into a SYSTEM service, so only an Acer-signed binary may be used.
     if ((Test-Path -LiteralPath $c -PathType Leaf) -and (Test-AcerSigned $c)) { $lightingExe = $c; break }
 }
-if (-not $lightingExe) { throw 'AcerLightingService.exe surucu deposunda bulunamadi veya imzasi gecerli degil.' }
+if (-not $lightingExe) { throw '" + Loc.Ps("AcerLightingService.exe surucu deposunda bulunamadi veya imzasi gecerli degil.") + @"' }
 
 Stop-Service -Name 'AASSvc' -Force -ErrorAction SilentlyContinue
 Stop-Service -Name 'AcerLightingService' -Force -ErrorAction SilentlyContinue
@@ -86,7 +86,7 @@ Start-Sleep -Milliseconds 800
 
 $svc = Get-Service -Name 'AcerLightingService' -ErrorAction SilentlyContinue
 if ($null -eq $svc -or $svc.Status -ne 'Running') {
-    throw 'AcerLightingService baslatilamadi.'
+    throw '" + Loc.Ps("AcerLightingService baslatilamadi.") + @"'
 }
 exit 0
 ";
@@ -95,8 +95,8 @@ exit 0
         {
             Success = ok,
             Message = ok
-                ? "Klavye aydınlatma servisi (AcerLightingService) başarıyla onarıldı ve başlatıldı."
-                : $"Klavye servisi onarılamadı: {err}"
+                ? Loc.T("Klavye aydınlatma servisi (AcerLightingService) başarıyla onarıldı ve başlatıldı.")
+                : Loc.T($"Klavye servisi onarılamadı: {err}")
         };
     }
 
@@ -131,7 +131,7 @@ foreach ($d in $dirs) {
         break
     }
 }
-if (-not $centralExe) { throw 'Gerekli Acer servis dosyalari (AcerCentralService / AcerLightingService) surucu deposunda bulunamadi veya imzalari gecerli degil.' }
+if (-not $centralExe) { throw '" + Loc.Ps("Gerekli Acer servis dosyalari (AcerCentralService / AcerLightingService) surucu deposunda bulunamadi veya imzalari gecerli degil.") + @"' }
 
 Stop-Service -Name 'AASSvc' -Force -ErrorAction SilentlyContinue
 Stop-Service -Name 'AcerLightingService' -Force -ErrorAction SilentlyContinue
@@ -152,9 +152,9 @@ Start-Service -Name 'AcerLightingService' -ErrorAction Stop
 Start-Sleep -Milliseconds 800
 
 $agent = Get-Service -Name 'AASSvc' -ErrorAction SilentlyContinue
-if ($null -eq $agent -or $agent.Status -ne 'Running') { throw 'AASSvc baslatilamadi.' }
+if ($null -eq $agent -or $agent.Status -ne 'Running') { throw '" + Loc.Ps("AASSvc baslatilamadi.") + @"' }
 $lighting = Get-Service -Name 'AcerLightingService' -ErrorAction SilentlyContinue
-if ($null -eq $lighting -or $lighting.Status -ne 'Running') { throw 'AcerLightingService baslatilamadi.' }
+if ($null -eq $lighting -or $lighting.Status -ne 'Running') { throw '" + Loc.Ps("AcerLightingService baslatilamadi.") + @"' }
 exit 0
 ";
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_fix_services");
@@ -162,8 +162,8 @@ exit 0
         {
             Success = ok,
             Message = ok
-                ? "Acer & NitroSense arka plan servisleri başarıyla onarıldı ve güncellendi."
-                : $"Acer servisleri onarılamadı: {err}"
+                ? Loc.T("Acer & NitroSense arka plan servisleri başarıyla onarıldı ve güncellendi.")
+                : Loc.T($"Acer servisleri onarılamadı: {err}")
         };
     }
 
@@ -180,7 +180,7 @@ if (-not (Test-Path -LiteralPath $regPath)) {
 }
 Set-ItemProperty -Path $regPath -Name 'discrete_gpu_support' -Value 1 -Type DWord -Force
 $written = (Get-ItemProperty -Path $regPath -Name 'discrete_gpu_support' -ErrorAction Stop).discrete_gpu_support
-if ($written -ne 1) { throw 'discrete_gpu_support yazilamadi.' }
+if ($written -ne 1) { throw '" + Loc.Ps("discrete_gpu_support yazilamadi.") + @"' }
 
 $oldTask = Get-ScheduledTask -TaskName 'AcerNitroSenseMuxRestore' -ErrorAction SilentlyContinue
 if ($null -ne $oldTask) {
@@ -196,8 +196,8 @@ exit 0
         {
             Success = ok,
             Message = ok
-                ? "MUX switch desteği kayıt defterinde etkinleştirildi ve eski görevler temizlendi."
-                : $"MUX ayarı onarılamadı: {err}"
+                ? Loc.T("MUX switch desteği kayıt defterinde etkinleştirildi ve eski görevler temizlendi.")
+                : Loc.T($"MUX ayarı onarılamadı: {err}")
         };
     }
 
@@ -289,8 +289,8 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
         {
             Success = ok,
             Message = ok
-                ? $"Sistem ve arka plan optimizasyonları başarıyla uygulandı. Önceki ayarlar yedeklendi: {backupPath}"
-                : $"Optimizasyon sırasında hata: {err}"
+                ? Loc.T($"Sistem ve arka plan optimizasyonları başarıyla uygulandı. Önceki ayarlar yedeklendi: {backupPath}")
+                : Loc.T($"Optimizasyon sırasında hata: {err}")
         };
     }
 
@@ -305,7 +305,7 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
             return new ToolExecutionResult
             {
                 Success = false,
-                Message = $"Geri alınacak optimizasyon yedeği yok: {backupPath}"
+                Message = Loc.T($"Geri alınacak optimizasyon yedeği yok: {backupPath}")
             };
         }
 
@@ -313,7 +313,7 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
 $ErrorActionPreference = 'Stop'
 $errs = @()
 $backupPath = '" + backupPath.Replace("'", "''") + @"'
-if (-not (Test-Path -LiteralPath $backupPath)) { throw 'Optimizasyon yedegi bulunamadi.' }
+if (-not (Test-Path -LiteralPath $backupPath)) { throw '" + Loc.Ps("Optimizasyon yedegi bulunamadi.") + @"' }
 $backup = Get-Content -LiteralPath $backupPath -Raw | ConvertFrom-Json
 
 foreach ($prop in $backup.services.PSObject.Properties) {
@@ -348,8 +348,8 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
         {
             Success = ok,
             Message = ok
-                ? "Optimizasyon öncesi ayarlar geri yüklendi."
-                : $"Ayarlar geri yüklenemedi: {err}"
+                ? Loc.T("Optimizasyon öncesi ayarlar geri yüklendi.")
+                : Loc.T($"Ayarlar geri yüklenemedi: {err}")
         };
     }
 
@@ -360,7 +360,7 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
             try
             {
                 int exit = await ElevatedRunnerSeam(script);
-                return (exit == 0, exit == 0 ? null : $"İşlem kodu: {exit}");
+                return (exit == 0, exit == 0 ? null : Loc.T($"İşlem kodu: {exit}"));
             }
             catch (Exception ex)
             {
@@ -386,7 +386,7 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
             };
 
             using var p = Process.Start(psi);
-            if (p == null) return (false, "Süreç başlatılamadı.");
+            if (p == null) return (false, Loc.T("Süreç başlatılamadı."));
 
             bool finished = await Task.Run(() => p.WaitForExit(35000));
             if (!finished)
@@ -396,8 +396,8 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
                 bool killed = false;
                 try { p.Kill(); killed = p.WaitForExit(2000); } catch { }
                 return (false, killed
-                    ? "İşlem 35 saniye içinde tamamlanamadı ve durduruldu."
-                    : "İşlem 35 saniye içinde tamamlanamadı; yönetici işlemi arka planda devam ediyor.");
+                    ? Loc.T("İşlem 35 saniye içinde tamamlanamadı ve durduruldu.")
+                    : Loc.T("İşlem 35 saniye içinde tamamlanamadı; yönetici işlemi arka planda devam ediyor."));
             }
 
             if (p.ExitCode == 0)
@@ -412,12 +412,12 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
                 try { errDetail = (await File.ReadAllTextAsync(errorLog)).Trim(); } catch { }
                 try { File.Delete(errorLog); } catch { }
             }
-            if (string.IsNullOrWhiteSpace(errDetail)) errDetail = $"Çıkış kodu {p.ExitCode}";
+            if (string.IsNullOrWhiteSpace(errDetail)) errDetail = Loc.T($"Çıkış kodu {p.ExitCode}");
             return (false, errDetail);
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            return (false, "Yönetici izni verilmedi (UAC reddedildi).");
+            return (false, Loc.T("Yönetici izni verilmedi (UAC reddedildi)."));
         }
         catch (Exception ex)
         {

@@ -99,9 +99,9 @@ public static class SettingsManager
         try
         {
             var json = File.ReadAllText(path);
-            if (string.IsNullOrWhiteSpace(json)) return (null, "dosya boş");
+            if (string.IsNullOrWhiteSpace(json)) return (null, Loc.T("dosya boş"));
             var parsed = JsonSerializer.Deserialize<AppSettings>(json);
-            return parsed != null ? (parsed, null) : (null, "içerik okunamadı");
+            return parsed != null ? (parsed, null) : (null, Loc.T("içerik okunamadı"));
         }
         catch (Exception ex)
         {

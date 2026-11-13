@@ -153,7 +153,7 @@ public class StandbyPurgeTask
             try
             {
                 dynamic? service = CreateScheduler();
-                if (service == null) { LastError = "Görev Zamanlayıcı kullanılamıyor."; return (int?)null; }
+                if (service == null) { LastError = Loc.T("Görev Zamanlayıcı kullanılamıyor."); return (int?)null; }
                 dynamic task = service.GetFolder(TaskFolder).GetTask(TaskName);
                 DateTime before = DateTime.Now.AddSeconds(-1);
                 task.Run(null);
@@ -167,12 +167,12 @@ public class StandbyPurgeTask
                     if (state != 4 && lastRun >= before)
                         return (int?)(int)task.LastTaskResult;
                 }
-                LastError = "Temizleme görevi zamanında bitmedi.";
+                LastError = Loc.T("Temizleme görevi zamanında bitmedi.");
                 return null;
             }
             catch (Exception ex)
             {
-                LastError = $"Temizleme görevi başlatılamadı: {ex.Message}";
+                LastError = Loc.T($"Temizleme görevi başlatılamadı: {ex.Message}");
                 return null;
             }
         });
@@ -192,12 +192,12 @@ public class StandbyPurgeTask
     {
         string full;
         try { full = Path.GetFullPath(InstallDirectory); }
-        catch (Exception ex) { throw new ArgumentException($"Geçersiz kurulum klasörü: {InstallDirectory}", nameof(InstallDirectory), ex); }
+        catch (Exception ex) { throw new ArgumentException(Loc.T($"Geçersiz kurulum klasörü: {InstallDirectory}"), nameof(InstallDirectory), ex); }
 
         var trimmed = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? "";
         if (trimmed.Length == 0 || string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException($"Kurulum klasörü bir sürücü kökü olamaz: {full}", nameof(InstallDirectory));
+            throw new ArgumentException(Loc.T($"Kurulum klasörü bir sürücü kökü olamaz: {full}"), nameof(InstallDirectory));
 
         var protectedRoots = new[]
         {
@@ -214,7 +214,7 @@ public class StandbyPurgeTask
             if (string.IsNullOrWhiteSpace(candidate)) continue;
             var normalized = Path.GetFullPath(candidate).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (string.Equals(trimmed, normalized, StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException($"Kurulum klasörü sistem klasörü olamaz: {full}", nameof(InstallDirectory));
+                throw new ArgumentException(Loc.T($"Kurulum klasörü sistem klasörü olamaz: {full}"), nameof(InstallDirectory));
         }
     }
 
@@ -225,11 +225,11 @@ public class StandbyPurgeTask
     public string GenerateInstallScript(string userId, IReadOnlyList<string> files, string[] expectedHashes, string errorLogPath)
     {
         EnsureSafeInstallDirectory();
-        if (!SafeUserName.IsMatch(userId)) throw new ArgumentException($"Geçersiz kullanıcı adı: {userId}", nameof(userId));
+        if (!SafeUserName.IsMatch(userId)) throw new ArgumentException(Loc.T($"Geçersiz kullanıcı adı: {userId}"), nameof(userId));
         if (files.Count == 0 || files[0] != HelperExeName || files.Any(f => !CandidateFiles.Contains(f)))
-            throw new ArgumentException("Geçersiz yardımcı dosya listesi.", nameof(files));
+            throw new ArgumentException(Loc.T("Geçersiz yardımcı dosya listesi."), nameof(files));
         if (expectedHashes.Length != files.Count || expectedHashes.Any(h => !Regex.IsMatch(h, "^[0-9A-F]{64}$")))
-            throw new ArgumentException("Geçersiz dosya özeti.", nameof(expectedHashes));
+            throw new ArgumentException(Loc.T("Geçersiz dosya özeti."), nameof(expectedHashes));
 
         var sb = new System.Text.StringBuilder();
         sb.Append($"$errLog = {Quote(errorLogPath)}; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
@@ -242,7 +242,7 @@ public class StandbyPurgeTask
             var f = Quote(files[i]);
             sb.Append($"Copy-Item -LiteralPath (Join-Path $src {f}) -Destination (Join-Path $stage {f}) -Force -ErrorAction Stop; ");
             sb.Append($"if ((Get-FileHash -LiteralPath (Join-Path $stage {f}) -Algorithm SHA256 -ErrorAction Stop).Hash -ne '{expectedHashes[i]}') " +
-                      $"{{ throw ('Kopyalanan dosya doğrulanamadı: ' + {f}) }}; ");
+                      $"{{ throw ('{Loc.Ps("Kopyalanan dosya doğrulanamadı:")} ' + {f}) }}; ");
         }
         sb.Append("if (Test-Path -LiteralPath $dst) { [IO.Directory]::Move($dst, $backup); $backedUp = $true }; ");
         sb.Append("[IO.Directory]::Move($stage, $dst); $swapped = $true; ");
@@ -252,11 +252,11 @@ public class StandbyPurgeTask
         sb.Append("$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries " +
                   "-ExecutionTimeLimit (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable:$false; ");
         sb.Append($"Register-ScheduledTask -TaskPath '{TaskFolder}\\' -TaskName '{TaskName}' -Action $action -Principal $principal " +
-                  "-Settings $settings -Description 'NitroLite: bekleme belleğini boşaltır (yalnızca NitroLite tarafından elle veya otomatik başlatılır).' -Force -ErrorAction Stop | Out-Null; ");
+                  "-Settings $settings -Description '" + Loc.Ps("NitroLite: bekleme belleğini boşaltır (yalnızca NitroLite tarafından elle veya otomatik başlatılır).") + "' -Force -ErrorAction Stop | Out-Null; ");
         sb.Append("if ($backedUp) { Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue }; exit 0 ");
         sb.Append("} catch { $failure = $_.Exception.Message; try { ");
         sb.Append("if ($swapped) { [IO.Directory]::Move($dst, $stage) }; if ($backedUp) { [IO.Directory]::Move($backup, $dst) } ");
-        sb.Append("} catch { $failure += ('; eski yardımcı geri alınamadı: ' + $_.Exception.Message) }; ");
+        sb.Append("} catch { $failure += ('; " + Loc.Ps("eski yardımcı geri alınamadı: ") + "' + $_.Exception.Message) }; ");
         sb.Append("$failure | Out-File -FilePath $errLog -Encoding utf8; exit 1 ");
         sb.Append("} finally { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue } }");
         return sb.ToString();
@@ -286,7 +286,7 @@ public class StandbyPurgeTask
         var hashes = files.Length == 0 ? null : ComputeHashes(BundledDirectory, files);
         if (hashes == null)
         {
-            LastError = "Temizleme yardımcısı NitroLite klasöründe bulunamadı (StandbyPurge).";
+            LastError = Loc.T("Temizleme yardımcısı NitroLite klasöründe bulunamadı (StandbyPurge).");
             return false;
         }
         string userId;
@@ -301,7 +301,7 @@ public class StandbyPurgeTask
         bool ok = await RunElevatedAsync(script, errLog);
         if (ok && GetState() != StandbyPurgeTaskState.Ready)
         {
-            LastError = "Kurulum bitti ama görev doğrulanamadı.";
+            LastError = Loc.T("Kurulum bitti ama görev doğrulanamadı.");
             return false;
         }
         return ok;
@@ -366,9 +366,9 @@ public class StandbyPurgeTask
         {
             LastError = exit switch
             {
-                -3 => "Yönetici izni verilmedi.",
-                -2 => "İşlem zamanında bitmedi.",
-                _ => $"İşlem başarısız oldu (kod {exit})."
+                -3 => Loc.T("Yönetici izni verilmedi."),
+                -2 => Loc.T("İşlem zamanında bitmedi."),
+                _ => Loc.T($"İşlem başarısız oldu (kod {exit}).")
             };
         }
         return exit == 0;

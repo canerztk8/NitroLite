@@ -166,7 +166,7 @@ public partial class App : System.Windows.Application
             if (!args.Handled) return;
             try
             {
-                ((MainWindow)MainWindow).ShowToast("Beklenmeyen bir hata oluştu; ayrıntılar günlük dosyasına yazıldı.", false);
+                ((MainWindow)MainWindow).ShowToast(Loc.T("Beklenmeyen bir hata oluştu; ayrıntılar günlük dosyasına yazıldı."), false);
             }
             catch { }
         };
@@ -198,8 +198,8 @@ public partial class App : System.Windows.Application
             try
             {
                 System.Windows.MessageBox.Show(
-                    "NitroLite başlatılamadı ve kapatılacak.\n\n" + ex.Message + "\n\nAyrıntılar: " + LogFile,
-                    "NitroLite", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Loc.T($"NitroLite başlatılamadı ve kapatılacak.\n\n{ex.Message}\n\nAyrıntılar: {LogFile}"),
+                    Loc.T("NitroLite"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch { }
             Shutdown(1);
@@ -247,7 +247,7 @@ public partial class App : System.Windows.Application
     {
         if (!HasFlag(args, "--yes", "-y", "--force"))
         {
-            Console.Error.WriteLine($"{command} sistem ayarlarını değiştirir. Onaylamak için --yes ekleyin:");
+            Console.Error.WriteLine(Loc.T($"{command} sistem ayarlarını değiştirir. Onaylamak için --yes ekleyin:"));
             Console.Error.WriteLine($"  NitroLite.exe {command} --yes");
             return 3;
         }
@@ -259,7 +259,7 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"{command} başlatılamadı: {ex.Message}");
+            Console.Error.WriteLine(Loc.T($"{command} başlatılamadı: {ex.Message}"));
             return 1;
         }
 
@@ -267,13 +267,13 @@ public partial class App : System.Windows.Application
         {
             if (!task.Wait(45000))
             {
-                Console.Error.WriteLine($"{command} 45 saniyede tamamlanmadı.");
+                Console.Error.WriteLine(Loc.T($"{command} 45 saniyede tamamlanmadı."));
                 return 2;
             }
         }
         catch (AggregateException ex)
         {
-            Console.Error.WriteLine($"{command} başarısız: {ex.GetBaseException().Message}");
+            Console.Error.WriteLine(Loc.T($"{command} başarısız: {ex.GetBaseException().Message}"));
             return 1;
         }
 

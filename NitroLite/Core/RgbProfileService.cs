@@ -54,7 +54,7 @@ public class RgbProfileService
         {
             var existing = _presets.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existing?.IsBuiltIn == true)
-                throw new ArgumentException("Fabrika profili adı kullanılamaz; farklı bir profil adı seçin.", nameof(name));
+                throw new ArgumentException(Loc.T("Fabrika profili adı kullanılamaz; farklı bir profil adı seçin."), nameof(name));
             if (existing != null)
             {
                 existing.Effect = effect;
@@ -81,7 +81,7 @@ public class RgbProfileService
             if (!Persist())
             {
                 // Surface the failure (the UI shows it) instead of claiming the preset was saved.
-                throw new IOException("Profil dosyası diske yazılamadı.");
+                throw new IOException(Loc.T("Profil dosyası diske yazılamadı."));
             }
         }
     }
@@ -243,7 +243,7 @@ public class RgbProfileService
             catch (Exception ex)
             {
                 // Custom presets are gone until the file is fixed; say so instead of pretending they loaded.
-                LoadError = $"RGB profil dosyası okunamadı ({ex.Message}); yalnızca fabrika profilleri yüklendi.";
+                LoadError = Loc.T($"RGB profil dosyası okunamadı ({ex.Message}); yalnızca fabrika profilleri yüklendi.");
                 AppLog.Warn("RGB profilleri okunamadı", $"{PresetsFile}: {ex}");
             }
         }

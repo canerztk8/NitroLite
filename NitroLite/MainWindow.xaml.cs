@@ -334,13 +334,13 @@ public partial class MainWindow : Window
         {
             Icon = appIcon ?? System.Drawing.SystemIcons.Application,
             Visible = true,
-            Text = "NitroLite"
+            Text = Loc.T("NitroLite")
         };
 
         var menu = new System.Windows.Forms.ContextMenuStrip();
-        menu.Items.Add("Göster / Aç", null, (s, e) => ShowWindow());
+        menu.Items.Add(Loc.T("Göster / Aç"), null, (s, e) => ShowWindow());
 
-        _menuItemRetryDesktop = new System.Windows.Forms.ToolStripMenuItem("Masaüstü ayarlarını yeniden dene", null, async (s, e) =>
+        _menuItemRetryDesktop = new System.Windows.Forms.ToolStripMenuItem(Loc.T("Masaüstü ayarlarını yeniden dene"), null, async (s, e) =>
         {
             await RetryPendingDesktopRestoreAsync();
         });
@@ -363,12 +363,12 @@ public partial class MainWindow : Window
         AddMode("Eco Mod", OperatingMode.Eco);
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        AddBoost("CPU Boost: Devre Dışı", CpuBoostMode.Disabled);
+        AddBoost(Loc.T("CPU Boost: Devre Dışı"), CpuBoostMode.Disabled);
         AddBoost("CPU Boost: Verimli", CpuBoostMode.Efficient);
         AddBoost("CPU Boost: Agresif", CpuBoostMode.Aggressive);
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add("Çıkış", null, (s, e) => RealExit());
+        menu.Items.Add(Loc.T("Çıkış"), null, (s, e) => RealExit());
 
         menu.Opening += (s, e) =>
         {
@@ -683,7 +683,7 @@ public partial class MainWindow : Window
             // A failure here used to leave the window half-initialised with no explanation: the constructor's
             // fire-and-forget call swallowed it and the Loaded handler turned it into a crash.
             AppLog.Error("Başlangıç yüklenemedi", ex.ToString());
-            ShowToast($"Başlangıç ayarları yüklenemedi: {ex.Message}", false);
+            ShowToast(Loc.T($"Başlangıç ayarları yüklenemedi: {ex.Message}"), false);
         }
         finally
         {
@@ -724,7 +724,7 @@ public partial class MainWindow : Window
         else recovery.SavedMouseProfile = 0;
 
         var pending = new List<string>();
-        if (recovery.RestoreMode) pending.Add("güç modu");
+        if (recovery.RestoreMode) pending.Add(Loc.T("güç modu"));
         if (recovery.SavedAcBoost.HasValue) pending.Add("priz CPU boost");
         if (recovery.SavedDcBoost.HasValue) pending.Add("pil CPU boost");
         if (recovery.RestoreFan) pending.Add("fan modu");
@@ -733,13 +733,13 @@ public partial class MainWindow : Window
         {
             _interruptedGameRecovery = null;
             ClearGameSessionRecoveryState();
-            ShowToast("Önceki oyun oturumundan doğrulanabilir ayarlar geri yüklendi.");
+            ShowToast(Loc.T("Önceki oyun oturumundan doğrulanabilir ayarlar geri yüklendi."));
         }
         else
         {
             _nextGameRecoveryAttempt = Environment.TickCount64 + 10000;
             SaveGameSessionRecoveryState(recovery);
-            ShowToast($"Geri yükleme bekleniyor: {string.Join(", ", pending)}.", false);
+            ShowToast(Loc.T($"Geri yükleme bekleniyor: {string.Join(", ", pending)}."), false);
         }
         UpdateTrayRetryMenuItemState();
         return pending.Count == 0;
@@ -759,9 +759,9 @@ public partial class MainWindow : Window
         {
             _settingsRecoveryNotice = loadResult.Source switch
             {
-                SettingsLoadSource.Backup => "Ayarlar dosyası bozuktu; yedekten (.bak) geri yüklendi.",
-                SettingsLoadSource.Legacy => "Ayarlar dosyası bozuktu; eski config.json dosyasından geri yüklendi.",
-                _ => "Ayarlar dosyası bozuktu ve yedeği de yoktu; varsayılan ayarlarla başlandı."
+                SettingsLoadSource.Backup => Loc.T("Ayarlar dosyası bozuktu; yedekten (.bak) geri yüklendi."),
+                SettingsLoadSource.Legacy => Loc.T("Ayarlar dosyası bozuktu; eski config.json dosyasından geri yüklendi."),
+                _ => Loc.T("Ayarlar dosyası bozuktu ve yedeği de yoktu; varsayılan ayarlarla başlandı.")
             };
         }
 
@@ -814,7 +814,7 @@ public partial class MainWindow : Window
         if (ChkAutoGameMode != null) ChkAutoGameMode.IsChecked = _appSettings.AutoGameModeEnabled;
         if (TxtGameStatus != null && !_appSettings.AutoGameModeEnabled)
         {
-            TxtGameStatus.Text = "Durum: Devre Dışı (Manuel Kontrol)";
+            TxtGameStatus.Text = Loc.T("Durum: Devre Dışı (Manuel Kontrol)");
         }
         _batteryService.WatchdogEnabled = _appSettings.BatteryWatchdogEnabled;
         if (ChkWatchdog != null) ChkWatchdog.IsChecked = _appSettings.BatteryWatchdogEnabled;
@@ -923,7 +923,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             App.WriteLog("Ayarlar kaydedilemedi", ex.Message);
-            ShowToast("Ayarlar diske kaydedilemedi. Değişiklikler bu oturumla sınırlı kalabilir.", false);
+            ShowToast(Loc.T("Ayarlar diske kaydedilemedi. Değişiklikler bu oturumla sınırlı kalabilir."), false);
             return false;
         }
     }
@@ -1196,7 +1196,7 @@ public partial class MainWindow : Window
                 if (!trayBalloon || _notifyIcon == null || _isExiting || _isInitializingUi || _isGameSessionActive) return;
                 try
                 {
-                    _notifyIcon.ShowBalloonTip(isSuccess ? 2500 : 4000, "NitroLite", message,
+                    _notifyIcon.ShowBalloonTip(isSuccess ? 2500 : 4000, Loc.T("NitroLite"), message,
                         isSuccess ? System.Windows.Forms.ToolTipIcon.Info : System.Windows.Forms.ToolTipIcon.Warning);
                 }
                 catch { }
@@ -1331,13 +1331,13 @@ public partial class MainWindow : Window
         if (BtnFanAuto == null || BtnFanMax == null) return;
         SetSegActive(BtnFanAuto, known && mode == FanMode.Auto);
         SetSegActive(BtnFanMax, known && mode == FanMode.Max);
-        BtnFanAuto.ToolTip = known && mode == FanMode.Auto ? "Etkin" : null;
-        BtnFanMax.ToolTip = known && mode == FanMode.Max ? "Etkin" : null;
+        BtnFanAuto.ToolTip = known && mode == FanMode.Auto ? Loc.T("Etkin") : null;
+        BtnFanMax.ToolTip = known && mode == FanMode.Max ? Loc.T("Etkin") : null;
         if (BtnFanCustom != null)
         {
             bool custom = known && mode == FanMode.Custom;
             SetSegActive(BtnFanCustom, custom);
-            BtnFanCustom.ToolTip = custom ? "Etkin" : "CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır.";
+            BtnFanCustom.ToolTip = custom ? Loc.T("Etkin") : Loc.T("CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır.");
         }
         // The sliders stay open while the user is choosing "Özel" (before the service confirms it).
         if (PnlCustomFan != null)
@@ -1435,13 +1435,13 @@ public partial class MainWindow : Window
             SaveSettings();
             if (_currentFanMode != FanMode.Custom || _isGameSessionActive) return;
             if (!await _agentClient.SetFanModeAsync(FanMode.Custom))
-                ShowToast("Fan hızı uygulanamadı.", false);
+                ShowToast(Loc.T("Fan hızı uygulanamadı."), false);
         };
         return timer;
     }
 
     private bool? _lastServiceTelemetryAvailable;
-    private const string ServiceUnavailableText = "-- (Servis yok)";
+    private static string ServiceUnavailableText => Loc.T("-- (Servis yok)");
 
     /// <summary>Tells the user once when AASSvc telemetry is lost and once when it comes back.</summary>
     private int _consecutiveTelemetryFailures;
@@ -1458,11 +1458,11 @@ public partial class MainWindow : Window
 
         if (!serviceAvailable)
         {
-            ShowToast("Acer servisine (AcerAgentService) ulaşılamıyor; yalnızca Windows ve NVIDIA'dan okunabilen veriler gösteriliyor.", false);
+            ShowToast(Loc.T("Acer servisine (AcerAgentService) ulaşılamıyor; yalnızca Windows ve NVIDIA'dan okunabilen veriler gösteriliyor."), false);
         }
         else if (previous == false)
         {
-            ShowToast("Acer servisi bağlantısı geri geldi; tüm sensörler okunuyor.");
+            ShowToast(Loc.T("Acer servisi bağlantısı geri geldi; tüm sensörler okunuyor."));
         }
     }
 
@@ -1536,13 +1536,13 @@ public partial class MainWindow : Window
                 BarGpuFan.Value = data.GpuFanSpeed;
 
                 // Tab 2: Monitoring - CPU
-                var coreText = (_hardwareInfo?.FormatCoreText(data.CpuCores)) ?? (data.CpuCores > 0 ? $"{data.CpuCores} iş parçacığı" : "");
+                var coreText = (_hardwareInfo?.FormatCoreText(data.CpuCores)) ?? (data.CpuCores > 0 ? Loc.T($"{data.CpuCores} iş parçacığı") : "");
                 TxtCpuCoreCount.Text = string.IsNullOrEmpty(coreText) ? "" : $" ({coreText})";
                 TxtMonCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
                 BarMonCpuTemp.Value = data.CpuTemperature;
                 ApplyTempSeverity(BarMonCpuTemp, TxtMonCpuTemp, data.CpuTemperature, data.CpuTemperature > 0);
 
-                TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts) + " (tahmini)";
+                TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts) + Loc.T(" (tahmini)");
                 SetBarValueGrowing(BarMonCpuPower, data.CpuPowerWatts, 10);
 
                 TxtMonCpuUsage.Text = FormattableString.Invariant($"{data.CpuUsage:F1} %");
@@ -1577,7 +1577,7 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    TxtMonRamDetail.Text = "-- GB / -- GB";
+                    TxtMonRamDetail.Text = Loc.T("-- GB / -- GB");
                     TxtMonRamPercent.Text = "-- %";
                     BarMonRam.Value = 0;
                 }
@@ -1594,8 +1594,8 @@ public partial class MainWindow : Window
             if (_notifyIcon != null)
             {
                 var tip = isFallback
-                    ? $"NitroLite: Acer servisi yanıt vermiyor | CPU: %{data.CpuUsage:F0}"
-                    : $"NitroLite: {_currentMode} | CPU: {data.CpuTemperature}°C | GPU: {data.GpuTemperature}°C";
+                    ? Loc.T($"NitroLite: Acer servisi yanıt vermiyor | CPU: %{data.CpuUsage:F0}")
+                    : Loc.T($"NitroLite: {_currentMode} | CPU: {data.CpuTemperature}°C | GPU: {data.GpuTemperature}°C");
                 _notifyIcon.Text = tip.Length > 63 ? tip[..63] : tip;
             }
 
@@ -1787,7 +1787,7 @@ public partial class MainWindow : Window
             samples.Add((x, v.Value));
         }
 
-        if (TxtTraceSpan != null) TxtTraceSpan.Text = $"KAYIT · {span.TotalSeconds:0} SANİYE";
+        if (TxtTraceSpan != null) TxtTraceSpan.Text = Loc.T($"KAYIT · {span.TotalSeconds:0} SANİYE");
 
         if (samples.Count < 2)
         {
@@ -2066,19 +2066,19 @@ public partial class MainWindow : Window
 
         string cornerDesc = _osdWindow.CurrentCorner switch
         {
-            0 => "Sol Üst",
-            1 => "Sağ Üst",
-            2 => "Sağ Alt",
-            3 => "Sol Alt",
-            _ => "Sol Üst"
+            0 => Loc.T("Sol Üst"),
+            1 => Loc.T("Sağ Üst"),
+            2 => Loc.T("Sağ Alt"),
+            3 => Loc.T("Sol Alt"),
+            _ => Loc.T("Sol Üst")
         };
         if (OsdOverlayWindow.MonitorCount > 1)
         {
-            cornerDesc += $", monitör {_osdWindow.CurrentMonitor + 1}/{OsdOverlayWindow.MonitorCount}";
+            cornerDesc += Loc.T($", monitör {_osdWindow.CurrentMonitor + 1}/{OsdOverlayWindow.MonitorCount}");
         }
         ShowToast(_isOsdOpen
-            ? $"OSD konumu: {cornerDesc}"
-            : $"OSD kapalı; konum kaydedildi ({cornerDesc}). Açınca orada görünecek.");
+            ? Loc.T($"OSD konumu: {cornerDesc}")
+            : Loc.T($"OSD kapalı; konum kaydedildi ({cornerDesc}). Açınca orada görünecek."));
     }
 
     private void ToggleOsd(bool enable, bool showToast = true)
@@ -2102,9 +2102,9 @@ public partial class MainWindow : Window
             UpdateTelemetryPollingRate();
             BtnToggleOsd.Background = (SolidColorBrush)FindResource("AccentCyan");
             BtnToggleOsd.Foreground = TryFindResource("OnAccent") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
-            BtnToggleOsd.Content = "OSD Katmanı: Açık (Kapat)";
+            BtnToggleOsd.Content = Loc.T("OSD Katmanı: Açık (Kapat)");
 
-            if (showToast) ShowToast("Ekran üstü gösterge etkinleştirildi.");
+            if (showToast) ShowToast(Loc.T("Ekran üstü gösterge etkinleştirildi."));
         }
         else
         {
@@ -2112,8 +2112,8 @@ public partial class MainWindow : Window
             UpdateTelemetryPollingRate();
             BtnToggleOsd.Background = System.Windows.Media.Brushes.Transparent;
             BtnToggleOsd.Foreground = (SolidColorBrush)FindResource("AccentCyan");
-            BtnToggleOsd.Content = "Ekran Üstü Gösterge (OSD)";
-            if (showToast) ShowToast("Ekran üstü gösterge kapatıldı.");
+            BtnToggleOsd.Content = Loc.T("Ekran Üstü Gösterge (OSD)");
+            if (showToast) ShowToast(Loc.T("Ekran üstü gösterge kapatıldı."));
         }
     }
 
@@ -2139,7 +2139,7 @@ public partial class MainWindow : Window
 
         if (TxtSideCpuBoost != null)
         {
-            TxtSideCpuBoost.Text = (int)mode is 0 or 1 or 2 or 4 ? name : "Diğer";
+            TxtSideCpuBoost.Text = (int)mode is 0 or 1 or 2 or 4 ? name : Loc.T("Diğer");
             TxtSideCpuBoost.Foreground = brush;
         }
 
@@ -2230,7 +2230,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast($"CPU modu uygulanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"CPU modu uygulanamadı: {ex.Message}"), false);
         }
     }
 
@@ -2263,7 +2263,7 @@ public partial class MainWindow : Window
             UpdateBoostUi(_cpuPowerService.CurrentMode);
             return true;
         }
-        ShowToast("CPU boost modu geri yüklenemedi.", false);
+        ShowToast(Loc.T("CPU boost modu geri yüklenemedi."), false);
         return false;
     }
 
@@ -2273,12 +2273,12 @@ public partial class MainWindow : Window
         if (ok)
         {
             UpdateBoostUi(mode);
-            ShowToast($"CPU boost modu: {ModePolicy.BoostDisplayName(mode)}");
+            ShowToast(Loc.T($"CPU boost modu: {ModePolicy.BoostDisplayName(mode)}"));
             return true;
         }
         else
         {
-            ShowToast($"CPU boost modu uygulanamadı: {ModePolicy.BoostDisplayName(mode)}", false);
+            ShowToast(Loc.T($"CPU boost modu uygulanamadı: {ModePolicy.BoostDisplayName(mode)}"), false);
             return false;
         }
     }
@@ -2350,7 +2350,7 @@ public partial class MainWindow : Window
                 {
                     CmbGpuMode.Items.Add(new ComboBoxItem
                     {
-                        Content = "Otomatik Seçim (DDS / Advanced Optimus)",
+                        Content = Loc.T("Otomatik Seçim (DDS / Advanced Optimus)"),
                         Tag = "Automatic"
                     });
                 }
@@ -2360,7 +2360,7 @@ public partial class MainWindow : Window
                 {
                     CmbGpuMode.Items.Add(new ComboBoxItem
                     {
-                        Content = "Optimus (Hibrit iGPU + dGPU)",
+                        Content = Loc.T("Optimus (Hibrit iGPU + dGPU)"),
                         Tag = "Optimus"
                     });
                 }
@@ -2370,7 +2370,7 @@ public partial class MainWindow : Window
                 {
                     CmbGpuMode.Items.Add(new ComboBoxItem
                     {
-                        Content = "Yalnızca Harici GPU (NVIDIA dGPU)",
+                        Content = Loc.T("Yalnızca Harici GPU (NVIDIA dGPU)"),
                         Tag = "DiscreteGpu"
                     });
                 }
@@ -2386,7 +2386,7 @@ public partial class MainWindow : Window
                 _currentGpuMode = null;
                 if (TxtGpuModeBadge != null)
                 {
-                    TxtGpuModeBadge.Text = "Bilinmiyor";
+                    TxtGpuModeBadge.Text = Loc.T("Bilinmiyor");
                     TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
                 }
             }
@@ -2398,25 +2398,25 @@ public partial class MainWindow : Window
 
             if (cap.HasValue && cap.Value > 0 && CmbGpuMode?.Items.Count > 0)
             {
-                SetGpuModeControlsEnabled(true, "Değişiklik, bilgisayar yeniden başlatıldıktan sonra geçerli olur.");
+                SetGpuModeControlsEnabled(true, Loc.T("Değişiklik, bilgisayar yeniden başlatıldıktan sonra geçerli olur."));
             }
             else if (cap.HasValue)
             {
-                SetGpuModeControlsEnabled(false, "Acer servisi bu cihaz için seçilebilir bir GPU modu bildirmiyor.");
+                SetGpuModeControlsEnabled(false, Loc.T("Acer servisi bu cihaz için seçilebilir bir GPU modu bildirmiyor."));
             }
             else
             {
                 SetGpuModeControlsEnabled(false,
-                    "GPU modu desteği Acer servisinden okunamadı; güvenlik için mod değiştirme kapalı.");
+                    Loc.T("GPU modu desteği Acer servisinden okunamadı; güvenlik için mod değiştirme kapalı."));
             }
         }
         catch (Exception ex)
         {
             _currentGpuMode = null;
-            SetGpuModeControlsEnabled(false, "GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı.");
+            SetGpuModeControlsEnabled(false, Loc.T("GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı."));
             if (TxtGpuModeBadge != null)
             {
-                TxtGpuModeBadge.Text = "Bilinmiyor";
+                TxtGpuModeBadge.Text = Loc.T("Bilinmiyor");
                 TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
             }
             System.Diagnostics.Debug.WriteLine($"[GPU Mode] Refresh error: {ex.Message}");
@@ -2431,18 +2431,18 @@ public partial class MainWindow : Window
             switch (mode)
             {
                 case GpuOperatingMode.DiscreteGpu:
-                    TxtGpuModeBadge.Text = "NVIDIA GPU Yalnızca (dGPU)";
+                    TxtGpuModeBadge.Text = Loc.T("NVIDIA GPU Yalnızca (dGPU)");
                     TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentRed");
                     SelectGpuModeCombo("DiscreteGpu");
                     break;
                 case GpuOperatingMode.Optimus:
-                    TxtGpuModeBadge.Text = "Optimus (Hibrit iGPU + dGPU)";
+                    TxtGpuModeBadge.Text = Loc.T("Optimus (Hibrit iGPU + dGPU)");
                     TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentGreen");
                     SelectGpuModeCombo("Optimus");
                     break;
                 case GpuOperatingMode.Automatic:
                 default:
-                    TxtGpuModeBadge.Text = "Otomatik Seçim (DDS / Dynamic)";
+                    TxtGpuModeBadge.Text = Loc.T("Otomatik Seçim (DDS / Dynamic)");
                     TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentCyan");
                     SelectGpuModeCombo("Automatic");
                     break;
@@ -2455,16 +2455,16 @@ public partial class MainWindow : Window
 
     private static string GpuModeShortName(GpuOperatingMode? mode) => mode switch
     {
-        GpuOperatingMode.DiscreteGpu => "Yalnızca NVIDIA",
-        GpuOperatingMode.Optimus => "Optimus",
-        GpuOperatingMode.Automatic => "Otomatik",
-        _ => "Bilinmiyor"
+        GpuOperatingMode.DiscreteGpu => Loc.T("Yalnızca NVIDIA"),
+        GpuOperatingMode.Optimus => Loc.T("Optimus"),
+        GpuOperatingMode.Automatic => Loc.T("Otomatik"),
+        _ => Loc.T("Bilinmiyor")
     };
 
     private void ShowPendingGpuModeBadge()
     {
         if (TxtGpuModeBadge == null || !_pendingGpuMode.HasValue) return;
-        TxtGpuModeBadge.Text = $"{GpuModeShortName(_currentGpuMode)} → {GpuModeShortName(_pendingGpuMode)} (yeniden başlatma bekleniyor)";
+        TxtGpuModeBadge.Text = Loc.T($"{GpuModeShortName(_currentGpuMode)} → {GpuModeShortName(_pendingGpuMode)} (yeniden başlatma bekleniyor)");
         TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentCyan");
     }
 
@@ -2485,48 +2485,48 @@ public partial class MainWindow : Window
     {
         if (CmbGpuMode?.SelectedItem is not ComboBoxItem selectedItem || selectedItem.Tag is not string tagStr)
         {
-            ShowToast("Lütfen bir GPU çalışma modu seçin.", false);
+            ShowToast(Loc.T("Lütfen bir GPU çalışma modu seçin."), false);
             return;
         }
 
         if (!Enum.TryParse<GpuOperatingMode>(tagStr, out var targetMode))
         {
-            ShowToast("Geçersiz GPU modu.", false);
+            ShowToast(Loc.T("Geçersiz GPU modu."), false);
             return;
         }
 
         if (!CanSwitchGpuMode(_supportedGpuCapability, targetMode))
         {
-            ShowToast("Seçilen GPU modu Acer servisinin bildirdiği modlar arasında değil.", false);
+            ShowToast(Loc.T("Seçilen GPU modu Acer servisinin bildirdiği modlar arasında değil."), false);
             return;
         }
 
         if (_pendingGpuMode.HasValue && targetMode == _pendingGpuMode.Value)
         {
-            ShowToast("Bu GPU modu zaten ayarlandı; yeniden başlatınca geçerli olacak.");
+            ShowToast(Loc.T("Bu GPU modu zaten ayarlandı; yeniden başlatınca geçerli olacak."));
             return;
         }
 
         // Re-selecting the running mode is allowed only to cancel a pending, not yet applied change.
         if (!_pendingGpuMode.HasValue && _currentGpuMode.HasValue && targetMode == _currentGpuMode.Value)
         {
-            ShowToast("Seçilen GPU modu zaten aktif.");
+            ShowToast(Loc.T("Seçilen GPU modu zaten aktif."));
             return;
         }
 
         string modeDisplayName = targetMode switch
         {
-            GpuOperatingMode.DiscreteGpu => "Yalnızca Harici GPU (NVIDIA dGPU)",
-            GpuOperatingMode.Optimus => "Optimus (Hibrit iGPU + dGPU)",
-            _ => "Otomatik Seçim (DDS / Advanced Optimus)"
+            GpuOperatingMode.DiscreteGpu => Loc.T("Yalnızca Harici GPU (NVIDIA dGPU)"),
+            GpuOperatingMode.Optimus => Loc.T("Optimus (Hibrit iGPU + dGPU)"),
+            _ => Loc.T("Otomatik Seçim (DDS / Advanced Optimus)")
         };
 
         var confirm = System.Windows.MessageBox.Show(
             this,
-            $"GPU Çalışma Modunu '{modeDisplayName}' olarak ayarlamak üzeresiniz.\n\n" +
-            "NitroSense'te olduğu gibi yeni mod, bilgisayar yeniden başlatıldıktan sonra geçerli olur.\n\n" +
-            "Devam etmek istiyor musunuz?",
-            "GPU Çalışma Modu (MUX Switch)",
+            Loc.T($"GPU Çalışma Modunu '{modeDisplayName}' olarak ayarlamak üzeresiniz.\n\n" +
+                  "NitroSense'te olduğu gibi yeni mod, bilgisayar yeniden başlatıldıktan sonra geçerli olur.\n\n" +
+                  "Devam etmek istiyor musunuz?"),
+            Loc.T("GPU Çalışma Modu (MUX Switch)"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
@@ -2549,13 +2549,13 @@ public partial class MainWindow : Window
                     _pendingGpuMode = targetMode;
                     ShowPendingGpuModeBadge();
                 }
-                ShowToast($"GPU modu '{modeDisplayName}' olarak ayarlandı; yeniden başlatınca geçerli olacak.");
+                ShowToast(Loc.T($"GPU modu '{modeDisplayName}' olarak ayarlandı; yeniden başlatınca geçerli olacak."));
 
                 var restart = System.Windows.MessageBox.Show(
                     this,
-                    "GPU modu kaydedildi. Değişikliğin geçerli olması için bilgisayarın yeniden başlatılması gerekiyor.\n\n" +
-                    "Açık çalışmalarınızı kaydettiyseniz şimdi yeniden başlatılsın mı?",
-                    "Yeniden Başlat ve Uygula",
+                    Loc.T("GPU modu kaydedildi. Değişikliğin geçerli olması için bilgisayarın yeniden başlatılması gerekiyor.\n\n" +
+                    "Açık çalışmalarınızı kaydettiyseniz şimdi yeniden başlatılsın mı?"),
+                    Loc.T("Yeniden Başlat ve Uygula"),
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
                 if (restart == MessageBoxResult.Yes)
@@ -2571,12 +2571,12 @@ public partial class MainWindow : Window
             }
             else
             {
-                ShowToast("GPU modu uygulanamadı. Acer Agent Service yanıt vermedi.", false);
+                ShowToast(Loc.T("GPU modu uygulanamadı. Acer Agent Service yanıt vermedi."), false);
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Hata: {ex.Message}", false);
+            ShowToast(Loc.T($"Hata: {ex.Message}"), false);
         }
         finally
         {
@@ -2631,7 +2631,7 @@ public partial class MainWindow : Window
                 ? p.DisplayName
                 : $"{p.DisplayName} ({p.ExeName})";
             // A profile whose exe is gone can never trigger; say so instead of silently doing nothing.
-            return p.IsInstalled ? label : $"{label} - kurulu değil";
+            return p.IsInstalled ? label : Loc.T($"{label} - kurulu değil");
         }).ToList();
 
         _isUpdatingGameUi = true;
@@ -2677,13 +2677,13 @@ public partial class MainWindow : Window
             _gameService.ActiveGameProfile.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase);
 
         TxtSelectedGameNameBadge.Text = isCurrentlyActive 
-            ? $" [{profile.DisplayName} - ŞU AN OYNANIYOR]" 
+            ? Loc.T($" [{profile.DisplayName} - ŞU AN OYNANIYOR]") 
             : $" [{profile.DisplayName}]";
         TxtSelectedGameNameBadge.Foreground = (SolidColorBrush)FindResource(isCurrentlyActive ? "AccentGreen" : "TextSecondary");
         var pathText = string.IsNullOrEmpty(profile.InstallPath)
             ? $"{profile.ExeName}.exe"
             : (profile.InstallPath.Length > 48 ? "..." + profile.InstallPath[^45..] : profile.InstallPath);
-        TxtSelectedGameExePath.Text = profile.IsInstalled ? pathText : pathText + "  (dosya bulunamadı)";
+        TxtSelectedGameExePath.Text = profile.IsInstalled ? pathText : pathText + Loc.T("  (dosya bulunamadı)");
 
         // 1. Target Operating Mode ComboBox
         SetComboBoxByTag(CmbGameTargetMode, profile.TargetMode.ToString());
@@ -2724,7 +2724,7 @@ public partial class MainWindow : Window
         var selectedIdx = CmbGameAtkMouseProfile.SelectedIndex;
         if (selectedIdx <= 0)
         {
-            ShowToast("Test için 1-4 arasında bir ATK fare profili seçin.", false);
+            ShowToast(Loc.T("Test için 1-4 arasında bir ATK fare profili seçin."), false);
             return;
         }
 
@@ -2744,7 +2744,7 @@ public partial class MainWindow : Window
                     _savedMouseProfileBeforeGame = selectedIdx;
                 }
                 UpdateSideMouseProfileStatus(selectedIdx);
-                ShowToast($"ATK A9 Fare donanımı Config {selectedIdx} profiline geçirildi.");
+                ShowToast(Loc.T($"ATK A9 Fare donanımı Config {selectedIdx} profiline geçirildi."));
             }
             else
             {
@@ -2885,11 +2885,11 @@ public partial class MainWindow : Window
 
     private static string DescribeMouseFailure(AtkMouseResult result) => result switch
     {
-        AtkMouseResult.ReceiverNotFound => "ATK alıcısı bulunamadı",
-        AtkMouseResult.NoResponse => "Fare yanıt vermedi",
-        AtkMouseResult.Rejected => "Fare profil değişikliğini reddetti",
-        AtkMouseResult.ProfileNotConfirmed => "Fare profili doğrulanamadı",
-        _ => "ATK alıcısıyla iletişim kurulamadı"
+        AtkMouseResult.ReceiverNotFound => Loc.T("ATK alıcısı bulunamadı"),
+        AtkMouseResult.NoResponse => Loc.T("Fare yanıt vermedi"),
+        AtkMouseResult.Rejected => Loc.T("Fare profil değişikliğini reddetti"),
+        AtkMouseResult.ProfileNotConfirmed => Loc.T("Fare profili doğrulanamadı"),
+        _ => Loc.T("ATK alıcısıyla iletişim kurulamadı")
     };
 
     /// <summary>
@@ -2902,11 +2902,11 @@ public partial class MainWindow : Window
     /// </param>
     internal static string DescribeMouseFailureShort(AtkMouseResult result, bool retryPending = false) => result switch
     {
-        AtkMouseResult.ReceiverNotFound => "Alıcı yok",
-        AtkMouseResult.NoResponse => retryPending ? "Uyanıyor…" : "Yanıt yok",
-        AtkMouseResult.Rejected => "Reddedildi",
-        AtkMouseResult.ProfileNotConfirmed => "Doğrulanamadı",
-        _ => "İletişim hatası"
+        AtkMouseResult.ReceiverNotFound => Loc.T("Alıcı yok"),
+        AtkMouseResult.NoResponse => retryPending ? Loc.T("Uyanıyor…") : Loc.T("Yanıt yok"),
+        AtkMouseResult.Rejected => Loc.T("Reddedildi"),
+        AtkMouseResult.ProfileNotConfirmed => Loc.T("Doğrulanamadı"),
+        _ => Loc.T("İletişim hatası")
     };
 
     private (int Generation, int Profile, int Remaining, long Due)? _pendingGameMouseProfile;
@@ -2964,18 +2964,18 @@ public partial class MainWindow : Window
         if (TxtSideMouseProfile == null) return;
         if (profile >= 1 && profile <= 4)
         {
-            TxtSideMouseProfile.Text = $"Config {profile}";
+            TxtSideMouseProfile.Text = Loc.T($"Config {profile}");
             TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("AccentGreen");
             TxtSideMouseProfile.ToolTip = null;
         }
         else
         {
             TxtSideMouseProfile.Text = failure == AtkMouseResult.Confirmed
-                ? "Bilinmiyor"
+                ? Loc.T("Bilinmiyor")
                 : DescribeMouseFailureShort(failure, retryPending);
             TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
             TxtSideMouseProfile.ToolTip = failure == AtkMouseResult.NoResponse
-                ? "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin."
+                ? Loc.T("Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.")
                 : null;
         }
     }
@@ -3024,7 +3024,7 @@ public partial class MainWindow : Window
         if (isEnabled)
         {
             InitializeDefaultMouseProfileUi();
-            ShowToast("ATK Fare Entegrasyonu etkinleştirildi.");
+            ShowToast(Loc.T("ATK Fare Entegrasyonu etkinleştirildi."));
         }
         else
         {
@@ -3050,18 +3050,18 @@ public partial class MainWindow : Window
                             UpdateSideMouseProfileStatus(targetMouseProfile);
                             _isMouseProfileSwitchedForGame = false;
                             _pendingMouseRestore = false;
-                            ShowToast($"ATK Fare Entegrasyonu devre dışı bırakıldı (Fare Config {targetMouseProfile} profiline geri döndürüldü).");
+                            ShowToast(Loc.T($"ATK Fare Entegrasyonu devre dışı bırakıldı (Fare Config {targetMouseProfile} profiline geri döndürüldü)."));
                         }
                         else
                         {
                             _pendingMouseRestore = true;
-                            ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı (Masaüstü fare profiline geri dönülemedi).", false);
+                            ShowToast(Loc.T("ATK Fare Entegrasyonu devre dışı bırakıldı (Masaüstü fare profiline geri dönülemedi)."), false);
                         }
                     }
                 }
                 else
                 {
-                    ShowToast("ATK Fare Entegrasyonu devre dışı bırakıldı.");
+                    ShowToast(Loc.T("ATK Fare Entegrasyonu devre dışı bırakıldı."));
                 }
             }
             finally
@@ -3077,14 +3077,14 @@ public partial class MainWindow : Window
         TxtDefaultMouseProfileStatus.ToolTip = tooltip;
         if (profile >= 1 && profile <= 4)
         {
-            string suffix = status ?? (confirmed ? "Aktif" : "Uygulanıyor…");
+            string suffix = status ?? (confirmed ? Loc.T("Aktif") : Loc.T("Uygulanıyor…"));
             string brushKey = confirmed ? "AccentGreen" : "TextSecondary";
-            TxtDefaultMouseProfileStatus.Text = $"Config {profile} ({suffix})";
+            TxtDefaultMouseProfileStatus.Text = Loc.T($"Config {profile} ({suffix})");
             TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
         }
         else
         {
-            TxtDefaultMouseProfileStatus.Text = "Son Kullanılan (Pasif)";
+            TxtDefaultMouseProfileStatus.Text = Loc.T("Son Kullanılan (Pasif)");
             TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
         }
     }
@@ -3100,7 +3100,7 @@ public partial class MainWindow : Window
             if (val >= 1 && val <= 4)
             {
                 // Saved as the default, but not sent to the mouse until "Uygula" (or the next game exit).
-                UpdateDefaultMouseProfileBadge(val, confirmed: false, status: "Uygula'ya basın");
+                UpdateDefaultMouseProfileBadge(val, confirmed: false, status: Loc.T("Uygula'ya basın"));
             }
             else
             {
@@ -3130,7 +3130,7 @@ public partial class MainWindow : Window
                 var result = await ApplyDesktopMouseProfileAsync(val);
                 if (result == AtkMouseResult.Confirmed)
                 {
-                    ShowToast($"{saveStatus}. Fareye uygulandı.", saved);
+                    ShowToast(Loc.T($"{saveStatus}. Fareye uygulandı."), saved);
                 }
                 else if (result is AtkMouseResult.Rejected)
                 {
@@ -3138,11 +3138,11 @@ public partial class MainWindow : Window
                 }
                 else if (result.HasValue)
                 {
-                    ShowToast($"{saveStatus}. {DescribeMouseFailure(result.Value)}. Tekrar denenecek.", false);
+                    ShowToast(Loc.T($"{saveStatus}. {DescribeMouseFailure(result.Value)}. Tekrar denenecek."), false);
                 }
                 else if (_pendingDesktopMouseRequest?.Profile == val && _isGameSessionActive)
                 {
-                    ShowToast($"{saveStatus}. Oyun bitince uygulanacak.", saved);
+                    ShowToast(Loc.T($"{saveStatus}. Oyun bitince uygulanacak."), saved);
                 }
             }
             finally
@@ -3154,7 +3154,7 @@ public partial class MainWindow : Window
         {
             _pendingDesktopMouseRequest = null;
             UpdateDefaultMouseProfileBadge(val);
-            if (saved) ShowToast("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi.");
+            if (saved) ShowToast(Loc.T("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi."));
         }
     }
 
@@ -3180,7 +3180,7 @@ public partial class MainWindow : Window
             var stored = GetSelectedGameProfile();
             if (stored == null)
             {
-                ShowToast("Seçili oyun profili bulunamadı; liste yenilendi.", false);
+                ShowToast(Loc.T("Seçili oyun profili bulunamadı; liste yenilendi."), false);
                 PopulateConfiguredGames();
                 return;
             }
@@ -3227,7 +3227,7 @@ public partial class MainWindow : Window
 
             if (!_gameService.SaveProfile(profile))
             {
-                ShowToast($"'{profile.DisplayName}' ayarları uygulandı ama diske kaydedilemedi; uygulama kapanınca kaybolabilir.", false);
+                ShowToast(Loc.T($"'{profile.DisplayName}' ayarları uygulandı ama diske kaydedilemedi; uygulama kapanınca kaybolabilir."), false);
             }
 
             // If this game is currently running right now, hot-apply settings immediately in real-time!
@@ -3240,12 +3240,12 @@ public partial class MainWindow : Window
             }
             else
             {
-                ShowToast($"'{profile.DisplayName}' oyun profili kaydedildi.");
+                ShowToast(Loc.T($"'{profile.DisplayName}' oyun profili kaydedildi."));
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Profil kaydedilemedi: {ex.Message}", false);
+            ShowToast(Loc.T($"Profil kaydedilemedi: {ex.Message}"), false);
         }
     }
 
@@ -3326,7 +3326,7 @@ public partial class MainWindow : Window
             {
                 if (allCoreOk)
                 {
-                    TxtGameStatus.Text = $"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})";
+                    TxtGameStatus.Text = Loc.T($"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})");
                     if (TryFindResource("AccentGreen") is SolidColorBrush brush)
                     {
                         TxtGameStatus.Foreground = brush;
@@ -3334,7 +3334,7 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    TxtGameStatus.Text = $"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)";
+                    TxtGameStatus.Text = Loc.T($"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)");
                     if (TryFindResource("AccentRed") is SolidColorBrush brush)
                     {
                         TxtGameStatus.Foreground = brush;
@@ -3344,11 +3344,11 @@ public partial class MainWindow : Window
 
             if (allCoreOk)
             {
-                ShowToast($"'{profile.DisplayName}' profili kaydedildi ve uygulandı.");
+                ShowToast(Loc.T($"'{profile.DisplayName}' profili kaydedildi ve uygulandı."));
             }
             else
             {
-                ShowToast($"'{profile.DisplayName}' profili kaydedildi ancak bazı donanım ayarları uygulanamadı.", false);
+                ShowToast(Loc.T($"'{profile.DisplayName}' profili kaydedildi ancak bazı donanım ayarları uygulanamadı."), false);
             }
 
             return allCoreOk;
@@ -3364,23 +3364,23 @@ public partial class MainWindow : Window
         if (BtnScanGames != null)
         {
             BtnScanGames.IsEnabled = false;
-            BtnScanGames.Content = "Taranıyor…";
+            BtnScanGames.Content = Loc.T("Taranıyor…");
         }
         try
         {
             var found = await Task.Run(() => _gameService.ScanAndAddInstalledGames());
             PopulateConfiguredGames();
-            ShowToast(found > 0 ? $"{found} yeni oyun profili eklendi." : "Yeni yüklü oyun tespit edilmedi.");
+            ShowToast(found > 0 ? Loc.T($"{found} yeni oyun profili eklendi.") : Loc.T("Yeni yüklü oyun tespit edilmedi."));
         }
         catch (Exception ex)
         {
-            ShowToast($"Oyun taraması başarısız: {ex.Message}", false);
+            ShowToast(Loc.T($"Oyun taraması başarısız: {ex.Message}"), false);
         }
         finally
         {
             if (BtnScanGames != null)
             {
-                BtnScanGames.Content = "Yüklü Oyunları Tara";
+                BtnScanGames.Content = Loc.T("Yüklü Oyunları Tara");
                 BtnScanGames.IsEnabled = true;
             }
         }
@@ -3391,8 +3391,8 @@ public partial class MainWindow : Window
         var steamCommon = @"C:\Program Files (x86)\Steam\steamapps\common";
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Çalıştırılabilir Oyun Dosyasını Seçin",
-            Filter = "Çalıştırılabilir Oyun Dosyaları (*.exe)|*.exe",
+            Title = Loc.T("Çalıştırılabilir Oyun Dosyasını Seçin"),
+            Filter = Loc.T("Çalıştırılabilir Oyun Dosyaları (*.exe)|*.exe"),
             InitialDirectory = Directory.Exists(steamCommon) ? steamCommon : Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)
         };
 
@@ -3412,7 +3412,7 @@ public partial class MainWindow : Window
         if (existing != null)
         {
             PopulateConfiguredGames(existing.ExeName);
-            ShowToast($"'{existing.DisplayName}' zaten listede; mevcut ayarları korundu.");
+            ShowToast(Loc.T($"'{existing.DisplayName}' zaten listede; mevcut ayarları korundu."));
             return;
         }
 
@@ -3432,8 +3432,8 @@ public partial class MainWindow : Window
         bool saved = _gameService.SaveProfile(profile);
         PopulateConfiguredGames(exeName);
         ShowToast(saved
-            ? $"'{cleanName}' profili eklendi."
-            : $"'{cleanName}' eklendi ama diske kaydedilemedi; uygulama kapanınca kaybolabilir.", saved);
+            ? Loc.T($"'{cleanName}' profili eklendi.")
+            : Loc.T($"'{cleanName}' eklendi ama diske kaydedilemedi; uygulama kapanınca kaybolabilir."), saved);
     }
 
     private void BtnDeleteGame_Click(object sender, RoutedEventArgs e)
@@ -3446,15 +3446,15 @@ public partial class MainWindow : Window
         }
 
         var confirm = System.Windows.MessageBox.Show(this,
-            $"'{profile.DisplayName}' oyun profilini silmek istiyor musunuz?", 
-            "Profili Sil", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T($"'{profile.DisplayName}' oyun profilini silmek istiyor musunuz?"), 
+            Loc.T("Profili Sil"), MessageBoxButton.YesNo, MessageBoxImage.Question);
 
         if (confirm == MessageBoxResult.Yes)
         {
             bool deleted = _gameService.DeleteProfile(profile.ExeName, profile.InstallPath);
             PopulateConfiguredGames();
-            ShowToast(deleted ? $"'{profile.DisplayName}' profili silindi."
-                : $"'{profile.DisplayName}' profili silinemedi.", deleted);
+            ShowToast(deleted ? Loc.T($"'{profile.DisplayName}' profili silindi.")
+                : Loc.T($"'{profile.DisplayName}' profili silinemedi."), deleted);
         }
     }
 
@@ -3574,7 +3574,7 @@ public partial class MainWindow : Window
                             {
                                 if (mouseResult != AtkMouseResult.Rejected)
                                     _pendingGameMouseProfile = (sessionGen, profile.TargetAtkMouseProfile, 3, Environment.TickCount64 + 3000);
-                                ShowToast($"Oyun fare profili: {DescribeMouseFailure(mouseResult)}.", false);
+                                ShowToast(Loc.T($"Oyun fare profili: {DescribeMouseFailure(mouseResult)}."), false);
                             }
 
                             if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled)
@@ -3596,7 +3596,7 @@ public partial class MainWindow : Window
                         var gameMode = ModePolicy.ClampForPower(profile.TargetMode, gameOnAc, gameBattery);
                         if (gameMode != profile.TargetMode)
                         {
-                            ShowToast($"'{profile.DisplayName}': {ModePolicy.DisplayName(profile.TargetMode)} pilde kullanılamaz, Dengeli uygulandı.", false);
+                            ShowToast(Loc.T($"'{profile.DisplayName}': {ModePolicy.DisplayName(profile.TargetMode)} pilde kullanılamaz, Dengeli uygulandı."), false);
                         }
                         bool modeOk = await SwitchModeAsync(gameMode);
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
@@ -3616,7 +3616,7 @@ public partial class MainWindow : Window
                         {
                             if (allCoreOk)
                             {
-                                TxtGameStatus.Text = $"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})";
+                                TxtGameStatus.Text = Loc.T($"Aktif: {profile.DisplayName.ToUpperInvariant()} ({profile.TargetMode} / {boostName}{mouseInfo})");
                                 if (TryFindResource("AccentGreen") is SolidColorBrush brush)
                                 {
                                     TxtGameStatus.Foreground = brush;
@@ -3624,7 +3624,7 @@ public partial class MainWindow : Window
                             }
                             else
                             {
-                                TxtGameStatus.Text = $"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)";
+                                TxtGameStatus.Text = Loc.T($"Kısmi Aktif: {profile.DisplayName.ToUpperInvariant()} (Bazı ayarlar uygulanamadı)");
                                 if (TryFindResource("AccentRed") is SolidColorBrush brush)
                                 {
                                     TxtGameStatus.Foreground = brush;
@@ -3634,12 +3634,12 @@ public partial class MainWindow : Window
 
                         if (!allCoreOk)
                         {
-                            ShowToast($"'{profile.DisplayName}' profilinin bazı donanım ayarları uygulanamadı.", false, trayBalloon: false);
+                            ShowToast(Loc.T($"'{profile.DisplayName}' profilinin bazı donanım ayarları uygulanamadı."), false, trayBalloon: false);
                         }
                     }
                     catch (Exception ex)
                     {
-                        ShowToast($"Profil uygulanamadı: {ex.Message}", false);
+                        ShowToast(Loc.T($"Profil uygulanamadı: {ex.Message}"), false);
                     }
                 };
 
@@ -3744,7 +3744,7 @@ public partial class MainWindow : Window
                                 }
                                 else
                                 {
-                                    failedSteps.Add("Çalışma Modu");
+                                    failedSteps.Add(Loc.T("Çalışma Modu"));
                                 }
                             }
 
@@ -3808,7 +3808,7 @@ public partial class MainWindow : Window
                                         _isMouseProfileSwitchedForGame = true;
                                         _pendingMouseRestore = true;
                                         failedSteps.Add("Fare Profili");
-                                        ShowToast("Varsayılan fare profiline geri dönülemedi.", false);
+                                        ShowToast(Loc.T("Varsayılan fare profiline geri dönülemedi."), false);
                                     }
                                 }
                             }
@@ -3829,8 +3829,8 @@ public partial class MainWindow : Window
                                 if (TxtGameStatus != null)
                                 {
                                     TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
-                                        ? "Durum: Beklemede (Aktif oyun yok)" 
-                                        : "Durum: Devre Dışı (Manuel Kontrol)";
+                                        ? Loc.T("Durum: Beklemede (Aktif oyun yok)") 
+                                        : Loc.T("Durum: Devre Dışı (Manuel Kontrol)");
                                     if (TryFindResource("TextSecondary") is SolidColorBrush brush)
                                     {
                                         TxtGameStatus.Foreground = brush;
@@ -3838,25 +3838,25 @@ public partial class MainWindow : Window
                                 }
 
                                 string restoredSummary = isBatteryEco 
-                                    ? $"Pilde Eco profili (Quiet / Boost Devre Dışı{restoredMouseInfo})" 
-                                    : $"Varsayılan profil ({_savedModeBeforeGame}{restoredMouseInfo})";
+                                    ? Loc.T($"Pilde Eco profili (Quiet / Boost Devre Dışı{restoredMouseInfo})") 
+                                    : Loc.T($"Varsayılan profil ({_savedModeBeforeGame}{restoredMouseInfo})");
 
                                 // Game ended notification removed
 
-                                ShowToast(isBatteryEco ? "Pilde Eco profili uygulandı (Masaüstü ayarları adaptör için saklandı)." : "Masaüstü ayarları başarıyla geri yüklendi.", trayBalloon: false);
+                                ShowToast(isBatteryEco ? Loc.T("Pilde Eco profili uygulandı (Masaüstü ayarları adaptör için saklandı).") : Loc.T("Masaüstü ayarları başarıyla geri yüklendi."), trayBalloon: false);
                             }
                             else
                             {
                                 if (TxtGameStatus != null)
                                 {
-                                    TxtGameStatus.Text = "Durum: Masaüstü Geri Yükleme Bekliyor";
+                                    TxtGameStatus.Text = Loc.T("Durum: Masaüstü Geri Yükleme Bekliyor");
                                     if (TryFindResource("AccentCyan") is SolidColorBrush brush)
                                     {
                                         TxtGameStatus.Foreground = brush;
                                     }
                                 }
 
-                                ShowToast($"Geri yüklenemeyen ayarlar: {string.Join(", ", failedSteps)}", false);
+                                ShowToast(Loc.T($"Geri yüklenemeyen ayarlar: {string.Join(", ", failedSteps)}"), false);
                             }
                         }
                         else if (_appSettings.AtkMouseIntegrationEnabled && _isMouseProfileSwitchedForGame)
@@ -3879,7 +3879,7 @@ public partial class MainWindow : Window
                                 {
                                     _isMouseProfileSwitchedForGame = true;
                                     _pendingMouseRestore = true;
-                                    ShowToast("Varsayılan fare profiline geri dönülemedi.", false);
+                                    ShowToast(Loc.T("Varsayılan fare profiline geri dönülemedi."), false);
                                 }
                             }
                         }
@@ -3888,8 +3888,8 @@ public partial class MainWindow : Window
                             if (TxtGameStatus != null)
                             {
                                 TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
-                                    ? "Durum: Beklemede (Aktif oyun yok)" 
-                                    : "Durum: Devre Dışı (Manuel Kontrol)";
+                                    ? Loc.T("Durum: Beklemede (Aktif oyun yok)") 
+                                    : Loc.T("Durum: Devre Dışı (Manuel Kontrol)");
                                 if (TryFindResource("TextSecondary") is SolidColorBrush brush)
                                 {
                                     TxtGameStatus.Foreground = brush;
@@ -3907,7 +3907,7 @@ public partial class MainWindow : Window
                     }
                     catch (Exception ex)
                     {
-                        ShowToast($"Profil geri yüklenemedi: {ex.Message}", false);
+                        ShowToast(Loc.T($"Profil geri yüklenemedi: {ex.Message}"), false);
                     }
                 };
 
@@ -3970,7 +3970,7 @@ public partial class MainWindow : Window
                     }
                     else
                     {
-                        failed.Add("Çalışma Modu");
+                        failed.Add(Loc.T("Çalışma Modu"));
                     }
                 }
 
@@ -4037,7 +4037,7 @@ public partial class MainWindow : Window
                     bool acOk = await _powerAutomationService.RetryPendingAcRestoreAsync(acquireLock: false);
                     if (!acOk)
                     {
-                        failed.Add("Adaptör Güç Ayarları");
+                        failed.Add(Loc.T("Adaptör Güç Ayarları"));
                     }
                 }
 
@@ -4054,26 +4054,26 @@ public partial class MainWindow : Window
                     if (TxtGameStatus != null)
                     {
                         TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
-                            ? "Durum: Beklemede (Aktif oyun yok)" 
-                            : "Durum: Devre Dışı (Manuel Kontrol)";
+                            ? Loc.T("Durum: Beklemede (Aktif oyun yok)") 
+                            : Loc.T("Durum: Devre Dışı (Manuel Kontrol)");
                         if (TryFindResource("TextSecondary") is SolidColorBrush brush)
                         {
                             TxtGameStatus.Foreground = brush;
                         }
                     }
-                    ShowToast("Bekleyen masaüstü ayarları başarıyla geri yüklendi.");
+                    ShowToast(Loc.T("Bekleyen masaüstü ayarları başarıyla geri yüklendi."));
                 }
                 else
                 {
                     if (TxtGameStatus != null)
                     {
-                        TxtGameStatus.Text = "Durum: Masaüstü Geri Yükleme Bekliyor";
+                        TxtGameStatus.Text = Loc.T("Durum: Masaüstü Geri Yükleme Bekliyor");
                         if (TryFindResource("AccentCyan") is SolidColorBrush brush)
                         {
                             TxtGameStatus.Foreground = brush;
                         }
                     }
-                    ShowToast($"Yeniden deneme tamamlanamadı: {string.Join(", ", failed)}", false);
+                    ShowToast(Loc.T($"Yeniden deneme tamamlanamadı: {string.Join(", ", failed)}"), false);
                 }
 
                 UpdateTrayRetryMenuItemState();
@@ -4109,8 +4109,8 @@ public partial class MainWindow : Window
             SaveSettings();
         }
         TxtGameStatus.Text = _gameService.AutoGameModeEnabled 
-            ? "Durum: Beklemede (Aktif oyun yok)" 
-            : "Durum: Devre Dışı (Manuel Kontrol)";
+            ? Loc.T("Durum: Beklemede (Aktif oyun yok)") 
+            : Loc.T("Durum: Devre Dışı (Manuel Kontrol)");
     }
 
     // ==========================================
@@ -4175,7 +4175,7 @@ public partial class MainWindow : Window
             UpdateEffectComboBox(preset.Effect);
 
             bool isOff = IsLightingOff(_lighting);
-            if (!await ApplyLightingToDeviceAsync($"'{selectedName}' profili uygulanamadı")) return;
+            if (!await ApplyLightingToDeviceAsync(Loc.T($"'{selectedName}' profili uygulanamadı"))) return;
 
             _appSettings.SelectedRgbPreset = selectedName;
             _appSettings.IsBacklightOff = isOff;
@@ -4184,7 +4184,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast($"Aydınlatma profili uygulanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma profili uygulanamadı: {ex.Message}"), false);
         }
         finally
         {
@@ -4226,7 +4226,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ShowToast($"Aydınlatma profili kaydedilemedi: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma profili kaydedilemedi: {ex.Message}"), false);
             return;
         }
 
@@ -4239,32 +4239,32 @@ public partial class MainWindow : Window
         PopulateRgbPresets(name);
         TxtCustomPresetName.Clear();
 
-        ShowToast($"'{name}' aydınlatma profili kaydedildi.");
+        ShowToast(Loc.T($"'{name}' aydınlatma profili kaydedildi."));
     }
 
     private void BtnDeleteCustomPreset_Click(object sender, RoutedEventArgs e)
     {
         if (CmbRgbPresets.SelectedItem is not string selectedName)
         {
-            ShowToast("Silmek için listeden bir profil seçin.", false);
+            ShowToast(Loc.T("Silmek için listeden bir profil seçin."), false);
             return;
         }
 
         var preset = _rgbProfileService.GetPresets().FirstOrDefault(p => p.Name == selectedName);
         if (preset?.IsBuiltIn == true)
         {
-            ShowToast("Varsayılan fabrika profilleri silinemez.", false);
+            ShowToast(Loc.T("Varsayılan fabrika profilleri silinemez."), false);
             return;
         }
 
         var confirm = System.Windows.MessageBox.Show(this,
-            $"'{selectedName}' aydınlatma profilini silmek istiyor musunuz?",
-            "Profili Sil", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T($"'{selectedName}' aydınlatma profilini silmek istiyor musunuz?"),
+            Loc.T("Profili Sil"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
         if (!_rgbProfileService.DeletePreset(selectedName))
         {
-            ShowToast("Profil silinemedi.", false);
+            ShowToast(Loc.T("Profil silinemedi."), false);
             return;
         }
 
@@ -4273,7 +4273,7 @@ public partial class MainWindow : Window
         MarkLightingCustomized();
         SaveSettings();
         PopulateRgbPresets();
-        ShowToast($"'{selectedName}' profili silindi.");
+        ShowToast(Loc.T($"'{selectedName}' profili silindi."));
     }
 
     // ==========================================
@@ -4294,18 +4294,18 @@ public partial class MainWindow : Window
             if (TxtBatHealthPercent != null)
                 TxtBatHealthPercent.Text = measured ? TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.HealthPercent:F1} %"), wearEstimated) : "--";
             if (TxtBatHealthNote != null)
-                TxtBatHealthNote.Text = !measured ? "Kapasite okunamadı"
-                    : details.HealthPercent >= 80 ? "İyi"
-                    : details.HealthPercent >= 60 ? "Yıpranmış"
-                    : "Değişim önerilir";
+                TxtBatHealthNote.Text = !measured ? Loc.T("Kapasite okunamadı")
+                    : details.HealthPercent >= 80 ? Loc.T("İyi")
+                    : details.HealthPercent >= 60 ? Loc.T("Yıpranmış")
+                    : Loc.T("Değişim önerilir");
 
             if (TxtBatWearPercent != null)
                 TxtBatWearPercent.Text = measured ? TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.WearLevelPercent:F1} %"), wearEstimated) : "--";
             if (TxtBatWearNote != null)
                 TxtBatWearNote.Text = !measured ? "--"
-                    : details.WearLevelPercent < 10 ? "Düşük aşınma (< %10)"
-                    : details.WearLevelPercent < 25 ? "Orta aşınma (%10–25)"
-                    : "Yüksek aşınma (> %25)";
+                    : details.WearLevelPercent < 10 ? Loc.T("Düşük aşınma (< %10)")
+                    : details.WearLevelPercent < 25 ? Loc.T("Orta aşınma (%10–25)")
+                    : Loc.T("Yüksek aşınma (> %25)");
 
             if (TxtBatFullChargeCap != null)
                 TxtBatFullChargeCap.Text = details.FullChargeCapacityMWh > 0
@@ -4314,13 +4314,13 @@ public partial class MainWindow : Window
 
             if (TxtBatDesignCap != null)
                 TxtBatDesignCap.Text = details.DesignCapacityMWh > 0
-                    ? "Fabrika: " + TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.DesignCapacityMWh:F0} mWh"), details.IsDesignCapacityEstimated)
-                    : "Fabrika: --";
+                    ? Loc.T("Fabrika: ") + TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.DesignCapacityMWh:F0} mWh"), details.IsDesignCapacityEstimated)
+                    : Loc.T("Fabrika: --");
 
             if (TxtBatCycleCount != null)
                 TxtBatCycleCount.Text = details.CycleCount.HasValue
-                    ? $"Döngü: {details.CycleCount.Value}"
-                    : "Döngü sayısı: pil yazılımı bildirmiyor";
+                    ? Loc.T($"Döngü: {details.CycleCount.Value}")
+                    : Loc.T("Döngü sayısı: pil yazılımı bildirmiyor");
 
             if (TxtBatVoltage != null)
                 TxtBatVoltage.Text = details.VoltageVolts > 0
@@ -4333,7 +4333,7 @@ public partial class MainWindow : Window
                 int cells = details.VoltageVolts > 0 ? (int)Math.Round(details.VoltageVolts / 3.85) : 0;
                 var parts = new List<string>();
                 if (details.Chemistry.Length > 0) parts.Add(details.Chemistry);
-                if (cells is >= 1 and <= 8 && details.Chemistry.StartsWith("Lityum")) parts.Add($"~{cells} hücre (gerilimden)");
+                if (cells is >= 1 and <= 8 && details.Chemistry.StartsWith("Lityum")) parts.Add(Loc.T($"~{cells} hücre (gerilimden)"));
                 TxtBatChemistry.Text = parts.Count > 0 ? string.Join(" · ", parts) : "--";
             }
 
@@ -4341,10 +4341,10 @@ public partial class MainWindow : Window
             {
                 var id = string.Join(" ", new[] { details.Manufacturer, details.ModelName }.Where(s => !string.IsNullOrWhiteSpace(s)));
                 TxtBatIdentity.Text = id.Length > 0
-                    ? $"{id} · Windows (WMI) üzerinden okunan kapasite ve gerilim."
-                    : "Windows (WMI) üzerinden okunan kapasite ve gerilim.";
+                    ? Loc.T($"{id} · Windows (WMI) üzerinden okunan kapasite ve gerilim.")
+                    : Loc.T("Windows (WMI) üzerinden okunan kapasite ve gerilim.");
                 if (TxtSubBatteryName != null)
-                    TxtSubBatteryName.Text = id.Length > 0 ? $"{id} · sıcaklık sensörü bildirilmiyor" : "Sıcaklık sensörü bildirilmiyor";
+                    TxtSubBatteryName.Text = id.Length > 0 ? Loc.T($"{id} · sıcaklık sensörü bildirilmiyor") : Loc.T("Sıcaklık sensörü bildirilmiyor");
             }
         });
     }
@@ -4356,11 +4356,11 @@ public partial class MainWindow : Window
             await RefreshBatteryHealthAsync();
             RefreshThermalHealthUi();
             await RefreshStorageHealthUi();
-            ShowToast("Donanım sağlık telemetrisi güncellendi.");
+            ShowToast(Loc.T("Donanım sağlık telemetrisi güncellendi."));
         }
         catch (Exception ex)
         {
-            ShowToast($"Telemetri güncellenemedi: {ex.Message}", false);
+            ShowToast(Loc.T($"Telemetri güncellenemedi: {ex.Message}"), false);
         }
     }
 
@@ -4389,7 +4389,7 @@ public partial class MainWindow : Window
                         : $" ({d0.BusType} - {d0.Firmware})";
                 }
                 if (TxtDrive0Detail != null) TxtDrive0Detail.Text = TelemetryFormatter.FormatDiskCapacity(d0.UsedCapacityGB, d0.TotalCapacityGB);
-                if (TxtDrive0Free != null) TxtDrive0Free.Text = FormattableString.Invariant($"{d0.FreeCapacityGB:F1} GB Boş Alan");
+                if (TxtDrive0Free != null) TxtDrive0Free.Text = Loc.TInv($"{d0.FreeCapacityGB:F1} GB Boş Alan");
                 if (BarDrive0 != null)
                 {
                     BarDrive0.Value = d0.UsedPercent;
@@ -4398,8 +4398,8 @@ public partial class MainWindow : Window
                 if (TxtDrive0HealthBadge != null)
                 {
                     TxtDrive0HealthBadge.Text = d0.EstHealthPercent >= 0
-                        ? $"Sağlık: %{d0.EstHealthPercent}"
-                        : (string.IsNullOrWhiteSpace(d0.HealthDesc) ? "Aşınma ölçülemiyor (yönetici izni gerekli)" : d0.HealthDesc);
+                        ? Loc.T($"Sağlık: %{d0.EstHealthPercent}")
+                        : (string.IsNullOrWhiteSpace(d0.HealthDesc) ? Loc.T("Aşınma ölçülemiyor (yönetici izni gerekli)") : d0.HealthDesc);
                 }
                 if (TxtDrive0Temp != null)
                 {
@@ -4408,7 +4408,7 @@ public partial class MainWindow : Window
                 if (TxtSubSsd1Temp != null)
                 {
                     TxtSubSsd1Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d0.Temperature), d0.IsTemperatureEstimated);
-                    if (TxtSubSsd1Label != null) TxtSubSsd1Label.Text = string.IsNullOrEmpty(d0.DriveLetter) ? "Disk 1" : $"Disk 1 ({d0.DriveLetter}:)";
+                    if (TxtSubSsd1Label != null) TxtSubSsd1Label.Text = string.IsNullOrEmpty(d0.DriveLetter) ? Loc.T("Disk 1") : Loc.T($"Disk 1 ({d0.DriveLetter}:)");
                     if (TxtSubSsd1Name != null) TxtSubSsd1Name.Text = d0.Model;
                 }
             }
@@ -4434,7 +4434,7 @@ public partial class MainWindow : Window
                         : $" ({d1.BusType} - {d1.Firmware})";
                 }
                 if (TxtDrive1Detail != null) TxtDrive1Detail.Text = TelemetryFormatter.FormatDiskCapacity(d1.UsedCapacityGB, d1.TotalCapacityGB);
-                if (TxtDrive1Free != null) TxtDrive1Free.Text = FormattableString.Invariant($"{d1.FreeCapacityGB:F1} GB Boş Alan");
+                if (TxtDrive1Free != null) TxtDrive1Free.Text = Loc.TInv($"{d1.FreeCapacityGB:F1} GB Boş Alan");
                 if (BarDrive1 != null)
                 {
                     BarDrive1.Value = d1.UsedPercent;
@@ -4443,8 +4443,8 @@ public partial class MainWindow : Window
                 if (TxtDrive1HealthBadge != null)
                 {
                     TxtDrive1HealthBadge.Text = d1.EstHealthPercent >= 0
-                        ? $"Sağlık: %{d1.EstHealthPercent}"
-                        : (string.IsNullOrWhiteSpace(d1.HealthDesc) ? "Aşınma ölçülemiyor (yönetici izni gerekli)" : d1.HealthDesc);
+                        ? Loc.T($"Sağlık: %{d1.EstHealthPercent}")
+                        : (string.IsNullOrWhiteSpace(d1.HealthDesc) ? Loc.T("Aşınma ölçülemiyor (yönetici izni gerekli)") : d1.HealthDesc);
                 }
                 if (TxtDrive1Temp != null)
                 {
@@ -4453,7 +4453,7 @@ public partial class MainWindow : Window
                 if (TxtSubSsd2Temp != null)
                 {
                     TxtSubSsd2Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d1.Temperature), d1.IsTemperatureEstimated);
-                    if (TxtSubSsd2Label != null) TxtSubSsd2Label.Text = string.IsNullOrEmpty(d1.DriveLetter) ? "Disk 2" : $"Disk 2 ({d1.DriveLetter}:)";
+                    if (TxtSubSsd2Label != null) TxtSubSsd2Label.Text = string.IsNullOrEmpty(d1.DriveLetter) ? Loc.T("Disk 2") : Loc.T($"Disk 2 ({d1.DriveLetter}:)");
                     if (TxtSubSsd2Name != null) TxtSubSsd2Name.Text = d1.Model;
                 }
             }
@@ -4468,17 +4468,17 @@ public partial class MainWindow : Window
                 bool allHealthy = drives.Count > 0 && drives.All(d => d.HealthStatus == 0);
                 if (anyProblem)
                 {
-                    TxtStorageBadge.Text = "Sürücü Uyarısı Mevcut";
+                    TxtStorageBadge.Text = Loc.T("Sürücü Uyarısı Mevcut");
                     TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("AccentRed");
                 }
                 else if (allHealthy)
                 {
-                    TxtStorageBadge.Text = "Tüm Sürücüler Sağlıklı";
+                    TxtStorageBadge.Text = Loc.T("Tüm Sürücüler Sağlıklı");
                     TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("AccentGreen");
                 }
                 else
                 {
-                    TxtStorageBadge.Text = "Sürücü Sağlığı Bilinmiyor";
+                    TxtStorageBadge.Text = Loc.T("Sürücü Sağlığı Bilinmiyor");
                     TxtStorageBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary");
                 }
             }
@@ -4493,9 +4493,9 @@ public partial class MainWindow : Window
             return "";
 
         int days = (DateTime.Today - day.Date).Days;
-        if (days <= 0) return "Bugün ölçüldü";
-        if (days == 1) return "Dün ölçüldü";
-        return FormattableString.Invariant($"{days} gün önce ölçüldü");
+        if (days <= 0) return Loc.T("Bugün ölçüldü");
+        if (days == 1) return Loc.T("Dün ölçüldü");
+        return Loc.TInv($"{days} gün önce ölçüldü");
     }
 
     /// <summary>
@@ -4521,8 +4521,8 @@ public partial class MainWindow : Window
             if (Dispatcher.HasShutdownStarted) return;
             if (BannerLightingUnsupported != null) BannerLightingUnsupported.Visibility = Visibility.Visible;
             if (TxtLightingUnsupported != null)
-                TxtLightingUnsupported.Text = "Acer servisi bu modelde denetlenebilir klavye aydınlatması bildirmedi. "
-                    + "Aşağıdaki denetimler etkisiz kalabilir; RGB servisini onarmayı deneyebilirsiniz.";
+                TxtLightingUnsupported.Text = Loc.T("Acer servisi bu modelde denetlenebilir klavye aydınlatması bildirmedi. "
+                    + "Aşağıdaki denetimler etkisiz kalabilir; RGB servisini onarmayı deneyebilirsiniz.");
         });
     }
 
@@ -4540,9 +4540,9 @@ public partial class MainWindow : Window
             {
                 // No day with a sustained-load measurement yet: show that instead of a 100 % score.
                 if (TxtStabilityScore != null) { TxtStabilityScore.Text = "--"; TxtStabilityScore.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
-                if (TxtStabilityStatus != null) TxtStabilityStatus.Text = "Veri toplanıyor (yük altında ölçüm yapılan gün yok)";
-                if (TxtStabilitySlope != null) TxtStabilitySlope.Text = "Eğim: --";
-                if (TxtStabilityBadge != null) { TxtStabilityBadge.Text = "Veri yok"; TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
+                if (TxtStabilityStatus != null) TxtStabilityStatus.Text = Loc.T("Veri toplanıyor (yük altında ölçüm yapılan gün yok)");
+                if (TxtStabilitySlope != null) TxtStabilitySlope.Text = Loc.T("Eğim: --");
+                if (TxtStabilityBadge != null) { TxtStabilityBadge.Text = Loc.T("Veri yok"); TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource("TextSecondary"); }
                 if (BarStabilityScore != null) BarStabilityScore.Value = 0;
             }
             else if (TxtStabilityScore != null)
@@ -4555,19 +4555,19 @@ public partial class MainWindow : Window
             // derived from it in this card is shown as an estimate.
             if (trend.DaysCount > 0 && TxtStabilityStatus != null)
             {
-                TxtStabilityStatus.Text = "Tahmini: " + trend.StatusText;
+                TxtStabilityStatus.Text = Loc.T("Tahmini: ") + trend.StatusText;
             }
 
             if (trend.DaysCount > 0 && TxtStabilitySlope != null)
             {
-                string slopeState = trend.DegradationSlopePerDay <= 0.005 ? " (Stabil)" : " (Artış Eğiliminde)";
-                TxtStabilitySlope.Text = $"Eğim: {TelemetryFormatter.FormatThermalSlope(trend.DegradationSlopePerDay)}{slopeState}";
+                string slopeState = trend.DegradationSlopePerDay <= 0.005 ? Loc.T(" (Stabil)") : Loc.T(" (Artış Eğiliminde)");
+                TxtStabilitySlope.Text = Loc.T($"Eğim: {TelemetryFormatter.FormatThermalSlope(trend.DegradationSlopePerDay)}{slopeState}");
             }
 
             if (trend.DaysCount > 0 && TxtStabilityBadge != null)
             {
-                TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? "Nominal (tahmini)" :
-                    (trend.StatusLevel == ThermalStatusLevel.Good ? "Kararlı (tahmini)" : "Bakım Önerilebilir (tahmini)");
+                TxtStabilityBadge.Text = trend.StatusLevel == ThermalStatusLevel.Excellent ? Loc.T("Nominal (tahmini)") :
+                    (trend.StatusLevel == ThermalStatusLevel.Good ? Loc.T("Kararlı (tahmini)") : Loc.T("Bakım Önerilebilir (tahmini)"));
                 TxtStabilityBadge.Foreground = (SolidColorBrush)FindResource(
                     trend.StatusLevel == ThermalStatusLevel.Excellent ? "AccentGreen" :
                     (trend.StatusLevel == ThermalStatusLevel.Good ? "AccentCyan" : "AccentRed"));
@@ -4584,17 +4584,17 @@ public partial class MainWindow : Window
             bool hasLoad = report.HasLoadMeasurement;
             if (TxtPasteHealthPercent != null)
             {
-                TxtPasteHealthPercent.Text = hasLoad ? FormattableString.Invariant($"~{report.PasteHealthPercent:F1} %") : "Ölçüm yok";
+                TxtPasteHealthPercent.Text = hasLoad ? FormattableString.Invariant($"~{report.PasteHealthPercent:F1} %") : Loc.T("Ölçüm yok");
                 TxtPasteHealthPercent.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
                     : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
 
             if (TxtThermalResistance != null)
             {
-                string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? " (Normal)" : " (Yüksek)");
+                string tag = report.ThermalResistanceRatio <= 2.20 ? " (Optimal)" : (report.ThermalResistanceRatio <= 2.55 ? Loc.T(" (Normal)") : Loc.T(" (Yüksek)"));
                 TxtThermalResistance.Text = hasLoad
-                    ? FormattableString.Invariant($"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}")
-                    : "Yük altında örnek bekleniyor";
+                    ? Loc.TInv($"Direnç: ~{report.ThermalResistanceRatio:F2} °C/W{tag}{TelemetryFormatter.EstimatedSuffix}")
+                    : Loc.T("Yük altında örnek bekleniyor");
             }
 
             if (TxtThermalSampleAge != null)
@@ -4604,7 +4604,7 @@ public partial class MainWindow : Window
                 TxtActiveFanHours.Text = FormattableString.Invariant($"{report.ActiveFanHours:F1} Saat");
 
             if (TxtAvgFanRpm != null)
-                TxtAvgFanRpm.Text = report.AvgFanRpm > 0 ? $"Ortalama: {report.AvgFanRpm} RPM" : "Ortalama: --";
+                TxtAvgFanRpm.Text = report.AvgFanRpm > 0 ? Loc.T($"Ortalama: {report.AvgFanRpm} RPM") : Loc.T("Ortalama: --");
 
             if (TxtPassiveFanHours != null)
                 TxtPassiveFanHours.Text = FormattableString.Invariant($"{report.PassiveFanHours:F1} Saat");
@@ -4613,11 +4613,11 @@ public partial class MainWindow : Window
                 TxtFanBearingHealth.Text = FormattableString.Invariant($"~{report.FanBearingHealthPercent:F1} %");
 
             if (TxtFanRatedLife != null)
-                TxtFanRatedLife.Text = FormattableString.Invariant($"Varsayılan fan ömrü {report.FanRatedHours:F0} saat; yalnızca NitroLite açıkken sayılan çalışma süresinden (tahmini)");
+                TxtFanRatedLife.Text = Loc.TInv($"Varsayılan fan ömrü {report.FanRatedHours:F0} saat; yalnızca NitroLite açıkken sayılan çalışma süresinden (tahmini)");
 
             if (TxtThermalBadge != null)
             {
-                TxtThermalBadge.Text = hasLoad ? "Tahmini: " + report.PasteHealthStatus : "Veri toplanıyor";
+                TxtThermalBadge.Text = hasLoad ? Loc.T("Tahmini: ") + report.PasteHealthStatus : Loc.T("Veri toplanıyor");
                 TxtThermalBadge.Foreground = (SolidColorBrush)FindResource(!hasLoad ? "TextSecondary"
                     : report.PasteHealthPercent >= 90 ? "AccentGreen" : (report.PasteHealthPercent >= 80 ? "AccentCyan" : "AccentRed"));
             }
@@ -4627,7 +4627,7 @@ public partial class MainWindow : Window
                 // report.Recommendation only looks at the current resistance, so it can say "bakım
                 // gerekmemektedir" while the trend card right above says "Bakım Önerilebilir".
                 TxtThermalRecommendation.Text = ThermalHealthService.BuildRecommendation(report.Recommendation, trend) +
-                    " Not: Bu değerlendirme deneysel bir tahmindir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.";
+                    Loc.T(" Not: Bu değerlendirme deneysel bir tahmindir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.");
             }
         });
     }
@@ -4639,7 +4639,7 @@ public partial class MainWindow : Window
             _selectedTrendDays = days;
             if (TxtStabilityDaysSubtitle != null)
             {
-                TxtStabilityDaysSubtitle.Text = $" (Son {days} Günlük Veri Seti)";
+                TxtStabilityDaysSubtitle.Text = Loc.T($" (Son {days} Günlük Veri Seti)");
             }
             RefreshThermalHealthUi();
         }
@@ -4669,15 +4669,15 @@ public partial class MainWindow : Window
             // Windows keeps its "charging" flag set while the 80 % limit holds the battery at 0 W, so decide by the
             // actual charge current when it was read.
             if (!status.IsPluggedIn)
-                TxtBatStateDesc.Text = "Pilde Çalışıyor (Deşarj)";
+                TxtBatStateDesc.Text = Loc.T("Pilde Çalışıyor (Deşarj)");
             else if (status.ChargeRateUnknown)
-                TxtBatStateDesc.Text = "Adaptöre Bağlı";
+                TxtBatStateDesc.Text = Loc.T("Adaptöre Bağlı");
             else if (status.ChargeRateWatts > 0)
-                TxtBatStateDesc.Text = "Adaptöre Bağlı (Şarj Ediliyor)";
+                TxtBatStateDesc.Text = Loc.T("Adaptöre Bağlı (Şarj Ediliyor)");
             else
                 TxtBatStateDesc.Text = _batteryService.WatchdogEnabled && status.BatteryPercent >= 78
-                    ? "Adaptöre Bağlı (Şarj sınırında bekliyor)"
-                    : "Adaptöre Bağlı (Şarj olmuyor)";
+                    ? Loc.T("Adaptöre Bağlı (Şarj sınırında bekliyor)")
+                    : Loc.T("Adaptöre Bağlı (Şarj olmuyor)");
 
             // Real-time power flow in Watts via TelemetryFormatter
             if (TxtBatDischargeRate != null)
@@ -4699,13 +4699,13 @@ public partial class MainWindow : Window
 
             if (TxtBatRemainingTime != null)
             {
-                TxtBatRemainingTime.Text = $"Kalan Süre: {TelemetryFormatter.FormatRemainingTime(status.EstimatedRemainingMinutes, status.IsPluggedIn, status.IsCharging)}";
+                TxtBatRemainingTime.Text = Loc.T($"Kalan Süre: {TelemetryFormatter.FormatRemainingTime(status.EstimatedRemainingMinutes, status.IsPluggedIn, status.IsCharging)}");
             }
 
             if (status.IsOvercharged)
             {
                 BannerOvercharge.Visibility = Visibility.Visible;
-                TxtOverchargeMsg.Text = $"Pil seviyesi %{status.BatteryPercent} seviyesine ulaştı. Adaptörü çıkararak deşarj işlemini başlatabilirsiniz.";
+                TxtOverchargeMsg.Text = Loc.T($"Pil seviyesi %{status.BatteryPercent} seviyesine ulaştı. Adaptörü çıkararak deşarj işlemini başlatabilirsiniz.");
             }
             else
             {
@@ -4721,7 +4721,7 @@ public partial class MainWindow : Window
         {
             if (Dispatcher.HasShutdownStarted) return;
             SystemSounds.Exclamation.Play();
-            _notifyIcon?.ShowBalloonTip(3000, "NitroLite", $"Pil %{percent} seviyesine ulaştı (%80 eşiği aşıldı).", System.Windows.Forms.ToolTipIcon.Warning);
+            _notifyIcon?.ShowBalloonTip(3000, Loc.T("NitroLite"), Loc.T($"Pil %{percent} seviyesine ulaştı (%80 eşiği aşıldı)."), System.Windows.Forms.ToolTipIcon.Warning);
         });
     }
 
@@ -4731,13 +4731,13 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             if (Dispatcher.HasShutdownStarted) return;
-            BtnToggleDischarge.Content = "Deşarj İşlemini Başlat";
+            BtnToggleDischarge.Content = Loc.T("Deşarj İşlemini Başlat");
             BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
-            TxtDischargeStatus.Text = "Hedef seviyeye (%80) ulaşıldı. Şarj adaptörünü bağlayabilirsiniz.";
+            TxtDischargeStatus.Text = Loc.T("Hedef seviyeye (%80) ulaşıldı. Şarj adaptörünü bağlayabilirsiniz.");
             TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
 
-            _notifyIcon?.ShowBalloonTip(4000, "NitroLite", "Pil seviyesi %80 sınırına ulaştı. Adaptörü bağlayabilirsiniz.", System.Windows.Forms.ToolTipIcon.Info);
-            ShowToast("Pil seviyesi %80 hedef sınırına indirildi.", trayBalloon: false);
+            _notifyIcon?.ShowBalloonTip(4000, Loc.T("NitroLite"), Loc.T("Pil seviyesi %80 sınırına ulaştı. Adaptörü bağlayabilirsiniz."), System.Windows.Forms.ToolTipIcon.Info);
+            ShowToast(Loc.T("Pil seviyesi %80 hedef sınırına indirildi."), trayBalloon: false);
         });
     }
 
@@ -4758,11 +4758,11 @@ public partial class MainWindow : Window
         {
             TxtModeHeader.Text = mode switch
             {
-                OperatingMode.Quiet => "SESSİZ",
-                OperatingMode.Default => "DENGELİ",
-                OperatingMode.Extreme => "PERFORMANS",
-                OperatingMode.Turbo => "TURBO",
-                OperatingMode.Eco => "ECO",
+                OperatingMode.Quiet => Loc.T("SESSİZ"),
+                OperatingMode.Default => Loc.T("DENGELİ"),
+                OperatingMode.Extreme => Loc.T("PERFORMANS"),
+                OperatingMode.Turbo => Loc.T("TURBO"),
+                OperatingMode.Eco => Loc.T("ECO"),
                 _ => ModePolicy.DisplayName(mode).ToUpperInvariant()
             };
         }
@@ -4806,7 +4806,7 @@ public partial class MainWindow : Window
 
     private void ShowUnknownModeUi()
     {
-        if (TxtModeHeader != null) TxtModeHeader.Text = "BİLİNMİYOR";
+        if (TxtModeHeader != null) TxtModeHeader.Text = Loc.T("BİLİNMİYOR");
         ResetAllModeCards();
         UpdateHighPowerAvailabilityUi();
     }
@@ -4848,7 +4848,7 @@ public partial class MainWindow : Window
         }
         if (txt != null)
         {
-            txt.Text = "SEÇ";
+            txt.Text = Loc.T("SEÇ");
             txt.Foreground = TryFindResource("TextMuted") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         }
         if (btn != null)
@@ -4874,7 +4874,7 @@ public partial class MainWindow : Window
         }
         if (txt != null)
         {
-            txt.Text = "AKTİF";
+            txt.Text = Loc.T("AKTİF");
             txt.Foreground = accent;
         }
         if (btn != null)
@@ -4915,11 +4915,11 @@ public partial class MainWindow : Window
             : await _agentClient.SetLightingAsync(cfg.Effect, cfg.Brightness, cfg.Speed, cfg.Direction, cfg.Color, cfg.LEDs.ToArray());
         if (!ok && !_isExiting)
         {
-            ShowToast($"{failurePrefix}: klavye komutu reddedildi veya Acer servisine ulaşılamadı. Ayar kaydedilmedi.", false);
+            ShowToast(Loc.T($"{failurePrefix}: klavye komutu reddedildi veya Acer servisine ulaşılamadı. Ayar kaydedilmedi."), false);
         }
         else if (ok && _agentClient.LastLightingPartialFailure && !_isExiting)
         {
-            ShowToast("Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.", false);
+            ShowToast(Loc.T("Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir."), false);
         }
 
         // Remember the last lit configuration so brightness/effect changes after "off" can bring it back.
@@ -4980,11 +4980,11 @@ public partial class MainWindow : Window
         }
 
         if (IsLightingOff(cfg))
-            note = "Aydınlatma kapalı. Parlaklığı artırmak, bir efekt ya da renk seçmek son ayarla geri açar.";
+            note = Loc.T("Aydınlatma kapalı. Parlaklığı artırmak, bir efekt ya da renk seçmek son ayarla geri açar.");
         else if (!LightingPolicy.EffectUsesColor(cfg.Effect))
-            note = "Bu efekt klavyenin kendi renk döngüsünü kullanır; seçilen renk uygulanmaz.";
+            note = Loc.T("Bu efekt klavyenin kendi renk döngüsünü kullanır; seçilen renk uygulanmaz.");
         else if (!LightingPolicy.EffectUsesZoneColors(cfg.Effect))
-            note = "Bu efekt tek renk kullanır; bölgelere ayrı renk yalnızca Sabit Renk (STATIC) efektinde verilebilir.";
+            note = Loc.T("Bu efekt tek renk kullanır; bölgelere ayrı renk yalnızca Sabit Renk (STATIC) efektinde verilebilir.");
         else
             note = "";
 
@@ -5025,7 +5025,7 @@ public partial class MainWindow : Window
         {
             string note = IsLightingOff(cfg) || LightingPolicy.EffectUsesColor(cfg.Effect)
                 ? ""
-                : "Renk butonları bu efektte kullanılmaz; bir renk seçerseniz Sabit Renk'e geçilir.";
+                : Loc.T("Renk butonları bu efektte kullanılmaz; bir renk seçerseniz Sabit Renk'e geçilir.");
             TxtRgbEffectNote.Text = note;
             TxtRgbEffectNote.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -5055,14 +5055,14 @@ public partial class MainWindow : Window
         if (_isExiting || Dispatcher.HasShutdownStarted) return;
         try
         {
-            if (await ApplyLightingToDeviceAsync("Aydınlatma ayarı uygulanamadı"))
+            if (await ApplyLightingToDeviceAsync(Loc.T("Aydınlatma ayarı uygulanamadı")))
             {
                 PersistLightingState();
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Aydınlatma ayarı uygulanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma ayarı uygulanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5073,7 +5073,7 @@ public partial class MainWindow : Window
             SliderBrightness.Value = cfg.Brightness;
             SliderSpeed.Value = cfg.Speed;
         });
-        TxtBrightnessVal.Text = IsLightingOff(cfg) ? "0 / 9 (Kapalı)" : $"{cfg.Brightness} / 9";
+        TxtBrightnessVal.Text = IsLightingOff(cfg) ? Loc.T("0 / 9 (Kapalı)") : $"{cfg.Brightness} / 9";
         TxtSpeedVal.Text = $"{cfg.Speed} / 9";
 
         UpdatePreviewZones(cfg);
@@ -5099,7 +5099,7 @@ public partial class MainWindow : Window
 
         bool maximized = WindowState == WindowState.Maximized;
         if (TxtMaximizeGlyph != null) TxtMaximizeGlyph.Text = maximized ? "" : "";
-        if (BtnMaximize != null) BtnMaximize.ToolTip = maximized ? "Geri al" : "Büyüt";
+        if (BtnMaximize != null) BtnMaximize.ToolTip = maximized ? Loc.T("Geri al") : Loc.T("Büyüt");
         // Windows draws no frame around a maximized window; drop the 1px border so content reaches the edges.
         if (RootBorder != null) RootBorder.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
 
@@ -5179,7 +5179,7 @@ public partial class MainWindow : Window
                 await HandleGameEndedAsync(_gameService.ActiveGameProfile ?? new GameProfile());
                 if (HasPendingDesktopRestore && !await RetryPendingDesktopRestoreAsync())
                 {
-                    ShowToast("Ayarlar geri yüklenemedi; yeniden deneyebilmeniz için uygulama açık bırakıldı.", false);
+                    ShowToast(Loc.T("Ayarlar geri yüklenemedi; yeniden deneyebilmeniz için uygulama açık bırakıldı."), false);
                     return;
                 }
             }
@@ -5191,7 +5191,7 @@ public partial class MainWindow : Window
             }
             FinishExit();
         }
-        catch (Exception ex) { ShowToast($"Çıkış tamamlanamadı: {ex.Message}", false); }
+        catch (Exception ex) { ShowToast(Loc.T($"Çıkış tamamlanamadı: {ex.Message}"), false); }
         finally { _exitRequested = false; }
     }
     private void FinishExit()
@@ -5296,7 +5296,7 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(new Action(async () =>
             {
                 try { await HandleModeSwitchKeyAsync(); }
-                catch (Exception ex) { ShowToast($"Mod tuşu işlenemedi: {ex.Message}", false); }
+                catch (Exception ex) { ShowToast(Loc.T($"Mod tuşu işlenemedi: {ex.Message}"), false); }
             }));
         }
         else if (function.Equals(ModeSwitchKey.BacklightTimeoutEvent, StringComparison.OrdinalIgnoreCase))
@@ -5398,7 +5398,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast($"Çalışma modu uygulanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Çalışma modu uygulanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5410,18 +5410,18 @@ public partial class MainWindow : Window
             if (ok)
             {
                 UpdateModeUi(mode);
-                ShowToast($"Çalışma modu: {ModePolicy.DisplayName(mode)}", isSuccess: true, trayBalloon: false);
+                ShowToast(Loc.T($"Çalışma modu: {ModePolicy.DisplayName(mode)}"), isSuccess: true, trayBalloon: false);
                 return true;
             }
             else
             {
-                ShowToast($"Çalışma modu değiştirilemedi: {ModePolicy.DisplayName(mode)}", false);
+                ShowToast(Loc.T($"Çalışma modu değiştirilemedi: {ModePolicy.DisplayName(mode)}"), false);
                 return false;
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Çalışma modu hatası: {ex.Message}", false);
+            ShowToast(Loc.T($"Çalışma modu hatası: {ex.Message}"), false);
             return false;
         }
     }
@@ -5438,20 +5438,20 @@ public partial class MainWindow : Window
                 UpdateDesktopBaselineForManualChange(fan: mode);
                 ShowToast(mode switch
                 {
-                    FanMode.Auto => "Otomatik fan eğrisi etkinleştirildi.",
-                    FanMode.Max => "Maksimum fan devri etkinleştirildi.",
-                    _ => $"Özel fan hızı: CPU %{_agentClient.CustomFanCpuPercent}, GPU %{_agentClient.CustomFanGpuPercent}."
+                    FanMode.Auto => Loc.T("Otomatik fan eğrisi etkinleştirildi."),
+                    FanMode.Max => Loc.T("Maksimum fan devri etkinleştirildi."),
+                    _ => Loc.T($"Özel fan hızı: CPU %{_agentClient.CustomFanCpuPercent}, GPU %{_agentClient.CustomFanGpuPercent}.")
                 });
             }
             else
             {
-                ShowToast("Fan modu uygulanamadı.", false);
+                ShowToast(Loc.T("Fan modu uygulanamadı."), false);
             }
             return ok;
         }
         catch (Exception ex)
         {
-            ShowToast($"Fan modu uygulanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Fan modu uygulanamadı: {ex.Message}"), false);
             return false;
         }
         finally
@@ -5487,7 +5487,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast($"Aydınlatma rengi ayarlanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma rengi ayarlanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5513,7 +5513,7 @@ public partial class MainWindow : Window
         MarkLightingCustomized();
         UpdateLightingUi(_lighting);
         SuppressEffectComboEvents(() => UpdateEffectComboBox(_lighting.Effect));
-        if (!await ApplyLightingToDeviceAsync("Aydınlatma rengi ayarlanamadı")) return;
+        if (!await ApplyLightingToDeviceAsync(Loc.T("Aydınlatma rengi ayarlanamadı"))) return;
         _appSettings.IsBacklightOff = false;
         PersistLightingState();
     }
@@ -5548,7 +5548,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast($"Aydınlatma rengi ayarlanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma rengi ayarlanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5581,13 +5581,13 @@ public partial class MainWindow : Window
             MarkLightingCustomized();
             UpdateLightingUi(_lighting);
             SuppressEffectComboEvents(() => UpdateEffectComboBox("STATIC"));
-            if (!await ApplyLightingToDeviceAsync("Bölge rengi ayarlanamadı")) return;
+            if (!await ApplyLightingToDeviceAsync(Loc.T("Bölge rengi ayarlanamadı"))) return;
             _appSettings.IsBacklightOff = false;
             PersistLightingState();
         }
         catch (Exception ex)
         {
-            ShowToast($"Bölge rengi ayarlanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Bölge rengi ayarlanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5601,12 +5601,12 @@ public partial class MainWindow : Window
             CancelActiveLightingReassertion();
             _lighting.Direction = direction;
             MarkLightingCustomized();
-            if (!await ApplyLightingToDeviceAsync("Efekt yönü ayarlanamadı")) return;
+            if (!await ApplyLightingToDeviceAsync(Loc.T("Efekt yönü ayarlanamadı"))) return;
             PersistLightingState();
         }
         catch (Exception ex)
         {
-            ShowToast($"Efekt yönü ayarlanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Efekt yönü ayarlanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5618,7 +5618,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowToast($"Aydınlatma kapatılamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma kapatılamadı: {ex.Message}"), false);
         }
     }
 
@@ -5638,7 +5638,7 @@ public partial class MainWindow : Window
         UpdateLightingUi(_lighting);
         SuppressEffectComboEvents(() => UpdateEffectComboBox("OFF"));
 
-        if (!await ApplyLightingToDeviceAsync("Aydınlatma kapatılamadı")) return;
+        if (!await ApplyLightingToDeviceAsync(Loc.T("Aydınlatma kapatılamadı"))) return;
 
         _appSettings.IsBacklightOff = true;
         _appSettings.KeyboardLighting = _lighting;
@@ -5699,14 +5699,14 @@ public partial class MainWindow : Window
                 MarkLightingCustomized();
                 UpdateLightingUi(_lighting);
 
-                if (!await ApplyLightingToDeviceAsync("Aydınlatma efekti ayarlanamadı")) return;
+                if (!await ApplyLightingToDeviceAsync(Loc.T("Aydınlatma efekti ayarlanamadı"))) return;
                 _appSettings.IsBacklightOff = false;
                 PersistLightingState();
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Aydınlatma efekti ayarlanamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Aydınlatma efekti ayarlanamadı: {ex.Message}"), false);
         }
     }
 
@@ -5793,7 +5793,7 @@ public partial class MainWindow : Window
         if (!ok)
         {
             SetBacklightTimeoutCheckboxSilently(!enable);
-            ShowToast("30 sn aydınlatma zaman aşımı değiştirilemedi: klavye komutu reddedildi veya Acer servisine ulaşılamadı.", false);
+            ShowToast(Loc.T("30 sn aydınlatma zaman aşımı değiştirilemedi: klavye komutu reddedildi veya Acer servisine ulaşılamadı."), false);
         }
     }
 
@@ -5848,18 +5848,18 @@ public partial class MainWindow : Window
             {
                 _appSettings.BatteryWatchdogEnabled = enable;
                 SaveSettings();
-                ShowToast(enable ? "%80 şarj sınırı etkinleştirildi (Acer Care Center)." : "Şarj sınırı kapatıldı; pil %100'e kadar şarj olacak.");
+                ShowToast(enable ? Loc.T("%80 şarj sınırı etkinleştirildi (Acer Care Center).") : Loc.T("Şarj sınırı kapatıldı; pil %100'e kadar şarj olacak."));
             }
             else
             {
                 SetWatchdogCheckboxSilently(!enable);
-                ShowToast($"Şarj sınırı değiştirilemedi: {_careCenterClient.LastError ?? "bilinmeyen hata"}", false);
+                ShowToast(Loc.T($"Şarj sınırı değiştirilemedi: {_careCenterClient.LastError ?? "bilinmeyen hata"}"), false);
             }
         }
         catch (Exception ex)
         {
             SetWatchdogCheckboxSilently(!enable);
-            ShowToast($"Şarj sınırı değiştirilemedi: {ex.Message}", false);
+            ShowToast(Loc.T($"Şarj sınırı değiştirilemedi: {ex.Message}"), false);
         }
         finally
         {
@@ -5878,8 +5878,8 @@ public partial class MainWindow : Window
         if (_batteryService.CurrentStatus.IsPluggedIn)
         {
             var res = System.Windows.MessageBox.Show(this,
-                "Adaptör bağlıyken batarya deşarj edilemez.\n\nAdaptörü çıkardıktan sonra 'Evet'e tıklayın.",
-                "Adaptör Bağlantısı", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                Loc.T("Adaptör bağlıyken batarya deşarj edilemez.\n\nAdaptörü çıkardıktan sonra 'Evet'e tıklayın."),
+                Loc.T("Adaptör Bağlantısı"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (res != MessageBoxResult.Yes) return;
         }
 
@@ -5888,8 +5888,8 @@ public partial class MainWindow : Window
         {
             var st = _batteryService.CurrentStatus;
             ShowToast(st.IsPluggedIn
-                ? "Adaptör hâlâ bağlı; deşarj başlatılmadı."
-                : $"Pil seviyesi (%{st.BatteryPercent}) zaten %80 veya altında; deşarja gerek yok.", isSuccess: false);
+                ? Loc.T("Adaptör hâlâ bağlı; deşarj başlatılmadı.")
+                : Loc.T($"Pil seviyesi (%{st.BatteryPercent}) zaten %80 veya altında; deşarja gerek yok."), isSuccess: false);
         }
     }
 
@@ -5903,17 +5903,17 @@ public partial class MainWindow : Window
             if (BtnToggleDischarge == null || TxtDischargeStatus == null) return;
             if (active)
             {
-                BtnToggleDischarge.Content = "Deşarjı Durdur";
+                BtnToggleDischarge.Content = Loc.T("Deşarjı Durdur");
                 BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentRed");
-                TxtDischargeStatus.Text = "Deşarj işlemi aktif: Pil seviyesi %80 sınırına indiriliyor...";
+                TxtDischargeStatus.Text = Loc.T("Deşarj işlemi aktif: Pil seviyesi %80 sınırına indiriliyor...");
                 TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
             }
             else
             {
-                BtnToggleDischarge.Content = "Deşarj İşlemini Başlat";
+                BtnToggleDischarge.Content = Loc.T("Deşarj İşlemini Başlat");
                 BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
                 bool plugged = _batteryService.CurrentStatus.IsPluggedIn;
-                TxtDischargeStatus.Text = plugged ? "Durum: Durdu (adaptör bağlandı)." : "Durum: Durduruldu.";
+                TxtDischargeStatus.Text = plugged ? Loc.T("Durum: Durdu (adaptör bağlandı).") : Loc.T("Durum: Durduruldu.");
                 TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
             }
         }));
@@ -5931,7 +5931,7 @@ public partial class MainWindow : Window
 
         if (TxtNitroSenseRunningBadge != null)
         {
-            TxtNitroSenseRunningBadge.Text = nsRunning ? "Açık" : "Kapalı";
+            TxtNitroSenseRunningBadge.Text = nsRunning ? Loc.T("Açık") : Loc.T("Kapalı");
             TxtNitroSenseRunningBadge.Foreground = nsRunning
                 ? (SolidColorBrush)FindResource("AccentRed")
                 : (SolidColorBrush)FindResource("TextMuted");
@@ -5940,9 +5940,9 @@ public partial class MainWindow : Window
         {
             TxtNitroSenseLauncherState.Text = launcherEnabled switch
             {
-                true => "Windows açılışında NitroSense'i başlatan görev (NitroSenseLauncher): açık",
-                false => "Windows açılışında NitroSense'i başlatan görev (NitroSenseLauncher): kapalı",
-                null => "NitroSense'i açılışta başlatan görev bulunamadı"
+                true => Loc.T("Windows açılışında NitroSense'i başlatan görev (NitroSenseLauncher): açık"),
+                false => Loc.T("Windows açılışında NitroSense'i başlatan görev (NitroSenseLauncher): kapalı"),
+                null => Loc.T("NitroSense'i açılışta başlatan görev bulunamadı")
             };
         }
         // Dimmed rather than disabled: the button template renders a disabled button as a blank light box.
@@ -5964,18 +5964,18 @@ public partial class MainWindow : Window
         if (!_debloatService.IsNitroSenseRunning())
         {
             await RefreshServiceListAsync();
-            ShowToast("NitroSense zaten kapalı.");
+            ShowToast(Loc.T("NitroSense zaten kapalı."));
             return;
         }
 
         var confirm = System.Windows.MessageBox.Show(this,
-            "NitroSense ve yardımcı işlemleri kapatılacak. Kaydedilmemiş bir NitroSense ayarı varsa kaybolur.\n\nDevam edilsin mi?",
-            "NitroSense'i Kapat", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("NitroSense ve yardımcı işlemleri kapatılacak. Kaydedilmemiş bir NitroSense ayarı varsa kaybolur.\n\nDevam edilsin mi?"),
+            Loc.T("NitroSense'i Kapat"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
         bool closed = await Task.Run(() => _debloatService.KillNitroSenseProcesses());
         await RefreshServiceListAsync();
-        ShowToast(closed ? "NitroSense kapatıldı." : "NitroSense kapatılamadı (yönetici olarak çalışıyor olabilir).", closed);
+        ShowToast(closed ? Loc.T("NitroSense kapatıldı.") : Loc.T("NitroSense kapatılamadı (yönetici olarak çalışıyor olabilir)."), closed);
     }
 
     private async void BtnApplyDebloat_Click(object sender, RoutedEventArgs e)
@@ -5990,10 +5990,10 @@ public partial class MainWindow : Window
             }
 
             var confirm = System.Windows.MessageBox.Show(this,
-                "Listelenen Acer arka plan servisleri durdurulup devre dışı bırakılacak ve NitroSense'in açılışta başlatılması kapatılacak. " +
+                Loc.T("Listelenen Acer arka plan servisleri durdurulup devre dışı bırakılacak ve NitroSense'in açılışta başlatılması kapatılacak. " +
                 "Mevcut ayarlar önce yedeklenir; \"Servisleri Geri Yükle\" ile geri dönebilirsiniz.\n\n" +
-                "NitroLite'ın kullandığı Acer Agent, Care Center ve Lighting servislerine dokunulmaz. Yönetici izni istenecek.\n\nDevam edilsin mi?",
-                "Acer Servisleri", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                "NitroLite'ın kullandığı Acer Agent, Care Center ve Lighting servislerine dokunulmaz. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+                Loc.T("Acer Servisleri"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (confirm != MessageBoxResult.Yes) return;
 
             _serviceOperationBusy = true;
@@ -6003,19 +6003,19 @@ public partial class MainWindow : Window
             await RefreshServiceListAsync();
             if (ok)
             {
-                ShowToast("Acer arka plan servisleri devre dışı bırakıldı.");
+                ShowToast(Loc.T("Acer arka plan servisleri devre dışı bırakıldı."));
             }
             else
             {
                 var msg = !string.IsNullOrEmpty(_debloatService.LastError)
-                    ? $"Servisler devre dışı bırakılamadı: {_debloatService.LastError}"
-                    : "Servisler devre dışı bırakılamadı (yönetici izni verilmemiş olabilir).";
+                    ? Loc.T($"Servisler devre dışı bırakılamadı: {_debloatService.LastError}")
+                    : Loc.T("Servisler devre dışı bırakılamadı (yönetici izni verilmemiş olabilir).");
                 ShowToast(msg, false);
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Servisler yapılandırılamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Servisler yapılandırılamadı: {ex.Message}"), false);
         }
         finally
         {
@@ -6031,10 +6031,10 @@ public partial class MainWindow : Window
         {
             bool hasBackup = _debloatService.HasRestorableBackup();
             var question = hasBackup
-                ? "Servisler, devre dışı bırakılmadan önce kaydedilen haline döndürülecek. Yönetici izni istenecek.\n\nDevam edilsin mi?"
-                : "Servislerin önceki hali için kayıtlı bir yedek yok.\n\nServisler Acer'in fabrika ayarına (Otomatik başlat) döndürülüp başlatılacak. " +
-                  "NitroSense'in açılışta başlatma ayarına dokunulmaz. Yönetici izni istenecek.\n\nDevam edilsin mi?";
-            var confirm = System.Windows.MessageBox.Show(this, question, "Servisleri Geri Yükle", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                ? Loc.T("Servisler, devre dışı bırakılmadan önce kaydedilen haline döndürülecek. Yönetici izni istenecek.\n\nDevam edilsin mi?")
+                : Loc.T("Servislerin önceki hali için kayıtlı bir yedek yok.\n\nServisler Acer'in fabrika ayarına (Otomatik başlat) döndürülüp başlatılacak. " +
+                  "NitroSense'in açılışta başlatma ayarına dokunulmaz. Yönetici izni istenecek.\n\nDevam edilsin mi?");
+            var confirm = System.Windows.MessageBox.Show(this, question, Loc.T("Servisleri Geri Yükle"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (confirm != MessageBoxResult.Yes) return;
 
             _serviceOperationBusy = true;
@@ -6046,19 +6046,19 @@ public partial class MainWindow : Window
             await RefreshServiceListAsync();
             if (ok)
             {
-                ShowToast(hasBackup ? "Önceki servis yapılandırması geri yüklendi." : "Servisler Acer fabrika ayarına döndürüldü.");
+                ShowToast(hasBackup ? Loc.T("Önceki servis yapılandırması geri yüklendi.") : Loc.T("Servisler Acer fabrika ayarına döndürüldü."));
             }
             else
             {
                 var msg = !string.IsNullOrEmpty(_debloatService.LastError)
-                    ? $"Servisler geri yüklenemedi: {_debloatService.LastError}"
-                    : "Servisler geri yüklenemedi (yönetici izni verilmemiş olabilir).";
+                    ? Loc.T($"Servisler geri yüklenemedi: {_debloatService.LastError}")
+                    : Loc.T("Servisler geri yüklenemedi (yönetici izni verilmemiş olabilir).");
                 ShowToast(msg, false);
             }
         }
         catch (Exception ex)
         {
-            ShowToast($"Servisler geri yüklenemedi: {ex.Message}", false);
+            ShowToast(Loc.T($"Servisler geri yüklenemedi: {ex.Message}"), false);
         }
         finally
         {
@@ -6071,11 +6071,11 @@ public partial class MainWindow : Window
     {
         if (_serviceOperationBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            "AcerLightingService kayıt defteri yolu ve başlangıç türü sürücü deposuyla eşitlenecek, ardından klavye servisi yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
-            "Klavye RGB Servisini Onar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("AcerLightingService kayıt defteri yolu ve başlangıç türü sürücü deposuyla eşitlenecek, ardından klavye servisi yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+            Loc.T("Klavye RGB Servisini Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        SetRepairToolBusy(true, "Klavye aydınlatma servisi onarılıyor...");
+        SetRepairToolBusy(true, Loc.T("Klavye aydınlatma servisi onarılıyor..."));
         try
         {
             var res = await SystemToolsService.FixKeyboardLightingAsync();
@@ -6085,8 +6085,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetRepairToolStatus(false, $"Hata: {ex.Message}");
-            ShowToast($"Onarım hatası: {ex.Message}", false);
+            SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
+            ShowToast(Loc.T($"Onarım hatası: {ex.Message}"), false);
         }
         finally
         {
@@ -6098,11 +6098,11 @@ public partial class MainWindow : Window
     {
         if (_serviceOperationBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            "AcerCentralService ve AcerLightingService en güncel sürücü paketine bağlanacak, çakışan eski servis süreçleri kapatılıp servisler yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
-            "Acer & NitroSense Servislerini Onar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("AcerCentralService ve AcerLightingService en güncel sürücü paketine bağlanacak, çakışan eski servis süreçleri kapatılıp servisler yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+            Loc.T("Acer & NitroSense Servislerini Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        SetRepairToolBusy(true, "Acer arka plan servisleri güncelleniyor ve onarılıyor...");
+        SetRepairToolBusy(true, Loc.T("Acer arka plan servisleri güncelleniyor ve onarılıyor..."));
         try
         {
             var res = await SystemToolsService.FixAcerServicesAsync();
@@ -6112,8 +6112,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetRepairToolStatus(false, $"Hata: {ex.Message}");
-            ShowToast($"Onarım hatası: {ex.Message}", false);
+            SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
+            ShowToast(Loc.T($"Onarım hatası: {ex.Message}"), false);
         }
         finally
         {
@@ -6125,11 +6125,11 @@ public partial class MainWindow : Window
     {
         if (_serviceOperationBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            "Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
-            "MUX Switch Kaydını Onar", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+            Loc.T("MUX Switch Kaydını Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        SetRepairToolBusy(true, "MUX switch kaydı ve servisleri düzenleniyor...");
+        SetRepairToolBusy(true, Loc.T("MUX switch kaydı ve servisleri düzenleniyor..."));
         try
         {
             var res = await SystemToolsService.RestoreMuxSwitchAsync();
@@ -6138,8 +6138,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetRepairToolStatus(false, $"Hata: {ex.Message}");
-            ShowToast($"MUX onarım hatası: {ex.Message}", false);
+            SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
+            ShowToast(Loc.T($"MUX onarım hatası: {ex.Message}"), false);
         }
         finally
         {
@@ -6151,11 +6151,11 @@ public partial class MainWindow : Window
     {
         if (_serviceOperationBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            "Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?",
-            "Windows & Sistem Optimizasyonu", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+            Loc.T("Windows & Sistem Optimizasyonu"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        SetRepairToolBusy(true, "Sistem ve arka plan optimizasyonları uygulanıyor...");
+        SetRepairToolBusy(true, Loc.T("Sistem ve arka plan optimizasyonları uygulanıyor..."));
         try
         {
             var res = await SystemToolsService.OptimizePcAsync();
@@ -6164,8 +6164,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetRepairToolStatus(false, $"Hata: {ex.Message}");
-            ShowToast($"Optimizasyon hatası: {ex.Message}", false);
+            SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
+            ShowToast(Loc.T($"Optimizasyon hatası: {ex.Message}"), false);
         }
         finally
         {
@@ -6177,11 +6177,11 @@ public partial class MainWindow : Window
     {
         if (_serviceOperationBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            "Optimizasyonun değiştirdiği servis başlangıç türleri, HAGS ayarı ve telemetri görevleri yedekten geri yüklenecek. Yönetici izni istenecek.\n\nDevam edilsin mi?",
-            "Optimizasyonu Geri Al", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("Optimizasyonun değiştirdiği servis başlangıç türleri, HAGS ayarı ve telemetri görevleri yedekten geri yüklenecek. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
+            Loc.T("Optimizasyonu Geri Al"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        SetRepairToolBusy(true, "Optimizasyon öncesi ayarlar geri yükleniyor...");
+        SetRepairToolBusy(true, Loc.T("Optimizasyon öncesi ayarlar geri yükleniyor..."));
         try
         {
             var res = await SystemToolsService.RestoreOptimizePcAsync();
@@ -6190,8 +6190,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SetRepairToolStatus(false, $"Hata: {ex.Message}");
-            ShowToast($"Geri alma hatası: {ex.Message}", false);
+            SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
+            ShowToast(Loc.T($"Geri alma hatası: {ex.Message}"), false);
         }
         finally
         {
@@ -6242,13 +6242,13 @@ public partial class MainWindow : Window
             _isInitializingUi = true;
             try { ChkAutoStart.IsChecked = false; }
             finally { _isInitializingUi = false; }
-            ShowToast("NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın.", false);
+            ShowToast(Loc.T("NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın."), false);
             return;
         }
 
         if (_debloatService.SetNitroLiteAutoStart(enable, _appSettings.StartMinimized))
         {
-            ShowToast(enable ? "Windows açılışında otomatik çalıştırma etkin" : "Windows açılışında çalıştırma kapatıldı");
+            ShowToast(enable ? Loc.T("Windows açılışında otomatik çalıştırma etkin") : Loc.T("Windows açılışında çalıştırma kapatıldı"));
             return;
         }
 
@@ -6256,7 +6256,7 @@ public partial class MainWindow : Window
         _isInitializingUi = true;
         try { ChkAutoStart.IsChecked = _debloatService.IsNitroLiteAutoStartEnabled(); }
         finally { _isInitializingUi = false; }
-        ShowToast("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı).", false);
+        ShowToast(Loc.T("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı)."), false);
     }
 
     private void ChkStartMinimized_Changed(object sender, RoutedEventArgs e)
@@ -6269,12 +6269,12 @@ public partial class MainWindow : Window
             || _debloatService.SetNitroLiteAutoStart(true, _appSettings.StartMinimized);
         if (!written)
         {
-            ShowToast("Ayar kaydedildi ama başlangıç kaydı güncellenemedi.", false);
+            ShowToast(Loc.T("Ayar kaydedildi ama başlangıç kaydı güncellenemedi."), false);
             return;
         }
         ShowToast(_appSettings.StartMinimized
-            ? "Windows açılışında pencere gösterilmeden tepside başlayacak"
-            : "Windows açılışında pencere açık başlayacak");
+            ? Loc.T("Windows açılışında pencere gösterilmeden tepside başlayacak")
+            : Loc.T("Windows açılışında pencere açık başlayacak"));
     }
 
     private bool _ramCleanBusy;
@@ -6291,19 +6291,20 @@ public partial class MainWindow : Window
                 var state = await Task.Run(() => _purgeTask.GetState());
                 if (state == StandbyPurgeTaskState.Unavailable)
                 {
-                    ShowToast("Temizleme yardımcısı NitroLite klasöründe bulunamadı; NitroLite'ı yeniden derleyin.", false);
+                    ShowToast(Loc.T("Temizleme yardımcısı NitroLite klasöründe bulunamadı; NitroLite'ı yeniden derleyin."), false);
                     return;
                 }
                 if (state != StandbyPurgeTaskState.Ready && !await RunPurgeSetupAsync(state)) return;
             }
 
-            SetRamCleanStatus(" (Boşaltılıyor…)", "TextSecondary");
+            _ramCleanResultShown = false;
+            SetRamCleanStatus(Loc.T(" (Boşaltılıyor…)"), "TextSecondary");
             var res = await _memoryService.CleanMemoryAsync();
             ShowMemoryCleanResult(res, automatic: false);
         }
         catch (Exception ex)
         {
-            ShowToast($"Bekleme belleği boşaltılamadı: {ex.Message}", false);
+            ShowToast(Loc.T($"Bekleme belleği boşaltılamadı: {ex.Message}"), false);
         }
         finally
         {
@@ -6317,24 +6318,24 @@ public partial class MainWindow : Window
     {
         if (_purgeTask == null) return false;
         string text = state == StandbyPurgeTaskState.NeedsUpdate
-            ? "Sormadan temizleme kurulumu bu NitroLite sürümüyle uyuşmuyor ve güncellenmesi gerekiyor.\n\n" +
-              "Windows bir kez yönetici izni (UAC) isteyecek. Sonrasında temizleme yine sormadan çalışır.\n\nGüncellensin mi?"
-            : "Bekleme belleğini boşaltmak yönetici yetkisi ister. Her seferinde sormaması için bir kerelik kurulum yapılacak:\n\n" +
+            ? Loc.T("Sormadan temizleme kurulumu bu NitroLite sürümüyle uyuşmuyor ve güncellenmesi gerekiyor.\n\n" +
+              "Windows bir kez yönetici izni (UAC) isteyecek. Sonrasında temizleme yine sormadan çalışır.\n\nGüncellensin mi?")
+            : Loc.T("Bekleme belleğini boşaltmak yönetici yetkisi ister. Her seferinde sormaması için bir kerelik kurulum yapılacak:\n\n" +
               "• Yalnızca bekleme belleğini boşaltan küçük bir program C:\\Program Files\\NitroLite klasörüne kopyalanır.\n" +
               "• Onu yönetici yetkisiyle çalıştıran bir Windows görevi (\\NitroLite\\StandbyPurge) kaydedilir. Görev kendiliğinden çalışmaz; yalnızca NitroLite başlatır.\n\n" +
               "Windows şimdi bir kez yönetici izni (UAC) isteyecek. Sonrasında butona her bastığınızda sormadan çalışır. " +
-              "Bu karttaki \"Kurulumu kaldır\" ile tamamen silebilirsiniz.\n\nKurulum yapılsın mı?";
-        var confirm = System.Windows.MessageBox.Show(this, text, "Sormadan Bellek Temizleme", MessageBoxButton.YesNo, MessageBoxImage.Question);
+              "Bu karttaki \"Kurulumu kaldır\" ile tamamen silebilirsiniz.\n\nKurulum yapılsın mı?");
+        var confirm = System.Windows.MessageBox.Show(this, text, Loc.T("Sormadan Bellek Temizleme"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return false;
 
-        SetRamCleanStatus(" (Kuruluyor…)", "TextSecondary");
+        SetRamCleanStatus(Loc.T(" (Kuruluyor…)"), "TextSecondary");
         bool ok = await _purgeTask.InstallAsync();
         if (!ok)
         {
-            ShowToast($"Kurulum yapılamadı: {_purgeTask.LastError}", false);
+            ShowToast(Loc.T($"Kurulum yapılamadı: {_purgeTask.LastError}"), false);
             return false;
         }
-        ShowToast("Kurulum tamam. Bekleme belleği artık sormadan boşaltılacak.");
+        ShowToast(Loc.T("Kurulum tamam. Bekleme belleği artık sormadan boşaltılacak."));
         return true;
     }
 
@@ -6342,16 +6343,16 @@ public partial class MainWindow : Window
     {
         if (_purgeTask == null || _ramCleanBusy) return;
         var confirm = System.Windows.MessageBox.Show(this,
-            "Sormadan temizleme kurulumu kaldırılacak (Windows görevi ve C:\\Program Files\\NitroLite\\StandbyPurge klasörü silinir).\n\n" +
-            "Windows bir kez yönetici izni (UAC) isteyecek. Devam edilsin mi?",
-            "Kurulumu Kaldır", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            Loc.T("Sormadan temizleme kurulumu kaldırılacak (Windows görevi ve C:\\Program Files\\NitroLite\\StandbyPurge klasörü silinir).\n\n" +
+            "Windows bir kez yönetici izni (UAC) isteyecek. Devam edilsin mi?"),
+            Loc.T("Kurulumu Kaldır"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
         _ramCleanBusy = true;
         try
         {
             bool ok = await _purgeTask.UninstallAsync();
-            ShowToast(ok ? "Sormadan temizleme kurulumu kaldırıldı." : $"Kaldırılamadı: {_purgeTask.LastError}", ok);
+            ShowToast(ok ? Loc.T("Sormadan temizleme kurulumu kaldırıldı.") : Loc.T($"Kaldırılamadı: {_purgeTask.LastError}"), ok);
         }
         finally
         {
@@ -6365,23 +6366,24 @@ public partial class MainWindow : Window
         if (res.RequiresAdministrator)
         {
             if (!automatic)
-                ShowToast("Bekleme belleğini boşaltmak için bir kerelik kurulum gerekiyor (butona basınca başlar).", false);
+                ShowToast(Loc.T("Bekleme belleğini boşaltmak için bir kerelik kurulum gerekiyor (butona basınca başlar)."), false);
             return;
         }
+        _ramCleanResultShown = true;
         if (!res.StandbyPurged)
         {
             if (!automatic)
             {
                 string why = res.TaskExitCode switch
                 {
-                    2 => "görev yönetici yetkisi alamadı (hesap yönetici olmayabilir)",
-                    3 => "Windows boşaltmayı reddetti",
-                    null => res.Error ?? "görev çalışmadı",
-                    _ => $"hata kodu {res.TaskExitCode}"
+                    2 => Loc.T("görev yönetici yetkisi alamadı (hesap yönetici olmayabilir)"),
+                    3 => Loc.T("Windows boşaltmayı reddetti"),
+                    null => res.Error ?? Loc.T("görev çalışmadı"),
+                    _ => Loc.T($"hata kodu {res.TaskExitCode}")
                 };
-                ShowToast($"Bekleme belleği boşaltılamadı: {why}.", false);
+                ShowToast(Loc.T($"Bekleme belleği boşaltılamadı: {why}."), false);
             }
-            SetRamCleanStatus(" (Başarısız)", "AccentRed");
+            SetRamCleanStatus(Loc.T(" (Başarısız)"), "AccentRed");
             return;
         }
 
@@ -6390,13 +6392,13 @@ public partial class MainWindow : Window
             : $"{res.FreedMegabytes:F0} MB";
         if (res.FreedMegabytes <= 0)
         {
-            ShowToast("Bekleme belleği zaten temiz (boşaltılacak önbellek yok).", isSuccess: true, trayBalloon: false);
-            SetRamCleanStatus(" (Zaten temiz)", "AccentGreen");
+            ShowToast(Loc.T("Bekleme belleği zaten temiz (boşaltılacak önbellek yok)."), isSuccess: true, trayBalloon: false);
+            SetRamCleanStatus(Loc.T(" (Zaten temiz)"), "AccentGreen");
         }
         else
         {
-            ShowToast($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe aktarıldı.", isSuccess: true, trayBalloon: false);
-            SetRamCleanStatus($" ({freedStr} boşaltıldı)", "AccentGreen");
+            ShowToast(Loc.T($"Bekleme belleği boşaltıldı: {freedStr} boş belleğe aktarıldı."), isSuccess: true, trayBalloon: false);
+            SetRamCleanStatus(Loc.T($" ({freedStr} boşaltıldı)"), "AccentGreen");
         }
         UpdateMemoryListText();
     }
@@ -6411,6 +6413,9 @@ public partial class MainWindow : Window
     private readonly bool _ramCleanIsAdmin = MemoryCleanerService.IsRunningAsAdministrator();
     // Admin, or the no-prompt task is installed and current: the purge (manual and automatic) works.
     private bool _ramCleanAvailable;
+    // True while the status line shows the outcome of the last purge. A flag, not a text search: the status text is
+    // translated, so looking for "boşaltıldı" only worked in Turkish.
+    private bool _ramCleanResultShown;
 
     /// <summary>Reads the task state off the UI thread and updates the card (status, auto checkbox, remove link).</summary>
     private async Task RefreshRamCleanStateAsync(bool keepResultText = false)
@@ -6426,24 +6431,23 @@ public partial class MainWindow : Window
         {
             // Never disabled: the custom button template renders a disabled button as an empty white box.
             BtnCleanRamCache.Opacity = 1.0;
-            BtnCleanRamCache.Content = _ramCleanAvailable || state == null ? "Bekleme Belleğini Boşalt" : "Kur ve Boşalt";
+            BtnCleanRamCache.Content = _ramCleanAvailable || state == null ? Loc.T("Bekleme Belleğini Boşalt") : Loc.T("Kur ve Boşalt");
         }
         if (ChkAutoRamClean != null) ChkAutoRamClean.IsEnabled = _ramCleanAvailable;
         if (BtnRemovePurgeTask != null)
             BtnRemovePurgeTask.Visibility = state is StandbyPurgeTaskState.Ready or StandbyPurgeTaskState.NeedsUpdate
                 ? Visibility.Visible : Visibility.Collapsed;
 
-        bool showingResult = keepResultText && TxtRamCleanStatus != null
-            && (TxtRamCleanStatus.Text.Contains("boşaltıldı") || TxtRamCleanStatus.Text.Contains("Başarısız"));
+        bool showingResult = keepResultText && _ramCleanResultShown;
         if (!showingResult)
         {
-            if (_ramCleanIsAdmin) SetRamCleanStatus(" (Hazır)", "AccentGreen");
+            if (_ramCleanIsAdmin) SetRamCleanStatus(Loc.T(" (Hazır)"), "AccentGreen");
             else switch (state)
             {
-                case StandbyPurgeTaskState.Ready: SetRamCleanStatus(" (Hazır · sormadan çalışır)", "AccentGreen"); break;
-                case StandbyPurgeTaskState.NeedsUpdate: SetRamCleanStatus(" (Kurulum güncellenmeli)", "AccentRed"); break;
-                case StandbyPurgeTaskState.Unavailable: SetRamCleanStatus(" (Yardımcı dosya eksik)", "AccentRed"); break;
-                default: SetRamCleanStatus(" (Bir kerelik kurulum gerekli)", "TextSecondary"); break;
+                case StandbyPurgeTaskState.Ready: SetRamCleanStatus(Loc.T(" (Hazır · sormadan çalışır)"), "AccentGreen"); break;
+                case StandbyPurgeTaskState.NeedsUpdate: SetRamCleanStatus(Loc.T(" (Kurulum güncellenmeli)"), "AccentRed"); break;
+                case StandbyPurgeTaskState.Unavailable: SetRamCleanStatus(Loc.T(" (Yardımcı dosya eksik)"), "AccentRed"); break;
+                default: SetRamCleanStatus(Loc.T(" (Bir kerelik kurulum gerekli)"), "TextSecondary"); break;
             }
         }
         UpdateMemoryListText();
@@ -6455,10 +6459,10 @@ public partial class MainWindow : Window
         if (TxtRamCleanNote == null) return;
         var lists = MemoryCleanerService.ReadMemoryLists();
         string sizes = lists.HasValue
-            ? FormattableString.Invariant($"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. ")
+            ? Loc.TInv($"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. ")
             : "";
-        TxtRamCleanNote.Text = sizes + "Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz. "
-                               + "Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.";
+        TxtRamCleanNote.Text = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz. ")
+                               + Loc.T("Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.");
     }
 
     private int _autoRamCleanRunning;
@@ -6484,7 +6488,7 @@ public partial class MainWindow : Window
         if (!IsLoaded || _isInitializingUi || ChkAutoRamClean == null) return;
         _appSettings.AutoRamCleanerEnabled = ChkAutoRamClean.IsChecked == true;
         SaveSettings();
-        ShowToast(_appSettings.AutoRamCleanerEnabled ? "Otomatik bellek temizleme etkin" : "Otomatik bellek temizleme devre dışı");
+        ShowToast(_appSettings.AutoRamCleanerEnabled ? Loc.T("Otomatik bellek temizleme etkin") : Loc.T("Otomatik bellek temizleme devre dışı"));
     }
 
     private async void CmbDcPowerMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -6494,7 +6498,7 @@ public partial class MainWindow : Window
         {
             _appSettings.DcPowerMode = pref;
             SaveSettings();
-            ShowToast(pref == DcPowerProfilePreference.Eco ? "Pilde güç tercihi: Eco (sessiz mod, pilde boost kapalı)" : "Pilde güç tercihi: Dengeli (mevcut ayarlar korunur)");
+            ShowToast(pref == DcPowerProfilePreference.Eco ? Loc.T("Pilde güç tercihi: Eco (sessiz mod, pilde boost kapalı)") : Loc.T("Pilde güç tercihi: Dengeli (mevcut ayarlar korunur)"));
             if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
         }
     }
@@ -6506,8 +6510,8 @@ public partial class MainWindow : Window
         if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
         SaveSettings();
         ShowToast(_appSettings.AutoRefreshRateSwitching
-            ? "Otomatik tazeleme etkin: pilde Eco laptop ekranını 60 Hz'e alır, adaptörde önceki hıza döner"
-            : "Otomatik ekran tazeleme hızı geçişi devre dışı");
+            ? Loc.T("Otomatik tazeleme etkin: pilde Eco laptop ekranını 60 Hz'e alır, adaptörde önceki hıza döner")
+            : Loc.T("Otomatik ekran tazeleme hızı geçişi devre dışı"));
     }
 }
 

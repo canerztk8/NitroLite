@@ -39,11 +39,11 @@ public static class LightingPolicy
 
     public static string DirectionName(int direction) => direction switch
     {
-        1 => "Sağa",
-        2 => "Sola",
-        3 => "Yukarı",
-        4 => "Aşağı",
-        _ => "Sağa"
+        1 => Loc.T("Sağa"),
+        2 => Loc.T("Sola"),
+        3 => Loc.T("Yukarı"),
+        4 => Loc.T("Aşağı"),
+        _ => Loc.T("Sağa")
     };
 
     public static LightingConfig Clone(LightingConfig c) => new()

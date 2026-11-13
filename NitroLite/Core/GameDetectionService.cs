@@ -322,13 +322,13 @@ public class GameDetectionService : IDisposable
     public static string? ValidateCustomGameExecutable(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            return "Dosya bulunamadı.";
+            return Loc.T("Dosya bulunamadı.");
         if (!string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
-            return "Yalnızca .exe dosyaları oyun olarak eklenebilir.";
+            return Loc.T("Yalnızca .exe dosyaları oyun olarak eklenebilir.");
 
         var name = Path.GetFileNameWithoutExtension(path);
         if (IsNonGameExecutable(name))
-            return $"'{name}.exe' bir oyun değil ve sürekli çalıştığı için oyun modunu kalıcı olarak açık tutar.";
+            return Loc.T($"'{name}.exe' bir oyun değil ve sürekli çalıştığı için oyun modunu kalıcı olarak açık tutar.");
 
         try
         {
@@ -336,11 +336,11 @@ public class GameDetectionService : IDisposable
             var windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
             if (!string.IsNullOrEmpty(windowsDir) &&
                 full.StartsWith(windowsDir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
-                return "Windows klasöründeki dosyalar oyun olarak eklenemez.";
+                return Loc.T("Windows klasöründeki dosyalar oyun olarak eklenemez.");
         }
         catch
         {
-            return "Dosya yolu okunamadı.";
+            return Loc.T("Dosya yolu okunamadı.");
         }
         return null;
     }
@@ -949,7 +949,7 @@ public class GameDetectionService : IDisposable
             catch (Exception ex)
             {
                 // Unreadable (locked, permissions): keep the error and refuse to overwrite what cannot be read.
-                ProfileLoadError = $"Oyun profilleri okunamadı: {ex.Message}";
+                ProfileLoadError = Loc.T($"Oyun profilleri okunamadı: {ex.Message}");
                 AppLog.Warn("Oyun profilleri okunamadı", $"{_profilesFile}: {ex}");
                 App.WriteLog("Oyun profili dosyası", ex.Message);
                 return;
@@ -972,7 +972,7 @@ public class GameDetectionService : IDisposable
                 catch (Exception ex)
                 {
                     // A corrupt file is kept as-is and saving stays blocked: it may hold profiles the user added.
-                    ProfileLoadError = $"Oyun profilleri okunamadı: {ex.Message}";
+                    ProfileLoadError = Loc.T($"Oyun profilleri okunamadı: {ex.Message}");
                     AppLog.Warn("Oyun profilleri okunamadı", $"{_profilesFile}: {ex}");
                     App.WriteLog("Oyun profili dosyası", ex.Message);
                     return;
