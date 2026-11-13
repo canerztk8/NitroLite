@@ -1238,6 +1238,20 @@ public partial class MainWindow : Window
         bar.Value = Math.Max(0, value);
     }
 
+    /// <summary>
+    /// Temperature is the one metric where colour carries meaning rather than decoration: the bar and
+    /// its reading turn red once the part runs hot, so the panel answers "is anything wrong" at a glance.
+    /// </summary>
+    private void ApplyTempSeverity(System.Windows.Controls.ProgressBar? bar, TextBlock? value, double celsius, bool available)
+    {
+        if (bar == null || value == null) return;
+        bool hot = available && celsius >= 85;
+        var hotBrush = TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red;
+        var idleBrush = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Goldenrod;
+        bar.Foreground = hot ? hotBrush : idleBrush;
+        value.Foreground = hot ? hotBrush : (TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.White);
+    }
+
     private DateTime _lastDeviceStateSyncUtc = DateTime.MinValue;
     private static readonly TimeSpan DeviceStateSyncInterval = TimeSpan.FromSeconds(5);
     private CpuBoostMode? _lastShownBoost;
@@ -1299,24 +1313,44 @@ public partial class MainWindow : Window
     private void UpdateFanButtonsUi(FanMode mode, bool known = true)
     {
         if (BtnFanAuto == null || BtnFanMax == null) return;
-        var activeBorder = (SolidColorBrush)FindResource("AccentCyan");
-        var idleBorder = (SolidColorBrush)FindResource("BorderDark");
-        BtnFanAuto.BorderBrush = known && mode == FanMode.Auto ? activeBorder : idleBorder;
-        BtnFanMax.BorderBrush = known && mode == FanMode.Max ? (SolidColorBrush)FindResource("AccentRed") : idleBorder;
-        BtnFanAuto.FontWeight = known && mode == FanMode.Auto ? FontWeights.Bold : FontWeights.Normal;
-        BtnFanMax.FontWeight = known && mode == FanMode.Max ? FontWeights.Bold : FontWeights.Normal;
+        SetSegActive(BtnFanAuto, known && mode == FanMode.Auto);
+        SetSegActive(BtnFanMax, known && mode == FanMode.Max);
         BtnFanAuto.ToolTip = known && mode == FanMode.Auto ? "Etkin" : null;
         BtnFanMax.ToolTip = known && mode == FanMode.Max ? "Etkin" : null;
         if (BtnFanCustom != null)
         {
             bool custom = known && mode == FanMode.Custom;
-            BtnFanCustom.BorderBrush = custom ? activeBorder : idleBorder;
-            BtnFanCustom.FontWeight = custom ? FontWeights.Bold : FontWeights.Normal;
+            SetSegActive(BtnFanCustom, custom);
             BtnFanCustom.ToolTip = custom ? "Etkin" : "CPU ve GPU fanını sabit bir hızda (%30–100) çalıştırır.";
         }
         // The sliders stay open while the user is choosing "Özel" (before the service confirms it).
         if (PnlCustomFan != null)
             PnlCustomFan.Visibility = (known && mode == FanMode.Custom) || _customFanPanelPinned ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // The idle look of each segmented button is whatever the XAML declared (a red "Maksimum", an
+    // amber "Özel"), captured once so switching back restores it instead of flattening the colour.
+    private readonly Dictionary<WpfButton, (WpfBrush Background, WpfBrush Foreground)> _segIdle =
+        new Dictionary<WpfButton, (WpfBrush, WpfBrush)>();
+
+    /// <summary>
+    /// Marks one option of a segmented control as chosen: the whole button takes the board's signal
+    /// colour with dark type, the same treatment the active mode row gets.
+    /// </summary>
+    private void SetSegActive(WpfButton? button, bool active)
+    {
+        if (button == null) return;
+        if (!_segIdle.ContainsKey(button))
+            _segIdle[button] = (button.Background, button.Foreground);
+
+        var signal = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Goldenrod;
+        var onAccent = TryFindResource("OnAccent") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
+        var idle = _segIdle[button];
+
+        button.Background = active ? signal : idle.Background;
+        button.Foreground = active ? onAccent : idle.Foreground;
+        button.BorderBrush = active ? signal : (TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray);
+        button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
     }
 
     // ---------------------------------------------------------------- custom fan speeds
@@ -1486,6 +1520,7 @@ public partial class MainWindow : Window
                 TxtCpuCoreCount.Text = string.IsNullOrEmpty(coreText) ? "" : $" ({coreText})";
                 TxtMonCpuTemp.Text = TelemetryFormatter.FormatCpuTemperature(data.CpuTemperature);
                 BarMonCpuTemp.Value = data.CpuTemperature;
+                ApplyTempSeverity(BarMonCpuTemp, TxtMonCpuTemp, data.CpuTemperature, data.CpuTemperature > 0);
 
                 TxtMonCpuPower.Text = TelemetryFormatter.FormatCpuPower(data.CpuPowerWatts) + " (tahmini)";
                 SetBarValueGrowing(BarMonCpuPower, data.CpuPowerWatts, 10);
@@ -1499,6 +1534,7 @@ public partial class MainWindow : Window
                 // Tab 2: Monitoring - GPU
                 TxtMonGpuTemp.Text = TelemetryFormatter.FormatGpuTemperature(data.GpuTemperature, isGpuSleeping, data.GpuMetricsAvailable);
                 BarMonGpuTemp.Value = data.GpuTemperature;
+                ApplyTempSeverity(BarMonGpuTemp, TxtMonGpuTemp, data.GpuTemperature, data.GpuMetricsAvailable && !isGpuSleeping);
 
                 TxtMonGpuPower.Text = TelemetryFormatter.FormatGpuPower(data.GpuPowerWatts, isGpuSleeping, data.GpuMetricsAvailable);
                 SetBarValueGrowing(BarMonGpuPower, data.GpuPowerWatts, 10);
@@ -1913,7 +1949,7 @@ public partial class MainWindow : Window
             _osdWindow.Show();
             UpdateTelemetryPollingRate();
             BtnToggleOsd.Background = (SolidColorBrush)FindResource("AccentCyan");
-            BtnToggleOsd.Foreground = System.Windows.Media.Brushes.Black;
+            BtnToggleOsd.Foreground = TryFindResource("OnAccent") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
             BtnToggleOsd.Content = "OSD Katmanı: Açık (Kapat)";
 
             if (showToast) ShowToast("Ekran üstü gösterge etkinleştirildi.");
@@ -1961,18 +1997,9 @@ public partial class MainWindow : Window
         }
 
         // Highlight the matching boost button (none for values without a button).
-        HighlightBoostButton(BtnBoostAggressive, mode == CpuBoostMode.Aggressive, "AccentRed");
-        HighlightBoostButton(BtnBoostEfficient, mode == CpuBoostMode.Efficient, "AccentCyan");
-        HighlightBoostButton(BtnBoostDisabled, mode == CpuBoostMode.Disabled, "AccentGreen");
-    }
-
-    private void HighlightBoostButton(WpfButton? button, bool active, string accentKey)
-    {
-        if (button == null) return;
-        button.BorderBrush = active
-            ? (TryFindResource(accentKey) as SolidColorBrush ?? System.Windows.Media.Brushes.White)
-            : (TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray);
-        button.FontWeight = active ? FontWeights.Bold : FontWeights.Normal;
+        SetSegActive(BtnBoostAggressive, mode == CpuBoostMode.Aggressive);
+        SetSegActive(BtnBoostEfficient, mode == CpuBoostMode.Efficient);
+        SetSegActive(BtnBoostDisabled, mode == CpuBoostMode.Disabled);
     }
 
     private void UpdateDesktopBaselineForManualChange(
@@ -4578,22 +4605,25 @@ public partial class MainWindow : Window
         // Reset all mode badges and card buttons
         ResetAllModeCards();
 
+        // One signal colour for the whole board: the active row is marked by position and fill,
+        // not by a per-mode hue, so the eye never has to relearn what a colour means.
+        var signal = TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Goldenrod;
         switch (mode)
         {
             case OperatingMode.Quiet:
-                SetModeCardActive(BtnModeQuiet, IndQuiet, TxtIndQuiet, TryFindResource("AccentCyan") as SolidColorBrush ?? System.Windows.Media.Brushes.Cyan);
+                SetModeCardActive(BtnModeQuiet, IndQuiet, TxtIndQuiet, signal);
                 break;
             case OperatingMode.Default:
-                SetModeCardActive(BtnModeDefault, IndDefault, TxtIndDefault, TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green);
+                SetModeCardActive(BtnModeDefault, IndDefault, TxtIndDefault, signal);
                 break;
             case OperatingMode.Extreme:
-                SetModeCardActive(BtnModeExtreme, IndExtreme, TxtIndExtreme, TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red);
+                SetModeCardActive(BtnModeExtreme, IndExtreme, TxtIndExtreme, signal);
                 break;
             case OperatingMode.Turbo:
-                SetModeCardActive(BtnModeTurbo, IndTurbo, TxtIndTurbo, TryFindResource("AccentRed") as SolidColorBrush ?? System.Windows.Media.Brushes.Red);
+                SetModeCardActive(BtnModeTurbo, IndTurbo, TxtIndTurbo, signal);
                 break;
             case OperatingMode.Eco:
-                SetModeCardActive(BtnModeEco, IndEco, TxtIndEco, TryFindResource("AccentGreen") as SolidColorBrush ?? System.Windows.Media.Brushes.Green);
+                SetModeCardActive(BtnModeEco, IndEco, TxtIndEco, signal);
                 break;
         }
 
@@ -4648,35 +4678,42 @@ public partial class MainWindow : Window
     {
         if (ind != null)
         {
-            ind.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0x1E, 0x23, 0x2F));
-            ind.BorderBrush = (SolidColorBrush)FindResource("BorderDark");
+            ind.Background = System.Windows.Media.Brushes.Transparent;
+            ind.BorderBrush = TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         }
         if (txt != null)
         {
             txt.Text = "SEÇ";
-            txt.Foreground = (SolidColorBrush)FindResource("TextMuted");
+            txt.Foreground = TryFindResource("TextMuted") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         }
         if (btn != null)
         {
-            btn.BorderBrush = (SolidColorBrush)FindResource("BorderDark");
+            btn.Background = System.Windows.Media.Brushes.Transparent;
+            btn.Foreground = TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.White;
         }
     }
 
+    /// <summary>
+    /// The active mode is the row that has flipped: the whole row takes the board's signal colour and
+    /// its type turns dark, so the state reads at a glance without a side stripe or a glow.
+    /// </summary>
     private void SetModeCardActive(WpfButton? btn, Border? ind, TextBlock? txt, SolidColorBrush accent)
     {
+        var onAccent = TryFindResource("OnAccent") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
         if (ind != null)
         {
-            ind.Background = accent;
-            ind.BorderBrush = accent;
+            ind.Background = System.Windows.Media.Brushes.Transparent;
+            ind.BorderBrush = onAccent;
         }
         if (txt != null)
         {
             txt.Text = "AKTİF";
-            txt.Foreground = System.Windows.Media.Brushes.White;
+            txt.Foreground = onAccent;
         }
         if (btn != null)
         {
-            btn.BorderBrush = accent;
+            btn.Background = accent;
+            btn.Foreground = onAccent;
         }
     }
 
@@ -4779,7 +4816,7 @@ public partial class MainWindow : Window
                     && (0.299 * s.Color.R + 0.587 * s.Color.G + 0.114 * s.Color.B) < 110;
                 label.Foreground = dark
                     ? (TryFindResource("TextSecondary") as WpfBrush ?? System.Windows.Media.Brushes.Gray)
-                    : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0F, 0x11, 0x15));
+                    : (TryFindResource("OnAccent") as WpfBrush ?? System.Windows.Media.Brushes.Black);
             }
         }
 

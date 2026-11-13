@@ -37,3 +37,5 @@ active_game_session.json
 
 ## Local AI agent working notes (kept on disk, not versioned)
 .agents/
+.impeccable/
+.codex/
