@@ -192,7 +192,7 @@ public partial class OsdOverlayWindow : Window
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
-    public void UpdateData(MonitorData data, OperatingMode mode, string? gameTitle = null)
+    public void UpdateData(MonitorData data)
     {
         if (Dispatcher.HasShutdownStarted) return;
         Dispatcher.Invoke(() =>
@@ -226,10 +226,5 @@ public partial class OsdOverlayWindow : Window
 
             TxtOsdFan.Text = Loc.T($"FAN: {TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed)}");
         });
-    }
-
-    public void UpdateData(MonitorData data, OperatingMode mode)
-    {
-        UpdateData(data, mode, (string?)null);
     }
 }

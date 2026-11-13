@@ -1625,7 +1625,7 @@ public partial class MainWindow : Window
                 // Update OSD if open
                 if (_isOsdOpen && _osdWindow != null && _osdWindow.IsVisible)
                 {
-                    _osdWindow.UpdateData(data, _currentMode);
+                    _osdWindow.UpdateData(data);
                 }
 
                 // Keep the last 60 seconds by time (not by count: polling is 3 s while hidden, 1 s while shown).
