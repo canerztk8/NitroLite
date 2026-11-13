@@ -806,5 +806,16 @@
  "Masaüstü eğrisini kopyala": "Скопировать кривую рабочего стола",
  "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Копирует кривую с карточки вентилятора в профиль этой игры.",
  "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Кривая вентилятора рабочего стола скопирована в эту игру; не забудьте сохранить.",
- "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "На время этой сессии кривая вентилятора берётся из профиля игры."
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "На время этой сессии кривая вентилятора берётся из профиля игры.",
+ "Görüntü Konforu": "Комфорт экрана",
+ "Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez.": "Согревает белую точку экрана; ночью читать легче. 6500 K — нейтрально, меньшие значения теплее и с меньшим количеством синего. Драйвер не нужен.",
+ "Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak.": "Цветовая температура: 6500 K — нейтрально, 1900 K — самое тёплое.",
+ "Etkinleştir": "Включить",
+ "Kapat": "Выключить",
+ "Sıfırla": "Сбросить",
+ "Seçili renk sıcaklığını ekrana uygular.": "Применяет выбранную цветовую температуру к экрану.",
+ "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Выключает цветовую температуру и возвращает экран к нейтральному.",
+ "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Возвращает экран к нейтральной цветовой температуре и выключает функцию.",
+ "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "Не удалось применить цветовую температуру экрана на этом драйвере.",
+ "Ekran nötr renk sıcaklığına döndü.": "Экран вернулся к нейтральной цветовой температуре."
 }

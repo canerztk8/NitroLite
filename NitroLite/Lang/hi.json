@@ -806,5 +806,16 @@
  "Masaüstü eğrisini kopyala": "डेस्कटॉप कर्व कॉपी करें",
  "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "फ़ैन कार्ड का कर्व इस गेम की प्रोफ़ाइल में कॉपी करता है।",
  "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "डेस्कटॉप फ़ैन कर्व इस गेम में कॉपी हो गया; सहेजना न भूलें।",
- "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "इस सत्र के लिए फ़ैन कर्व गेम प्रोफ़ाइल से आता है।"
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "इस सत्र के लिए फ़ैन कर्व गेम प्रोफ़ाइल से आता है।",
+ "Görüntü Konforu": "डिस्प्ले आराम",
+ "Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez.": "स्क्रीन का सफ़ेद बिंदु गर्म करता है; रात में पढ़ना आसान बनाता है। 6500 K तटस्थ है, कम मान ज़्यादा गर्म और कम नीले होते हैं। किसी ड्राइवर की ज़रूरत नहीं।",
+ "Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak.": "रंग तापमान: 6500 K तटस्थ, 1900 K सबसे गर्म।",
+ "Etkinleştir": "चालू करें",
+ "Kapat": "बंद करें",
+ "Sıfırla": "रीसेट करें",
+ "Seçili renk sıcaklığını ekrana uygular.": "चुना गया रंग तापमान स्क्रीन पर लागू करता है।",
+ "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "रंग तापमान बंद करता है और स्क्रीन को तटस्थ पर लौटाता है।",
+ "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "स्क्रीन को तटस्थ रंग तापमान पर लौटाता है और सुविधा बंद करता है।",
+ "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "इस ड्राइवर पर स्क्रीन का रंग तापमान लागू नहीं हो सका।",
+ "Ekran nötr renk sıcaklığına döndü.": "स्क्रीन तटस्थ रंग तापमान पर लौट आई।"
 }

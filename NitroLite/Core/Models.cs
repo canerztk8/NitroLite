@@ -303,6 +303,13 @@ public class AppSettings
     /// <summary>The saved curve, cleaned up and ready to apply.</summary>
     public FanCurve BuildFanCurve() => new(FanCurvePoints, FanCurveHysteresisC, FanCurveMinDwellSeconds);
 
+    /// <summary>Warm the display white point at night. Off by default: a tinted screen is a choice, not a default.</summary>
+    [JsonPropertyName("color_temperature_enabled")]
+    public bool ColorTemperatureEnabled { get; set; } = false;
+
+    [JsonPropertyName("color_temperature_kelvin")]
+    public int ColorTemperatureKelvin { get; set; } = ColorTemperatureService.NeutralKelvin;
+
     /// <summary>
     /// Brings every value that came out of a settings file back into the range the app can act on.
     /// System.Text.Json accepts any number for an enum, so a hand-edited or half-written file can carry
@@ -331,6 +338,8 @@ public class AppSettings
         FanCurvePoints = FanCurve.Sanitize(FanCurvePoints);
         FanCurveHysteresisC = Math.Clamp(FanCurveHysteresisC, 0, 15);
         FanCurveMinDwellSeconds = Math.Clamp(FanCurveMinDwellSeconds, 0, 120);
+
+        ColorTemperatureKelvin = Math.Clamp(ColorTemperatureKelvin, ColorTemperatureService.MinKelvin, ColorTemperatureService.MaxKelvin);
 
         if (Language != null && !Loc.IsSupported(Language)) Language = null;
     }

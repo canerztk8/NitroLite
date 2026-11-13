@@ -1527,6 +1527,30 @@
                                         </Border>
                                     </StackPanel>
                                 </Border>
+
+                                <!-- VisionCare: the display white point, through the gamma ramp -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,14,0,0">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,6">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="Görüntü Konforu" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                                <TextBlock Text=" (VisionCare)" Foreground="{StaticResource TextMuted}" FontSize="12" />
+                                            </StackPanel>
+                                            <TextBlock x:Name="TxtColorTempValue" Text="6500 K" HorizontalAlignment="Right" Style="{StaticResource Figure}" FontSize="13" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                        </Grid>
+                                        <TextBlock Text="Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Slider x:Name="SliderColorTemp" Grid.Column="0" Minimum="1900" Maximum="6500" Value="6500" SmallChange="100" LargeChange="500" TickFrequency="100" IsSnapToTickEnabled="True" ValueChanged="SliderColorTemp_ValueChanged" VerticalAlignment="Center" ToolTip="Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak." />
+                                            <Button x:Name="BtnColorTempToggle" Grid.Column="1" Content="Etkinleştir" Click="BtnColorTempToggle_Click" Margin="14,0,0,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" FontSize="11" Cursor="Hand" ToolTip="Seçili renk sıcaklığını ekrana uygular." />
+                                            <Button x:Name="BtnColorTempReset" Grid.Column="2" Content="Sıfırla" Click="BtnColorTempReset_Click" Margin="8,0,0,0" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="10,6" FontWeight="SemiBold" FontSize="11" Cursor="Hand" ToolTip="Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır." />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

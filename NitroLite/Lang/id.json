@@ -806,5 +806,16 @@
  "Masaüstü eğrisini kopyala": "Salin kurva desktop",
  "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Menyalin kurva dari kartu kipas ke profil game ini.",
  "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Kurva kipas desktop disalin ke game ini; jangan lupa simpan.",
- "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "Kurva kipas berasal dari profil game selama sesi ini."
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "Kurva kipas berasal dari profil game selama sesi ini.",
+ "Görüntü Konforu": "Kenyamanan Layar",
+ "Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez.": "Menghangatkan titik putih layar; lebih mudah dibaca di malam hari. 6500 K netral, nilai lebih rendah lebih hangat dan kurang biru. Tidak perlu driver.",
+ "Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak.": "Suhu warna: 6500 K netral, 1900 K paling hangat.",
+ "Etkinleştir": "Aktifkan",
+ "Kapat": "Matikan",
+ "Sıfırla": "Atur ulang",
+ "Seçili renk sıcaklığını ekrana uygular.": "Menerapkan suhu warna yang dipilih ke layar.",
+ "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Mematikan suhu warna dan mengembalikan layar ke netral.",
+ "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Mengembalikan layar ke suhu warna netral dan mematikan fitur.",
+ "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "Suhu warna layar tidak dapat diterapkan pada driver ini.",
+ "Ekran nötr renk sıcaklığına döndü.": "Layar kembali ke suhu warna netral."
 }

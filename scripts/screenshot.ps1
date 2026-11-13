@@ -266,14 +266,22 @@ foreach ($pageId in $pages) {
         foreach ($s in $scrollers) {
             $sp = $s.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern)
             if (-not $sp.Current.VerticallyScrollable) { continue }
+            # Scroll(LargeIncrement) is a no-op on WPF's ScrollViewer peer, so the step is computed here: one
+            # viewport per scroll, which is what a large increment is meant to be.
+            $step = [Math]::Max(1.0, $sp.Current.VerticalViewSize)
             for ($i = 0; $i -lt $Scrolls; $i++) {
-                $sp.Scroll([System.Windows.Automation.ScrollAmount]::NoAmount,
-                           [System.Windows.Automation.ScrollAmount]::LargeIncrement)
+                $next = [Math]::Min(100.0, $sp.Current.VerticalScrollPercent + $step)
+                $sp.SetScrollPercent([System.Windows.Automation.ScrollPattern]::NoScroll, $next)
                 Start-Sleep -Milliseconds 250
             }
+            # The offset is applied on the UI thread and the poll timer can clamp it back while the page is
+            # still settling, so the final position is asserted again right before the capture.
+            Start-Sleep -Milliseconds 700
+            $sp.SetScrollPercent([System.Windows.Automation.ScrollPattern]::NoScroll,
+                                 [Math]::Min(100.0, $sp.Current.VerticalScrollPercent))
             break
         }
-        Start-Sleep -Milliseconds 600
+        Start-Sleep -Milliseconds 900
     }
 
     $file = Join-Path $Out ("{0}-{1}-{2}.png" -f $Language, $Theme, $pageId)

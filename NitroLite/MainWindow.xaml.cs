@@ -31,6 +31,9 @@ public partial class MainWindow : Window
     private readonly MemoryCleanerService _memoryService;
     private readonly StorageHealthService _storageService;
     private readonly IDisplayRefreshRateService _displayService;
+    private readonly ColorTemperatureService _colorTemperatureService;
+    private DispatcherTimer? _colorTempApplyTimer;
+    private bool _isUpdatingColorTempUi;
     private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
 
@@ -241,6 +244,7 @@ public partial class MainWindow : Window
         _memoryService = new();
         _storageService = new();
         _displayService = new DisplayRefreshRateService();
+        _colorTemperatureService = new();
         _atkMouseService = new();
 
         InitializeComponent();
@@ -272,7 +276,8 @@ public partial class MainWindow : Window
         Func<int, bool>? mouseProfileSwitcher = null,
         bool isTestHarness = true,
         IDisplayRefreshRateService? displayService = null,
-        HardwareMonitorService? hardwareService = null)
+        HardwareMonitorService? hardwareService = null,
+        ColorTemperatureService? colorTemperatureService = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
@@ -285,6 +290,7 @@ public partial class MainWindow : Window
         _memoryService = new MemoryCleanerService();
         _storageService = new StorageHealthService();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
+        _colorTemperatureService = colorTemperatureService ?? new();
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
@@ -822,6 +828,15 @@ public partial class MainWindow : Window
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         LoadCustomFanSettings();
         LoadFanCurveSettings();
+        LoadColorTemperatureSettings();
+        // The ramp is not persisted by Windows across a reboot, so a saved tint has to be written again here.
+        // Neutral goes down first: a crash or a force-kill leaves the last ramp on the screen, and without this
+        // the ramp captured as "original" would be that stale tint instead of the screen's own state.
+        if (_appSettings.ColorTemperatureEnabled)
+        {
+            _colorTemperatureService.ResetToNeutral();
+            ApplyColorTemperature();
+        }
         _ = RefreshRamCleanStateAsync();
 
         // Persisted toggles: apply to the services directly (the Changed handlers ignore events
@@ -1880,6 +1895,117 @@ public partial class MainWindow : Window
     }
 
     private void CanvasFanCurve_SizeChanged(object sender, SizeChangedEventArgs e) => RenderFanCurve();
+
+    // ---------------------------------------------------------------- display colour temperature (VisionCare)
+
+    private void LoadColorTemperatureSettings()
+    {
+        if (SliderColorTemp != null)
+        {
+            _isUpdatingColorTempUi = true;
+            try { SliderColorTemp.Value = _appSettings.ColorTemperatureKelvin; }
+            finally { _isUpdatingColorTempUi = false; }
+        }
+        UpdateColorTemperatureUi();
+    }
+
+    private void UpdateColorTemperatureUi()
+    {
+        if (TxtColorTempValue != null)
+        {
+            // Kelvin is written the same way in every language.
+            TxtColorTempValue.Text = $"{_appSettings.ColorTemperatureKelvin} K";
+        }
+
+        if (BtnColorTempToggle != null)
+        {
+            bool on = _appSettings.ColorTemperatureEnabled;
+            BtnColorTempToggle.Content = on ? Loc.T("Kapat") : Loc.T("Etkinleştir");
+            BtnColorTempToggle.ToolTip = on
+                ? Loc.T("Renk sıcaklığını kapatır ve ekranı nötre döndürür.")
+                : Loc.T("Seçili renk sıcaklığını ekrana uygular.");
+        }
+    }
+
+    private void SliderColorTemp_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (SliderColorTemp == null) return;
+
+        _appSettings.ColorTemperatureKelvin = (int)Math.Round(SliderColorTemp.Value);
+        UpdateColorTemperatureUi();
+
+        // Dragging the slider fires this on every tick; the timer collapses a drag into one ramp write.
+        if (!IsLoaded || _isInitializingUi || _isUpdatingColorTempUi) return;
+
+        _colorTempApplyTimer ??= CreateColorTempApplyTimer();
+        _colorTempApplyTimer.Stop();
+        _colorTempApplyTimer.Start();
+    }
+
+    private DispatcherTimer CreateColorTempApplyTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            SaveSettings();
+            if (!_appSettings.ColorTemperatureEnabled) return;
+            ApplyColorTemperature();
+        };
+        return timer;
+    }
+
+    private void ApplyColorTemperature()
+    {
+        if (_colorTemperatureService.Apply(_appSettings.ColorTemperatureKelvin)) return;
+
+        // The driver refused the ramp (remote session, locked-down driver). Do not leave the switch claiming
+        // the screen is tinted when it is not.
+        AppLog.Warn("Görüntü Konforu", $"SetDeviceGammaRamp reddedildi ({_appSettings.ColorTemperatureKelvin} K).");
+        _appSettings.ColorTemperatureEnabled = false;
+        _colorTemperatureService.Restore();
+        UpdateColorTemperatureUi();
+        SaveSettings();
+        ShowToast(Loc.T("Ekran renk sıcaklığı bu sürücüde uygulanamadı."), false);
+    }
+
+    internal void SetColorTemperatureEnabled(bool enabled)
+    {
+        if (enabled)
+        {
+            _appSettings.ColorTemperatureEnabled = true;
+            ApplyColorTemperature();
+        }
+        else
+        {
+            _appSettings.ColorTemperatureEnabled = false;
+            _colorTemperatureService.Restore();
+        }
+
+        UpdateColorTemperatureUi();
+        SaveSettings();
+    }
+
+    private void BtnColorTempToggle_Click(object sender, RoutedEventArgs e) =>
+        SetColorTemperatureEnabled(!_appSettings.ColorTemperatureEnabled);
+
+    private void BtnColorTempReset_Click(object sender, RoutedEventArgs e)
+    {
+        _appSettings.ColorTemperatureEnabled = false;
+        _appSettings.ColorTemperatureKelvin = ColorTemperatureService.NeutralKelvin;
+        _colorTemperatureService.Restore();
+
+        if (SliderColorTemp != null)
+        {
+            _isUpdatingColorTempUi = true;
+            try { SliderColorTemp.Value = ColorTemperatureService.NeutralKelvin; }
+            finally { _isUpdatingColorTempUi = false; }
+        }
+
+        UpdateColorTemperatureUi();
+        SaveSettings();
+        ShowToast(Loc.T("Ekran nötr renk sıcaklığına döndü."));
+    }
 
     /// <summary>
     /// Draws the curve on the recording strip: temperature across (30–100 °C), fan speed up (30–100 %), one ink
@@ -5677,6 +5803,8 @@ public partial class MainWindow : Window
         _toastTimer?.Stop();
 
         _hardwareService.Dispose();
+        // Put the display back to the ramp Windows had before NitroLite touched it.
+        _colorTemperatureService.Dispose();
         if (_osdWindow != null)
         {
             _osdWindow.IsExiting = true;
@@ -5705,6 +5833,7 @@ public partial class MainWindow : Window
             _pollTimer?.Stop();
             _toastTimer?.Stop();
             _hardwareService.Dispose();
+            _colorTemperatureService.Dispose();
             _powerAutomationService?.Dispose();
             _cpuPowerService.Dispose();
             _gameService.Dispose();

@@ -806,5 +806,16 @@
  "Masaüstü eğrisini kopyala": "Copiar la curva del escritorio",
  "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Copia la curva de la tarjeta de ventilador al perfil de este juego.",
  "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Curva de ventilador del escritorio copiada a este juego; recuerda guardar.",
- "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "La curva de ventilador viene del perfil del juego durante esta sesión."
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "La curva de ventilador viene del perfil del juego durante esta sesión.",
+ "Görüntü Konforu": "Confort visual",
+ "Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez.": "Calienta el punto blanco de la pantalla; facilita la lectura de noche. 6500 K es neutro, los valores más bajos son más cálidos y con menos azul. No requiere controlador.",
+ "Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak.": "Temperatura de color: 6500 K neutro, 1900 K el más cálido.",
+ "Etkinleştir": "Activar",
+ "Kapat": "Apagar",
+ "Sıfırla": "Restablecer",
+ "Seçili renk sıcaklığını ekrana uygular.": "Aplica la temperatura de color seleccionada a la pantalla.",
+ "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Apaga la temperatura de color y devuelve la pantalla al neutro.",
+ "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Devuelve la pantalla a la temperatura de color neutra y apaga la función.",
+ "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "No se pudo aplicar la temperatura de color de la pantalla con este controlador.",
+ "Ekran nötr renk sıcaklığına döndü.": "La pantalla ha vuelto a la temperatura de color neutra."
 }

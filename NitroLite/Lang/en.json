@@ -806,5 +806,16 @@
  "Masaüstü eğrisini kopyala": "Copy the desktop curve",
  "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Copies the curve from the fan card into this game's profile.",
  "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Desktop fan curve copied to this game; remember to save.",
- "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "The fan curve comes from the game profile for this session."
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "The fan curve comes from the game profile for this session.",
+ "Görüntü Konforu": "Display Comfort",
+ "Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez.": "Warms the screen's white point; easier reading at night. 6500 K is neutral, lower values are warmer and less blue. No driver needed.",
+ "Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak.": "Colour temperature: 6500 K neutral, 1900 K warmest.",
+ "Etkinleştir": "Enable",
+ "Kapat": "Turn Off",
+ "Sıfırla": "Reset",
+ "Seçili renk sıcaklığını ekrana uygular.": "Applies the selected colour temperature to the screen.",
+ "Renk sıcaklığını kapatır ve ekranı nötre döndürür.": "Turns the colour temperature off and returns the screen to neutral.",
+ "Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır.": "Returns the screen to neutral colour temperature and turns the feature off.",
+ "Ekran renk sıcaklığı bu sürücüde uygulanamadı.": "The display colour temperature could not be applied on this driver.",
+ "Ekran nötr renk sıcaklığına döndü.": "The screen is back to neutral colour temperature."
 }
