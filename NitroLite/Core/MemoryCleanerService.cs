@@ -32,10 +32,12 @@ public readonly record struct MemoryListSizes(double FreeGigabytes, double Stand
 /// (github.com/IgorMundstein/WinMemoryCleaner).
 /// </summary>
 /// <remarks>
-/// WinMemoryCleaner is GPL-3.0 and NitroLite is MIT, so the tool is deliberately not bundled, downloaded or
-/// redistributed: NitroLite only launches an installation the user already has, and points at the official
-/// release page when it is missing. That keeps NitroLite's licence intact and leaves the tool's updates to
-/// its own author.
+/// The release package ships an unmodified copy under <c>tools\</c>, so the card works without a separate
+/// installation. WinMemoryCleaner is GPL-3.0 and NitroLite is MIT; the two travel together as an aggregate
+/// (GPL-3.0 section 5) because NitroLite only starts the tool as a child process and never links against it.
+/// The package carries the tool's licence, a notice and its source archive; see THIRD-PARTY-NOTICES.md.
+/// A copy the user drops into NitroLite's data folder still wins, so a newer upstream build can be tried
+/// without waiting for a NitroLite release.
 /// </remarks>
 public class MemoryCleanerService
 {
@@ -116,6 +118,28 @@ public class MemoryCleanerService
         }
     }
 
+    /// <summary>
+    /// The copy that ships inside the release package, or null when NitroLite runs from a build folder that has
+    /// no <c>tools\</c> directory. The path is returned whether or not the file exists; <see cref="FindTool"/>
+    /// does the existence check.
+    /// </summary>
+    public static string? BundledToolPath
+    {
+        get
+        {
+            try
+            {
+                string baseDirectory = AppContext.BaseDirectory;
+                if (string.IsNullOrEmpty(baseDirectory)) return null;
+                return Path.Combine(baseDirectory, "tools", ToolFileName);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     /// <summary>Full path of an installed WinMemoryCleaner, or null when it is not on this machine.</summary>
     public static string? FindTool()
     {
@@ -135,7 +159,8 @@ public class MemoryCleanerService
 
     private static IEnumerable<string> ToolCandidates()
     {
-        // A portable copy the user dropped into NitroLite's own data folder.
+        // A portable copy the user dropped into NitroLite's own data folder wins over everything else, so a
+        // newer upstream build can be tried without waiting for a NitroLite release.
         string dataDirectory;
         try
         {
@@ -147,6 +172,11 @@ public class MemoryCleanerService
         }
         if (!string.IsNullOrEmpty(dataDirectory))
             yield return Path.Combine(dataDirectory, "tools", ToolFileName);
+
+        // The copy the release package ships. Preferred over a system-wide install because it is the build
+        // this NitroLite version was tested against.
+        string? bundled = BundledToolPath;
+        if (bundled != null) yield return bundled;
 
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrEmpty(local))

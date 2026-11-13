@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-901-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-866-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
@@ -56,9 +56,10 @@ at idle. Telemetry is read every 3 seconds while minimised.
 ### 6b. Standby memory purge
 - Converts the standby list Windows keeps cached into free memory without touching the memory of running programs.
   The card shows the current standby and free amounts.
-- The first use needs a one-time setup (a single UAC prompt); after that the button runs without asking.
-- Optional automatic mode: when real free memory drops below 1 GB and the standby list exceeds 1 GB, it runs at most
-  once every 5 minutes, including during a game.
+- Runs [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner), which ships inside the package under
+  `tools\`, so there is nothing to install. Windows asks for confirmation (UAC) each time you press the button.
+- Drop your own `WinMemoryCleaner.exe` into `%LOCALAPPDATA%\NitroLite\tools\` to use a different build; that copy
+  wins over the bundled one.
 
 ### 7. OSD (on-screen display)
 - Three lines: CPU (temperature, estimated power, clock, usage), GPU (temperature, power, clock, VRAM), RAM and fan.
@@ -85,8 +86,8 @@ Every Acer and Windows maintenance task runs from the **System Services & Tools*
 - **Windows & system optimisation:** HAGS (GPU hardware scheduling), NVMe TRIM, disabling telemetry tasks and
   background service cleanup. Every change is backed up to `optimize_backup.json`; **Restore** puts service start
   types, the HAGS value and the telemetry tasks back.
-- **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`,
-  `--restore-optimize` and `--purge-standby`. Commands that change system settings ask for confirmation:
+- **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`
+  and `--restore-optimize`. Commands that change system settings ask for confirmation:
   `NitroLite.exe --optimize-pc --yes`.
 
 ### If the Acer service is not running
@@ -200,14 +201,14 @@ choose **Exit**.
 ### When does it ask for administrator rights?
 NitroLite runs as a normal user. Windows asks for confirmation (UAC) only for:
 - **Standby memory purge:** WinMemoryCleaner needs administrator rights to release the standby list, so Windows
-  asks each time you press the button.
+  asks each time you press the button. The tool itself ships with NitroLite; nothing to install.
 - **Disabling / restoring Acer background services.**
 
 ### Uninstall
 1. On the System Services page, turn off **"Run at Windows startup"**. If you disabled services, press
    **"Restore services"**.
 2. Quit NitroLite from the tray and delete its folder. To remove the settings too, delete `%LOCALAPPDATA%\NitroLite`.
-3. If you installed WinMemoryCleaner for the RAM card, uninstall it separately; NitroLite never bundled it.
+   The bundled WinMemoryCleaner goes with the folder; nothing else is left behind.
 
 ---
 
@@ -230,24 +231,24 @@ The executable is `NitroLite/bin/Release/net10.0-windows/NitroLite.exe` (this bu
 powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 ```
 
-This writes `artifacts\NitroLite-v<version>-win-x64.zip`: a self-contained single-file `NitroLite.exe` plus the
-standby-purge helper compiled with Native AOT. The script pins the .NET runtime to the patched version (10.0.14,
-CVE-2026-111497) and refuses to package a build that does not reference it. Native AOT needs the "Desktop development
-with C++" component of the Visual Studio Build Tools.
+This writes `artifacts\NitroLite-v<version>-win-x64.zip`: a self-contained single-file `NitroLite.exe`, the licence,
+a third-party notice, and `tools\WinMemoryCleaner.exe` with its own licence and source archive. The script pins the
+.NET runtime to the patched version (10.0.14, CVE-2026-111497) and refuses to package a build that does not reference
+it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or tampered asset fails the build.
 
 ---
 
 ## Tests
 
-901 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+866 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
 - The tests use their own temporary data folder (`NITROLITE_DATA_DIR`) and never touch your real settings.
-- Six tests that change the real system (standby purge, changing a connected mouse's profile, power plan changes) are
-  skipped by default. To run them:
+- Two tests that change the real system (changing a connected mouse's profile, power plan changes) are skipped by
+  default. To run them:
 
 ```powershell
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
@@ -273,3 +274,8 @@ GitHub returns only to the repository owner. Requires the [GitHub CLI](https://c
 ## License
 
 This project is released under the [MIT License](LICENSE).
+
+The package also contains [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) 3.0.8, which is
+GPL-3.0. It is an unmodified, separate executable that NitroLite only launches as a child process, so the two form an
+aggregate under GPL-3.0 section 5 and NitroLite's own code stays MIT. The package carries the tool's licence, a notice
+and its source archive; see `THIRD-PARTY-NOTICES.md`.

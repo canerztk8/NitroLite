@@ -6139,7 +6139,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Opens the official WinMemoryCleaner release page; NitroLite never downloads or bundles it.</summary>
+    /// <summary>Opens the official WinMemoryCleaner release page; only shown when the bundled copy is missing.</summary>
     private void BtnGetMemoryCleaner_Click(object sender, RoutedEventArgs e)
     {
         try

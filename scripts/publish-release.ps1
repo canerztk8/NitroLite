@@ -6,12 +6,17 @@
     - NitroLite.exe: self-contained single file (no .NET install needed on the target PC).
     - Pinned to a patched .NET runtime ($RuntimeVersion). 10.0.14 fixes CVE-2026-111497 (Brotli decoder,
       GHSA-p3jp-9v83-76w9); the SDK's bundled 10.0.12 is affected, so never ship a package built without the pin.
+    - tools\WinMemoryCleaner.exe: the unmodified upstream release, so the memory card works out of the box.
+      GPL-3.0, distributed as an aggregate next to MIT-licensed NitroLite; see third-party\WinMemoryCleaner\NOTICE.md.
+      Both the version and the SHA-256 are pinned, so a re-uploaded or tampered asset fails the build.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 #>
 param(
     [string]$RuntimeVersion = '10.0.14',
+    [string]$WinMemoryCleanerVersion = '3.0.8',
+    [string]$WinMemoryCleanerSha256 = '8b68d56c6ee28740f76513f21b21f5a1018f0ef291467b3f3d39d43daf0c0f2f',
     [switch]$SkipTests
 )
 
@@ -60,10 +65,6 @@ Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
 
 # Ship only what the app needs.
 Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item -Force
-$unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
-    $_.Name -notin 'NitroLite.exe'
-}
-if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
 
 # Guard against the vulnerable runtime: the single-file host carries the runtime version string.
 $exeBytes = [IO.File]::ReadAllBytes((Join-Path $stage 'NitroLite.exe'))
@@ -72,6 +73,55 @@ if (-not ([Text.Encoding]::ASCII.GetString($exeBytes).Contains($RuntimeVersion))
 }
 
 Copy-Item (Join-Path $root 'LICENSE') $stage
+
+# ---------------------------------------------------------------------------
+# WinMemoryCleaner (GPL-3.0), bundled as a separate executable.
+# NitroLite never links against it; it only starts it as a child process, so the two
+# form an aggregate under GPL-3.0 section 5 and NitroLite stays MIT.
+# ---------------------------------------------------------------------------
+Write-Host "==> WinMemoryCleaner $WinMemoryCleanerVersion" -ForegroundColor Cyan
+$wmcDir = Join-Path $stage 'tools'
+New-Item -ItemType Directory -Path $wmcDir -Force | Out-Null
+
+$wmcExe = Join-Path $wmcDir 'WinMemoryCleaner.exe'
+Invoke-WebRequest -UseBasicParsing -OutFile $wmcExe `
+    -Uri "https://github.com/IgorMundstein/WinMemoryCleaner/releases/download/$WinMemoryCleanerVersion/WinMemoryCleaner.exe"
+
+$actual = (Get-FileHash $wmcExe -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $WinMemoryCleanerSha256.ToLowerInvariant()) {
+    throw "WinMemoryCleaner digest mismatch: expected $WinMemoryCleanerSha256, got $actual"
+}
+
+Copy-Item (Join-Path $root 'third-party\WinMemoryCleaner\LICENSE') (Join-Path $wmcDir 'WinMemoryCleaner-LICENSE.txt')
+Copy-Item (Join-Path $root 'third-party\WinMemoryCleaner\NOTICE.md') (Join-Path $stage 'THIRD-PARTY-NOTICES.md')
+
+# GPL-3.0 section 6(d) wants the Corresponding Source reachable from the same place as the
+# object code, so the upstream source archive travels inside the package. GitHub generates
+# these archives on demand and does not promise byte-stability, so only the shape is checked.
+$srcZip = Join-Path $wmcDir 'WinMemoryCleaner-source.zip'
+Invoke-WebRequest -UseBasicParsing -OutFile $srcZip `
+    -Uri "https://github.com/IgorMundstein/WinMemoryCleaner/archive/refs/tags/$WinMemoryCleanerVersion.zip"
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$srcArchive = [IO.Compression.ZipFile]::OpenRead($srcZip)
+try {
+    if ($srcArchive.Entries.Count -eq 0) { throw 'The WinMemoryCleaner source archive is empty.' }
+} finally { $srcArchive.Dispose() }
+
+# Nothing else may reach the package: the updater refuses unknown entries, so a stray file
+# here would break in-app updates for everyone.
+$allowed = @(
+    'NitroLite.exe',
+    'LICENSE',
+    'THIRD-PARTY-NOTICES.md',
+    'tools\WinMemoryCleaner.exe',
+    'tools\WinMemoryCleaner-LICENSE.txt',
+    'tools\WinMemoryCleaner-source.zip'
+)
+$unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
+    $_.FullName.Substring($stage.Length + 1) -notin $allowed
+}
+if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
+
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 

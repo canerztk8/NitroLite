@@ -551,7 +551,11 @@ public class UpdateServiceTests : IDisposable
             new[]
             {
                 "NitroLite.exe",
-                "LICENSE"
+                "LICENSE",
+                "THIRD-PARTY-NOTICES.md",
+                "tools/WinMemoryCleaner.exe",
+                "tools/WinMemoryCleaner-LICENSE.txt",
+                "tools/WinMemoryCleaner-source.zip"
             },
             UpdateService.PackageFiles);
     }

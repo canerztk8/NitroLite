@@ -45,12 +45,16 @@ public static class UpdateService
 
     /// <summary>
     /// The files the release package is allowed to contain, as paths relative to the package root. Anything else is
-    /// refused, not extracted. The helper lives in its own folder because the app looks for it there.
+    /// refused, not extracted. WinMemoryCleaner lives in its own folder because the app looks for it there.
     /// </summary>
     public static readonly string[] PackageFiles =
     {
         "NitroLite.exe",
-        "LICENSE"
+        "LICENSE",
+        "THIRD-PARTY-NOTICES.md",
+        "tools/WinMemoryCleaner.exe",
+        "tools/WinMemoryCleaner-LICENSE.txt",
+        "tools/WinMemoryCleaner-source.zip"
     };
 
     public static string LatestReleaseApi => $"https://api.github.com/repos/{Owner}/{Repository}/releases/latest";

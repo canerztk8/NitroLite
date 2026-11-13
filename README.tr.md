@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-901-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-866-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (geliştirme **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070
@@ -55,9 +55,10 @@ arayüzünü çalıştırmaz.
 ### 6b. Bekleme belleğini boşaltma
 - Windows'un önbellekte tuttuğu bekleme listesini boş belleğe çevirir; çalışan programların belleğine dokunmaz.
   Kartta anlık bekleme / boş bellek miktarı görünür.
-- Boşaltmayı [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) yapar. NitroLite bu aracı
-  paketlemez (GPL-3.0); kurulu değilse kart resmi indirme sayfasını açar. Kurulum: `winget install \
-  IgorMundstein.WinMemoryCleaner`.
+- Boşaltmayı [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) yapar. Araç paketin içinde
+  `tools\` klasöründe gelir, kurulum gerekmez. Her basışta Windows yönetici izni sorar. Farklı bir sürüm denemek
+  isterseniz kendi `WinMemoryCleaner.exe` dosyanızı `%LOCALAPPDATA%\NitroLite\tools\` klasörüne koyun; o kopya
+  paketlenmiş olanın yerine geçer.
 - Araç yönetici izni ister, bu yüzden Windows her basışta UAC sorar.
 
 ### 7. OSD (ekran üstü gösterge)
@@ -85,7 +86,7 @@ doğrudan **Sistem Servisleri ve Araçlar** sekmesinden tek tıkla yürütülür
   bırakma ve arka plan servis temizliği uygular. Değiştirdiği her ayarı (`optimize_backup.json`) yedekler;
   **Geri Al** düğmesi servis başlangıç türlerini, HAGS değerini ve telemetri görevlerini yedekten geri yükler.
 - **Komut satırı desteği:** `NitroLite.exe` üzerinden doğrudan `--fix-lighting`, `--fix-services`, `--restore-mux`,
-  `--optimize-pc`, `--restore-optimize` veya `--purge-standby` bayraklarıyla komut satırından da çalıştırılabilir.
+  `--optimize-pc` veya `--restore-optimize` bayraklarıyla komut satırından da çalıştırılabilir.
   Sistem ayarlarını değiştiren komutlar onay ister: `NitroLite.exe --optimize-pc --yes`.
 
 ### Acer servisi kapalıysa
@@ -203,7 +204,7 @@ NitroLite normal kullanıcı olarak çalışır. Windows yalnızca şu işlemler
 - **Acer arka plan servislerini kapatma / geri yükleme.**
 
 ### Kaldırma
-1. RAM kartı için WinMemoryCleaner kurduysanız onu ayrıca kaldırın; NitroLite bu aracı hiçbir zaman paketlemedi.
+1. Paketle gelen WinMemoryCleaner klasörle birlikte silinir; geride ayrıca bir şey kalmaz.
 2. Sistem Servisleri sayfasında **"Windows açılışında otomatik çalıştır"** seçeneğini kapatın. Servisleri
    kapattıysanız **"Servisleri Geri Yükle"**'ye basın.
 3. NitroLite'ı tepsiden kapatıp klasörünü silin. Ayarları da silmek için `%LOCALAPPDATA%\NitroLite` klasörünü silin.
@@ -237,7 +238,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-901 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+866 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
@@ -271,3 +272,9 @@ trafik verisini GitHub yalnızca depo sahibine verir. [GitHub CLI](https://cli.g
 ## Lisans
 
 Bu proje [MIT Lisansı](LICENSE) kapsamındadır.
+
+Paket ayrıca GPL-3.0 lisanslı [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) 3.0.8 sürümünü
+içerir. Araç değiştirilmemiş, ayrı bir çalıştırılabilir dosyadır; NitroLite onu yalnızca alt süreç olarak başlatır.
+Bu yüzden ikisi GPL-3.0 madde 5 anlamında bir "toplama" (aggregate) oluşturur ve NitroLite'ın kendi kodu MIT
+kalır. Paket, aracın lisansını, bir bildirimi ve kaynak arşivini taşır; ayrıntılar `THIRD-PARTY-NOTICES.md`
+dosyasında.

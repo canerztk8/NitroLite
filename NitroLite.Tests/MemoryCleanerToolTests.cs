@@ -6,46 +6,104 @@ using Xunit;
 namespace NitroLite.Tests;
 
 /// <summary>
-/// WinMemoryCleaner is GPL-3.0 and NitroLite is MIT, so the tool is never bundled: NitroLite only launches a copy
-/// the user installed. These tests pin the lookup order and the "not installed" answer the RAM card depends on.
+/// The release package ships an unmodified WinMemoryCleaner under <c>tools\</c>, so the RAM card works without a
+/// separate installation. These tests pin the lookup order: a copy the user dropped into the data folder wins,
+/// then the bundled one, then a system-wide install.
 /// </summary>
 public class MemoryCleanerToolTests
 {
     private static string ToolsFolder => Path.Combine(AppPaths.DataDirectory, "tools");
 
+    private static string PortableCopy => Path.Combine(ToolsFolder, MemoryCleanerService.ToolFileName);
+
+    /// <summary>Creates the bundled stub next to the test assembly and returns its path.</summary>
+    private static string CreateBundledStub()
+    {
+        string bundled = MemoryCleanerService.BundledToolPath
+                         ?? throw new InvalidOperationException("BundledToolPath is null in the test host.");
+        Directory.CreateDirectory(Path.GetDirectoryName(bundled)!);
+        File.WriteAllText(bundled, "stub");
+        return bundled;
+    }
+
+    private static void RemoveBundledStub(string bundled)
+    {
+        try { File.Delete(bundled); } catch { }
+        try { Directory.Delete(Path.GetDirectoryName(bundled)!, recursive: false); } catch { }
+    }
+
+    [Fact]
+    public void BundledToolPath_PointsAtTheToolsFolderNextToTheExecutable()
+    {
+        string? bundled = MemoryCleanerService.BundledToolPath;
+        Assert.NotNull(bundled);
+        Assert.Equal(
+            Path.Combine(AppContext.BaseDirectory, "tools", MemoryCleanerService.ToolFileName),
+            bundled);
+    }
+
     [Fact]
     public void FindTool_FindsAPortableCopyInTheDataFolder()
     {
-        string folder = ToolsFolder;
-        string exe = Path.Combine(folder, MemoryCleanerService.ToolFileName);
-        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(ToolsFolder);
         try
         {
-            File.WriteAllText(exe, "stub");
-            Assert.Equal(exe, MemoryCleanerService.FindTool());
+            File.WriteAllText(PortableCopy, "stub");
+            Assert.Equal(PortableCopy, MemoryCleanerService.FindTool());
         }
         finally
         {
-            try { File.Delete(exe); } catch { }
+            try { File.Delete(PortableCopy); } catch { }
+        }
+    }
+
+    [Fact]
+    public void FindTool_FindsTheBundledCopyWhenNothingElseIsInstalled()
+    {
+        try { File.Delete(PortableCopy); } catch { }
+        string bundled = CreateBundledStub();
+        try
+        {
+            Assert.Equal(bundled, MemoryCleanerService.FindTool());
+        }
+        finally
+        {
+            RemoveBundledStub(bundled);
+        }
+    }
+
+    [Fact]
+    public void FindTool_PrefersTheDataFolderCopyOverTheBundledOne()
+    {
+        // The data folder is the escape hatch for trying a newer upstream build without a NitroLite release.
+        Directory.CreateDirectory(ToolsFolder);
+        string bundled = CreateBundledStub();
+        try
+        {
+            File.WriteAllText(PortableCopy, "portable");
+            Assert.Equal(PortableCopy, MemoryCleanerService.FindTool());
+        }
+        finally
+        {
+            try { File.Delete(PortableCopy); } catch { }
+            RemoveBundledStub(bundled);
         }
     }
 
     [Fact]
     public void FindTool_ReturnsNullWhenThePortableCopyIsGone()
     {
-        string exe = Path.Combine(ToolsFolder, MemoryCleanerService.ToolFileName);
-        try { File.Delete(exe); } catch { }
+        try { File.Delete(PortableCopy); } catch { }
 
         // The machine may genuinely have WinMemoryCleaner installed through winget or Program Files; only the
         // portable copy is under this test's control, so assert on that path rather than on a global null.
-        Assert.NotEqual(exe, MemoryCleanerService.FindTool());
+        Assert.NotEqual(PortableCopy, MemoryCleanerService.FindTool());
     }
 
     [Fact]
     public void CleanMemory_ReportsTheToolMissingInsteadOfThrowing()
     {
-        string exe = Path.Combine(ToolsFolder, MemoryCleanerService.ToolFileName);
-        try { File.Delete(exe); } catch { }
+        try { File.Delete(PortableCopy); } catch { }
 
         if (MemoryCleanerService.FindTool() != null) return; // installed on this machine; nothing to assert
 
