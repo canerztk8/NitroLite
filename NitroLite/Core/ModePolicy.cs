@@ -29,12 +29,12 @@ public static class ModePolicy
 
     public static string DisplayName(OperatingMode mode) => mode switch
     {
-        OperatingMode.Quiet => "Sessiz",
-        OperatingMode.Default => "Dengeli",
-        OperatingMode.Extreme => "Performans",
-        OperatingMode.Turbo => "Turbo",
-        OperatingMode.Eco => "Eco",
-        _ => $"Mod {(int)mode}"
+        OperatingMode.Quiet => Loc.T("Sessiz"),
+        OperatingMode.Default => Loc.T("Dengeli"),
+        OperatingMode.Extreme => Loc.T("Performans"),
+        OperatingMode.Turbo => Loc.T("Turbo"),
+        OperatingMode.Eco => Loc.T("Eco"),
+        _ => Loc.T($"Mod {(int)mode}")
     };
 
     /// <summary>

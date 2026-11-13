@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace NitroLite.Core;
 
@@ -13,6 +14,14 @@ public class RgbPreset
     public string Color { get; set; } = "#00E5FF";
     public List<string> LEDs { get; set; } = new() { "#00E5FF", "#FF2A55", "#00E5FF", "#FF2A55" };
     public bool IsBuiltIn { get; set; } = false;
+
+    /// <summary>
+    /// The name to show in the UI. <see cref="Name"/> is the stable identity — settings store it and custom presets
+    /// are deduplicated by it — so it must not change with the UI language. Built-in presets translate their name
+    /// for display; a custom preset keeps whatever its user typed.
+    /// </summary>
+    [JsonIgnore]
+    public string DisplayName => IsBuiltIn ? Loc.T(Name) : Name;
 }
 
 public class RgbProfileService

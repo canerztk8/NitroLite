@@ -90,6 +90,25 @@ public class ModePolicyTests
         Assert.Equal("Dengeli", ModePolicy.DisplayName(OperatingMode.Default));
         Assert.Equal("Eco", ModePolicy.DisplayName(OperatingMode.Eco));
     }
+
+    [Fact]
+    public void ModeNames_FollowTheSelectedLanguage()
+    {
+        var original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage("en");
+            Assert.Equal("Performance", ModePolicy.DisplayName(OperatingMode.Extreme));
+            Assert.Equal("Balanced", ModePolicy.DisplayName(OperatingMode.Default));
+            Assert.Equal("Quiet", ModePolicy.DisplayName(OperatingMode.Quiet));
+            // An enum value NitroLite does not know still reads as a mode, not as a raw number.
+            Assert.Equal("Mode 99", ModePolicy.DisplayName((OperatingMode)99));
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+        }
+    }
 }
 
 public class CustomGameValidationTests

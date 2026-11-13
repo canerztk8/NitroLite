@@ -909,7 +909,8 @@ public partial class MainWindow : Window
                 _appSettings.IsBacklightOff = _lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
                 if (CmbRgbPresets?.SelectedItem is string presetName && !string.IsNullOrWhiteSpace(presetName))
                 {
-                    _appSettings.SelectedRgbPreset = presetName;
+                    // The combo shows DisplayName; store the stable Name so the selection survives a language change.
+                    _appSettings.SelectedRgbPreset = SelectedRgbPreset()?.Name ?? presetName;
                 }
             }
 
@@ -1006,8 +1007,7 @@ public partial class MainWindow : Window
                         bool shouldBeOff = _appSettings.IsBacklightOff || 
                                            _lighting.Brightness == 0 || 
                                            _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) ||
-                                           (!string.IsNullOrEmpty(_appSettings.SelectedRgbPreset) && 
-                                            _appSettings.SelectedRgbPreset.Contains("kapalı", StringComparison.OrdinalIgnoreCase));
+                                           SelectedPresetTurnsLightingOff();
 
                         bool success = shouldBeOff
                             ? await _agentClient.TurnOffLightingAsync()
@@ -4133,7 +4133,9 @@ public partial class MainWindow : Window
         if (CmbRgbPresets == null) return;
 
         var presets = _rgbProfileService.GetPresets();
-        CmbRgbPresets.ItemsSource = presets.Select(p => p.Name).ToList();
+        // The combo shows DisplayName; the stored identity stays RgbPreset.Name so a language change cannot
+        // orphan the user's saved selection.
+        CmbRgbPresets.ItemsSource = presets.Select(p => p.DisplayName).ToList();
 
         string? target = selectPresetName;
         if (string.IsNullOrEmpty(target) && !string.IsNullOrEmpty(_appSettings.SelectedRgbPreset))
@@ -4143,7 +4145,7 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrEmpty(target) && presets.Any(p => p.Name.Equals(target, StringComparison.OrdinalIgnoreCase)))
         {
-            var matched = presets.First(p => p.Name.Equals(target, StringComparison.OrdinalIgnoreCase)).Name;
+            var matched = presets.First(p => p.Name.Equals(target, StringComparison.OrdinalIgnoreCase)).DisplayName;
             CmbRgbPresets.SelectedItem = matched;
         }
         else if (_appSettings.IsBacklightOff)
@@ -4151,7 +4153,7 @@ public partial class MainWindow : Window
             var offPreset = presets.FirstOrDefault(p => p.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) || p.Brightness == 0);
             if (offPreset != null)
             {
-                CmbRgbPresets.SelectedItem = offPreset.Name;
+                CmbRgbPresets.SelectedItem = offPreset.DisplayName;
             }
             else
             {
@@ -4164,11 +4166,32 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>The preset the combo is showing, or null when nothing is selected.</summary>
+    private RgbPreset? SelectedRgbPreset()
+    {
+        if (CmbRgbPresets?.SelectedItem is not string shownName) return null;
+        return _rgbProfileService.GetPresets().FirstOrDefault(p => p.DisplayName == shownName);
+    }
+
+    /// <summary>
+    /// True when the stored preset name points at a preset that turns the backlight off. The name is the stable
+    /// identity, so this keeps working when the UI language changes.
+    /// </summary>
+    private bool SelectedPresetTurnsLightingOff()
+    {
+        var name = _appSettings.SelectedRgbPreset;
+        if (string.IsNullOrEmpty(name)) return false;
+        var preset = _rgbProfileService.GetPresets()
+            .FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        return preset != null &&
+               (preset.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase) || preset.Brightness == 0);
+    }
+
     private async void CmbRgbPresets_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || _isApplyingPreset || CmbRgbPresets.SelectedItem is not string selectedName) return;
 
-        var preset = _rgbProfileService.GetPresets().FirstOrDefault(p => p.Name == selectedName);
+        var preset = _rgbProfileService.GetPresets().FirstOrDefault(p => p.DisplayName == selectedName);
         if (preset == null) return;
 
         _isApplyingPreset = true;
@@ -4188,7 +4211,7 @@ public partial class MainWindow : Window
             bool isOff = IsLightingOff(_lighting);
             if (!await ApplyLightingToDeviceAsync(Loc.T($"'{selectedName}' profili uygulanamadı"))) return;
 
-            _appSettings.SelectedRgbPreset = selectedName;
+            _appSettings.SelectedRgbPreset = preset.Name;
             _appSettings.IsBacklightOff = isOff;
             _appSettings.KeyboardLighting = _lighting;
             PersistLightingState();
@@ -4255,25 +4278,25 @@ public partial class MainWindow : Window
 
     private void BtnDeleteCustomPreset_Click(object sender, RoutedEventArgs e)
     {
-        if (CmbRgbPresets.SelectedItem is not string selectedName)
+        var preset = SelectedRgbPreset();
+        if (preset == null)
         {
             ShowToast(Loc.T("Silmek için listeden bir profil seçin."), false);
             return;
         }
 
-        var preset = _rgbProfileService.GetPresets().FirstOrDefault(p => p.Name == selectedName);
-        if (preset?.IsBuiltIn == true)
+        if (preset.IsBuiltIn)
         {
             ShowToast(Loc.T("Varsayılan fabrika profilleri silinemez."), false);
             return;
         }
 
         var confirm = System.Windows.MessageBox.Show(this,
-            Loc.T($"'{selectedName}' aydınlatma profilini silmek istiyor musunuz?"),
+            Loc.T($"'{preset.DisplayName}' aydınlatma profilini silmek istiyor musunuz?"),
             Loc.T("Profili Sil"), MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirm != MessageBoxResult.Yes) return;
 
-        if (!_rgbProfileService.DeletePreset(selectedName))
+        if (!_rgbProfileService.DeletePreset(preset.Name))
         {
             ShowToast(Loc.T("Profil silinemedi."), false);
             return;
@@ -4284,7 +4307,7 @@ public partial class MainWindow : Window
         MarkLightingCustomized();
         SaveSettings();
         PopulateRgbPresets();
-        ShowToast(Loc.T($"'{selectedName}' profili silindi."));
+        ShowToast(Loc.T($"'{preset.DisplayName}' profili silindi."));
     }
 
     // ==========================================
@@ -5514,7 +5537,7 @@ public partial class MainWindow : Window
                 // Already applied above; do not let the preset combo send the same command again.
                 bool wasApplying = _isApplyingPreset;
                 _isApplyingPreset = true;
-                try { CmbRgbPresets.SelectedItem = offPreset.Name; }
+                try { CmbRgbPresets.SelectedItem = offPreset.DisplayName; }
                 finally { _isApplyingPreset = wasApplying; }
             }
         }

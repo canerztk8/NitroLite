@@ -108,3 +108,64 @@ public class RgbPresetCapabilityTests
         Assert.Equal("STATIC", presets.Single(p => p.Name == "Okyanus Mavisi").Effect);
     }
 }
+
+/// <summary>
+/// The preset combo shows <see cref="RgbPreset.DisplayName"/> while settings keep <see cref="RgbPreset.Name"/>.
+/// If the two ever collapse into one, switching the UI language orphans the user's saved selection.
+/// </summary>
+public class RgbPresetDisplayNameTests
+{
+    [Fact]
+    public void BuiltInPreset_TranslatesItsDisplayNameButKeepsItsIdentity()
+    {
+        var original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage("en");
+            var wave = new RgbProfileService().GetPresets().Single(p => p.Effect == "WAVE");
+            Assert.Equal("Gökkuşağı Dalga", wave.Name);
+            Assert.Equal("Rainbow Wave", wave.DisplayName);
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+        }
+    }
+
+    [Fact]
+    public void CustomPreset_KeepsTheNameItsUserTyped()
+    {
+        var original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage("en");
+            var custom = new RgbPreset { Name = "Benim Profilim", IsBuiltIn = false };
+            Assert.Equal("Benim Profilim", custom.DisplayName);
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+        }
+    }
+
+    [Fact]
+    public void EveryBuiltInPreset_HasATranslatedDisplayName()
+    {
+        var original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage("en");
+            var untranslated = new RgbProfileService().GetPresets()
+                .Where(p => p.IsBuiltIn)
+                .Where(p => p.DisplayName == p.Name)
+                .Select(p => p.Name)
+                .ToList();
+            Assert.True(untranslated.Count == 0,
+                $"built-in presets with no English name: {string.Join(" / ", untranslated)}");
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+        }
+    }
+}
