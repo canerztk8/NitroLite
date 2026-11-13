@@ -18,7 +18,7 @@
  " (Zaten temiz)": " (Already clean)",
  " (tahmini)": " (estimated)",
  " ({0} boşaltıldı)": " ({0} purged)",
- " Made with love · by ": " Made with love · by ",
+ " Made with love by · ": " Made with love by · ",
  " Not: Bu değerlendirme deneysel bir tahmindir; CPU gücü sensörden değil kullanım ve frekanstan hesaplanır. Termal macun bakımı kararı için tek başına yeterli değildir.": " Note: this assessment is an experimental estimate; CPU power is derived from usage and frequency rather than a sensor. It is not enough on its own to decide on thermal paste maintenance.",
  " [Counter-Strike 2]": " [Counter-Strike 2]",
  " [{0} - ŞU AN OYNANIYOR]": " [{0} - PLAYING NOW]",

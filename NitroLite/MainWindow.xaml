@@ -657,7 +657,7 @@
                             <!-- The signature sits above the readout, centred on the rail's own width. -->
                             <TextBlock Margin="10,0,10,10" FontSize="10" TextWrapping="Wrap" TextAlignment="Center">
                                 <Run Text="♥" Foreground="{StaticResource Vermilion}" />
-                                <Run Text=" Made with love · by " Foreground="{StaticResource InkFaint}" />
+                                <Run Text=" Made with love by · " Foreground="{StaticResource InkFaint}" />
                                 <Hyperlink Click="LinkAuthor_Click" Foreground="{StaticResource Link}" TextDecorations="None" Cursor="Hand"><Run Text="Caner" /></Hyperlink>
                             </TextBlock>
                             <Border Background="{StaticResource Rule}" Height="1" Margin="10,0,10,10" />
