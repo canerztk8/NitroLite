@@ -33,6 +33,22 @@
              a tabular face, the prose stays in the platform's humanist sans. -->
         <FontFamily x:Key="FigureFont">Cascadia Mono, Consolas, Courier New</FontFamily>
 
+        <!-- Keyboard focus: a 1px vermilion rule drawn just outside the control. WPF shows a FocusVisualStyle only
+             when the focus arrived from the keyboard, so a mouse user never sees it, and the ring never competes
+             with the hover and selected states the templates already draw. -->
+        <Style x:Key="FocusRing">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="-2"
+                                   Stroke="{StaticResource Vermilion}"
+                                   StrokeThickness="1"
+                                   SnapsToDevicePixels="True" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- A printed label: small, uppercase, faint. Used for field names and captions. -->
         <Style x:Key="LabelCaps" TargetType="{x:Type TextBlock}">
             <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
@@ -80,6 +96,7 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Button}">
@@ -158,6 +175,7 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ComboBox}">
@@ -233,7 +251,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ComboBoxItem}">
-                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="2" Margin="2,1">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="2" Margin="2,1"
+                                BorderBrush="Transparent" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -244,6 +263,12 @@
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource PanelBg}" />
                                 <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                            </Trigger>
+                            <!-- The drop-down lives in a Popup, which has no adorner layer, so FocusVisualStyle
+                                 would never draw here; the item marks keyboard focus on its own border instead.
+                                 The 1px border is always reserved, so focusing an item never shifts its text. -->
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource Vermilion}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -256,6 +281,7 @@
             <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type CheckBox}">
@@ -295,6 +321,7 @@
             <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type RadioButton}">
@@ -329,6 +356,7 @@
         <!-- Slider: a 2px ruled track, the filled part in vermilion, a square ink thumb. -->
         <Style TargetType="{x:Type Slider}">
             <Setter Property="Height" Value="18" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Slider}">
@@ -458,6 +486,7 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="10,8" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <!-- The rail is 200 px wide and a translated label can be longer than the Turkish one
                  ("Мониторинг оборудования"), so the label wraps instead of being clipped. -->
             <Setter Property="ContentTemplate">
@@ -510,6 +539,7 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -550,6 +580,7 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -658,7 +689,22 @@
                             <TextBlock Margin="10,0,10,10" FontSize="10" TextWrapping="Wrap" TextAlignment="Center">
                                 <Run Text="♥" Foreground="{StaticResource Vermilion}" />
                                 <Run Text=" Made with love by · " Foreground="{StaticResource InkFaint}" />
-                                <Hyperlink Click="LinkAuthor_Click" Foreground="{StaticResource Link}" TextDecorations="None" Cursor="Hand"><Run Text="Caner" /></Hyperlink>
+                                <Hyperlink Click="LinkAuthor_Click" Cursor="Hand">
+                                    <!-- A Hyperlink is a ContentElement, so FocusVisualStyle does not apply to it;
+                                         it underlines itself when the keyboard reaches it instead. -->
+                                    <Hyperlink.Style>
+                                        <Style TargetType="Hyperlink">
+                                            <Setter Property="Foreground" Value="{StaticResource Link}" />
+                                            <Setter Property="TextDecorations" Value="None" />
+                                            <Style.Triggers>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter Property="TextDecorations" Value="Underline" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Hyperlink.Style>
+                                    <Run Text="Caner" />
+                                </Hyperlink>
                             </TextBlock>
                             <Border Background="{StaticResource Rule}" Height="1" Margin="10,0,10,10" />
                             <TextBlock Text="SİSTEM" Style="{StaticResource LabelCaps}" Margin="10,0,0,6" />
@@ -1380,7 +1426,7 @@
                                             <!-- Save Custom Preset input. The hint is a sibling, not a watermark, so it
                                                  can never end up inside a saved profile name. -->
                                             <Grid Grid.Column="1" Margin="10,0">
-                                                <TextBox x:Name="TxtCustomPresetName" Background="{StaticResource CardBg}" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="10,7" FontSize="11" VerticalAlignment="Center" ToolTip="Yeni profil adı" />
+                                                <TextBox x:Name="TxtCustomPresetName" Background="{StaticResource CardBg}" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="10,7" FontSize="11" VerticalAlignment="Center" ToolTip="Yeni profil adı" FocusVisualStyle="{StaticResource FocusRing}" />
                                                 <TextBlock Text="Yeni profil adı" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                                     <TextBlock.Style>
                                                         <Style TargetType="{x:Type TextBlock}">
