@@ -2,12 +2,16 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-977-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1086-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
 **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It speaks the same protocols as the Acer services NitroSense
 uses (`AcerAgentService`, Acer Care Center) and does not ship an Electron shell.
+
+It is not tied to the machine it was written on: at startup it reads the model, the CPU vendor and what the Acer
+service says the hardware can do, then shows only the controls this laptop actually has. See
+[Compatibility](#compatibility).
 
 **Measured footprint** (AN16-41, in the tray, Release build): about 74 MB working set and roughly 0.6 % of one core
 at idle. Telemetry is read every 3 seconds while minimised.
@@ -75,7 +79,9 @@ at idle. Telemetry is read every 3 seconds while minimised.
 - No DLL is injected into the game; it is only a transparent always-on-top window. It can sit in any of the four
   corners.
 
-### 8. Keyboard RGB (4 zones)
+### 8. Keyboard RGB
+- The zone count and the effect list come from the keyboard itself, so a single-zone or single-colour model gets
+  the controls it can actually use instead of a four-zone picker that does nothing.
 - Static, breathing, wave, neon, slide, zoom, meteor and sparkle effects, plus your own saved profiles.
 - The setting is reapplied after sleep and at sign-in. The 30-second idle timeout is read from the device.
 
@@ -116,6 +122,37 @@ Every Acer and Windows maintenance task runs from the **System Services & Tools*
 ### If the Acer service is not running
 When AASSvc does not answer, NitroLite keeps showing what Windows and the NVIDIA driver can report (CPU usage, RAM,
 GPU). Only the sensors that live in the service are marked "No service".
+
+---
+
+## Compatibility
+
+NitroLite targets the whole Acer Nitro line (Nitro 5, 16 and 17; Nitro V 15 and 16; Intel and AMD), not one SKU.
+Nothing about the hardware is hardcoded: the app asks, and hides what the answer does not cover.
+
+| What | Where the answer comes from | When the answer is missing |
+|---|---|---|
+| Model, family, BIOS, CPU vendor | SMBIOS (`Win32_ComputerSystem`, `Win32_BaseBoard`, `Win32_BIOS`) | the device block says SMBIOS did not answer |
+| Operating modes | `SUPPORT_OPERATING_MODE_CAPABILITY` | every mode stays visible, because a failed query is not evidence a mode is absent |
+| Keyboard zones and effects | `GET_CONNECTED_DEVICE` | the four-zone layout stays, for the same reason |
+| GPU mode (MUX) | `SUPPORT_GPU_MODE_CAPABILITY` | mode switching is disabled with a note, never guessed |
+| 80 % charge limit | Acer Care Center (`AcerCCAgent`) | the checkbox is disabled and says why |
+| Fan curve | the Acer service's own fixed-speed command | the curve turns itself off and says so |
+
+**No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
+already uses, and CPU boost through the Windows power plan. Nothing here loads `WinRing0` or any other driver, so
+Vanguard, FACEIT and EAC have nothing to object to.
+
+### If your model is not covered
+
+**Settings → Export hardware report** writes `hardware-report-<timestamp>.txt` and `.json` into the data folder
+and opens it. The report lists the model code, BIOS, Acer service states, the keyboard report, the operating
+modes, the GPU mode capability and whether the Acer WMI class answers. Attach it to a GitHub issue: it is the
+difference between "the fan slider does nothing" and a fix. It contains no serial number, user name, file path or
+log content.
+
+The same report is available without the window: `NitroLite.exe --hardware-report` (add `--json` for JSON, or
+`--out <folder>` to write both files).
 
 ---
 
@@ -163,7 +200,9 @@ settings stay where they are in `%LOCALAPPDATA%\NitroLite`.
 
 **Settings → Report a bug** opens a GitHub issue with the version, Windows build, laptop model and language already
 filled in. You see the text before anything is sent, and you can edit it. No user name, file path or log content is
-added. Next to it, **Open log folder** takes you to the log if you want to paste an excerpt yourself.
+added. Next to it, **Open log folder** takes you to the log if you want to paste an excerpt yourself, and
+**Export hardware report** writes the capability report described under [Compatibility](#compatibility) — attach
+it when the problem is about a feature that is missing or does nothing on your model.
 
 ---
 
@@ -188,7 +227,15 @@ NitroLite
 │   ├── ThemeManager.cs             # Light and dark palettes
 │   ├── UpdateService.cs            # GitHub release check, digest verification, executable swap
 │   ├── AppPaths.cs                 # Data folder and system tool paths
-│   └── TelemetryFormatter.cs       # Value formatting and "(estimated)" labels
+│   ├── TelemetryFormatter.cs       # Value formatting and "(estimated)" labels
+│   └── Hardware/                   # Model identity and capability probing
+│       ├── DeviceIdentity.cs       # Model code, family, BIOS and CPU vendor parsing
+│       ├── SmbiosProbe.cs          # Read-only SMBIOS queries that never throw
+│       ├── HardwareDetector.cs     # Cached identity, retried when SMBIOS was silent
+│       ├── AcerWmiProbe.cs         # AcerGamingFunction presence and method list
+│       ├── KeyboardCapability.cs   # Zones and effects from GET_CONNECTED_DEVICE
+│       ├── DeviceCapabilities.cs   # Everything the service reports, in one record
+│       └── HardwareReport.cs       # The text and JSON report users attach to issues
 ├── Lang/                           # en, tr, de, es, ru, pt, hi, id
 ├── Themes/                         # Light.xaml, Dark.xaml
 ├── OsdOverlayWindow.xaml           # OSD window

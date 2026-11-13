@@ -2,13 +2,17 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-977-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1086-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (geliştirme **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070
 üzerinde yapıldı) için NitroSense'in yerini alan, hafif ve açık kaynaklı bir kontrol merkezidir. NitroSense'in
 kullandığı Acer servisleriyle (`AcerAgentService`, Acer Care Center) aynı protokolleri kullanır; ağır Electron
 arayüzünü çalıştırmaz.
+
+Geliştirildiği bilgisayara bağlı değildir: açılışta modeli, işlemci üreticisini ve Acer servisinin donanım için
+bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip olduğu denetimleri gösterir. Bkz.
+[Uyumluluk](#uyumluluk).
 
 **Ölçülen kaynak kullanımı** (AN16-41, tepside, Release): ~74 MB çalışma kümesi, boşta bir çekirdeğin yaklaşık
 %0,6'sı. Simge durumundayken telemetri 3 saniyede bir okunur.
@@ -75,7 +79,9 @@ arayüzünü çalıştırmaz.
 - Üç satır: CPU (sıcaklık, tahmini güç, frekans, kullanım), GPU (sıcaklık, güç, frekans, VRAM), RAM ve fan.
 - Oyuna DLL enjekte etmez; yalnızca her zaman üstte duran şeffaf bir penceredir. Dört köşeye yerleştirilebilir.
 
-### 8. Klavye RGB (4 bölge)
+### 8. Klavye RGB
+- Bölge sayısı ve efekt listesi klavyenin kendisinden okunur; tek bölgeli veya tek renkli bir model, işe
+  yaramayan dört bölgeli seçici yerine gerçekten kullanabildiği denetimleri görür.
 - Statik, nefes, dalga, neon, kaydırma, zoom, meteor ve pırıltı efektleri; kendi profillerinizi kaydetme.
 - Uykudan dönüşte ve oturum açılışında ayar yeniden uygulanır. 30 saniyelik boşta kapanma ayarı cihazdan okunur.
 
@@ -102,6 +108,37 @@ doğrudan **Sistem Servisleri ve Araçlar** sekmesinden tek tıkla yürütülür
 ### Acer servisi kapalıysa
 AASSvc yanıt vermezse NitroLite, Windows ve NVIDIA sürücüsünden okunabilen verileri (CPU kullanımı, RAM, GPU)
 göstermeye devam eder. Yalnızca serviste bulunan sensörler "Servis yok" olarak işaretlenir.
+
+---
+
+## Uyumluluk
+
+NitroLite tek bir modele değil, Acer Nitro serisinin tamamına (Nitro 5, 16 ve 17; Nitro V 15 ve 16; Intel ve AMD)
+yönelir. Donanımla ilgili hiçbir şey sabit yazılmamıştır: uygulama sorar, cevabın kapsamadığı denetimi gizler.
+
+| Ne | Cevap nereden geliyor | Cevap yoksa |
+|---|---|---|
+| Model, aile, BIOS, işlemci üreticisi | SMBIOS (`Win32_ComputerSystem`, `Win32_BaseBoard`, `Win32_BIOS`) | cihaz bloğu SMBIOS cevap vermedi diye yazar |
+| Çalışma modları | `SUPPORT_OPERATING_MODE_CAPABILITY` | tüm modlar görünür kalır, çünkü başarısız sorgu modun olmadığının kanıtı değildir |
+| Klavye bölgeleri ve efektleri | `GET_CONNECTED_DEVICE` | dört bölgeli düzen kalır, aynı sebeple |
+| GPU modu (MUX) | `SUPPORT_GPU_MODE_CAPABILITY` | mod değiştirme notla kapatılır, asla tahmin edilmez |
+| %80 şarj sınırı | Acer Care Center (`AcerCCAgent`) | onay kutusu kapatılır ve sebebini yazar |
+| Fan eğrisi | Acer servisinin kendi sabit hız komutu | eğri kendini kapatır ve bunu söyler |
+
+**Çekirdek sürücü yok, EC kaydına yazma yok.** Fan ve aydınlatma denetimi NitroSense'in zaten kullandığı Acer
+servisi üzerinden, işlemci hız artışı Windows güç planı üzerinden yapılır. Burada `WinRing0` veya başka bir
+sürücü yüklenmez; Vanguard, FACEIT ve EAC'nin itiraz edeceği bir şey yoktur.
+
+### Modeliniz kapsam dışıysa
+
+**Ayarlar → Donanım raporu** düğmesi veri klasörüne `hardware-report-<zaman>.txt` ve `.json` yazar ve klasörü
+açar. Rapor model kodunu, BIOS'u, Acer servislerinin durumunu, klavye raporunu, çalışma modlarını, GPU modu
+yeteneğini ve Acer WMI sınıfının cevap verip vermediğini listeler. Bir GitHub issue'suna ekleyin: "fan kaydırıcısı
+hiçbir şey yapmıyor" ile düzeltme arasındaki fark budur. Seri numarası, kullanıcı adı, dosya yolu veya günlük
+içeriği barındırmaz.
+
+Aynı rapor pencere olmadan da alınır: `NitroLite.exe --hardware-report` (JSON için `--json`, iki dosyayı bir
+klasöre yazmak için `--out <klasör>`).
 
 ---
 
@@ -148,7 +185,8 @@ Ayarlarınız `%LOCALAPPDATA%\NitroLite` altında durduğu için korunur.
 **Ayarlar → Hata bildir** düğmesi, sürüm, Windows sürümü, dizüstü modeli ve dil bilgisi doldurulmuş olarak bir GitHub
 issue sayfası açar. Göndermeden önce metni görürsünüz ve değiştirebilirsiniz. Kullanıcı adı, dosya yolu veya günlük
 içeriği eklenmez. Yanındaki **Günlük klasörünü aç** bağlantısı, bir bölümü kendiniz yapıştırmak isterseniz günlüğe
-götürür.
+götürür. **Donanım raporu** ise [Uyumluluk](#uyumluluk) bölümünde anlatılan yetenek raporunu yazar; sorun modelinizde
+eksik veya işlevsiz bir özellikle ilgiliyse onu ekleyin.
 
 ---
 
@@ -173,7 +211,15 @@ NitroLite
 │   ├── ThemeManager.cs             # Açık ve koyu paletler
 │   ├── UpdateService.cs            # GitHub sürüm denetimi, özet doğrulama, exe değişimi
 │   ├── AppPaths.cs                 # Veri klasörü ve sistem aracı yolları
-│   └── TelemetryFormatter.cs       # Değer biçimlendirme ve "(tahmini)" etiketleri
+│   ├── TelemetryFormatter.cs       # Değer biçimlendirme ve "(tahmini)" etiketleri
+│   └── Hardware/                   # Model kimliği ve yetenek sorgulama
+│       ├── DeviceIdentity.cs       # Model kodu, aile, BIOS ve işlemci üreticisi ayrıştırma
+│       ├── SmbiosProbe.cs          # Hata fırlatmayan salt okunur SMBIOS sorguları
+│       ├── HardwareDetector.cs     # Önbellekli kimlik; SMBIOS sustuysa yeniden dener
+│       ├── AcerWmiProbe.cs         # AcerGamingFunction varlığı ve metot listesi
+│       ├── KeyboardCapability.cs   # GET_CONNECTED_DEVICE üzerinden bölgeler ve efektler
+│       ├── DeviceCapabilities.cs   # Servisin bildirdiği her şey, tek kayıtta
+│       └── HardwareReport.cs       # Kullanıcının issue'ya eklediği metin ve JSON raporu
 ├── Lang/                           # en, tr, de, es, ru, pt, hi, id
 ├── Themes/                         # Light.xaml, Dark.xaml
 ├── OsdOverlayWindow.xaml           # OSD penceresi
