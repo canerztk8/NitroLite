@@ -2680,7 +2680,8 @@ public partial class MainWindow : Window
                     _ => "Uygulama bekleniyor"
                 },
                 tooltip: result == AtkMouseResult.Confirmed ? null : DescribeMouseFailure(result));
-            UpdateSideMouseProfileStatus(activeProfile ?? 0, failure: result);
+            UpdateSideMouseProfileStatus(activeProfile ?? 0, failure: result,
+                retryPending: _pendingDesktopMouseRequest != null);
             return result;
         }
         catch (Exception ex)
@@ -2706,13 +2707,17 @@ public partial class MainWindow : Window
     };
 
     /// <summary>
-    /// Compact variant for the sidebar status card, where the value shares a ~160 px row with its label.
-    /// The full text is still used in toasts and tooltips.
+    /// Compact variant for the sidebar status card, where the value shares a ~154 px row with its label
+    /// (about 95 px for the value itself). The full text is still used in toasts and tooltips.
     /// </summary>
-    private static string DescribeMouseFailureShort(AtkMouseResult result) => result switch
+    /// <param name="retryPending">
+    /// True while the desktop profile is still being retried. A silent wireless mouse is retried every few
+    /// seconds, so "no response" read as a dead end; the retrying state says what is actually happening.
+    /// </param>
+    internal static string DescribeMouseFailureShort(AtkMouseResult result, bool retryPending = false) => result switch
     {
         AtkMouseResult.ReceiverNotFound => "Alıcı yok",
-        AtkMouseResult.NoResponse => "Yanıt yok",
+        AtkMouseResult.NoResponse => retryPending ? "Uyanıyor…" : "Yanıt yok",
         AtkMouseResult.Rejected => "Reddedildi",
         AtkMouseResult.ProfileNotConfirmed => "Doğrulanamadı",
         _ => "İletişim hatası"
@@ -2767,7 +2772,8 @@ public partial class MainWindow : Window
         finally { _gameProfileTransitionLock.Release(); }
     }
 
-    private void UpdateSideMouseProfileStatus(int profile, AtkMouseResult failure = AtkMouseResult.Confirmed)
+    private void UpdateSideMouseProfileStatus(int profile, AtkMouseResult failure = AtkMouseResult.Confirmed,
+        bool retryPending = false)
     {
         if (TxtSideMouseProfile == null) return;
         if (profile >= 1 && profile <= 4)
@@ -2778,7 +2784,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            TxtSideMouseProfile.Text = failure == AtkMouseResult.Confirmed ? "Bilinmiyor" : DescribeMouseFailureShort(failure);
+            TxtSideMouseProfile.Text = failure == AtkMouseResult.Confirmed
+                ? "Bilinmiyor"
+                : DescribeMouseFailureShort(failure, retryPending);
             TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
             TxtSideMouseProfile.ToolTip = failure == AtkMouseResult.NoResponse
                 ? "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin."
