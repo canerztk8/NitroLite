@@ -1869,6 +1869,33 @@ function global:Disable-ScheduledTask {
         Assert.Equal(new[] { 1, 2 }, profiles);
     });
 
+    // The sidebar row used to fall back to "Bilinmiyor" whenever a caller passed no profile number, so a
+    // successful switch could be overwritten by the startup placeholder.
+    [Fact]
+    public void SideMouseProfile_KeepsTheConfirmedConfigWhenAPlaceholderCallFollows()
+    {
+        Assert.Equal(("Config 2", true),
+            MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.Confirmed, retryPending: false, lastShownProfile: 2));
+    }
+
+    [Fact]
+    public void SideMouseProfile_SaysItIsCheckingBeforeTheFirstQueryAnswers()
+    {
+        Assert.Equal(("Sorgulanıyor…", false),
+            MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.Confirmed, retryPending: false, lastShownProfile: 0));
+    }
+
+    [Fact]
+    public void SideMouseProfile_ShowsTheFailureInsteadOfUnknownWhenTheSwitchFails()
+    {
+        Assert.Equal(("Uyanıyor…", false),
+            MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.NoResponse, retryPending: true, lastShownProfile: 0));
+        Assert.Equal(("Yanıt yok", false),
+            MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.NoResponse, retryPending: false, lastShownProfile: 0));
+        Assert.Equal(("Alıcı yok", false),
+            MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.ReceiverNotFound, retryPending: false, lastShownProfile: 0));
+    }
+
     // Bug 3: Balanced DC mode AC reconnect fires event with Applied=true when no commands were sent.
     // Fix: when !_isDcEcoActive && !HasPendingAcRestore, all Applied flags must be false.
     [Fact]

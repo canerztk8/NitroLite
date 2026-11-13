@@ -47,6 +47,14 @@
 .PARAMETER KeepOpen
     Leave the app running and the data folder in place, for poking at it afterwards.
 
+.PARAMETER MouseProfile
+    Turns ATK mouse integration on with this default profile (0-4), so the sidebar's FARE row is
+    captured. Omit it to leave the integration off, as a fresh install has it.
+
+.PARAMETER Settle
+    Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
+    value is still being fetched at startup (for example the ATK mouse profile).
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -All -Theme dark -Language de
 
@@ -63,7 +71,9 @@ param(
     [string]$Size = '1325x913',
     [int]$Scrolls = 0,
     [string]$Exe = '',
-    [switch]$KeepOpen
+    [switch]$KeepOpen,
+    [ValidateRange(0, 4)][int]$MouseProfile,
+    [int]$Settle = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,7 +133,11 @@ if ($running) {
 $dataDir = Join-Path ([IO.Path]::GetTempPath()) ('nl-shot-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $dataDir | Out-Null
 $themeValue = if ($Theme -eq 'dark') { 1 } else { 0 }
-$json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": $themeValue`r`n}`r`n"
+$json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": $themeValue"
+if ($PSBoundParameters.ContainsKey('MouseProfile')) {
+    $json += ",`r`n  `"atk_mouse_integration_enabled`": true,`r`n  `"default_atk_mouse_profile`": $MouseProfile"
+}
+$json += "`r`n}`r`n"
 [IO.File]::WriteAllText((Join-Path $dataDir 'settings.json'), $json, (New-Object Text.UTF8Encoding($false)))
 
 if (-not $Out) { $Out = Join-Path ([IO.Path]::GetTempPath()) 'nl-shots' }
@@ -175,7 +189,7 @@ switch ($Position) {
 }
 # SWP_NOACTIVATE: move and resize without stealing focus.
 [Shot]::SetWindowPos($hwnd, $after, $x, $y, $winW, $winH, 0x0010) | Out-Null
-Start-Sleep -Milliseconds 900
+Start-Sleep -Milliseconds (900 + $Settle)
 
 # ---- capture ----------------------------------------------------------------------------------
 $rootEl = [System.Windows.Automation.AutomationElement]::RootElement

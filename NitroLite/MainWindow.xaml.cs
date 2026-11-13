@@ -67,6 +67,8 @@ public partial class MainWindow : Window
     private FanMode _savedFanModeBeforeGame = FanMode.Auto;
     private int _savedMouseProfileBeforeGame = 1;
     private bool _isMouseProfileSwitchedForGame = false;
+    // The last Config the sidebar row showed, so a placeholder call cannot erase it.
+    private int _lastShownMouseProfile = 0;
     private GpuOperatingMode? _currentGpuMode = null;
     private bool _isGameSessionActive = false;
     private bool _hasPendingDesktopRestore = false;
@@ -2809,6 +2811,11 @@ public partial class MainWindow : Window
             {
                 request.NextAttemptAt = Environment.TickCount64;
                 UpdateDefaultMouseProfileBadge(profile, confirmed: false, status: "Oyun bitince uygulanacak");
+                // Deferred, not queried: the row must not keep claiming a query is running.
+                if (_atkMouseService.HasConfirmedProfile && _atkMouseService.CurrentActiveProfile is >= 1 and <= 4)
+                    UpdateSideMouseProfileStatus(_atkMouseService.CurrentActiveProfile);
+                else
+                    ShowSideMouseProfileUnknown();
                 return null;
             }
 
@@ -2946,22 +2953,42 @@ public partial class MainWindow : Window
         bool retryPending = false)
     {
         if (TxtSideMouseProfile == null) return;
-        if (profile >= 1 && profile <= 4)
-        {
-            TxtSideMouseProfile.Text = Loc.T($"Config {profile}");
-            TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("AccentGreen");
-            TxtSideMouseProfile.ToolTip = null;
-        }
-        else
-        {
-            TxtSideMouseProfile.Text = failure == AtkMouseResult.Confirmed
-                ? Loc.T("Bilinmiyor")
-                : DescribeMouseFailureShort(failure, retryPending);
-            TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
-            TxtSideMouseProfile.ToolTip = failure == AtkMouseResult.NoResponse
-                ? Loc.T("Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.")
-                : null;
-        }
+        if (profile is >= 1 and <= 4) _lastShownMouseProfile = profile;
+
+        var (text, isConfig) = DescribeSideMouseProfile(profile, failure, retryPending, _lastShownMouseProfile);
+        TxtSideMouseProfile.Text = text;
+        TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource(isConfig ? "AccentGreen" : "TextSecondary");
+        TxtSideMouseProfile.ToolTip = !isConfig && failure == AtkMouseResult.NoResponse
+            ? Loc.T("Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.")
+            : null;
+    }
+
+    /// <summary>
+    /// What the sidebar row says for a given state. Split out so the placeholder rules can be tested without a
+    /// window: a caller with no profile number must not erase one the row already showed, and "Bilinmiyor" is
+    /// only honest once a query has finished without an answer.
+    /// </summary>
+    /// <param name="lastShownProfile">The last Config the row showed, or 0 when it never showed one.</param>
+    internal static (string Text, bool IsConfig) DescribeSideMouseProfile(int profile, AtkMouseResult failure,
+        bool retryPending, int lastShownProfile)
+    {
+        if (profile is >= 1 and <= 4) return (Loc.T($"Config {profile}"), true);
+        if (failure == AtkMouseResult.Confirmed && lastShownProfile is >= 1 and <= 4)
+            return (Loc.T($"Config {lastShownProfile}"), true);
+        return (failure == AtkMouseResult.Confirmed
+            ? Loc.T("Sorgulanıyor…")
+            : DescribeMouseFailureShort(failure, retryPending), false);
+    }
+
+    /// <summary>
+    /// The row's "we do not know" state. Only used where no query is running, so it does not claim one is.
+    /// </summary>
+    private void ShowSideMouseProfileUnknown()
+    {
+        if (TxtSideMouseProfile == null) return;
+        TxtSideMouseProfile.Text = Loc.T("Bilinmiyor");
+        TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
+        TxtSideMouseProfile.ToolTip = null;
     }
 
     private void UpdateAtkMouseIntegrationVisibility(bool enabled)
