@@ -354,16 +354,16 @@ public partial class MainWindow : Window
         void AddBoost(string text, CpuBoostMode boost) =>
             menu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(text, null, async (s, e) => await SetManualCpuBoostAsync(boost)) { Tag = boost });
 
-        AddMode("Sessiz Mod", OperatingMode.Quiet);
-        AddMode("Dengeli Mod", OperatingMode.Default);
-        AddMode("Performans Modu", OperatingMode.Extreme);
-        AddMode("Turbo Mod", OperatingMode.Turbo);
-        AddMode("Eco Mod", OperatingMode.Eco);
+        AddMode(Loc.T("Sessiz Mod"), OperatingMode.Quiet);
+        AddMode(Loc.T("Dengeli Mod"), OperatingMode.Default);
+        AddMode(Loc.T("Performans Modu"), OperatingMode.Extreme);
+        AddMode(Loc.T("Turbo Mod"), OperatingMode.Turbo);
+        AddMode(Loc.T("Eco Mod"), OperatingMode.Eco);
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         AddBoost(Loc.T("CPU Boost: Devre Dışı"), CpuBoostMode.Disabled);
-        AddBoost("CPU Boost: Verimli", CpuBoostMode.Efficient);
-        AddBoost("CPU Boost: Agresif", CpuBoostMode.Aggressive);
+        AddBoost(Loc.T("CPU Boost: Verimli"), CpuBoostMode.Efficient);
+        AddBoost(Loc.T("CPU Boost: Agresif"), CpuBoostMode.Aggressive);
 
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(Loc.T("Çıkış"), null, (s, e) => RealExit());
