@@ -799,5 +799,12 @@
  "CPU {0} °C · fan %{1}": "CPU {0} °C · पंखा {1}%",
  "Eğri": "कर्व",
  "FAN EĞRİSİ": "फ़ैन कर्व",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "कर्व CPU तापमान का पालन करता है: तापमान बढ़ते ही पंखे तेज़ हो जाते हैं और गिरने पर हिस्टैरिसिस बैंड पार करने के बाद ही धीमे होते हैं। गेम सत्र के दौरान गेम प्रोफ़ाइल की पंखा सेटिंग लागू होती है।"
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "कर्व CPU तापमान का पालन करता है: तापमान बढ़ते ही पंखे तेज़ हो जाते हैं और गिरने पर हिस्टैरिसिस बैंड पार करने के बाद ही धीमे होते हैं। गेम सत्र के दौरान गेम प्रोफ़ाइल की पंखा सेटिंग लागू होती है।",
+ "Bu oyun için fan eğrisi kullan": "इस गेम के लिए फ़ैन कर्व इस्तेमाल करें",
+ "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "स्थिर फ़ैन गति के बजाय तापमान के अनुसार बदलने वाला कर्व लागू करता है। बंद होने पर ऊपर वाला फ़ैन प्रोफ़ाइल लागू होता है।",
+ "OYUN FAN EĞRİSİ": "गेम फ़ैन कर्व",
+ "Masaüstü eğrisini kopyala": "डेस्कटॉप कर्व कॉपी करें",
+ "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "फ़ैन कार्ड का कर्व इस गेम की प्रोफ़ाइल में कॉपी करता है।",
+ "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "डेस्कटॉप फ़ैन कर्व इस गेम में कॉपी हो गया; सहेजना न भूलें।",
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "इस सत्र के लिए फ़ैन कर्व गेम प्रोफ़ाइल से आता है।"
 }

@@ -799,5 +799,12 @@
  "CPU {0} °C · fan %{1}": "CPU {0} °C · fan {1}%",
  "Eğri": "Curve",
  "FAN EĞRİSİ": "FAN CURVE",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "The curve follows the CPU temperature: the fans speed up as soon as it rises, and slow down only after it falls past the hysteresis band. During a game session the game profile's fan setting applies."
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "The curve follows the CPU temperature: the fans speed up as soon as it rises, and slow down only after it falls past the hysteresis band. During a game session the game profile's fan setting applies.",
+ "Bu oyun için fan eğrisi kullan": "Use a fan curve for this game",
+ "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "Runs a curve that follows the temperature instead of a fixed fan speed. When off, the fan profile above applies.",
+ "OYUN FAN EĞRİSİ": "GAME FAN CURVE",
+ "Masaüstü eğrisini kopyala": "Copy the desktop curve",
+ "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Copies the curve from the fan card into this game's profile.",
+ "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Desktop fan curve copied to this game; remember to save.",
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "The fan curve comes from the game profile for this session."
 }

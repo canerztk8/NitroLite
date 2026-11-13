@@ -182,6 +182,15 @@ public class GameProfile
     public int TargetAtkMouseProfile { get; set; } = 0; // 0: Değiştirme / Pasif, 1..4: Config 1..4
 
     /// <summary>
+    /// Run a fan curve for the length of this game's session instead of a fixed <see cref="TargetFanMode"/>.
+    /// The shape comes from <see cref="TargetFanCurvePoints"/>; when that is null the desktop curve is used.
+    /// </summary>
+    public bool TargetFanCurveEnabled { get; set; } = false;
+
+    /// <summary>This game's own curve anchors. Null means "follow the curve set on the fan card".</summary>
+    public List<FanCurvePoint>? TargetFanCurvePoints { get; set; }
+
+    /// <summary>
     /// False when the recorded executable is gone (game uninstalled or moved). A profile without a path is
     /// treated as installed: it was added by hand and there is nothing to check.
     /// </summary>

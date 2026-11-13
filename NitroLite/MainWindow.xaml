@@ -1213,6 +1213,81 @@
                                                     </StackPanel>
                                                 </UniformGrid>
 
+                                                <!-- Per-game fan curve: this profile can run its own shape instead of a fixed speed -->
+                                                <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,0,0,12">
+                                                    <StackPanel>
+                                                        <CheckBox x:Name="ChkGameFanCurve" Content="Bu oyun için fan eğrisi kullan" Checked="ChkGameFanCurve_Changed" Unchecked="ChkGameFanCurve_Changed" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="SemiBold" Cursor="Hand" ToolTip="Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir." />
+                                                        <StackPanel x:Name="PnlGameFanCurve" Visibility="Collapsed" Margin="0,8,0,0">
+                                                            <Grid Margin="0,0,0,6">
+                                                                <TextBlock Text="OYUN FAN EĞRİSİ" Style="{StaticResource LabelCaps}" VerticalAlignment="Center" />
+                                                                <Button x:Name="BtnGameCurveCopyDesktop" Content="Masaüstü eğrisini kopyala" Click="BtnGameCurveCopyDesktop_Click" HorizontalAlignment="Right" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="8,2" FontSize="10" FontWeight="SemiBold" Cursor="Hand" ToolTip="Fan kartındaki eğriyi bu oyunun profiline kopyalar." />
+                                                            </Grid>
+                                                            <UniformGrid Columns="3">
+                                                                <Grid Margin="0,0,22,8">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="30" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="38" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="40°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve0" Grid.Column="1" Minimum="30" Maximum="100" Value="30" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <TextBlock x:Name="TxtGameCurve0" Grid.Column="2" Text="%30" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                                <Grid Margin="0,0,22,8">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="30" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="38" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="50°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve1" Grid.Column="1" Minimum="30" Maximum="100" Value="32" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <TextBlock x:Name="TxtGameCurve1" Grid.Column="2" Text="%32" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                                <Grid Margin="0,0,0,8">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="30" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="38" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="60°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve2" Grid.Column="1" Minimum="30" Maximum="100" Value="36" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <TextBlock x:Name="TxtGameCurve2" Grid.Column="2" Text="%36" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                                <Grid Margin="0,0,22,0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="30" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="38" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="70°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve3" Grid.Column="1" Minimum="30" Maximum="100" Value="42" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <TextBlock x:Name="TxtGameCurve3" Grid.Column="2" Text="%42" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                                <Grid Margin="0,0,22,0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="30" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="38" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="80°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve4" Grid.Column="1" Minimum="30" Maximum="100" Value="62" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <TextBlock x:Name="TxtGameCurve4" Grid.Column="2" Text="%62" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                                <Grid Margin="0,0,0,0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="30" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="38" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="90°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve5" Grid.Column="1" Minimum="30" Maximum="100" Value="100" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <TextBlock x:Name="TxtGameCurve5" Grid.Column="2" Text="%100" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                                </Grid>
+                                                            </UniformGrid>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+
                                                 <!-- Save Profile Action Button & Description -->
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>

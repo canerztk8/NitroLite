@@ -799,5 +799,12 @@
  "CPU {0} °C · fan %{1}": "CPU {0} °C · Lüfter {1} %",
  "Eğri": "Kurve",
  "FAN EĞRİSİ": "LÜFTERKURVE",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Die Kurve folgt der CPU-Temperatur: steigt sie, drehen die Lüfter sofort auf; sinkt sie, werden sie erst nach der Hysterese langsamer. Während einer Spielsitzung gilt die Lüftereinstellung des Spielprofils."
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Die Kurve folgt der CPU-Temperatur: steigt sie, drehen die Lüfter sofort auf; sinkt sie, werden sie erst nach der Hysterese langsamer. Während einer Spielsitzung gilt die Lüftereinstellung des Spielprofils.",
+ "Bu oyun için fan eğrisi kullan": "Für dieses Spiel eine Lüfterkurve verwenden",
+ "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "Verwendet eine Kurve, die der Temperatur folgt, statt einer festen Lüfterdrehzahl. Ausgeschaltet gilt das Lüfterprofil oben.",
+ "OYUN FAN EĞRİSİ": "SPIEL-LÜFTERKURVE",
+ "Masaüstü eğrisini kopyala": "Desktop-Kurve kopieren",
+ "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Kopiert die Kurve aus der Lüfterkarte in das Profil dieses Spiels.",
+ "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Desktop-Lüfterkurve in dieses Spiel kopiert; Speichern nicht vergessen.",
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "Die Lüfterkurve kommt für diese Sitzung aus dem Spielprofil."
 }

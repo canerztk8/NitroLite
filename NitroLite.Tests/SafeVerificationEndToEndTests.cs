@@ -2710,4 +2710,159 @@ function global:Disable-ScheduledTask {
     }
 
     #endregion
+
+    #region Per-game fan curve
+
+    private static GameProfile CurveGame(List<FanCurvePoint>? points, FanMode fixedMode = FanMode.Max) => new()
+    {
+        ExeName = "testgame",
+        DisplayName = "Test Game",
+        TargetMode = OperatingMode.Default,
+        TargetCpuBoost = CpuBoostMode.Disabled,
+        TargetFanMode = fixedMode,
+        TargetFanCurveEnabled = points != null,
+        TargetFanCurvePoints = points
+    };
+
+    [Fact]
+    public async Task AGameProfileWithItsOwnCurve_TakesTheFansInCustomModeInsteadOfItsFixedSpeed()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings { CustomFanCpuPercent = 50 };
+            var window = FanCurveWindow(agent, settings);
+
+            await window.HandleGameStartedAsync(CurveGame(new List<FanCurvePoint> { new(40, 45), new(90, 100) }));
+
+            Assert.True(window.IsGameSessionActive);
+            Assert.True(window.IsGameFanCurveArmed);
+            Assert.Equal(FanMode.Custom, agent.CurrentFanMode);
+            // No temperature has been read yet, so the curve falls back to the saved manual speed rather than
+            // guessing from a sensor it does not have.
+            Assert.Equal(50, agent.CustomFanCpuPercent);
+        });
+    }
+
+    [Fact]
+    public async Task AGameProfileWithoutItsOwnAnchors_FollowsTheDesktopCurve()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings
+            {
+                CustomFanCpuPercent = 44,
+                FanCurvePoints = new List<FanCurvePoint> { new(40, 33), new(90, 100) }
+            };
+            var window = FanCurveWindow(agent, settings);
+
+            var game = CurveGame(new List<FanCurvePoint> { new(40, 33), new(90, 100) });
+            game.TargetFanCurvePoints = null;
+
+            await window.HandleGameStartedAsync(game);
+
+            Assert.True(window.IsGameFanCurveArmed);
+            Assert.Equal(FanMode.Custom, agent.CurrentFanMode);
+            Assert.Equal(44, agent.CustomFanCpuPercent);
+        });
+    }
+
+    [Fact]
+    public async Task EndingAGameWithItsOwnCurve_HandsTheFansBackToTheDesktopCurve()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings
+            {
+                CustomFanCpuPercent = 50,
+                FanCurveEnabled = true,
+                FanCurvePoints = new List<FanCurvePoint> { new(40, 30), new(90, 100) }
+            };
+            var window = FanCurveWindow(agent, settings);
+            Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+
+            var game = CurveGame(new List<FanCurvePoint> { new(40, 45), new(90, 100) });
+            await window.HandleGameStartedAsync(game);
+            Assert.True(window.IsGameFanCurveArmed);
+
+            await window.HandleGameEndedAsync(game);
+
+            Assert.False(window.IsGameSessionActive);
+            Assert.False(window.IsGameFanCurveArmed);
+            // The desktop curve is back, and the user's preference was never cleared by the handover.
+            Assert.True(window.IsFanCurveArmed);
+            Assert.True(settings.FanCurveEnabled);
+            Assert.Equal(FanMode.Custom, agent.CurrentFanMode);
+        });
+    }
+
+    [Fact]
+    public async Task EndingAGameWithItsOwnCurve_LeavesTheDesktopCurveOffWhenTheUserHadItOff()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings { CustomFanCpuPercent = 50, FanCurveEnabled = false };
+            var window = FanCurveWindow(agent, settings);
+
+            var game = CurveGame(new List<FanCurvePoint> { new(40, 45), new(90, 100) });
+            await window.HandleGameStartedAsync(game);
+            await window.HandleGameEndedAsync(game);
+
+            Assert.False(window.IsFanCurveArmed);
+            Assert.False(settings.FanCurveEnabled);
+        });
+    }
+
+    [Fact]
+    public async Task AGameWithoutACurve_SuspendsTheDesktopCurveAndResumesItAfter()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings
+            {
+                CustomFanCpuPercent = 50,
+                FanCurveEnabled = true,
+                FanCurvePoints = new List<FanCurvePoint> { new(40, 30), new(90, 100) }
+            };
+            var window = FanCurveWindow(agent, settings);
+            Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+
+            var game = CurveGame(null, FanMode.Max);
+            await window.HandleGameStartedAsync(game);
+
+            // The profile's fixed speed wins for the session; the desktop curve stays armed but suspended.
+            Assert.Equal(FanMode.Max, agent.CurrentFanMode);
+            Assert.False(window.IsGameFanCurveArmed);
+            Assert.True(window.IsFanCurveArmed);
+
+            await window.HandleGameEndedAsync(game);
+
+            Assert.Equal(FanMode.Custom, agent.CurrentFanMode);
+            Assert.True(settings.FanCurveEnabled);
+        });
+    }
+
+    [Fact]
+    public async Task AFailedGameCurveStart_LeavesNoCurveArmed()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            agent.OnSetFanModeAsync = _ => Task.FromResult(false);
+            var settings = new AppSettings();
+            var window = FanCurveWindow(agent, settings);
+
+            Assert.False(await window.ArmGameFanCurveAsync(CurveGame(new List<FanCurvePoint> { new(40, 45), new(90, 100) })));
+
+            Assert.False(window.IsFanCurveArmed);
+            Assert.False(window.IsGameFanCurveArmed);
+            Assert.Equal(FanMode.Auto, agent.CurrentFanMode);
+        });
+    }
+
+    #endregion
 }

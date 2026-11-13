@@ -799,5 +799,12 @@
  "CPU {0} °C · fan %{1}": "ЦП {0} °C · вентилятор {1} %",
  "Eğri": "Кривая",
  "FAN EĞRİSİ": "КРИВАЯ ВЕНТИЛЯТОРОВ",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Кривая следует за температурой процессора: при росте вентиляторы сразу ускоряются, а замедляются только после выхода за зону гистерезиса. Во время игровой сессии действует настройка вентиляторов игрового профиля."
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Кривая следует за температурой процессора: при росте вентиляторы сразу ускоряются, а замедляются только после выхода за зону гистерезиса. Во время игровой сессии действует настройка вентиляторов игрового профиля.",
+ "Bu oyun için fan eğrisi kullan": "Использовать кривую вентилятора для этой игры",
+ "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "Применяет кривую, следующую за температурой, вместо фиксированной скорости. Если выключено, действует профиль вентилятора выше.",
+ "OYUN FAN EĞRİSİ": "КРИВАЯ ВЕНТИЛЯТОРА ДЛЯ ИГРЫ",
+ "Masaüstü eğrisini kopyala": "Скопировать кривую рабочего стола",
+ "Fan kartındaki eğriyi bu oyunun profiline kopyalar.": "Копирует кривую с карточки вентилятора в профиль этой игры.",
+ "Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın.": "Кривая вентилятора рабочего стола скопирована в эту игру; не забудьте сохранить.",
+ "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "На время этой сессии кривая вентилятора берётся из профиля игры."
 }

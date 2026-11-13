@@ -57,6 +57,9 @@
 .PARAMETER FanCurveFlat
     Turns the curve on with a flat shape at this percentage, so a fixed fan speed can be measured.
 
+.PARAMETER GameFanCurve
+    Ticks the per-game fan curve box on the game profile card, so its editor is captured open.
+
 .PARAMETER Settle
     Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
     value is still being fetched at startup (for example the ATK mouse profile).
@@ -81,6 +84,7 @@ param(
     [ValidateRange(0, 4)][int]$MouseProfile,
     [switch]$FanCurve,
     [ValidateRange(30, 100)][int]$FanCurveFlat,
+    [switch]$GameFanCurve,
     [int]$Settle = 0
 )
 
@@ -240,6 +244,20 @@ foreach ($pageId in $pages) {
     }
     $nav.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 1400
+
+    # Toggled before scrolling: opening the panel makes the page taller, so the scroll has to see the final layout.
+    if ($GameFanCurve) {
+        $chkCond = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ChkGameFanCurve')
+        $chk = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $chkCond)
+        if ($chk) {
+            $tp = $chk.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+            if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
+            Start-Sleep -Milliseconds 500
+        } else {
+            Write-Host "  ChkGameFanCurve not found" -ForegroundColor Yellow
+        }
+    }
 
     if ($Scrolls -ne 0) {
         $scrollCond = New-Object System.Windows.Automation.PropertyCondition(

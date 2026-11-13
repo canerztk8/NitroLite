@@ -1371,7 +1371,12 @@ public partial class MainWindow : Window
         {
             bool curve = known && mode == FanMode.Custom && curveOwnsFans;
             SetSegActive(BtnFanCurve, curve);
-            BtnFanCurve.ToolTip = curve ? Loc.T("Etkin") : Loc.T("Fan hızını CPU sıcaklığına göre kendisi ayarlar.");
+            // A running game profile owns the curve for the length of its session; the card cannot take it back.
+            bool gameOwnsCurve = _fanCurveOwner == FanCurveOwner.Game;
+            BtnFanCurve.IsEnabled = !gameOwnsCurve;
+            BtnFanCurve.ToolTip = gameOwnsCurve
+                ? Loc.T("Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.")
+                : curve ? Loc.T("Etkin") : Loc.T("Fan hızını CPU sıcaklığına göre kendisi ayarlar.");
         }
 
         // The sliders stay open while the user is choosing "Özel" (before the service confirms it).
@@ -1481,7 +1486,21 @@ public partial class MainWindow : Window
 
     // ---------------------------------------------------------------- software fan curve
 
-    private bool _fanCurveEnabled;
+    /// <summary>
+    /// Who armed the curve. The fan card and a running game profile can both want it, and only one of them may
+    /// own the fans at a time: the game profile takes over for the length of its session and hands back after.
+    /// </summary>
+    private enum FanCurveOwner { None, Desktop, Game }
+
+    private FanCurveOwner _fanCurveOwner = FanCurveOwner.None;
+    private bool _fanCurveEnabled => _fanCurveOwner != FanCurveOwner.None;
+
+    /// <summary>True while a curve is armed, whoever armed it.</summary>
+    internal bool IsFanCurveArmed => _fanCurveEnabled;
+
+    /// <summary>True while a running game profile owns the curve.</summary>
+    internal bool IsGameFanCurveArmed => _fanCurveOwner == FanCurveOwner.Game;
+
     private FanCurveEvaluator? _fanCurveEvaluator;
     private DispatcherTimer? _fanCurveApplyTimer;
     private int _fanCurveLastTemperatureC;
@@ -1585,7 +1604,7 @@ public partial class MainWindow : Window
         {
             timer.Stop();
             SaveSettings();
-            if (!_fanCurveEnabled || _isGameSessionActive) return;
+            if (_fanCurveOwner != FanCurveOwner.Desktop) return;
             await ApplyFanCurveAsync(_fanCurveLastTemperatureC);
         };
         return timer;
@@ -1593,12 +1612,14 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// One step of the curve: takes the temperature the poll already fetched and writes a new custom fan speed
-    /// only when the evaluator says it is worth it. Never runs during a game session (the game profile owns the
-    /// fans) and never writes when the sensor has no reading.
+    /// only when the evaluator says it is worth it. A game profile's curve runs only while that game is up, and
+    /// the desktop curve only outside a session, so the two can never fight over the fans. Never writes when the
+    /// sensor has no reading.
     /// </summary>
     private async Task ApplyFanCurveAsync(int cpuTemperatureC)
     {
-        if (!_fanCurveEnabled || _isInitializingUi || _isGameSessionActive) return;
+        if (!_fanCurveEnabled || _isInitializingUi) return;
+        if (_isGameSessionActive != (_fanCurveOwner == FanCurveOwner.Game)) return;
         if (_fanCurveEvaluator == null || cpuTemperatureC <= 0) return;
 
         _fanCurveLastTemperatureC = cpuTemperatureC;
@@ -1650,7 +1671,7 @@ public partial class MainWindow : Window
 
         if (enabled)
         {
-            _fanCurveEnabled = true;
+            _fanCurveOwner = FanCurveOwner.Desktop;
             _appSettings.FanCurveEnabled = true;
             _fanCurveEvaluator = new FanCurveEvaluator(_appSettings.BuildFanCurve());
             SaveSettings();
@@ -1693,11 +1714,15 @@ public partial class MainWindow : Window
         return ok;
     }
 
-    /// <summary>Forgets the curve without touching the fans. The caller decides what mode they should be in.</summary>
+    /// <summary>
+    /// Forgets the curve without touching the fans. The caller decides what mode they should be in. Only a curve
+    /// the fan card armed clears the saved preference: a game profile handing back must leave the desktop setting
+    /// exactly as the user left it.
+    /// </summary>
     private void DisableFanCurveState()
     {
-        _fanCurveEnabled = false;
-        _appSettings.FanCurveEnabled = false;
+        if (_fanCurveOwner == FanCurveOwner.Desktop) _appSettings.FanCurveEnabled = false;
+        _fanCurveOwner = FanCurveOwner.None;
         _fanCurveEvaluator = null;
         SaveSettings();
         UpdateFanCurveStatusText();
@@ -1706,6 +1731,152 @@ public partial class MainWindow : Window
     private async void BtnFanCurve_Click(object sender, RoutedEventArgs e)
     {
         await SetFanCurveEnabledAsync(!_fanCurveEnabled);
+    }
+
+    /// <summary>
+    /// Arms the curve a game profile asked for. The shape is the profile's own anchors when it has them and the
+    /// desktop curve otherwise, so a profile that only wants "my curve, but for this game" needs no second editor.
+    /// </summary>
+    internal async Task<bool> ArmGameFanCurveAsync(GameProfile profile)
+    {
+        var curve = new FanCurve(
+            profile.TargetFanCurvePoints ?? _appSettings.FanCurvePoints,
+            _appSettings.FanCurveHysteresisC,
+            _appSettings.FanCurveMinDwellSeconds);
+
+        _fanCurveOwner = FanCurveOwner.Game;
+        _fanCurveEvaluator = new FanCurveEvaluator(curve);
+
+        int percent = _fanCurveLastTemperatureC > 0
+            ? curve.PercentAt(_fanCurveLastTemperatureC)
+            : _appSettings.CustomFanCpuPercent;
+        _agentClient.CustomFanCpuPercent = percent;
+        _agentClient.CustomFanGpuPercent = percent;
+        if (!await _agentClient.SetFanModeAsync(FanMode.Custom))
+        {
+            _fanCurveOwner = FanCurveOwner.None;
+            _fanCurveEvaluator = null;
+            return false;
+        }
+
+        _currentFanMode = FanMode.Custom;
+        _fanCurveLastPercent = percent;
+        UpdateFanButtonsUi(_currentFanMode);
+        UpdateFanCurveStatusText();
+        return true;
+    }
+
+    /// <summary>
+    /// Hands the fans back after a game profile's curve ran. When the user had the desktop curve on, it is re-armed
+    /// here rather than left to the next poll, so a session never ends on a fixed speed the user did not choose.
+    /// </summary>
+    internal async Task ReleaseGameFanCurveAsync()
+    {
+        if (_fanCurveOwner != FanCurveOwner.Game) return;
+        _fanCurveOwner = FanCurveOwner.None;
+        _fanCurveEvaluator = null;
+        UpdateFanCurveStatusText();
+        if (_appSettings.FanCurveEnabled) await SetFanCurveEnabledAsync(true, quiet: true);
+    }
+
+    // ---------------------------------------------------------------- per-game fan curve editor
+
+    private Slider?[] GameFanCurveSliders => new Slider?[] { SliderGameCurve0, SliderGameCurve1, SliderGameCurve2, SliderGameCurve3, SliderGameCurve4, SliderGameCurve5 };
+
+    private TextBlock?[] GameFanCurveLabels => new TextBlock?[] { TxtGameCurve0, TxtGameCurve1, TxtGameCurve2, TxtGameCurve3, TxtGameCurve4, TxtGameCurve5 };
+
+    /// <summary>
+    /// Fills the per-game curve editor from a profile. A profile without its own anchors shows the desktop curve,
+    /// which is exactly what it would run, so the sliders never claim a shape that is not in effect.
+    /// </summary>
+    private void LoadGameFanCurveEditor(GameProfile profile)
+    {
+        var curve = new FanCurve(
+            profile.TargetFanCurvePoints ?? _appSettings.FanCurvePoints,
+            _appSettings.FanCurveHysteresisC,
+            _appSettings.FanCurveMinDwellSeconds);
+
+        var sliders = GameFanCurveSliders;
+        var labels = GameFanCurveLabels;
+        _isUpdatingFanCurveUi = true;
+        try
+        {
+            // Read through the curve rather than off its anchor list: a profile saved with fewer than six anchors
+            // still fills every slider with the speed that anchor temperature would actually produce.
+            for (int i = 0; i < sliders.Length && i < FanCurve.AnchorCount; i++)
+            {
+                int percent = curve.PercentAt(FanCurve.AnchorTemperatures[i]);
+                if (sliders[i] != null) sliders[i]!.Value = percent;
+                if (labels[i] != null) labels[i]!.Text = $"%{percent}";
+            }
+        }
+        finally
+        {
+            _isUpdatingFanCurveUi = false;
+        }
+
+        if (ChkGameFanCurve != null) ChkGameFanCurve.IsChecked = profile.TargetFanCurveEnabled;
+        if (PnlGameFanCurve != null)
+            PnlGameFanCurve.Visibility = profile.TargetFanCurveEnabled ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The six anchors the per-game editor is showing, or null before the window is built.</summary>
+    private List<FanCurvePoint>? ReadGameFanCurveFromEditor()
+    {
+        var sliders = GameFanCurveSliders;
+        if (sliders.Any(s => s == null)) return null;
+
+        var points = new List<FanCurvePoint>(FanCurve.AnchorCount);
+        for (int i = 0; i < FanCurve.AnchorCount; i++)
+            points.Add(new FanCurvePoint(FanCurve.AnchorTemperatures[i], (int)sliders[i]!.Value));
+        return points;
+    }
+
+    private void UpdateGameFanCurveLabels()
+    {
+        var sliders = GameFanCurveSliders;
+        var labels = GameFanCurveLabels;
+        for (int i = 0; i < sliders.Length && i < labels.Length; i++)
+        {
+            if (sliders[i] == null || labels[i] == null) continue;
+            labels[i]!.Text = $"%{(int)sliders[i]!.Value}";
+        }
+    }
+
+    private void SliderGameFanCurve_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) =>
+        UpdateGameFanCurveLabels();
+
+    private void ChkGameFanCurve_Changed(object sender, RoutedEventArgs e)
+    {
+        if (PnlGameFanCurve == null) return;
+        PnlGameFanCurve.Visibility = ChkGameFanCurve?.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Copies the fan card's curve into the selected game's profile. The editor already shows the desktop shape
+    /// when the profile has none, so this is for the case where the user changed the desktop curve after the
+    /// profile was saved and wants the game to follow the new one.
+    /// </summary>
+    private void BtnGameCurveCopyDesktop_Click(object sender, RoutedEventArgs e)
+    {
+        var desktop = _appSettings.BuildFanCurve();
+        var sliders = GameFanCurveSliders;
+        var labels = GameFanCurveLabels;
+        _isUpdatingFanCurveUi = true;
+        try
+        {
+            for (int i = 0; i < sliders.Length && i < FanCurve.AnchorCount; i++)
+            {
+                int percent = desktop.PercentAt(FanCurve.AnchorTemperatures[i]);
+                if (sliders[i] != null) sliders[i]!.Value = percent;
+                if (labels[i] != null) labels[i]!.Text = $"%{percent}";
+            }
+        }
+        finally
+        {
+            _isUpdatingFanCurveUi = false;
+        }
+        ShowToast(Loc.T("Masaüstü fan eğrisi bu oyuna kopyalandı; kaydetmeyi unutmayın."));
     }
 
     private void CanvasFanCurve_SizeChanged(object sender, SizeChangedEventArgs e) => RenderFanCurve();
@@ -3044,6 +3215,9 @@ public partial class MainWindow : Window
                 ? targetIdx 
                 : 0;
         }
+
+        // 6. Per-game fan curve
+        LoadGameFanCurveEditor(profile);
     }
 
     private Task<AtkMouseResult> ApplyMouseProfileOnWorkerAsync(int targetProfile)
@@ -3559,7 +3733,9 @@ public partial class MainWindow : Window
                 TargetFanMode = stored.TargetFanMode,
                 InstallPath = stored.InstallPath,
                 AutoApply = stored.AutoApply,
-                TargetAtkMouseProfile = stored.TargetAtkMouseProfile
+                TargetAtkMouseProfile = stored.TargetAtkMouseProfile,
+                TargetFanCurveEnabled = stored.TargetFanCurveEnabled,
+                TargetFanCurvePoints = stored.TargetFanCurvePoints
             };
 
             // 1. Operating Mode
@@ -3587,6 +3763,14 @@ public partial class MainWindow : Window
             if (CmbGameAtkMouseProfile != null && CmbGameAtkMouseProfile.SelectedIndex >= 0)
             {
                 profile.TargetAtkMouseProfile = CmbGameAtkMouseProfile.SelectedIndex;
+            }
+
+            // 6. Per-game fan curve
+            if (ChkGameFanCurve != null) profile.TargetFanCurveEnabled = ChkGameFanCurve.IsChecked == true;
+            if (profile.TargetFanCurveEnabled)
+            {
+                var points = ReadGameFanCurveFromEditor();
+                if (points != null) profile.TargetFanCurvePoints = points;
             }
 
             if (!_gameService.SaveProfile(profile))
@@ -3632,9 +3816,11 @@ public partial class MainWindow : Window
             bool boostOk = await ApplyGameBoostModeAsync(profile.TargetCpuBoost);
             if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
 
-            bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
+            bool fanOk = profile.TargetFanCurveEnabled
+                ? await ArmGameFanCurveAsync(profile)
+                : await _agentClient.SetFanModeAsync(profile.TargetFanMode);
             if (saveGen != _gameSessionGeneration || !_isGameSessionActive) return false;
-            if (fanOk)
+            if (fanOk && !profile.TargetFanCurveEnabled)
             {
                 _currentFanMode = profile.TargetFanMode;
             }
@@ -3968,9 +4154,11 @@ public partial class MainWindow : Window
                         bool boostOk = await ApplyGameBoostModeAsync(profile.TargetCpuBoost);
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
 
-                        bool fanOk = await _agentClient.SetFanModeAsync(profile.TargetFanMode);
+                        bool fanOk = profile.TargetFanCurveEnabled
+                            ? await ArmGameFanCurveAsync(profile)
+                            : await _agentClient.SetFanModeAsync(profile.TargetFanMode);
                         if (sessionGen != _gameSessionGeneration || !_gameService.AutoGameModeEnabled) return;
-                        if (fanOk)
+                        if (fanOk && !profile.TargetFanCurveEnabled)
                         {
                             _currentFanMode = profile.TargetFanMode;
                         }
@@ -4265,6 +4453,12 @@ public partial class MainWindow : Window
                                 }
                             }
                         }
+
+                        // A curve the game profile armed hands the fans back here, after every restore step above, so
+                        // the machine ends up on the desktop curve rather than on the game's last speed.
+                        if (endGen != _gameSessionGeneration) return;
+                        await ReleaseGameFanCurveAsync();
+                        if (endGen != _gameSessionGeneration) return;
 
                         UpdateTrayRetryMenuItemState();
 
