@@ -31,9 +31,6 @@ public partial class MainWindow : Window
     private readonly MemoryCleanerService _memoryService;
     private readonly StorageHealthService _storageService;
     private readonly IDisplayRefreshRateService _displayService;
-    private readonly ColorTemperatureService _colorTemperatureService;
-    private DispatcherTimer? _colorTempApplyTimer;
-    private bool _isUpdatingColorTempUi;
     private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
 
@@ -244,7 +241,6 @@ public partial class MainWindow : Window
         _memoryService = new();
         _storageService = new();
         _displayService = new DisplayRefreshRateService();
-        _colorTemperatureService = new();
         _atkMouseService = new();
 
         InitializeComponent();
@@ -276,8 +272,7 @@ public partial class MainWindow : Window
         Func<int, bool>? mouseProfileSwitcher = null,
         bool isTestHarness = true,
         IDisplayRefreshRateService? displayService = null,
-        HardwareMonitorService? hardwareService = null,
-        ColorTemperatureService? colorTemperatureService = null)
+        HardwareMonitorService? hardwareService = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
@@ -290,7 +285,6 @@ public partial class MainWindow : Window
         _memoryService = new MemoryCleanerService();
         _storageService = new StorageHealthService();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
-        _colorTemperatureService = colorTemperatureService ?? new();
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
@@ -828,15 +822,6 @@ public partial class MainWindow : Window
         UpdateAtkMouseIntegrationVisibility(_appSettings.AtkMouseIntegrationEnabled);
         LoadCustomFanSettings();
         LoadFanCurveSettings();
-        LoadColorTemperatureSettings();
-        // The ramp is not persisted by Windows across a reboot, so a saved tint has to be written again here.
-        // Neutral goes down first: a crash or a force-kill leaves the last ramp on the screen, and without this
-        // the ramp captured as "original" would be that stale tint instead of the screen's own state.
-        if (_appSettings.ColorTemperatureEnabled)
-        {
-            _colorTemperatureService.ResetToNeutral();
-            ApplyColorTemperature();
-        }
         _ = RefreshRamCleanStateAsync();
 
         // Persisted toggles: apply to the services directly (the Changed handlers ignore events
@@ -1896,117 +1881,6 @@ public partial class MainWindow : Window
 
     private void CanvasFanCurve_SizeChanged(object sender, SizeChangedEventArgs e) => RenderFanCurve();
 
-    // ---------------------------------------------------------------- display colour temperature (VisionCare)
-
-    private void LoadColorTemperatureSettings()
-    {
-        if (SliderColorTemp != null)
-        {
-            _isUpdatingColorTempUi = true;
-            try { SliderColorTemp.Value = _appSettings.ColorTemperatureKelvin; }
-            finally { _isUpdatingColorTempUi = false; }
-        }
-        UpdateColorTemperatureUi();
-    }
-
-    private void UpdateColorTemperatureUi()
-    {
-        if (TxtColorTempValue != null)
-        {
-            // Kelvin is written the same way in every language.
-            TxtColorTempValue.Text = $"{_appSettings.ColorTemperatureKelvin} K";
-        }
-
-        if (BtnColorTempToggle != null)
-        {
-            bool on = _appSettings.ColorTemperatureEnabled;
-            BtnColorTempToggle.Content = on ? Loc.T("Kapat") : Loc.T("Etkinleştir");
-            BtnColorTempToggle.ToolTip = on
-                ? Loc.T("Renk sıcaklığını kapatır ve ekranı nötre döndürür.")
-                : Loc.T("Seçili renk sıcaklığını ekrana uygular.");
-        }
-    }
-
-    private void SliderColorTemp_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (SliderColorTemp == null) return;
-
-        _appSettings.ColorTemperatureKelvin = (int)Math.Round(SliderColorTemp.Value);
-        UpdateColorTemperatureUi();
-
-        // Dragging the slider fires this on every tick; the timer collapses a drag into one ramp write.
-        if (!IsLoaded || _isInitializingUi || _isUpdatingColorTempUi) return;
-
-        _colorTempApplyTimer ??= CreateColorTempApplyTimer();
-        _colorTempApplyTimer.Stop();
-        _colorTempApplyTimer.Start();
-    }
-
-    private DispatcherTimer CreateColorTempApplyTimer()
-    {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop();
-            SaveSettings();
-            if (!_appSettings.ColorTemperatureEnabled) return;
-            ApplyColorTemperature();
-        };
-        return timer;
-    }
-
-    private void ApplyColorTemperature()
-    {
-        if (_colorTemperatureService.Apply(_appSettings.ColorTemperatureKelvin)) return;
-
-        // The driver refused the ramp (remote session, locked-down driver). Do not leave the switch claiming
-        // the screen is tinted when it is not.
-        AppLog.Warn("Görüntü Konforu", $"SetDeviceGammaRamp reddedildi ({_appSettings.ColorTemperatureKelvin} K).");
-        _appSettings.ColorTemperatureEnabled = false;
-        _colorTemperatureService.Restore();
-        UpdateColorTemperatureUi();
-        SaveSettings();
-        ShowToast(Loc.T("Ekran renk sıcaklığı bu sürücüde uygulanamadı."), false);
-    }
-
-    internal void SetColorTemperatureEnabled(bool enabled)
-    {
-        if (enabled)
-        {
-            _appSettings.ColorTemperatureEnabled = true;
-            ApplyColorTemperature();
-        }
-        else
-        {
-            _appSettings.ColorTemperatureEnabled = false;
-            _colorTemperatureService.Restore();
-        }
-
-        UpdateColorTemperatureUi();
-        SaveSettings();
-    }
-
-    private void BtnColorTempToggle_Click(object sender, RoutedEventArgs e) =>
-        SetColorTemperatureEnabled(!_appSettings.ColorTemperatureEnabled);
-
-    private void BtnColorTempReset_Click(object sender, RoutedEventArgs e)
-    {
-        _appSettings.ColorTemperatureEnabled = false;
-        _appSettings.ColorTemperatureKelvin = ColorTemperatureService.NeutralKelvin;
-        _colorTemperatureService.Restore();
-
-        if (SliderColorTemp != null)
-        {
-            _isUpdatingColorTempUi = true;
-            try { SliderColorTemp.Value = ColorTemperatureService.NeutralKelvin; }
-            finally { _isUpdatingColorTempUi = false; }
-        }
-
-        UpdateColorTemperatureUi();
-        SaveSettings();
-        ShowToast(Loc.T("Ekran nötr renk sıcaklığına döndü."));
-    }
-
     /// <summary>
     /// Draws the curve on the recording strip: temperature across (30–100 °C), fan speed up (30–100 %), one ink
     /// trace through the anchors and a vermilion mark where the machine is right now.
@@ -2117,7 +1991,12 @@ public partial class MainWindow : Window
         TxtGpuFanRpm.Text = ServiceUnavailableText;
         TxtMonSysTemp.Text = ServiceUnavailableText;
         TxtMonCpuFreqGhz.Text = ServiceUnavailableText;
-        if (TxtSubMoboTemp != null) TxtSubMoboTemp.Text = ServiceUnavailableText;
+        if (TxtSubMoboTemp != null)
+        {
+            // A sentence, not a reading: it stays visible where a "-- °C" placeholder would be hidden.
+            TxtSubMoboTemp.Text = ServiceUnavailableText;
+            TxtSubMoboTemp.Visibility = Visibility.Visible;
+        }
         if (data.GpuTemperature <= 0)
         {
             // NVML did not report either; do not claim the GPU is asleep.
@@ -2177,7 +2056,7 @@ public partial class MainWindow : Window
 
                 // Sub-Component Thermal Matrix: Motherboard / VRM (SYS1_TEMPERATURE)
                 if (TxtSubMoboTemp != null)
-                    TxtSubMoboTemp.Text = TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : null);
+                    ShowTemperature(TxtSubMoboTemp, TelemetryFormatter.FormatTemperature(data.SysTemperature > 0 ? data.SysTemperature : null));
 
                 // Tab 1: Fans
                 TxtCpuFanRpm.Text = TelemetryFormatter.FormatFanSpeedRpm(data.CpuFanSpeed);
@@ -5061,7 +4940,7 @@ public partial class MainWindow : Window
                     ? Loc.T($"{id} · Windows (WMI) üzerinden okunan kapasite ve gerilim.")
                     : Loc.T("Windows (WMI) üzerinden okunan kapasite ve gerilim.");
                 if (TxtSubBatteryName != null)
-                    TxtSubBatteryName.Text = id.Length > 0 ? Loc.T($"{id} · sıcaklık sensörü bildirilmiyor") : Loc.T("Sıcaklık sensörü bildirilmiyor");
+                    TxtSubBatteryName.Text = id.Length > 0 ? id : Loc.T("Pil");
             }
         });
     }
@@ -5105,11 +4984,11 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive0Temp != null)
                 {
-                    TxtDrive0Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d0.Temperature), d0.IsTemperatureEstimated);
+                    ShowTemperature(TxtDrive0Temp, TelemetryFormatter.FormatTemperature(d0.Temperature));
                 }
                 if (TxtSubSsd1Temp != null)
                 {
-                    TxtSubSsd1Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d0.Temperature), d0.IsTemperatureEstimated);
+                    ShowTemperature(TxtSubSsd1Temp, TelemetryFormatter.FormatTemperature(d0.Temperature));
                     if (TxtSubSsd1Label != null) TxtSubSsd1Label.Text = string.IsNullOrEmpty(d0.DriveLetter) ? Loc.T("Disk 1") : Loc.T($"Disk 1 ({d0.DriveLetter}:)");
                     if (TxtSubSsd1Name != null) TxtSubSsd1Name.Text = d0.Model;
                 }
@@ -5150,11 +5029,11 @@ public partial class MainWindow : Window
                 }
                 if (TxtDrive1Temp != null)
                 {
-                    TxtDrive1Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d1.Temperature), d1.IsTemperatureEstimated);
+                    ShowTemperature(TxtDrive1Temp, TelemetryFormatter.FormatTemperature(d1.Temperature));
                 }
                 if (TxtSubSsd2Temp != null)
                 {
-                    TxtSubSsd2Temp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatTemperature(d1.Temperature), d1.IsTemperatureEstimated);
+                    ShowTemperature(TxtSubSsd2Temp, TelemetryFormatter.FormatTemperature(d1.Temperature));
                     if (TxtSubSsd2Label != null) TxtSubSsd2Label.Text = string.IsNullOrEmpty(d1.DriveLetter) ? Loc.T("Disk 2") : Loc.T($"Disk 2 ({d1.DriveLetter}:)");
                     if (TxtSubSsd2Name != null) TxtSubSsd2Name.Text = d1.Model;
                 }
@@ -5215,18 +5094,25 @@ public partial class MainWindow : Window
         });
     }
 
+    /// <summary>
+    /// Writes a temperature into a card, or removes the line when there is no reading. A "-- °C" placeholder in a
+    /// card whose sensor never answers reads as a broken value; the model name underneath already says what the
+    /// component is, so the line is dropped instead of standing there empty.
+    /// </summary>
+    private static void ShowTemperature(TextBlock? block, string text)
+    {
+        if (block == null) return;
+        bool hasReading = !string.IsNullOrWhiteSpace(text) && !text.Contains("--");
+        block.Text = hasReading ? text : string.Empty;
+        block.Visibility = hasReading ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void OnBatteryStatusUpdated(BatteryStatusInfo status)
     {
         if (Dispatcher.HasShutdownStarted) return;
         Dispatcher.Invoke(() =>
         {
             if (Dispatcher.HasShutdownStarted) return;
-
-            // Live Battery Sub-Component Matrix Temperature
-            if (TxtSubBatteryTemp != null)
-            {
-                TxtSubBatteryTemp.Text = TelemetryFormatter.MarkEstimated(TelemetryFormatter.FormatDetailedTemperature(status.TemperatureCelsius), status.IsTemperatureEstimated);
-            }
 
             UpdateHighPowerAvailabilityUi();
 
@@ -5381,26 +5267,35 @@ public partial class MainWindow : Window
         UpdateHighPowerAvailabilityUi();
     }
 
-    private bool? _lastHighPowerAllowed;
+    private (bool Allowed, bool OnAc, OperatingMode Mode)? _lastModeAvailability;
 
     /// <summary>
-    /// Locks the Turbo/Performance cards on battery or below 40 % (NitroSense rule) and says why.
-    /// Called on mode changes, battery status updates and the periodic state poll.
+    /// Shows each mode group only where it can be used: Turbo/Performance need the AC adapter (NitroSense also
+    /// wants 40 % battery), Eco is a battery mode. The row that is active stays visible even when its group is
+    /// hidden, so the list always marks the mode the machine is actually in. Called on mode changes, battery
+    /// status updates and the periodic state poll.
     /// </summary>
     private void UpdateHighPowerAvailabilityUi()
     {
         var (onAc, percent) = PowerStateProvider();
         bool allowed = ModePolicy.IsHighPowerAllowed(onAc, percent);
-        if (_lastHighPowerAllowed == allowed) return;
-        _lastHighPowerAllowed = allowed;
 
+        var state = (allowed, onAc, _currentMode);
+        if (_lastModeAvailability == state) return;
+        _lastModeAvailability = state;
+
+        var (showHighPower, showEco) = ModePolicy.VisibleModeGroups(onAc, _currentMode);
         foreach (var card in new[] { BtnModeExtreme, BtnModeTurbo })
         {
             if (card == null) continue;
+            card.Visibility = showHighPower ? Visibility.Visible : Visibility.Collapsed;
             card.IsEnabled = allowed;
             card.Opacity = allowed ? 1.0 : 0.45;
             card.ToolTip = allowed ? null : ModePolicy.HighPowerBlockedMessage;
         }
+
+        if (BtnModeEco != null)
+            BtnModeEco.Visibility = showEco ? Visibility.Visible : Visibility.Collapsed;
 
         if (TxtModeLockNote != null)
         {
@@ -5803,8 +5698,6 @@ public partial class MainWindow : Window
         _toastTimer?.Stop();
 
         _hardwareService.Dispose();
-        // Put the display back to the ramp Windows had before NitroLite touched it.
-        _colorTemperatureService.Dispose();
         if (_osdWindow != null)
         {
             _osdWindow.IsExiting = true;
@@ -5833,7 +5726,6 @@ public partial class MainWindow : Window
             _pollTimer?.Stop();
             _toastTimer?.Stop();
             _hardwareService.Dispose();
-            _colorTemperatureService.Dispose();
             _powerAutomationService?.Dispose();
             _cpuPowerService.Dispose();
             _gameService.Dispose();
@@ -6951,7 +6843,12 @@ public partial class MainWindow : Window
         }
         else
         {
-            ShowToast(Loc.T($"Önbellek boşaltıldı: {freedStr} serbest bırakıldı (kullanılan RAM değişmez)."), isSuccess: true, trayBalloon: false);
+            // The standby list is cached memory, not "in use" memory, so the used-RAM bar never moves. Available
+            // memory is the figure that does move, and showing it before and after is what makes the result
+            // checkable against Task Manager instead of asking the user to trust one number.
+            string before = FormattableString.Invariant($"{res.AvailableBeforeGigabytes:F1}");
+            string after = FormattableString.Invariant($"{res.AvailableGigabytes:F1}");
+            ShowToast(Loc.T($"Önbellek boşaltıldı: {freedStr} serbest bırakıldı, kullanılabilir bellek {before} → {after} GB."), isSuccess: true, trayBalloon: false);
             SetRamCleanStatus(Loc.T($" ({freedStr} serbest bırakıldı)"), "AccentGreen");
         }
         UpdateMemoryListText();
@@ -7046,11 +6943,13 @@ public partial class MainWindow : Window
                 ?? CmbLanguage.Items[0];
 
             CmbTheme.Items.Clear();
+            CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T("Sistem varsayılanı"), Tag = AppTheme.System });
             CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T("Aydınlık"), Tag = AppTheme.Light });
             CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T("Koyu"), Tag = AppTheme.Dark });
-            var theme = ThemeManager.Resolve(_appSettings.Theme);
+            // Selected by the stored preference, not by the resolved palette: "System" has to stay selected even
+            // though the window is currently showing one of the two concrete themes.
             CmbTheme.SelectedItem = CmbTheme.Items.OfType<ComboBoxItem>()
-                .FirstOrDefault(i => i.Tag is AppTheme t && t == theme) ?? CmbTheme.Items[0];
+                .FirstOrDefault(i => i.Tag is AppTheme t && t == _appSettings.Theme) ?? CmbTheme.Items[0];
 
             ChkAutoUpdateCheck.IsChecked = _appSettings.AutoUpdateCheck;
             if (TxtSettingsVersion != null) TxtSettingsVersion.Text = UpdateService.CurrentVersionText;
@@ -7079,7 +6978,9 @@ public partial class MainWindow : Window
     {
         if (!_settingsCardReady || _isInitializingUi) return;
         if (CmbTheme?.SelectedItem is not ComboBoxItem item || item.Tag is not AppTheme theme) return;
-        if (theme == ThemeManager.Resolve(_appSettings.Theme)) return;
+        // Compare against the stored preference: with "System" the resolved palette can equal the new choice
+        // while the preference itself still has to be saved.
+        if (theme == _appSettings.Theme) return;
 
         _appSettings.Theme = theme;
         SaveSettings();

@@ -72,6 +72,24 @@ public class ModePolicyTests
     }
 
     [Theory]
+    // On the adapter the high-power rows are offered and Eco is not; on battery it is the other way round.
+    [InlineData(true, OperatingMode.Default, true, false)]
+    [InlineData(true, OperatingMode.Quiet, true, false)]
+    [InlineData(false, OperatingMode.Default, false, true)]
+    [InlineData(false, OperatingMode.Quiet, false, true)]
+    // The active row stays on screen even when its group is hidden, so the list always marks the live mode.
+    [InlineData(false, OperatingMode.Turbo, true, true)]
+    [InlineData(false, OperatingMode.Extreme, true, true)]
+    [InlineData(true, OperatingMode.Eco, true, true)]
+    public void VisibleModeGroups_ShowsEachGroupWhereItCanBeUsed(
+        bool onAc, OperatingMode active, bool expectHighPower, bool expectEco)
+    {
+        var (showHighPower, showEco) = ModePolicy.VisibleModeGroups(onAc, active);
+        Assert.Equal(expectHighPower, showHighPower);
+        Assert.Equal(expectEco, showEco);
+    }
+
+    [Theory]
     [InlineData(0, "Devre Dışı")]
     [InlineData(1, "Windows Varsayılanı")]
     [InlineData(2, "Agresif")]

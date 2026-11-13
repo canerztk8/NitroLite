@@ -38,7 +38,13 @@ public enum AppTheme
 {
     /// <summary>The light "recording paper" surface NitroLite shipped with.</summary>
     Light = 0,
-    Dark = 1
+    Dark = 1,
+
+    /// <summary>
+    /// Follow the Windows app theme. Stored as its own value, not resolved on save, so a user who picked "System"
+    /// keeps following Windows instead of being frozen into whichever palette was current that day.
+    /// </summary>
+    System = 2
 }
 
 public class MonitorData
@@ -139,12 +145,9 @@ public class BatteryStatusInfo
     // True when the charge rate was not read (game session fast path): do not infer "full/held" from 0 W.
     public bool ChargeRateUnknown { get; set; }
     public bool IsDischarging { get; set; }
-    public double? TemperatureCelsius { get; set; }
     public double DischargeRateMilliwatts { get; set; }
     public double RemainingCapacityMWh { get; set; }
     public double SmoothedDischargeRateWatts { get; set; }
-    // True when TemperatureCelsius comes from the charge/discharge wattage model instead of a sensor.
-    public bool IsTemperatureEstimated { get; set; }
 }
 
 public class BatteryHealthDetails
@@ -303,13 +306,6 @@ public class AppSettings
     /// <summary>The saved curve, cleaned up and ready to apply.</summary>
     public FanCurve BuildFanCurve() => new(FanCurvePoints, FanCurveHysteresisC, FanCurveMinDwellSeconds);
 
-    /// <summary>Warm the display white point at night. Off by default: a tinted screen is a choice, not a default.</summary>
-    [JsonPropertyName("color_temperature_enabled")]
-    public bool ColorTemperatureEnabled { get; set; } = false;
-
-    [JsonPropertyName("color_temperature_kelvin")]
-    public int ColorTemperatureKelvin { get; set; } = ColorTemperatureService.NeutralKelvin;
-
     /// <summary>
     /// Brings every value that came out of a settings file back into the range the app can act on.
     /// System.Text.Json accepts any number for an enum, so a hand-edited or half-written file can carry
@@ -338,8 +334,6 @@ public class AppSettings
         FanCurvePoints = FanCurve.Sanitize(FanCurvePoints);
         FanCurveHysteresisC = Math.Clamp(FanCurveHysteresisC, 0, 15);
         FanCurveMinDwellSeconds = Math.Clamp(FanCurveMinDwellSeconds, 0, 120);
-
-        ColorTemperatureKelvin = Math.Clamp(ColorTemperatureKelvin, ColorTemperatureService.MinKelvin, ColorTemperatureService.MaxKelvin);
 
         if (Language != null && !Loc.IsSupported(Language)) Language = null;
     }

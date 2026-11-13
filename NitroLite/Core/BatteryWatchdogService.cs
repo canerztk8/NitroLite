@@ -160,7 +160,6 @@ public class BatteryWatchdogService : IDisposable
                 info.DischargeRateWatts = 0.0;
                 info.ChargeRateWatts = 0.0;
                 info.SmoothedDischargeRateWatts = 0.0;
-                info.TemperatureCelsius = null;
                 info.ChargeRateUnknown = true;
                 return info;
             }

@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-987-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-977-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
@@ -63,7 +63,8 @@ at idle. Telemetry is read every 3 seconds while minimised.
 
 ### 6b. Standby memory purge
 - Converts the standby list Windows keeps cached into free memory without touching the memory of running programs.
-  The card shows the current standby and free amounts.
+  The card shows the current standby and free amounts, and the result reports available memory before and after —
+  the figure that actually moves. The used-RAM bar does not, because cached pages were never counted as used.
 - Runs [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner), which ships inside the package under
   `tools\`, so there is nothing to install. Windows asks for confirmation (UAC) each time you press the button.
 - Drop your own `WinMemoryCleaner.exe` into `%LOCALAPPDATA%\NitroLite\tools\` to use a different build; that copy
@@ -81,14 +82,6 @@ at idle. Telemetry is read every 3 seconds while minimised.
 ### 9. Health page
 - Battery, SSD and thermal cards. Disk temperatures without SMART access, and thermal paste/fan bearing estimates,
   are marked "(estimated)".
-
-### 9b. Display comfort (VisionCare)
-- Warms the display white point from 6500 K (neutral) down to 1900 K so a screen is easier to read at night.
-- Works through the display gamma ramp, a GDI call every Windows machine has: no driver, no overlay, nothing for an
-  anti-cheat to look at. Each monitor is handled separately, so an external screen is covered too.
-- The ramp that was there before the first write is captured and put back when you press **Reset** or quit, so
-  NitroLite does not leave a screen tinted. If it is killed while a tint is applied, the tint stays until the next
-  launch or a display mode change; **Reset** is there for exactly that case.
 
 ### 10. Integrated system and repair tools
 Every Acer and Windows maintenance task runs from the **System Services & Tools** page with one click — no external
@@ -146,8 +139,9 @@ NitroLite restarts itself in about a second to apply it.
 
 ## Theme
 
-**Settings → Theme** switches between the light "paper" theme and a dark theme built from the same accent colours.
-The OSD is dark in both. Like the language, the theme applies after a quick restart.
+**Settings → Theme** offers **System default**, the light "paper" theme and a dark theme built from the same accent
+colours. System default follows the Windows app theme, resolved at launch. The OSD is dark in every case. Like the
+language, the theme applies after a quick restart.
 
 ## Updating
 
@@ -292,7 +286,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-987 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+977 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

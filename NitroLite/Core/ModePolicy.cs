@@ -23,6 +23,14 @@ public static class ModePolicy
     public static bool IsModeAllowed(OperatingMode mode, bool onAc, int? batteryPercent) =>
         !IsHighPowerMode(mode) || IsHighPowerAllowed(onAc, batteryPercent);
 
+    /// <summary>
+    /// Which mode groups the modes page shows. Turbo/Performance are an AC choice and Eco is a battery choice, so
+    /// each group appears only where it can be used. The active row always stays visible even when its group is
+    /// hidden: a list with no marked row would leave the user guessing which mode the machine is in.
+    /// </summary>
+    public static (bool ShowHighPower, bool ShowEco) VisibleModeGroups(bool onAc, OperatingMode active) =>
+        (onAc || IsHighPowerMode(active), !onAc || active == OperatingMode.Eco);
+
     /// <summary>Used for automatic changes (game profiles): a blocked high-power target falls back to Balanced.</summary>
     public static OperatingMode ClampForPower(OperatingMode mode, bool onAc, int? batteryPercent) =>
         IsModeAllowed(mode, onAc, batteryPercent) ? mode : OperatingMode.Default;

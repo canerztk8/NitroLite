@@ -264,15 +264,6 @@ public static class TelemetryFormatter
     }
 
     /// <summary>
-    /// Formats a physical temperature with 1 decimal place (e.g. for battery).
-    /// </summary>
-    public static string FormatDetailedTemperature(double? temp, string defaultText = "--.- °C")
-    {
-        if (!temp.HasValue || temp.Value <= 0) return defaultText;
-        return string.Format(CultureInfo.InvariantCulture, "{0:F1} °C", temp.Value);
-    }
-
-    /// <summary>
     /// Formats degradation slope per day (e.g. "+0.001 °C/W/gün").
     /// </summary>
     public static string FormatThermalSlope(double slope)

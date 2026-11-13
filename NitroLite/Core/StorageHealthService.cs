@@ -24,8 +24,6 @@ public class StorageDriveInfo
     public string HealthDesc { get; set; } = Loc.T("Sağlıklı (Nominal)");
     public int EstHealthPercent { get; set; } = 100;
     public int? Temperature { get; set; }
-    // True when Temperature is a model baseline (no SMART reading available without admin rights).
-    public bool IsTemperatureEstimated { get; set; }
 }
 
 public class StorageHealthService
@@ -289,7 +287,6 @@ public class StorageHealthService
                         }
 
                         int? driveTemp = null;
-                        bool tempEstimated = false;
                         if (tempMap.TryGetValue(diskNum, out int measuredTemp) && measuredTemp > 0 && measuredTemp < 120)
                         {
                             driveTemp = measuredTemp;
@@ -311,8 +308,7 @@ public class StorageHealthService
                             HealthStatus = health,
                             HealthDesc = healthDesc,
                             EstHealthPercent = estHealth,
-                            Temperature = driveTemp,
-                            IsTemperatureEstimated = tempEstimated
+                            Temperature = driveTemp
                         });
                     }
                     catch { }
@@ -419,8 +415,7 @@ public class StorageHealthService
                                 HealthStatus = StorageDriveInfo.HealthUnknown,
                                 HealthDesc = Loc.T("Bilinmiyor (Sağlık verisi okunamadı)"),
                                 EstHealthPercent = -1,
-                                Temperature = null,
-                                IsTemperatureEstimated = false
+                                Temperature = null
                             });
                         }
                         catch { }
@@ -456,8 +451,7 @@ public class StorageHealthService
                         HealthStatus = StorageDriveInfo.HealthUnknown,
                         HealthDesc = Loc.T("Bilinmiyor (Sağlık verisi okunamadı)"),
                         EstHealthPercent = -1,
-                        Temperature = null,
-                        IsTemperatureEstimated = false
+                        Temperature = null
                     });
                 }
             }

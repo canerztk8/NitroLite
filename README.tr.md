@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-987-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-977-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (geliştirme **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070
@@ -62,7 +62,9 @@ arayüzünü çalıştırmaz.
 
 ### 6b. Bekleme belleğini boşaltma
 - Windows'un önbellekte tuttuğu bekleme listesini boş belleğe çevirir; çalışan programların belleğine dokunmaz.
-  Kartta anlık bekleme / boş bellek miktarı görünür.
+  Kartta anlık bekleme / boş bellek miktarı görünür; sonuç, gerçekten değişen sayıyı yani kullanılabilir belleğin
+  öncesini ve sonrasını bildirir. Kullanılan RAM çubuğu değişmez, çünkü önbellekteki sayfalar hiçbir zaman
+  "kullanımda" sayılmadı.
 - Boşaltmayı [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) yapar. Araç paketin içinde
   `tools\` klasöründe gelir, kurulum gerekmez. Her basışta Windows yönetici izni sorar. Farklı bir sürüm denemek
   isterseniz kendi `WinMemoryCleaner.exe` dosyanızı `%LOCALAPPDATA%\NitroLite\tools\` klasörüne koyun; o kopya
@@ -80,14 +82,6 @@ arayüzünü çalıştırmaz.
 ### 9. Sağlık sekmesi
 - Pil, SSD ve termal durum kartları. SMART erişimi olmayan disk sıcaklıkları ve termal macun/fan yatağı tahminleri
   "(tahmini)" olarak işaretlidir.
-
-### 9b. Görüntü konforu (VisionCare)
-- Ekranın beyaz noktasını 6500 K (nötr) ile 1900 K arasında ısıtır; gece okumayı kolaylaştırır.
-- Ekranın gama rampası üzerinden çalışır; bu her Windows makinesinde bulunan bir GDI çağrısıdır: sürücü yok, kaplama
-  yok, anti-cheat'in bakacağı bir şey yok. Her monitör ayrı ele alınır, harici ekran da kapsanır.
-- İlk yazmadan önceki rampa saklanır ve **Sıfırla**'ya bastığınızda ya da uygulamadan çıktığınızda geri konur; yani
-  NitroLite ekranı renkli bırakmaz. Renk uygulanmışken uygulama zorla kapatılırsa renk bir sonraki açılışa veya ekran
-  modu değişimine kadar kalır; **Sıfırla** tam bu durum için vardır.
 
 ### 10. Entegre sistem ve onarım araçları
 Harici `.bat`, `.ps1` veya ayrı `.exe` araçlarına gerek kalmadan, tüm Acer ve Windows bakım/onarım işlemleri
@@ -129,8 +123,9 @@ açılmak için yaklaşık bir saniyede kendini yeniden başlatır.
 
 ## Tema
 
-**Ayarlar → Tema** açık "kâğıt" teması ile aynı vurgu renklerinden kurulmuş koyu tema arasında geçiş yapar. OSD her
-iki temada da koyudur. Dil gibi, tema da hızlı yeniden başlatmayla uygulanır.
+**Ayarlar → Tema** üç seçenek sunar: **Sistem varsayılanı**, açık "kâğıt" teması ve aynı vurgu renklerinden kurulmuş
+koyu tema. Sistem varsayılanı Windows'un uygulama temasını izler ve açılışta çözülür. OSD her durumda koyudur. Dil
+gibi, tema da hızlı yeniden başlatmayla uygulanır.
 
 ## Güncelleme
 
@@ -276,7 +271,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-987 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+977 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

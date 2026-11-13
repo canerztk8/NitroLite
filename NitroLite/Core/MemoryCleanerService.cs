@@ -11,6 +11,8 @@ public class MemoryCleanerResult
 {
     /// <summary>Drop of the standby list caused by the clean, in megabytes.</summary>
     public double FreedMegabytes { get; set; }
+    /// <summary>Available physical memory before the clean, in gigabytes.</summary>
+    public double AvailableBeforeGigabytes { get; set; }
     public double AvailableGigabytes { get; set; }
     /// <summary>True when the standby list was actually released.</summary>
     public bool Cleaned { get; set; }
@@ -224,6 +226,8 @@ public class MemoryCleanerService
         }
 
         var listsBefore = ReadMemoryLists();
+        var memBefore = new MEMORYSTATUSEX();
+        GlobalMemoryStatusEx(memBefore);
 
         try
         {
@@ -285,6 +289,7 @@ public class MemoryCleanerService
         }
 
         result.FreedMegabytes = freedGb > 0 ? Math.Round(freedGb * 1024.0, 1) : 0;
+        result.AvailableBeforeGigabytes = Math.Round(memBefore.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 2);
         result.AvailableGigabytes = Math.Round(memAfter.ullAvailPhys / (1024.0 * 1024.0 * 1024.0), 2);
         result.Cleaned = result.Error == null && result.ExitCode is null or 0;
         if (!result.Cleaned && result.Error == null) result.Error = $"WinMemoryCleaner exited with code {result.ExitCode}.";

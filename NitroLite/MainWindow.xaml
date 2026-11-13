@@ -1551,30 +1551,6 @@
                                         </Border>
                                     </StackPanel>
                                 </Border>
-
-                                <!-- VisionCare: the display white point, through the gamma ramp -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,14,0,0">
-                                    <StackPanel>
-                                        <Grid Margin="0,0,0,6">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="Görüntü Konforu" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                                <TextBlock Text=" (VisionCare)" Foreground="{StaticResource TextMuted}" FontSize="12" />
-                                            </StackPanel>
-                                            <TextBlock x:Name="TxtColorTempValue" Text="6500 K" HorizontalAlignment="Right" Style="{StaticResource Figure}" FontSize="13" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
-                                        </Grid>
-                                        <TextBlock Text="Ekranın beyaz noktasını ısıtır; gece okumayı kolaylaştırır. 6500 K nötrdür, düşük değerler daha sıcak ve daha az mavidir. Sürücü gerektirmez." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Slider x:Name="SliderColorTemp" Grid.Column="0" Minimum="1900" Maximum="6500" Value="6500" SmallChange="100" LargeChange="500" TickFrequency="100" IsSnapToTickEnabled="True" ValueChanged="SliderColorTemp_ValueChanged" VerticalAlignment="Center" ToolTip="Renk sıcaklığı: 6500 K nötr, 1900 K en sıcak." />
-                                            <Button x:Name="BtnColorTempToggle" Grid.Column="1" Content="Etkinleştir" Click="BtnColorTempToggle_Click" Margin="14,0,0,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" FontSize="11" Cursor="Hand" ToolTip="Seçili renk sıcaklığını ekrana uygular." />
-                                            <Button x:Name="BtnColorTempReset" Grid.Column="2" Content="Sıfırla" Click="BtnColorTempReset_Click" Margin="8,0,0,0" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="10,6" FontWeight="SemiBold" FontSize="11" Cursor="Hand" ToolTip="Ekranı nötr renk sıcaklığına döndürür ve özelliği kapatır." />
-                                        </Grid>
-                                    </StackPanel>
-                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
@@ -1884,7 +1860,7 @@
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Bileşen Sıcaklık Matrisi" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="1" Text="Acer servisi, Windows ve disk sürücülerinden; okunamayan değerler -- olarak gösterilir." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="16,0,0,0" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="Acer servisi, Windows ve disk sürücülerinden; okunamayan değerler hiç gösterilmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="16,0,0,0" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>
 
                                         <UniformGrid Columns="4">
@@ -1892,7 +1868,7 @@
                                             <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
                                                     <TextBlock Text="Sistem (SYS1)" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtSubMoboTemp" Text="-- °C" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock x:Name="TxtSubMoboTemp" Text="" Visibility="Collapsed" Foreground="{StaticResource TextPrimary}" FontSize="15" FontWeight="Bold" Margin="0,3" />
                                                     <TextBlock Text="Acer servisi sensörü" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
@@ -1901,7 +1877,7 @@
                                             <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
                                                     <TextBlock x:Name="TxtSubSsd1Label" Text="Disk 1" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtSubSsd1Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock x:Name="TxtSubSsd1Temp" Text="" Visibility="Collapsed" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
                                                     <TextBlock x:Name="TxtSubSsd1Name" Text="--" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
@@ -1910,17 +1886,17 @@
                                             <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
                                                     <TextBlock x:Name="TxtSubSsd2Label" Text="Disk 2" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtSubSsd2Temp" Text="-- °C" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
+                                                    <TextBlock x:Name="TxtSubSsd2Temp" Text="" Visibility="Collapsed" Foreground="{StaticResource AccentGreen}" FontSize="15" FontWeight="Bold" Margin="0,3" />
                                                     <TextBlock x:Name="TxtSubSsd2Name" Text="--" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" />
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Battery Pack -->
+                                            <!-- Battery Pack: no temperature line. The pack reports no sensor, and an
+                                                 empty degree placeholder would read as a broken reading. -->
                                             <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,16,0">
                                                 <StackPanel>
                                                     <TextBlock Text="Pil" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="Bold" />
-                                                    <TextBlock x:Name="TxtSubBatteryTemp" Text="-- °C" Foreground="{StaticResource AccentCyan}" FontSize="15" FontWeight="Bold" Margin="0,3" />
-                                                    <TextBlock x:Name="TxtSubBatteryName" Text="Sıcaklık sensörü bildirilmiyor" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" />
+                                                    <TextBlock x:Name="TxtSubBatteryName" Text="Pil" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="9" Margin="0,3,0,0" />
                                                 </StackPanel>
                                             </Border>
                                         </UniformGrid>
@@ -1949,7 +1925,7 @@
                                                             <TextBlock x:Name="TxtDrive0Bus" Text="" Foreground="{StaticResource TextMuted}" FontSize="11" />
                                                         </StackPanel>
                                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                            <TextBlock x:Name="TxtDrive0Temp" Text="-- °C" Foreground="{StaticResource TextSecondary}" FontWeight="Bold" FontSize="11" Margin="0,0,10,0" />
+                                                            <TextBlock x:Name="TxtDrive0Temp" Text="" Visibility="Collapsed" Foreground="{StaticResource TextSecondary}" FontWeight="Bold" FontSize="11" Margin="0,0,10,0" />
                                                             <TextBlock x:Name="TxtDrive0HealthBadge" Text="--" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" FontSize="11" />
                                                         </StackPanel>
                                                     </Grid>
@@ -1972,7 +1948,7 @@
                                                             <TextBlock x:Name="TxtDrive1Bus" Text="" Foreground="{StaticResource TextMuted}" FontSize="11" />
                                                         </StackPanel>
                                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                            <TextBlock x:Name="TxtDrive1Temp" Text="-- °C" Foreground="{StaticResource TextSecondary}" FontWeight="Bold" FontSize="11" Margin="0,0,10,0" />
+                                                            <TextBlock x:Name="TxtDrive1Temp" Text="" Visibility="Collapsed" Foreground="{StaticResource TextSecondary}" FontWeight="Bold" FontSize="11" Margin="0,0,10,0" />
                                                             <TextBlock x:Name="TxtDrive1HealthBadge" Text="--" Foreground="{StaticResource AccentGreen}" FontWeight="Bold" FontSize="11" />
                                                         </StackPanel>
                                                     </Grid>
@@ -2196,9 +2172,9 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                                 <TextBlock Text="Tema" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="Tema değiştiğinde NitroLite yeniden başlar." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                <TextBlock Text="Sistem varsayılanı Windows'un açık/koyu ayarını izler. Tema değiştiğinde NitroLite yeniden başlar." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
-                                            <ComboBox x:Name="CmbTheme" Grid.Column="1" Width="200" VerticalAlignment="Center" SelectionChanged="CmbTheme_SelectionChanged" />
+                                            <ComboBox x:Name="CmbTheme" Grid.Column="1" Width="220" VerticalAlignment="Center" SelectionChanged="CmbTheme_SelectionChanged" />
                                         </Grid>
 
                                         <Separator Background="{StaticResource BorderDark}" Margin="0,0,0,12" />
@@ -2227,11 +2203,15 @@
 
                                         <!-- Feedback: a prefilled GitHub issue, no telemetry -->
                                         <Grid>
-                                            <StackPanel Margin="0,0,16,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                                 <TextBlock Text="Hata bildir" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
                                                 <TextBlock Text="GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
-                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                 <Button x:Name="BtnOpenLogs" Content="Günlük klasörünü aç" Click="BtnOpenLogs_Click" Background="Transparent" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" Cursor="Hand" FontSize="11" Margin="0,0,8,0" />
                                                 <Button x:Name="BtnReportBug" Content="Hata bildir" Click="BtnReportBug_Click" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
                                             </StackPanel>
