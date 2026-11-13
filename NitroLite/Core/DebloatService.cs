@@ -18,7 +18,19 @@ public class ServiceStatusInfo
 
 public class DebloatService
 {
-    public static readonly string[] Tier1Services = new[]
+    /// <summary>
+    /// Services NitroLite itself talks to. Disabling one of these would take the app's own hardware control away:
+    /// AASSvc carries the lighting, mode and fan commands over 127.0.0.1:46933, and AcerLightingService drives the
+    /// keyboard backlight. They must never reach <see cref="Tier1Services"/>.
+    /// </summary>
+    public static readonly string[] RequiredServices = new[]
+    {
+        "AASSvc",
+        "AcerLightingService"
+    };
+
+    /// <summary>The list as written. <see cref="Tier1Services"/> is what the app actually uses.</summary>
+    internal static readonly string[] DeclaredTier1Services = new[]
     {
         "AcerServiceSvc",
         "ASMSvc",
@@ -27,6 +39,14 @@ public class DebloatService
         "AcerDeviceInfoAgentService",
         "AcerDeviceEnablingServiceV2"
     };
+
+    /// <summary>
+    /// The services the debloat page may disable. Anything in <see cref="RequiredServices"/> is filtered out here,
+    /// so a careless edit to the declared list cannot cost the app its own hardware control.
+    /// </summary>
+    public static readonly string[] Tier1Services = DeclaredTier1Services
+        .Where(name => !RequiredServices.Contains(name, StringComparer.OrdinalIgnoreCase))
+        .ToArray();
 
     public static readonly HashSet<string> AllowedStartupTypes = new(StringComparer.OrdinalIgnoreCase)
     {

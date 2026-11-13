@@ -340,6 +340,28 @@ public class VerifiedDefectsRegressionTests
         Assert.DoesNotContain("AcerLightingService", script);
     }
 
+    [Fact]
+    public void Defect3_Tier1Services_NeverCarriesAServiceNitroLiteDependsOn()
+    {
+        // The protection used to be implicit: a service was safe only because nobody had typed it into the list.
+        // RequiredServices names the ones the app itself talks to, and Tier1Services filters them out.
+        Assert.NotEmpty(DebloatService.RequiredServices);
+        Assert.Empty(DebloatService.Tier1Services.Intersect(DebloatService.RequiredServices, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Defect3_Tier1Services_FiltersARequiredServiceOutOfTheDeclaredList()
+    {
+        // Whatever the declared list says, the effective list is the one the scripts are built from.
+        var overlap = DebloatService.DeclaredTier1Services
+            .Intersect(DebloatService.RequiredServices, StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        Assert.Equal(DebloatService.DeclaredTier1Services.Length - overlap, DebloatService.Tier1Services.Length);
+        Assert.All(DebloatService.Tier1Services, name =>
+            Assert.DoesNotContain(name, DebloatService.RequiredServices, StringComparer.OrdinalIgnoreCase));
+    }
+
     // =========================================================================
     // DEFECT 4: SettingsManager Backup Preservation During Corrupted Recovery
     // =========================================================================
