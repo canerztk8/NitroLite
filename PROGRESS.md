@@ -122,6 +122,24 @@ Gerçek GitHub yanıtı `ParseRelease`'e verildi: 1.2.0 derlemesi için güncell
 
 Not: v1.1.0 kullanıcıları bu sürümü bir kez elle indirmek zorunda; onlarda güncelleyici yok.
 
+### Güncelleyici, gerçek sürümle uçtan uca denendi
+
+1.2.0 derlemesi tek dosya olarak paketlendi, boş bir klasöre çıkarıldı ve çalıştırıldı:
+
+| Adım | Sonuç |
+|---|---|
+| Açılış | 1.2.0.0 |
+| Güncelleme düğmesi | `Güncelle v1.2.1` — gerçek GitHub sürümünü buldu |
+| Tıklama | indirdi, SHA-256 doğruladı, exe'yi değiştirdi, yeniden başladı |
+| Sonuç | **1.2.1.0**, yeni süreç çalışıyor, `.old` artığı yok |
+
+İlk deneme `Oyun sırasında güncelleme yapılmaz.` ile reddedildi. Sebep bir hata değil: Rocket League açıktı
+(`rocketleague`, 21:07'de başlamış) ve oyun profili `AutoApply` olduğu için oyun oturumu etkin sayıldı. Koruma
+tam olarak tasarlandığı gibi çalıştı. Test, oyun otomasyonu kapalı ayrı bir veri klasörüyle tekrarlandı.
+
+Ayrıca boru hattı tek tek de doğrulandı: `DownloadAsync` 70.967.796 bayt indirdi, `VerifyDigest` eşleşti,
+`ExtractToStaging` altı dosyayı çıkardı, `InstallFromStaging` 76.108.965 baytlık exe'yi kurdu.
+
 ## Bilinen sınırlar
 
 - Çevirileri yazar yaptı; anadili konuşan biri kontrol etmedi. README'de düzeltme issue'su isteniyor.
@@ -129,6 +147,11 @@ Not: v1.1.0 kullanıcıları bu sürümü bir kez elle indirmek zorunda; onlarda
 - Güncelleme yalnızca release paketiyle çalışır; geliştirme derlemesinde buton release sayfasını açar.
 - Yükseltilmiş WinMemoryCleaner yolu hiç test edilemedi (geliştirme ortamı yönetici değil).
 - `TxtBatRemainingTime` kartın sağ kenarına sıfır boşlukla yaslanıyor; metin tam, kesik değil.
+- Güncelleme sırasında exe değişimi iki adımda oluyor (`exe` → `exe.old`, sonra `yeni` → `exe`). Tam bu iki adımın
+  arasında elektrik kesilirse klasörde `NitroLite.exe` kalmaz, yalnızca `NitroLite.exe.old` kalır ve uygulama
+  açılamaz; kullanıcı `.old` dosyasını elle yeniden adlandırmak zorunda. Pencere milisaniye mertebesinde ve
+  `File.Replace` çalışan bir exe üzerinde kullanılamıyor (DELETE izni yok), bu yüzden iki adım zorunlu.
+  Kabul edilen risk; değiştirmek çalışan güncelleyiciyi bozma riskinden daha büyük.
 
 ## Beş fazlı denetim (22 katman) — 2026-11-14
 
