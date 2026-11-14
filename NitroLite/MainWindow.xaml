@@ -1825,35 +1825,30 @@
                                             </Border>
 
                                             <Button x:Name="BtnToggleDischarge" Content="Deşarj İşlemini Başlat" Click="BtnToggleDischarge_Click" Background="{StaticResource Ink}" Foreground="{StaticResource OnAccent}" FontWeight="SemiBold" FontSize="11" Padding="16,9" BorderThickness="0" Cursor="Hand" HorizontalAlignment="Left" />
+
+                                            <!-- SCHOOL MODE: lives in this column because the discharge card is much
+                                                 shorter than the battery card beside it, and a full-width row of its
+                                                 own left a band of empty paper across the page. -->
+                                            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,14,0,0">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Okul Modu" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                                                        <!-- "Etkin" reads as a state, so it is correct both checked and
+                                                             unchecked; "Açık" read as an instruction and was wrong once
+                                                             the box was on. -->
+                                                        <CheckBox x:Name="ChkSchoolMode" Grid.Column="1" Checked="ChkSchoolMode_Changed" Unchecked="ChkSchoolMode_Changed" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="11" Content="Etkin" />
+                                                    </Grid>
+                                                    <TextBlock x:Name="TxtSchoolModeDetail" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,4,0,0" />
+                                                    <TextBlock x:Name="TxtSchoolModeStatus" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" Margin="0,6,0,0" Visibility="Collapsed" />
+                                                </StackPanel>
+                                            </Border>
                                         </StackPanel>
                                     </Border>
                                 </UniformGrid>
-
-                                <!-- SCHOOL MODE CARD -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
-                                    <StackPanel>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock Text="Okul Modu" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="13" />
-                                                <TextBlock Text="Pili en uzun süre götürecek ayarları tek seferde uygular. Kapatınca hepsi eski hâline döner." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <!-- "Etkin" reads as a state, so it is correct both checked and unchecked;
-                                                 "Açık" read as an instruction and was wrong once the box was on. -->
-                                            <CheckBox x:Name="ChkSchoolMode" Grid.Column="1" Checked="ChkSchoolMode_Changed" Unchecked="ChkSchoolMode_Changed" VerticalAlignment="Top" Margin="16,0,0,0" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" Content="Etkin" />
-                                        </Grid>
-
-                                        <Border Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,8,0,0" Margin="0,10,0,0">
-                                            <StackPanel>
-                                                <TextBlock x:Name="TxtSchoolModeDetail" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" />
-                                                <TextBlock x:Name="TxtSchoolModeStatus" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" Margin="0,6,0,0" Visibility="Collapsed" />
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
 
                                 <!-- MODULE 3: BATTERY HEALTH & WEAR REPORT CARD -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">

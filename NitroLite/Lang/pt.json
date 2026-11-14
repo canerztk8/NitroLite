@@ -838,7 +838,6 @@
  "ACER SERVİSİNE ULAŞILAMIYOR": "SERVIÇO ACER INACESSÍVEL",
  "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "Os modos, as ventoinhas, a iluminação do teclado e o limite de carga passam pelo serviço da Acer. O AcerAgentService que vem com o NitroSense precisa de estar instalado e em execução. Os dados que o Windows e a NVIDIA fornecem continuam a ser mostrados.",
  "Okul Modu": "Modo Escola",
- "Pili en uzun süre götürecek ayarları tek seferde uygular. Kapatınca hepsi eski hâline döner.": "Aplica de uma vez todas as configurações que prolongam a bateria. Ao desligar, tudo volta.",
  "Klavye ışığı geri yüklenemedi": "Não foi possível restaurar a luz do teclado",
  "Güç planı ayarı": "Configuração do plano de energia",
  "Maksimum işlemci durumu": "Estado máximo do processador",
@@ -849,6 +848,7 @@
  "USB güç tasarrufu": "Economia de energia USB",
  "CPU Boost (pil)": "CPU Boost (bateria)",
  "Çalışma modu (Sessiz)": "Modo de operação (Silencioso)",
+ "Çalışma modu (Eco)": "Modo de funcionamento (Eco)",
  "Fan (Otomatik)": "Ventoinha (Automática)",
  "Ekran 60 Hz": "Tela 60 Hz",
  "Ekran parlaklığı": "Brilho da tela",
@@ -860,5 +860,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "Modo Escola desligado: as configurações anteriores voltaram.",
  "Okul modu: uygulanamayan adımlar: {0}": "Modo Escola: etapas que não puderam ser aplicadas: {0}",
  "Okul modu uygulanamadı: {0}": "Não foi possível aplicar o Modo Escola: {0}",
- "Pilde: CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık. Ayrıca Sessiz mod, otomatik fan, 60 Hz ekran, %40 parlaklık ve kapalı klavye ışığı.": "Na bateria: CPU Boost desligado, processador no máximo 70 %, economia de bateria do Windows sempre ligada, tela desliga em 3 minutos, suspensão em 10 minutos, disco para em 2 minutos, economia USB ligada. Além disso: modo Silencioso, ventoinha automática, 60 Hz, 40 % de brilho e luz do teclado desligada."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Na bateria: as configurações mais económicas — modo Eco, CPU boost desligado, processador a 70 %, economia de bateria ativada, ecrã desliga aos 3 min / suspensão aos 10 min, 60 Hz, 40 % de brilho, retroiluminação do teclado desligada. Ao desativar, tudo volta."
 }

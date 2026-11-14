@@ -935,7 +935,8 @@ public partial class MainWindow : Window
         var service = new SchoolModeService(_agentClient, _cpuPowerService, _displayService, _screenBrightnessService, _appSettings)
         {
             GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode,
-            GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode
+            GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode,
+            IsModeSupported = mode => ModePolicy.IsModeSupported(_supportedModes, mode)
         };
         if (SliderBrightness != null)
         {
@@ -966,7 +967,7 @@ public partial class MainWindow : Window
             ChkSchoolMode.IsChecked = _appSettings.SchoolModeEnabled;
             if (TxtSchoolModeDetail != null)
             {
-                TxtSchoolModeDetail.Text = Loc.T("Pilde: CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık. Ayrıca Sessiz mod, otomatik fan, 60 Hz ekran, %40 parlaklık ve kapalı klavye ışığı.");
+                TxtSchoolModeDetail.Text = Loc.T("Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.");
             }
         }
         finally

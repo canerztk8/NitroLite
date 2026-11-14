@@ -838,7 +838,6 @@
  "ACER SERVİSİNE ULAŞILAMIYOR": "ACER सेवा उपलब्ध नहीं",
  "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "मोड, फ़ैन, कीबोर्ड लाइटिंग और चार्ज सीमा सब Acer सेवा के ज़रिए काम करते हैं। NitroSense के साथ आने वाली AcerAgentService इंस्टॉल और चालू होनी चाहिए। Windows और NVIDIA से मिलने वाला डेटा अब भी दिखाया जाता है।",
  "Okul Modu": "स्कूल मोड",
- "Pili en uzun süre götürecek ayarları tek seferde uygular. Kapatınca hepsi eski hâline döner.": "बैटरी लंबे समय तक चलाने वाली सभी सेटिंग्स एक साथ लागू करता है। बंद करने पर सब पहले जैसा हो जाता है।",
  "Klavye ışığı geri yüklenemedi": "कीबोर्ड बैकलाइट बहाल नहीं हो सकी",
  "Güç planı ayarı": "पावर प्लान सेटिंग",
  "Maksimum işlemci durumu": "अधिकतम प्रोसेसर स्थिति",
@@ -849,6 +848,7 @@
  "USB güç tasarrufu": "USB बिजली बचत",
  "CPU Boost (pil)": "CPU Boost (बैटरी)",
  "Çalışma modu (Sessiz)": "ऑपरेटिंग मोड (शांत)",
+ "Çalışma modu (Eco)": "ऑपरेटिंग मोड (Eco)",
  "Fan (Otomatik)": "फ़ैन (स्वचालित)",
  "Ekran 60 Hz": "स्क्रीन 60 Hz",
  "Ekran parlaklığı": "स्क्रीन चमक",
@@ -860,5 +860,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "स्कूल मोड बंद: पिछली सेटिंग्स वापस आ गईं।",
  "Okul modu: uygulanamayan adımlar: {0}": "स्कूल मोड: लागू न हो सके चरण: {0}",
  "Okul modu uygulanamadı: {0}": "स्कूल मोड लागू नहीं हो सका: {0}",
- "Pilde: CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık. Ayrıca Sessiz mod, otomatik fan, 60 Hz ekran, %40 parlaklık ve kapalı klavye ışığı.": "बैटरी पर: CPU Boost बंद, प्रोसेसर अधिकतम 70 %, Windows बैटरी सेवर हमेशा चालू, स्क्रीन 3 मिनट में बंद, 10 मिनट में स्लीप, डिस्क 2 मिनट में रुकती है, USB बिजली बचत चालू। साथ ही: शांत मोड, स्वचालित फ़ैन, 60 Hz, 40 % चमक और कीबोर्ड बैकलाइट बंद।"
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "बैटरी पर: सबसे किफायती सेटिंग्स — Eco मोड, CPU boost बंद, प्रोसेसर 70 %, बैटरी सेवर चालू, स्क्रीन 3 मिनट में बंद / 10 मिनट में स्लीप, 60 Hz, 40 % चमक, कीबोर्ड बैकलाइट बंद। बंद करने पर सब कुछ वापस आ जाता है।"
 }

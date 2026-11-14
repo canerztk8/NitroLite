@@ -133,6 +133,19 @@ public sealed class SchoolModeService
     public Func<OperatingMode>? GetCurrentOperatingMode { get; set; }
     public Func<FanMode>? GetCurrentFanMode { get; set; }
 
+    /// <summary>
+    /// Whether the machine lists <paramref name="mode"/> among the modes it offers. Null means "not asked yet", and
+    /// then Eco is tried: a capability query that has not run is not evidence that the mode is missing.
+    /// </summary>
+    public Func<OperatingMode, bool>? IsModeSupported { get; set; }
+
+    /// <summary>
+    /// The hardware mode school mode asks for: Eco, the most economical mode the machine offers. A model that does
+    /// not list Eco gets Quiet instead, which is the next lowest.
+    /// </summary>
+    public OperatingMode TargetOperatingMode =>
+        IsModeSupported?.Invoke(OperatingMode.Eco) == false ? OperatingMode.Quiet : OperatingMode.Eco;
+
     /// <summary>Turns the keyboard backlight off; true when it is off afterwards.</summary>
     public Func<Task<bool>>? TurnLightingOffAsync { get; set; }
 
@@ -271,8 +284,18 @@ public sealed class SchoolModeService
             outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
         else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
 
-        if (await _agentClient.SetOperatingModeAsync(OperatingMode.Quiet)) outcome.Applied.Add(Loc.T("Çalışma modu (Sessiz)"));
-        else outcome.Failed.Add(Loc.T("Çalışma modu (Sessiz)"));
+        var targetMode = TargetOperatingMode;
+        bool modeOk = await _agentClient.SetOperatingModeAsync(targetMode);
+        if (!modeOk && targetMode != OperatingMode.Quiet)
+        {
+            // A model that lists Eco but refuses it (some firmware only allows it on battery) still gets the next
+            // lowest mode rather than no mode change at all.
+            targetMode = OperatingMode.Quiet;
+            modeOk = await _agentClient.SetOperatingModeAsync(OperatingMode.Quiet);
+        }
+        if (modeOk)
+            outcome.Applied.Add(Loc.T(targetMode == OperatingMode.Eco ? "Çalışma modu (Eco)" : "Çalışma modu (Sessiz)"));
+        else outcome.Failed.Add(Loc.T("Çalışma modu"));
 
         if (await _agentClient.SetFanModeAsync(FanMode.Auto)) outcome.Applied.Add(Loc.T("Fan (Otomatik)"));
         else outcome.Failed.Add(Loc.T("Fan (Otomatik)"));

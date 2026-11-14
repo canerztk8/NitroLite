@@ -83,7 +83,7 @@ at idle. Telemetry is read every 3 seconds while minimised.
   launch.
 - **School mode:** one switch for the longest a charge can last. It writes battery-only values into the active power
   plan (CPU boost off, processor capped at 70 %, Windows battery saver always on, screen off after 3 minutes, sleep
-  after 10, disk off after 2, USB power saving on) and sets Quiet mode, automatic fan, 60 Hz, 40 % brightness and the
+  after 10, disk off after 2, USB power saving on) and sets Eco mode, automatic fan, 60 Hz, 40 % brightness and the
   keyboard backlight off. Every value it replaces is written to `school_mode_backup.json` before the first change, so
   turning it off — or relaunching after a crash — puts the machine back exactly as it was. While it is on, the
   automatic AC/battery pass stands down instead of undoing it.

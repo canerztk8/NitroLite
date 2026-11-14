@@ -838,7 +838,6 @@
  "ACER SERVİSİNE ULAŞILAMIYOR": "LAYANAN ACER TIDAK TERJANGKAU",
  "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "Mode, kipas, lampu latar keyboard, dan batas pengisian daya semuanya lewat layanan Acer. AcerAgentService yang disertakan dengan NitroSense harus terpasang dan berjalan. Data yang bisa dibaca Windows dan NVIDIA tetap ditampilkan.",
  "Okul Modu": "Mode Sekolah",
- "Pili en uzun süre götürecek ayarları tek seferde uygular. Kapatınca hepsi eski hâline döner.": "Menerapkan sekaligus semua pengaturan yang memperpanjang baterai. Saat dimatikan, semuanya kembali.",
  "Klavye ışığı geri yüklenemedi": "Lampu latar keyboard tidak dapat dipulihkan",
  "Güç planı ayarı": "Pengaturan skema daya",
  "Maksimum işlemci durumu": "Status prosesor maksimum",
@@ -849,6 +848,7 @@
  "USB güç tasarrufu": "Hemat daya USB",
  "CPU Boost (pil)": "CPU Boost (baterai)",
  "Çalışma modu (Sessiz)": "Mode operasi (Senyap)",
+ "Çalışma modu (Eco)": "Mode operasi (Eco)",
  "Fan (Otomatik)": "Kipas (Otomatis)",
  "Ekran 60 Hz": "Layar 60 Hz",
  "Ekran parlaklığı": "Kecerahan layar",
@@ -860,5 +860,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "Mode Sekolah nonaktif: pengaturan sebelumnya kembali.",
  "Okul modu: uygulanamayan adımlar: {0}": "Mode Sekolah: langkah yang tidak dapat diterapkan: {0}",
  "Okul modu uygulanamadı: {0}": "Mode Sekolah tidak dapat diterapkan: {0}",
- "Pilde: CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık. Ayrıca Sessiz mod, otomatik fan, 60 Hz ekran, %40 parlaklık ve kapalı klavye ışığı.": "Saat memakai baterai: CPU Boost mati, prosesor maksimal 70 %, penghemat baterai Windows selalu aktif, layar mati setelah 3 menit, tidur setelah 10 menit, disk berhenti setelah 2 menit, hemat daya USB aktif. Selain itu: mode Senyap, kipas otomatis, 60 Hz, kecerahan 40 %, dan lampu latar keyboard mati."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Saat memakai baterai: pengaturan paling hemat — mode Eco, CPU boost mati, prosesor 70 %, penghemat baterai aktif, layar mati setelah 3 mnt / tidur setelah 10 mnt, 60 Hz, kecerahan 40 %, lampu latar keyboard mati. Saat dimatikan, semuanya kembali."
 }

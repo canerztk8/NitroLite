@@ -49,10 +49,24 @@ public class SchoolModeServiceTests
         public override CpuBoostMode? QueryBoostModeExact(bool isAc) => isAc ? CurrentMode : DcBoost;
     }
 
+    /// <summary>The shared mock, plus the modes a given firmware refuses.</summary>
+    private sealed class SchoolModeAgent : MockAcerAgentClient
+    {
+        public HashSet<OperatingMode> Rejected { get; } = new();
+        public List<OperatingMode> Attempts { get; } = new();
+
+        public override Task<bool> SetOperatingModeAsync(OperatingMode mode)
+        {
+            Attempts.Add(mode);
+            if (Rejected.Contains(mode)) return Task.FromResult(false);
+            return base.SetOperatingModeAsync(mode);
+        }
+    }
+
     private sealed class Harness
     {
         public FakePowerScheme Scheme { get; } = new();
-        public MockAcerAgentClient Agent { get; } = new();
+        public SchoolModeAgent Agent { get; } = new();
         public SchoolModeCpuPower Cpu { get; } = new();
         public TestDisplayRefreshRateServiceStub Display { get; } = new();
         public TestScreenBrightnessService Brightness { get; } = new();
@@ -113,17 +127,56 @@ public class SchoolModeServiceTests
     }
 
     [Fact]
-    public async Task EnableAsync_SetsQuietModeAutoFanSixtyHertzAndFortyPercentBrightness()
+    public async Task EnableAsync_SetsEcoModeAutoFanSixtyHertzAndFortyPercentBrightness()
     {
         var h = new Harness().WithPreviousValues();
 
         await h.Service.EnableAsync();
 
-        Assert.Equal(OperatingMode.Quiet, h.Agent.CurrentMode);
+        // Eco, not Quiet: school mode is the most economical the machine can be, and Eco is the lowest mode Acer
+        // offers. Quiet is only the fallback for a model that does not list Eco.
+        Assert.Equal(OperatingMode.Eco, h.Agent.CurrentMode);
         Assert.Equal(FanMode.Auto, h.Agent.CurrentFanMode);
         Assert.Equal(60, h.Display.GetCurrentRefreshRate());
         Assert.Equal(SchoolModeService.TargetBrightnessPercent, h.Brightness.Current);
         Assert.Contains(CpuBoostMode.Disabled, h.Cpu.BoostHistory);
+    }
+
+    [Fact]
+    public async Task EnableAsync_WhenTheMachineDoesNotListEco_FallsBackToQuiet()
+    {
+        var h = new Harness().WithPreviousValues();
+        h.Service.IsModeSupported = mode => mode != OperatingMode.Eco;
+
+        await h.Service.EnableAsync();
+
+        Assert.Equal(OperatingMode.Quiet, h.Agent.CurrentMode);
+        Assert.DoesNotContain(OperatingMode.Eco, h.Agent.Attempts);
+    }
+
+    [Fact]
+    public async Task EnableAsync_WhenTheFirmwareRefusesEco_FallsBackToQuiet()
+    {
+        var h = new Harness().WithPreviousValues();
+        h.Agent.Rejected.Add(OperatingMode.Eco);
+
+        var outcome = await h.Service.EnableAsync();
+
+        Assert.Equal(OperatingMode.Quiet, h.Agent.CurrentMode);
+        Assert.Contains(Loc.T("Çalışma modu (Sessiz)"), outcome.Applied);
+        Assert.True(outcome.Success, string.Join(", ", outcome.Failed));
+    }
+
+    [Fact]
+    public async Task EnableAsync_WhenBothEcoAndQuietAreRefused_ReportsTheModeAsFailed()
+    {
+        var h = new Harness().WithPreviousValues();
+        h.Agent.Rejected.Add(OperatingMode.Eco);
+        h.Agent.Rejected.Add(OperatingMode.Quiet);
+
+        var outcome = await h.Service.EnableAsync();
+
+        Assert.Contains(Loc.T("Çalışma modu"), outcome.Failed);
     }
 
     [Fact]
