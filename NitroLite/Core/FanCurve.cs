@@ -33,11 +33,23 @@ public sealed class FanCurve
     public const int DefaultMinDwellSeconds = 10;
 
     /// <summary>
-    /// At or above this temperature the curve is not allowed to ask for a slow fan, whatever shape the user drew.
+    /// Temperature bands where the curve is not allowed to ask for a slow fan, whatever shape the user drew.
     /// The curve is a preference; keeping a hot die cool is not. It also covers the case the editor cannot: if
     /// NitroLite dies, the last speed it wrote stays in the firmware, so that last write must never be a quiet one
     /// while the machine is hot.
+    /// <para>
+    /// The floor rises with the temperature. A single threshold at 85 °C left a 95 °C machine running at 60 %,
+    /// which is not enough to cool a laptop die: the bands below are what the firmware itself would do.
+    /// </para>
     /// </summary>
+    public static readonly IReadOnlyList<(int TemperatureC, int MinPercent)> SafetyFloor = new[]
+    {
+        (85, 60),
+        (90, 80),
+        (95, 100)
+    };
+
+    /// <summary>The first safety band, kept as a named constant because the editor and the tests talk about it.</summary>
     public const int SafetyTemperatureC = 85;
 
     /// <summary>Lowest speed the curve may ask for at or above <see cref="SafetyTemperatureC"/>.</summary>
@@ -89,21 +101,40 @@ public sealed class FanCurve
     /// Fan speed for <paramref name="temperatureC"/>, linearly interpolated between the two anchors that surround
     /// it and held flat outside them. Never returns a value the service would reject.
     /// <para>
-    /// At or above <see cref="SafetyTemperatureC"/> the result is raised to <see cref="SafetyMinPercent"/>. This is
-    /// applied here rather than in the editor so a settings file written by an older build, or by hand, cannot get
-    /// around it either.
+    /// The result is raised to <see cref="SafetyFloorAt"/> for the current temperature. This is applied here rather
+    /// than in the editor so a settings file written by an older build, or by hand, cannot get around it either.
     /// </para>
     /// </summary>
     public int PercentAt(double temperatureC)
     {
+        // A reading that is not a number is not a cool machine. The safe answer is full speed, not the quietest
+        // anchor: this used to return the lowest point, which turned a broken sensor into a silent fan.
+        if (double.IsNaN(temperatureC)) return MaxPercent;
+
         int percent = InterpolatedPercentAt(temperatureC);
-        return temperatureC >= SafetyTemperatureC ? Math.Max(percent, SafetyMinPercent) : percent;
+        return Math.Max(percent, SafetyFloorAt(temperatureC));
+    }
+
+    /// <summary>
+    /// The lowest speed the curve may ask for at this temperature, or 0 below the first band so a cool machine is
+    /// left entirely to the user's shape.
+    /// </summary>
+    public static int SafetyFloorAt(double temperatureC)
+    {
+        if (double.IsNaN(temperatureC)) return MaxPercent;
+
+        int floor = 0;
+        foreach (var (bandTemperature, bandPercent) in SafetyFloor)
+        {
+            if (temperatureC >= bandTemperature && bandPercent > floor) floor = bandPercent;
+        }
+        return floor;
     }
 
     /// <summary>The curve's own shape, before the safety floor is applied.</summary>
     private int InterpolatedPercentAt(double temperatureC)
     {
-        if (double.IsNaN(temperatureC)) return Points[0].Percent;
+        if (double.IsNaN(temperatureC)) return MaxPercent;
         if (temperatureC <= Points[0].TemperatureC) return Points[0].Percent;
         if (temperatureC >= Points[^1].TemperatureC) return Points[^1].Percent;
 

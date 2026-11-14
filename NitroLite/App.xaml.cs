@@ -123,6 +123,16 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // 1.5 A previous run that never reached a clean exit may have left the fans at a fixed speed. The marker is
+        // read before the window is built, so the firmware is back in charge before anything can read a fan mode
+        // and mistake the leftover for the user's choice.
+        if (CleanExitMarker.PreviousRunWasUnclean())
+        {
+            WriteLog("Önceki çalışma temiz kapanmadı", "Fanlar otomatik moda döndürülüyor.");
+            AcerAgentClient.TryRestoreFanAutoBlocking(TimeSpan.FromSeconds(4));
+        }
+        CleanExitMarker.MarkRunning();
+
         // 2. Setup Wake-Up Event Listener for the primary instance
         try
         {
@@ -169,6 +179,15 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
             WriteLog("Domain Exception", args.ExceptionObject?.ToString());
+
+            // The process is going down and nothing else will run. A custom fan speed written to the firmware
+            // outlives it, so the fans are handed back here rather than left at whatever the curve last asked for.
+            // Blocking is correct: there is no dispatcher left to await on, and the alternative is a hot machine
+            // running a quiet curve until the next start notices the marker.
+            if (AcerAgentClient.TryRestoreFanAutoBlocking(TimeSpan.FromSeconds(4)))
+            {
+                CleanExitMarker.MarkCleanExit();
+            }
         };
 
         DispatcherUnhandledException += (s, args) =>
@@ -560,6 +579,10 @@ public partial class App : System.Windows.Application
     {
         try
         {
+            // Reaching here means the process is leaving on its own terms, so the next start must not treat this
+            // run as a crash and reset the fans behind the user's back.
+            CleanExitMarker.MarkCleanExit();
+
             _wakeUpEvent?.Dispose();
             _wakeUpEvent = null;
 

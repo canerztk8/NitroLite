@@ -102,6 +102,16 @@ public class HardwareMonitorService : IDisposable
     private readonly bool _allowNvml;
     private IntPtr _gpuDevice = IntPtr.Zero;
     private DateTime _lastNvmlRetryUtc = DateTime.MinValue;
+    private int _nvmlFailureCount;
+
+    /// <summary>First retry delay; doubles per consecutive failure up to <see cref="NvmlMaxRetryDelaySeconds"/>.</summary>
+    private const double NvmlBaseRetryDelaySeconds = 4.0;
+
+    /// <summary>Ceiling for the retry delay, so a machine with no working NVML is not probed every few seconds.</summary>
+    private const double NvmlMaxRetryDelaySeconds = 60.0;
+
+    private double NvmlRetryDelaySeconds =>
+        Math.Min(NvmlBaseRetryDelaySeconds * Math.Pow(2, _nvmlFailureCount), NvmlMaxRetryDelaySeconds);
 
     private long _prevIdleTime = 0;
     private long _prevKernelTime = 0;
@@ -123,21 +133,45 @@ public class HardwareMonitorService : IDisposable
     {
         try
         {
-            if (_ownsNvml || NvmlInit() == 0)
+            // A failed attempt used to leave _ownsNvml set, and the guard below then skipped NvmlInit() forever.
+            // After a driver reset (hibernate, driver update, TDR) NVML answers NVML_ERROR_UNINITIALIZED and nothing
+            // ever called NvmlInit again, so GPU telemetry stayed dead until the app was restarted.
+            if (!_ownsNvml)
             {
-                _ownsNvml = true;
-                if (NvmlDeviceGetHandleByIndex(0, out _gpuDevice) == 0)
+                if (NvmlInit() != 0)
                 {
-                    _nvmlInitialized = true;
+                    _nvmlInitialized = false;
+                    _gpuDevice = IntPtr.Zero;
                     return;
                 }
+                _ownsNvml = true;
             }
+
+            if (NvmlDeviceGetHandleByIndex(0, out _gpuDevice) == 0)
+            {
+                _nvmlInitialized = true;
+                _nvmlFailureCount = 0;
+                return;
+            }
+
+            // The library is up but the device is not there (driver mid-reset, dGPU in D3cold). Close the session
+            // so the next attempt starts from a clean NvmlInit instead of reusing a half-open one.
+            ResetNvmlSession();
         }
         catch
         {
-            _nvmlInitialized = false;
-            _gpuDevice = IntPtr.Zero;
+            ResetNvmlSession();
         }
+    }
+
+    /// <summary>Drops the NVML session so the next attempt calls NvmlInit again instead of reusing a dead one.</summary>
+    private void ResetNvmlSession()
+    {
+        _nvmlInitialized = false;
+        _gpuDevice = IntPtr.Zero;
+        if (!_ownsNvml) return;
+        _ownsNvml = false;
+        try { NvmlShutdown(); } catch { }
     }
 
     public double GetNativeCpuUsage()
@@ -195,7 +229,13 @@ public class HardwareMonitorService : IDisposable
         catch { }
     }
 
-    public MonitorData CreateFallbackMonitorData()
+    /// <param name="allowNvml">
+    /// False when the dGPU may be powered down and nothing has told us otherwise. NVML queries wake a sleeping
+    /// dGPU and keep it out of D3cold, which costs battery; with AASSvc gone there is no GPU1_TEMPERATURE to say
+    /// whether it is asleep, so the safe answer is not to ask. The caller passes true only when it knows the
+    /// machine is on the adapter, where waking the dGPU costs nothing.
+    /// </param>
+    public MonitorData CreateFallbackMonitorData(bool allowNvml = false)
     {
         var data = new MonitorData
         {
@@ -205,7 +245,7 @@ public class HardwareMonitorService : IDisposable
         };
 
         ApplyNativeRamFallback(data);
-        EnrichMonitorData(data);
+        EnrichMonitorData(data, gpuAsleepPerService: !allowNvml);
         return data;
     }
 
@@ -221,10 +261,12 @@ public class HardwareMonitorService : IDisposable
         // 1. Retry NVML initialization when dGPU wakes from RTD3 deep sleep
         if (mayQueryNvml && _allowNvml && (!_nvmlInitialized || _gpuDevice == IntPtr.Zero))
         {
-            if ((DateTime.UtcNow - _lastNvmlRetryUtc).TotalSeconds >= 4.0)
+            if ((DateTime.UtcNow - _lastNvmlRetryUtc).TotalSeconds >= NvmlRetryDelaySeconds)
             {
                 _lastNvmlRetryUtc = DateTime.UtcNow;
                 TryInitNvml();
+                // Back off on failure: a machine whose driver never answers must not be probed every four seconds.
+                if (!_nvmlInitialized) _nvmlFailureCount = Math.Min(_nvmlFailureCount + 1, 5);
             }
         }
 
@@ -268,9 +310,9 @@ public class HardwareMonitorService : IDisposable
             }
             catch
             {
-                // NVML communication failed (e.g. RTD3 transition); mark for retry
-                _gpuDevice = IntPtr.Zero;
-                _nvmlInitialized = false;
+                // NVML communication failed (e.g. RTD3 transition). Drop the session so the retry path calls
+                // NvmlInit again rather than reusing a handle the driver has already forgotten.
+                ResetNvmlSession();
                 data.GpuMetricsAvailable = false;
             }
         }
@@ -296,23 +338,37 @@ public class HardwareMonitorService : IDisposable
             data.CpuCores = Environment.ProcessorCount;
         }
 
-        // 4. CPU Package Power (Watts) Calculation without artificial 65W ceiling clamp
-        // Accommodates Zen 4 Phoenix base 35W TDP, boost up to 85W+ under full multi-core load
+        // 4. CPU Package Power (Watts) — an estimate, not a measurement.
+        // AASSvc does not report CPU power and reading the MSR would need a kernel driver, which this project does
+        // not ship (anti-cheat). The curve below is therefore a model, and the UI labels it "(tahmini)". Its
+        // reference clock used to be hardcoded to 3800 MHz — one Ryzen 7 7840HS and no other Nitro — so every other
+        // model got a number that was wrong by tens of percent. The caller sets CpuReferenceFrequencyMHz from
+        // Win32_Processor.MaxClockSpeed; the default only applies when Windows did not report it.
         if (data.CpuUsage > 0)
         {
-            double freqRatio = data.CpuFrequencyMHz > 0 ? (data.CpuFrequencyMHz / 3800.0) : 1.0;
+            double reference = CpuReferenceFrequencyMHz > 0 ? CpuReferenceFrequencyMHz : DefaultCpuReferenceFrequencyMHz;
+            double freqRatio = data.CpuFrequencyMHz > 0 ? (data.CpuFrequencyMHz / reference) : 1.0;
             double loadRatio = Math.Clamp(data.CpuUsage / 100.0, 0.0, 1.0);
 
             // Dynamic non-linear power curve
             double dynamicWatts = 8.0 + (loadRatio * 46.0 * Math.Pow(freqRatio, 1.3));
-            // Removed 65.0W ceiling clamp so genuine boost wattage is shown; clamped to realistic socket limits
-            data.CpuPowerWatts = Math.Round(Math.Clamp(dynamicWatts, 7.0, 135.0), 1);
+            // Whole watts: a model that is off by a few watts must not claim a tenth of a watt of precision.
+            data.CpuPowerWatts = Math.Round(Math.Clamp(dynamicWatts, 7.0, 135.0), 0);
         }
         else
         {
             data.CpuPowerWatts = 8.5;
         }
     }
+
+    /// <summary>Reference clock for the CPU power estimate when Windows did not report the processor's rating.</summary>
+    public const double DefaultCpuReferenceFrequencyMHz = 3800.0;
+
+    /// <summary>
+    /// The processor's rated maximum clock, used as the reference point of the CPU power estimate. Set from
+    /// <see cref="HardwareInfo.CpuMaxClockMhz"/> once the hardware names are read; 0 keeps the default.
+    /// </summary>
+    public double CpuReferenceFrequencyMHz { get; set; } = DefaultCpuReferenceFrequencyMHz;
 
     public void Dispose()
     {

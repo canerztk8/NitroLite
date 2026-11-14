@@ -11,6 +11,13 @@ public sealed class HardwareInfo
     public string CpuName { get; init; } = "";
     public int CpuCores { get; init; }
     public int CpuThreads { get; init; }
+
+    /// <summary>
+    /// The processor's rated maximum clock in MHz, from Win32_Processor.MaxClockSpeed. Used as the reference point
+    /// of the CPU power estimate: the formula used to hardcode 3800 MHz, which is one Ryzen 7 7840HS and no other
+    /// Nitro. Zero when Windows did not report it, and the estimate then falls back to its own default.
+    /// </summary>
+    public int CpuMaxClockMhz { get; init; }
     public string DiscreteGpuName { get; init; } = "";
     public int MemoryModules { get; init; }
     public double MemoryTotalGb { get; init; }
@@ -106,13 +113,13 @@ public static class HardwareInfoService
 
     private static HardwareInfo Read()
     {
-        string cpuName = ""; int cores = 0, threads = 0;
+        string cpuName = ""; int cores = 0, threads = 0, maxClockMhz = 0;
         string gpu = "";
         int modules = 0, speed = 0, smbiosType = 0; double totalBytes = 0;
 
         try
         {
-            using var s = new ManagementObjectSearcher("SELECT Name, NumberOfCores, NumberOfLogicalProcessors FROM Win32_Processor");
+            using var s = new ManagementObjectSearcher("SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed FROM Win32_Processor");
             using var r = s.Get();
             foreach (ManagementObject o in r)
             {
@@ -121,6 +128,8 @@ public static class HardwareInfoService
                     cpuName = (o["Name"]?.ToString() ?? "").Trim();
                     cores += Convert.ToInt32(o["NumberOfCores"] ?? 0);
                     threads += Convert.ToInt32(o["NumberOfLogicalProcessors"] ?? 0);
+                    int clock = Convert.ToInt32(o["MaxClockSpeed"] ?? 0);
+                    if (clock > maxClockMhz) maxClockMhz = clock;
                 }
             }
         }
@@ -163,6 +172,7 @@ public static class HardwareInfoService
             CpuName = cpuName,
             CpuCores = cores,
             CpuThreads = threads,
+            CpuMaxClockMhz = maxClockMhz,
             DiscreteGpuName = gpu,
             MemoryModules = modules,
             MemoryTotalGb = Math.Round(totalBytes / (1024.0 * 1024 * 1024), 1),

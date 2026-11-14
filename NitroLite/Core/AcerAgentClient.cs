@@ -764,6 +764,35 @@ public class AcerAgentClient : IDisposable
     }
 
     /// <summary>
+    /// Hands the fans back to the firmware from a process that is about to die. Blocking on purpose: the crash
+    /// handler has no dispatcher, no cancellation token and no time to await anything, and the live client may be
+    /// the reason the process is going down, so a fresh one is used.
+    /// <para>
+    /// The budget has to cover the 3 s connect timeout plus the round trip; anything shorter returns false while
+    /// the connection is still being made, which is the one case where the fans stay where they were.
+    /// </para>
+    /// </summary>
+    public static bool TryRestoreFanAutoBlocking(TimeSpan timeout)
+    {
+        try
+        {
+            var task = Task.Run(async () =>
+            {
+                using var client = new AcerAgentClient();
+                return await client.SetFanModeAsync(FanMode.Auto);
+            });
+
+            // Short-circuit: Result is only read once the wait succeeded, so a timeout never blocks here.
+            return task.Wait(timeout) && task.Result;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fanlar otomatik moda döndürülemedi", ex.GetBaseException().Message);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Asks the agent whether this machine has controllable keyboard lighting (packet 40). Returns null when the
     /// agent does not answer or answers in an unexpected shape: an unknown capability must never disable the tab.
     /// </summary>

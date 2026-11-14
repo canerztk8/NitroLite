@@ -68,6 +68,16 @@ public class PowerAutomationService : IDisposable
     private readonly AppSettings _settings;
     private SemaphoreSlim? _transitionLock;
 
+    /// <summary>
+    /// How long a power transition waits for the previous one. A pass that hangs on a WMI or service call must not
+    /// queue every later adapter change behind it, and the exit path must not wait forever for a lock it will never
+    /// get: both give up and leave the pending flags for the next attempt.
+    /// </summary>
+    private static readonly TimeSpan TransitionLockTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>Shorter budget for the exit path: the process is closing and the user is waiting.</summary>
+    private static readonly TimeSpan ExitLockTimeout = TimeSpan.FromSeconds(3);
+
     private readonly System.Timers.Timer _debounceTimer;
     private readonly object _stateSyncLock = new();
     private bool _lastAcStatus = true;
@@ -92,6 +102,17 @@ public class PowerAutomationService : IDisposable
     private int? _savedRefreshRateBeforeEco;
 
     /// <summary>
+    /// The panel rate Eco replaced with 60 Hz, read and written under <see cref="_stateSyncLock"/>. The DC apply
+    /// path and the AC restore path run on different threads; an unsynchronised read here can see null while the
+    /// panel is already at 60 Hz, and then nothing raises it again until the adapter returns.
+    /// </summary>
+    private int? SavedRefreshRateBeforeEco
+    {
+        get { lock (_stateSyncLock) return _savedRefreshRateBeforeEco; }
+        set { lock (_stateSyncLock) _savedRefreshRateBeforeEco = value; }
+    }
+
+    /// <summary>
     /// Optional file used to persist the Eco baseline. Null disables persistence (unit tests).
     /// </summary>
     public string? EcoStateFilePath { get; set; }
@@ -103,7 +124,7 @@ public class PowerAutomationService : IDisposable
         try
         {
             // Also keep the file while a lowered panel rate still has to be restored (e.g. lid was closed on AC).
-            if (!_isDcEcoActive && !HasPendingAcRestore && !_savedRefreshRateBeforeEco.HasValue)
+            if (!_isDcEcoActive && !HasPendingAcRestore && !SavedRefreshRateBeforeEco.HasValue)
             {
                 if (File.Exists(path)) File.Delete(path);
                 return;
@@ -116,7 +137,7 @@ public class PowerAutomationService : IDisposable
                 SavedBoost = _savedCpuBoostBeforeDc,
                 SavedFan = _savedFanModeBeforeDc,
                 SavedDcBoost = _savedDcBoostBeforeEco,
-                SavedRefreshRate = _savedRefreshRateBeforeEco,
+                SavedRefreshRate = SavedRefreshRateBeforeEco,
                 TimestampUtc = DateTime.UtcNow
             };
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
@@ -149,7 +170,7 @@ public class PowerAutomationService : IDisposable
                 // Only a panel refresh rate is still waiting to be restored.
                 if (state.SavedRefreshRate.HasValue)
                 {
-                    lock (_stateSyncLock) { _savedRefreshRateBeforeEco = state.SavedRefreshRate; }
+                    SavedRefreshRateBeforeEco = state.SavedRefreshRate;
                 }
                 return false;
             }
@@ -159,7 +180,7 @@ public class PowerAutomationService : IDisposable
                 _savedCpuBoostBeforeDc = state.SavedBoost;
                 _savedFanModeBeforeDc = state.SavedFan;
                 _savedDcBoostBeforeEco = state.SavedDcBoost;
-                _savedRefreshRateBeforeEco = state.SavedRefreshRate;
+                SavedRefreshRateBeforeEco = state.SavedRefreshRate;
                 _isDcEcoActive = true;
             }
             return true;
@@ -196,7 +217,7 @@ public class PowerAutomationService : IDisposable
 
     public bool IsDcEcoActive => _isDcEcoActive;
     public bool HasPendingAcRestore => _pendingAcModeRestore || _pendingAcCpuRestore || _pendingAcFanRestore;
-    internal bool HasPendingPanelRestore => _lastAcStatus && _savedRefreshRateBeforeEco.HasValue;
+    internal bool HasPendingPanelRestore => _lastAcStatus && SavedRefreshRateBeforeEco.HasValue;
     /// <summary>True while a battery Eco pass still has steps that failed and must be retried.</summary>
     public bool HasPendingDcApply => _pendingDcApply;
     public bool PendingAcModeRestore => _pendingAcModeRestore;
@@ -319,7 +340,9 @@ public class PowerAutomationService : IDisposable
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _transitionLock = transitionLock;
 
-        _lastAcStatus = QueryAcStatus();
+        // Unknown at construction time is not a reason to guess: the first EvaluatePowerStateAsync reads it again
+        // and does nothing until Windows gives a real answer.
+        _lastAcStatus = QueryAcStatus() ?? true;
 
         _debounceTimer = new System.Timers.Timer(500.0)
         {
@@ -361,14 +384,25 @@ public class PowerAutomationService : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"OnDebounceElapsed failed: {ex.Message}");
+            // Trace only reaches a debugger. A power transition that failed is exactly what a bug report needs to
+            // show, so it goes to the same log the user can open from the settings card.
+            AppLog.Warn("Güç geçişi uygulanamadı", ex.ToString());
         }
     }
 
     public async Task EvaluatePowerStateAsync(bool? forceAcStatus = null)
     {
-        bool isAc = forceAcStatus ?? QueryAcStatus();
-        await ProcessPowerTransitionAsync(isAc);
+        var isAc = forceAcStatus ?? QueryAcStatus();
+        if (!isAc.HasValue)
+        {
+            // Windows would not say whether the adapter is connected. Guessing "AC" is how a laptop on battery ends
+            // up with Eco never applied; guessing "battery" would put a desktop into Eco for nothing. Neither is
+            // worth the risk, so nothing is touched and the next power event tries again.
+            AppLog.Warn("Güç durumu okunamadı", "AC/batarya durumu bilinmiyor; bu turda hiçbir ayar değiştirilmedi.");
+            return;
+        }
+
+        await ProcessPowerTransitionAsync(isAc.Value);
     }
 
     public async Task ProcessPowerTransitionAsync(bool isAc)
@@ -386,7 +420,13 @@ public class PowerAutomationService : IDisposable
 
         if (_transitionLock != null)
         {
-            await _transitionLock.WaitAsync();
+            // Bounded: an adapter change that arrives while a previous pass is stuck must not queue forever behind
+            // it. Giving up leaves the pending flags set, so the next pass (or the retry path) picks the work up.
+            if (!await _transitionLock.WaitAsync(TransitionLockTimeout))
+            {
+                AppLog.Warn("Güç geçişi kilitlenmesi", "Önceki geçiş 10 saniye içinde bitmedi; bu tur atlandı.");
+                return;
+            }
         }
         try
         {
@@ -450,7 +490,7 @@ public class PowerAutomationService : IDisposable
                         refreshOk = before <= 60 || _displayService.SetRefreshRate(60);
                         if (before > 60 && refreshOk)
                         {
-                            _savedRefreshRateBeforeEco = before;
+                            SavedRefreshRateBeforeEco = before;
                             PersistEcoState();
                         }
                     }
@@ -608,6 +648,13 @@ public class PowerAutomationService : IDisposable
                 });
             }
         }
+        catch (Exception ex)
+        {
+            // Without this the exception escaped to the debounce timer's async void handler, the pending flags kept
+            // whatever value the half-finished pass left them at, and the retry path never ran again. Leaving them
+            // set is what makes the next pass pick the work up.
+            AppLog.Warn("Güç geçişi tamamlanamadı", ex.ToString());
+        }
         finally
         {
             _transitionLock?.Release();
@@ -718,10 +765,10 @@ public class PowerAutomationService : IDisposable
     /// </summary>
     private int? RestorePanelRefreshRateAfterEco()
     {
-        var saved = _savedRefreshRateBeforeEco;
+        var saved = SavedRefreshRateBeforeEco;
         if (!saved.HasValue) return null;
         if (!_displayService.SetRefreshRate(saved.Value)) return null;
-        _savedRefreshRateBeforeEco = null;
+        SavedRefreshRateBeforeEco = null;
         PersistEcoState();
         return saved;
     }
@@ -750,7 +797,13 @@ public class PowerAutomationService : IDisposable
     {
         if (_isDisposed || (!_isDcEcoActive && !HasPendingAcRestore)) return true;
 
-        if (_transitionLock != null) await _transitionLock.WaitAsync();
+        // Bounded: the exit path must finish. A transition that is still holding the lock is left to the persisted
+        // baseline, which the next start reads and restores.
+        if (_transitionLock != null && !await _transitionLock.WaitAsync(ExitLockTimeout))
+        {
+            AppLog.Warn("Çıkışta Eco geri alınamadı", "Güç geçişi kilidi 3 saniye içinde alınamadı; temel durum diskte kaldı.");
+            return false;
+        }
         try
         {
             bool modeOk = false, boostOk = false, fanOk = false;
@@ -778,19 +831,24 @@ public class PowerAutomationService : IDisposable
         }
     }
 
-    private bool QueryAcStatus() => AcStatusProvider?.Invoke() ?? QueryHardwareAcStatus();
+    /// <summary>
+    /// AC state, or null when Windows would not say. <c>ACLineStatus</c> 255 means "unknown" in the API contract,
+    /// not "on the adapter": treating it as AC silently skipped Eco on every machine that reports it.
+    /// </summary>
+    private bool? QueryAcStatus() => AcStatusProvider?.Invoke() ?? QueryHardwareAcStatus();
 
-    private static bool QueryHardwareAcStatus()
+    private static bool? QueryHardwareAcStatus()
     {
         try
         {
             if (GetSystemPowerStatus(out var status))
             {
-                return status.ACLineStatus == 1 || status.ACLineStatus == 255;
+                if (status.ACLineStatus == 1) return true;
+                if (status.ACLineStatus == 0) return false;
             }
         }
         catch { }
-        return true;
+        return null;
     }
 
     public void Dispose()

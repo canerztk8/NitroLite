@@ -68,8 +68,31 @@ public class FanCurveTests
         var curve = QuietEverywhereCurve();
 
         Assert.Equal(FanCurve.SafetyMinPercent, curve.PercentAt(FanCurve.SafetyTemperatureC));
-        Assert.Equal(FanCurve.SafetyMinPercent, curve.PercentAt(90));
-        Assert.Equal(FanCurve.SafetyMinPercent, curve.PercentAt(100));
+        Assert.Equal(80, curve.PercentAt(90));
+        Assert.Equal(FanCurve.MaxPercent, curve.PercentAt(100));
+    }
+
+    [Fact]
+    public void TheSafetyFloorRisesWithTheTemperature()
+    {
+        // A single threshold at 85 °C left a 95 °C machine running at 60 %, which does not cool a laptop die.
+        Assert.Equal(0, FanCurve.SafetyFloorAt(84.9));
+        Assert.Equal(60, FanCurve.SafetyFloorAt(85));
+        Assert.Equal(60, FanCurve.SafetyFloorAt(89.9));
+        Assert.Equal(80, FanCurve.SafetyFloorAt(90));
+        Assert.Equal(80, FanCurve.SafetyFloorAt(94.9));
+        Assert.Equal(100, FanCurve.SafetyFloorAt(95));
+        Assert.Equal(100, FanCurve.SafetyFloorAt(120));
+    }
+
+    [Fact]
+    public void AnUnreadableTemperatureAsksForFullSpeedRatherThanSilence()
+    {
+        // A broken sensor used to fall through to the quietest anchor, which is the one answer that cannot be right.
+        var curve = QuietEverywhereCurve();
+
+        Assert.Equal(FanCurve.MaxPercent, curve.PercentAt(double.NaN));
+        Assert.Equal(FanCurve.MaxPercent, FanCurve.SafetyFloorAt(double.NaN));
     }
 
     [Fact]
@@ -97,7 +120,7 @@ public class FanCurveTests
     {
         var evaluator = new FanCurveEvaluator(QuietEverywhereCurve());
 
-        Assert.Equal(FanCurve.SafetyMinPercent, evaluator.Evaluate(95, T0));
+        Assert.Equal(FanCurve.MaxPercent, evaluator.Evaluate(95, T0));
     }
 
     [Fact]

@@ -1450,6 +1450,11 @@ public partial class MainWindow : Window
         {
             var info = await Task.Run(HardwareInfoService.Get);
             _hardwareInfo = info;
+
+            // The CPU power reading is an estimate built around the processor's rated clock. Feeding it the real
+            // rating is what keeps the number honest on a Nitro that is not this one.
+            if (info.CpuMaxClockMhz > 0) _hardwareService.CpuReferenceFrequencyMHz = info.CpuMaxClockMhz;
+
             if (Dispatcher.HasShutdownStarted) return;
             await Dispatcher.InvokeAsync(() =>
             {
@@ -1875,20 +1880,25 @@ public partial class MainWindow : Window
     /// the desktop curve only outside a session, so the two can never fight over the fans. Never writes when the
     /// sensor has no reading.
     /// </summary>
-    private async Task ApplyFanCurveAsync(int cpuTemperatureC)
+    private async Task ApplyFanCurveAsync(int cpuTemperatureC, int gpuTemperatureC = 0)
     {
         if (!_fanCurveEnabled || _isInitializingUi) return;
         if (_isGameSessionActive != (_fanCurveOwner == FanCurveOwner.Game)) return;
         if (_fanCurveEvaluator == null || cpuTemperatureC <= 0) return;
 
-        _fanCurveLastTemperatureC = cpuTemperatureC;
+        // The curve follows the hotter of the two dies. A CPU sensor that sticks at 45 °C while the GPU climbs to
+        // 90 °C used to leave the fans at the idle speed: the curve only ever looked at the CPU. Taking the maximum
+        // costs nothing when both readings are good and is the difference between cooling and not when one is not.
+        int temperatureC = gpuTemperatureC > cpuTemperatureC ? gpuTemperatureC : cpuTemperatureC;
+
+        _fanCurveLastTemperatureC = temperatureC;
 
         // While the curve is on it owns the fans. Anything else holding a different mode — NitroSense, the mode
         // key, a restore that ran while the curve was suspended — is taken back here, at the speed this
         // temperature asks for. Turning the curve off is the one way to hand the fans back.
         if (_currentFanMode != FanMode.Custom)
         {
-            int percent = _fanCurveEvaluator.Curve.PercentAt(cpuTemperatureC);
+            int percent = _fanCurveEvaluator.Curve.PercentAt(temperatureC);
             _agentClient.CustomFanCpuPercent = percent;
             _agentClient.CustomFanGpuPercent = percent;
             if (!await _agentClient.SetFanModeAsync(FanMode.Custom)) return;
@@ -1900,7 +1910,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        int? target = _fanCurveEvaluator.Evaluate(cpuTemperatureC, DateTime.UtcNow);
+        int? target = _fanCurveEvaluator.Evaluate(temperatureC, DateTime.UtcNow);
         if (target is null) return;
 
         _agentClient.CustomFanCpuPercent = target.Value;
@@ -2293,10 +2303,12 @@ public partial class MainWindow : Window
             // AASSvc unavailable: fall back to what Windows/NVML can measure (CPU load, RAM, GPU via NVML).
             // Sensors only the Acer service provides (CPU temperature, fans, board temperature) are shown as
             // unavailable, and the sample is kept out of thermal history, the chart and the OSD.
+            // NVML is only touched on the adapter: with the service gone there is no GPU1_TEMPERATURE to say whether
+            // the dGPU is asleep, and waking it every second on battery is exactly the trap this avoids.
             bool isFallback = data == null;
             if (isFallback)
             {
-                data = _hardwareService.CreateFallbackMonitorData();
+                data = _hardwareService.CreateFallbackMonitorData(allowNvml: _powerAutomationService?.LastAcStatus == true);
             }
             UpdateServiceTelemetryState(serviceAvailable: !isFallback);
 
@@ -2312,10 +2324,12 @@ public partial class MainWindow : Window
 
             // The software fan curve follows the temperature this poll already fetched. The last reading is kept
             // even while the curve is off, so turning it on acts on the current temperature instead of waiting.
+            // The GPU reading goes along: the curve follows the hotter die, so a stuck CPU sensor cannot leave the
+            // fans at idle speed while the GPU cooks.
             if (data.CpuTemperature > 0) _fanCurveLastTemperatureC = data.CpuTemperature;
             if (_fanCurveEnabled)
             {
-                await ApplyFanCurveAsync(data.CpuTemperature);
+                await ApplyFanCurveAsync(data.CpuTemperature, data.GpuTemperature);
                 UpdateFanCurveStatusText();
             }
 
@@ -6305,6 +6319,10 @@ public partial class MainWindow : Window
         CancelActiveOperatingModeReassertion();
         SaveWindowPosition();
 
+        // The fans are on the firmware and the settings are on disk: this run ended on purpose, so the next start
+        // must not reset the fan mode behind the user's back.
+        CleanExitMarker.MarkCleanExit();
+
         _batteryService.StatusUpdated -= OnBatteryStatusUpdated;
         _batteryService.OverchargeAlert -= OnOverchargeAlert;
         _batteryService.DischargeTargetReached -= OnDischargeTargetReached;
@@ -6346,15 +6364,21 @@ public partial class MainWindow : Window
             // reading asked for. Blocking here is deliberate: the write has to land before the process does.
             // Task.Run keeps the continuations off this thread, which is the UI thread and about to be blocked, so
             // the wait cannot deadlock on the dispatcher.
+            // The budget has to clear the 3 s connect timeout: a shorter wait returns while the connection is still
+            // being made, and the Dispose below then closes the socket before the command is sent.
             if (_fanCurveEnabled)
             {
                 try
                 {
                     Task.Run(async () => { await _agentClient.SetFanModeAsync(FanMode.Auto); })
-                        .Wait(TimeSpan.FromSeconds(2));
+                        .Wait(TimeSpan.FromSeconds(4));
                 }
                 catch { }
             }
+
+            // The fans are back on the firmware, so the next start must not treat this as a crash and reset them
+            // again. Written even when the fan call failed: the marker only records that this run ended on purpose.
+            CleanExitMarker.MarkCleanExit();
 
             if (_osdWindow != null)
             {
