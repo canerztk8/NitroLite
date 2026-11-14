@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Management;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace NitroLite.Core.Hardware;
 
@@ -35,11 +36,15 @@ public sealed record AcerWmiProbeResult
     /// <summary>The WMI error code and message when the call failed, e.g. "WBEM_E_INVALID_METHOD_PARAMETERS (0x8004103A)".</summary>
     public string CallError { get; init; } = "";
 
+    /// <summary>True when the probe did not finish in time. A hung provider is a distinct outcome from a missing one.</summary>
+    public bool TimedOut { get; init; }
+
     /// <summary>One line for the report: registered but silent, working, or absent.</summary>
     public string Summary
     {
         get
         {
+            if (TimedOut) return "probe timed out";
             if (!ClassPresent) return "not registered";
             if (string.IsNullOrEmpty(CallMethod)) return $"registered ({Methods.Count} methods), not called";
             return CallSucceeded
@@ -64,6 +69,7 @@ public static class AcerWmiProbe
         ManagementClass? cls = null;
         try
         {
+            // ManagementScope is not IDisposable in System.Management; the COM object is released by the finalizer.
             var scope = new ManagementScope(WmiNamespace);
             scope.Connect();
             cls = new ManagementClass(scope, new ManagementPath(ClassName), null);
@@ -157,6 +163,29 @@ public static class AcerWmiProbe
         finally
         {
             cls.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Runs <see cref="Read"/> on a worker thread with a hard timeout. The failure this probe exists to detect is a
+    /// provider that hangs instead of returning an error, and a synchronous call would hang the caller with it: the
+    /// hardware report and the settings page both call this.
+    /// </summary>
+    public static AcerWmiProbeResult ReadWithTimeout(TimeSpan timeout)
+    {
+        try
+        {
+            var task = Task.Run(Read);
+            if (task.Wait(timeout)) return task.Result;
+            return new AcerWmiProbeResult { TimedOut = true, CallError = "probe timed out" };
+        }
+        catch (AggregateException ex)
+        {
+            return new AcerWmiProbeResult { CallError = ex.GetBaseException().GetType().Name };
+        }
+        catch (Exception ex)
+        {
+            return new AcerWmiProbeResult { CallError = ex.GetType().Name };
         }
     }
 

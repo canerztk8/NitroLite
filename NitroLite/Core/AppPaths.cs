@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 
 namespace NitroLite.Core;
@@ -20,6 +20,13 @@ public static class AppPaths
     private static readonly object MigrationLock = new();
     private static string? _dataDirectory;
 
+    /// <summary>
+    /// Why <see cref="DataDirectory"/> could not be created, or null when it is usable. The app keeps running
+    /// (reads fall back to defaults) but the user has to be told: otherwise every setting silently fails to save
+    /// and the next launch starts from defaults again with no explanation.
+    /// </summary>
+    public static string? DataDirectoryError { get; private set; }
+
     public static string DataDirectory
     {
         get
@@ -28,7 +35,16 @@ public static class AppPaths
             if (cached != null) return cached;
             lock (MigrationLock)
             {
-                _dataDirectory ??= ResolveDataDirectory();
+                if (_dataDirectory == null)
+                {
+                    _dataDirectory = ResolveDataDirectory();
+                    // Logged only after the field is assigned: AppLog resolves its own file through this property,
+                    // so logging from inside ResolveDataDirectory would re-enter it while the field is still null.
+                    if (DataDirectoryError != null)
+                    {
+                        AppLog.Error("Veri klasörü oluşturulamadı", DataDirectoryError);
+                    }
+                }
                 return _dataDirectory;
             }
         }
@@ -45,7 +61,17 @@ public static class AppPaths
         string dir = !string.IsNullOrWhiteSpace(overrideDir)
             ? overrideDir
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NitroLite");
-        try { Directory.CreateDirectory(dir); } catch { }
+        try
+        {
+            Directory.CreateDirectory(dir);
+            DataDirectoryError = null;
+        }
+        catch (Exception ex)
+        {
+            // Swallowing this used to leave the app writing into a directory that does not exist, so every save
+            // failed with a different, unrelated-looking error. The reason is kept here instead.
+            DataDirectoryError = $"{dir}: {ex.Message}";
+        }
         return dir;
     }
 

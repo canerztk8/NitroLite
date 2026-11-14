@@ -41,6 +41,14 @@ public class BatteryWatchdogService : IDisposable
     // Counts game-session ticks so the ~235 ms WMI query runs every fifth tick on battery instead of every tick.
     private int _gameSessionWmiTick = 0;
 
+    // The BatteryStatus query is the only expensive read here (~235 ms). Percent, AC state and the OS estimate all
+    // come from GetSystemPowerStatus, which costs microseconds, so the wattage figures are refreshed on their own
+    // slower clock instead of on every 3 s tick.
+    private static readonly TimeSpan WmiQueryInterval = TimeSpan.FromSeconds(30);
+    private readonly Stopwatch _wmiClock = Stopwatch.StartNew();
+    private TimeSpan _lastWmiQueryAt = TimeSpan.MinValue;
+    private bool _forceWmiRefresh = true;
+
     public bool WatchdogEnabled { get; set; } = true;
     public bool IsGameSessionActive { get; set; } = false;
     public bool IsDischarging => _isDischarging;
@@ -72,6 +80,9 @@ public class BatteryWatchdogService : IDisposable
             if (e.Mode == PowerModes.StatusChange)
             {
                 _emaInitialized = false;
+                // Plugging or unplugging the adapter flips the sign of the wattage: waiting up to 30 s for the next
+                // scheduled read would show the old direction next to the new AC state.
+                _forceWmiRefresh = true;
             }
 
             UpdateStatus();
@@ -185,6 +196,19 @@ public class BatteryWatchdogService : IDisposable
             _gameSessionWmiTick = 0;
         }
 
+        // Everything above came from GetSystemPowerStatus. The wattage figures below need WMI, so they run on the
+        // slower clock and the previous reading is reused in between.
+        bool wmiDue = _forceWmiRefresh
+            || _lastWmiQueryAt == TimeSpan.MinValue
+            || _wmiClock.Elapsed - _lastWmiQueryAt >= WmiQueryInterval;
+        if (!wmiDue)
+        {
+            ApplyCachedRates(info);
+            return info;
+        }
+        _forceWmiRefresh = false;
+        _lastWmiQueryAt = _wmiClock.Elapsed;
+
         // Live Real-Time Discharge / Charge Rate via in-process WMI with full disposal
         try
         {
@@ -230,6 +254,26 @@ public class BatteryWatchdogService : IDisposable
         // query that used to run here every 3 s was removed: its result was never published, and the WMI call is
         // slow enough to matter in a loop this tight.
         return info;
+    }
+
+    /// <summary>
+    /// Copies the last measured wattage figures onto a freshly built status. Used on the ticks where the WMI query
+    /// is skipped: reporting 0 W would be a lie, and the reading is still current to within half a minute.
+    /// </summary>
+    private void ApplyCachedRates(BatteryStatusInfo info)
+    {
+        var last = CurrentStatus;
+        info.IsDischarging = last.IsDischarging;
+        info.DischargeRateWatts = last.DischargeRateWatts;
+        info.DischargeRateMilliwatts = last.DischargeRateMilliwatts;
+        info.ChargeRateWatts = last.ChargeRateWatts;
+        info.SmoothedDischargeRateWatts = last.SmoothedDischargeRateWatts;
+        info.RemainingCapacityMWh = last.RemainingCapacityMWh;
+        info.ChargeRateUnknown = true;
+        if (info.EstimatedRemainingMinutes <= 0)
+        {
+            info.EstimatedRemainingMinutes = last.EstimatedRemainingMinutes;
+        }
     }
 
     public async Task<BatteryHealthDetails> GetBatteryHealthDetailsAsync()

@@ -229,10 +229,18 @@ public partial class MainWindow : Window
     private const int SW_RESTORE = 9;
     private const int SW_SHOWMAXIMIZED = 3;
 
+    /// <summary>
+    /// Releases the working set after the window is hidden.
+    /// <para>
+    /// This used to run a blocking, compacting, aggressive generation-2 collection and then empty the working set.
+    /// Both halves made the app slower, not lighter: the collection froze the UI thread for a few hundred
+    /// milliseconds on every minimise, and emptying the working set only meant every page had to be faulted back
+    /// in the next time the window was shown. The runtime's own collector already does this correctly, so the only
+    /// thing left is the working-set trim, which is cheap and does not touch the heap.
+    /// </para>
+    /// </summary>
     public static void TrimMemory()
     {
-        GC.Collect(2, GCCollectionMode.Aggressive, true, true);
-        GC.WaitForPendingFinalizers();
         try
         {
             SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
@@ -240,12 +248,41 @@ public partial class MainWindow : Window
         catch { }
     }
 
-    private int _hasInitialized = 0;
+    private Task? _initTask;
+    private readonly object _initLock = new();
+    private bool _initFailed;
 
-    public async Task EnsureInitializedAsync()
+    /// <summary>
+    /// Runs the first refresh exactly once and hands every caller the same task. The old version set a flag before
+    /// the work started, so the second caller (the constructor starts this fire-and-forget and the Loaded handler
+    /// calls it again) returned immediately and then acted on state that had not been read yet. A failed run also
+    /// left the flag set, so it never retried.
+    /// </summary>
+    public Task EnsureInitializedAsync()
     {
-        if (Interlocked.Exchange(ref _hasInitialized, 1) != 0) return;
-        await RefreshAllAsync();
+        lock (_initLock)
+        {
+            if (_initTask == null || _initFailed)
+            {
+                _initFailed = false;
+                _initTask = RunInitializationAsync();
+            }
+            return _initTask;
+        }
+    }
+
+    private async Task RunInitializationAsync()
+    {
+        try
+        {
+            await RefreshAllAsync();
+        }
+        catch (Exception ex)
+        {
+            // A service that was not up yet must not leave the window permanently empty: the next call retries.
+            AppLog.Error("Başlangıç yenilemesi başarısız", ex.Message);
+            _initFailed = true;
+        }
     }
 
     public MainWindow(bool startMinimized = false)
@@ -583,7 +620,7 @@ public partial class MainWindow : Window
             // loses the desktop settings the battery Eco pass still has to restore.
             if (_powerAutomationService!.RestorePersistedEcoState())
             {
-                System.Diagnostics.Trace.WriteLine("Recovered persisted battery Eco baseline.");
+                AppLog.Warn("Eco temel durumu kurtarıldı", "Önceki çalışmadan kalan pil profili geri yüklenecek.");
             }
 
             // 1. Initial Mode (Restore saved manual mode or query hardware)
@@ -722,9 +759,19 @@ public partial class MainWindow : Window
 
             // School mode owns the machine while it is on, so it is re-applied after the power pass: the settings it
             // writes are absolute, and the undo record on disk is left untouched.
-            if (_appSettings.SchoolModeEnabled && _schoolModeService != null)
+            if (_schoolModeService != null)
             {
-                await _schoolModeService.ReapplyAsync();
+                if (_appSettings.SchoolModeEnabled)
+                {
+                    await _schoolModeService.ReapplyAsync();
+                }
+                else if (await _schoolModeService.RecoverOrphanedBackupAsync())
+                {
+                    // A run died between writing the undo record and saving the setting. The machine was still in
+                    // school-mode values with the switch showing off; say so instead of leaving the user to wonder
+                    // why the laptop got slow.
+                    ShowToast(Loc.T("Yarım kalan okul modu geri alındı; ayarlarınız eski hâline döndü."), false);
+                }
             }
 
             // 7. Services page state. An existing autostart entry is kept working (moved exe, --minimized flag in
@@ -1032,7 +1079,16 @@ public partial class MainWindow : Window
             TxtSchoolModeStatus.Text = on
                 ? Loc.T("Okul modu açık: pil tasarrufu ayarları uygulandı.")
                 : Loc.T("Okul modu kapalı: önceki ayarlar geri yüklendi.");
-            if (TryFindResource("AccentGreen") is System.Windows.Media.Brush ok) TxtSchoolModeStatus.Foreground = ok;
+            if (outcome.Warnings.Count > 0)
+            {
+                // Applied, but the undo record is missing: the user has to know before they rely on the switch.
+                TxtSchoolModeStatus.Text += " " + string.Join(" ", outcome.Warnings);
+                if (TryFindResource("Vermilion") is System.Windows.Media.Brush warn) TxtSchoolModeStatus.Foreground = warn;
+            }
+            else if (TryFindResource("AccentGreen") is System.Windows.Media.Brush ok)
+            {
+                TxtSchoolModeStatus.Foreground = ok;
+            }
         }
         else
         {
@@ -1153,6 +1209,22 @@ public partial class MainWindow : Window
 
     private void OnSystemPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
+        if (e.Mode == PowerModes.Suspend)
+        {
+            // Windows can cut power to the process at any point after this event, so anything still only in memory
+            // is lost. Settings are normally written on every change, but the window rectangle is not: a user who
+            // moves the window and closes the lid would come back to the old position.
+            try
+            {
+                SaveWindowPosition();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Suspend: could not persist window position", ex.Message);
+            }
+            return;
+        }
+
         if (e.Mode == PowerModes.Resume)
         {
             _ = ReassertKeyboardLightingAsync();
@@ -1160,6 +1232,9 @@ public partial class MainWindow : Window
             // The adapter may have been plugged or unplugged while suspended, and Windows does not always raise
             // StatusChange on resume: re-evaluate the power state explicitly.
             _ = _powerAutomationService?.EvaluatePowerStateAsync();
+            // The charge limit lives in the EC and is reset by some BIOS revisions across a suspend cycle. The
+            // care-centre read-back is the only place that notices, so it has to run on resume too.
+            _ = SyncChargeLimitFromCareCenterAsync();
             // A laptop that sleeps for days would otherwise skip the wear history entirely: the reading is only
             // taken at launch and when the battery page is opened. The history decides whether this one is new.
             _ = RefreshBatteryHealthAsync();
@@ -1361,20 +1436,31 @@ public partial class MainWindow : Window
                 var (onAc, percent) = PowerStateProvider();
                 var targetMode = ModePolicy.ClampForPower(_appSettings.LastOperatingMode.Value, onAc, percent);
 
-                var currentMode = await _agentClient.TryGetOperatingModeAsync();
-                if (currentMode.HasValue && currentMode.Value != targetMode)
+                // The same lock PowerAutomationService takes. Without it this reassert and an Eco pass started by
+                // the same resume event both wrote the operating mode, and the hardware kept whichever landed last
+                // while the two components each believed their own value had won.
+                if (!await _gameProfileTransitionLock.WaitAsync(TimeSpan.FromSeconds(5), token)) continue;
+                try
                 {
-                    if (await _agentClient.SetOperatingModeAsync(targetMode))
+                    var currentMode = await _agentClient.TryGetOperatingModeAsync();
+                    if (currentMode.HasValue && currentMode.Value != targetMode)
                     {
-                        if (!_isExiting && !Dispatcher.HasShutdownStarted)
+                        if (await _agentClient.SetOperatingModeAsync(targetMode))
                         {
-                            Dispatcher.Invoke(() =>
+                            if (!_isExiting && !Dispatcher.HasShutdownStarted)
                             {
-                                UpdateModeUi(targetMode);
-                                UpdateDesktopBaselineForManualChange(mode: targetMode);
-                            });
+                                Dispatcher.Invoke(() =>
+                                {
+                                    UpdateModeUi(targetMode);
+                                    UpdateDesktopBaselineForManualChange(mode: targetMode);
+                                });
+                            }
                         }
                     }
+                }
+                finally
+                {
+                    _gameProfileTransitionLock.Release();
                 }
             }
         }
@@ -1527,7 +1613,10 @@ public partial class MainWindow : Window
             }
             UpdateFanButtonsUi(fan ?? _currentFanMode, fan.HasValue);
 
-            var boost = _cpuPowerService.QueryCurrentBoostMode();
+            // Off the UI thread: the native read is cheap, but its fallback spawns powercfg.exe and waits for it.
+            // Called inline this froze the window for up to four seconds every five seconds on a machine where
+            // PowerReadACValueIndex fails, which is the "not responding" the user sees.
+            var boost = await Task.Run(() => _cpuPowerService.QueryCurrentBoostMode());
             if (_cpuPowerService.IsModeVerified && boost != _lastShownBoost)
             {
                 bool externalChange = _lastShownBoost.HasValue;
@@ -1999,7 +2088,15 @@ public partial class MainWindow : Window
 
     private async void BtnFanCurve_Click(object sender, RoutedEventArgs e)
     {
-        await SetFanCurveEnabledAsync(!_fanCurveEnabled);
+        try
+        {
+            await SetFanCurveEnabledAsync(!_fanCurveEnabled);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fan eğrisi açılamadı", ex.ToString());
+            ShowToast(Loc.T($"Fan eğrisi değiştirilemedi: {ex.Message}"), false);
+        }
     }
 
     /// <summary>
@@ -2496,6 +2593,13 @@ public partial class MainWindow : Window
             }
 
         }
+        }
+        catch (Exception ex)
+        {
+            // The tick handler is async void, so an exception here used to reach DispatcherUnhandledException and be
+            // swallowed five times before the app was allowed to crash. One bad sample must cost one sample, not the
+            // whole session: the next tick starts clean because _isPolling is reset in finally.
+            AppLog.Warn("Telemetri turu başarısız", ex.ToString());
         }
         finally
         {
@@ -4385,7 +4489,9 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"OnGameStarted failed: {ex.Message}");
+            // Trace only reaches a debugger. A game profile that failed to apply is exactly what a bug report needs
+            // to show, and the user can open this log from the settings card.
+            AppLog.Warn("Oyun profili uygulanamadı", ex.ToString());
         }
     }
 
@@ -4595,7 +4701,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Trace.WriteLine($"OnGameEnded failed: {ex.Message}");
+            AppLog.Warn("Oyun profili geri alınamadı", ex.ToString());
         }
     }
 
@@ -6288,7 +6394,7 @@ public partial class MainWindow : Window
             // Leave no battery Eco changes behind. If this fails, the persisted Eco state is restored on next start.
             if (_powerAutomationService != null && !await _powerAutomationService.RevertEcoForExitAsync())
             {
-                System.Diagnostics.Trace.WriteLine("Eco revert on exit incomplete; persisted state will be restored next start.");
+                AppLog.Warn("Çıkışta Eco tam geri alınamadı", "Temel durum diskte; bir sonraki açılışta geri yüklenecek.");
             }
 
             // The curve cannot run once the window is gone: hand the fans back to the firmware instead of leaving
@@ -7589,7 +7695,14 @@ public partial class MainWindow : Window
             UpdateDcRefreshOptionState();
             SaveSettings();
             ShowToast(pref == DcPowerProfilePreference.Eco ? Loc.T("Pilde güç tercihi: Eco (sessiz mod, pilde boost kapalı)") : Loc.T("Pilde güç tercihi: Dengeli (mevcut ayarlar korunur)"));
-            if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
+            try
+            {
+                if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Pil güç tercihi uygulanamadı", ex.ToString());
+            }
         }
     }
 
@@ -7597,7 +7710,14 @@ public partial class MainWindow : Window
     {
         if (!IsLoaded || _isInitializingUi || ChkAutoRefreshRate == null) return;
         _appSettings.AutoRefreshRateSwitching = ChkAutoRefreshRate.IsChecked == true;
-        if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
+        try
+        {
+            if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Ekran yenileme hızı geçişi uygulanamadı", ex.ToString());
+        }
         SaveSettings();
         ShowToast(_appSettings.AutoRefreshRateSwitching
             ? Loc.T("Otomatik tazeleme etkin: pilde Eco laptop ekranını 60 Hz'e alır, adaptörde önceki hıza döner")

@@ -55,7 +55,6 @@ public class SafeVerificationEndToEndTests
 
         public override Task<bool> EnsureConnectedAsync() => Task.FromResult(true);
 
-        public override Task<OperatingMode> GetOperatingModeAsync() => Task.FromResult(CurrentMode);
 
         public override Task<OperatingMode?> TryGetOperatingModeAsync() => Task.FromResult<OperatingMode?>(CurrentMode);
 

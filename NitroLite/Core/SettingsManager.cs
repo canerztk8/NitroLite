@@ -122,13 +122,21 @@ public static class SettingsManager
         }
 
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+
+        // Validate what is about to be written, not what is already on disk. A serialisation bug would otherwise
+        // replace a good settings file with an unreadable one and the next launch would start from defaults.
+        if (JsonSerializer.Deserialize<AppSettings>(json) == null)
+        {
+            throw new InvalidOperationException("Ayarlar serileştirilemedi; dosya yazılmadı.");
+        }
+
         string tempPath = filePath + ".tmp." + Guid.NewGuid().ToString("N");
         string backupPath = filePath + ".bak";
 
         File.WriteAllText(tempPath, json);
 
         // Maintain backup of previous valid settings (only copy if filePath contains valid deserializable settings)
-        if (File.Exists(filePath) && IsValidSettingsFile(filePath))
+        if (File.Exists(filePath) && IsKnownGoodOrValid(filePath))
         {
             try
             {
@@ -143,6 +151,58 @@ public static class SettingsManager
         }
 
         File.Move(tempPath, filePath, overwrite: true);
+        RememberKnownGood(filePath);
+    }
+
+    // Remembers the file this process last wrote successfully. Settings are saved on every change, and re-reading
+    // and re-parsing the file on each save just to decide whether it is safe to back up was pure overhead: a file
+    // this process wrote a moment ago is known to be valid.
+    private static readonly object KnownGoodLock = new();
+    private static string? _knownGoodPath;
+    private static long _knownGoodLength;
+    private static DateTime _knownGoodWriteUtc;
+
+    private static bool IsKnownGoodOrValid(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists || info.Length == 0) return false;
+            lock (KnownGoodLock)
+            {
+                if (_knownGoodPath != null
+                    && string.Equals(_knownGoodPath, path, StringComparison.OrdinalIgnoreCase)
+                    && _knownGoodLength == info.Length
+                    && _knownGoodWriteUtc == info.LastWriteTimeUtc)
+                {
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to the full check.
+        }
+        return IsValidSettingsFile(path);
+    }
+
+    private static void RememberKnownGood(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists) return;
+            lock (KnownGoodLock)
+            {
+                _knownGoodPath = path;
+                _knownGoodLength = info.Length;
+                _knownGoodWriteUtc = info.LastWriteTimeUtc;
+            }
+        }
+        catch
+        {
+            // The cache is an optimisation only.
+        }
     }
 
     public static bool IsValidSettingsFile(string path)

@@ -77,7 +77,10 @@ public class CpuPowerService : IDisposable
         BypassNativePowerCalls = bypassNativePowerCalls;
         if (autoInitialize)
         {
-            UnhideSetting();
+            // No HKLM write here. UnhideSetting used to flip the "Attributes" value of the boost setting under
+            // HKLM on every start: it needs administrator rights, so it silently failed for a standard user, and
+            // for an administrator it permanently exposed a hidden Windows power option the user never asked for.
+            // PowerWriteACValueIndex writes hidden settings perfectly well, so nothing needs unhiding.
             CurrentMode = QueryCurrentBoostMode(IsAcPowerActive());
         }
     }
@@ -121,21 +124,6 @@ public class CpuPowerService : IDisposable
         if (!TryGetActiveScheme(out var scheme)) return false;
         if (PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref subGroup, ref setting, value) != 0) return false;
         return PowerSetActiveScheme(IntPtr.Zero, ref scheme) == 0;
-    }
-
-    private void UnhideSetting()
-    {
-        if (BypassNativePowerCalls) return;
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(
-                $@"SYSTEM\CurrentControlSet\Control\Power\PowerSettings\{SubProcessorGuid}\{PerfBoostModeGuid}", true);
-            if (key != null)
-            {
-                key.SetValue("Attributes", 2, RegistryValueKind.DWord);
-            }
-        }
-        catch { }
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -195,8 +183,9 @@ public class CpuPowerService : IDisposable
 
                 if (ret == 0)
                 {
-                    if (val == 0) return CpuBoostMode.Disabled;
-                    if (val == 4) return CpuBoostMode.Efficient;
+                    // Windows PerfBoostMode is documented as 0..6. 3, 5 and 6 have no enum member, but they are
+                    // real values the firmware can be holding: reporting them as "unknown" hid the user's actual
+                    // setting. Anything above 6 is not a PerfBoostMode at all.
                     return val <= 6 ? (CpuBoostMode)val : null;
                 }
             }
@@ -254,7 +243,9 @@ public class CpuPowerService : IDisposable
                     if (p == null) return null;
 
                     var readTask = p.StandardOutput.ReadToEndAsync();
-                    if (!p.WaitForExit(3000))
+                    // powercfg /query answers in tens of milliseconds. Three seconds was long enough to freeze the
+                    // caller for four seconds on every poll when the tool hung; 800 ms is still generous.
+                    if (!p.WaitForExit(800))
                     {
                         bool exited = false;
                         try
@@ -277,7 +268,7 @@ public class CpuPowerService : IDisposable
 
                     if (!p.HasExited || p.ExitCode != 0) return null;
 
-                    if (!readTask.Wait(1000))
+                    if (!readTask.Wait(500))
                     {
                         try { p.Kill(entireProcessTree: true); } catch { }
                         return null;
@@ -291,21 +282,51 @@ public class CpuPowerService : IDisposable
                 }
             }
 
-            var pattern = isAc 
-                ? @"Current AC Power Setting Index:\s*0x([0-9a-fA-F]+)"
-                : @"Current DC Power Setting Index:\s*0x([0-9a-fA-F]+)";
-
-            var match = Regex.Match(output, pattern);
-            if (match.Success && int.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.HexNumber, null, out var val))
+            // Parsed by GUID, not by label. powercfg /query is localised ("Geçerli AC Güç Ayarları Dizini" on a
+            // Turkish Windows, "Aktueller AC-Energieeinstellungsindex" on a German one), so the old English-only
+            // regex never matched and the fallback was dead on every non-English machine.
+            var val = ParsePowerCfgIndex(output, isAc);
+            if (val.HasValue)
             {
-                if (val == 0) return CpuBoostMode.Disabled;
-                if (val == 4) return CpuBoostMode.Efficient;
-                return val <= 6 ? (CpuBoostMode)val : null;
+                // 3, 5 and 6 are real Windows values with no matching enum member. They are still the value the
+                // firmware holds, so they are reported as-is; only values above 6 are rejected.
+                return val.Value <= 6 ? (CpuBoostMode)val.Value : null;
             }
         }
         catch { }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reads the AC or DC index out of <c>powercfg /query</c> output without depending on the display language.
+    /// The block for the boost setting is found by its GUID, and the index is the last <c>0x...</c> value inside it;
+    /// every label around those two facts is localised, the GUID and the hex value are not.
+    /// </summary>
+    internal static uint? ParsePowerCfgIndex(string? output, bool isAc)
+    {
+        if (string.IsNullOrWhiteSpace(output)) return null;
+
+        // The setting block starts at its GUID and ends at the next "GUID Alias" line or the end of the text.
+        int start = output.IndexOf(PerfBoostModeGuid, StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return null;
+
+        int end = output.IndexOf("GUID Alias", start + PerfBoostModeGuid.Length, StringComparison.OrdinalIgnoreCase);
+        var block = end > start ? output[start..end] : output[start..];
+
+        // "Current AC Power Setting Index" / "Current DC ..." are localised, but the two values always appear in
+        // that order inside the block: AC first, then DC.
+        var values = Regex.Matches(block, @"0x([0-9a-fA-F]{1,8})");
+        if (values.Count == 0) return null;
+
+        // The GUID itself is not a 0x value, so the first two matches are the AC and DC indexes.
+        int index = isAc ? 0 : 1;
+        if (values.Count <= index) return null;
+
+        return uint.TryParse(values[index].Groups[1].Value, System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
     }
 
     private readonly SemaphoreSlim _powerLock = new(1, 1);
@@ -540,7 +561,9 @@ public class CpuPowerService : IDisposable
             p = Process.Start(psi);
             if (p == null) return false;
 
-            if (!p.WaitForExit(3000))
+            // The write path runs from a button press on the UI thread, so it gets a shorter leash than the old
+            // three seconds: powercfg answers in tens of milliseconds when it answers at all.
+            if (!p.WaitForExit(1500))
             {
                 bool exited = false;
                 try

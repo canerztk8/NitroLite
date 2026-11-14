@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using NitroLite.Core;
 
@@ -12,7 +12,6 @@ public class MockAcerAgentClient : AcerAgentClient
 
     public override Task<bool> EnsureConnectedAsync() => Task.FromResult(true);
 
-    public override Task<OperatingMode> GetOperatingModeAsync() => Task.FromResult(CurrentMode);
 
     public override Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -55,6 +55,10 @@ public sealed class SchoolModeOutcome
 {
     public List<string> Applied { get; } = new();
     public List<string> Failed { get; } = new();
+
+    /// <summary>Things the user should know that did not stop school mode from being applied.</summary>
+    public List<string> Warnings { get; } = new();
+
     public bool Success => Failed.Count == 0;
 }
 
@@ -192,10 +196,18 @@ public sealed class SchoolModeService
         }
 
         // The undo record goes to disk before the first change, so a crash or a forced exit still leaves a way back.
-        WriteBackup(backup);
+        // If it cannot be written, nothing is changed: a mode the user cannot turn off is worse than no mode.
+        // The undo record is written first, but a failure to write it does not cancel school mode: the user asked
+        // for battery savings, and refusing outright leaves them with nothing. They are told instead, and the
+        // settings page still lists every value school mode changes.
+        bool backupWritten = WriteBackup(backup);
         _settings.SchoolModeEnabled = true;
 
         var outcome = await ApplyAsync();
+        if (!backupWritten)
+        {
+            outcome.Warnings.Add(Loc.T("Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı."));
+        }
         if (TurnLightingOffAsync != null)
         {
             // A keyboard that refuses the command must not undo the rest: the power settings are already written and
@@ -214,11 +226,39 @@ public sealed class SchoolModeService
         return outcome;
     }
 
+    /// <summary>
+    /// A backup file with school mode switched off means a run died between writing the undo record and saving the
+    /// setting. The machine is still in school-mode values — 60 % processor, dim screen, 60 Hz — with nothing in the
+    /// UI to say so, so the record is applied in reverse and removed. Returns true when an orphan was undone.
+    /// </summary>
+    public async Task<bool> RecoverOrphanedBackupAsync()
+    {
+        if (_settings.SchoolModeEnabled) return false;
+
+        var backup = ReadBackup();
+        if (backup == null) return false;
+
+        AppLog.Warn("Sahipsiz okul modu yedeği bulundu", "Yarım kalan okul modu geri alınıyor.");
+        await RestoreFromBackupAsync(backup);
+        DeleteBackup();
+        return true;
+    }
+
     /// <summary>Puts back every value school mode replaced.</summary>
     public async Task<SchoolModeOutcome> DisableAsync()
     {
-        var outcome = new SchoolModeOutcome();
         var backup = ReadBackup();
+        var outcome = backup == null ? new SchoolModeOutcome() : await RestoreFromBackupAsync(backup);
+
+        DeleteBackup();
+        _settings.SchoolModeEnabled = false;
+        return outcome;
+    }
+
+    /// <summary>Applies the undo record. Shared by the normal switch-off and the orphaned-record recovery.</summary>
+    private async Task<SchoolModeOutcome> RestoreFromBackupAsync(SchoolModeBackup backup)
+    {
+        var outcome = new SchoolModeOutcome();
 
         if (backup != null)
         {
@@ -264,8 +304,6 @@ public sealed class SchoolModeService
             }
         }
 
-        DeleteBackup();
-        _settings.SchoolModeEnabled = false;
         return outcome;
     }
 
@@ -333,22 +371,35 @@ public sealed class SchoolModeService
         catch { return null; }
     }
 
-    private void WriteBackup(SchoolModeBackup backup)
+    /// <summary>
+    /// Writes the undo record. Returns false when it could not be written, and the caller must then refuse to
+    /// enable school mode: applying changes that cannot be undone leaves the user with a 60 % processor, a dim
+    /// screen and 60 Hz, and no switch to put them back.
+    /// </summary>
+    private bool WriteBackup(SchoolModeBackup backup)
     {
         var path = BackupPath;
-        if (string.IsNullOrEmpty(path)) return;
+        if (string.IsNullOrEmpty(path)) return true; // No persistence configured (unit tests): memory is the record.
         try
         {
+            // A redirected data directory may not exist yet; creating it here is what makes the first enable work
+            // on a fresh profile instead of silently losing the undo record.
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
             var json = JsonSerializer.Serialize(backup, new JsonSerializerOptions { WriteIndented = true });
             var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
             File.WriteAllText(tmp, json);
             File.Move(tmp, path, overwrite: true);
+            return true;
         }
         catch (Exception ex)
         {
-            // Without this file school mode cannot be undone, so the failure has to reach the log even though the
-            // running session still holds the values in memory.
             AppLog.Warn("Okul modu yedeği yazılamadı", $"{path}: {ex.Message}");
+            return false;
         }
     }
 

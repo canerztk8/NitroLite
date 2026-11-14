@@ -12,8 +12,19 @@ public partial class App : System.Windows.Application
     private static readonly string LogFile = Path.Combine(AppPaths.DataDirectory, "nitrolite.log");
     private static readonly string ConfigFile = AppPaths.GetDataFile("config.json");
 
-    private const string MutexName = "Local\\NitroLite_SingleInstance_Mutex_AN16";
-    private const string EventName = "Local\\NitroLite_SingleInstance_WakeUpEvent_AN16";
+    // Global\ rather than Local\: Local\ is scoped to one Windows session, so a second user signed in through
+    // fast user switching (or an RDP session) could start a second NitroLite and both would drive the same EC.
+    // Mutexes and events do not need SeCreateGlobalPrivilege, but the default DACL only grants the creating user,
+    // so a different user gets access denied: that falls back to the per-session name instead of failing to start.
+    private const string MutexName = @"Global\NitroLite_SingleInstance_Mutex_AN16";
+    private const string MutexNameFallback = @"Local\NitroLite_SingleInstance_Mutex_AN16";
+    private const string EventName = @"Global\NitroLite_SingleInstance_WakeUpEvent_AN16";
+    private const string EventNameFallback = @"Local\NitroLite_SingleInstance_WakeUpEvent_AN16";
+
+    // Serialises the headless commands against each other. They run before the GUI mutex on purpose (a script has
+    // to be able to change the mode while the window is open), but two of them at once would both write the same
+    // EC registers and the second write could land on a half-applied first one.
+    private const string CliMutexName = @"Global\NitroLite_Cli_Mutex_AN16";
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool AllowSetForegroundWindow(int dwProcessId);
@@ -22,6 +33,7 @@ public partial class App : System.Windows.Application
 
     private static Mutex? _mutex;
     private static EventWaitHandle? _wakeUpEvent;
+    private static string _wakeUpEventName = EventNameFallback;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -81,14 +93,7 @@ public partial class App : System.Windows.Application
 
         // 1. Single Instance Check via Mutex
         bool createdNew = false;
-        try
-        {
-            _mutex = new Mutex(true, MutexName, out createdNew);
-        }
-        catch (AbandonedMutexException)
-        {
-            createdNew = true;
-        }
+        _mutex = CreateSingleInstanceMutex(out createdNew);
 
         if (!createdNew)
         {
@@ -111,7 +116,7 @@ public partial class App : System.Windows.Application
             try
             {
                 AllowSetForegroundWindow(ASFW_ANY);
-                if (EventWaitHandle.TryOpenExisting(EventName, out var wakeEvent))
+                if (EventWaitHandle.TryOpenExisting(_wakeUpEventName, out var wakeEvent))
                 {
                     wakeEvent.Set();
                 }
@@ -136,7 +141,7 @@ public partial class App : System.Windows.Application
         // 2. Setup Wake-Up Event Listener for the primary instance
         try
         {
-            _wakeUpEvent = new EventWaitHandle(false, EventResetMode.AutoReset, EventName);
+            _wakeUpEvent = new EventWaitHandle(false, EventResetMode.AutoReset, _wakeUpEventName);
             var thread = new Thread(() =>
             {
                 while (_wakeUpEvent != null)
@@ -335,6 +340,70 @@ public partial class App : System.Windows.Application
     /// Prints the hardware report to stdout, or writes it to a folder when <c>--out &lt;dir&gt;</c> is given.
     /// <c>--json</c> switches the stdout format. Read-only, so it needs no confirmation flag.
     /// </summary>
+    /// <summary>
+    /// Creates the single-instance mutex, preferring the machine-wide name and falling back to the per-session one
+    /// when another user already owns it. Never throws: a lock that cannot be created must not stop the app from
+    /// starting, so the failure is logged and the instance is allowed to run.
+    /// </summary>
+    private static Mutex? CreateSingleInstanceMutex(out bool createdNew)
+    {
+        createdNew = false;
+        foreach (var name in new[] { MutexName, MutexNameFallback })
+        {
+            try
+            {
+                var mutex = new Mutex(true, name, out createdNew);
+                _wakeUpEventName = name == MutexName ? EventName : EventNameFallback;
+                return mutex;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Another user's session owns the machine-wide name. Try the per-session one.
+                createdNew = false;
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Tek örnek kilidi oluşturulamadı", $"{name}: {ex.Message}");
+                createdNew = true;
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Takes the CLI lock for the duration of a headless command. Returns null when another command is already
+    /// running, so the caller can say so instead of writing the same hardware register twice.
+    /// </summary>
+    private static Mutex? TryAcquireCliMutex(TimeSpan timeout)
+    {
+        Mutex? mutex = null;
+        try
+        {
+            mutex = new Mutex(false, CliMutexName);
+            bool acquired;
+            try
+            {
+                acquired = mutex.WaitOne(timeout);
+            }
+            catch (AbandonedMutexException)
+            {
+                // The previous command was killed mid-write; the lock is ours now.
+                acquired = true;
+            }
+            if (acquired) return mutex;
+            mutex.Dispose();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // A lock that cannot be created must not block the command.
+            WriteLog("CLI kilidi oluşturulamadı", ex.Message);
+            mutex?.Dispose();
+            return new Mutex(false);
+        }
+    }
+
     private static int RunHardwareReport(string[] args)
     {
         UseUtf8Console();
@@ -403,6 +472,13 @@ public partial class App : System.Windows.Application
             return 3;
         }
 
+        using var cliLock = TryAcquireCliMutex(TimeSpan.FromSeconds(10));
+        if (cliLock == null)
+        {
+            Console.Error.WriteLine(Loc.T("Başka bir NitroLite komutu çalışıyor. Bitmesini bekleyip tekrar deneyin."));
+            return 4;
+        }
+
         Task<ToolExecutionResult> task;
         try
         {
@@ -459,6 +535,13 @@ public partial class App : System.Windows.Application
     private static int RunHardwareCommand(string[] args)
     {
         UseUtf8Console();
+        using var cliLock = TryAcquireCliMutex(TimeSpan.FromSeconds(10));
+        if (cliLock == null)
+        {
+            Console.Error.WriteLine(Loc.T("Başka bir NitroLite komutu çalışıyor. Bitmesini bekleyip tekrar deneyin."));
+            return 4;
+        }
+
         try
         {
             var task = Task.Run(() => RunHardwareCommandAsync(args));

@@ -526,11 +526,6 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    public virtual async Task<OperatingMode> GetOperatingModeAsync()
-    {
-        return await TryGetOperatingModeAsync() ?? OperatingMode.Default;
-    }
-
     public virtual async Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {
         await _lock.WaitAsync();

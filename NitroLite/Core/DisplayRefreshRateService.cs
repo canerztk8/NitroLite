@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 
 namespace NitroLite.Core;
@@ -13,7 +13,6 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
 {
     private const int ENUM_CURRENT_SETTINGS = -1;
     private const uint CDS_UPDATEREGISTRY = 0x00000001;
-    private const uint CDS_GLOBAL = 0x00000008;
     private const int DISP_CHANGE_SUCCESSFUL = 0;
     private const int DM_DISPLAYFREQUENCY = 0x00400000;
 
@@ -196,7 +195,9 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
             int height = currentDm.dmPelsHeight;
             int bpp = currentDm.dmBitsPerPel;
 
-            int maxRate = 60;
+            // The fallback is the rate that is running right now, not 60. A panel at 165 Hz whose mode list could
+            // not be enumerated used to be "restored" to 60 Hz, which is a downgrade the user never asked for.
+            int maxRate = currentDm.dmDisplayFrequency > 0 ? currentDm.dmDisplayFrequency : 60;
             int modeIndex = 0;
             var testDm = new DEVMODE { dmSize = (short)Marshal.SizeOf<DEVMODE>() };
             while (EnumDisplaySettings(device, modeIndex, ref testDm))
@@ -272,7 +273,9 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
             }
 
             targetDm.dmFields |= DM_DISPLAYFREQUENCY;
-            int result = ChangeDisplaySettingsEx(device, ref targetDm, IntPtr.Zero, CDS_UPDATEREGISTRY | CDS_GLOBAL, IntPtr.Zero);
+            // CDS_UPDATEREGISTRY alone: the refresh rate is this user's choice, and CDS_GLOBAL wrote it into the
+            // machine-wide profile, so the next person to log on found their panel at 60 Hz with no idea why.
+            int result = ChangeDisplaySettingsEx(device, ref targetDm, IntPtr.Zero, CDS_UPDATEREGISTRY, IntPtr.Zero);
             return result == DISP_CHANGE_SUCCESSFUL;
         }
         catch

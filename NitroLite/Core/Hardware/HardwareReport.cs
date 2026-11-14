@@ -54,7 +54,7 @@ public static class HardwareReport
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
-        var wmi = AcerWmiProbe.Read();
+        var wmi = AcerWmiProbe.ReadWithTimeout(TimeSpan.FromSeconds(5));
         var sb = new StringBuilder();
 
         sb.AppendLine("NitroLite hardware report");
@@ -147,7 +147,7 @@ public static class HardwareReport
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
-        var wmi = AcerWmiProbe.Read();
+        var wmi = AcerWmiProbe.ReadWithTimeout(TimeSpan.FromSeconds(5));
 
         var services = new JsonArray();
         foreach (var name in ReportedServices)
