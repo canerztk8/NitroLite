@@ -1154,6 +1154,9 @@ public partial class MainWindow : Window
             // The adapter may have been plugged or unplugged while suspended, and Windows does not always raise
             // StatusChange on resume: re-evaluate the power state explicitly.
             _ = _powerAutomationService?.EvaluatePowerStateAsync();
+            // A laptop that sleeps for days would otherwise skip the wear history entirely: the reading is only
+            // taken at launch and when the battery page is opened. The history decides whether this one is new.
+            _ = RefreshBatteryHealthAsync();
         }
     }
 
