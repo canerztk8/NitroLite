@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -77,7 +77,9 @@ public class SchoolModeServiceTests
         {
             Service = new SchoolModeService(Agent, Cpu, Display, Brightness, Settings, Scheme)
             {
-                BackupPath = Path.Combine(Path.GetTempPath(), "nitrolite_school_" + Guid.NewGuid().ToString("N") + ".json"),
+                // Inside the isolated data folder, which TestDataIsolation sweeps: a bare %TEMP% path left one
+                // file behind per harness and nothing ever removed them.
+                BackupPath = AppPaths.GetDataFile("school_" + Guid.NewGuid().ToString("N") + ".json"),
                 GetCurrentOperatingMode = () => OperatingMode.Extreme,
                 GetCurrentFanMode = () => FanMode.Max
             };
