@@ -834,5 +834,7 @@
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "У этой клавиатуры одна зона; все клавиши подсвечиваются одним цветом.",
  "Bu modelde klavye aydınlatması bildirilmedi.": "Эта модель не сообщила о подсветке клавиатуры.",
  "Dinamik aydınlatma efektleri ve donanım profilleri.": "Динамические эффекты подсветки и аппаратные профили.",
- "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) не найден; ограничение зарядки на этом компьютере настроить нельзя."
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) не найден; ограничение зарядки на этом компьютере настроить нельзя.",
+ "ACER SERVİSİNE ULAŞILAMIYOR": "СЛУЖБА ACER НЕДОСТУПНА",
+ "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "Режимы, вентиляторы, подсветка клавиатуры и предел заряда работают через службу Acer. Служба AcerAgentService, поставляемая с NitroSense, должна быть установлена и запущена. Данные, доступные из Windows и NVIDIA, по-прежнему отображаются."
 }

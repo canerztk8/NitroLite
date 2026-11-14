@@ -834,5 +834,7 @@
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "Este teclado tiene una sola zona; todas las teclas toman el mismo color.",
  "Bu modelde klavye aydınlatması bildirilmedi.": "Este modelo no notificó iluminación de teclado.",
  "Dinamik aydınlatma efektleri ve donanım profilleri.": "Efectos de iluminación dinámicos y perfiles de hardware.",
- "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "No se encontró Acer Care Center (AcerCCAgent); el límite de carga no se puede ajustar en este equipo."
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "No se encontró Acer Care Center (AcerCCAgent); el límite de carga no se puede ajustar en este equipo.",
+ "ACER SERVİSİNE ULAŞILAMIYOR": "SERVICIO ACER NO DISPONIBLE",
+ "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "Los modos, los ventiladores, la iluminación del teclado y el límite de carga pasan por el servicio de Acer. El AcerAgentService que viene con NitroSense debe estar instalado y en ejecución. Los datos que Windows y NVIDIA pueden aportar se siguen mostrando."
 }

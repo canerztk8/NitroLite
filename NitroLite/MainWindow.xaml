@@ -747,9 +747,33 @@
 
                 <!-- TAB CONTENT CONTAINER -->
                 <Grid Grid.Column="1" Margin="26,20,26,0">
-                    
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Standing note while the Acer service is unreachable. The toast alone is gone after three
+                         seconds, and a window whose every hardware control silently does nothing reads as broken. -->
+                    <Border x:Name="ServiceBanner" Grid.Row="0" Visibility="Collapsed"
+                            Background="{StaticResource PaperDeep}" BorderBrush="{StaticResource Rule}"
+                            BorderThickness="1" CornerRadius="2" Margin="0,0,0,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{StaticResource Vermilion}" />
+                            <StackPanel Grid.Column="1" Margin="12,9,12,10">
+                                <TextBlock x:Name="TxtServiceBannerTitle" Style="{StaticResource LabelCaps}"
+                                           Foreground="{StaticResource Vermilion}" Text="ACER SERVİSİNE ULAŞILAMIYOR" />
+                                <TextBlock x:Name="TxtServiceBannerBody" Foreground="{StaticResource InkSoft}"
+                                           FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
                     <!-- TAB 1: MODES & FANS -->
-                    <Grid x:Name="TabModes" Visibility="Visible">
+                    <Grid x:Name="TabModes" Grid.Row="1" Visibility="Visible">
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Çalışma Modları" Foreground="{StaticResource Ink}" FontSize="18" FontWeight="SemiBold" />
@@ -1316,7 +1340,7 @@
                     </Grid>
 
                     <!-- TAB 2: LIVE MONITORING & OSD -->
-                    <Grid x:Name="TabMonitoring" Visibility="Collapsed">
+                    <Grid x:Name="TabMonitoring" Grid.Row="1" Visibility="Collapsed">
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <Grid Margin="0,0,0,14">
@@ -1556,7 +1580,7 @@
                     </Grid>
 
                     <!-- TAB 3: KEYBOARD RGB -->
-                    <Grid x:Name="TabRgb" Visibility="Collapsed">
+                    <Grid x:Name="TabRgb" Grid.Row="1" Visibility="Collapsed">
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <Grid Margin="0,0,0,16">
@@ -1733,7 +1757,7 @@
                     </Grid>
 
                     <!-- TAB 4: BATTERY HEALTH & SAFE DISCHARGE -->
-                    <Grid x:Name="TabBattery" Visibility="Collapsed">
+                    <Grid x:Name="TabBattery" Grid.Row="1" Visibility="Collapsed">
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Pil Şarj Sınırı ve Güvenli Deşarj" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />
@@ -1981,7 +2005,7 @@
                     </Grid>
 
                     <!-- TAB 5: DEBLOAT HUB & SETTINGS -->
-                    <Grid x:Name="TabDebloat" Visibility="Collapsed">
+                    <Grid x:Name="TabDebloat" Grid.Row="1" Visibility="Collapsed">
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Sistem Servisleri ve Başlangıç Ayarları" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="SemiBold" />

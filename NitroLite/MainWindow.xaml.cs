@@ -100,6 +100,10 @@ public partial class MainWindow : Window
     internal OperatingMode CurrentMode => _currentMode;
     internal AppSettings CurrentAppSettings => _appSettings;
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
+    internal void ReportServiceAvailabilityForTesting(bool available) => UpdateServiceTelemetryState(available);
+    internal bool ServiceBannerShownForTesting => ServiceBanner?.Visibility == Visibility.Visible;
+    internal int TelemetryFailureCountForTesting => _consecutiveTelemetryFailures;
+    internal bool? LastServiceTelemetryAvailableForTesting => _lastServiceTelemetryAvailable;
     internal bool IsGameSessionActive => _isGameSessionActive;
     internal int GameSessionGeneration => _gameSessionGeneration;
     internal SemaphoreSlim GameProfileTransitionLock => _gameProfileTransitionLock;
@@ -1979,6 +1983,7 @@ public partial class MainWindow : Window
 
         var previous = _lastServiceTelemetryAvailable;
         _lastServiceTelemetryAvailable = serviceAvailable;
+        UpdateServiceBanner(serviceAvailable);
         if (previous == serviceAvailable) return;
 
         if (!serviceAvailable)
@@ -1989,6 +1994,24 @@ public partial class MainWindow : Window
         {
             ShowToast(Loc.T("Acer servisi bağlantısı geri geldi; tüm sensörler okunuyor."));
         }
+    }
+
+    /// <summary>
+    /// Keeps a standing note on screen while the Acer service is unreachable. The toast is gone after three
+    /// seconds, and a window whose every hardware control silently does nothing reads as a broken app rather
+    /// than as a machine that is missing the service NitroLite talks to.
+    /// </summary>
+    private void UpdateServiceBanner(bool serviceAvailable)
+    {
+        if (ServiceBanner == null) return;
+
+        ServiceBanner.Visibility = serviceAvailable ? Visibility.Collapsed : Visibility.Visible;
+        if (serviceAvailable) return;
+
+        if (TxtServiceBannerTitle != null)
+            TxtServiceBannerTitle.Text = Loc.T("ACER SERVİSİNE ULAŞILAMIYOR");
+        if (TxtServiceBannerBody != null)
+            TxtServiceBannerBody.Text = Loc.T("Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.");
     }
 
     private void ApplyServiceUnavailableTelemetryText(MonitorData data)

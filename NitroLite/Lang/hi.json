@@ -834,5 +834,7 @@
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "इस कीबोर्ड में एक ही ज़ोन है; सभी कुंजियाँ एक ही रंग लेती हैं।",
  "Bu modelde klavye aydınlatması bildirilmedi.": "इस मॉडल ने कीबोर्ड बैकलाइट की जानकारी नहीं दी।",
  "Dinamik aydınlatma efektleri ve donanım profilleri.": "गतिशील लाइटिंग प्रभाव और हार्डवेयर प्रोफ़ाइल।",
- "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) नहीं मिला; इस कंप्यूटर पर चार्ज सीमा सेट नहीं की जा सकती।"
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) नहीं मिला; इस कंप्यूटर पर चार्ज सीमा सेट नहीं की जा सकती।",
+ "ACER SERVİSİNE ULAŞILAMIYOR": "ACER सेवा उपलब्ध नहीं",
+ "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "मोड, फ़ैन, कीबोर्ड लाइटिंग और चार्ज सीमा सब Acer सेवा के ज़रिए काम करते हैं। NitroSense के साथ आने वाली AcerAgentService इंस्टॉल और चालू होनी चाहिए। Windows और NVIDIA से मिलने वाला डेटा अब भी दिखाया जाता है।"
 }

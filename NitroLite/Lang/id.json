@@ -834,5 +834,7 @@
  "Bu klavye tek bölgeli; tüm tuşlar aynı rengi alır.": "Keyboard ini hanya memiliki satu zona; semua tombol memakai warna yang sama.",
  "Bu modelde klavye aydınlatması bildirilmedi.": "Model ini tidak melaporkan pencahayaan keyboard.",
  "Dinamik aydınlatma efektleri ve donanım profilleri.": "Efek pencahayaan dinamis dan profil perangkat keras.",
- "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) tidak ditemukan; batas pengisian daya tidak dapat diatur di komputer ini."
+ "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) tidak ditemukan; batas pengisian daya tidak dapat diatur di komputer ini.",
+ "ACER SERVİSİNE ULAŞILAMIYOR": "LAYANAN ACER TIDAK TERJANGKAU",
+ "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "Mode, kipas, lampu latar keyboard, dan batas pengisian daya semuanya lewat layanan Acer. AcerAgentService yang disertakan dengan NitroSense harus terpasang dan berjalan. Data yang bisa dibaca Windows dan NVIDIA tetap ditampilkan."
 }
