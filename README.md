@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1086-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1089-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
@@ -334,7 +334,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-977 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1089 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

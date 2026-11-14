@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1086-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1089-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (geliştirme **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070
@@ -318,7 +318,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-977 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+1089 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
