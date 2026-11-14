@@ -60,6 +60,9 @@ public static class AcerWmiProbe
     private const string WmiNamespace = @"root\WMI";
     private const string ClassName = "AcerGamingFunction";
 
+    /// <summary>How many getters the probe tries before giving up. Each one can cost a few hundred milliseconds.</summary>
+    private const int MaxProbeCalls = 6;
+
     /// <summary>
     /// Inspects the class and invokes one harmless getter. Safe to call on any machine: a missing class, a denied
     /// namespace and a failing method all come back as data rather than exceptions.
@@ -106,13 +109,16 @@ public static class AcerWmiProbe
             }
             catch { }
 
-            // Prefer a getter that takes no arguments: it cannot be rejected for a malformed input structure, so a
-            // failure there is unambiguous evidence that the provider itself is not answering.
-            var target = methods.FirstOrDefault(m => m.Equals("GetGamingFanTable", StringComparison.Ordinal))
-                         ?? methods.FirstOrDefault(m => IsParameterless(cls, m))
-                         ?? "";
+            // Only getters are tried: a setter would change the machine, and this probe is read-only. The first one
+            // that answers settles the question. Picking a single method up front was wrong: on an AN16-41 every
+            // method declares in-parameters, so the chosen one came back as InvalidMethodParameters and the report
+            // blamed the provider for a probe mistake.
+            var candidates = methods
+                .Where(m => m.StartsWith("Get", StringComparison.Ordinal))
+                .Take(MaxProbeCalls)
+                .ToList();
 
-            if (target.Length == 0)
+            if (candidates.Count == 0)
             {
                 return new AcerWmiProbeResult
                 {
@@ -122,43 +128,43 @@ public static class AcerWmiProbe
                 };
             }
 
-            try
+            string lastMethod = "";
+            string lastError = "";
+            foreach (var candidate in candidates)
             {
-                using var inParams = cls.GetMethodParameters(target);
-                using var outParams = cls.InvokeMethod(target, inParams, null);
-                return new AcerWmiProbeResult
+                lastMethod = candidate;
+                try
                 {
-                    ClassPresent = true,
-                    ProviderVersion = providerVersion,
-                    Methods = methods,
-                    CallMethod = target,
-                    CallSucceeded = true
-                };
+                    using var inParams = cls.GetMethodParameters(candidate);
+                    using var outParams = cls.InvokeMethod(candidate, inParams, null);
+                    return new AcerWmiProbeResult
+                    {
+                        ClassPresent = true,
+                        ProviderVersion = providerVersion,
+                        Methods = methods,
+                        CallMethod = candidate,
+                        CallSucceeded = true
+                    };
+                }
+                catch (ManagementException ex)
+                {
+                    lastError = $"{ex.ErrorCode} (0x{(int)ex.ErrorCode:X8})";
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex.GetType().Name;
+                }
             }
-            catch (ManagementException ex)
+
+            return new AcerWmiProbeResult
             {
-                return new AcerWmiProbeResult
-                {
-                    ClassPresent = true,
-                    ProviderVersion = providerVersion,
-                    Methods = methods,
-                    CallMethod = target,
-                    CallSucceeded = false,
-                    CallError = $"{ex.ErrorCode} (0x{(int)ex.ErrorCode:X8})"
-                };
-            }
-            catch (Exception ex)
-            {
-                return new AcerWmiProbeResult
-                {
-                    ClassPresent = true,
-                    ProviderVersion = providerVersion,
-                    Methods = methods,
-                    CallMethod = target,
-                    CallSucceeded = false,
-                    CallError = ex.GetType().Name
-                };
-            }
+                ClassPresent = true,
+                ProviderVersion = providerVersion,
+                Methods = methods,
+                CallMethod = lastMethod,
+                CallSucceeded = false,
+                CallError = lastError
+            };
         }
         finally
         {
