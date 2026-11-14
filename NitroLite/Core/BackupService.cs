@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -106,9 +106,7 @@ public static class BackupService
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
             var json = JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
-            var tmp = targetPath + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, targetPath, overwrite: true);
+            AtomicFile.WriteAllText(targetPath, json);
             return result;
         }
         catch (Exception ex)

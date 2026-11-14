@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -222,9 +222,7 @@ public sealed class BatteryWearHistory
         try
         {
             var json = JsonSerializer.Serialize(samples, new JsonSerializerOptions { WriteIndented = true });
-            var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, overwrite: true);
+            AtomicFile.WriteAllText(path, json);
             return true;
         }
         catch (Exception ex)

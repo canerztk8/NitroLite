@@ -170,9 +170,7 @@ public partial class MainWindow : Window
         try
         {
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
-            string tmp = GameSessionRecoveryFile + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, GameSessionRecoveryFile, overwrite: true);
+            AtomicFile.WriteAllText(GameSessionRecoveryFile, json);
         }
         catch (Exception ex)
         {
@@ -1196,9 +1194,7 @@ public partial class MainWindow : Window
         try
         {
             var json = JsonSerializer.Serialize(_lighting, new JsonSerializerOptions { WriteIndented = true });
-            string tmp = ActiveRgbConfigFile + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, ActiveRgbConfigFile, overwrite: true);
+            AtomicFile.WriteAllText(ActiveRgbConfigFile, json);
         }
         catch (Exception ex)
         {

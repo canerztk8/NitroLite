@@ -525,6 +525,28 @@ public class DebloatService
             return ScheduledTaskStateQuerySeam(taskName);
         }
 
+        // The XML form carries <Enabled>true|false</Enabled>, which is the same in every Windows display language.
+        // The CSV form prints a localised state word, so the text matching below only ever worked on an English,
+        // Turkish or German machine and reported "Unknown" everywhere else.
+        try
+        {
+            using var xmlProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = AppPaths.SystemTool("schtasks.exe"),
+                Arguments = $"/query /tn \"{taskName}\" /xml",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            if (xmlProcess != null)
+            {
+                var xml = ReadOutputWithTimeout(xmlProcess, 2000);
+                var enabled = ParseTaskEnabledFromXml(xml);
+                if (enabled.HasValue) return enabled.Value ? "Enabled" : "Disabled";
+            }
+        }
+        catch { }
+
         try
         {
             using var p = Process.Start(new ProcessStartInfo
@@ -563,6 +585,18 @@ public class DebloatService
         return "Unknown";
     }
 
+    /// <summary>
+    /// Reads the <c>Enabled</c> flag out of <c>schtasks /query /xml</c>. Null when the task does not exist or the
+    /// output is not the expected XML, so the caller can fall back instead of guessing.
+    /// </summary>
+    public static bool? ParseTaskEnabledFromXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml)) return null;
+        var match = Regex.Match(xml, @"<Enabled>\s*(true|false)\s*</Enabled>", RegexOptions.IgnoreCase);
+        if (!match.Success) return null;
+        return string.Equals(match.Groups[1].Value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     public Dictionary<string, string> LoadBackupState()
     {
         try
@@ -591,9 +625,7 @@ public class DebloatService
                 Directory.CreateDirectory(dir);
             }
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
-            var tmp = BackupStateFilePath + ".tmp";
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, BackupStateFilePath, overwrite: true);
+            AtomicFile.WriteAllText(BackupStateFilePath, json);
             return File.Exists(BackupStateFilePath);
         }
         catch (Exception ex)

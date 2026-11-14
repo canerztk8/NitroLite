@@ -230,6 +230,12 @@ public static class UpdateService
     /// Extracts the package into a staging folder and returns it. Only the files in <see cref="PackageFiles"/> are
     /// written, and every entry is checked to land inside the staging folder, so a crafted archive cannot escape it.
     /// </summary>
+    /// <summary>Largest single file the updater will write out of a package.</summary>
+    private const long MaxEntryBytes = 512L * 1024 * 1024;
+
+    /// <summary>Largest total the updater will write out of a package.</summary>
+    private const long MaxPackageBytes = 1024L * 1024 * 1024;
+
     public static string ExtractToStaging(string zipPath)
     {
         var staging = Path.Combine(Path.GetTempPath(), $"NitroLite-stage-{Guid.NewGuid():N}");
@@ -245,6 +251,10 @@ public static class UpdateService
         if (exeEntry == null) throw new InvalidDataException("NitroLite.exe is not in the package.");
         var prefix = exeEntry.FullName[..^"NitroLite.exe".Length];
 
+        // A zip declares its uncompressed size, and a hostile or truncated one can declare gigabytes. The real
+        // package is a few hundred megabytes, so anything past the cap is refused before a byte is written: a full
+        // system drive is a worse outcome than a failed update.
+        long totalBytes = 0;
         foreach (var entry in archive.Entries)
         {
             if (entry.FullName.EndsWith("/", StringComparison.Ordinal) || entry.FullName.EndsWith("\\", StringComparison.Ordinal))
@@ -255,6 +265,12 @@ public static class UpdateService
             if (relative.Length == 0) continue;
             if (!PackageFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
                 throw new InvalidDataException($"Unexpected file in the package: {relative}");
+
+            if (entry.Length > MaxEntryBytes)
+                throw new InvalidDataException($"Package entry is too large: {relative} ({entry.Length} bytes)");
+            totalBytes += entry.Length;
+            if (totalBytes > MaxPackageBytes)
+                throw new InvalidDataException($"Package expands to more than {MaxPackageBytes / (1024 * 1024)} MB.");
 
             var destination = Path.GetFullPath(Path.Combine(staging, relative));
             if (!destination.StartsWith(stagingRoot, StringComparison.OrdinalIgnoreCase))
@@ -292,6 +308,16 @@ public static class UpdateService
     /// </remarks>
     public static string InstallFromStaging(string staging, string installDirectory)
     {
+        // Only a folder this class created may be installed from. Without this, a caller that passed the wrong path
+        // (or a path an attacker could write to) would copy arbitrary files over the install folder.
+        var stagingFull = Path.GetFullPath(staging);
+        var tempRoot = Path.GetFullPath(Path.GetTempPath());
+        if (!stagingFull.StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase)
+            || !Path.GetFileName(stagingFull).StartsWith("NitroLite-stage-", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The staging folder is not a NitroLite staging folder.");
+        }
+
         var target = Path.Combine(installDirectory, "NitroLite.exe");
 
         var staged = Directory.GetFiles(staging, "*", SearchOption.AllDirectories)

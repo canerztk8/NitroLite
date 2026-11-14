@@ -319,7 +319,9 @@ public class UpdateServiceTests : IDisposable
     }
     private string StagingFolder(string exeContent = "new exe")
     {
-        var staging = Path_("stage");
+        // InstallFromStaging only accepts a folder this class created: under the temp directory and named
+        // NitroLite-stage-*, so a wrong path cannot copy arbitrary files over the install folder.
+        var staging = Path_("NitroLite-stage-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
         File.WriteAllText(Path.Combine(staging, "NitroLite.exe"), exeContent);
         File.WriteAllText(Path.Combine(staging, "LICENSE"), "MIT");

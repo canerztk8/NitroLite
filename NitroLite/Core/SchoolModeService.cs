@@ -391,9 +391,7 @@ public sealed class SchoolModeService
             }
 
             var json = JsonSerializer.Serialize(backup, new JsonSerializerOptions { WriteIndented = true });
-            var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, overwrite: true);
+            AtomicFile.WriteAllText(path, json);
             return true;
         }
         catch (Exception ex)

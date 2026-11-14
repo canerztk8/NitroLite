@@ -130,10 +130,7 @@ public static class SettingsManager
             throw new InvalidOperationException("Ayarlar serileştirilemedi; dosya yazılmadı.");
         }
 
-        string tempPath = filePath + ".tmp." + Guid.NewGuid().ToString("N");
         string backupPath = filePath + ".bak";
-
-        File.WriteAllText(tempPath, json);
 
         // Maintain backup of previous valid settings (only copy if filePath contains valid deserializable settings)
         if (File.Exists(filePath) && IsKnownGoodOrValid(filePath))
@@ -150,7 +147,7 @@ public static class SettingsManager
             }
         }
 
-        File.Move(tempPath, filePath, overwrite: true);
+        AtomicFile.WriteAllText(filePath, json);
         RememberKnownGood(filePath);
     }
 

@@ -141,9 +141,7 @@ public class PowerAutomationService : IDisposable
                 TimestampUtc = DateTime.UtcNow
             };
             var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
-            var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, overwrite: true);
+            AtomicFile.WriteAllText(path, json);
         }
         catch (Exception ex)
         {

@@ -268,9 +268,7 @@ public class RgbProfileService
                 custom = _presets.Where(p => !p.IsBuiltIn).ToList();
             }
             var json = JsonSerializer.Serialize(custom, new JsonSerializerOptions { WriteIndented = true });
-            var tempFile = PresetsFile + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tempFile, json);
-            File.Move(tempFile, PresetsFile, overwrite: true);
+            AtomicFile.WriteAllText(PresetsFile, json);
             return true;
         }
         catch
