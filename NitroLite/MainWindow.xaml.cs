@@ -1941,15 +1941,12 @@ public partial class MainWindow : Window
             });
         }
 
-        // The trace: the anchors the editor holds, joined straight, plus the flat ends the curve really has.
+        // The trace is sampled from the curve instead of drawn through the anchors, so the safety floor above
+        // 85 °C shows up as the step the fans will actually make.
         var curve = new FanCurve(ReadFanCurveFromEditor());
-        var points = new PointCollection
-        {
-            new WpfPoint(X(FanCurve.MinTemperatureC), Y(curve.PercentAt(FanCurve.MinTemperatureC)))
-        };
-        foreach (var anchor in curve.Points)
-            points.Add(new WpfPoint(X(anchor.TemperatureC), Y(anchor.Percent)));
-        points.Add(new WpfPoint(X(FanCurve.MaxTemperatureC), Y(curve.PercentAt(FanCurve.MaxTemperatureC))));
+        var points = new PointCollection();
+        for (int temperature = FanCurve.MinTemperatureC; temperature <= FanCurve.MaxTemperatureC; temperature++)
+            points.Add(new WpfPoint(X(temperature), Y(curve.PercentAt(temperature))));
         FanCurveLine.Points = points;
         FanCurveLine.Stroke = ink;
 
@@ -5894,6 +5891,22 @@ public partial class MainWindow : Window
         try
         {
             SaveWindowPosition();
+
+            // Windows is taking the process down and the normal exit path never runs. The curve cannot run once we
+            // are gone, so hand the fans back to the firmware first, or they stay pinned at whatever speed the last
+            // reading asked for. Blocking here is deliberate: the write has to land before the process does.
+            // Task.Run keeps the continuations off this thread, which is the UI thread and about to be blocked, so
+            // the wait cannot deadlock on the dispatcher.
+            if (_fanCurveEnabled)
+            {
+                try
+                {
+                    Task.Run(async () => { await _agentClient.SetFanModeAsync(FanMode.Auto); })
+                        .Wait(TimeSpan.FromSeconds(2));
+                }
+                catch { }
+            }
+
             if (_osdWindow != null)
             {
                 _osdWindow.IsExiting = true;

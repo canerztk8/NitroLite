@@ -798,7 +798,7 @@
  "CPU {0} °C · fan %{1}": "CPU {0} °C · kipas {1}%",
  "Eğri": "Kurva",
  "FAN EĞRİSİ": "KURVA KIPAS",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Kurva mengikuti suhu CPU: kipas langsung berputar lebih cepat saat suhu naik, dan baru melambat setelah melewati pita histeresis. Selama sesi game, pengaturan kipas profil game yang berlaku.",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. 85 °C ve üstünde fan hiçbir zaman %60'ın altına inmez. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "Kurva mengikuti suhu CPU: kipas langsung berputar lebih cepat saat suhu naik, dan baru melambat setelah melewati pita histeresis. Pada 85 °C ke atas kipas tidak pernah turun di bawah 60 %. Selama sesi game, pengaturan kipas profil game yang berlaku.",
  "Bu oyun için fan eğrisi kullan": "Gunakan kurva kipas untuk game ini",
  "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "Menerapkan kurva yang mengikuti suhu, bukan kecepatan kipas tetap. Saat mati, profil kipas di atas yang berlaku.",
  "OYUN FAN EĞRİSİ": "KURVA KIPAS GAME",

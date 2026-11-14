@@ -1057,11 +1057,11 @@
                                                         <ColumnDefinition Width="42" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Text="90°" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
-                                                    <Slider x:Name="SliderCurve5" Grid.Column="1" Minimum="30" Maximum="100" Value="100" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                    <Slider x:Name="SliderCurve5" Grid.Column="1" Minimum="60" Maximum="100" Value="100" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderFanCurve_ValueChanged" VerticalAlignment="Center" />
                                                     <TextBlock x:Name="TxtCurve5" Grid.Column="2" Text="%100" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                                 </Grid>
                                             </Grid>
-                                            <TextBlock Text="Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir." Foreground="{StaticResource InkFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,10,0,0" />
+                                            <TextBlock Text="Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. 85 °C ve üstünde fan hiçbir zaman %60'ın altına inmez. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir." Foreground="{StaticResource InkFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,10,0,0" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -1312,7 +1312,7 @@
                                                                         <ColumnDefinition Width="38" />
                                                                     </Grid.ColumnDefinitions>
                                                                     <TextBlock Text="90°" Style="{StaticResource Figure}" FontSize="10" Foreground="{StaticResource InkSoft}" VerticalAlignment="Center" />
-                                                                    <Slider x:Name="SliderGameCurve5" Grid.Column="1" Minimum="30" Maximum="100" Value="100" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
+                                                                    <Slider x:Name="SliderGameCurve5" Grid.Column="1" Minimum="60" Maximum="100" Value="100" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderGameFanCurve_ValueChanged" VerticalAlignment="Center" />
                                                                     <TextBlock x:Name="TxtGameCurve5" Grid.Column="2" Text="%100" Style="{StaticResource Figure}" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                                                 </Grid>
                                                             </UniformGrid>

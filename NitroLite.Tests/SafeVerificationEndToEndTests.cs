@@ -2675,6 +2675,42 @@ function global:Disable-ScheduledTask {
     }
 
     [Fact]
+    public async Task SessionEnding_HandsTheFansBackToTheFirmwareWhenTheCurveOwnsThem()
+    {
+        await RunInStaAsync(async () =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
+            var settings = new AppSettings { CustomFanCpuPercent = 55 };
+            var window = FanCurveWindow(agent, settings);
+
+            Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+            Assert.Equal(FanMode.Custom, agent.CurrentFanMode);
+
+            // Windows is taking the process down and the normal exit path never runs. The curve cannot run any
+            // more, so the fans must not stay pinned at the last speed it asked for.
+            window.FastExitForSessionEnding();
+
+            Assert.Equal(FanMode.Auto, agent.CurrentFanMode);
+        });
+    }
+
+    [Fact]
+    public async Task SessionEnding_LeavesAManualFanModeAlone()
+    {
+        await RunInStaAsync(() =>
+        {
+            var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Max };
+            var window = FanCurveWindow(agent, new AppSettings());
+
+            window.FastExitForSessionEnding();
+
+            // A speed the user picked by hand is their choice, not a leftover of the curve.
+            Assert.Equal(FanMode.Max, agent.CurrentFanMode);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task ChoosingAFanModeByHand_StopsTheCurve()
     {
         await RunInStaAsync(async () =>

@@ -798,7 +798,7 @@
  "CPU {0} °C · fan %{1}": "CPU {0} °C · ventoinha {1} %",
  "Eğri": "Curva",
  "FAN EĞRİSİ": "CURVA DE VENTOINHA",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "A curva segue a temperatura da CPU: as ventoinhas aceleram assim que ela sobe e só desaceleram depois de passar da faixa de histerese. Durante uma sessão de jogo vale a configuração de ventoinha do perfil do jogo.",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. 85 °C ve üstünde fan hiçbir zaman %60'ın altına inmez. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "A curva segue a temperatura da CPU: as ventoinhas aceleram assim que ela sobe e só desaceleram depois de passar da faixa de histerese. A partir de 85 °C as ventoinhas nunca ficam abaixo de 60 %. Durante uma sessão de jogo vale a configuração de ventoinha do perfil do jogo.",
  "Bu oyun için fan eğrisi kullan": "Usar uma curva de ventoinha para este jogo",
  "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "Aplica uma curva que segue a temperatura em vez de uma velocidade fixa. Desligado, vale o perfil de ventoinha acima.",
  "OYUN FAN EĞRİSİ": "CURVA DE VENTOINHA DO JOGO",

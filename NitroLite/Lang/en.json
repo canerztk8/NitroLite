@@ -798,7 +798,7 @@
  "CPU {0} °C · fan %{1}": "CPU {0} °C · fan {1}%",
  "Eğri": "Curve",
  "FAN EĞRİSİ": "FAN CURVE",
- "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "The curve follows the CPU temperature: the fans speed up as soon as it rises, and slow down only after it falls past the hysteresis band. During a game session the game profile's fan setting applies.",
+ "Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. 85 °C ve üstünde fan hiçbir zaman %60'ın altına inmez. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir.": "The curve follows the CPU temperature: the fans speed up as soon as it rises, and slow down only after it falls past the hysteresis band. At 85 °C and above the fans never drop below 60 %. During a game session the game profile's fan setting applies.",
  "Bu oyun için fan eğrisi kullan": "Use a fan curve for this game",
  "Sabit bir fan hızı yerine sıcaklığa göre değişen bir eğri uygular. Kapalıyken yukarıdaki fan profili geçerlidir.": "Runs a curve that follows the temperature instead of a fixed fan speed. When off, the fan profile above applies.",
  "OYUN FAN EĞRİSİ": "GAME FAN CURVE",

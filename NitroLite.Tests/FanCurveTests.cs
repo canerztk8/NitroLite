@@ -56,6 +56,50 @@ public class FanCurveTests
         Assert.InRange(curve.PercentAt(65), FanCurve.MinPercent, FanCurve.MaxPercent);
     }
 
+    // ---------------------------------------------------------------- safety floor
+
+    /// <summary>A curve the editor no longer offers but a settings file can still hold: flat and quiet all the way up.</summary>
+    private static FanCurve QuietEverywhereCurve() =>
+        new(new[] { new FanCurvePoint(40, 30), new FanCurvePoint(90, 30) });
+
+    [Fact]
+    public void PercentAtRaisesAQuietCurveToTheSafetyFloorWhenTheMachineIsHot()
+    {
+        var curve = QuietEverywhereCurve();
+
+        Assert.Equal(FanCurve.SafetyMinPercent, curve.PercentAt(FanCurve.SafetyTemperatureC));
+        Assert.Equal(FanCurve.SafetyMinPercent, curve.PercentAt(90));
+        Assert.Equal(FanCurve.SafetyMinPercent, curve.PercentAt(100));
+    }
+
+    [Fact]
+    public void PercentAtLeavesTheCurveAloneBelowTheSafetyTemperature()
+    {
+        var curve = QuietEverywhereCurve();
+
+        Assert.Equal(30, curve.PercentAt(FanCurve.SafetyTemperatureC - 1));
+        Assert.Equal(30, curve.PercentAt(60));
+    }
+
+    [Fact]
+    public void TheSafetyFloorDoesNotChangeTheDefaultCurve()
+    {
+        // The default curve is already above the floor wherever the floor applies, so nobody who never touched the
+        // editor sees a different fan speed because of it.
+        var curve = new FanCurve(FanCurve.DefaultPoints());
+
+        Assert.Equal(81, curve.PercentAt(FanCurve.SafetyTemperatureC));
+        Assert.Equal(FanCurve.MaxPercent, curve.PercentAt(90));
+    }
+
+    [Fact]
+    public void TheEvaluatorAppliesTheSafetyFloor()
+    {
+        var evaluator = new FanCurveEvaluator(QuietEverywhereCurve());
+
+        Assert.Equal(FanCurve.SafetyMinPercent, evaluator.Evaluate(95, T0));
+    }
+
     [Fact]
     public void SanitizeSortsClampsAndCollapsesDuplicateTemperatures()
     {

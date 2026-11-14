@@ -32,6 +32,17 @@ public sealed class FanCurve
 
     public const int DefaultMinDwellSeconds = 10;
 
+    /// <summary>
+    /// At or above this temperature the curve is not allowed to ask for a slow fan, whatever shape the user drew.
+    /// The curve is a preference; keeping a hot die cool is not. It also covers the case the editor cannot: if
+    /// NitroLite dies, the last speed it wrote stays in the firmware, so that last write must never be a quiet one
+    /// while the machine is hot.
+    /// </summary>
+    public const int SafetyTemperatureC = 85;
+
+    /// <summary>Lowest speed the curve may ask for at or above <see cref="SafetyTemperatureC"/>.</summary>
+    public const int SafetyMinPercent = 60;
+
     /// <summary>How many anchors the editor offers. Fixed, so the curve can never be left without a shape.</summary>
     public const int AnchorCount = 6;
 
@@ -72,8 +83,20 @@ public sealed class FanCurve
     /// <summary>
     /// Fan speed for <paramref name="temperatureC"/>, linearly interpolated between the two anchors that surround
     /// it and held flat outside them. Never returns a value the service would reject.
+    /// <para>
+    /// At or above <see cref="SafetyTemperatureC"/> the result is raised to <see cref="SafetyMinPercent"/>. This is
+    /// applied here rather than in the editor so a settings file written by an older build, or by hand, cannot get
+    /// around it either.
+    /// </para>
     /// </summary>
     public int PercentAt(double temperatureC)
+    {
+        int percent = InterpolatedPercentAt(temperatureC);
+        return temperatureC >= SafetyTemperatureC ? Math.Max(percent, SafetyMinPercent) : percent;
+    }
+
+    /// <summary>The curve's own shape, before the safety floor is applied.</summary>
+    private int InterpolatedPercentAt(double temperatureC)
     {
         if (double.IsNaN(temperatureC)) return Points[0].Percent;
         if (temperatureC <= Points[0].TemperatureC) return Points[0].Percent;
