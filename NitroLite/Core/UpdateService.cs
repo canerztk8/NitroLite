@@ -133,6 +133,11 @@ public static class UpdateService
                 ? u.GetString() : null;
             if (string.IsNullOrWhiteSpace(url)) continue;
 
+            // The package is downloaded and then executed. Only https is acceptable: a file:// or http:// address
+            // in the payload would either fail outright or fetch something the published digest was never
+            // computed over, and the digest is the only thing standing between the user and a tampered build.
+            if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) continue;
+
             long size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out var parsedSize) ? parsedSize : 0;
 
             // GitHub publishes "sha256:<hex>" for release assets. Without it there is nothing to verify against, and

@@ -690,8 +690,12 @@ public class AcerAgentClient : IDisposable
     /// </summary>
     public static object BuildFanControlParameter(FanMode mode, int cpuPercent = 50, int gpuPercent = 50)
     {
-        int cpu = Math.Clamp(cpuPercent, 0, 100);
-        int gpu = Math.Clamp(gpuPercent, 0, 100);
+        // A custom speed of 0 stops the fan, and the firmware keeps it stopped for as long as a custom speed is
+        // set. Every caller already clamps to AppSettings.MinCustomFanPercent, but this is the single choke point
+        // every fan write passes through, so the floor belongs here as well: one bad call site is all it takes.
+        int floor = mode == FanMode.Custom ? AppSettings.MinCustomFanPercent : 0;
+        int cpu = Math.Clamp(cpuPercent, floor, 100);
+        int gpu = Math.Clamp(gpuPercent, floor, 100);
         int customAuto = mode == FanMode.Custom ? 0 : 1;
         return new
         {
