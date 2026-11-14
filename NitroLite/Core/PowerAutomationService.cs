@@ -214,6 +214,12 @@ public class PowerAutomationService : IDisposable
         set => _transitionLock = value;
     }
 
+    /// <summary>
+    /// Overrides the AC/battery query. Null reads the real machine. Tests pin it so a run does not depend on whether
+    /// the host happens to be plugged in.
+    /// </summary>
+    public Func<bool>? AcStatusProvider { get; set; }
+
     public Func<bool>? IsGameSessionActive { get; set; }
     public Func<GameProfile?>? GetActiveGameProfile { get; set; }
     public Func<OperatingMode>? GetCurrentOperatingMode { get; set; }
@@ -306,7 +312,7 @@ public class PowerAutomationService : IDisposable
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _transitionLock = transitionLock;
 
-        _lastAcStatus = QueryHardwareAcStatus();
+        _lastAcStatus = QueryAcStatus();
 
         _debounceTimer = new System.Timers.Timer(500.0)
         {
@@ -354,7 +360,7 @@ public class PowerAutomationService : IDisposable
 
     public async Task EvaluatePowerStateAsync(bool? forceAcStatus = null)
     {
-        bool isAc = forceAcStatus ?? QueryHardwareAcStatus();
+        bool isAc = forceAcStatus ?? QueryAcStatus();
         await ProcessPowerTransitionAsync(isAc);
     }
 
@@ -432,6 +438,12 @@ public class PowerAutomationService : IDisposable
                             PersistEcoState();
                         }
                     }
+                    else
+                    {
+                        // The option was switched off while Eco already held the panel at 60 Hz. Without this the
+                        // display stays at 60 Hz on battery with nothing left to raise it until the adapter returns.
+                        RestorePanelRefreshRateAfterEco();
+                    }
 
                     _pendingDcApply = !modeOk || !boostOk || !fanOk || !refreshOk;
                     var failed = new System.Collections.Generic.List<string>();
@@ -460,7 +472,9 @@ public class PowerAutomationService : IDisposable
                 }
                 else
                 {
-                    // Balanced mode: retain active settings (NitroSense behavior)
+                    // Balanced mode: retain active settings (NitroSense behavior). A panel rate Eco lowered is Eco's
+                    // doing, not the user's, so it goes back even though everything else stays untouched.
+                    RestorePanelRefreshRateAfterEco();
                     lock (_stateSyncLock) { _isDcEcoActive = false; }
                     PowerModeSwitched?.Invoke(new PowerTransitionEventArgs
                     {
@@ -747,6 +761,8 @@ public class PowerAutomationService : IDisposable
             _transitionLock?.Release();
         }
     }
+
+    private bool QueryAcStatus() => AcStatusProvider?.Invoke() ?? QueryHardwareAcStatus();
 
     private static bool QueryHardwareAcStatus()
     {

@@ -197,6 +197,9 @@ public class AdversarialTelemetryAndPowerStressTests
 
         var service = new PowerAutomationService(agentClient, cpuPower, mockDisplay, settings, attachSystemEvents: false)
         {
+            // Pinned: the assertion below is about the debounce settling once, not about whether the host running
+            // the suite happens to be plugged in.
+            AcStatusProvider = () => true,
             GetCurrentOperatingMode = () => OperatingMode.Turbo,
             GetCurrentFanMode = () => FanMode.Max
         };

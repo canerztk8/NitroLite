@@ -1800,13 +1800,16 @@
                                             <Separator Background="{StaticResource BorderDark}" Margin="0,8,0,8" />
                                             <TextBlock Text="Pilde Çalışma Güç Profili (DC Modu):" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="Bold" Margin="0,0,0,4" />
                                             <ComboBox x:Name="CmbDcPowerMode" SelectionChanged="CmbDcPowerMode_SelectionChanged" Background="{StaticResource RailBg}" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource BorderDark}" FontSize="11" Margin="0,0,0,6">
-                                                <ComboBoxItem Content="Eco Modu (60Hz + Sessiz Fan + Güç Tasarrufu)" Tag="Eco" IsSelected="True" />
+                                                <!-- The 60 Hz part is not in this label: it is the checkbox below, and it can be
+                                                     switched off. A label that promised 60 Hz while the checkbox was off was
+                                                     the reason Eco looked broken on battery. -->
+                                                <ComboBoxItem Content="Eco Modu (Sessiz Fan + Güç Tasarrufu)" Tag="Eco" IsSelected="True" />
                                                 <ComboBoxItem Content="Dengeli Mod (Mevcut Ayarları Koru)" Tag="Balanced" />
                                             </ComboBox>
                                             <CheckBox x:Name="ChkAutoRefreshRate" Checked="ChkAutoRefreshRate_Changed" Unchecked="ChkAutoRefreshRate_Changed" IsChecked="True" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="11" Margin="0,2">
                                                 <!-- A CheckBox renders a string Content on one unbroken line; the German
                                                      sentence is twice the Turkish one and was clipped mid-word. -->
-                                                <TextBlock Text="Pilde laptop ekranını 60 Hz'e al (adaptörde önceki hıza döner; harici monitörlere dokunmaz)" TextWrapping="Wrap" />
+                                                <TextBlock Text="Eco modunda laptop ekranını 60 Hz'e al (adaptörde önceki hıza döner; harici monitörlere dokunmaz)" TextWrapping="Wrap" />
                                             </CheckBox>
                                         </StackPanel>
                                     </Border>

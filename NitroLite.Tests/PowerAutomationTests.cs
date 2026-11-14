@@ -195,5 +195,62 @@ public class PowerAutomationTests
         service.Dispose();
         service.TriggerDebounce(); // Should be a safe no-op after disposal
     }
+
+    [Fact]
+    public async Task TurningTheSixtyHertzOptionOffOnBattery_PutsThePanelBack()
+    {
+        // The bug: Eco lowered the panel to 60 Hz, the user then cleared the option, and the display stayed at
+        // 60 Hz for the rest of the battery session because only the AC branch ever raised it again.
+        var settings = new AppSettings
+        {
+            DcPowerMode = DcPowerProfilePreference.Eco,
+            AutoRefreshRateSwitching = true
+        };
+
+        var mockDisplay = new MockDisplayRefreshRateService { CurrentHz = 165 };
+        var service = new PowerAutomationService(
+            new MockAcerAgentClient(), new MockCpuPowerService(), mockDisplay, settings, attachSystemEvents: false)
+        {
+            GetCurrentOperatingMode = () => OperatingMode.Default,
+            GetCurrentFanMode = () => FanMode.Auto
+        };
+
+        await service.ProcessPowerTransitionAsync(isAc: false);
+        Assert.Equal(60, mockDisplay.CurrentHz);
+
+        settings.AutoRefreshRateSwitching = false;
+        await service.ProcessPowerTransitionAsync(isAc: false);
+
+        Assert.Equal(165, mockDisplay.CurrentHz);
+        Assert.Equal(new[] { 60, 165 }, mockDisplay.SetRefreshRateCalls);
+    }
+
+    [Fact]
+    public async Task SwitchingFromEcoToBalancedOnBattery_PutsThePanelBack()
+    {
+        // Balanced promises to keep the current settings, but a rate Eco lowered is Eco's doing, not the user's.
+        var settings = new AppSettings
+        {
+            DcPowerMode = DcPowerProfilePreference.Eco,
+            AutoRefreshRateSwitching = true
+        };
+
+        var mockDisplay = new MockDisplayRefreshRateService { CurrentHz = 165 };
+        var service = new PowerAutomationService(
+            new MockAcerAgentClient(), new MockCpuPowerService(), mockDisplay, settings, attachSystemEvents: false)
+        {
+            GetCurrentOperatingMode = () => OperatingMode.Default,
+            GetCurrentFanMode = () => FanMode.Auto
+        };
+
+        await service.ProcessPowerTransitionAsync(isAc: false);
+        Assert.Equal(60, mockDisplay.CurrentHz);
+
+        settings.DcPowerMode = DcPowerProfilePreference.Balanced;
+        await service.ProcessPowerTransitionAsync(isAc: false);
+
+        Assert.Equal(165, mockDisplay.CurrentHz);
+        Assert.False(service.IsDcEcoActive);
+    }
 }
 

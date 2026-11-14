@@ -1246,6 +1246,9 @@ function global:Disable-ScheduledTask {
                 settings: settings,
                 mouseProfileSwitcher: p => true,
                 isTestHarness: true);
+            // Pinned to AC: this test is about the Eco baseline, not the battery clamp, and reading the host's
+            // real power state made it fail whenever the suite ran on a laptop that was unplugged.
+            window.PowerStateProvider = () => (OnAc: true, BatteryPercent: 100);
 
             // Simulate laptop is on battery (DC)
             await window.PowerAutomation!.ProcessPowerTransitionAsync(isAc: false);
@@ -2010,6 +2013,14 @@ function global:Disable-ScheduledTask {
                 settings: settings,
                 mouseProfileSwitcher: p => true,
                 isTestHarness: true);
+            // Pinned to AC: this test is about the Eco baseline, not the battery clamp, and reading the host's
+            // real power state made it fail whenever the suite ran on a laptop that was unplugged.
+            window.PowerStateProvider = () => (OnAc: true, BatteryPercent: 100);
+            // The automation service read the host's adapter state in its constructor, before the pin above
+            // could apply, so it has to be told once more. Without this the restore targets come back as Eco's
+            // Quiet instead of the desktop Default.
+            window.PowerAutomation!.AcStatusProvider = () => true;
+            await window.PowerAutomation.EvaluatePowerStateAsync();
 
             window.SetCurrentModeForTesting(OperatingMode.Default);
             mockCpu.CurrentMode = CpuBoostMode.Aggressive;
@@ -2452,6 +2463,9 @@ function global:Disable-ScheduledTask {
                 settings: settings,
                 mouseProfileSwitcher: p => true,
                 isTestHarness: true);
+            // Pinned to AC: this test is about the Eco baseline, not the battery clamp, and reading the host's
+            // real power state made it fail whenever the suite ran on a laptop that was unplugged.
+            window.PowerStateProvider = () => (OnAc: true, BatteryPercent: 100);
 
             window.SetCurrentModeForTesting(OperatingMode.Default);
             mockCpu.CurrentMode = CpuBoostMode.Aggressive;

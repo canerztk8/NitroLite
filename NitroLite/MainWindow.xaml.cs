@@ -900,6 +900,19 @@ public partial class MainWindow : Window
         {
             ChkAutoRefreshRate.IsChecked = _appSettings.AutoRefreshRateSwitching;
         }
+        UpdateDcRefreshOptionState();
+    }
+
+    /// <summary>
+    /// The 60 Hz option only exists inside Eco: the battery branch of <see cref="PowerAutomationService"/> applies it
+    /// there and nowhere else. Leaving it enabled under "Dengeli Mod" made it look like a setting that did nothing.
+    /// </summary>
+    private void UpdateDcRefreshOptionState()
+    {
+        if (ChkAutoRefreshRate == null) return;
+        bool eco = _appSettings.DcPowerMode == DcPowerProfilePreference.Eco;
+        ChkAutoRefreshRate.IsEnabled = eco;
+        ChkAutoRefreshRate.Opacity = eco ? 1.0 : 0.45;
     }
 
     private void SaveWindowPosition()
@@ -7113,6 +7126,7 @@ public partial class MainWindow : Window
         if (Enum.TryParse<DcPowerProfilePreference>(tag, out var pref))
         {
             _appSettings.DcPowerMode = pref;
+            UpdateDcRefreshOptionState();
             SaveSettings();
             ShowToast(pref == DcPowerProfilePreference.Eco ? Loc.T("Pilde güç tercihi: Eco (sessiz mod, pilde boost kapalı)") : Loc.T("Pilde güç tercihi: Dengeli (mevcut ayarlar korunur)"));
             if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
