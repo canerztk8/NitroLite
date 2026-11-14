@@ -240,6 +240,24 @@ public static class UpdateService
     {
         var staging = Path.Combine(Path.GetTempPath(), $"NitroLite-stage-{Guid.NewGuid():N}");
         Directory.CreateDirectory(staging);
+        try
+        {
+            ExtractInto(staging, zipPath);
+            return staging;
+        }
+        catch
+        {
+            // A refused package must not leave its folder behind. Every failed update used to add an empty
+            // NitroLite-stage-* to %TEMP% that nothing ever swept, so the folder is removed before the reason
+            // travels up to the caller.
+            CleanUp(staging);
+            throw;
+        }
+    }
+
+    /// <summary>Unpacks a package into an already created staging folder, or throws with the reason.</summary>
+    private static void ExtractInto(string staging, string zipPath)
+    {
         var stagingRoot = Path.GetFullPath(staging) + Path.DirectorySeparatorChar;
 
         using var archive = ZipFile.OpenRead(zipPath);
@@ -285,8 +303,6 @@ public static class UpdateService
             if (!File.Exists(Path.Combine(staging, required)))
                 throw new InvalidDataException($"The package does not contain {required}.");
         }
-
-        return staging;
     }
 
     /// <summary>

@@ -66,13 +66,13 @@ public class FilesystemUpdaterScenarios : IDisposable
             for (int i = 0; i < 520; i++) stream.Write(chunk, 0, chunk.Length);
         }
 
+        var before = Directory.GetDirectories(Path.GetTempPath(), "NitroLite-stage-*").Length;
         var error = Assert.Throws<InvalidDataException>(() => UpdateService.ExtractToStaging(zip));
         Assert.Contains("too large", error.Message, StringComparison.OrdinalIgnoreCase);
 
-        // Known defect, reported and awaiting a decision: the staging folder is created before the package is
-        // validated, so a refused package leaves an empty NitroLite-stage-* folder in %TEMP% forever. Nothing is
-        // written into it, so this is clutter rather than a hazard.
-        Assert.True(Directory.GetDirectories(Path.GetTempPath(), "NitroLite-stage-*").Length > 0);
+        // A refused package must not leave its folder behind: every failed update used to add an empty
+        // NitroLite-stage-* to %TEMP% that nothing ever swept.
+        Assert.Equal(before, Directory.GetDirectories(Path.GetTempPath(), "NitroLite-stage-*").Length);
     }
 
     [Fact]
@@ -165,12 +165,10 @@ public class FilesystemUpdaterScenarios : IDisposable
     }
 
     [Fact]
-    public void RestoreSummary_IsStillTurkishInEveryLanguage_KNOWN_DEFECT()
+    public void RestoreSummary_FollowsTheUiLanguage()
     {
-        // Reported, awaiting a decision. BackupService puts the Turkish source strings straight into Written and
-        // Skipped instead of passing them through Loc.T, so an English or German window shows a Turkish restore
-        // summary. This test pins the current behaviour so the defect cannot be forgotten; flip it to the
-        // translated strings once the fix lands.
+        // The user reads the restore summary in the language they picked. The Turkish source strings used to go
+        // straight into Written and Skipped, so an English window showed a Turkish summary.
         var backup = Path_("school.json");
         var settingsPath = Path_("settings.json");
         var settings = new AppSettings { Language = "en", SchoolModeEnabled = true };
@@ -182,11 +180,15 @@ public class FilesystemUpdaterScenarios : IDisposable
             Loc.SetLanguage("en");
             var english = BackupService.Restore(backup, settingsPath, null, null);
             Assert.True(english.Success);
-            Assert.Contains("Okul modu kapalı olarak geri yüklendi", english.Skipped);
-            Assert.DoesNotContain("School mode restored as off", english.Skipped);
+            Assert.Contains("School mode restored as off", english.Skipped);
+            Assert.Contains("Settings", english.Written);
+            Assert.DoesNotContain("Okul modu kapalı olarak geri yüklendi", english.Skipped);
 
-            // The catalogue does carry the translation, so the fix is a Loc.T call and nothing else.
-            Assert.Equal("School mode restored as off", Loc.T("Okul modu kapalı olarak geri yüklendi"));
+            Loc.SetLanguage("de");
+            var german = BackupService.Restore(backup, settingsPath, null, null);
+            Assert.True(german.Success);
+            Assert.Contains("Schulmodus ausgeschaltet wiederhergestellt", german.Skipped);
+            Assert.Contains("Einstellungen", german.Written);
         }
         finally
         {

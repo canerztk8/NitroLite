@@ -48,8 +48,12 @@ internal sealed class ScenarioAgentClient : AcerAgentClient
         if (WriteGate != null) await WriteGate.WaitAsync().ConfigureAwait(false);
         if (!WritesSucceed) return false;
         CurrentFanMode = mode;
-        if (cpuPercent >= 0) CustomCpuPercent = cpuPercent;
-        if (gpuPercent >= 0) CustomGpuPercent = gpuPercent;
+        // The real client falls back to the properties the caller set before asking for Custom, so the mock has
+        // to do the same or every recorded write reads as 0 %.
+        if (cpuPercent < 0) cpuPercent = CustomFanCpuPercent;
+        if (gpuPercent < 0) gpuPercent = CustomFanGpuPercent;
+        CustomCpuPercent = cpuPercent;
+        CustomGpuPercent = gpuPercent;
         FanWrites.Add((mode, CustomCpuPercent, CustomGpuPercent));
         return true;
     }

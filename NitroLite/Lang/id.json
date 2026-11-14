@@ -799,6 +799,7 @@
  "Fan eğrisi kapandı.": "Kurva kipas mati.",
  "Fan eğrisi kapandı: fan modu başka bir yerden değiştirildi.": "Kurva kipas mati: mode kipas diubah dari tempat lain.",
  "Sıcaklık bekleniyor…": "Menunggu suhu…",
+ "Sensör yanıt vermiyor · fan %{0}": "Tidak ada pembacaan sensor · kipas %{0}",
  "CPU {0} °C · fan %{1}": "CPU {0} °C · kipas {1}%",
  "Eğri": "Kurva",
  "FAN EĞRİSİ": "KURVA KIPAS",

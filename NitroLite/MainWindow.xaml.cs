@@ -1795,6 +1795,12 @@ public partial class MainWindow : Window
     private DispatcherTimer? _fanCurveApplyTimer;
     private int _fanCurveLastTemperatureC;
     private int _fanCurveLastPercent;
+
+    /// <summary>
+    /// True while neither temperature sensor is answering. The curve then holds full speed instead of the
+    /// speed the last good reading asked for, and the status line says why.
+    /// </summary>
+    private bool _fanCurveSensorDead;
     private bool _isUpdatingFanCurveUi;
 
     /// <summary>The six sliders of the curve editor, in anchor order. Null before the window is built.</summary>
@@ -1904,6 +1910,11 @@ public partial class MainWindow : Window
             TxtFanCurveStatus.Text = Loc.T("Kapalı");
             return;
         }
+        if (_fanCurveSensorDead)
+        {
+            TxtFanCurveStatus.Text = Loc.T($"Sensör yanıt vermiyor · fan %{_fanCurveLastPercent}");
+            return;
+        }
         TxtFanCurveStatus.Text = _fanCurveLastTemperatureC > 0
             ? Loc.T($"CPU {_fanCurveLastTemperatureC} °C · fan %{_fanCurveLastPercent}")
             : Loc.T("Sıcaklık bekleniyor…");
@@ -1961,7 +1972,7 @@ public partial class MainWindow : Window
             timer.Stop();
             SaveSettings();
             if (_fanCurveOwner != FanCurveOwner.Desktop) return;
-            await ApplyFanCurveAsync(_fanCurveLastTemperatureC);
+            await ApplyFanCurveAsync(_fanCurveSensorDead ? 0 : _fanCurveLastTemperatureC);
         };
         return timer;
     }
@@ -1969,19 +1980,30 @@ public partial class MainWindow : Window
     /// <summary>
     /// One step of the curve: takes the temperature the poll already fetched and writes a new custom fan speed
     /// only when the evaluator says it is worth it. A game profile's curve runs only while that game is up, and
-    /// the desktop curve only outside a session, so the two can never fight over the fans. Never writes when the
-    /// sensor has no reading.
+    /// the desktop curve only outside a session, so the two can never fight over the fans. One live sensor is
+    /// enough; when neither answers the curve holds full speed rather than going quiet.
     /// </summary>
-    private async Task ApplyFanCurveAsync(int cpuTemperatureC, int gpuTemperatureC = 0)
+    internal async Task ApplyFanCurveAsync(int cpuTemperatureC, int gpuTemperatureC = 0)
     {
         if (!_fanCurveEnabled || _isInitializingUi) return;
         if (_isGameSessionActive != (_fanCurveOwner == FanCurveOwner.Game)) return;
-        if (_fanCurveEvaluator == null || cpuTemperatureC <= 0) return;
+        if (_fanCurveEvaluator == null) return;
 
         // The curve follows the hotter of the two dies. A CPU sensor that sticks at 45 °C while the GPU climbs to
         // 90 °C used to leave the fans at the idle speed: the curve only ever looked at the CPU. Taking the maximum
         // costs nothing when both readings are good and is the difference between cooling and not when one is not.
-        int temperatureC = gpuTemperatureC > cpuTemperatureC ? gpuTemperatureC : cpuTemperatureC;
+        // The guard used to sit on the CPU reading alone, so a dead CPU sensor returned before the maximum was
+        // ever taken and a 92 °C GPU could not raise the fans.
+        int temperatureC = Math.Max(cpuTemperatureC, gpuTemperatureC);
+
+        // Neither sensor answered. The curve asks for full speed instead of leaving the fans wherever the last
+        // write put them: a curve the user turned on must not go quiet because a sensor died.
+        _fanCurveSensorDead = temperatureC <= 0;
+        if (_fanCurveSensorDead)
+        {
+            await ApplyFanCurveFullSpeedAsync();
+            return;
+        }
 
         _fanCurveLastTemperatureC = temperatureC;
 
@@ -2015,6 +2037,29 @@ public partial class MainWindow : Window
         }
 
         _fanCurveLastPercent = target.Value;
+        UpdateFanCurveStatusText();
+    }
+
+    /// <summary>
+    /// Neither temperature sensor is answering. The curve holds full speed rather than the speed the last good
+    /// reading asked for, because a fan curve the user turned on must not go quiet when the sensor dies.
+    /// </summary>
+    /// <remarks>
+    /// The write happens once per arming: the evaluator is reset so the next good reading takes over cleanly, and
+    /// a machine whose sensor never reports does not hammer the EC with the same value on every poll.
+    /// </remarks>
+    private async Task ApplyFanCurveFullSpeedAsync()
+    {
+        if (_currentFanMode == FanMode.Custom && _fanCurveLastPercent == FanCurve.MaxPercent) return;
+
+        _agentClient.CustomFanCpuPercent = FanCurve.MaxPercent;
+        _agentClient.CustomFanGpuPercent = FanCurve.MaxPercent;
+        if (!await _agentClient.SetFanModeAsync(FanMode.Custom)) return;
+
+        _currentFanMode = FanMode.Custom;
+        _fanCurveLastPercent = FanCurve.MaxPercent;
+        _fanCurveEvaluator?.Reset();
+        UpdateFanButtonsUi(_currentFanMode);
         UpdateFanCurveStatusText();
     }
 
@@ -2426,7 +2471,8 @@ public partial class MainWindow : Window
             // even while the curve is off, so turning it on acts on the current temperature instead of waiting.
             // The GPU reading goes along: the curve follows the hotter die, so a stuck CPU sensor cannot leave the
             // fans at idle speed while the GPU cooks.
-            if (data.CpuTemperature > 0) _fanCurveLastTemperatureC = data.CpuTemperature;
+            int hottestReading = Math.Max(data.CpuTemperature, data.GpuTemperature);
+            if (hottestReading > 0) _fanCurveLastTemperatureC = hottestReading;
             if (_fanCurveEnabled)
             {
                 await ApplyFanCurveAsync(data.CpuTemperature, data.GpuTemperature);

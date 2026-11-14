@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NitroLite.Core;
 using Xunit;
 
@@ -345,6 +346,101 @@ public class ThermalChaosScenarios
         Assert.Equal(80, flat.PercentAt(90));
         Assert.Equal(100, flat.PercentAt(95));
     }
+
+    #endregion
+
+    #region S1-05 The curve itself, driven through the window
+
+    private static MainWindow BuildCurveWindow(ScenarioAgentClient agent) =>
+        new(agent, new ScenarioCpuPower(), new GameDetectionService(), new AtkMouseService(),
+            settings: new AppSettings
+            {
+                FanCurveEnabled = false,
+                CustomFanCpuPercent = 50,
+                FanCurvePoints = FanCurve.DefaultPoints().ToList()
+            },
+            isTestHarness: true);
+
+    /// <summary>
+    /// The guard used to sit on the CPU reading alone, so a dead CPU sensor returned before the hotter of the two
+    /// dies was ever taken and a 92 °C GPU could not raise the fans.
+    /// </summary>
+    [Fact]
+    public Task ADeadCpuSensorDoesNotStopTheGpuFromRaisingTheFans() => Sta.RunAsync(async () =>
+    {
+        var agent = new ScenarioAgentClient();
+        var window = BuildCurveWindow(agent);
+        Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+        agent.FanWrites.Clear();
+
+        await window.ApplyFanCurveAsync(0, 92);
+
+        Assert.NotEmpty(agent.FanWrites);
+        Assert.True(agent.FanWrites[^1].Cpu >= 80,
+            $"the GPU was at 92 °C but the curve asked for {agent.FanWrites[^1].Cpu} %");
+    });
+
+    /// <summary>
+    /// The mirror case: a dead GPU sensor must not stop a hot CPU either.
+    /// </summary>
+    [Fact]
+    public Task ADeadGpuSensorDoesNotStopTheCpuFromRaisingTheFans() => Sta.RunAsync(async () =>
+    {
+        var agent = new ScenarioAgentClient();
+        var window = BuildCurveWindow(agent);
+        Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+        agent.FanWrites.Clear();
+
+        await window.ApplyFanCurveAsync(92, 0);
+
+        Assert.NotEmpty(agent.FanWrites);
+        Assert.True(agent.FanWrites[^1].Cpu >= 80,
+            $"the CPU was at 92 °C but the curve asked for {agent.FanWrites[^1].Cpu} %");
+    });
+
+    /// <summary>
+    /// Neither sensor answering is not a cool machine. The curve holds full speed instead of leaving the fans
+    /// wherever the last write put them, and it writes once rather than on every poll.
+    /// </summary>
+    [Fact]
+    public Task BothSensorsDead_AsksForFullSpeedOnce() => Sta.RunAsync(async () =>
+    {
+        var agent = new ScenarioAgentClient();
+        var window = BuildCurveWindow(agent);
+        Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+        agent.FanWrites.Clear();
+
+        await window.ApplyFanCurveAsync(0, 0);
+        Assert.Single(agent.FanWrites);
+        Assert.Equal(FanCurve.MaxPercent, agent.FanWrites[0].Cpu);
+        Assert.Equal(FanCurve.MaxPercent, agent.FanWrites[0].Gpu);
+
+        // A second dead poll must not repeat the write.
+        await window.ApplyFanCurveAsync(0, 0);
+        Assert.Single(agent.FanWrites);
+    });
+
+    /// <summary>
+    /// A sensor that comes back has to take the fans back from the full-speed hold, otherwise a single bad poll
+    /// would leave the machine loud until the curve is turned off.
+    /// </summary>
+    [Fact]
+    public Task ASensorThatComesBack_TakesTheFansBackFromFullSpeed() => Sta.RunAsync(async () =>
+    {
+        var agent = new ScenarioAgentClient();
+        var window = BuildCurveWindow(agent);
+        Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
+
+        await window.ApplyFanCurveAsync(0, 0);
+        Assert.Equal(FanCurve.MaxPercent, agent.FanWrites[^1].Cpu);
+
+        agent.FanWrites.Clear();
+        await window.ApplyFanCurveAsync(45, 0);
+
+        Assert.NotEmpty(agent.FanWrites);
+        Assert.True(agent.FanWrites[^1].Cpu < FanCurve.MaxPercent,
+            $"the sensor read 45 °C but the fans stayed at {agent.FanWrites[^1].Cpu} %");
+    });
 
     #endregion
 }

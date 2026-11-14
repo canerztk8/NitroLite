@@ -102,7 +102,7 @@ public static class BackupService
             AppVersion = appVersion ?? string.Empty,
             Settings = JsonSerializer.SerializeToElement(settings)
         };
-        result.Written.Add("Ayarlar");
+        result.Written.Add(Loc.T("Ayarlar"));
 
         document.GameProfiles = ReadJsonFile(gameProfilesPath, JsonValueKind.Array, "Oyun profilleri", result);
         document.RgbPresets = ReadJsonFile(rgbPresetsPath, JsonValueKind.Array, "RGB profilleri", result);
@@ -201,7 +201,7 @@ public static class BackupService
         try
         {
             SettingsManager.SaveSettingsAtomic(settingsPath, restored);
-            result.Written.Add("Ayarlar");
+            result.Written.Add(Loc.T("Ayarlar"));
         }
         catch (Exception ex)
         {
@@ -209,7 +209,7 @@ public static class BackupService
             return BackupResult.Fail(Loc.T($"Ayarlar yazılamadı: {ex.Message}"));
         }
 
-        if (schoolModeDropped) result.Skipped.Add("Okul modu kapalı olarak geri yüklendi");
+        if (schoolModeDropped) result.Skipped.Add(Loc.T("Okul modu kapalı olarak geri yüklendi"));
 
         WriteJsonFile(document.GameProfiles, gameProfilesPath, JsonValueKind.Array, "Oyun profilleri", result);
         WriteJsonFile(document.RgbPresets, rgbPresetsPath, JsonValueKind.Array, "RGB profilleri", result);
@@ -222,7 +222,7 @@ public static class BackupService
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            result.Skipped.Add(label);
+            result.Skipped.Add(Loc.T(label));
             return null;
         }
 
@@ -231,16 +231,16 @@ public static class BackupService
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
             if (doc.RootElement.ValueKind != expected)
             {
-                result.Skipped.Add(label);
+                result.Skipped.Add(Loc.T(label));
                 return null;
             }
-            result.Written.Add(label);
+            result.Written.Add(Loc.T(label));
             return doc.RootElement.Clone();
         }
         catch (Exception ex)
         {
             AppLog.Warn($"Yedeğe {label} eklenemedi", $"{path}: {ex.Message}");
-            result.Skipped.Add(label);
+            result.Skipped.Add(Loc.T(label));
             return null;
         }
     }
@@ -250,7 +250,7 @@ public static class BackupService
     {
         if (element is not JsonElement value || value.ValueKind != expected || string.IsNullOrWhiteSpace(path))
         {
-            result.Skipped.Add(label);
+            result.Skipped.Add(Loc.T(label));
             return;
         }
 
@@ -263,12 +263,12 @@ public static class BackupService
             var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
             File.WriteAllText(tmp, json);
             File.Move(tmp, path, overwrite: true);
-            result.Written.Add(label);
+            result.Written.Add(Loc.T(label));
         }
         catch (Exception ex)
         {
             AppLog.Warn($"Yedekten {label} yazılamadı", $"{path}: {ex.Message}");
-            result.Skipped.Add(label);
+            result.Skipped.Add(Loc.T(label));
         }
     }
 }
