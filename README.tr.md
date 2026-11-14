@@ -298,7 +298,7 @@ NitroLite
 ## Kurulum (indir ve çalıştır)
 
 1. **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** sayfasından
-   `NitroLite-v1.2.0-win-x64.zip` dosyasını indirin.
+   `NitroLite-v1.2.1-win-x64.zip` dosyasını indirin.
 2. Zip'i **kalıcı bir klasöre** çıkarın, örneğin `C:\Users\<kullanıcı>\Programlar\NitroLite`. "İndirilenler"
    klasöründe bırakmayın: "Windows açılışında otomatik çalıştır" seçeneği exe'nin bulunduğu yeri hatırlar.
 3. `NitroLite\NitroLite.exe` dosyasını açın. Kurulum sihirbazı yok, **.NET kurmanız gerekmez**; çalışma zamanı
@@ -343,7 +343,7 @@ Bunun yerine, yazara güvenmeden şunları kontrol edebilirsiniz:
 | Kontrol | Nasıl |
 |---|---|
 | İndirme bu depodan geldi | Releases sayfasındaki bağlantı `github.com/canerztk8/NitroLite` adresini gösterir; taşıma GitHub'a HTTPS'tir. |
-| Dosya yayınlanan dosya | `Get-FileHash NitroLite-v1.2.0-win-x64.zip -Algorithm SHA256` çıktısını GitHub'ın sürümde listelediği özetle karşılaştırın. |
+| Dosya yayınlanan dosya | `Get-FileHash NitroLite-v1.2.1-win-x64.zip -Algorithm SHA256` çıktısını GitHub'ın sürümde listelediği özetle karşılaştırın. |
 | Kaynak ikiliyle aynı | Etiketten kendiniz derleyin; `scripts\publish-release.ps1` sürümü üreten betiğin aynısıdır. |
 | Güncelleyici kısa yol almıyor | İndirilen paketin SHA-256'sını GitHub'ın yayınladığı özetle karşılaştırır, tutmazsa exe'yi değiştirmez. |
 
