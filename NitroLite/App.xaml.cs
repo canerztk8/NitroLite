@@ -321,8 +321,14 @@ public partial class App : System.Windows.Application
     {
         lock (RecentUiExceptions)
         {
-            while (RecentUiExceptions.Count > 0 && utcNow - RecentUiExceptions.Peek() > UiExceptionWindow)
+            // A clock that stepped backwards makes the age negative. Read as "still inside the window" that kept
+            // every old entry, so the queue filled up and the next single exception was allowed to crash the app.
+            while (RecentUiExceptions.Count > 0)
+            {
+                var age = utcNow - RecentUiExceptions.Peek();
+                if (age >= TimeSpan.Zero && age <= UiExceptionWindow) break;
                 RecentUiExceptions.Dequeue();
+            }
             RecentUiExceptions.Enqueue(utcNow);
             return RecentUiExceptions.Count <= MaxUiExceptionsPerWindow;
         }

@@ -25,6 +25,21 @@ public class DistributionReadinessTests
         App.ResetUiExceptionHistoryForTesting();
     }
 
+    [Fact]
+    public void AClockThatStepsBackwards_DoesNotTurnOneExceptionIntoACrash()
+    {
+        App.ResetUiExceptionHistoryForTesting();
+        var t0 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < App.MaxUiExceptionsPerWindow; i++)
+            Assert.True(App.ShouldSurviveUiException(t0.AddSeconds(i)));
+
+        // An NTP correction moved the clock back an hour. The old entries must not be read as "just now", or the
+        // next single exception would be treated as a burst and take the app down.
+        Assert.True(App.ShouldSurviveUiException(t0.AddHours(-1)));
+        App.ResetUiExceptionHistoryForTesting();
+    }
+
     [Theory]
     [InlineData(@"C:\Users\x\AppData\Local\Temp\Temp1_NitroLite.zip\NitroLite\NitroLite.exe", true)]
     [InlineData(@"C:\Users\x\AppData\Local\Temp\NitroLite.exe", true)]
