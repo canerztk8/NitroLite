@@ -229,6 +229,16 @@ public class FanCurveTests
     }
 
     [Fact]
+    public void AClockThatStepsBackwardsDoesNotFreezeTheCurve()
+    {
+        var evaluator = new FanCurveEvaluator(TwoPointCurve());
+        evaluator.Evaluate(66, T0);
+        // An NTP correction moved the wall clock back an hour. Read as "no time has passed" this used to hold the
+        // fans at the old speed until the clock caught up again.
+        Assert.Equal(64, evaluator.Evaluate(62, T0.AddHours(-1)));
+    }
+
+    [Fact]
     public void AZeroDwellTimeLetsTheFansSlowDownOnTheNextPoll()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve(minDwellSeconds: 0));

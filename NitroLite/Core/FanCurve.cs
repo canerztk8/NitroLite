@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -241,7 +241,12 @@ public sealed class FanCurveEvaluator
         // Slowing down: only once the temperature has clearly left the band that produced the current speed,
         // and never more often than the dwell time.
         if (temperatureC > _lastAppliedTemperatureC - _curve.HysteresisC) return null;
-        if ((nowUtc - _lastWriteUtc).TotalSeconds < _curve.MinDwellSeconds) return null;
+
+        // A wall clock that steps backwards (NTP correction, a manual change, a resume from standby) makes the
+        // elapsed time negative. Read as "not enough time has passed" that froze the curve at its last speed until
+        // the clock caught up again, so a negative value is treated as the clock having moved, not as no time.
+        double elapsedSeconds = (nowUtc - _lastWriteUtc).TotalSeconds;
+        if (elapsedSeconds >= 0 && elapsedSeconds < _curve.MinDwellSeconds) return null;
 
         Apply(target, temperatureC, nowUtc);
         return target;

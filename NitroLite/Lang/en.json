@@ -837,6 +837,8 @@
  "Bu modelde klavye aydınlatması bildirilmedi.": "This model reported no keyboard lighting.",
  "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamic lighting effects and hardware profiles.",
  "Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.": "Acer Care Center (AcerCCAgent) was not found; the charge limit cannot be set on this computer.",
+ "Acer Care Center'in sertifikası değişmiş; bağlantı güvenlik için reddedildi. Acer güncellemesinden sonra bu normaldir.": "Acer Care Center's certificate has changed; the connection was refused for security. This is normal after an Acer update.",
+ "Yeni sertifikaya güven": "Trust the new certificate",
  "ACER SERVİSİNE ULAŞILAMIYOR": "ACER SERVICE UNREACHABLE",
  "Modlar, fan, klavye aydınlatması ve şarj sınırı Acer servisi üzerinden çalışır. NitroSense ile gelen AcerAgentService kurulu ve çalışıyor olmalı. Windows ve NVIDIA'dan okunabilen veriler gösterilmeye devam eder.": "Modes, fans, keyboard lighting and the charge limit all go through the Acer service. The AcerAgentService that ships with NitroSense has to be installed and running. Data that Windows and NVIDIA can provide is still shown.",
  "Okul Modu": "School Mode",

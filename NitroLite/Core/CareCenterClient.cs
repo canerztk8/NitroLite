@@ -62,6 +62,28 @@ public class CareCenterClient
     public string? LastError { get; private set; }
 
     /// <summary>
+    /// True when the agent presented a certificate other than the one trusted on first use. The connection is
+    /// refused, which is right, but the certificate can rotate with an Acer update, so the page offers a way to
+    /// trust the new one instead of leaving the battery limit broken with no explanation.
+    /// </summary>
+    public bool CertificateMismatch { get; private set; }
+
+    /// <summary>Drops the stored thumbprint so the next connection trusts whatever the agent presents.</summary>
+    public void ForgetPinnedCertificate()
+    {
+        CertificateMismatch = false;
+        try
+        {
+            var path = AppPaths.GetDataFile(CertificatePinFile);
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Care Center sertifika sabitlemesi silinemedi", ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Turns a reported charge mode into what the battery page shows. A null mode means the agent did not answer,
     /// so the limit is not controllable here and the checkbox must not claim it is.
     /// </summary>
@@ -143,13 +165,16 @@ public class CareCenterClient
             {
                 var pinned = File.ReadAllText(path).Trim();
                 if (string.Equals(pinned, thumbprint, StringComparison.OrdinalIgnoreCase)) return true;
+                CertificateMismatch = true;
                 LastError = Loc.T("Care Center sertifikası daha önce güvenilen sertifikadan farklı; bağlantı reddedildi.");
                 AppLog.Warn("Care Center sertifika sabitlemesi tutmadı",
                     $"Beklenen: {pinned}{Environment.NewLine}Gelen: {thumbprint}{Environment.NewLine}" +
                     $"Sertifika yenilendiyse {path} dosyasını silin.");
                 return false;
             }
-            File.WriteAllText(path, thumbprint);
+            // Atomic: a torn write would leave a thumbprint that never matches again, and the battery limit would
+            // stay unavailable until the user found and deleted this file by hand.
+            AtomicFile.WriteAllText(path, thumbprint);
             return true;
         }
         catch
@@ -162,6 +187,7 @@ public class CareCenterClient
     private async Task<JsonNode?> RunAsync(JsonObject request)
     {
         LastError = null;
+        CertificateMismatch = false;
         using var cts = new CancellationTokenSource(Timeout);
         using var ws = new ClientWebSocket();
         // The agent uses a self-signed certificate for localhost, so the chain cannot be validated. Pin the

@@ -7076,6 +7076,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Drops the stored Care Center certificate thumbprint and reads the limit again. Only reachable from the note
+    /// that appears when the agent presented a different certificate, so trusting a new one is always a user action.
+    /// </summary>
+    private async void BtnRetrustCareCenter_Click(object sender, RoutedEventArgs e)
+    {
+        _careCenterClient.ForgetPinnedCertificate();
+        await SyncChargeLimitFromCareCenterAsync();
+    }
+
+    /// <summary>
     /// The 80 % limit is owned by Acer Care Center; show what it actually reports instead of assuming.
     /// Runs in the background so a missing AcerCCAgent cannot delay startup.
     /// </summary>
@@ -7096,12 +7106,21 @@ public partial class MainWindow : Window
                 {
                     TxtChargeLimitHint.Visibility = state.Available ? Visibility.Visible : Visibility.Collapsed;
                 }
+                bool certificateChanged = !state.Available && _careCenterClient.CertificateMismatch;
                 if (TxtChargeLimitNote != null)
                 {
+                    // "Agent not found" was wrong when the agent answered with a different certificate: the user
+                    // would conclude the laptop does not support the limit and never look again.
                     TxtChargeLimitNote.Text = state.Available
                         ? ""
-                        : Loc.T("Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.");
+                        : certificateChanged
+                            ? Loc.T("Acer Care Center'in sertifikası değişmiş; bağlantı güvenlik için reddedildi. Acer güncellemesinden sonra bu normaldir.")
+                            : Loc.T("Acer Care Center (AcerCCAgent) bulunamadı; şarj sınırı bu bilgisayarda ayarlanamıyor.");
                     TxtChargeLimitNote.Visibility = state.Available ? Visibility.Collapsed : Visibility.Visible;
+                }
+                if (BtnRetrustCareCenter != null)
+                {
+                    BtnRetrustCareCenter.Visibility = certificateChanged ? Visibility.Visible : Visibility.Collapsed;
                 }
 
                 // No agent, no limit: a ticked box would claim a charge limit the machine does not have, and the
