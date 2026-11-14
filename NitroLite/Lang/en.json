@@ -871,7 +871,7 @@
  "Geri yükle": "Restore",
  "Yedekle": "Back up",
  "Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.": "No readings yet. NitroLite records one reading a day; the curve appears after a few days.",
- "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.": "Only one reading so far. A curve needs at least two; NitroLite records one a day.",
+ "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.": "Only one reading so far. A curve needs at least two; NitroLite records one every two weeks.",
  "İlk ölçüm {0:d} · aşınma {1} puan": "First reading {0:d} · wear {1} points",
  "{0:F0} günde aşınma {1} puan değişti.": "Wear changed by {1} points over {0:F0} days.",
  "Yıllık eğilim için en az bir haftalık kayıt gerekir.": "A yearly trend needs at least a week of readings.",

@@ -871,7 +871,7 @@
  "Geri yükle": "Pulihkan",
  "Yedekle": "Cadangkan",
  "Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.": "Belum ada pengukuran. NitroLite mencatat satu pengukuran per hari; kurva muncul setelah beberapa hari.",
- "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.": "Baru ada satu pengukuran. Kurva butuh minimal dua; NitroLite mencatat satu per hari.",
+ "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.": "Baru ada satu pengukuran. Kurva butuh minimal dua; NitroLite mencatat satu setiap dua minggu.",
  "İlk ölçüm {0:d} · aşınma {1} puan": "Pengukuran pertama {0:d} · keausan {1} poin",
  "{0:F0} günde aşınma {1} puan değişti.": "Keausan berubah {1} poin dalam {0:F0} hari.",
  "Yıllık eğilim için en az bir haftalık kayıt gerekir.": "Tren tahunan butuh setidaknya satu minggu pengukuran.",

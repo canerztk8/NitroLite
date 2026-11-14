@@ -871,7 +871,7 @@
  "Geri yükle": "Restaurar",
  "Yedekle": "Guardar copia",
  "Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.": "Aún no hay mediciones. NitroLite registra una medición al día; la curva aparece en unos días.",
- "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.": "Solo hay una medición. Una curva necesita al menos dos; NitroLite registra una al día.",
+ "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.": "Solo hay una medición. Una curva necesita al menos dos; NitroLite registra una cada dos semanas.",
  "İlk ölçüm {0:d} · aşınma {1} puan": "Primera medición {0:d} · desgaste {1} puntos",
  "{0:F0} günde aşınma {1} puan değişti.": "El desgaste cambió {1} puntos en {0:F0} días.",
  "Yıllık eğilim için en az bir haftalık kayıt gerekir.": "Para una tendencia anual hace falta al menos una semana de mediciones.",

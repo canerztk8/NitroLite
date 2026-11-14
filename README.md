@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1168-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1169-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -81,9 +81,10 @@ at idle. Telemetry is read every 3 seconds while minimised.
 - **Wear trend:** NitroLite keeps a history of the wear level it measured and draws it as a line under the battery
   card, with the change over the recorded period and a per-year rate once there are at least seven days of history.
   Only measured values are stored — a capacity Windows estimated, or a reading outside 0–100 %, is skipped rather
-  than guessed. A sample is written when 20 hours have passed or the health dropped by a full point, at most 400
-  samples are kept, and **Clear history** deletes the file. The rate is an extrapolation of a short series, not a
-  prediction: a battery that is recalibrated can move the line in either direction.
+  than guessed. Wear moves over months, so a reading is written every **15 days**; a pack that loses a whole point
+  sooner is recorded at once instead of waiting. At most 400 samples are kept, and **Clear history** deletes the
+  file. The first trend line therefore appears two weeks after the first reading. The rate is an extrapolation of a
+  short series, not a prediction: a battery that is recalibrated can move the line in either direction.
 - **Automatic Eco on battery:** switching to battery applies a low-power mode and (optionally) 60 Hz on the internal
   display; plugging back in restores the previous settings. If the app crashes, the state is repaired on the next
   launch.
@@ -387,7 +388,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-1168 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1169 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

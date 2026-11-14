@@ -871,7 +871,7 @@
  "Geri yükle": "Восстановить",
  "Yedekle": "Сохранить копию",
  "Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.": "Измерений пока нет. NitroLite записывает одно измерение в день; кривая появится через несколько дней.",
- "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.": "Пока одно измерение. Для кривой нужно минимум два; NitroLite записывает одно в день.",
+ "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.": "Пока одно измерение. Для кривой нужно минимум два; NitroLite записывает одно раз в две недели.",
  "İlk ölçüm {0:d} · aşınma {1} puan": "Первое измерение {0:d} · износ {1} п.п.",
  "{0:F0} günde aşınma {1} puan değişti.": "Износ изменился на {1} п.п. за {0:F0} дн.",
  "Yıllık eğilim için en az bir haftalık kayıt gerekir.": "Для годовой тенденции нужно минимум неделя измерений.",

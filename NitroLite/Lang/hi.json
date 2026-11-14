@@ -871,7 +871,7 @@
  "Geri yükle": "पुनर्स्थापित करें",
  "Yedekle": "बैकअप लें",
  "Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.": "अभी कोई माप नहीं। NitroLite दिन में एक माप दर्ज करता है; कुछ दिनों बाद वक्र दिखेगा।",
- "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.": "अभी केवल एक माप है। वक्र के लिए कम से कम दो चाहिए; NitroLite दिन में एक दर्ज करता है।",
+ "Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.": "अभी केवल एक माप है। वक्र के लिए कम से कम दो चाहिए; NitroLite हर दो हफ़्ते में एक दर्ज करता है।",
  "İlk ölçüm {0:d} · aşınma {1} puan": "पहला माप {0:d} · घिसाव {1} अंक",
  "{0:F0} günde aşınma {1} puan değişti.": "{0:F0} दिनों में घिसाव {1} अंक बदला।",
  "Yıllık eğilim için en az bir haftalık kayıt gerekir.": "वार्षिक प्रवृत्ति के लिए कम से कम एक सप्ताह के माप चाहिए।",

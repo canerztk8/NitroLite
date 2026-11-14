@@ -68,9 +68,9 @@ public sealed class BatteryWearTrend
 /// straight line that says nothing about the pack, so those readings are skipped instead.
 /// </para>
 /// <para>
-/// One reading per day is enough for a wear curve, so a reading is only appended when the last one is at least
+/// Wear moves over months, not days, so a reading is only appended when the last one is at least
 /// <see cref="MinimumInterval"/> old, or when health dropped by <see cref="MinimumDropPercent"/> in the meantime.
-/// The file is capped at <see cref="MaxSamples"/> readings (about a year of daily ones).
+/// The file is capped at <see cref="MaxSamples"/> readings.
 /// </para>
 /// </summary>
 public sealed class BatteryWearHistory
@@ -78,7 +78,11 @@ public sealed class BatteryWearHistory
     public const int MaxSamples = 400;
     public const double MinimumDropPercent = 1.0;
 
-    public static readonly TimeSpan MinimumInterval = TimeSpan.FromHours(20);
+    /// <summary>
+    /// Two weeks is enough for a wear curve: a year of readings is still two dozen points, and a pack that really
+    /// degrades is caught by <see cref="MinimumDropPercent"/> long before the interval elapses.
+    /// </summary>
+    public static readonly TimeSpan MinimumInterval = TimeSpan.FromDays(15);
 
     private readonly string? _path;
     private readonly object _lock = new();

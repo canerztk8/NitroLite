@@ -5235,7 +5235,7 @@ public partial class MainWindow : Window
 
         if (!trend.HasTrend)
         {
-            TxtWearTrendSummary.Text = Loc.T("Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.");
+            TxtWearTrendSummary.Text = Loc.T("Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.");
             if (TxtWearTrendNote != null)
             {
                 TxtWearTrendNote.Text = Loc.T($"İlk ölçüm {first.TimestampUtc.ToLocalTime():d} · aşınma {FormattableString.Invariant($"{first.WearLevelPercent:F1}")} puan");

@@ -73,6 +73,20 @@ public class BatteryWearHistoryTests : IDisposable
     }
 
     [Fact]
+    public void TheIntervalIsTwoWeeks()
+    {
+        // Wear moves over months; a reading every two weeks is a curve, a reading every day is noise.
+        Assert.Equal(TimeSpan.FromDays(15), BatteryWearHistory.MinimumInterval);
+
+        var history = new BatteryWearHistory(_path);
+        history.TryRecord(Details(96.0), Day0);
+
+        Assert.False(history.TryRecord(Details(95.8), Day0.AddDays(14)));
+        Assert.True(history.TryRecord(Details(95.8), Day0.AddDays(15)));
+        Assert.Equal(2, history.GetSamples().Count);
+    }
+
+    [Fact]
     public void ARealDropIsRecordedEvenWithinTheInterval()
     {
         // A pack that loses a whole point in an hour is news, not noise; waiting a day would hide it.
@@ -155,13 +169,13 @@ public class BatteryWearHistoryTests : IDisposable
         var history = new BatteryWearHistory(_path);
         for (int i = 0; i < BatteryWearHistory.MaxSamples + 5; i++)
         {
-            history.TryRecord(Details(99.0 - i * 0.01), Day0.AddDays(i));
+            history.TryRecord(Details(99.0 - i * 0.01), Day0.AddDays(i * 15));
         }
 
         var samples = history.GetSamples();
         Assert.Equal(BatteryWearHistory.MaxSamples, samples.Count);
         // The newest reading is always kept; the oldest ones are the ones that go.
-        Assert.Equal(Day0.AddDays(BatteryWearHistory.MaxSamples + 4), samples[^1].TimestampUtc);
+        Assert.Equal(Day0.AddDays((BatteryWearHistory.MaxSamples + 4) * 15), samples[^1].TimestampUtc);
     }
 
     [Fact]
@@ -195,7 +209,8 @@ public class BatteryWearHistoryTests : IDisposable
     {
         var history = new BatteryWearHistory(_path);
         history.TryRecord(Details(96.0), Day0);
-        history.TryRecord(Details(95.9), Day0.AddDays(3));
+        // A whole point lost in three days is recorded at once, interval or not.
+        history.TryRecord(Details(94.9), Day0.AddDays(3));
 
         // Three days is not enough to say anything about a year.
         Assert.Null(history.GetTrend().WearPerYearPercent);
@@ -223,7 +238,7 @@ public class BatteryWearHistoryTests : IDisposable
     {
         var first = new BatteryWearHistory(_path);
         first.TryRecord(Details(96.0, cycles: 42), Day0);
-        first.TryRecord(Details(95.0, cycles: 60), Day0.AddDays(10));
+        first.TryRecord(Details(95.0, cycles: 60), Day0.AddDays(20));
 
         var second = new BatteryWearHistory(_path);
         var samples = second.GetSamples();

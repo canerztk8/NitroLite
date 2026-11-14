@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1168-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1169-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -80,10 +80,11 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
   bildirmediği değerler "(tahmini)" etiketiyle gösterilir.
 - **Aşınma trendi:** NitroLite ölçtüğü aşınma oranının geçmişini tutar ve pil kartının altına çizgi olarak çizer;
   kaydedilen dönemdeki değişimi ve en az yedi günlük geçmiş varsa yıllık hızı gösterir. Yalnızca ölçülmüş değerler
-  saklanır — Windows'un tahmin ettiği kapasite veya %0–100 dışındaki bir okuma tahmin edilmez, atlanır. 20 saat
-  geçtiğinde ya da sağlık tam bir puan düştüğünde örnek yazılır, en fazla 400 örnek tutulur, **Geçmişi sil** dosyayı
-  siler. Hız kısa bir serinin uzatılmasıdır, tahmin değil: yeniden kalibre edilen bir pil çizgiyi iki yöne de
-  kaydırabilir.
+  saklanır — Windows'un tahmin ettiği kapasite veya %0–100 dışındaki bir okuma tahmin edilmez, atlanır. Aşınma
+  aylar mertebesinde değiştiği için örnek **15 günde bir** yazılır; tam bir puanı daha erken kaybeden pil beklemeden
+  kaydedilir. En fazla 400 örnek tutulur, **Geçmişi sil** dosyayı siler. Bu yüzden ilk trend çizgisi ilk okumadan iki
+  hafta sonra görünür. Hız kısa bir serinin uzatılmasıdır, tahmin değil: yeniden kalibre edilen bir pil çizgiyi iki
+  yöne de kaydırabilir.
 - **Pilde otomatik Eco:** Pile geçince düşük güç modu ve (isteğe bağlı) ana ekranda 60 Hz; adaptör takılınca önceki
   ayarlar geri yüklenir. Uygulama çökerse bu durum bir sonraki açılışta onarılır.
 - **Okul modu:** Şarjın en uzun süre gitmesi için tek anahtar. Etkin güç planına yalnızca pilde geçerli değerleri yazar
@@ -371,7 +372,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-1168 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+1169 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
