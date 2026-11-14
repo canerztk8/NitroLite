@@ -313,7 +313,7 @@ NitroLite
 
 ## Install (download and run)
 
-1. Download `NitroLite-v1.2.1-win-x64.zip` from the
+1. Download `NitroLite-v1.2.2-win-x64.zip` from the
    **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page.
 2. Extract it to a **permanent folder**, for example `C:\Users\<you>\Programs\NitroLite`. Do not leave it in
    Downloads: "run at Windows startup" remembers where the exe lives.
@@ -358,7 +358,7 @@ What you can check instead, without trusting the author:
 | Check | How |
 |---|---|
 | The download came from this repository | The link on the Releases page points at `github.com/canerztk8/NitroLite`; HTTPS to GitHub is the transport. |
-| The file is the one that was published | `Get-FileHash NitroLite-v1.2.1-win-x64.zip -Algorithm SHA256` and compare it with the digest GitHub lists on the release. |
+| The file is the one that was published | `Get-FileHash NitroLite-v1.2.2-win-x64.zip -Algorithm SHA256` and compare it with the digest GitHub lists on the release. |
 | The source matches the binary | Build it yourself from the tag; `scripts\publish-release.ps1` is the same script that produced the release. |
 | The updater does not take a shortcut | It compares the downloaded package's SHA-256 against the digest GitHub publishes and refuses to swap the exe on a mismatch. |
 
