@@ -19,7 +19,9 @@ public interface IDisplayRefreshRateService
 
     /// <summary>
     /// Switches the display refresh rate to the specified frequency in Hertz.
-    /// Uses Win32 ChangeDisplaySettingsEx with CDS_UPDATEREGISTRY | CDS_GLOBAL.
+    /// Uses Win32 ChangeDisplaySettingsEx with CDS_UPDATEREGISTRY only. CDS_GLOBAL is deliberately not set: it
+    /// writes the mode into the machine-wide display database, so a 60 Hz choice made for one user would follow
+    /// every other account on the laptop.
     /// Strictly operates at OS display mode level without touching GPU MUX or DDS registers.
     /// </summary>
     /// <param name="hz">Target refresh rate in Hz (e.g. 60 or 165).</param>

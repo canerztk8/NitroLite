@@ -450,7 +450,9 @@ public class PowerAutomationService : IDisposable
                         _savedOperatingModeBeforeDc = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default;
                         _savedCpuBoostBeforeDc = GetCurrentCpuBoost?.Invoke() ?? _cpuPowerService.CurrentMode;
                         _savedFanModeBeforeDc = GetCurrentFanMode?.Invoke() ?? FanMode.Auto;
-                        try { _savedDcBoostBeforeEco = _cpuPowerService.QueryBoostModeExact(false); }
+                        // Off the caller's thread: this launches powercfg and waits up to 800 ms for it. The callers
+                        // include the school mode switch and the settings page, both on the UI thread.
+                        try { _savedDcBoostBeforeEco = await Task.Run(() => _cpuPowerService.QueryBoostModeExact(false)); }
                         catch { _savedDcBoostBeforeEco = null; }
                     }
                     lock (_stateSyncLock) { _isDcEcoActive = true; }

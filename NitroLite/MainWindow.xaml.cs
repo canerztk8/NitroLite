@@ -3343,7 +3343,9 @@ public partial class MainWindow : Window
                 TxtGpuModeBadge.Text = Loc.T("Bilinmiyor");
                 TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
             }
-            System.Diagnostics.Debug.WriteLine($"[GPU Mode] Refresh error: {ex.Message}");
+            // Trace only reaches a debugger. A GPU mode query that failed is exactly what a bug report needs to
+            // show, so it goes to the same log the user can open from the settings card.
+            AppLog.Warn("GPU modu okunamadı", ex.Message);
         }
     }
 
