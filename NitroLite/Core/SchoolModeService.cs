@@ -173,27 +173,35 @@ public sealed class SchoolModeService
     {
         if (_settings.SchoolModeEnabled) return await ReapplyAsync();
 
-        var backup = new SchoolModeBackup
+        // Reading the current state launches nine powercfg processes and a WMI call, which is up to a second of
+        // work. It runs off the UI thread so flipping the switch does not freeze the window; none of it touches a
+        // control.
+        var backup = await Task.Run(() =>
         {
-            Mode = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
-            Fan = GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
-            DcBoost = TryQueryDcBoost(),
-            RefreshRate = _displayService.GetCurrentRefreshRate() is var hz && hz > 0 ? hz : null,
-            Brightness = _brightnessService.GetBrightness()
-        };
-
-        foreach (var setting in PowerSettings)
-        {
-            if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
+            var state = new SchoolModeBackup
             {
-                backup.PowerSettings.Add(new SchoolModePowerBackup
+                Mode = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
+                Fan = GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
+                DcBoost = TryQueryDcBoost(),
+                RefreshRate = _displayService.GetCurrentRefreshRate() is var hz && hz > 0 ? hz : null,
+                Brightness = _brightnessService.GetBrightness()
+            };
+
+            foreach (var setting in PowerSettings)
+            {
+                if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
                 {
-                    SubGroup = setting.SubGroup.ToString(),
-                    Setting = setting.Setting.ToString(),
-                    PreviousDc = previous
-                });
+                    state.PowerSettings.Add(new SchoolModePowerBackup
+                    {
+                        SubGroup = setting.SubGroup.ToString(),
+                        Setting = setting.Setting.ToString(),
+                        PreviousDc = previous
+                    });
+                }
             }
-        }
+
+            return state;
+        });
 
         // The undo record goes to disk before the first change, so a crash or a forced exit still leaves a way back.
         // If it cannot be written, nothing is changed: a mode the user cannot turn off is worse than no mode.
@@ -262,15 +270,24 @@ public sealed class SchoolModeService
 
         if (backup != null)
         {
-            foreach (var saved in backup.PowerSettings)
+            // One powercfg process per recorded setting: off the UI thread, like the forward pass.
+            var (restored, restoreFailed) = await Task.Run(() =>
             {
-                if (!Guid.TryParse(saved.SubGroup, out var subGroup) || !Guid.TryParse(saved.Setting, out var setting))
-                    continue;
-                string label = PowerSettings.FirstOrDefault(s => s.SubGroup == subGroup && s.Setting == setting)?.Label
-                               ?? Loc.T("Güç planı ayarı");
-                if (_scheme.TryWriteDc(subGroup, setting, saved.PreviousDc)) outcome.Applied.Add(label);
-                else outcome.Failed.Add(label);
-            }
+                var ok = new List<string>();
+                var bad = new List<string>();
+                foreach (var saved in backup.PowerSettings)
+                {
+                    if (!Guid.TryParse(saved.SubGroup, out var subGroup) || !Guid.TryParse(saved.Setting, out var setting))
+                        continue;
+                    string label = PowerSettings.FirstOrDefault(s => s.SubGroup == subGroup && s.Setting == setting)?.Label
+                                   ?? Loc.T("Güç planı ayarı");
+                    if (_scheme.TryWriteDc(subGroup, setting, saved.PreviousDc)) ok.Add(label);
+                    else bad.Add(label);
+                }
+                return (ok, bad);
+            });
+            outcome.Applied.AddRange(restored);
+            outcome.Failed.AddRange(restoreFailed);
 
             if (backup.DcBoost.HasValue)
             {
@@ -322,11 +339,20 @@ public sealed class SchoolModeService
     {
         var outcome = new SchoolModeOutcome();
 
-        foreach (var setting in PowerSettings)
+        // Eight powercfg writes, each a process launch. Off the UI thread for the same reason as the read above.
+        var (powerApplied, powerFailed) = await Task.Run(() =>
         {
-            if (_scheme.TryWriteDc(setting.SubGroup, setting.Setting, setting.TargetDc)) outcome.Applied.Add(Loc.T(setting.Label));
-            else outcome.Failed.Add(Loc.T(setting.Label));
-        }
+            var applied = new List<string>();
+            var failed = new List<string>();
+            foreach (var setting in PowerSettings)
+            {
+                if (_scheme.TryWriteDc(setting.SubGroup, setting.Setting, setting.TargetDc)) applied.Add(Loc.T(setting.Label));
+                else failed.Add(Loc.T(setting.Label));
+            }
+            return (applied, failed);
+        });
+        outcome.Applied.AddRange(powerApplied);
+        outcome.Failed.AddRange(powerFailed);
 
         if (await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true))
             outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
