@@ -99,7 +99,7 @@ public class AcerAgentClient : IDisposable
 
         // AASSvc is often absent (not installed, stopped, or still starting). Retrying on every telemetry tick
         // stalled each request for the full connect timeout, so back off exponentially between attempts.
-        if (DateTime.UtcNow < _nextConnectAttemptUtc) return false;
+        if (_connectClock.Elapsed < _nextConnectAttemptAt) return false;
 
         Disconnect();
 
@@ -135,7 +135,7 @@ public class AcerAgentClient : IDisposable
     private void ResetConnectBackoff()
     {
         _consecutiveConnectFailures = 0;
-        _nextConnectAttemptUtc = DateTime.MinValue;
+        _nextConnectAttemptAt = TimeSpan.MinValue;
     }
 
     /// <summary>Grows the delay between connect attempts: 1, 2, 4, 8, 16, then 30 seconds.</summary>
@@ -143,7 +143,7 @@ public class AcerAgentClient : IDisposable
     {
         _consecutiveConnectFailures = Math.Min(_consecutiveConnectFailures + 1, 10);
         double seconds = Math.Min(MaxConnectBackoffSeconds, Math.Pow(2, _consecutiveConnectFailures - 1));
-        _nextConnectAttemptUtc = DateTime.UtcNow.AddSeconds(seconds);
+        _nextConnectAttemptAt = _connectClock.Elapsed + TimeSpan.FromSeconds(seconds);
 
         // Only the first failure of a streak: AASSvc being absent is normal and must not fill the log.
         if (_consecutiveConnectFailures == 1)
@@ -1033,7 +1033,10 @@ public class AcerAgentClient : IDisposable
     private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
     private int _consecutiveConnectFailures;
-    private DateTime _nextConnectAttemptUtc = DateTime.MinValue;
+    // Monotonic: a clock correction must not turn the reconnect backoff into a burst of connect attempts or a
+    // stall that outlasts the session.
+    private readonly System.Diagnostics.Stopwatch _connectClock = System.Diagnostics.Stopwatch.StartNew();
+    private TimeSpan _nextConnectAttemptAt = TimeSpan.MinValue;
     private const double MaxConnectBackoffSeconds = 30;
 
     public void Dispose()

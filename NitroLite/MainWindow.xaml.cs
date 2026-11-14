@@ -1570,7 +1570,9 @@ public partial class MainWindow : Window
         value.Foreground = hot ? hotBrush : (TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.White);
     }
 
-    private DateTime _lastDeviceStateSyncUtc = DateTime.MinValue;
+    // Monotonic: a clock correction must not make the 5 s device-state poll fire in a burst or stall.
+    private readonly System.Diagnostics.Stopwatch _deviceStateClock = System.Diagnostics.Stopwatch.StartNew();
+    private TimeSpan _lastDeviceStateSyncAt = TimeSpan.MinValue;
     private static readonly TimeSpan DeviceStateSyncInterval = TimeSpan.FromSeconds(5);
     private CpuBoostMode? _lastShownBoost;
 
@@ -2582,9 +2584,11 @@ public partial class MainWindow : Window
 
             // Re-read operating mode, fan mode and CPU boost so changes made elsewhere (NitroSense, the mode key,
             // Windows power settings) are reflected instead of showing the last value NitroLite set.
-            if (!isFallback && (DateTime.UtcNow - _lastDeviceStateSyncUtc) >= DeviceStateSyncInterval)
+            if (!isFallback
+                && (_lastDeviceStateSyncAt == TimeSpan.MinValue
+                    || (_deviceStateClock.Elapsed - _lastDeviceStateSyncAt) >= DeviceStateSyncInterval))
             {
-                _lastDeviceStateSyncUtc = DateTime.UtcNow;
+                _lastDeviceStateSyncAt = _deviceStateClock.Elapsed;
                 await SyncDeviceStateAsync();
             }
 

@@ -101,7 +101,10 @@ public class HardwareMonitorService : IDisposable
     private bool _ownsNvml;
     private readonly bool _allowNvml;
     private IntPtr _gpuDevice = IntPtr.Zero;
-    private DateTime _lastNvmlRetryUtc = DateTime.MinValue;
+    // A monotonic clock, not DateTime.UtcNow: an NTP correction or a manual clock change would otherwise make the
+    // backoff fire early (a burst of NVML calls) or stall for hours.
+    private readonly System.Diagnostics.Stopwatch _nvmlClock = System.Diagnostics.Stopwatch.StartNew();
+    private TimeSpan _lastNvmlRetryAt = TimeSpan.MinValue;
     private int _nvmlFailureCount;
 
     /// <summary>First retry delay; doubles per consecutive failure up to <see cref="NvmlMaxRetryDelaySeconds"/>.</summary>
@@ -261,9 +264,10 @@ public class HardwareMonitorService : IDisposable
         // 1. Retry NVML initialization when dGPU wakes from RTD3 deep sleep
         if (mayQueryNvml && _allowNvml && (!_nvmlInitialized || _gpuDevice == IntPtr.Zero))
         {
-            if ((DateTime.UtcNow - _lastNvmlRetryUtc).TotalSeconds >= NvmlRetryDelaySeconds)
+            if (_lastNvmlRetryAt == TimeSpan.MinValue
+                || (_nvmlClock.Elapsed - _lastNvmlRetryAt).TotalSeconds >= NvmlRetryDelaySeconds)
             {
-                _lastNvmlRetryUtc = DateTime.UtcNow;
+                _lastNvmlRetryAt = _nvmlClock.Elapsed;
                 TryInitNvml();
                 // Back off on failure: a machine whose driver never answers must not be probed every four seconds.
                 if (!_nvmlInitialized) _nvmlFailureCount = Math.Min(_nvmlFailureCount + 1, 5);
