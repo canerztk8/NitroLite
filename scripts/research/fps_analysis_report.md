@@ -204,7 +204,7 @@ Parent: PCI\VEN_10DE&DEV_2860&SUBSYS_16791025&REV_A1\4&3730A3F3&0&0009  <-- NVID
 
 #### Recommendation 3: Purge Bloated 19.32 GB NVIDIA DirectX Shader Cache (DXCache)
 - **Technical Rationale & Diagnostic Evidence**:
-  - Directory query of `C:\Users\caner\AppData\Local\NVIDIA\DXCache` revealed **288 files consuming 19,324.91 MB (~19.32 GB)**.
+  - Directory query of `%LOCALAPPDATA%\NVIDIA\DXCache` revealed **288 files consuming 19,324.91 MB (~19.32 GB)**.
   - When graphics drivers and games receive updates, previously compiled binary shaders are often invalidated but remain on disk. A 19+ GB cache folder forces the NVIDIA driver to perform slow index searches across bloated binary blobs. Hash collisions and stale shader misses manifest as micro-stutter, frametime spikes, and momentary freezes when rendering new particle effects or entering new map sectors.
 - **Estimated FPS & Frame Pacing Impact**:
   - **Substantial stabilization of 1% and 0.1% low frametimes**.

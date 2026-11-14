@@ -1,9 +1,9 @@
-# Empirical Verification Script for Challenger Gate R2 V2.2
+﻿# Empirical Verification Script for Challenger Gate R2 V2.2
 # Author: challenger_gate_r2_v2_2
 # Date: 2026-11-04
 
 $ErrorActionPreference = "Stop"
-$root = "c:\Users\caner\Documents\antigravity\eager-shannon"
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "  CHALLENGER GATE R2 V2.2 EMPIRICAL VERIFICATION HARNESS          " -ForegroundColor Cyan

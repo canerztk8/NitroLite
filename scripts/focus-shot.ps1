@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Out = 'C:\temp\focus',
     [int]$Tabs = 3,
     [string]$Language = 'en',
@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-if (-not $root) { $root = 'C:\Users\caner\Documents\antigravity\eager-shannon' }
+if (-not $root) { throw 'Could not resolve the repository root from the script location.' }
 
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms

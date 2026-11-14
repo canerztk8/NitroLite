@@ -1,7 +1,7 @@
-# verify_r2_audit.ps1
+﻿# verify_r2_audit.ps1
 # Comprehensive empirical verification script for Challenger R2_1
 
-$reportPath = "c:\Users\caner\Documents\antigravity\eager-shannon\nitro_sense_analysis.md"
+$reportPath = Join-Path $PSScriptRoot "nitro_sense_analysis.md"
 $content = Get-Content -LiteralPath $reportPath -Raw
 $lines = Get-Content -LiteralPath $reportPath
 
