@@ -296,6 +296,39 @@ public class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public void RestoreRejectsAFileTooLargeToBeABackup()
+    {
+        // The dialog offers "all files", so a video can be picked by mistake. The length is checked before the
+        // file is read: reading it whole would allocate its size in memory first.
+        using (var stream = new FileStream(_backupPath, FileMode.Create, FileAccess.Write))
+        {
+            stream.SetLength(BackupService.MaxBackupBytes + 1);
+        }
+
+        var result = Restore();
+
+        Assert.False(result.Success);
+        Assert.Equal(Loc.T("Bu dosya bir NitroLite yedeği için çok büyük."), result.Error);
+        Assert.False(File.Exists(_settingsPath));
+    }
+
+    [Fact]
+    public void RestoreAcceptsAFileAtTheSizeLimit()
+    {
+        // The cap is a ceiling, not a target: a file exactly at the limit still goes through the normal checks.
+        using (var stream = new FileStream(_backupPath, FileMode.Create, FileAccess.Write))
+        {
+            stream.SetLength(BackupService.MaxBackupBytes);
+        }
+
+        var result = Restore();
+
+        // Rejected for being empty JSON, not for its size.
+        Assert.False(result.Success);
+        Assert.NotEqual(Loc.T("Bu dosya bir NitroLite yedeği için çok büyük."), result.Error);
+    }
+
+    [Fact]
     public void RestoreDoesNotTouchTheSettingsWhenTheFileIsRejected()
     {
         SettingsManager.SaveSettingsAtomic(_settingsPath, new AppSettings { Language = "es" });

@@ -160,7 +160,11 @@ public sealed class SchoolModeService
     public OperatingMode TargetOperatingMode =>
         IsModeSupported?.Invoke(OperatingMode.Eco) == false ? OperatingMode.Quiet : OperatingMode.Eco;
 
-    /// <summary>Turns the keyboard backlight off; true when it is off afterwards.</summary>
+    /// <summary>
+    /// Turns the keyboard backlight off. True when it was on and is now off, so there is something to put back;
+    /// false when it was already off. The value is stored as <see cref="SchoolModeBackup.LightingWasOn"/> and is
+    /// what decides whether switching school mode off restores the backlight.
+    /// </summary>
     public Func<Task<bool>>? TurnLightingOffAsync { get; set; }
 
     /// <summary>Puts the keyboard backlight back the way the user had it.</summary>
@@ -398,9 +402,9 @@ public sealed class SchoolModeService
     }
 
     /// <summary>
-    /// Writes the undo record. Returns false when it could not be written, and the caller must then refuse to
-    /// enable school mode: applying changes that cannot be undone leaves the user with a 60 % processor, a dim
-    /// screen and 60 Hz, and no switch to put them back.
+    /// Writes the undo record. Returns false when it could not be written; the caller then applies school mode
+    /// anyway and says so in <see cref="SchoolModeOutcome.Warnings"/>. Refusing outright would leave a user who
+    /// asked for battery savings with nothing, and the settings page still lists every value school mode changes.
     /// </summary>
     private bool WriteBackup(SchoolModeBackup backup)
     {

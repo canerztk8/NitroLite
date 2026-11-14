@@ -70,6 +70,13 @@ public static class BackupService
     /// <summary>Extension offered in the save dialog, so a backup is recognisable in a downloads folder.</summary>
     public const string FileExtension = ".json";
 
+    /// <summary>
+    /// A backup is a few hundred kilobytes at most. The restore dialog offers "all files", so a user can pick a
+    /// video by mistake; reading it whole would allocate its size in memory before the marker check could reject
+    /// it. The cap is checked on the file length, before anything is read.
+    /// </summary>
+    public const long MaxBackupBytes = 16L * 1024 * 1024;
+
     public static string SuggestedFileName(DateTime now) => $"NitroLite-backup-{now:yyyy-MM-dd}.json";
 
     /// <summary>
@@ -128,6 +135,16 @@ public static class BackupService
     {
         if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
             return BackupResult.Fail(Loc.T("Yedek dosyası bulunamadı."));
+
+        try
+        {
+            if (new FileInfo(sourcePath).Length > MaxBackupBytes)
+                return BackupResult.Fail(Loc.T("Bu dosya bir NitroLite yedeği için çok büyük."));
+        }
+        catch (Exception ex)
+        {
+            return BackupResult.Fail(Loc.T($"Yedek dosyası okunamadı: {ex.Message}"));
+        }
 
         BackupDocument? document;
         try

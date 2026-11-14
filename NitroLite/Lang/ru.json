@@ -902,6 +902,7 @@
  "RGB profilleri": "Профили RGB",
  "Yedek yazılamadı: {0}": "Не удалось записать резервную копию: {0}",
  "Yedek dosyası bulunamadı.": "Файл резервной копии не найден.",
+ "Bu dosya bir NitroLite yedeği için çok büyük.": "Этот файл слишком велик для резервной копии NitroLite.",
  "Yedek dosyası okunamadı: {0}": "Не удалось прочитать файл копии: {0}",
  "Yedek dosyası boş.": "Файл резервной копии пуст.",
  "Bu dosya bir NitroLite yedeği değil.": "Этот файл не является резервной копией NitroLite.",

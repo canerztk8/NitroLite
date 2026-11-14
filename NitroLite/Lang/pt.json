@@ -902,6 +902,7 @@
  "RGB profilleri": "Perfis RGB",
  "Yedek yazılamadı: {0}": "Não foi possível gravar a cópia: {0}",
  "Yedek dosyası bulunamadı.": "O ficheiro de cópia não foi encontrado.",
+ "Bu dosya bir NitroLite yedeği için çok büyük.": "Este ficheiro é demasiado grande para ser uma cópia de NitroLite.",
  "Yedek dosyası okunamadı: {0}": "Não foi possível ler o ficheiro de cópia: {0}",
  "Yedek dosyası boş.": "O ficheiro de cópia está vazio.",
  "Bu dosya bir NitroLite yedeği değil.": "Este ficheiro não é uma cópia do NitroLite.",

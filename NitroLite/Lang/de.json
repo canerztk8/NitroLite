@@ -902,6 +902,7 @@
  "RGB profilleri": "RGB-Profile",
  "Yedek yazılamadı: {0}": "Die Sicherung konnte nicht geschrieben werden: {0}",
  "Yedek dosyası bulunamadı.": "Die Sicherungsdatei wurde nicht gefunden.",
+ "Bu dosya bir NitroLite yedeği için çok büyük.": "Diese Datei ist zu groß für eine NitroLite-Sicherung.",
  "Yedek dosyası okunamadı: {0}": "Die Sicherungsdatei konnte nicht gelesen werden: {0}",
  "Yedek dosyası boş.": "Die Sicherungsdatei ist leer.",
  "Bu dosya bir NitroLite yedeği değil.": "Diese Datei ist keine NitroLite-Sicherung.",

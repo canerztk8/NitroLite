@@ -902,6 +902,7 @@
  "RGB profilleri": "RGB प्रोफ़ाइल",
  "Yedek yazılamadı: {0}": "बैकअप नहीं लिखा जा सका: {0}",
  "Yedek dosyası bulunamadı.": "बैकअप फ़ाइल नहीं मिली।",
+ "Bu dosya bir NitroLite yedeği için çok büyük.": "यह फ़ाइल NitroLite बैकअप के लिए बहुत बड़ी है।",
  "Yedek dosyası okunamadı: {0}": "बैकअप फ़ाइल पढ़ी नहीं जा सकी: {0}",
  "Yedek dosyası boş.": "बैकअप फ़ाइल खाली है।",
  "Bu dosya bir NitroLite yedeği değil.": "यह फ़ाइल NitroLite बैकअप नहीं है।",

@@ -363,6 +363,29 @@ public class SafeVerificationEndToEndTests
 
     #endregion
 
+    #region School mode: the keyboard backlight
+
+    [Fact]
+    public Task SchoolMode_DoesNotClaimTheBacklightWasOnWhenItWasAlreadyOff() => RunInStaAsync(async () =>
+    {
+        // SchoolModeService restores the backlight only when the delegate says it was on. Returning true for a
+        // backlight that was already off made switching school mode off turn the keyboard on with a default
+        // colour the user never chose.
+        var window = new MainWindow(
+            new TestAcerAgentClient(),
+            new TestCpuPowerService(),
+            new GameDetectionService(),
+            new AtkMouseService(),
+            settings: new AppSettings(),
+            isTestHarness: true);
+
+        window.SetLightingForTesting(new LightingConfig { Brightness = 0, Effect = "OFF" });
+
+        Assert.False(await window.TurnLightingOffForSchoolModeAsync());
+    });
+
+    #endregion
+
     #region Test Case 3: Tray Retry Interrupted by New Game
 
     [Fact]

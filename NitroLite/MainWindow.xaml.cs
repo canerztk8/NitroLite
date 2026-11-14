@@ -105,6 +105,7 @@ public partial class MainWindow : Window
     internal OperatingMode CurrentMode => _currentMode;
     internal AppSettings CurrentAppSettings => _appSettings;
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
+    internal void SetLightingForTesting(LightingConfig cfg) => _lighting = cfg;
     internal void ReportServiceAvailabilityForTesting(bool available) => UpdateServiceTelemetryState(available);
     internal bool ServiceBannerShownForTesting => ServiceBanner?.Visibility == Visibility.Visible;
     internal int TelemetryFailureCountForTesting => _consecutiveTelemetryFailures;
@@ -1095,10 +1096,14 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>School mode: keyboard backlight off. True when it is off afterwards.</summary>
-    private async Task<bool> TurnLightingOffForSchoolModeAsync()
+    /// <summary>
+    /// School mode: keyboard backlight off. True when it was on and is now off, which is what tells the service
+    /// there is something to put back. A backlight that was already off returns false: claiming it was on made
+    /// switching school mode off turn the keyboard on with a default colour the user never chose.
+    /// </summary>
+    internal async Task<bool> TurnLightingOffForSchoolModeAsync()
     {
-        if (IsLightingOff(_lighting)) return true;
+        if (IsLightingOff(_lighting)) return false;
         _appSettings.LastActiveLighting = LightingPolicy.Clone(_lighting);
         _lighting.Brightness = 0;
         _lighting.Effect = "OFF";
@@ -8180,11 +8185,12 @@ public partial class MainWindow : Window
         catch (Exception ex) { AppLog.Warn("Eski ayar kopyası güncellenemedi", ex.Message); }
 
         // A backup written by an older build may not carry every part. Saying so is the difference between "the
-        // restore worked" and "my game profiles are gone and nobody told me".
+        // restore worked" and "my game profiles are gone and nobody told me". The labels are catalogue keys, so
+        // they are translated here: joining them raw put Turkish words inside an English sentence.
         var message = Loc.T("Yedek geri yüklendi; NitroLite yeniden başlatılıyor…");
         if (result.Skipped.Count > 0)
         {
-            message += " " + Loc.T($"Yedekte olmayan bölümler atlandı: {string.Join(", ", result.Skipped)}");
+            message += " " + Loc.T($"Yedekte olmayan bölümler atlandı: {string.Join(", ", result.Skipped.Select(label => Loc.T(label)))}");
         }
         RestartForSettingChange(message, discardInMemorySettings: true);
     }

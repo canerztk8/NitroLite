@@ -902,6 +902,7 @@
  "RGB profilleri": "RGB presets",
  "Yedek yazılamadı: {0}": "The backup could not be written: {0}",
  "Yedek dosyası bulunamadı.": "The backup file was not found.",
+ "Bu dosya bir NitroLite yedeği için çok büyük.": "This file is too large to be a NitroLite backup.",
  "Yedek dosyası okunamadı: {0}": "The backup file could not be read: {0}",
  "Yedek dosyası boş.": "The backup file is empty.",
  "Bu dosya bir NitroLite yedeği değil.": "This file is not a NitroLite backup.",

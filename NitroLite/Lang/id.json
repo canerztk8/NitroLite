@@ -902,6 +902,7 @@
  "RGB profilleri": "Profil RGB",
  "Yedek yazılamadı: {0}": "Cadangan tidak dapat ditulis: {0}",
  "Yedek dosyası bulunamadı.": "Berkas cadangan tidak ditemukan.",
+ "Bu dosya bir NitroLite yedeği için çok büyük.": "Berkas ini terlalu besar untuk cadangan NitroLite.",
  "Yedek dosyası okunamadı: {0}": "Berkas cadangan tidak dapat dibaca: {0}",
  "Yedek dosyası boş.": "Berkas cadangan kosong.",
  "Bu dosya bir NitroLite yedeği değil.": "Berkas ini bukan cadangan NitroLite.",
