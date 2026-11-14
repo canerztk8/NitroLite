@@ -119,3 +119,51 @@ Not: v1.1.0 kullanıcıları bu sürümü bir kez elle indirmek zorunda; onlarda
 - Güncelleme yalnızca release paketiyle çalışır; geliştirme derlemesinde buton release sayfasını açar.
 - Yükseltilmiş WinMemoryCleaner yolu hiç test edilemedi (geliştirme ortamı yönetici değil).
 - `TxtBatRemainingTime` kartın sağ kenarına sıfır boşlukla yaslanıyor; metin tam, kesik değil.
+
+## Beş fazlı denetim (22 katman) — 2026-11-14
+
+Kod tabanının tamamı 22 katmanda denetlendi; 86 bulgu çıktı ve hepsi düzeltildi.
+Hiçbir şey GitHub'a gönderilmedi; yerel `main` 21 commit ileride.
+
+### Denetimde doğrulanan, dokunulmayan olumlu özellikler
+
+- Sıfır EC register yazımı, sıfır kernel sürücüsü, sıfır `DeviceIoControl` → Vanguard/EAC/FACEIT ile çakışma yok.
+- Tüm `ToUpper`/`ToLower` `Invariant` varyantı (Türkçe İ/ı tuzağı yok).
+- Kültürden bağımsız sayı ayrıştırma: `double.Parse`/`int.Parse` çağrılarının tamamı `InvariantCulture` veya `TryParse` ile.
+- 23 `ManagementObjectSearcher` çağrısının tamamı `using` ile serbest bırakılıyor.
+- `SystemEvents` aboneliklerinin her birinin karşılık gelen `-=` var.
+- GDI sızıntısı yok: tepsi ikonunda dinamik çizim yok.
+- `DEVMODEA` (156 bayt) ve `DISPLAYCONFIG_PATH_INFO` (72 bayt) yapıları bayt-doğru.
+- `TODO`/`FIXME`/`HACK`/`NotImplementedException` sıfır; boş `catch` bloğu sıfır.
+- `UpdateService` zip-slip korumalı, beyaz liste, SHA-256, iki fazlı commit + rollback, 1 GB / 512 MB zip bombası sınırı.
+- `FanCurve.SafetyFloor` kademeli (85→60, 90→80, 95→100), NaN → MaxPercent.
+- Manifest `PerMonitorV2` DPI farkındalığı bildiriyor; OSD fiziksel piksel kullanıyor.
+- Pencere konumu geri yükleme sanal ekran sınırlarına karşı doğrulanıyor.
+- `DebloatService.RequiredServices` (`AASSvc`, `AcerLightingService`) `Tier1Services`'ten filtreleniyor.
+- `SchoolModeService` 8 güç ayarı + mod + boost + Hz + parlaklık + klavye ışığı; yedek yazılamazsa uyguluyor ve `Warnings` ile bildiriyor; sahipsiz yedek açılışta geri alınıyor.
+- `BatteryWearHistory` 15 günde bir ölçüm, saat geri giderse atlıyor.
+
+### Düzeltilen gerçek hatalar (bu tur)
+
+| Hata | Etki |
+|---|---|
+| `FanCurveEvaluator.Evaluate` bekleme süresini duvar saatinden ölçüyordu | Saat geri gidince (NTP, manuel, uykudan dönüş) geçen süre negatif → "yeterli zaman geçmedi" → fanlar saat düzelene kadar son hızda kilitli |
+| `CareCenterClient` sertifika pinlemesi sertifika döndüğünde kalıcı kırılıyordu | Acer güncellemesi sertifikayı değiştirince pil sınırı sonsuza kadar kullanılamaz hale geliyordu; mesaj yanlışlıkla "Care Center bulunamadı" diyordu. Artık `CertificateMismatch` ayrı durum + "Yeni sertifikaya güven" butonu |
+| Pin dosyası atomik yazılmıyordu | Yarım yazım eşleşmeyen thumbprint bırakıyordu → `AtomicFile.WriteAllText` |
+| `App.ShouldSurviveUiException` penceresi negatif yaşla budanmıyordu | Saat geri gidince kuyruk doluyor, tek istisna uygulamayı çökertiyordu |
+| `SchoolModeService` 9 powercfg okuma + 8 yazma UI thread'inde | Okul modu anahtarı çevrilince pencere 1-2 sn donuyordu; okuma/yazma `Task.Run`'a alındı |
+
+### Bilinçli olarak dokunulmayanlar
+
+- `BuildFanControlParameter` içindeki `fan_index = 0` — çalışan özellik, aksini kanıtlayan veri yok.
+- `ModePolicy.IsModeSupported` bilinmeyen modelde tüm modları gösteriyor — testli tasarım kararı ("hiçbir şey varsayma").
+- `MemoryCleanerService.Cleaned` çıkış kodu okunamadığında iyimser — arayüz zaten "zaten temiz" gösteriyor.
+- `PublishReadyToRun` kapalı — paket boyutu, lightweight hedefi.
+- `ReadOutputWithTimeout` 2000 ms — ölçülmüş değer.
+
+### Doğrulama
+
+- `dotnet build -c Release`: 0 hata, 0 uyarı.
+- `dotnet test`: **1205 geçti, 0 başarısız, 3 atlandı** (1208 toplam; atlananlar canlı donanım testleri).
+- 5 sayfa × açık + koyu tema ekran görüntüsü: taşan, kesilen, çevrilmemiş metin yok; koyu temada okunmayan alan yok.
+- Canlı ölçüm: 80 sn'de bellek 153→165 MB (ısınma), handle 833→807 (düşüyor), 60 sn boşta CPU 0.31 sn = tek çekirdeğin %0.52'si. Sızıntı yok.
