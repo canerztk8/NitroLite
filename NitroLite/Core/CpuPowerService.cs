@@ -82,7 +82,7 @@ public class CpuPowerService : IDisposable
         }
     }
 
-    private static bool TryGetActiveScheme(out Guid schemeGuid)
+    internal static bool TryGetActiveScheme(out Guid schemeGuid)
     {
         schemeGuid = Guid.Empty;
         try
@@ -102,6 +102,25 @@ public class CpuPowerService : IDisposable
         }
         catch { }
         return false;
+    }
+
+    /// <summary>
+    /// Reads the battery (DC) value of any power-scheme setting. Locale-independent, unlike parsing
+    /// <c>powercfg /query</c>, whose labels are translated.
+    /// </summary>
+    internal static bool TryReadDcValue(Guid subGroup, Guid setting, out uint value)
+    {
+        value = 0;
+        if (!TryGetActiveScheme(out var scheme)) return false;
+        return PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref subGroup, ref setting, out value) == 0;
+    }
+
+    /// <summary>Writes the battery (DC) value of a power-scheme setting and re-activates the scheme.</summary>
+    internal static bool TryWriteDcValue(Guid subGroup, Guid setting, uint value)
+    {
+        if (!TryGetActiveScheme(out var scheme)) return false;
+        if (PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref subGroup, ref setting, value) != 0) return false;
+        return PowerSetActiveScheme(IntPtr.Zero, ref scheme) == 0;
     }
 
     private void UnhideSetting()

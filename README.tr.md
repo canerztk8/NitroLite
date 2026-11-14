@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1089-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1125-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -80,6 +80,12 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
   bildirmediği değerler "(tahmini)" etiketiyle gösterilir.
 - **Pilde otomatik Eco:** Pile geçince düşük güç modu ve (isteğe bağlı) ana ekranda 60 Hz; adaptör takılınca önceki
   ayarlar geri yüklenir. Uygulama çökerse bu durum bir sonraki açılışta onarılır.
+- **Okul modu:** Şarjın en uzun süre gitmesi için tek anahtar. Etkin güç planına yalnızca pilde geçerli değerleri yazar
+  (CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika
+  sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık) ve Sessiz mod, otomatik fan, 60 Hz, %40 parlaklık ve
+  kapalı klavye ışığını uygular. Değiştirdiği her değer ilk değişiklikten önce `school_mode_backup.json` dosyasına
+  yazılır; böylece kapatınca — ya da çökmeden sonra yeniden açınca — makine tam eski hâline döner. Açıkken otomatik
+  adaptör/pil geçişi devre dışı kalır, okul modunu geri almaz.
 
 ### 6b. Bekleme belleğini boşaltma
 - Windows'un önbellekte tuttuğu bekleme listesini boş belleğe çevirir; çalışan programların belleğine dokunmaz.
@@ -223,6 +229,8 @@ NitroLite
 │   ├── BatteryWatchdogService.cs   # Pil durumu, sağlık ve deşarj telemetrisi
 │   ├── CpuPowerService.cs          # Windows güç planı CPU boost ayarı
 │   ├── PowerAutomationService.cs   # Adaptör/pil geçişleri ve Eco kurtarma
+│   ├── SchoolModeService.cs        # Tek anahtarla pil tasarrufu ve birebir geri alma kaydı
+│   ├── ScreenBrightnessService.cs  # WMI üzerinden panel parlaklığı (yalnız harici ekranda null)
 │   ├── GameDetectionService.cs     # Oyun tarama ve algılama
 │   ├── HardwareMonitorService.cs   # NVML (GPU) ve Windows yedek telemetrisi
 │   ├── StorageHealthService.cs     # Disk sağlık ve doluluk bilgisi
@@ -339,7 +347,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-1089 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+1125 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

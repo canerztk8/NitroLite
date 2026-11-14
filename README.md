@@ -81,6 +81,12 @@ at idle. Telemetry is read every 3 seconds while minimised.
 - **Automatic Eco on battery:** switching to battery applies a low-power mode and (optionally) 60 Hz on the internal
   display; plugging back in restores the previous settings. If the app crashes, the state is repaired on the next
   launch.
+- **School mode:** one switch for the longest a charge can last. It writes battery-only values into the active power
+  plan (CPU boost off, processor capped at 70 %, Windows battery saver always on, screen off after 3 minutes, sleep
+  after 10, disk off after 2, USB power saving on) and sets Quiet mode, automatic fan, 60 Hz, 40 % brightness and the
+  keyboard backlight off. Every value it replaces is written to `school_mode_backup.json` before the first change, so
+  turning it off — or relaunching after a crash — puts the machine back exactly as it was. While it is on, the
+  automatic AC/battery pass stands down instead of undoing it.
 
 ### 6b. Standby memory purge
 - Converts the standby list Windows keeps cached into free memory without touching the memory of running programs.
@@ -239,6 +245,8 @@ NitroLite
 │   ├── BatteryWatchdogService.cs   # Battery state, health and discharge telemetry
 │   ├── CpuPowerService.cs          # Windows power plan CPU boost setting
 │   ├── PowerAutomationService.cs   # AC/battery transitions and Eco recovery
+│   ├── SchoolModeService.cs        # One-switch battery saving, with an exact undo record
+│   ├── ScreenBrightnessService.cs  # Panel brightness through WMI (null on external-only setups)
 │   ├── GameDetectionService.cs     # Game scanning and detection
 │   ├── HardwareMonitorService.cs   # NVML (GPU) and Windows fallback telemetry
 │   ├── StorageHealthService.cs     # Disk health and free space
@@ -355,7 +363,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-1089 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1125 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

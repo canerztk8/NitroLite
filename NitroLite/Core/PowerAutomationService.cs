@@ -226,6 +226,13 @@ public class PowerAutomationService : IDisposable
     public Func<CpuBoostMode>? GetCurrentCpuBoost { get; set; }
     public Func<FanMode>? GetCurrentFanMode { get; set; }
 
+    /// <summary>
+    /// Set while school mode owns the machine. The automatic battery/AC pass would otherwise undo school mode's
+    /// quiet mode, fan and refresh rate the moment the adapter comes back, while the toggle still says it is on.
+    /// The AC state is still tracked, so the next evaluation after school mode ends sees the right transition.
+    /// </summary>
+    public bool AutomationSuspended { get; set; }
+
     public void SetSavedAcBaseline(OperatingMode mode, CpuBoostMode boost, FanMode fan, bool force = false)
     {
         lock (_stateSyncLock)
@@ -367,6 +374,15 @@ public class PowerAutomationService : IDisposable
     public async Task ProcessPowerTransitionAsync(bool isAc)
     {
         if (_isDisposed) return;
+
+        if (AutomationSuspended)
+        {
+            // Keep the AC state current but change nothing: school mode is holding the machine. Clearing the
+            // "already evaluated" flag makes the next real pass run even if nothing else changed in between.
+            _lastAcStatus = isAc;
+            _hasEvaluatedInitialState = false;
+            return;
+        }
 
         if (_transitionLock != null)
         {

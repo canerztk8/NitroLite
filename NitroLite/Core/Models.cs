@@ -264,6 +264,13 @@ public class AppSettings
     public bool BatteryWatchdogEnabled { get; set; } = true;
 
     /// <summary>
+    /// School mode: the most economical the machine can be on one charge. Persisted so it survives a restart and is
+    /// re-applied at startup; <see cref="SchoolModeService"/> keeps the undo record next to the other data files.
+    /// </summary>
+    [JsonPropertyName("school_mode_enabled")]
+    public bool SchoolModeEnabled { get; set; } = false;
+
+    /// <summary>
     /// UI language code (see <see cref="Loc.Languages"/>). Null means the user has not chosen one: a fresh install
     /// follows the Windows display language, and a settings file written before v1.2 stays Turkish.
     /// </summary>

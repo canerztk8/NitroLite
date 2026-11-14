@@ -32,8 +32,10 @@ public partial class MainWindow : Window
     private readonly MemoryCleanerService _memoryService;
     private readonly StorageHealthService _storageService;
     private readonly IDisplayRefreshRateService _displayService;
+    private readonly IScreenBrightnessService _screenBrightnessService;
     private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
+    private SchoolModeService? _schoolModeService;
 
     private readonly DispatcherTimer _pollTimer = new();
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
@@ -247,6 +249,7 @@ public partial class MainWindow : Window
         _memoryService = new();
         _storageService = new();
         _displayService = new DisplayRefreshRateService();
+        _screenBrightnessService = new ScreenBrightnessService();
         _atkMouseService = new();
 
         InitializeComponent();
@@ -278,7 +281,8 @@ public partial class MainWindow : Window
         Func<int, bool>? mouseProfileSwitcher = null,
         bool isTestHarness = true,
         IDisplayRefreshRateService? displayService = null,
-        HardwareMonitorService? hardwareService = null)
+        HardwareMonitorService? hardwareService = null,
+        IScreenBrightnessService? screenBrightnessService = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
@@ -291,6 +295,7 @@ public partial class MainWindow : Window
         _memoryService = new MemoryCleanerService();
         _storageService = new StorageHealthService();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
+        _screenBrightnessService = screenBrightnessService ?? (isTestHarness ? new TestScreenBrightnessService() : new ScreenBrightnessService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
@@ -317,6 +322,7 @@ public partial class MainWindow : Window
             _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
             _powerAutomationService.GetActiveGameProfile = () => _gameService.ActiveGameProfile;
             _powerAutomationService.PowerModeSwitched += OnPowerModeSwitchedHandler;
+            _schoolModeService = CreateSchoolModeService();
         }
     }
 
@@ -459,6 +465,7 @@ public partial class MainWindow : Window
         _powerAutomationService.IsGameSessionActive = () => _isGameSessionActive;
         _powerAutomationService.GetActiveGameProfile = () => _gameService.ActiveGameProfile;
         _powerAutomationService.PowerModeSwitched += OnPowerModeSwitchedHandler;
+        _schoolModeService = CreateSchoolModeService();
 
         Loaded += async (s, e) =>
         {
@@ -699,6 +706,13 @@ public partial class MainWindow : Window
             // Eco baseline was already loaded before the startup mode was written (step 0.2).
             await _powerAutomationService.EvaluatePowerStateAsync();
 
+            // School mode owns the machine while it is on, so it is re-applied after the power pass: the settings it
+            // writes are absolute, and the undo record on disk is left untouched.
+            if (_appSettings.SchoolModeEnabled && _schoolModeService != null)
+            {
+                await _schoolModeService.ReapplyAsync();
+            }
+
             // 7. Services page state. An existing autostart entry is kept working (moved exe, --minimized flag in
             // sync with the setting); nothing is written when autostart is off.
             _debloatService.RepairNitroLiteAutoStart(_appSettings.StartMinimized);
@@ -901,6 +915,141 @@ public partial class MainWindow : Window
             ChkAutoRefreshRate.IsChecked = _appSettings.AutoRefreshRateSwitching;
         }
         UpdateDcRefreshOptionState();
+        UpdateSchoolModeUi();
+        ApplySchoolModeAutomationState();
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // School mode: one switch for the most economical the machine can be on a charge.
+    // ---------------------------------------------------------------------------------------------------------------
+
+    private bool _schoolModeUiSyncing;
+
+    /// <summary>
+    /// School mode drives the same services the rest of the window uses, so the mode, fan and lighting pages stay in
+    /// sync through the handlers that already exist. The lighting callbacks are only wired when the window has a
+    /// visual tree: the test harness never calls InitializeComponent, so those controls are null there.
+    /// </summary>
+    private SchoolModeService CreateSchoolModeService()
+    {
+        var service = new SchoolModeService(_agentClient, _cpuPowerService, _displayService, _screenBrightnessService, _appSettings)
+        {
+            GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode,
+            GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode
+        };
+        if (SliderBrightness != null)
+        {
+            service.TurnLightingOffAsync = TurnLightingOffForSchoolModeAsync;
+            service.RestoreLightingAsync = RestoreLightingAfterSchoolModeAsync;
+        }
+        return service;
+    }
+
+    /// <summary>
+    /// While school mode is on it owns the machine: the automatic battery/AC pass would otherwise undo its quiet
+    /// mode, fan and refresh rate the moment the adapter comes back.
+    /// </summary>
+    private void ApplySchoolModeAutomationState()
+    {
+        if (_powerAutomationService != null)
+        {
+            _powerAutomationService.AutomationSuspended = _appSettings.SchoolModeEnabled;
+        }
+    }
+
+    private void UpdateSchoolModeUi()
+    {
+        if (ChkSchoolMode == null) return;
+        _schoolModeUiSyncing = true;
+        try
+        {
+            ChkSchoolMode.IsChecked = _appSettings.SchoolModeEnabled;
+            if (TxtSchoolModeDetail != null)
+            {
+                TxtSchoolModeDetail.Text = Loc.T("Pilde: CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık. Ayrıca Sessiz mod, otomatik fan, 60 Hz ekran, %40 parlaklık ve kapalı klavye ışığı.");
+            }
+        }
+        finally
+        {
+            _schoolModeUiSyncing = false;
+        }
+    }
+
+    private async void ChkSchoolMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || _schoolModeUiSyncing || ChkSchoolMode == null || _schoolModeService == null) return;
+
+        bool on = ChkSchoolMode.IsChecked == true;
+        ChkSchoolMode.IsEnabled = false;
+        try
+        {
+            var outcome = on ? await _schoolModeService.EnableAsync() : await _schoolModeService.DisableAsync();
+            _appSettings.SchoolModeEnabled = on;
+            SaveSettings();
+            ApplySchoolModeAutomationState();
+
+            if (!on && _powerAutomationService != null)
+            {
+                // Hand the machine back to the automatic pass, which re-applies Eco when it is on battery.
+                await _powerAutomationService.EvaluatePowerStateAsync();
+            }
+
+            ShowSchoolModeOutcome(on, outcome);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Okul modu", ex.ToString());
+            ShowToast(Loc.T($"Okul modu uygulanamadı: {ex.Message}"), false);
+        }
+        finally
+        {
+            ChkSchoolMode.IsEnabled = true;
+            UpdateSchoolModeUi();
+        }
+    }
+
+    private void ShowSchoolModeOutcome(bool on, SchoolModeOutcome outcome)
+    {
+        if (TxtSchoolModeStatus == null) return;
+        TxtSchoolModeStatus.Visibility = Visibility.Visible;
+        if (outcome.Success)
+        {
+            TxtSchoolModeStatus.Text = on
+                ? Loc.T("Okul modu açık: pil tasarrufu ayarları uygulandı.")
+                : Loc.T("Okul modu kapalı: önceki ayarlar geri yüklendi.");
+            if (TryFindResource("AccentGreen") is System.Windows.Media.Brush ok) TxtSchoolModeStatus.Foreground = ok;
+        }
+        else
+        {
+            TxtSchoolModeStatus.Text = Loc.T($"Okul modu: uygulanamayan adımlar: {string.Join(", ", outcome.Failed)}");
+            if (TryFindResource("Vermilion") is System.Windows.Media.Brush bad) TxtSchoolModeStatus.Foreground = bad;
+        }
+    }
+
+    /// <summary>School mode: keyboard backlight off. True when it is off afterwards.</summary>
+    private async Task<bool> TurnLightingOffForSchoolModeAsync()
+    {
+        if (IsLightingOff(_lighting)) return true;
+        _appSettings.LastActiveLighting = LightingPolicy.Clone(_lighting);
+        _lighting.Brightness = 0;
+        _lighting.Effect = "OFF";
+        _lighting.Color = "#000000";
+        _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
+        _appSettings.IsBacklightOff = true;
+        if (!await _agentClient.TurnOffLightingAsync()) return false;
+        UpdateLightingUi(_lighting);
+        SaveSettings();
+        return true;
+    }
+
+    /// <summary>School mode off: the keyboard comes back the way the user had it.</summary>
+    private async Task RestoreLightingAfterSchoolModeAsync()
+    {
+        _lighting = LightingPolicy.ResumeFromOff(_appSettings.LastActiveLighting);
+        _appSettings.IsBacklightOff = false;
+        UpdateLightingUi(_lighting);
+        await ApplyLightingToDeviceAsync(Loc.T("Klavye ışığı geri yüklenemedi"));
+        SaveSettings();
     }
 
     /// <summary>
