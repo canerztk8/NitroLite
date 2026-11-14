@@ -64,6 +64,11 @@
     Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
     value is still being fetched at startup (for example the ATK mouse profile).
 
+.PARAMETER Seed
+    Folder whose files are copied into the throwaway data folder before launch, so a page that reads
+    a data file (battery wear history, game profiles, RGB presets) can be captured with content in
+    it. settings.json is written after the copy, so -Language and -Theme still win.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -All -Theme dark -Language de
 
@@ -85,7 +90,8 @@ param(
     [switch]$FanCurve,
     [ValidateRange(30, 100)][int]$FanCurveFlat,
     [switch]$GameFanCurve,
-    [int]$Settle = 0
+    [int]$Settle = 0,
+    [string]$Seed = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,6 +150,10 @@ if ($running) {
 # ---- throwaway data folder --------------------------------------------------------------------
 $dataDir = Join-Path ([IO.Path]::GetTempPath()) ('nl-shot-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $dataDir | Out-Null
+if ($Seed) {
+    if (-not (Test-Path $Seed)) { throw "Seed folder not found: $Seed" }
+    Copy-Item -Path (Join-Path $Seed '*') -Destination $dataDir -Force
+}
 $themeValue = if ($Theme -eq 'dark') { 1 } else { 0 }
 $json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": $themeValue"
 if ($PSBoundParameters.ContainsKey('MouseProfile')) {

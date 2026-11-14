@@ -1898,6 +1898,38 @@
                                                 </StackPanel>
                                             </Border>
                                         </UniformGrid>
+
+                                        <!-- WEAR TREND: one reading a day, drawn as a line on the same paper.
+                                             The numbers above say where the pack is now; this says which way it is
+                                             going, which is the question a wear percentage alone cannot answer. -->
+                                        <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,14,0,0">
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                        <TextBlock Text="Aşınma Trendi" Foreground="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="12" />
+                                                        <TextBlock x:Name="TxtWearTrendSummary" Text="Henüz ölçüm yok." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                                        <TextBlock x:Name="TxtWearTrendNote" Text="" Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0" Visibility="Collapsed" />
+                                                    </StackPanel>
+                                                    <Button x:Name="BtnClearWearHistory" Grid.Column="1" Content="Geçmişi sil" Click="BtnClearWearHistory_Click" VerticalAlignment="Center" Background="Transparent" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="10,5" Cursor="Hand" FontSize="10" Visibility="Collapsed" />
+                                                </Grid>
+
+                                                <!-- The line is ink on paper, like every other trace in the app. The
+                                                     canvas is hidden until there are two readings to join. -->
+                                                <Canvas x:Name="CanvasWearTrend" Height="58" Margin="0,10,0,0" ClipToBounds="True" Visibility="Collapsed" SizeChanged="CanvasWearTrend_SizeChanged">
+                                                    <Polyline x:Name="WearTrendLine" Stroke="{StaticResource Ink}" StrokeThickness="1.5" StrokeLineJoin="Round" />
+                                                    <Canvas x:Name="WearTrendMarks" />
+                                                </Canvas>
+
+                                                <Grid x:Name="GridWearTrendAxis" Margin="0,4,0,0" Visibility="Collapsed">
+                                                    <TextBlock x:Name="TxtWearTrendFirstDate" Text="" Foreground="{StaticResource TextMuted}" FontSize="9" HorizontalAlignment="Left" />
+                                                    <TextBlock x:Name="TxtWearTrendLastDate" Text="" Foreground="{StaticResource TextMuted}" FontSize="9" HorizontalAlignment="Right" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
@@ -2194,7 +2226,10 @@
                                 </Border>
 
                                 <!-- NITROLITE SETTINGS: language, theme, update checks, feedback -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,16,0,0">
+                                <!-- The bottom margin is what keeps the last row off the window edge: the page's
+                                     ScrollViewer has no padding of its own, so a card flush with the bottom had
+                                     its final line clipped. -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,16,0,16">
                                     <StackPanel>
                                         <TextBlock Text="NitroLite Ayarları" Style="{StaticResource SectionTitle}" />
                                         <TextBlock Text="Arayüz dili, tema, güncelleme denetimi ve geri bildirim." Style="{StaticResource BodyText}" Margin="0,2,0,14" />
@@ -2280,6 +2315,24 @@
                                                 <TextBlock Text="Model, BIOS, Acer servisleri ve WMI durumunu bir dosyaya yazar. Hata bildirirken bu dosyayı ekleyin. Seri numarası, kullanıcı adı ve dosya yolu içermez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
                                             <Button x:Name="BtnHardwareReport" Grid.Column="1" Content="Raporu dışa aktar" Click="BtnHardwareReport_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                        </Grid>
+
+                                        <Separator Background="{StaticResource BorderDark}" Margin="0,12,0,12" />
+
+                                        <!-- Backup: one file that survives a Windows reinstall or a new laptop -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <TextBlock Text="Yedekleme" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                                                <TextBlock Text="Ayarları, fan eğrilerini, oyun profillerini ve RGB profillerini tek dosyaya yazar. Windows'u yeniden kurduğunuzda veya yeni bir bilgisayara geçtiğinizde geri yükleyin. Pencere konumu ve okul modu yedeğe girmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <Button x:Name="BtnRestoreBackup" Content="Geri yükle" Click="BtnRestoreBackup_Click" Background="Transparent" Foreground="{StaticResource TextSecondary}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="12,6" Cursor="Hand" FontSize="11" Margin="0,0,8,0" />
+                                                <Button x:Name="BtnCreateBackup" Content="Yedekle" Click="BtnCreateBackup_Click" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                            </StackPanel>
                                         </Grid>
                                     </StackPanel>
                                 </Border>

@@ -36,6 +36,9 @@ public partial class MainWindow : Window
     private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
     private SchoolModeService? _schoolModeService;
+    private readonly BatteryWearHistory _wearHistory;
+    // The vermilion dot on the newest wear reading, created once and moved on every render.
+    private System.Windows.Shapes.Ellipse? _wearTrendDot;
 
     private readonly DispatcherTimer _pollTimer = new();
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
@@ -153,6 +156,8 @@ public partial class MainWindow : Window
     private static readonly string LegacyConfigFile = AppPaths.GetDataFile("config.json");
     private static readonly string GameSessionRecoveryFile = AppPaths.GetDataFile("active_game_session.json");
     private static readonly string DcEcoStateFile = AppPaths.GetDataFile("dc_eco_state.json");
+    private static readonly string GameProfilesFile = AppPaths.GetDataFile("game_profiles.json");
+    private static readonly string RgbPresetsFile = AppPaths.GetDataFile("rgb_presets.json");
 
     internal void SaveGameSessionRecoveryState(GameSessionRecoveryState state)
     {
@@ -248,6 +253,7 @@ public partial class MainWindow : Window
         _hardwareService = new();
         _memoryService = new();
         _storageService = new();
+        _wearHistory = new BatteryWearHistory();
         _displayService = new DisplayRefreshRateService();
         _screenBrightnessService = new ScreenBrightnessService();
         _atkMouseService = new();
@@ -282,7 +288,8 @@ public partial class MainWindow : Window
         bool isTestHarness = true,
         IDisplayRefreshRateService? displayService = null,
         HardwareMonitorService? hardwareService = null,
-        IScreenBrightnessService? screenBrightnessService = null)
+        IScreenBrightnessService? screenBrightnessService = null,
+        BatteryWearHistory? wearHistory = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
@@ -294,6 +301,7 @@ public partial class MainWindow : Window
         _hardwareService = hardwareService ?? (isTestHarness ? new HardwareMonitorService(initNvml: false) : new HardwareMonitorService());
         _memoryService = new MemoryCleanerService();
         _storageService = new StorageHealthService();
+        _wearHistory = wearHistory ?? new BatteryWearHistory();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         _screenBrightnessService = screenBrightnessService ?? (isTestHarness ? new TestScreenBrightnessService() : new ScreenBrightnessService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
@@ -5123,6 +5131,11 @@ public partial class MainWindow : Window
     private async Task RefreshBatteryHealthAsync()
     {
         var details = await _batteryService.GetBatteryHealthDetailsAsync();
+
+        // One reading a day is enough for a wear curve; the history decides whether this one is new. It runs off the
+        // UI thread because the first call reads the file.
+        await Task.Run(() => _wearHistory.TryRecord(details));
+
         Dispatcher.Invoke(() =>
         {
             // Values computed from a fixed factory capacity, and the hard-coded fallbacks used when Windows
@@ -5186,7 +5199,141 @@ public partial class MainWindow : Window
                 if (TxtSubBatteryName != null)
                     TxtSubBatteryName.Text = id.Length > 0 ? id : Loc.T("Pil");
             }
+
+            RenderWearTrend();
         });
+    }
+
+    /// <summary>
+    /// Draws the recorded wear readings as a line on the card's paper: x is the date, y is the wear percentage.
+    /// Hidden until there are two readings, because one point is a number, not a trend.
+    /// </summary>
+    private void RenderWearTrend()
+    {
+        if (CanvasWearTrend == null || WearTrendLine == null || TxtWearTrendSummary == null) return;
+
+        var trend = _wearHistory.GetTrend();
+        var samples = trend.Samples;
+
+        if (BtnClearWearHistory != null)
+            BtnClearWearHistory.Visibility = samples.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (samples.Count == 0)
+        {
+            TxtWearTrendSummary.Text = Loc.T("Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.");
+            if (TxtWearTrendNote != null) TxtWearTrendNote.Visibility = Visibility.Collapsed;
+            CanvasWearTrend.Visibility = Visibility.Collapsed;
+            if (GridWearTrendAxis != null) GridWearTrendAxis.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var first = samples[0];
+        var last = samples[^1];
+
+        if (!trend.HasTrend)
+        {
+            TxtWearTrendSummary.Text = Loc.T("Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite günde bir ölçüm kaydeder.");
+            if (TxtWearTrendNote != null)
+            {
+                TxtWearTrendNote.Text = Loc.T($"İlk ölçüm {first.TimestampUtc.ToLocalTime():d} · aşınma {FormattableString.Invariant($"{first.WearLevelPercent:F1}")} puan");
+                TxtWearTrendNote.Visibility = Visibility.Visible;
+            }
+            CanvasWearTrend.Visibility = Visibility.Collapsed;
+            if (GridWearTrendAxis != null) GridWearTrendAxis.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        double days = trend.SpanDays ?? 0;
+        double change = trend.WearChangePercent ?? 0;
+        string changeText = change.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture);
+        TxtWearTrendSummary.Text = Loc.T($"{Math.Max(1, Math.Round(days)):F0} günde aşınma {changeText} puan değişti.");
+
+        if (TxtWearTrendNote != null)
+        {
+            if (trend.WearPerYearPercent is not double perYear)
+            {
+                TxtWearTrendNote.Text = Loc.T("Yıllık eğilim için en az bir haftalık kayıt gerekir.");
+            }
+            else if (change <= 0)
+            {
+                // A pack that reads healthier than before recalibrated; saying "it is healing" would be a lie.
+                TxtWearTrendNote.Text = Loc.T("Aşınma artmadı; pil kendini yeniden kalibre etmiş olabilir.");
+            }
+            else
+            {
+                TxtWearTrendNote.Text = Loc.T($"Bu hızla yılda yaklaşık {FormattableString.Invariant($"{perYear:F1}")} puan aşınır.");
+            }
+            TxtWearTrendNote.Visibility = Visibility.Visible;
+        }
+
+        if (GridWearTrendAxis != null)
+        {
+            GridWearTrendAxis.Visibility = Visibility.Visible;
+            if (TxtWearTrendFirstDate != null) TxtWearTrendFirstDate.Text = first.TimestampUtc.ToLocalTime().ToString("d");
+            if (TxtWearTrendLastDate != null) TxtWearTrendLastDate.Text = last.TimestampUtc.ToLocalTime().ToString("d");
+        }
+
+        CanvasWearTrend.Visibility = Visibility.Visible;
+
+        double width = CanvasWearTrend.ActualWidth;
+        double height = CanvasWearTrend.ActualHeight;
+        if (width <= 0 || height <= 0) { width = 600; height = 58; }
+
+        double minWear = samples.Min(s => s.WearLevelPercent);
+        double maxWear = samples.Max(s => s.WearLevelPercent);
+        // A flat history is a real answer, so it is drawn as a flat line in the middle instead of dividing by zero.
+        double pad = Math.Max(0.5, (maxWear - minWear) * 0.15);
+        double lo = Math.Max(0, minWear - pad);
+        double hi = maxWear + pad;
+        if (hi - lo < 1.0) hi = lo + 1.0;
+
+        var start = first.TimestampUtc;
+        double spanSeconds = Math.Max(1.0, (last.TimestampUtc - start).TotalSeconds);
+
+        var points = new PointCollection();
+        foreach (var sample in samples)
+        {
+            double x = (sample.TimestampUtc - start).TotalSeconds / spanSeconds * (width - 2) + 1;
+            double y = height - 1 - (sample.WearLevelPercent - lo) / (hi - lo) * (height - 2);
+            points.Add(new WpfPoint(x, y));
+        }
+        WearTrendLine.Points = points;
+
+        // The newest reading is the live one, so it gets the vermilion dot the other traces use.
+        if (WearTrendMarks != null && points.Count > 0)
+        {
+            if (_wearTrendDot == null)
+            {
+                _wearTrendDot = new System.Windows.Shapes.Ellipse
+                {
+                    Width = 5,
+                    Height = 5,
+                    Fill = TryFindResource("Vermilion") as WpfBrush
+                };
+                WearTrendMarks.Children.Add(_wearTrendDot);
+            }
+            var tip = points[^1];
+            System.Windows.Controls.Canvas.SetLeft(_wearTrendDot, tip.X - 2.5);
+            System.Windows.Controls.Canvas.SetTop(_wearTrendDot, tip.Y - 2.5);
+        }
+    }
+
+    private void CanvasWearTrend_SizeChanged(object sender, SizeChangedEventArgs e) => RenderWearTrend();
+
+    private void BtnClearWearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        var confirm = System.Windows.MessageBox.Show(this,
+            Loc.T("Pil aşınma geçmişi silinsin mi? Bu, kaydedilmiş tüm ölçümleri siler ve eğri sıfırdan başlar."),
+            Loc.T("Geçmişi sil"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        if (!_wearHistory.Clear())
+        {
+            ShowToast(Loc.T("Pil aşınma geçmişi silinemedi."), false);
+            return;
+        }
+        RenderWearTrend();
+        ShowToast(Loc.T("Pil aşınma geçmişi silindi."));
     }
 
     private async Task RefreshStorageHealthUi()
@@ -7383,7 +7530,11 @@ public partial class MainWindow : Window
     /// Restarts NitroLite so a setting that is read once at startup takes effect. The single-instance mutex is
     /// released first: otherwise the replacement process would see a running instance and exit immediately.
     /// </summary>
-    private void RestartForSettingChange(string message)
+    /// <param name="discardInMemorySettings">
+    /// Set when the file on disk is newer than the settings this session holds (a restore). The shutdown path saves
+    /// the in-memory copy, which would write the old settings straight back over the restored file.
+    /// </param>
+    private void RestartForSettingChange(string message, bool discardInMemorySettings = false)
     {
         if (_isGameSessionActive)
         {
@@ -7419,6 +7570,9 @@ public partial class MainWindow : Window
                 ShowToast(Loc.T($"NitroLite yeniden başlatılamadı: {ex.Message}"), false);
                 return;
             }
+            // Only once the replacement process is actually running: a failed start must leave this session able to
+            // save its settings.
+            if (discardInMemorySettings) _settingsLoaded = false;
             System.Windows.Application.Current?.Shutdown();
         };
         timer.Start();
@@ -7648,6 +7802,83 @@ public partial class MainWindow : Window
     }
 
     private void LinkAuthor_Click(object sender, RoutedEventArgs e) => OpenUrl("https://github.com/canerztk8");
+
+    /// <summary>
+    /// Writes settings, game profiles and RGB presets into one file the user picks. The live settings object is used,
+    /// so a change made a second ago is in the file even if it has not been flushed to disk yet.
+    /// </summary>
+    private void BtnCreateBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = Loc.T("NitroLite yedeğini kaydet"),
+            FileName = BackupService.SuggestedFileName(DateTime.Now),
+            DefaultExt = BackupService.FileExtension,
+            Filter = Loc.T("NitroLite yedeği (*.json)|*.json|Tüm dosyalar (*.*)|*.*"),
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        var result = BackupService.Create(
+            dialog.FileName,
+            _appSettings,
+            GameProfilesFile,
+            RgbPresetsFile,
+            UpdateService.CurrentVersionText);
+
+        if (!result.Success)
+        {
+            ShowToast(result.Error ?? Loc.T("Yedek yazılamadı."), false);
+            return;
+        }
+
+        ShowToast(Loc.T($"Yedek kaydedildi: {Path.GetFileName(dialog.FileName)}"));
+    }
+
+    /// <summary>
+    /// Puts a backup file back over the live settings and profiles, then restarts so the restored settings are the
+    /// ones the app reads. Refused during a game session: the restart would drop the profile the session runs on.
+    /// </summary>
+    private void BtnRestoreBackup_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isGameSessionActive)
+        {
+            ShowToast(Loc.T("Oyun sırasında yedek geri yüklenmez; oyunu kapattıktan sonra deneyin."), false);
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Loc.T("NitroLite yedeğini seç"),
+            DefaultExt = BackupService.FileExtension,
+            Filter = Loc.T("NitroLite yedeği (*.json)|*.json|Tüm dosyalar (*.*)|*.*"),
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        var confirm = System.Windows.MessageBox.Show(this,
+            Loc.T("Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?"),
+            Loc.T("Yedeği geri yükle"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        var result = BackupService.Restore(dialog.FileName, AppSettingsConfigFile, GameProfilesFile, RgbPresetsFile);
+        if (!result.Success)
+        {
+            ShowToast(result.Error ?? Loc.T("Yedek geri yüklenemedi."), false);
+            return;
+        }
+
+        // An older build reads the legacy copy; leaving it stale would resurrect the old settings on a downgrade.
+        try
+        {
+            if (File.Exists(AppSettingsConfigFile))
+                File.Copy(AppSettingsConfigFile, LegacyConfigFile, overwrite: true);
+        }
+        catch (Exception ex) { AppLog.Warn("Eski ayar kopyası güncellenemedi", ex.Message); }
+
+        RestartForSettingChange(Loc.T("Yedek geri yüklendi; NitroLite yeniden başlatılıyor…"), discardInMemorySettings: true);
+    }
 
     private void OpenUrl(string url)
     {

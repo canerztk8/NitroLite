@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1125-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1168-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -78,6 +78,12 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
   ayarlanır ve geri okunarak doğrulanır. Care Center kurulu değilse bu seçenek çalışmaz.
 - **Telemetri:** Anlık şarj/deşarj gücü, tahmini kalan süre, tam şarj kapasitesi ve aşınma oranı. Windows'un
   bildirmediği değerler "(tahmini)" etiketiyle gösterilir.
+- **Aşınma trendi:** NitroLite ölçtüğü aşınma oranının geçmişini tutar ve pil kartının altına çizgi olarak çizer;
+  kaydedilen dönemdeki değişimi ve en az yedi günlük geçmiş varsa yıllık hızı gösterir. Yalnızca ölçülmüş değerler
+  saklanır — Windows'un tahmin ettiği kapasite veya %0–100 dışındaki bir okuma tahmin edilmez, atlanır. 20 saat
+  geçtiğinde ya da sağlık tam bir puan düştüğünde örnek yazılır, en fazla 400 örnek tutulur, **Geçmişi sil** dosyayı
+  siler. Hız kısa bir serinin uzatılmasıdır, tahmin değil: yeniden kalibre edilen bir pil çizgiyi iki yöne de
+  kaydırabilir.
 - **Pilde otomatik Eco:** Pile geçince düşük güç modu ve (isteğe bağlı) ana ekranda 60 Hz; adaptör takılınca önceki
   ayarlar geri yüklenir. Uygulama çökerse bu durum bir sonraki açılışta onarılır.
 - **Okul modu:** Şarjın en uzun süre gitmesi için tek anahtar. Etkin güç planına yalnızca pilde geçerli değerleri yazar
@@ -217,6 +223,21 @@ içeriği eklenmez. Yanındaki **Günlük klasörünü aç** bağlantısı, bir 
 götürür. **Donanım raporu** ise [Uyumluluk](#uyumluluk) bölümünde anlatılan yetenek raporunu yazar; sorun modelinizde
 eksik veya işlevsiz bir özellikle ilgiliyse onu ekleyin.
 
+## Yedekleme ve geri yükleme
+
+**Ayarlar → Yedekleme** ayarlarınızı, oyun profillerinizi ve RGB profillerinizi tek bir JSON dosyasına yazar; yeni
+bir dizüstü ya da temiz bir Windows kurulumu her şeyi baştan ayarlamak anlamına gelmez. **Geri yükle** bu dosyayı
+geri okur ve NitroLite'ı yeniden başlatır.
+
+- Dosya `app` ve `schema` işaretleri taşıyan düz JSON'dur; NitroLite yedeği olmayan bir dosya yarım uygulanmak
+  yerine reddedilir.
+- İki değer bilerek makineler arasında taşınmaz: pencere konumu (olmayan bir monitörü işaret edebilir) ve **Okul
+  modu** (geri alma kaydı değişiklikleri yapan makinede kalır, başka yerde geri yüklemek kimsenin geri alamayacağı
+  ayarlar bırakır). Geri yükleme onu kapatır ve bunu bildirir.
+- Geri alma kayıtlarının kendisi — `debloat_backup_state.json`, `optimize_backup.json`, `school_mode_backup.json` —
+  yedeğin parçası değildir. Bu makinenin özgün durumunu anlatırlar, başka bir makinede anlamları yoktur.
+- Eksik veya okunamayan profil dosyası hata sayılmaz, atlanır ve bildirilir.
+
 ---
 
 ## Yapı
@@ -228,6 +249,8 @@ NitroLite
 │   ├── CareCenterClient.cs         # Acer Care Center WebSocket istemcisi (%80 şarj sınırı)
 │   ├── AtkMouseService.cs          # ATK / VXE fare HID protokolü
 │   ├── BatteryWatchdogService.cs   # Pil durumu, sağlık ve deşarj telemetrisi
+│   ├── BatteryWearHistory.cs       # Ölçülmüş aşınma örnekleri, trend ve yıllık hız
+│   ├── BackupService.cs            # Ayarlar, oyun ve RGB profilleri tek JSON dosyasında
 │   ├── CpuPowerService.cs          # Windows güç planı CPU boost ayarı
 │   ├── PowerAutomationService.cs   # Adaptör/pil geçişleri ve Eco kurtarma
 │   ├── SchoolModeService.cs        # Tek anahtarla pil tasarrufu ve birebir geri alma kaydı
@@ -258,7 +281,7 @@ NitroLite
 └── App.xaml                        # Tek örnek kontrolü, CLI bayrakları ve hata kaydı
 ```
 
-**Veri konumu:** Ayarlar, oyun profilleri, RGB profilleri, termal geçmiş ve günlük dosyası
+**Veri konumu:** Ayarlar, oyun profilleri, RGB profilleri, termal geçmiş, pil aşınma geçmişi ve günlük dosyası
 `%LOCALAPPDATA%\NitroLite` altında tutulur. Eski sürümlerin exe yanındaki dosyaları ilk açılışta buraya kopyalanır.
 
 ---
@@ -348,7 +371,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-1125 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+1168 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1089-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1168-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -78,6 +78,12 @@ at idle. Telemetry is read every 3 seconds while minimised.
   does, then read back to confirm. Without Care Center installed this option does nothing.
 - **Telemetry:** live charge/discharge power, estimated time remaining, full-charge capacity and wear level. Values
   Windows does not report are labelled "(estimated)".
+- **Wear trend:** NitroLite keeps a history of the wear level it measured and draws it as a line under the battery
+  card, with the change over the recorded period and a per-year rate once there are at least seven days of history.
+  Only measured values are stored — a capacity Windows estimated, or a reading outside 0–100 %, is skipped rather
+  than guessed. A sample is written when 20 hours have passed or the health dropped by a full point, at most 400
+  samples are kept, and **Clear history** deletes the file. The rate is an extrapolation of a short series, not a
+  prediction: a battery that is recalibrated can move the line in either direction.
 - **Automatic Eco on battery:** switching to battery applies a low-power mode and (optionally) 60 Hz on the internal
   display; plugging back in restores the previous settings. If the app crashes, the state is repaired on the next
   launch.
@@ -233,6 +239,21 @@ added. Next to it, **Open log folder** takes you to the log if you want to paste
 **Export hardware report** writes the capability report described under [Compatibility](#compatibility) — attach
 it when the problem is about a feature that is missing or does nothing on your model.
 
+## Backup and restore
+
+**Settings → Backup** writes one JSON file holding your settings, game profiles and RGB profiles, so a new laptop or
+a fresh Windows install does not mean setting everything up again. **Restore** reads that file back and restarts
+NitroLite.
+
+- The file is plain JSON with an `app` and `schema` marker; a file that is not a NitroLite backup is refused instead
+  of half-applied.
+- Two values are deliberately not carried across machines: the window position (it may point at a monitor that is
+  not there) and **School mode** (its undo record lives on the machine that made the changes, so restoring it
+  elsewhere would leave settings nobody can put back). Restore turns it off and says so.
+- The undo records themselves — `debloat_backup_state.json`, `optimize_backup.json`, `school_mode_backup.json` — are
+  not part of the backup. They describe this machine's original state and mean nothing on another one.
+- A missing or unreadable profile file is skipped and reported, not treated as an error.
+
 ---
 
 ## Architecture
@@ -244,6 +265,8 @@ NitroLite
 │   ├── CareCenterClient.cs         # Acer Care Center WebSocket client (80 % charge limit)
 │   ├── AtkMouseService.cs          # ATK / VXE mouse HID protocol
 │   ├── BatteryWatchdogService.cs   # Battery state, health and discharge telemetry
+│   ├── BatteryWearHistory.cs       # Measured wear samples, trend and per-year rate
+│   ├── BackupService.cs            # Settings, game and RGB profiles in one JSON file
 │   ├── CpuPowerService.cs          # Windows power plan CPU boost setting
 │   ├── PowerAutomationService.cs   # AC/battery transitions and Eco recovery
 │   ├── SchoolModeService.cs        # One-switch battery saving, with an exact undo record
@@ -274,7 +297,7 @@ NitroLite
 └── App.xaml                        # Single instance, CLI flags, error logging
 ```
 
-**Data location:** settings, game profiles, RGB profiles, thermal history and the log live in
+**Data location:** settings, game profiles, RGB profiles, thermal history, battery wear history and the log live in
 `%LOCALAPPDATA%\NitroLite`. Files that older versions kept next to the exe are copied there on first launch.
 
 ---
@@ -364,7 +387,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-1125 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1168 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
