@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1184-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1198-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -75,6 +75,9 @@ at idle. Telemetry is read every 3 seconds while minimised.
 ### 5. ATK / VXE mouse integration (optional)
 - Switches between Config 1–4 over HID, applies a per-game profile, and returns to the default profile when the game
   ends.
+- A wireless mouse stops answering vendor commands while it sleeps, so a switch that arrives when it is idle is
+  retried — every few hundred milliseconds at first, then every three seconds — and once more the moment you touch
+  the mouse or keyboard. The sidebar row reads **Click** while it waits, and the profile applies as soon as you do.
 
 ### 6. Battery
 - **80 % charge limit:** set through Acer Care Center (`AcerCCAgent`, `wss://localhost:4343`) the same way NitroSense
@@ -393,7 +396,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-1184 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1198 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

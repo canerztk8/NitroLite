@@ -115,6 +115,12 @@ public partial class MainWindow : Window
     internal System.Windows.Forms.ToolStripMenuItem? MenuItemRetryDesktop => _menuItemRetryDesktop;
     internal Func<Func<Task>, Task>? DispatcherRunner { get; set; }
     internal Func<int, bool>? MouseProfileSwitcher { get; set; }
+
+    /// <summary>
+    /// Tick count of the last user input. Production reads the real one; tests drive it so the
+    /// input-triggered mouse retry can be exercised without injecting system-wide input.
+    /// </summary>
+    internal Func<long> UserActivityProvider { get; set; } = () => UserActivity.LastInputTick;
     internal Action<string, bool>? ToastHandler { get; set; }
     internal PowerAutomationService? PowerAutomation => _powerAutomationService;
 
@@ -3581,12 +3587,50 @@ public partial class MainWindow : Window
         _ = ApplyDesktopMouseProfileAsync(profile);
     }
 
-    private static readonly TimeSpan MouseRetryInterval = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// Wait before the next attempt at a mouse profile that has not been confirmed yet. A wireless mouse only
+    /// answers vendor commands while it is awake, so the first attempts sit close together: the user usually
+    /// touches the mouse a second or two after the profile fails, and that is the window worth catching.
+    /// </summary>
+    /// <remarks>
+    /// After a minute of silence the mouse is more likely switched off than asleep, so the schedule drops to a
+    /// slow poll. User input still bypasses it, so switching the mouse back on applies the profile at once.
+    /// </remarks>
+    internal static long MouseRetryDelayMs(int attempts) => attempts switch
+    {
+        <= 1 => 400,
+        2 => 800,
+        3 => 1200,
+        4 => 1600,
+        5 => 2000,
+        6 => 2500,
+        <= 30 => 3000,
+        _ => 10000
+    };
+
+    /// <summary>Floor between two attempts, so a burst of input cannot turn into a HID hammer.</summary>
+    private const long MouseRetryMinGapMs = 700;
+
+    /// <summary>
+    /// Attempts and spacing for a game profile switch. The mouse is in active use by then, so a short burst is
+    /// enough; the old three attempts three seconds apart could all land while the mouse was still idle.
+    /// </summary>
+    private const int GameMouseRetryAttempts = 5;
+    private const long GameMouseRetryDelayMs = 1500;
 
     private sealed class DesktopMouseRequest(int profile)
     {
         public int Profile { get; } = profile;
         public long NextAttemptAt { get; set; } = long.MaxValue;
+        public int Attempts { get; set; }
+        public long LastAttemptAt { get; set; }
+        public long LastInputAtAttempt { get; set; }
+
+        /// <summary>
+        /// An attempt is on the wire. The activity shortcut can make a retry due at any moment, so without this
+        /// a second attempt could start while the first is still waiting on the mouse.
+        /// </summary>
+        public bool InFlight { get; set; }
     }
 
     private DesktopMouseRequest? _pendingDesktopMouseRequest;
@@ -3601,12 +3645,27 @@ public partial class MainWindow : Window
 
     internal async Task RetryPendingDesktopMouseProfileIfDueAsync(long now)
     {
-        if (_pendingDesktopMouseRequest is not { } request || now < request.NextAttemptAt ||
-            _isGameSessionActive || !_appSettings.AtkMouseIntegrationEnabled) return;
+        if (_pendingDesktopMouseRequest is not { } request || request.InFlight || _isGameSessionActive ||
+            !_appSettings.AtkMouseIntegrationEnabled) return;
+
+        // Two reasons to try again: the backoff says it is time, or the user just touched the keyboard or
+        // mouse. The second one is what makes this work — a sleeping wireless mouse only answers while it is
+        // awake, so the attempt has to land inside that window instead of on a fixed clock.
+        bool userWokeIt = UserActivityProvider() > request.LastInputAtAttempt &&
+                          now - request.LastAttemptAt >= MouseRetryMinGapMs;
+        if (now < request.NextAttemptAt && !userWokeIt) return;
 
         // Only one attempt for this request may wait on the transition lock at a time.
         request.NextAttemptAt = long.MaxValue;
-        await TryApplyDesktopMouseProfileAsync(request);
+        request.InFlight = true;
+        try
+        {
+            await TryApplyDesktopMouseProfileAsync(request);
+        }
+        finally
+        {
+            request.InFlight = false;
+        }
     }
 
     private async Task<AtkMouseResult?> TryApplyDesktopMouseProfileAsync(DesktopMouseRequest request)
@@ -3627,7 +3686,7 @@ public partial class MainWindow : Window
                 if (_atkMouseService.HasConfirmedProfile && _atkMouseService.CurrentActiveProfile is >= 1 and <= 4)
                     UpdateSideMouseProfileStatus(_atkMouseService.CurrentActiveProfile);
                 else
-                    ShowSideMouseProfileUnknown();
+                    ShowSideMouseProfileDeferred();
                 return null;
             }
 
@@ -3655,10 +3714,15 @@ public partial class MainWindow : Window
             if (!ReferenceEquals(_pendingDesktopMouseRequest, request) || !_appSettings.AtkMouseIntegrationEnabled)
                 return null;
 
+            request.LastAttemptAt = Environment.TickCount64;
+            request.LastInputAtAttempt = UserActivityProvider();
             if (result is AtkMouseResult.Confirmed or AtkMouseResult.Rejected)
                 _pendingDesktopMouseRequest = null;
             else
-                request.NextAttemptAt = Environment.TickCount64 + (long)MouseRetryInterval.TotalMilliseconds;
+            {
+                request.Attempts++;
+                request.NextAttemptAt = request.LastAttemptAt + MouseRetryDelayMs(request.Attempts);
+            }
 
             UpdateDefaultMouseProfileBadge(profile,
                 confirmed: result == AtkMouseResult.Confirmed,
@@ -3676,7 +3740,12 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             if (ReferenceEquals(_pendingDesktopMouseRequest, request))
-                request.NextAttemptAt = Environment.TickCount64 + (long)MouseRetryInterval.TotalMilliseconds;
+            {
+                request.Attempts++;
+                request.LastAttemptAt = Environment.TickCount64;
+                request.LastInputAtAttempt = UserActivityProvider();
+                request.NextAttemptAt = request.LastAttemptAt + MouseRetryDelayMs(request.Attempts);
+            }
             App.WriteLog("ATK fare profili", ex.Message);
             return AtkMouseResult.CommunicationError;
         }
@@ -3706,7 +3775,7 @@ public partial class MainWindow : Window
     internal static string DescribeMouseFailureShort(AtkMouseResult result, bool retryPending = false) => result switch
     {
         AtkMouseResult.ReceiverNotFound => Loc.T("Alıcı yok"),
-        AtkMouseResult.NoResponse => retryPending ? Loc.T("Uyanıyor…") : Loc.T("Yanıt yok"),
+        AtkMouseResult.NoResponse => retryPending ? Loc.T("Tıklayın") : Loc.T("Yanıt yok"),
         AtkMouseResult.Rejected => Loc.T("Reddedildi"),
         AtkMouseResult.ProfileNotConfirmed => Loc.T("Doğrulanamadı"),
         _ => Loc.T("İletişim hatası")
@@ -3755,7 +3824,7 @@ public partial class MainWindow : Window
             }
             else if (result != AtkMouseResult.Rejected && request.Remaining > 1)
                 _pendingGameMouseProfile = (request.Generation, request.Profile, request.Remaining - 1,
-                    Environment.TickCount64 + 3000);
+                    Environment.TickCount64 + GameMouseRetryDelayMs);
         }
         catch (Exception ex) { App.WriteLog("Oyun fare profili", ex.Message); }
         finally { _gameProfileTransitionLock.Release(); }
@@ -3771,7 +3840,7 @@ public partial class MainWindow : Window
         TxtSideMouseProfile.Text = text;
         TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource(isConfig ? "AccentGreen" : "TextSecondary");
         TxtSideMouseProfile.ToolTip = !isConfig && failure == AtkMouseResult.NoResponse
-            ? Loc.T("Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.")
+            ? Loc.T("Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.")
             : null;
     }
 
@@ -3793,14 +3862,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The row's "we do not know" state. Only used where no query is running, so it does not claim one is.
+    /// The row's state while a desktop profile change waits for the running game to end. It used to say
+    /// "Bilinmiyor", which read as a dead end even though the change was queued and would be applied.
     /// </summary>
-    private void ShowSideMouseProfileUnknown()
+    private void ShowSideMouseProfileDeferred()
     {
         if (TxtSideMouseProfile == null) return;
-        TxtSideMouseProfile.Text = Loc.T("Bilinmiyor");
+        TxtSideMouseProfile.Text = Loc.T("Oyun bitince");
         TxtSideMouseProfile.Foreground = (SolidColorBrush)FindResource("TextSecondary");
-        TxtSideMouseProfile.ToolTip = null;
+        TxtSideMouseProfile.ToolTip = Loc.T("Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.");
     }
 
     private void UpdateAtkMouseIntegrationVisibility(bool enabled)
@@ -4116,7 +4186,7 @@ public partial class MainWindow : Window
                 var mouseResult = await TryApplyGameMouseProfileAsync(profile.TargetAtkMouseProfile, saveGen);
                 mouseOk = mouseResult == AtkMouseResult.Confirmed;
                 if (!mouseOk && mouseResult != AtkMouseResult.Rejected)
-                    _pendingGameMouseProfile = (saveGen, profile.TargetAtkMouseProfile, 3, Environment.TickCount64 + 3000);
+                    _pendingGameMouseProfile = (saveGen, profile.TargetAtkMouseProfile, GameMouseRetryAttempts, Environment.TickCount64 + GameMouseRetryDelayMs);
                 if (mouseOk)
                 {
                     _isMouseProfileSwitchedForGame = true;
@@ -4408,7 +4478,7 @@ public partial class MainWindow : Window
                             else
                             {
                                 if (mouseResult != AtkMouseResult.Rejected)
-                                    _pendingGameMouseProfile = (sessionGen, profile.TargetAtkMouseProfile, 3, Environment.TickCount64 + 3000);
+                                    _pendingGameMouseProfile = (sessionGen, profile.TargetAtkMouseProfile, GameMouseRetryAttempts, Environment.TickCount64 + GameMouseRetryDelayMs);
                                 ShowToast(Loc.T($"Oyun fare profili: {DescribeMouseFailure(mouseResult)}."), false);
                             }
 

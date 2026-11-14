@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
@@ -14,9 +14,9 @@ namespace NitroLite.Tests;
 public class MouseProfileStatusTextTests
 {
     [Fact]
-    public void NoResponse_WhileRetrying_ReportsThatTheMouseIsWaking()
+    public void NoResponse_WhileRetrying_TellsTheUserToClickTheMouse()
     {
-        Assert.Equal("Uyanıyor…", MainWindow.DescribeMouseFailureShort(AtkMouseResult.NoResponse, retryPending: true));
+        Assert.Equal("Tıklayın", MainWindow.DescribeMouseFailureShort(AtkMouseResult.NoResponse, retryPending: true));
     }
 
     [Fact]

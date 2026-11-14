@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1184-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1198-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -75,6 +75,9 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
 
 ### 5. ATK / VXE fare entegrasyonu (isteğe bağlı)
 - HID üzerinden Config 1–4 arasında profil değiştirme, oyuna özel profil ve oyun bitince varsayılan profile dönüş.
+- Kablosuz fare uyurken üretici komutlarına yanıt vermez; bu yüzden boştayken gelen bir değişiklik önce birkaç yüz
+  milisaniyede bir, sonra üç saniyede bir yeniden denenir ve fareye ya da klavyeye dokunduğunuz anda bir kez daha
+  denenir. Beklerken kenar çubuğundaki satır **Tıklayın** yazar; tıkladığınız an profil uygulanır.
 
 ### 6. Pil
 - **%80 şarj sınırı:** Acer Care Center (`AcerCCAgent`, `wss://localhost:4343`) üzerinden NitroSense ile aynı şekilde
@@ -377,7 +380,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-1184 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+1198 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

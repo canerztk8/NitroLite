@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "Hanya satu dari dua target (global / keyboard) yang menerima perintah lampu; pengaturan mungkin diterapkan sebagian.",
  "KAYIT": "REK",
  "KAYIT · {0:0} SANİYE": "REK · {0:0} DETIK",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "Mouse nirkabel mungkin sedang tidur. Gerakkan mouse.",
  "Kalan Süre: --": "Sisa Waktu: --",
  "Kalan Süre: {0}": "Sisa Waktu: {0}",
  "Kaldırılamadı: {0}": "Tidak dapat menghapus: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "Mode Turbo",
  "Turuncu": "Oranye",
  "Tüm Sürücüler Sağlıklı": "Semua Drive Sehat",
- "Uyanıyor…": "Membangunkan…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "Peringatan (Perlu Pemeriksaan Drive)",
  "Uygula": "Terapkan",
  "Uygula'ya basın": "Tekan Terapkan",
@@ -910,5 +908,9 @@
  "Oyun": "Game",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Paling dekat dengan kurva pabrik: tenang di awal, lalu makin cepat di atas 80 °C.",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Berputar lebih lambat pada suhu menengah. Pada 85 °C ke atas batas keamanan tetap berlaku.",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Lebih cepat naik dan menjaga suhu tetap rendah; jelas lebih berisik daripada Seimbang."
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Lebih cepat naik dan menjaga suhu tetap rendah; jelas lebih berisik daripada Seimbang.",
+ "Tıklayın": "Klik",
+ "Oyun bitince": "Setelah game",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Tidak diubah selama sesi game. Akan diterapkan saat game ditutup.",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Mouse nirkabel sudah tidur. Klik sekali; profil diterapkan saat Anda mengklik."
 }

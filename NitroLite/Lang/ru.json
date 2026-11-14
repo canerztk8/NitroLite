@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "Команду подсветки приняла только одна из двух целей (общая / клавиатура); настройка может быть применена частично.",
  "KAYIT": "ЗАПИСЬ",
  "KAYIT · {0:0} SANİYE": "ЗАПИСЬ · {0:0} СЕК",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "Беспроводная мышь может находиться в спящем режиме. Подвиньте мышь.",
  "Kalan Süre: --": "Осталось: --",
  "Kalan Süre: {0}": "Осталось: {0}",
  "Kaldırılamadı: {0}": "Не удалось удалить: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "Турбо-режим",
  "Turuncu": "Оранжевый",
  "Tüm Sürücüler Sağlıklı": "Все накопители исправны",
- "Uyanıyor…": "Пробуждение…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "Предупреждение (нужна проверка накопителя)",
  "Uygula": "Применить",
  "Uygula'ya basın": "Нажмите «Применить»",
@@ -910,5 +908,9 @@
  "Oyun": "Игра",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Ближе всего к заводской кривой: тихо в начале, ускорение после 80 °C.",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "На средних температурах вращается медленнее. При 85 °C и выше по-прежнему действует защитный порог.",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Ускоряется раньше и держит температуру ниже; заметно громче сбалансированной."
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Ускоряется раньше и держит температуру ниже; заметно громче сбалансированной.",
+ "Tıklayın": "Клик",
+ "Oyun bitince": "После игры",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Не меняется во время игровой сессии. Будет применено после закрытия игры.",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Беспроводная мышь уснула. Щёлкните её один раз; профиль применится в момент щелчка."
 }

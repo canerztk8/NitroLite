@@ -1843,6 +1843,82 @@ function global:Disable-ScheduledTask {
     });
 
     [Fact]
+    public Task DesktopMouseProfile_RetriesAsSoonAsTheUserTouchesTheMouse() => RunInStaAsync(async () =>
+    {
+        // A wireless mouse answers only while it is awake, and it wakes on user input. Waiting out the backoff
+        // meant every attempt landed after the mouse had gone back to sleep, so the profile only applied when
+        // the user happened to click at the right moment.
+        var profiles = new List<int>();
+        long inputTick = 1;
+        var window = new MainWindow(new TestAcerAgentClient(), new TestCpuPowerService(),
+            new GameDetectionService(), new AtkMouseService(),
+            settings: new AppSettings { AtkMouseIntegrationEnabled = true },
+            mouseProfileSwitcher: profile =>
+            {
+                profiles.Add(profile);
+                return false;
+            }, isTestHarness: true);
+        window.UserActivityProvider = () => inputTick;
+
+        Assert.Equal(AtkMouseResult.NoResponse, await window.ApplyDesktopMouseProfileAsync(1));
+
+        // Walk the schedule out to its slow end, where the next attempt is three seconds away.
+        for (int i = 0; i < 7; i++)
+            await window.RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64 + 60_000);
+        int attemptsSoFar = profiles.Count;
+        Assert.Equal(8, attemptsSoFar);
+
+        // Nothing touched: a second from now is still inside the backoff.
+        await window.RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64 + 1000);
+        Assert.Equal(attemptsSoFar, profiles.Count);
+
+        // The user clicks the mouse: the same moment now has to produce an attempt.
+        inputTick = Environment.TickCount64;
+        await window.RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64 + 1000);
+        Assert.Equal(attemptsSoFar + 1, profiles.Count);
+    });
+
+    [Fact]
+    public Task DesktopMouseProfile_DoesNotStackAttemptsWhileOneIsOnTheWire() => RunInStaAsync(async () =>
+    {
+        // The input shortcut can make a retry due at any moment, so a second attempt must not start while the
+        // first is still waiting on the mouse.
+        var profiles = new List<int>();
+        long inputTick = 1;
+        var window = new MainWindow(new TestAcerAgentClient(), new TestCpuPowerService(),
+            new GameDetectionService(), new AtkMouseService(),
+            settings: new AppSettings { AtkMouseIntegrationEnabled = true },
+            mouseProfileSwitcher: profile =>
+            {
+                profiles.Add(profile);
+                return false;
+            }, isTestHarness: true);
+        window.UserActivityProvider = () => inputTick;
+
+        Assert.Equal(AtkMouseResult.NoResponse, await window.ApplyDesktopMouseProfileAsync(1));
+        for (int i = 0; i < 7; i++)
+            await window.RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64 + 60_000);
+        int attemptsSoFar = profiles.Count;
+
+        await window.GameProfileTransitionLock.WaitAsync();
+        Task first;
+        Task second;
+        try
+        {
+            inputTick = Environment.TickCount64;
+            first = window.RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64 + 1000);
+            second = window.RetryPendingDesktopMouseProfileIfDueAsync(Environment.TickCount64 + 1000);
+        }
+        finally
+        {
+            window.GameProfileTransitionLock.Release();
+        }
+
+        await Task.WhenAll(first, second);
+        Assert.Equal(attemptsSoFar + 1, profiles.Count);
+    });
+
+    [Fact]
     public Task DesktopMouseProfile_QueuedRetryYieldsToNewerSelection() => RunInStaAsync(async () =>
     {
         var profiles = new List<int>();
@@ -1894,7 +1970,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public void SideMouseProfile_ShowsTheFailureInsteadOfUnknownWhenTheSwitchFails()
     {
-        Assert.Equal(("Uyanıyor…", false),
+        Assert.Equal(("Tıklayın", false),
             MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.NoResponse, retryPending: true, lastShownProfile: 0));
         Assert.Equal(("Yanıt yok", false),
             MainWindow.DescribeSideMouseProfile(0, AtkMouseResult.NoResponse, retryPending: false, lastShownProfile: 0));

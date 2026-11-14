@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "Nur eines der beiden Ziele (global / Tastatur) hat den Lichtbefehl angenommen; die Einstellung ist möglicherweise nur teilweise angewendet.",
  "KAYIT": "AUFN",
  "KAYIT · {0:0} SANİYE": "AUFN · {0:0} SEKUNDEN",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "Die Funkmaus ist möglicherweise im Ruhezustand. Bewegen Sie die Maus.",
  "Kalan Süre: --": "Restzeit: --",
  "Kalan Süre: {0}": "Restzeit: {0}",
  "Kaldırılamadı: {0}": "Entfernen nicht möglich: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "Turbo-Modus",
  "Turuncu": "Orange",
  "Tüm Sürücüler Sağlıklı": "Alle Datenträger gesund",
- "Uyanıyor…": "Wird aufgeweckt…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "Warnung (Datenträgerprüfung erforderlich)",
  "Uygula": "Anwenden",
  "Uygula'ya basın": "Auf Anwenden drücken",
@@ -910,5 +908,9 @@
  "Oyun": "Spiel",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Am nächsten an der Werkskurve: leise am Anfang, ab 80 °C wird sie schneller.",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Dreht bei mittleren Temperaturen langsamer. Ab 85 °C greift weiterhin die Sicherheitsgrenze.",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Wird früher schneller und hält die Temperatur niedriger; deutlich lauter als Ausgewogen."
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Wird früher schneller und hält die Temperatur niedriger; deutlich lauter als Ausgewogen.",
+ "Tıklayın": "Klicken",
+ "Oyun bitince": "Nach dem Spiel",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Wird während einer Spielsitzung nicht geändert. Es wird angewendet, wenn das Spiel geschlossen wird.",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Die Funkmaus ist in den Ruhezustand gegangen. Klicken Sie einmal; das Profil wird im Moment des Klicks angewendet."
 }

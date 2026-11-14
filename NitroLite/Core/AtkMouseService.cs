@@ -84,7 +84,7 @@ public class AtkMouseService
 
             // A sent command with no acknowledgement may still have applied.
             if (result != AtkMouseResult.NoResponse) return result;
-            int? current = QueryCurrentProfile(out var queryResult);
+            int? current = QueryCurrentProfile(1, out var queryResult);
             if (current == configNumber) return AtkMouseResult.Confirmed;
             return current.HasValue ? AtkMouseResult.ProfileNotConfirmed : queryResult;
         }
@@ -100,13 +100,23 @@ public class AtkMouseService
     /// <returns>1-indexed configuration number (1..4), or null if query fails.</returns>
     public int? QueryCurrentProfile() => QueryCurrentProfile(out _);
 
-    internal int? QueryCurrentProfile(out AtkMouseResult result)
+    internal int? QueryCurrentProfile(out AtkMouseResult result) => QueryCurrentProfile(3, out result);
+
+    /// <summary>
+    /// Reads the active configuration file, retrying up to <paramref name="attempts"/> times.
+    /// </summary>
+    /// <param name="attempts">
+    /// Three when the answer is the whole point. One when this only verifies a switch that already went out:
+    /// a sleeping mouse answers neither, and three silent attempts cost two seconds that the retry loop needs
+    /// for its next try.
+    /// </param>
+    internal int? QueryCurrentProfile(int attempts, out AtkMouseResult result)
     {
         result = AtkMouseResult.CommunicationError;
         try
         {
             byte[] queryPacket = BuildGetCurrentConfigPacket();
-            for (int attempt = 0; attempt < 3; attempt++)
+            for (int attempt = 0; attempt < attempts; attempt++)
             {
                 byte[]? response = SendAndReceivePacket("vid_" + VID_ATK, "col05", queryPacket, CMD_GET_CURRENT_CONFIG, out result);
                 if (response != null && response.Length >= 7 && response[1] == CMD_GET_CURRENT_CONFIG && response[2] == 0)
@@ -122,7 +132,7 @@ public class AtkMouseService
                 }
                 if (response != null) result = AtkMouseResult.ProfileNotConfirmed;
                 if (result == AtkMouseResult.ReceiverNotFound) return null;
-                if (attempt < 2) Thread.Sleep(100);
+                if (attempt < attempts - 1) Thread.Sleep(100);
             }
         }
         catch { result = AtkMouseResult.CommunicationError; }

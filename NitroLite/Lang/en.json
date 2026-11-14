@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "Only one of the two targets (global / keyboard) accepted the light command; the setting may be partly applied.",
  "KAYIT": "REC",
  "KAYIT · {0:0} SANİYE": "REC · {0:0} SECONDS",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "The wireless mouse may be asleep. Move the mouse.",
  "Kalan Süre: --": "Time Left: --",
  "Kalan Süre: {0}": "Time Left: {0}",
  "Kaldırılamadı: {0}": "Could not remove: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "Turbo Mode",
  "Turuncu": "Orange",
  "Tüm Sürücüler Sağlıklı": "All Drives Healthy",
- "Uyanıyor…": "Waking…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "Warning (Drive Check Needed)",
  "Uygula": "Apply",
  "Uygula'ya basın": "Press Apply",
@@ -910,5 +908,9 @@
  "Oyun": "Game",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Closest to the factory curve: quiet at first, then speeds up past 80 °C.",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Turns slower at middle temperatures. At 85 °C and above the safety floor still applies.",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Speeds up earlier and keeps the temperature lower; noticeably louder than Balanced."
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Speeds up earlier and keeps the temperature lower; noticeably louder than Balanced.",
+ "Tıklayın": "Click",
+ "Oyun bitince": "After game",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Not changed during a game session. It will be applied when the game closes.",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "The wireless mouse has gone to sleep. Click it once; the profile is applied the moment you click."
 }

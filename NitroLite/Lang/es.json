@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "Solo uno de los dos destinos (global / teclado) aceptó el comando de iluminación; es posible que el ajuste se haya aplicado parcialmente.",
  "KAYIT": "REC",
  "KAYIT · {0:0} SANİYE": "REC · {0:0} SEGUNDOS",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "Es posible que el ratón inalámbrico esté suspendido. Mueva el ratón.",
  "Kalan Süre: --": "Tiempo restante: --",
  "Kalan Süre: {0}": "Tiempo restante: {0}",
  "Kaldırılamadı: {0}": "No se pudo quitar: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "Modo turbo",
  "Turuncu": "Naranja",
  "Tüm Sürücüler Sağlıklı": "Todas las unidades en buen estado",
- "Uyanıyor…": "Reactivando…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "Advertencia (es necesario comprobar la unidad)",
  "Uygula": "Aplicar",
  "Uygula'ya basın": "Pulse Aplicar",
@@ -910,5 +908,9 @@
  "Oyun": "Juego",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Lo más parecido a la curva de fábrica: silenciosa al principio y más rápida a partir de 80 °C.",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Gira más despacio a temperaturas medias. A partir de 85 °C sigue aplicándose el límite de seguridad.",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Acelera antes y mantiene la temperatura más baja; bastante más ruidosa que Equilibrado."
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Acelera antes y mantiene la temperatura más baja; bastante más ruidosa que Equilibrado.",
+ "Tıklayın": "Clic",
+ "Oyun bitince": "Tras el juego",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "No se cambia durante una sesión de juego. Se aplicará al cerrar el juego.",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "El ratón inalámbrico se ha dormido. Haz clic una vez; el perfil se aplica en el momento del clic."
 }

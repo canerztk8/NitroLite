@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "दो लक्ष्यों (वैश्विक / कीबोर्ड) में से केवल एक ने लाइट कमांड स्वीकार किया; सेटिंग आंशिक रूप से लागू हो सकती है।",
  "KAYIT": "REC",
  "KAYIT · {0:0} SANİYE": "REC · {0:0} सेकंड",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "वायरलेस माउस सो रहा हो सकता है। माउस हिलाएँ।",
  "Kalan Süre: --": "शेष समय: --",
  "Kalan Süre: {0}": "शेष समय: {0}",
  "Kaldırılamadı: {0}": "हटाया नहीं जा सका: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "टर्बो मोड",
  "Turuncu": "नारंगी",
  "Tüm Sürücüler Sağlıklı": "सभी ड्राइव स्वस्थ",
- "Uyanıyor…": "जगाया जा रहा है…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "चेतावनी (ड्राइव जाँच आवश्यक)",
  "Uygula": "लागू करें",
  "Uygula'ya basın": "लागू करें दबाएँ",
@@ -910,5 +908,9 @@
  "Oyun": "गेम",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "फ़ैक्टरी वक्र के सबसे नज़दीक: शुरू में शांत, 80 °C के बाद तेज़।",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "मध्यम तापमान पर धीमा घूमता है। 85 °C और उससे ऊपर सुरक्षा सीमा फिर भी लागू रहती है।",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "जल्दी तेज़ होता है और तापमान कम रखता है; संतुलित से स्पष्ट रूप से अधिक शोर करता है।"
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "जल्दी तेज़ होता है और तापमान कम रखता है; संतुलित से स्पष्ट रूप से अधिक शोर करता है।",
+ "Tıklayın": "क्लिक करें",
+ "Oyun bitince": "गेम के बाद",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "गेम सत्र के दौरान नहीं बदला जाता। गेम बंद होने पर लागू होगा।",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "वायरलेस माउस सो गया है। एक बार क्लिक करें; क्लिक करते ही प्रोफ़ाइल लागू हो जाएगी।"
 }

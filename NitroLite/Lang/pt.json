@@ -366,7 +366,6 @@
  "Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir.": "Apenas um dos dois destinos (global / teclado) aceitou o comando de luz; a configuração pode estar aplicada em parte.",
  "KAYIT": "GRAV",
  "KAYIT · {0:0} SANİYE": "GRAV · {0:0} SEGUNDOS",
- "Kablosuz fare uykuda olabilir. Fareyi hareket ettirin.": "O mouse sem fio pode estar em repouso. Mova o mouse.",
  "Kalan Süre: --": "Tempo Restante: --",
  "Kalan Süre: {0}": "Tempo Restante: {0}",
  "Kaldırılamadı: {0}": "Não foi possível remover: {0}",
@@ -635,7 +634,6 @@
  "Turbo Mod": "Modo turbo",
  "Turuncu": "Laranja",
  "Tüm Sürücüler Sağlıklı": "Todas as Unidades Saudáveis",
- "Uyanıyor…": "Despertando…",
  "Uyarı (Sürücü Kontrolü Gerekli)": "Aviso (Verificação da Unidade Necessária)",
  "Uygula": "Aplicar",
  "Uygula'ya basın": "Pressione Aplicar",
@@ -910,5 +908,9 @@
  "Oyun": "Jogo",
  "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "O mais próximo da curva de fábrica: silencioso no início e mais rápido a partir de 80 °C.",
  "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Gira mais devagar em temperaturas médias. A partir de 85 °C o limite de segurança continua valendo.",
- "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Acelera mais cedo e mantém a temperatura mais baixa; bem mais ruidosa que Equilibrado."
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Acelera mais cedo e mantém a temperatura mais baixa; bem mais ruidosa que Equilibrado.",
+ "Tıklayın": "Clique",
+ "Oyun bitince": "Após o jogo",
+ "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Não é alterado durante uma sessão de jogo. Será aplicado quando o jogo fechar.",
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "O mouse sem fio entrou em repouso. Clique uma vez; o perfil é aplicado no momento do clique."
 }
