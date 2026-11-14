@@ -5,6 +5,10 @@
 [![Tests](https://img.shields.io/badge/Tests-1089-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/screenshots/modes.png" alt="NitroLite: çalışma modları, fan denetimi, işlemci boost ve MUX anahtarı" width="100%">
+</p>
+
 **NitroLite**, Acer Nitro dizüstü bilgisayarlar (geliştirme **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070
 üzerinde yapıldı) için NitroSense'in yerini alan, hafif ve açık kaynaklı bir kontrol merkezidir. NitroSense'in
 kullandığı Acer servisleriyle (`AcerAgentService`, Acer Care Center) aynı protokolleri kullanır; ağır Electron
@@ -18,6 +22,19 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
 %0,6'sı. Simge durumundayken telemetri 3 saniyede bir okunur.
 
 *English README: [README.md](README.md)*
+
+---
+
+## Ekran görüntüleri
+
+<p align="center">
+  <a href="docs/screenshots/monitoring.png"><img src="docs/screenshots/monitoring.png" alt="Donanım telemetrisi ve OSD" width="49%"></a>
+  <a href="docs/screenshots/rgb.png"><img src="docs/screenshots/rgb.png" alt="Klavye arka aydınlatması" width="49%"></a>
+</p>
+<p align="center">
+  <a href="docs/screenshots/battery.png"><img src="docs/screenshots/battery.png" alt="Pil sağlığı ve bileşen sıcaklık matrisi" width="49%"></a>
+  <a href="docs/screenshots/services.png"><img src="docs/screenshots/services.png" alt="Sistem servisleri ve onarım araçları" width="49%"></a>
+</p>
 
 ---
 
@@ -164,6 +181,10 @@ açılmak için yaklaşık bir saniyede kendini yeniden başlatır.
 **Ayarlar → Tema** üç seçenek sunar: **Sistem varsayılanı**, açık "kâğıt" teması ve aynı vurgu renklerinden kurulmuş
 koyu tema. Sistem varsayılanı Windows'un uygulama temasını izler ve açılışta çözülür. OSD her durumda koyudur. Dil
 gibi, tema da hızlı yeniden başlatmayla uygulanır.
+
+<p align="center">
+  <img src="docs/screenshots/modes-dark.png" alt="NitroLite koyu temada" width="100%">
+</p>
 
 ## Güncelleme
 
@@ -332,7 +353,7 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
-### Ekran görüntüsü
+### Ekran görüntüsü alma
 
 `scripts/screenshot.ps1`, uygulamayı açıp ekranın ortasına koyup elle görüntü almanıza gerek bırakmaz.
 NitroLite'ı kendi geçici veri klasörüyle başlatır, pencereyi köşeye park eder, sayfaları gezer, her

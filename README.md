@@ -5,6 +5,10 @@
 [![Tests](https://img.shields.io/badge/Tests-1089-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/screenshots/modes.png" alt="NitroLite: operating modes, fan control, CPU boost and the MUX switch" width="100%">
+</p>
+
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
 **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It speaks the same protocols as the Acer services NitroSense
 uses (`AcerAgentService`, Acer Care Center) and does not ship an Electron shell.
@@ -17,6 +21,19 @@ service says the hardware can do, then shows only the controls this laptop actua
 at idle. Telemetry is read every 3 seconds while minimised.
 
 *Türkçe README: [README.tr.md](README.tr.md)*
+
+---
+
+## Screenshots
+
+<p align="center">
+  <a href="docs/screenshots/monitoring.png"><img src="docs/screenshots/monitoring.png" alt="Hardware telemetry and OSD" width="49%"></a>
+  <a href="docs/screenshots/rgb.png"><img src="docs/screenshots/rgb.png" alt="Keyboard backlight" width="49%"></a>
+</p>
+<p align="center">
+  <a href="docs/screenshots/battery.png"><img src="docs/screenshots/battery.png" alt="Battery health and thermal matrix" width="49%"></a>
+  <a href="docs/screenshots/services.png"><img src="docs/screenshots/services.png" alt="Services and repair tools" width="49%"></a>
+</p>
 
 ---
 
@@ -180,6 +197,10 @@ NitroLite restarts itself in about a second to apply it.
 **Settings → Theme** offers **System default**, the light "paper" theme and a dark theme built from the same accent
 colours. System default follows the Windows app theme, resolved at launch. The OSD is dark in every case. Like the
 language, the theme applies after a quick restart.
+
+<p align="center">
+  <img src="docs/screenshots/modes-dark.png" alt="NitroLite in the dark theme" width="100%">
+</p>
 
 ## Updating
 
@@ -348,7 +369,7 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
-### Screenshots
+### Capturing screenshots
 
 `scripts/screenshot.ps1` captures pages without you having to open the app, centre it and grab the
 window by hand. It starts NitroLite against a throwaway data folder, parks the window in a corner,
