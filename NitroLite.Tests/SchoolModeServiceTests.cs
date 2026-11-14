@@ -483,6 +483,20 @@ public class SchoolModeServiceTests
     }
 
     [Fact]
+    public void PowerSettings_CarryTheThreeProcessorLeversThatActuallySavePower()
+    {
+        // The GUIDs are the part that silently does nothing when it is wrong, so they are pinned here rather than
+        // only in the service: a typo would otherwise look like a successful school mode.
+        var processor = new Guid("54533251-82be-4824-96c1-47b60b740d00");
+        var levers = SchoolModeService.PowerSettings.Where(s => s.SubGroup == processor).ToList();
+
+        Assert.Equal(3, levers.Count);
+        Assert.Contains(levers, s => s.Setting == new Guid("bc5038f7-23e0-4960-96da-33abaf5935ec") && s.TargetDc == 60);
+        Assert.Contains(levers, s => s.Setting == new Guid("94d3a615-a899-4ac5-ae2b-e4d8f634367f") && s.TargetDc == 1);
+        Assert.Contains(levers, s => s.Setting == new Guid("36687f9e-e3a5-4dbf-b1dc-15eb381c6863") && s.TargetDc == 100);
+    }
+
+    [Fact]
     public void PowerSettings_AreDistinctAndHaveATranslatedLabel()
     {
         Assert.Equal(SchoolModeService.PowerSettings.Count,

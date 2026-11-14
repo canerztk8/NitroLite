@@ -82,11 +82,12 @@ at idle. Telemetry is read every 3 seconds while minimised.
   display; plugging back in restores the previous settings. If the app crashes, the state is repaired on the next
   launch.
 - **School mode:** one switch for the longest a charge can last. It writes battery-only values into the active power
-  plan (CPU boost off, processor capped at 70 %, Windows battery saver always on, screen off after 3 minutes, sleep
-  after 10, disk off after 2, USB power saving on) and sets Eco mode, automatic fan, 60 Hz, 40 % brightness and the
-  keyboard backlight off. Every value it replaces is written to `school_mode_backup.json` before the first change, so
-  turning it off — or relaunching after a crash — puts the machine back exactly as it was. While it is on, the
-  automatic AC/battery pass stands down instead of undoing it.
+  plan (CPU boost off, processor capped at 60 %, passive cooling, processor energy preference at maximum efficiency,
+  Windows battery saver always on, screen off after 3 minutes, sleep after 10, disk off after 2, USB power saving on)
+  and sets Eco mode, automatic fan, 60 Hz, 40 % brightness and the keyboard backlight off. Every value it replaces is
+  written to `school_mode_backup.json` before the first change, so turning it off — or relaunching after a crash —
+  puts the machine back exactly as it was. While it is on, the automatic AC/battery pass stands down instead of
+  undoing it.
 
 ### 6b. Standby memory purge
 - Converts the standby list Windows keeps cached into free memory without touching the memory of running programs.

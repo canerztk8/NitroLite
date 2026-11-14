@@ -81,11 +81,12 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
 - **Pilde otomatik Eco:** Pile geçince düşük güç modu ve (isteğe bağlı) ana ekranda 60 Hz; adaptör takılınca önceki
   ayarlar geri yüklenir. Uygulama çökerse bu durum bir sonraki açılışta onarılır.
 - **Okul modu:** Şarjın en uzun süre gitmesi için tek anahtar. Etkin güç planına yalnızca pilde geçerli değerleri yazar
-  (CPU boost kapalı, işlemci en fazla %70, Windows pil tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika
-  sonra uyku, disk 2 dakika sonra durur, USB güç tasarrufu açık) ve Eco mod, otomatik fan, 60 Hz, %40 parlaklık ve
-  kapalı klavye ışığını uygular. Değiştirdiği her değer ilk değişiklikten önce `school_mode_backup.json` dosyasına
-  yazılır; böylece kapatınca — ya da çökmeden sonra yeniden açınca — makine tam eski hâline döner. Açıkken otomatik
-  adaptör/pil geçişi devre dışı kalır, okul modunu geri almaz.
+  (CPU boost kapalı, işlemci en fazla %60, pasif soğutma, işlemci enerji tercihi en verimli uçta, Windows pil
+  tasarrufu hep açık, ekran 3 dakika sonra kapanır, 10 dakika sonra uyku, disk 2 dakika sonra durur, USB güç
+  tasarrufu açık) ve Eco mod, otomatik fan, 60 Hz, %40 parlaklık ve kapalı klavye ışığını uygular. Değiştirdiği her
+  değer ilk değişiklikten önce `school_mode_backup.json` dosyasına yazılır; böylece kapatınca — ya da çökmeden sonra
+  yeniden açınca — makine tam eski hâline döner. Açıkken otomatik adaptör/pil geçişi devre dışı kalır, okul modunu
+  geri almaz.
 
 ### 6b. Bekleme belleğini boşaltma
 - Windows'un önbellekte tuttuğu bekleme listesini boş belleğe çevirir; çalışan programların belleğine dokunmaz.

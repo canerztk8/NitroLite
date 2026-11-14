@@ -841,6 +841,8 @@
  "Klavye ışığı geri yüklenemedi": "The keyboard backlight could not be restored",
  "Güç planı ayarı": "Power plan setting",
  "Maksimum işlemci durumu": "Maximum processor state",
+ "Sistem soğutma ilkesi": "System cooling policy",
+ "İşlemci enerji tercihi": "Processor energy preference",
  "Windows pil tasarrufu": "Windows battery saver",
  "Ekran kapanma süresi": "Screen-off timeout",
  "Uyku süresi": "Sleep timeout",
@@ -860,5 +862,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "School mode off: the previous settings are back.",
  "Okul modu: uygulanamayan adımlar: {0}": "School mode: steps that could not be applied: {0}",
  "Okul modu uygulanamadı: {0}": "School mode could not be applied: {0}",
- "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "On battery: the most economical settings — Eco mode, CPU boost off, processor at 70 %, battery saver on, screen off after 3 min / sleep after 10 min, 60 Hz, 40 % brightness, keyboard backlight off. Turning it off puts everything back."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "On battery: the most economical settings — Eco mode, CPU boost off, processor at 60 %, passive cooling, battery saver on, screen off after 3 min / sleep after 10 min, 60 Hz, 40 % brightness, keyboard backlight off. Turning it off puts everything back."
 }

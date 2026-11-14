@@ -841,6 +841,8 @@
  "Klavye ışığı geri yüklenemedi": "Lampu latar keyboard tidak dapat dipulihkan",
  "Güç planı ayarı": "Pengaturan skema daya",
  "Maksimum işlemci durumu": "Status prosesor maksimum",
+ "Sistem soğutma ilkesi": "Kebijakan pendinginan sistem",
+ "İşlemci enerji tercihi": "Preferensi energi prosesor",
  "Windows pil tasarrufu": "Penghemat baterai Windows",
  "Ekran kapanma süresi": "Waktu layar mati",
  "Uyku süresi": "Waktu tidur",
@@ -860,5 +862,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "Mode Sekolah nonaktif: pengaturan sebelumnya kembali.",
  "Okul modu: uygulanamayan adımlar: {0}": "Mode Sekolah: langkah yang tidak dapat diterapkan: {0}",
  "Okul modu uygulanamadı: {0}": "Mode Sekolah tidak dapat diterapkan: {0}",
- "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Saat memakai baterai: pengaturan paling hemat — mode Eco, CPU boost mati, prosesor 70 %, penghemat baterai aktif, layar mati setelah 3 mnt / tidur setelah 10 mnt, 60 Hz, kecerahan 40 %, lampu latar keyboard mati. Saat dimatikan, semuanya kembali."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Saat memakai baterai: pengaturan paling hemat — mode Eco, CPU boost mati, prosesor 60 %, pendinginan pasif, penghemat baterai aktif, layar mati setelah 3 mnt / tidur setelah 10 mnt, 60 Hz, kecerahan 40 %, lampu latar keyboard mati. Saat dimatikan, semuanya kembali."
 }

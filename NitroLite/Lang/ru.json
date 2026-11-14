@@ -841,6 +841,8 @@
  "Klavye ışığı geri yüklenemedi": "Не удалось восстановить подсветку клавиатуры",
  "Güç planı ayarı": "Настройка схемы питания",
  "Maksimum işlemci durumu": "Максимальное состояние процессора",
+ "Sistem soğutma ilkesi": "Политика охлаждения системы",
+ "İşlemci enerji tercihi": "Энергетические предпочтения процессора",
  "Windows pil tasarrufu": "Экономия заряда Windows",
  "Ekran kapanma süresi": "Тайм-аут отключения экрана",
  "Uyku süresi": "Тайм-аут сна",
@@ -860,5 +862,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "Школьный режим выключен: прежние настройки восстановлены.",
  "Okul modu: uygulanamayan adımlar: {0}": "Школьный режим: не удалось применить: {0}",
  "Okul modu uygulanamadı: {0}": "Не удалось включить школьный режим: {0}",
- "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "От батареи: самые экономичные настройки — режим Eco, CPU boost выключен, процессор на 70 %, экономия заряда включена, экран гаснет через 3 мин / сон через 10 мин, 60 Гц, яркость 40 %, подсветка клавиатуры выключена. При выключении всё возвращается."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "От батареи: самые экономичные настройки — режим Eco, CPU boost выключен, процессор на 60 %, пассивное охлаждение, экономия заряда включена, экран гаснет через 3 мин / сон через 10 мин, 60 Гц, яркость 40 %, подсветка клавиатуры выключена. При выключении всё возвращается."
 }

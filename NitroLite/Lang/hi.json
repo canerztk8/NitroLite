@@ -841,6 +841,8 @@
  "Klavye ışığı geri yüklenemedi": "कीबोर्ड बैकलाइट बहाल नहीं हो सकी",
  "Güç planı ayarı": "पावर प्लान सेटिंग",
  "Maksimum işlemci durumu": "अधिकतम प्रोसेसर स्थिति",
+ "Sistem soğutma ilkesi": "सिस्टम कूलिंग नीति",
+ "İşlemci enerji tercihi": "प्रोसेसर ऊर्जा प्राथमिकता",
  "Windows pil tasarrufu": "Windows बैटरी सेवर",
  "Ekran kapanma süresi": "स्क्रीन बंद होने का समय",
  "Uyku süresi": "स्लीप समय",
@@ -860,5 +862,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "स्कूल मोड बंद: पिछली सेटिंग्स वापस आ गईं।",
  "Okul modu: uygulanamayan adımlar: {0}": "स्कूल मोड: लागू न हो सके चरण: {0}",
  "Okul modu uygulanamadı: {0}": "स्कूल मोड लागू नहीं हो सका: {0}",
- "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "बैटरी पर: सबसे किफायती सेटिंग्स — Eco मोड, CPU boost बंद, प्रोसेसर 70 %, बैटरी सेवर चालू, स्क्रीन 3 मिनट में बंद / 10 मिनट में स्लीप, 60 Hz, 40 % चमक, कीबोर्ड बैकलाइट बंद। बंद करने पर सब कुछ वापस आ जाता है।"
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "बैटरी पर: सबसे किफायती सेटिंग्स — Eco मोड, CPU boost बंद, प्रोसेसर 60 %, पैसिव कूलिंग, बैटरी सेवर चालू, स्क्रीन 3 मिनट में बंद / 10 मिनट में स्लीप, 60 Hz, 40 % चमक, कीबोर्ड बैकलाइट बंद। बंद करने पर सब कुछ वापस आ जाता है।"
 }

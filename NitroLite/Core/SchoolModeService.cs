@@ -75,13 +75,21 @@ public sealed class SchoolModeService
 {
     public const int TargetBrightnessPercent = 40;
     public const int TargetRefreshRate = 60;
-    public const uint TargetMaxProcessorPercent = 70;
+    public const uint TargetMaxProcessorPercent = 60;
     public const uint TargetDisplayOffSeconds = 180;
     public const uint TargetSleepSeconds = 600;
     public const uint TargetDiskOffSeconds = 120;
 
+    /// <summary>Passive: the processor slows down before the fan speeds up, so the fan stays off in a quiet room.</summary>
+    public const uint TargetCoolingPolicy = 1;
+
+    /// <summary>100 = the processor prefers efficiency over speed for the same work (CPPC energy preference).</summary>
+    public const uint TargetEnergyPreference = 100;
+
     private static readonly Guid SubProcessor = new("54533251-82be-4824-96c1-47b60b740d00");
     private static readonly Guid MaxProcessorState = new("bc5038f7-23e0-4960-96da-33abaf5935ec");
+    private static readonly Guid SystemCoolingPolicy = new("94d3a615-a899-4ac5-ae2b-e4d8f634367f");
+    private static readonly Guid EnergyPreference = new("36687f9e-e3a5-4dbf-b1dc-15eb381c6863");
     private static readonly Guid SubEnergySaver = new("de830923-a562-41af-a086-e3a2c6bad2da");
     private static readonly Guid EnergySaverThreshold = new("e69653ca-cf7f-4f05-aa73-cb833fa90ad4");
     private static readonly Guid SubVideo = new("7516b95f-f776-4464-8c53-06167f40cc99");
@@ -97,6 +105,8 @@ public sealed class SchoolModeService
     public static IReadOnlyList<SchoolModePowerSetting> PowerSettings { get; } = new[]
     {
         new SchoolModePowerSetting(SubProcessor, MaxProcessorState, TargetMaxProcessorPercent, "Maksimum işlemci durumu"),
+        new SchoolModePowerSetting(SubProcessor, SystemCoolingPolicy, TargetCoolingPolicy, "Sistem soğutma ilkesi"),
+        new SchoolModePowerSetting(SubProcessor, EnergyPreference, TargetEnergyPreference, "İşlemci enerji tercihi"),
         new SchoolModePowerSetting(SubEnergySaver, EnergySaverThreshold, 100, "Windows pil tasarrufu"),
         new SchoolModePowerSetting(SubVideo, VideoIdle, TargetDisplayOffSeconds, "Ekran kapanma süresi"),
         new SchoolModePowerSetting(SubSleep, StandbyIdle, TargetSleepSeconds, "Uyku süresi"),

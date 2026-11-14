@@ -841,6 +841,8 @@
  "Klavye ışığı geri yüklenemedi": "No se pudo restaurar la retroiluminación del teclado",
  "Güç planı ayarı": "Ajuste del plan de energía",
  "Maksimum işlemci durumu": "Estado máximo del procesador",
+ "Sistem soğutma ilkesi": "Directiva de refrigeración del sistema",
+ "İşlemci enerji tercihi": "Preferencia energética del procesador",
  "Windows pil tasarrufu": "Ahorro de batería de Windows",
  "Ekran kapanma süresi": "Tiempo de apagado de pantalla",
  "Uyku süresi": "Tiempo de suspensión",
@@ -860,5 +862,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "Modo Escuela desactivado: los ajustes anteriores están de vuelta.",
  "Okul modu: uygulanamayan adımlar: {0}": "Modo Escuela: pasos que no se pudieron aplicar: {0}",
  "Okul modu uygulanamadı: {0}": "No se pudo aplicar el Modo Escuela: {0}",
- "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Con batería: los ajustes más económicos — modo Eco, CPU boost desactivado, procesador al 70 %, ahorro de batería activado, pantalla apagada a los 3 min / suspensión a los 10 min, 60 Hz, 40 % de brillo, retroiluminación del teclado apagada. Al desactivarlo todo vuelve."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Con batería: los ajustes más económicos — modo Eco, CPU boost desactivado, procesador al 60 %, refrigeración pasiva, ahorro de batería activado, pantalla apagada a los 3 min / suspensión a los 10 min, 60 Hz, 40 % de brillo, retroiluminación del teclado apagada. Al desactivarlo todo vuelve."
 }

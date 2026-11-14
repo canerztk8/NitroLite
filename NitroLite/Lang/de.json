@@ -841,6 +841,8 @@
  "Klavye ışığı geri yüklenemedi": "Die Tastaturbeleuchtung konnte nicht wiederhergestellt werden",
  "Güç planı ayarı": "Energieschema-Einstellung",
  "Maksimum işlemci durumu": "Maximaler Prozessorzustand",
+ "Sistem soğutma ilkesi": "Systemkühlungsrichtlinie",
+ "İşlemci enerji tercihi": "Energiepräferenz des Prozessors",
  "Windows pil tasarrufu": "Windows-Energiesparmodus",
  "Ekran kapanma süresi": "Bildschirm-Timeout",
  "Uyku süresi": "Standby-Timeout",
@@ -860,5 +862,5 @@
  "Okul modu kapalı: önceki ayarlar geri yüklendi.": "Schulmodus aus: Die vorherigen Einstellungen sind zurück.",
  "Okul modu: uygulanamayan adımlar: {0}": "Schulmodus: nicht anwendbare Schritte: {0}",
  "Okul modu uygulanamadı: {0}": "Schulmodus konnte nicht angewendet werden: {0}",
- "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %70, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Im Akkubetrieb: die sparsamsten Einstellungen — Eco-Modus, CPU-Boost aus, Prozessor auf 70 %, Energiesparmodus an, Bildschirm nach 3 Min. aus / Standby nach 10 Min., 60 Hz, 40 % Helligkeit, Tastaturbeleuchtung aus. Beim Ausschalten kommt alles zurück."
+ "Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.": "Im Akkubetrieb: die sparsamsten Einstellungen — Eco-Modus, CPU-Boost aus, Prozessor auf 60 %, passive Kühlung, Energiesparmodus an, Bildschirm nach 3 Min. aus / Standby nach 10 Min., 60 Hz, 40 % Helligkeit, Tastaturbeleuchtung aus. Beim Ausschalten kommt alles zurück."
 }
