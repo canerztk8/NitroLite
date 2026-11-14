@@ -100,15 +100,25 @@ Doğrulama: 1089 test geçti; 5 sayfa × 2 tema ekran görüntüsü; Rusça ve H
 Devanagari taşma yok); paketlenmiş exe boş klasörde `--hardware-report`, `--mode balanced --fan auto` (exit 0),
 `--mode bogus` (exit 3).
 
-## Yapılmayan tek şey
+## Yayın durumu
 
-`git push` ve v1.2.0 release yayını. Kullanıcı "gönder" dediğinde:
+`main` push edildi. **v1.2.1** yayınlandı: <https://github.com/canerztk8/NitroLite/releases/tag/v1.2.1>
 
-```powershell
-git push origin main
-gh release create v1.2.0 artifacts/NitroLite-v1.2.0-win-x64.zip `
-    --title "NitroLite v1.2.0" --notes-file <notlar>
-```
+Neden 1.2.1 ve neden yeni bir sürüm: yayındaki 1.2.0 paketi denetim düzeltmelerinden önce derlenmişti ve
+uygulama içi güncelleyici sürüm numarasını karşılaştırıyor. Düzeltmeleri aynı sürüm numarası altında yayınlamak
+mevcut kullanıcıları sonsuza kadar eski derlemede bırakırdı.
+
+| | |
+|---|---|
+| Paket | `NitroLite-v1.2.1-win-x64.zip`, 70.967.796 bayt |
+| SHA-256 | `A42BD6E6E043EC6B9AB4754738125A60F144FBD402C6EFDD2CFBA2E61A9EF73A` |
+| GitHub özeti | `sha256:a42bd6e6…` — yerel özetle birebir aynı |
+| Durum | Latest, taslak değil, ön sürüm değil |
+
+Doğrulama: paket boş klasöre çıkarıldı, `--mode bogus` exit 3, `--hardware-report` exit 0 ve v1.2.1 yazıyor;
+pencere açıldı, 2,5 dakika boyunca bellek 344→343 MB ve handle 979→967 (sabit), CPU tek çekirdeğin ~%1'i.
+Gerçek GitHub yanıtı `ParseRelease`'e verildi: 1.2.0 derlemesi için güncelleme öneriyor, 1.2.1 derlemesi için
+`null` dönüyor.
 
 Not: v1.1.0 kullanıcıları bu sürümü bir kez elle indirmek zorunda; onlarda güncelleyici yok.
 
