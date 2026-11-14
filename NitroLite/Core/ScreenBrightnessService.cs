@@ -24,7 +24,8 @@ public sealed class ScreenBrightnessService : IScreenBrightnessService
         try
         {
             using var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT CurrentBrightness FROM WmiMonitorBrightness");
-            foreach (ManagementObject row in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject row in results)
             {
                 using (row)
                 {
@@ -43,7 +44,8 @@ public sealed class ScreenBrightnessService : IScreenBrightnessService
         {
             byte target = (byte)Math.Clamp(percent, 0, 100);
             using var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM WmiMonitorBrightnessMethods");
-            foreach (ManagementObject row in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject row in results)
             {
                 using (row)
                 {

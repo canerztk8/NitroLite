@@ -492,7 +492,8 @@ public static class UpdateService
         {
             using var searcher = new System.Management.ManagementObjectSearcher(
                 "SELECT Manufacturer, Model FROM Win32_ComputerSystem");
-            foreach (System.Management.ManagementObject item in searcher.Get())
+            using var results = searcher.Get();
+            foreach (System.Management.ManagementObject item in results)
             {
                 var manufacturer = (item["Manufacturer"]?.ToString() ?? "").Trim();
                 var model = (item["Model"]?.ToString() ?? "").Trim();

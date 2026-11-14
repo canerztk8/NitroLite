@@ -4030,7 +4030,18 @@ public partial class MainWindow : Window
     {
         if (!IsLoaded || _isInitializingUi || ChkAtkMouseIntegration == null) return;
         bool isEnabled = ChkAtkMouseIntegration.IsChecked == true;
-        await SetMouseIntegrationEnabledAsync(isEnabled);
+        try
+        {
+            await SetMouseIntegrationEnabledAsync(isEnabled);
+        }
+        catch (Exception ex)
+        {
+            // The setting is already saved by the time this can throw, so the checkbox stays where the user put it;
+            // what failed is the mouse profile restore behind it. Say so instead of letting the exception reach the
+            // dispatcher, where it would only produce a generic error dialog.
+            AppLog.Warn("ATK fare entegrasyonu değiştirilemedi", ex.ToString());
+            ShowToast(Loc.T($"ATK Fare Entegrasyonu değiştirilemedi: {ex.Message}"), false);
+        }
     }
 
     internal async Task SetMouseIntegrationEnabledAsync(bool isEnabled)
@@ -6725,12 +6736,30 @@ public partial class MainWindow : Window
 
     private async void BtnFanAuto_Click(object sender, RoutedEventArgs e)
     {
-        await SetManualFanModeAsync(FanMode.Auto);
+        try
+        {
+            await SetManualFanModeAsync(FanMode.Auto);
+        }
+        catch (Exception ex)
+        {
+            // SetManualFanModeAsync handles its own failures; this covers the step before it, where turning the
+            // curve off saves the settings file and a full or read-only disk can throw.
+            AppLog.Warn("Fan modu düğmesi başarısız", ex.ToString());
+            ShowToast(Loc.T($"Fan modu uygulanamadı: {ex.Message}"), false);
+        }
     }
 
     private async void BtnFanMax_Click(object sender, RoutedEventArgs e)
     {
-        await SetManualFanModeAsync(FanMode.Max);
+        try
+        {
+            await SetManualFanModeAsync(FanMode.Max);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fan modu düğmesi başarısız", ex.ToString());
+            ShowToast(Loc.T($"Fan modu uygulanamadı: {ex.Message}"), false);
+        }
     }
 
     private async void BtnPresetColor_Click(object sender, RoutedEventArgs e)
@@ -7088,8 +7117,18 @@ public partial class MainWindow : Window
     /// </summary>
     private async void BtnRetrustCareCenter_Click(object sender, RoutedEventArgs e)
     {
-        _careCenterClient.ForgetPinnedCertificate();
-        await SyncChargeLimitFromCareCenterAsync();
+        try
+        {
+            _careCenterClient.ForgetPinnedCertificate();
+            await SyncChargeLimitFromCareCenterAsync();
+        }
+        catch (Exception ex)
+        {
+            // ForgetPinnedCertificate writes the pin file; a read-only data folder throws here, and the user would
+            // otherwise see nothing at all after pressing the button.
+            AppLog.Warn("Care Center sertifikası sıfırlanamadı", ex.ToString());
+            ShowToast(Loc.T($"Sertifika sıfırlanamadı: {ex.Message}"), false);
+        }
     }
 
     /// <summary>
@@ -7275,21 +7314,29 @@ public partial class MainWindow : Window
 
     private async void BtnKillNitroSense_Click(object sender, RoutedEventArgs e)
     {
-        if (!_debloatService.IsNitroSenseRunning())
+        try
         {
+            if (!_debloatService.IsNitroSenseRunning())
+            {
+                await RefreshServiceListAsync();
+                ShowToast(Loc.T("NitroSense zaten kapalı."));
+                return;
+            }
+
+            var confirm = System.Windows.MessageBox.Show(this,
+                Loc.T("NitroSense ve yardımcı işlemleri kapatılacak. Kaydedilmemiş bir NitroSense ayarı varsa kaybolur.\n\nDevam edilsin mi?"),
+                Loc.T("NitroSense'i Kapat"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            bool closed = await Task.Run(() => _debloatService.KillNitroSenseProcesses());
             await RefreshServiceListAsync();
-            ShowToast(Loc.T("NitroSense zaten kapalı."));
-            return;
+            ShowToast(closed ? Loc.T("NitroSense kapatıldı.") : Loc.T("NitroSense kapatılamadı (yönetici olarak çalışıyor olabilir)."), closed);
         }
-
-        var confirm = System.Windows.MessageBox.Show(this,
-            Loc.T("NitroSense ve yardımcı işlemleri kapatılacak. Kaydedilmemiş bir NitroSense ayarı varsa kaybolur.\n\nDevam edilsin mi?"),
-            Loc.T("NitroSense'i Kapat"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
-
-        bool closed = await Task.Run(() => _debloatService.KillNitroSenseProcesses());
-        await RefreshServiceListAsync();
-        ShowToast(closed ? Loc.T("NitroSense kapatıldı.") : Loc.T("NitroSense kapatılamadı (yönetici olarak çalışıyor olabilir)."), closed);
+        catch (Exception ex)
+        {
+            AppLog.Warn("NitroSense kapatılamadı", ex.ToString());
+            ShowToast(Loc.T($"NitroSense kapatılamadı: {ex.Message}"), false);
+        }
     }
 
     private async void BtnApplyDebloat_Click(object sender, RoutedEventArgs e)
@@ -7872,7 +7919,7 @@ public partial class MainWindow : Window
                     FileName = exe,
                     UseShellExecute = true,
                     WorkingDirectory = AppContext.BaseDirectory
-                });
+                })?.Dispose();
             }
             catch (Exception ex)
             {
