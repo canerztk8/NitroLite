@@ -124,6 +124,7 @@ yönelir. Donanımla ilgili hiçbir şey sabit yazılmamıştır: uygulama sorar
 | GPU modu (MUX) | `SUPPORT_GPU_MODE_CAPABILITY` | mod değiştirme notla kapatılır, asla tahmin edilmez |
 | %80 şarj sınırı | Acer Care Center (`AcerCCAgent`) | onay kutusu kapatılır ve sebebini yazar |
 | Fan eğrisi | Acer servisinin kendi sabit hız komutu | eğri kendini kapatır ve bunu söyler |
+| Acer servisinin kendisi | `127.0.0.1:46933` üzerindeki `AASSvc` | pencerenin üstünde eksik servisi adıyla söyleyen kalıcı bir not çıkar; Windows ve NVIDIA'dan okunabilen her şey çalışmaya devam eder |
 
 **Çekirdek sürücü yok, EC kaydına yazma yok.** Fan ve aydınlatma denetimi NitroSense'in zaten kullandığı Acer
 servisi üzerinden, işlemci hız artışı Windows güç planı üzerinden yapılır. Burada `WinRing0` veya başka bir

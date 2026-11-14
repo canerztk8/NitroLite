@@ -138,6 +138,7 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 | GPU mode (MUX) | `SUPPORT_GPU_MODE_CAPABILITY` | mode switching is disabled with a note, never guessed |
 | 80 % charge limit | Acer Care Center (`AcerCCAgent`) | the checkbox is disabled and says why |
 | Fan curve | the Acer service's own fixed-speed command | the curve turns itself off and says so |
+| The Acer service itself | `AASSvc` on `127.0.0.1:46933` | a standing note at the top of the window names the missing service, and everything Windows and NVIDIA can measure keeps working |
 
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
 already uses, and CPU boost through the Windows power plan. Nothing here loads `WinRing0` or any other driver, so
