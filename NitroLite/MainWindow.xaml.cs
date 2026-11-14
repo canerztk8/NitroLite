@@ -682,14 +682,14 @@ public partial class MainWindow : Window
                 try
                 {
                     var json = await File.ReadAllTextAsync(ActiveRgbConfigFile);
-                    var savedRgb = JsonSerializer.Deserialize<LightingConfig>(json);
+                    var savedRgb = LightingPolicy.Sanitize(JsonSerializer.Deserialize<LightingConfig>(json));
                     if (savedRgb != null)
                     {
                         _lighting = savedRgb;
                         UpdateLightingUi(_lighting);
                         UpdateEffectComboBox(_lighting.Effect);
 
-                        if (_lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))
+                        if (_lighting.Brightness == 0 || string.Equals(_lighting.Effect, "OFF", StringComparison.OrdinalIgnoreCase))
                         {
                             await _agentClient.TurnOffLightingAsync();
                         }
@@ -6171,7 +6171,7 @@ public partial class MainWindow : Window
     }
 
     private static bool IsLightingOff(LightingConfig cfg) =>
-        cfg.Brightness == 0 || cfg.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase);
+        cfg.Brightness == 0 || string.Equals(cfg.Effect, "OFF", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Sends the current <see cref="_lighting"/> to AASSvc and reports a failure to the user.

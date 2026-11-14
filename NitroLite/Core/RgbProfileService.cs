@@ -22,6 +22,32 @@ public class RgbPreset
     /// </summary>
     [JsonIgnore]
     public string DisplayName => IsBuiltIn ? Loc.T(Name) : Name;
+
+    /// <summary>
+    /// Brings a preset read from disk into the range the keyboard accepts. A preset file is outside the app's
+    /// control: a null <see cref="Effect"/> or <see cref="LEDs"/> there used to reach the same
+    /// <c>Effect.Equals(...)</c> / <c>LEDs.ToArray()</c> calls the settings file did.
+    /// </summary>
+    public void Sanitize()
+    {
+        var safe = LightingPolicy.Sanitize(new LightingConfig
+        {
+            Effect = Effect,
+            Brightness = Brightness,
+            Speed = Speed,
+            Direction = Direction,
+            Color = Color,
+            LEDs = LEDs
+        });
+        if (safe == null) return;
+
+        Effect = safe.Effect;
+        Brightness = safe.Brightness;
+        Speed = safe.Speed;
+        Direction = safe.Direction;
+        Color = safe.Color;
+        LEDs = safe.LEDs;
+    }
 }
 
 public class RgbProfileService
@@ -241,6 +267,10 @@ public class RgbProfileService
                     {
                         foreach (var c in custom.Where(x => !x.IsBuiltIn))
                         {
+                            // A preset with no name cannot be selected, renamed or deleted, and every lookup
+                            // compares names: it would throw on the first GetPresets() call.
+                            if (string.IsNullOrWhiteSpace(c.Name)) continue;
+                            c.Sanitize();
                             if (!_presets.Any(p => p.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase)))
                             {
                                 _presets.Add(c);

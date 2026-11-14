@@ -15,6 +15,61 @@ public static class LightingPolicy
     public static bool IsOff(LightingConfig cfg) =>
         cfg.Brightness <= 0 || string.Equals(cfg.Effect, "OFF", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// A colour as <c>#RRGGBB</c>, or <paramref name="fallback"/> when the text is not one. The service rejects a
+    /// malformed colour with WRONG_PARAMETERS, so nothing unvalidated may reach it.
+    /// </summary>
+    public static string NormalizeHex(string? color, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return fallback;
+        var hex = color.Trim().TrimStart('#');
+        if (hex.Length != 6) return fallback;
+        foreach (var ch in hex)
+        {
+            if (!Uri.IsHexDigit(ch)) return fallback;
+        }
+        return "#" + hex.ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// A lighting configuration that can be sent to the service: no null strings, every number inside the range the
+    /// keyboard accepts, every colour a valid hex triplet, exactly four zones. Null stays null, because a settings
+    /// file with no lighting block means "read the keyboard's own state", not "apply a default".
+    /// <para>
+    /// This is the boundary for anything read from disk — a settings file, a backup, a preset file. Those are
+    /// outside the app's control, and a null <see cref="LightingConfig.Effect"/> used to reach
+    /// <c>cfg.Effect.Equals(...)</c> in the startup refresh and abort every step after it.
+    /// </para>
+    /// </summary>
+    public static LightingConfig? Sanitize(LightingConfig? cfg)
+    {
+        if (cfg == null) return null;
+
+        var effect = string.IsNullOrWhiteSpace(cfg.Effect) ? "STATIC" : cfg.Effect.Trim().ToUpperInvariant();
+        var color = NormalizeHex(cfg.Color, DefaultColor);
+
+        var leds = new List<string>(4);
+        if (cfg.LEDs != null)
+        {
+            foreach (var led in cfg.LEDs)
+            {
+                if (leds.Count == 4) break;
+                leds.Add(NormalizeHex(led, color));
+            }
+        }
+        while (leds.Count < 4) leds.Add(color);
+
+        return new LightingConfig
+        {
+            Effect = effect,
+            Brightness = Math.Clamp(cfg.Brightness, 0, 9),
+            Speed = Math.Clamp(cfg.Speed, 1, 9),
+            Direction = AllowedDirections(effect).Contains(cfg.Direction) ? cfg.Direction : 1,
+            Color = color,
+            LEDs = leds
+        };
+    }
+
     /// <summary>WAVE and NEON cycle the keyboard's own colours; every other effect uses the chosen colour.</summary>
     public static bool EffectUsesColor(string effect) => effect.ToUpperInvariant() switch
     {
@@ -122,7 +177,7 @@ public static class LightingPolicy
         if (brightness is > 0) cfg.Brightness = Math.Clamp(brightness.Value, 1, 9);
         if (!string.IsNullOrWhiteSpace(effect) && !effect.Equals("OFF", StringComparison.OrdinalIgnoreCase)) cfg.Effect = effect;
         if (cfg.Brightness <= 0) cfg.Brightness = 5;
-        if (cfg.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase)) cfg.Effect = "STATIC";
+        if (string.Equals(cfg.Effect, "OFF", StringComparison.OrdinalIgnoreCase)) cfg.Effect = "STATIC";
 
         if (IsBlack(cfg.Color)) cfg.Color = DefaultColor;
         var leds = (cfg.LEDs ?? new List<string>()).Take(4).ToList();

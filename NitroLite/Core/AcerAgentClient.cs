@@ -888,17 +888,8 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    private static string NormalizeHexColor(string? color, string fallback)
-    {
-        if (string.IsNullOrWhiteSpace(color)) return fallback;
-        var hex = color.Trim().TrimStart('#');
-        if (hex.Length != 6) return fallback;
-        foreach (var ch in hex)
-        {
-            if (!Uri.IsHexDigit(ch)) return fallback;
-        }
-        return "#" + hex.ToUpperInvariant();
-    }
+    private static string NormalizeHexColor(string? color, string fallback) =>
+        LightingPolicy.NormalizeHex(color, fallback);
 
     /// <summary>True when the last lighting command was accepted by only one of the two targets (global / keyboard).</summary>
     public bool LastLightingPartialFailure { get; private set; }

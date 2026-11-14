@@ -103,35 +103,6 @@ public class MonitorData
     public DateTime Timestamp { get; set; } = DateTime.Now;
 }
 
-public class RgbColor
-{
-    public byte R { get; set; }
-    public byte G { get; set; }
-    public byte B { get; set; }
-
-    public RgbColor(byte r, byte g, byte b)
-    {
-        R = r;
-        G = g;
-        B = b;
-    }
-
-    public string ToHex() => $"#{R:X2}{G:X2}{B:X2}";
-
-    public static RgbColor FromHex(string hex)
-    {
-        hex = hex.TrimStart('#');
-        if (hex.Length == 6)
-        {
-            byte r = Convert.ToByte(hex.Substring(0, 2), 16);
-            byte g = Convert.ToByte(hex.Substring(2, 2), 16);
-            byte b = Convert.ToByte(hex.Substring(4, 2), 16);
-            return new RgbColor(r, g, b);
-        }
-        return new RgbColor(0, 200, 255); // Default cyan
-    }
-}
-
 public class BatteryStatusInfo
 {
     public int BatteryPercent { get; set; }
@@ -343,6 +314,13 @@ public class AppSettings
         FanCurveMinDwellSeconds = Math.Clamp(FanCurveMinDwellSeconds, 0, 120);
 
         if (Language != null && !Loc.IsSupported(Language)) Language = null;
+
+        // The lighting block is the one part of the file that is not a number or an enum: it carries strings and a
+        // list. A null Effect or a null LEDs list used to reach cfg.Effect.Equals(...) and cfg.LEDs.ToArray() in the
+        // startup refresh, and the exception aborted every step after it, leaving the window half-built on every
+        // launch. Null stays null: no lighting block means "read the keyboard's own state".
+        KeyboardLighting = LightingPolicy.Sanitize(KeyboardLighting);
+        LastActiveLighting = LightingPolicy.Sanitize(LastActiveLighting);
     }
 }
 

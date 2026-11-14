@@ -245,4 +245,124 @@ public class UnexpectedValueTests : IDisposable
         Assert.Equal("-- °C", TelemetryFormatter.FormatGpuTemperature(255.0, available: false));
         Assert.Equal("0 °C (Uyku / D3cold)", TelemetryFormatter.FormatGpuTemperature(255.0, isSleeping: true));
     }
+
+    // ---- the lighting block: strings and a list, not numbers ------------------------------------------------
+
+    [Fact]
+    public void Normalize_RepairsALightingBlockWithNullStrings()
+    {
+        // A hand-edited or half-written file can carry "Effect": null and "LEDs": null. Both used to reach
+        // cfg.Effect.Equals(...) and cfg.LEDs.ToArray() in the startup refresh, and the exception aborted every
+        // step after it: the window opened half-built on every launch.
+        var settings = new AppSettings
+        {
+            KeyboardLighting = new LightingConfig { Effect = null!, Color = null!, LEDs = null! }
+        };
+
+        settings.Normalize();
+
+        Assert.NotNull(settings.KeyboardLighting);
+        Assert.Equal("STATIC", settings.KeyboardLighting!.Effect);
+        Assert.Equal(LightingPolicy.DefaultColor, settings.KeyboardLighting.Color);
+        Assert.Equal(4, settings.KeyboardLighting.LEDs.Count);
+        Assert.All(settings.KeyboardLighting.LEDs, led => Assert.Equal(LightingPolicy.DefaultColor, led));
+    }
+
+    [Fact]
+    public void Normalize_LeavesAMissingLightingBlockMissing()
+    {
+        // No lighting block means "read the keyboard's own state". Turning it into a default would make a fresh
+        // install overwrite whatever the keyboard is currently doing.
+        var settings = new AppSettings { KeyboardLighting = null, LastActiveLighting = null };
+
+        settings.Normalize();
+
+        Assert.Null(settings.KeyboardLighting);
+        Assert.Null(settings.LastActiveLighting);
+    }
+
+    [Fact]
+    public void Normalize_BringsLightingNumbersAndColoursIntoRange()
+    {
+        var settings = new AppSettings
+        {
+            KeyboardLighting = new LightingConfig
+            {
+                Effect = "static",
+                Brightness = 99,
+                Speed = 0,
+                Direction = 42,
+                Color = "not-a-colour",
+                LEDs = new List<string> { "#GGGGGG", "#FF2A55" }
+            }
+        };
+
+        settings.Normalize();
+
+        var lit = settings.KeyboardLighting!;
+        Assert.Equal("STATIC", lit.Effect);
+        Assert.Equal(9, lit.Brightness);
+        Assert.Equal(1, lit.Speed);
+        Assert.Equal(1, lit.Direction);
+        Assert.Equal(LightingPolicy.DefaultColor, lit.Color);
+        Assert.Equal(4, lit.LEDs.Count);
+        Assert.Equal(LightingPolicy.DefaultColor, lit.LEDs[0]);
+        Assert.Equal("#FF2A55", lit.LEDs[1]);
+    }
+
+    [Fact]
+    public void Sanitize_KeepsTheDirectionAnEffectActuallySupports()
+    {
+        var wave = LightingPolicy.Sanitize(new LightingConfig { Effect = "WAVE", Direction = 3 })!;
+        Assert.Equal(3, wave.Direction);
+
+        // STATIC has no direction at all, so whatever the file said is replaced rather than sent.
+        var staticEffect = LightingPolicy.Sanitize(new LightingConfig { Effect = "STATIC", Direction = 3 })!;
+        Assert.Equal(1, staticEffect.Direction);
+    }
+
+    [Fact]
+    public void Sanitize_TruncatesExtraZonesInsteadOfSendingThem()
+    {
+        var cfg = LightingPolicy.Sanitize(new LightingConfig
+        {
+            Effect = "STATIC",
+            LEDs = new List<string> { "#111111", "#222222", "#333333", "#444444", "#555555", "#666666" }
+        })!;
+
+        Assert.Equal(4, cfg.LEDs.Count);
+        Assert.Equal("#444444", cfg.LEDs[3]);
+    }
+
+    [Fact]
+    public void LoadSettings_SurvivesALightingBlockFullOfNulls()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, """
+            {
+              "KeyboardLighting": { "Effect": null, "Brightness": 99, "Speed": 0, "Direction": 9, "Color": null, "LEDs": null },
+              "LastActiveLighting": { "Effect": null, "LEDs": null }
+            }
+            """);
+
+        var result = SettingsManager.LoadSettings(path);
+
+        Assert.Equal(SettingsLoadSource.Primary, result.Source);
+        Assert.False(result.PrimaryCorrupt);
+        Assert.Equal("STATIC", result.Settings.KeyboardLighting!.Effect);
+        Assert.Equal(4, result.Settings.KeyboardLighting!.LEDs.Count);
+        Assert.Equal("STATIC", result.Settings.LastActiveLighting!.Effect);
+    }
+
+    [Fact]
+    public void RgbPreset_Sanitize_RepairsAPresetReadFromDisk()
+    {
+        var preset = new RgbPreset { Name = "Bozuk", Effect = null!, Brightness = 99, LEDs = null! };
+
+        preset.Sanitize();
+
+        Assert.Equal("STATIC", preset.Effect);
+        Assert.Equal(9, preset.Brightness);
+        Assert.Equal(4, preset.LEDs.Count);
+    }
 }
