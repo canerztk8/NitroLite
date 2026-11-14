@@ -8156,7 +8156,14 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { AppLog.Warn("Eski ayar kopyası güncellenemedi", ex.Message); }
 
-        RestartForSettingChange(Loc.T("Yedek geri yüklendi; NitroLite yeniden başlatılıyor…"), discardInMemorySettings: true);
+        // A backup written by an older build may not carry every part. Saying so is the difference between "the
+        // restore worked" and "my game profiles are gone and nobody told me".
+        var message = Loc.T("Yedek geri yüklendi; NitroLite yeniden başlatılıyor…");
+        if (result.Skipped.Count > 0)
+        {
+            message += " " + Loc.T($"Yedekte olmayan bölümler atlandı: {string.Join(", ", result.Skipped)}");
+        }
+        RestartForSettingChange(message, discardInMemorySettings: true);
     }
 
     private void OpenUrl(string url)
