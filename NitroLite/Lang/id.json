@@ -905,5 +905,10 @@
  "Yedekteki ayarlar okunamadı: {0}": "Pengaturan dalam cadangan tidak dapat dibaca: {0}",
  "Yedekteki ayarlar okunamadı.": "Pengaturan dalam cadangan tidak dapat dibaca.",
  "Ayarlar yazılamadı: {0}": "Pengaturan tidak dapat ditulis: {0}",
- "Okul modu kapalı olarak geri yüklendi": "Mode sekolah dipulihkan dalam keadaan mati"
+ "Okul modu kapalı olarak geri yüklendi": "Mode sekolah dipulihkan dalam keadaan mati",
+ "ŞABLON": "TEMPLATE",
+ "Oyun": "Game",
+ "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Paling dekat dengan kurva pabrik: tenang di awal, lalu makin cepat di atas 80 °C.",
+ "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Berputar lebih lambat pada suhu menengah. Pada 85 °C ke atas batas keamanan tetap berlaku.",
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Lebih cepat naik dan menjaga suhu tetap rendah; jelas lebih berisik daripada Seimbang."
 }

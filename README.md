@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1169-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1184-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -49,6 +49,9 @@ at idle. Telemetry is read every 3 seconds while minimised.
   dwell time keep it from hunting up and down on a temperature that sits on a step. The curve is drawn as a trace
   that always matches the sliders, and the current operating point is marked on it. The default curve is quieter
   than the stock automatic one below 70 °C and louder above 80 °C.
+- **Curve templates:** three shapes above the editor — Balanced, Quiet and Gaming — fill all six points in one
+  click. A template is a shortcut, not a mode: moving a slider afterwards leaves it and the mark clears. Balanced
+  is the default curve, so a fresh install opens with it already marked.
 - **Mode key:** the keyboard's mode/Turbo key cycles modes the way NitroSense does (on AC: Balanced → Performance →
   Turbo → Quiet; on battery: Balanced ↔ Quiet).
 - If the mode cannot be read, the UI says "Unknown" instead of inventing a default.
@@ -270,6 +273,8 @@ NitroLite
 │   ├── BackupService.cs            # Settings, game and RGB profiles in one JSON file
 │   ├── CpuPowerService.cs          # Windows power plan CPU boost setting
 │   ├── PowerAutomationService.cs   # AC/battery transitions and Eco recovery
+│   ├── FanCurve.cs                 # Curve shape, interpolation and the safety floor
+│   ├── FanCurvePresets.cs          # The Balanced, Quiet and Gaming templates
 │   ├── SchoolModeService.cs        # One-switch battery saving, with an exact undo record
 │   ├── ScreenBrightnessService.cs  # Panel brightness through WMI (null on external-only setups)
 │   ├── GameDetectionService.cs     # Game scanning and detection
@@ -388,7 +393,7 @@ it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or t
 
 ## Tests
 
-1169 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1184 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

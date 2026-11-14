@@ -905,5 +905,10 @@
  "Yedekteki ayarlar okunamadı: {0}": "Не удалось прочитать настройки из копии: {0}",
  "Yedekteki ayarlar okunamadı.": "Не удалось прочитать настройки из копии.",
  "Ayarlar yazılamadı: {0}": "Не удалось записать настройки: {0}",
- "Okul modu kapalı olarak geri yüklendi": "Школьный режим восстановлен выключенным"
+ "Okul modu kapalı olarak geri yüklendi": "Школьный режим восстановлен выключенным",
+ "ŞABLON": "ШАБЛОН",
+ "Oyun": "Игра",
+ "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Ближе всего к заводской кривой: тихо в начале, ускорение после 80 °C.",
+ "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "На средних температурах вращается медленнее. При 85 °C и выше по-прежнему действует защитный порог.",
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Ускоряется раньше и держит температуру ниже; заметно громче сбалансированной."
 }

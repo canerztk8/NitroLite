@@ -905,5 +905,10 @@
  "Yedekteki ayarlar okunamadı: {0}": "The settings in the backup could not be read: {0}",
  "Yedekteki ayarlar okunamadı.": "The settings in the backup could not be read.",
  "Ayarlar yazılamadı: {0}": "The settings could not be written: {0}",
- "Okul modu kapalı olarak geri yüklendi": "School mode restored as off"
+ "Okul modu kapalı olarak geri yüklendi": "School mode restored as off",
+ "ŞABLON": "TEMPLATE",
+ "Oyun": "Game",
+ "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "Closest to the factory curve: quiet at first, then speeds up past 80 °C.",
+ "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "Turns slower at middle temperatures. At 85 °C and above the safety floor still applies.",
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "Speeds up earlier and keeps the temperature lower; noticeably louder than Balanced."
 }

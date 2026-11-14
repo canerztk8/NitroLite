@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1169-10B981)](#-testler)
+[![Tests](https://img.shields.io/badge/Tests-1184-10B981)](#-testler)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -50,6 +50,9 @@ bildirdiği yetenekleri okur, sonra yalnızca bu dizüstünün gerçekten sahip 
   süresi, bir basamağa oturan sıcaklıkta fanın inip çıkmasını engeller. Eğri, kaydırıcılarla her zaman aynı olan bir
   çizgi olarak çizilir ve o anki çalışma noktası üzerinde işaretlenir. Varsayılan eğri 70 °C altında stok otomatik
   eğriden daha sessiz, 80 °C üstünde daha yüksektir.
+- **Eğri şablonları:** düzenleyicinin üstünde üç şekil — Dengeli, Sessiz ve Oyun — altı noktayı tek tıkla doldurur.
+  Şablon bir mod değil kısayoldur: sonradan bir kaydırıcıyı oynatınca şablon terk edilir ve işaret kalkar.
+  Varsayılan eğri Dengeli olduğu için ilk açılışta o zaten işaretli gelir.
 - **Mod tuşu:** Klavyedeki mod/Turbo tuşu NitroSense gibi modlar arasında geçiş yapar (adaptörde Dengeli → Performans
   → Turbo → Sessiz; pilde Dengeli ↔ Sessiz).
 - Mod okunamazsa arayüz "Bilinmiyor" gösterir; varsayılan bir mod uydurmaz.
@@ -254,6 +257,8 @@ NitroLite
 │   ├── BackupService.cs            # Ayarlar, oyun ve RGB profilleri tek JSON dosyasında
 │   ├── CpuPowerService.cs          # Windows güç planı CPU boost ayarı
 │   ├── PowerAutomationService.cs   # Adaptör/pil geçişleri ve Eco kurtarma
+│   ├── FanCurve.cs                 # Eğri şekli, ara değer ve güvenlik sınırı
+│   ├── FanCurvePresets.cs          # Dengeli, Sessiz ve Oyun şablonları
 │   ├── SchoolModeService.cs        # Tek anahtarla pil tasarrufu ve birebir geri alma kaydı
 │   ├── ScreenBrightnessService.cs  # WMI üzerinden panel parlaklığı (yalnız harici ekranda null)
 │   ├── GameDetectionService.cs     # Oyun tarama ve algılama
@@ -372,7 +377,7 @@ başvurmayan bir derlemeyi paketlemeyi reddeder.
 
 ## Testler
 
-1169 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
+1184 test: protokol paketleri, Eco/oyun geçişleri, kurtarma senaryoları, biçimlendirme, sınır değerler ve eşzamanlılık.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

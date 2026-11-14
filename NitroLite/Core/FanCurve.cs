@@ -53,16 +53,21 @@ public sealed class FanCurve
     /// The curve a fresh install starts from: the floor at idle, close to what the firmware does through the
     /// middle of the range, and full speed by 90 °C. Turning the feature on must not make the laptop louder than
     /// it already was, or the first thing the user does is turn it off again.
+    /// <para>
+    /// It is the "balanced" preset rather than a second copy of the same six numbers, so the editor opens with
+    /// that template already marked as the one in use.
+    /// </para>
     /// </summary>
-    public static List<FanCurvePoint> DefaultPoints() => new()
-    {
-        new FanCurvePoint(40, 30),
-        new FanCurvePoint(50, 32),
-        new FanCurvePoint(60, 36),
-        new FanCurvePoint(70, 42),
-        new FanCurvePoint(80, 62),
-        new FanCurvePoint(90, 100)
-    };
+    public static List<FanCurvePoint> DefaultPoints() =>
+        FanCurvePresets.ById("balanced")?.ToPoints() ?? new List<FanCurvePoint>
+        {
+            new FanCurvePoint(40, 30),
+            new FanCurvePoint(50, 32),
+            new FanCurvePoint(60, 36),
+            new FanCurvePoint(70, 42),
+            new FanCurvePoint(80, 62),
+            new FanCurvePoint(90, 100)
+        };
 
     public FanCurve(IEnumerable<FanCurvePoint>? points, int hysteresisC = DefaultHysteresisC, int minDwellSeconds = DefaultMinDwellSeconds)
     {

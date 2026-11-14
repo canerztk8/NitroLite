@@ -905,5 +905,10 @@
  "Yedekteki ayarlar okunamadı: {0}": "बैकअप की सेटिंग्स पढ़ी नहीं जा सकीं: {0}",
  "Yedekteki ayarlar okunamadı.": "बैकअप की सेटिंग्स पढ़ी नहीं जा सकीं।",
  "Ayarlar yazılamadı: {0}": "सेटिंग्स नहीं लिखी जा सकीं: {0}",
- "Okul modu kapalı olarak geri yüklendi": "स्कूल मोड बंद के रूप में पुनर्स्थापित"
+ "Okul modu kapalı olarak geri yüklendi": "स्कूल मोड बंद के रूप में पुनर्स्थापित",
+ "ŞABLON": "टेम्पलेट",
+ "Oyun": "गेम",
+ "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.": "फ़ैक्टरी वक्र के सबसे नज़दीक: शुरू में शांत, 80 °C के बाद तेज़।",
+ "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.": "मध्यम तापमान पर धीमा घूमता है। 85 °C और उससे ऊपर सुरक्षा सीमा फिर भी लागू रहती है।",
+ "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.": "जल्दी तेज़ होता है और तापमान कम रखता है; संतुलित से स्पष्ट रूप से अधिक शोर करता है।"
 }

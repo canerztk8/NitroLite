@@ -1706,8 +1706,44 @@ public partial class MainWindow : Window
     private void LoadFanCurveSettings()
     {
         _fanCurveLastPercent = _appSettings.CustomFanCpuPercent;
+        InitializeCurvePresetButtons();
         ApplyFanCurveToEditor(_appSettings.BuildFanCurve());
         UpdateFanCurveStatusText();
+    }
+
+    /// <summary>The template buttons, in the order the XAML declares them. Empty before the window is built.</summary>
+    private IEnumerable<WpfButton> CurvePresetButtons =>
+        PnlCurvePresets?.Children.OfType<WpfButton>() ?? Enumerable.Empty<WpfButton>();
+
+    /// <summary>
+    /// Labels the template buttons from the preset list, so a preset is named in one place. The text is set here
+    /// rather than in the XAML because the catalogue key lives on the preset record.
+    /// </summary>
+    private void InitializeCurvePresetButtons()
+    {
+        foreach (var button in CurvePresetButtons)
+        {
+            var preset = FanCurvePresets.ById(button.Tag as string);
+            if (preset == null) continue;
+            button.Content = Loc.T(preset.NameKey);
+            button.ToolTip = Loc.T(preset.DescriptionKey);
+        }
+    }
+
+    /// <summary>
+    /// Marks the template the editor currently shows, and clears the mark once a slider has moved off it. The
+    /// curve is the state, so nothing has to be remembered: the shape either is a preset or it is not.
+    /// </summary>
+    private void UpdateFanCurvePresetButtons()
+    {
+        var buttons = CurvePresetButtons.ToList();
+        if (buttons.Count == 0) return;
+
+        var current = FanCurvePresets.Match(ReadFanCurveFromEditor());
+        foreach (var button in buttons)
+        {
+            SetSegActive(button, current != null && current.Id == button.Tag as string);
+        }
     }
 
     private void ApplyFanCurveToEditor(FanCurve curve)
@@ -1728,6 +1764,7 @@ public partial class MainWindow : Window
         }
         UpdateFanCurveLabels();
         RenderFanCurve();
+        UpdateFanCurvePresetButtons();
     }
 
     /// <summary>The curve the editor currently shows, as the six anchors the sliders stand for.</summary>
@@ -1773,8 +1810,18 @@ public partial class MainWindow : Window
     {
         UpdateFanCurveLabels();
         RenderFanCurve();
+        UpdateFanCurvePresetButtons();
         if (!IsLoaded || _isInitializingUi || _isUpdatingFanCurveUi) return;
 
+        CommitFanCurveFromEditor();
+    }
+
+    /// <summary>
+    /// Saves the shape the editor shows and re-arms the evaluator, then lets the debounce write it to the fans.
+    /// Shared by the sliders and the templates so both take exactly the same path.
+    /// </summary>
+    private void CommitFanCurveFromEditor()
+    {
         _appSettings.FanCurvePoints = ReadFanCurveFromEditor();
         // A new shape means the next evaluation must write again, even if the target happens to match.
         _fanCurveEvaluator = _fanCurveEnabled ? new FanCurveEvaluator(_appSettings.BuildFanCurve()) : null;
@@ -1782,6 +1829,25 @@ public partial class MainWindow : Window
         _fanCurveApplyTimer ??= CreateFanCurveApplyTimer();
         _fanCurveApplyTimer.Stop();
         _fanCurveApplyTimer.Start();
+    }
+
+    /// <summary>
+    /// Fills the editor from a template. The curve is only a shape here: whether the fans follow it is the
+    /// "Eğri" button's business, and this panel is only reachable while it is on.
+    /// </summary>
+    private void BtnCurvePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not WpfButton button) return;
+        var preset = FanCurvePresets.ById(button.Tag as string);
+        if (preset == null) return;
+
+        ApplyFanCurveToEditor(new FanCurve(
+            preset.ToPoints(),
+            _appSettings.FanCurveHysteresisC,
+            _appSettings.FanCurveMinDwellSeconds));
+
+        if (!IsLoaded || _isInitializingUi) return;
+        CommitFanCurveFromEditor();
     }
 
     private DispatcherTimer CreateFanCurveApplyTimer()
