@@ -32,6 +32,31 @@ public class AuditDefectRemediationTests
     }
 
     [Fact]
+    public void CpuPowerService_ReadsTheRealPowerCfgHiddenOutput()
+    {
+        // Verbatim `powercfg /qh SCHEME_CURRENT <subgroup> <setting>` output from an Acer Nitro AN16-41. The
+        // "Possible Setting Index" lines are decimal and must not be mistaken for the current index, and the
+        // setting is hidden, so a plain /query prints only the scheme header and the read returned null.
+        var service = new CpuPowerService(autoInitialize: false, bypassNativePowerCalls: true);
+        service.MockPowerCfgQueryOutput =
+            "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)\r\n" +
+            "  GUID Alias: SCHEME_BALANCED\r\n" +
+            "  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (Processor power management)\r\n" +
+            "    GUID Alias: SUB_PROCESSOR\r\n" +
+            "    Power Setting GUID: be337238-0d82-4146-a960-4f3749d470c7  (Processor performance boost mode)\r\n" +
+            "      GUID Alias: PERFBOOSTMODE\r\n" +
+            "      Possible Setting Index: 000\r\n" +
+            "      Possible Setting Friendly Name: Disabled\r\n" +
+            "      Possible Setting Index: 006\r\n" +
+            "      Possible Setting Friendly Name: Efficient Aggressive At Guaranteed\r\n" +
+            "    Current AC Power Setting Index: 0x00000004\r\n" +
+            "    Current DC Power Setting Index: 0x00000000\r\n";
+
+        Assert.Equal(CpuBoostMode.Efficient, service.QueryCurrentBoostModePowerCfg(isAc: true));
+        Assert.Equal(CpuBoostMode.Disabled, service.QueryCurrentBoostModePowerCfg(isAc: false));
+    }
+
+    [Fact]
     public void MemoryCleanerService_Calculation_ReturnsGigabytesNotMegabytes()
     {
         // 16 GB = 17,179,869,184 bytes

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -179,8 +179,9 @@ public class AdversarialR2R3EmpiricalTests
         // 2. The first failed write was /setacvalueindex
         Assert.Contains(executedArgs, a => a.Contains("/setacvalueindex"));
 
-        // 3. R2 requires evaluating partial changes by querying: UpdateCurrentModeAfterFailure executes /query
-        Assert.Contains(executedArgs, a => a.Contains("/query"));
+        // 3. R2 requires evaluating partial changes by querying: UpdateCurrentModeAfterFailure executes /qh, the
+        // hidden-setting form, because a plain /query prints only the scheme header for the boost setting.
+        Assert.Contains(executedArgs, a => a.Contains("/qh"));
     }
 
     // =========================================================================

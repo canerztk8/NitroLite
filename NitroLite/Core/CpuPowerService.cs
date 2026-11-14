@@ -224,11 +224,11 @@ public class CpuPowerService : IDisposable
             else
             {
                 var psi = ProcessInfoFactory != null
-                    ? ProcessInfoFactory($"/query SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}")
+                    ? ProcessInfoFactory($"/qh SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}")
                     : new ProcessStartInfo
                     {
                         FileName = AppPaths.SystemTool("powercfg.exe"),
-                        Arguments = $"/query SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}",
+                        Arguments = $"/qh SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
@@ -299,7 +299,9 @@ public class CpuPowerService : IDisposable
     }
 
     /// <summary>
-    /// Reads the AC or DC index out of <c>powercfg /query</c> output without depending on the display language.
+    /// Reads the AC or DC index out of <c>powercfg /qh</c> output without depending on the display language.
+    /// The <c>/h</c> flag matters: the boost setting is hidden by default, and a plain <c>/query</c> prints only the
+    /// scheme header for it, so the fallback path could never read a value.
     /// The block for the boost setting is found by its GUID, and the index is the last <c>0x...</c> value inside it;
     /// every label around those two facts is localised, the GUID and the hex value are not.
     /// </summary>
@@ -307,12 +309,19 @@ public class CpuPowerService : IDisposable
     {
         if (string.IsNullOrWhiteSpace(output)) return null;
 
-        // The setting block starts at its GUID and ends at the next "GUID Alias" line or the end of the text.
+        // The setting block starts at its GUID and ends at the next setting or subgroup header. "GUID Alias" is not
+        // a terminator: the boost setting carries its own alias line right after its GUID, so stopping there cut the
+        // block off before the current index and every read came back null.
         int start = output.IndexOf(PerfBoostModeGuid, StringComparison.OrdinalIgnoreCase);
         if (start < 0) return null;
 
-        int end = output.IndexOf("GUID Alias", start + PerfBoostModeGuid.Length, StringComparison.OrdinalIgnoreCase);
-        var block = end > start ? output[start..end] : output[start..];
+        int end = output.Length;
+        foreach (var marker in new[] { "Power Setting GUID", "Subgroup GUID" })
+        {
+            int next = output.IndexOf(marker, start + PerfBoostModeGuid.Length, StringComparison.OrdinalIgnoreCase);
+            if (next >= 0 && next < end) end = next;
+        }
+        var block = output[start..end];
 
         // "Current AC Power Setting Index" / "Current DC ..." are localised, but the two values always appear in
         // that order inside the block: AC first, then DC.
