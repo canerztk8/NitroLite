@@ -29,7 +29,12 @@ NitroLite.Tests/bin/
 debloat_backup_state.json
 thermal_health.json
 active_rgb_state.json
+# Windows writes this as battery-report.html; the underscore spelling is what a
+# hand-typed `powercfg /batteryreport /output battery_report.html` produces. Both
+# carry the computer name and the battery serial number, so both stay out.
 battery-report.html
+battery_report.html
+battery*.html
 
 ## NitroLite crash-recovery state
 dc_eco_state.json
