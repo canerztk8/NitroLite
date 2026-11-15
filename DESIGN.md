@@ -1,6 +1,6 @@
 ---
 name: NitroLite
-description: Acer Nitro dizüstüler için hafif NitroSense alternatifi — Kandilli sismograf kağıdı görsel dünyası
+description: A lightweight NitroSense alternative for Acer Nitro laptops — the visual world of Kandilli seismograph paper
 colors:
   paper: "#F2EDE3"
   paper-deep: "#E8E0D2"
@@ -115,136 +115,136 @@ components:
 
 ## Overview
 
-NitroLite'ın görsel dünyası **Kandilli sismograf kağıdı**: bir tambur kayıt cihazının üzerine sardığı kağıt. Sıcak krem stok bütün yüzeyi kaplar, gövdeyi tek bir mürekkep taşır, tek bir vermilyon "şimdi"yi ve gerçekten dikkat isteyen şeyi işaretler. Dünya yalnızca zemin, çizgi, tipografi ve tek imza hareketi verir; yerleşim, gezinme ve kontrol davranışı tanıdık Windows kalır.
+NitroLite's visual world is **Kandilli seismograph paper**: the paper a drum recorder wraps around itself. Warm cream stock covers the whole surface, a single ink carries the body, a single vermilion marks "now" and anything that genuinely needs attention. The world supplies only ground, rule, typography and one signature gesture; layout, navigation and control behaviour stay familiar Windows.
 
-İmza hareket: **kayıt şeridi.** Her ekranın üstünde son 60 saniyenin sürekli mürekkep izi var; sağ kenarda kesikli vermilyon bir "şimdi" çizgisi, izin ucunda vermilyon bir nokta. Kalem mürekkeptir, damga vermilyondur — bu ayrım dünyanın tamamını yönetir.
+The signature gesture: **the recording strip.** Every screen carries the last sixty seconds as a continuous ink trace across its top, a dashed vermilion "now" line at the right edge, a vermilion dot at the end of the trace. The pen is ink, the stamp is vermilion — that distinction governs the whole world.
 
-Yüzey modu **Operate**: kullanıcı bir görevi bitirir. Süs değil, tarama hızı ve tutarlılık önemlidir. Marka, hassas detaylarda yaşar: hizalama, tek vurgu rengi, dürüst boş durumlar, ölçümün mürekkeple çizilmesi.
+Surface mode **Operate**: the user finishes a task. Not decoration; scan speed and consistency matter. The brand lives in the precise details: alignment, one accent colour, honest empty states, measurement drawn in ink.
 
 ## Colors
 
-- **paper `#F2EDE3`** — pencere zemini. Her şeyin altındaki tek katman; gün boyu açık kalan bir ekran için göz yormayan sıcak krem.
-- **paper-deep `#E8E0D2`** — kayıt şeridinin ve grafiğin zemini, seçili segment düğmesinin dolgusu. Kağıdın bir ton koyusu.
-- **card `#F8F4EB`** — form alanları ve açılır liste zemini. Kağıttan bir tık açık.
-- **card-hover `#EDE6D8`** — yalnızca fare üzerindeyken.
-- **rail `#EAE3D5`** — kenar çubuğu. Zeminden bir tık koyu, böylece gezinme "çerçeve" gibi okunur.
-- **rule `#D5CBB8`** — varsayılan 1px çizgi. **rule-strong `#B8AB93`** — odak, hover, ölçüm çubuğu rayı.
-- **ink `#1B1917`** — gövde metni, ölçüm çubuklarının dolgusu, grafik izi, işaretli kutu. Saf siyah değil; kağıda basılmış mürekkep.
-- **ink-soft `#4A4238`** — açıklamalar, ikincil değerler. **ink-faint `#6E6558`** — mikro etiketler ve "SEÇ" ipuçları.
-- **vermilion `#C0392B`** — dünyanın tek vurgusu ve **yalnızca üç iş için**: (1) şu an canlı olan şey — başlık çubuğundaki mod, grafiğin uç noktası, "şimdi" çizgisi; (2) dikkat isteyen durum — eşik aşımı, bakım önerisi, engellenmiş mod; (3) yıkıcı eylem metni. Başka hiçbir yerde kullanılmaz.
-- **vermilion-deep `#9B2C1F`** — yıkıcı düğme metni ve uyarı başlığı. Parlak vermilyondan bir tık koyu, düğme metni olarak daha az bağırır.
-- **olive `#5F6B3E`** — doğrulanmış iyi durum: pil sağlığı, SSD sıcaklığı, nominal kararlılık.
-- **slate `#4A6274`** — nötr üçüncü ölçüm (pil gerilimi, GPU modu rozeti).
-- **on-accent `#F7F2E8`** — mürekkep dolgu üzerindeki metin ve tik.
-- **warn-bg `#F0E2D2`** — uyarı bandının zemini; vermilyon metinle birlikte.
+- **paper `#F2EDE3`** — the window ground. The single layer under everything; a warm cream that does not tire the eye on a screen left open all day.
+- **paper-deep `#E8E0D2`** — the ground of the recording strip and the chart, the fill of the selected segment button. One shade darker than the paper.
+- **card `#F8F4EB`** — form fields and dropdown ground. A touch lighter than the paper.
+- **card-hover `#EDE6D8`** — only while the pointer is over it.
+- **rail `#EAE3D5`** — the sidebar. A touch darker than the ground, so navigation reads as a "frame".
+- **rule `#D5CBB8`** — the default 1px line. **rule-strong `#B8AB93`** — focus, hover, the measurement bar track.
+- **ink `#1B1917`** — body text, the fill of measurement bars, the chart trace, a checked box. Not pure black; ink pressed into paper.
+- **ink-soft `#4A4238`** — descriptions, secondary values. **ink-faint `#6E6558`** — micro labels and "SELECT" hints.
+- **vermilion `#C0392B`** — the world's only accent, and **for exactly three jobs**: (1) what is live right now — the mode in the title bar, the end point of the chart, the "now" line; (2) a state that needs attention — a threshold crossed, a maintenance suggestion, a blocked mode; (3) destructive action text. Nowhere else.
+- **vermilion-deep `#9B2C1F`** — destructive button text and warning headings. A touch darker than the bright vermilion, so it shouts less as button text.
+- **olive `#5F6B3E`** — verified good state: battery health, SSD temperature, nominal stability.
+- **slate `#4A6274`** — the neutral third measurement (battery voltage, the GPU mode badge).
+- **on-accent `#F7F2E8`** — text and tick on an ink fill.
+- **warn-bg `#F0E2D2`** — the ground of the warning band, together with vermilion text.
 
-Renk asla tek başına anlam taşımaz: her durum çipi metin de yazar ("AKTİF", "SEÇ", "Devre dışı", "Bakım Önerilebilir").
+Colour never carries meaning on its own: every state chip also writes text ("ACTIVE", "SELECT", "Disabled", "Service Recommended").
 
-**Ölçüm çubukları renk taşımaz.** Ray `rule`, dolgu `ink`. Bir çubuk ölçümü gösterir, yargıyı değil; yargı yanındaki metinde ve rozette durur. Tek istisna %85 üzeri disk doluluğu ve çalışan deşarj işlemi — bunlar gerçek eşik ve gerçek canlı durum.
+**Measurement bars carry no colour.** The track is `rule`, the fill is `ink`. A bar shows a measurement, not a judgement; the judgement lives in the text and the badge beside it. The only exceptions are disk usage above 85 % and a running discharge — a real threshold and a real live state.
 
 ## Typography
 
-İki aile, kesin iş bölümü: **kaydedilen rakamlar** Cascadia Mono (yedek Consolas, Courier New), **yazılan metin** Segoe UI Variable Text. Özel font yüklenmez — hafiflik kısıtı.
+Two families, a strict division of labour: **recorded figures** in Cascadia Mono (falling back to Consolas, Courier New), **written text** in Segoe UI Variable Text. No custom font is loaded — the lightweight constraint.
 
-| Rol | Boyut | Ağırlık | Aile | Kullanım |
+| Role | Size | Weight | Family | Use |
 |---|---|---|---|---|
-| display | 18px | SemiBold | Segoe UI | Sekme başlığı, her ekranda bir tane |
-| title | 14px | SemiBold | Segoe UI | Mod satırı adı, bölüm başlığı |
-| body | 12px | Regular | Segoe UI | Açıklama paragrafı |
-| label | 11px | Regular / SemiBold | Segoe UI | Alan etiketi, düğme metni, durum çipi |
-| micro | 10px | SemiBold | Segoe UI | Ölçüm etiketi, "SEÇ", eksen yazısı |
-| figure | 12–20px | Regular / SemiBold | Cascadia Mono | Her sayısal okuma, eksen değeri, RPM, °C |
+| display | 18px | SemiBold | Segoe UI | Page title, one per screen |
+| title | 14px | SemiBold | Segoe UI | Mode row name, section heading |
+| body | 12px | Regular | Segoe UI | Description paragraph |
+| label | 11px | Regular / SemiBold | Segoe UI | Field label, button text, state chip |
+| micro | 10px | SemiBold | Segoe UI | Measurement label, "SELECT", axis text |
+| figure | 12–20px | Regular / SemiBold | Cascadia Mono | Every numeric reading, axis value, RPM, °C |
 
-Mono rakamlar sütun halinde hizalanır: bir değer listesi aşağı doğru tarandığında basamaklar üst üste gelir. Etiket solda, değer sağda, ikisi aynı baseline'da.
+Mono figures align in a column: scanning a list of values downwards, the digits stack. Label on the left, value on the right, both on the same baseline.
 
-WPF'te harf aralığı ayarı yok; mikro etiketlerin ferahlığı büyük harf ve `ink-faint` ile kurulur, `letter-spacing` ile değil.
+WPF has no letter-spacing setting; the airiness of the micro labels comes from uppercase and `ink-faint`, not from `letter-spacing`.
 
 ## Layout
 
-- Pencere: 1060×730 varsayılan, 2560×1380'e kadar genişler. Kenar çubuğu sabit **200px**, içerik `*`.
-- İçerik boşluğu **26px** yatay, **20px** dikey. Bölüm arası **14–18px**.
-- Dikey ritim 4'ün katları: 4 / 8 / 12 / 16 / 20.
-- **Kart ızgarası yok.** Bölüm, kağıt üzerinde çizgiyle ayrılmış bir banttır: üstte 1px `rule`, altında 14px boşluk, sonra içerik. Aynı boy dört kutu yerine tek bir okuma şeridi.
-- Ölçümler satır satır dizilir, kutu kutu değil. Dört sütunlu okuma şeridinde her hücrenin üstünde kendi 1px çizgisi vardır; hücreler arasında kutu, gölge veya zemin farkı yoktur.
-- Geniş ekranda satırlar uzar; bu doğru — kağıt geniştir. İçerik ortalanmaz, sola yaslanır.
-- Form alanları (ComboBox, TextBox) içeriğe göre sınırlanır, satırı doldurmaz.
-- Sağa yaslı eylem sütunu her bölümde aynı x'te durur; düğmeler satırın ortasında yüzmez.
+- Window: 1060×730 default, grows to 2560×1380. Sidebar fixed at **200px**, content `*`.
+- Content padding **26px** horizontal, **20px** vertical. Between sections **14–18px**.
+- Vertical rhythm in multiples of 4: 4 / 8 / 12 / 16 / 20.
+- **No card grid.** A section is a band separated from the paper by a rule: a 1px `rule` on top, 14px of space below it, then the content. One reading strip instead of four equally sized boxes.
+- Measurements are laid out row by row, not box by box. In a four-column reading strip each cell carries its own 1px line above it; there is no box, shadow or ground difference between cells.
+- On a wide screen the rows lengthen; that is correct — paper is wide. Content is not centred, it is left-aligned.
+- Form fields (ComboBox, TextBox) are bounded by their content, they do not fill the row.
+- The right-aligned action column sits at the same x in every section; buttons do not float in the middle of a row.
 
 ## Elevation & Depth
 
-**Gölge yok.** Hiyerarşi üç şeyle kurulur: kağıt tonu (rail → paper → card → paper-deep), 1px çizgi ve boşluk.
+**No shadow.** Hierarchy is built from three things: paper tone (rail → paper → card → paper-deep), a 1px rule, and space.
 
-- `DropShadowEffect` kullanılmaz; hiçbir yerde. Pencere kenarını Windows çizer.
-- Gradyan, bulanıklık, cam efekti, `AllowsTransparency` yok — WPF GPU üzerinde çizsin, boşta tüketim düşük kalsın.
-- Katman sayısı düşük tutulur: her ek kutu boşta tüketim demektir.
-- Derinlik hissi tek yerden gelir: kayıt şeridi kağıttan bir ton koyu bir banttır ve 1px çizgiyle çevrilidir. Başka hiçbir yüzey "yukarıda" durmaz.
+- `DropShadowEffect` is not used; anywhere. Windows draws the window edge.
+- No gradient, blur, glass effect or `AllowsTransparency` — let WPF draw on the GPU and keep idle consumption low.
+- The layer count is kept low: every extra box is idle consumption.
+- Depth comes from one place only: the recording strip is a band one shade darker than the paper, framed by a 1px rule. No other surface sits "above".
 
 ## Shapes
 
-- Köşe yarıçapı **0 / 1 / 2px**. Daha büyüğü "kart" hissi verir, bu dünyada istenmez. Bölümler ve okuma şeritleri tamamen kare.
-- 1px çizgi her yerde aynı kalınlıkta. 1.5px yalnızca grafik izinde.
-- Ölçüm çubukları **4–6px** yüksekliğinde, yuvarlatılmamış uçlu.
-- Onay kutuları ve radyo düğmeleri **14×14px kare**, 1px yarıçap. Yuvarlak değil — kayıt kağıdı dilinde kare.
-- Slider: 3px ray, **8×16px** kare tutamak, rayın iki ucunda 4px pay (tutamak kenarda kırpılmaz).
-- Mod satırının sol işareti **3×18px** dikdörtgen; gezinme işareti **5×5px** kare.
+- Corner radius **0 / 1 / 2px**. Anything larger reads as a "card", which this world does not want. Sections and reading strips are perfectly square.
+- The 1px rule keeps the same weight everywhere. 1.5px only on the chart trace.
+- Measurement bars are **4–6px** tall with square ends.
+- Checkboxes and radio buttons are **14×14px squares**, 1px radius. Not round — square, in the language of recording paper.
+- Slider: 3px track, **8×16px** square thumb, 4px of margin at each end of the track (the thumb is not clipped at the edge).
+- The mode row's left marker is a **3×18px** rectangle; the navigation marker is a **5×5px** square.
 
 ## Icon
 
-Simge, dünyanın tek karelik özeti: `paper-deep` zemin, tek `ink` iz, izin ucunda `vermilion` nokta. Gradyan, parlama, çerçeve, yuvarlatılmış köşe yok — simge de bir kağıt şeridi gibi karedir.
+The icon is the world in one square: `paper-deep` ground, a single `ink` trace, a `vermilion` dot at the end of the trace. No gradient, glow, frame or rounded corner — the icon is square like a strip of paper.
 
-- **Zemin** `paper-deep` tam kare. `paper` değil: beyaz Gezgin zemininde kenarı okunur, koyu görev çubuğunda öne çıkar.
-- **İz** `ink`, tuvalin 72/1024'ü kalınlığında, yuvarlak eklemli. Soldan kenara girer, sağda noktada biter: kayıt sürüyor, kalem şu anda orada.
-- **Nokta** `vermilion`, çapı 136/1024, izin bittiği yerde. Simgedeki tek renk; başka hiçbir öğe renk taşımaz.
-- **Tek olay.** İz bir tane taşır: hızlı yükseliş, derin dönüş, tabana dönüş. İkinci bir olay 16px'te gürültüye dönüşür, eklenmez.
-- **Boyutlar** 16 / 20 / 24 / 32 / 40 / 48 / 64 / 96 / 128 / 256. Simge 16px'te tek sivri olarak okunuyorsa doğrudur; her değişiklik bu boyutta kontrol edilir.
-- Simge temaya göre değişmez. Tek `app.ico` pencereyi, tepsiyi ve exe'yi besler.
+- **Ground** `paper-deep` across the whole square. Not `paper`: it reads against a white Explorer background and stands forward on a dark taskbar.
+- **Trace** `ink`, 72/1024 of the canvas thick, round joints. It enters from the left edge and ends in the dot on the right: the recording is running, the pen is there right now.
+- **Dot** `vermilion`, 136/1024 in diameter, where the trace ends. The only colour in the icon; no other element carries colour.
+- **One event.** The trace carries one: a fast rise, a deep turn, a return to the baseline. A second event turns to noise at 16px and is not added.
+- **Sizes** 16 / 20 / 24 / 32 / 40 / 48 / 64 / 96 / 128 / 256. The icon is right if it reads as a single spike at 16px; every change is checked at that size.
+- The icon does not change with the theme. A single `app.ico` feeds the window, the tray and the exe.
 
 ## Components
 
-**Kayıt şeridi (imza)** — ekranın üstünde 72px yüksekliğinde `paper-deep` bant, 1px `rule` çerçeve. İçinde son 60 saniyenin sürekli `ink` izi (1.4px), sağ kenarda kesikli vermilyon "şimdi" çizgisi, mod değişimlerinde vermilyon dikey tik. Üstünde mikro etiketler: solda "KAYIT · 42 SANİYE", sağda "ARALIK 58–71 °C" ve "ŞİMDİ 64 °C". Veri yokken ortada "Kayıt bekleniyor" yazar, boş bir çizgi çizilmez.
+**Recording strip (signature)** — a 72px-tall `paper-deep` band across the top of the screen, framed by a 1px `rule`. Inside it, the last sixty seconds as a continuous `ink` trace (1.4px), a dashed vermilion "now" line at the right edge, a vermilion vertical tick at mode changes. Above it, micro labels: "RECORDING · 42 SECONDS" on the left, "RANGE 58–71 °C" and "NOW 64 °C" on the right. With no data it says "Waiting for a recording" in the middle; an empty line is not drawn.
 
-**Telemetri grafiği** — aynı dil, daha büyük (140px). İz `ink`, uçtaki nokta vermilyon. Ölçek **sağda ayrı bir olukta** durur, 1px dikey çizgiyle ayrılmış; etiket asla izin üstüne binmez. Üç yatay kılavuz çizgisi `rule`.
+**Telemetry chart** — the same language, larger (140px). The trace is `ink`, the dot at the end is vermilion. The scale sits **on the right in its own gutter**, separated by a 1px vertical line; a label never lands on top of the trace. Three horizontal guide lines in `rule`.
 
-**Mode row** — tam genişlik satır, üstünde 1px `rule`. Sol kenarda 14px'lik işaret kolonu, içinde aktif satırda 3×18px vermilyon dikdörtgen. Sağda durum damgası: pasif satırda `rule` çerçeveli "SEÇ" (`ink-faint`), aktif satırda vermilyon çerçeveli "AKTİF" (vermilyon metin). Aktif satırın metni `ink`, diğerleri `ink-soft`. **Durum dolguyla değil, geri çekilmeyle kurulur** — hiçbir satır renkli banda dönmez.
+**Mode row** — a full-width row with a 1px `rule` above it. A 14px marker column at the left edge, holding a 3×18px vermilion rectangle on the active row. On the right, a state stamp: "SELECT" in a `rule` frame (`ink-faint`) on an inactive row, "ACTIVE" in a vermilion frame (vermilion text) on the active one. The active row's text is `ink`, the rest `ink-soft`. **State is built by withdrawal, not by fill** — no row turns into a coloured band.
 
-**Nav item** — aynı dil, daha küçük: 10px 8px dolgu, 2px yarıçap. Aktif olan `paper` zemin alır ve sol margininde 5×5px vermilyon kare belirir. Şerit yok, dolgu yok.
+**Nav item** — the same language, smaller: 10px 8px padding, 2px radius. The active one takes a `paper` ground and a 5×5px vermilion square appears in its left margin. No strip, no fill.
 
-**Seg button** — fan modu ve CPU boost gibi 2–4 seçenekli gruplar. Boş durum saydam zemin + `rule` çerçeve + `ink-soft` metin. Seçili olan `paper-deep` zemin + `ink` çerçeve + `ink` metin + SemiBold + altında 2px `ink` çizgi: kağıda bastırılmış gibi okunur, kırmızıya boyanmaz.
+**Seg button** — groups of 2–4 options such as fan mode and CPU boost. The empty state is a transparent ground + `rule` frame + `ink-soft` text. The selected one is a `paper-deep` ground + `ink` frame + `ink` text + SemiBold + a 2px `ink` line underneath: it reads as pressed into the paper, not painted red.
 
-**Section** — `CardBorder` stili: saydam zemin, üstte 1px `rule`, 14px üst dolgu, yarıçap yok. Başlık title, altında label açıklama. 21 kullanım aynı dili miras alır.
+**Section** — the `CardBorder` style: transparent ground, a 1px `rule` on top, 14px top padding, no radius. Title in title, a label description below it. All 21 uses inherit the same language.
 
-**Stat cell** — kart değil: üstte 1px çizgi, altında mikro etiket + mono değer + not. Dört tanesi yan yana bir okuma şeridi oluşturur.
+**Stat cell** — not a card: a 1px line on top, then a micro label + mono value + note. Four of them side by side form a reading strip.
 
-**Checkbox / Radio** — 14px kare, `rule-strong` çerçeve; işaretliyken `ink` dolgu + `on-accent` tik. Metin 7px sağda. Radyo da kare — aynı aileden okunur.
+**Checkbox / Radio** — 14px square, `rule-strong` frame; when checked, an `ink` fill + `on-accent` tick. Text 7px to the right. The radio is square too — it reads as the same family.
 
-**Slider** — 3px ray (`rule`), dolu kısım `ink`, kare tutamak `ink`.
+**Slider** — 3px track (`rule`), the filled part `ink`, the square thumb `ink`.
 
-**Stamp** — vermilyon 1px çerçeve, 1px yarıçap, 2px 7px dolgu, mikro büyük harf. Yalnızca "AKTİF" için. Ekranda tek tane olur.
+**Stamp** — vermilion 1px frame, 1px radius, 2px 7px padding, micro uppercase. Only for "ACTIVE". One per screen.
 
-**Toast** — `card` zemin, `rule-strong` çerçeve, 2px yarıçap, 200ms fade. Gölge yok.
+**Toast** — `card` ground, `rule-strong` frame, 2px radius, 200ms fade. No shadow.
 
 ## Do's and Don'ts
 
-**Yap**
+**Do**
 
-- Kalemi mürekkeple, damgayı vermilyonla çiz. Bir ekranda vermilyon en fazla üç yerde görünsün ve her biri "şu an" ya da "dikkat" desin.
-- Durumu metinle de yaz: "AKTİF", "SEÇ", "Devre dışı", "Uyanıyor…".
-- Okunamayan değeri `--` göster; tahmin etme. Tahmini değeri "~" ve "(tahmini)" ile işaretle.
-- Hiyerarşiyi kağıt tonu + 1px çizgi + boşlukla kur.
-- Her sayıyı mono ile diz; etiketle değeri aynı baseline'da hizala.
-- Yeni bir ölçüm eklerken mevcut okuma şeridine satır olarak ekle, yeni kart açma.
-- Türkçe yaz; kod tanımlayıcıları İngilizce kalsın.
+- Draw the pen in ink and the stamp in vermilion. Vermilion appears at most three times on a screen, and each one says "right now" or "attention".
+- Write the state in text as well: "ACTIVE", "SELECT", "Disabled", "Waking…".
+- Show an unreadable value as `--`; do not guess. Mark an estimated value with "~" and "(estimated)".
+- Build hierarchy from paper tone + 1px rule + space.
+- Set every figure in mono; align the label and the value on the same baseline.
+- When adding a new measurement, add it as a row to the existing reading strip; do not open a new card.
+- Write user-facing text in Turkish; keep code identifiers in English.
 
-**Yapma**
+**Don't**
 
-- Gölge, gradyan, bulanıklık, cam efekti, parlama.
-- Ölçüm çubuğunu duruma göre renklendirme — çubuk ölçer, rozet yargılar.
-- Onay kutusunu, radyoyu, slider dolgusunu veya seçili segmenti vermilyona boyama.
-- Başlığın üstüne küçük "kicker" etiketi.
-- Kartın üstüne veya yanına renkli 1px şerit.
-- İç içe kutu: bölüm içinde bölüm, kart içinde kart.
-- Aynı boy kartlardan oluşan ızgara (dört kutu, altı kutu…).
-- Grafik eksen etiketini izin üstüne bindirme; ölçek kendi oluğunda durur.
-- Oyuncu RGB'si: neon, çok renkli vurgular, animasyonlu geçişler.
-- Sürekli animasyon veya saniyede birden fazla kare tüketen efekt. Tek hareket: 200ms toast fade.
+- Shadow, gradient, blur, glass effect, glow.
+- Colour a measurement bar by state — the bar measures, the badge judges.
+- Paint a checkbox, radio, slider fill or selected segment vermilion.
+- A small "kicker" label above a heading.
+- A coloured 1px strip on top of or beside a card.
+- Nested boxes: a section inside a section, a card inside a card.
+- A grid of equally sized cards (four boxes, six boxes…).
+- Overlap a chart axis label on the trace; the scale stays in its own gutter.
+- Gamer RGB: neon, multi-colour accents, animated transitions.
+- Continuous animation or an effect that burns more than one frame per second. The only motion: a 200ms toast fade.
 - Emoji.
