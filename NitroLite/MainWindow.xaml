@@ -2825,6 +2825,25 @@
 
                                         <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />
 
+                                        <!-- Hardware backend: the rollback switch for the hardware layer. Off pins
+                                             every read and write to the Acer service socket. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Doğrudan WMI arka ucu" Style="{StaticResource RowTitle}" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır." />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <CheckBox Style="{StaticResource ToggleSwitch}" x:Name="ChkUseDirectWmiBackend" Checked="ChkUseDirectWmiBackend_Changed" Unchecked="ChkUseDirectWmiBackend_Changed" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />
+
                                         <!-- Backup: one file that survives a Windows reinstall or a new laptop -->
                                         <Grid>
                                             <Grid.ColumnDefinitions>

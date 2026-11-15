@@ -991,5 +991,9 @@
  "Saf Siyah (OLED)": "Hitam Pekat (OLED)",
  "Soğuk Antrasit": "Antrasit Dingin",
  "Kehribar Konsol": "Konsol Amber",
- "Kuzey Buzulu": "Embun Beku Nord"
+ "Kuzey Buzulu": "Embun Beku Nord",
+ "Doğrudan WMI arka ucu": "Backend WMI langsung",
+ "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Mencoba mengelola perangkat keras melalui WMI saat layanan Acer tidak berjalan. Matikan untuk hanya memakai layanan Acer.",
+ "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "Backend WMI langsung aktif; diterapkan pada peluncuran berikutnya",
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Hanya layanan Acer yang akan dipakai; diterapkan pada peluncuran berikutnya"
 }

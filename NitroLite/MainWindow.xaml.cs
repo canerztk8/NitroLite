@@ -818,6 +818,10 @@ public partial class MainWindow : Window
         }
 
         ChkStartMinimized.IsChecked = _appSettings.StartMinimized;
+        if (ChkUseDirectWmiBackend != null)
+        {
+            ChkUseDirectWmiBackend.IsChecked = _appSettings.UseDirectWmiBackend;
+        }
         if (ChkAtkMouseIntegration != null)
         {
             ChkAtkMouseIntegration.IsChecked = _appSettings.AtkMouseIntegrationEnabled;
@@ -1762,6 +1766,20 @@ public partial class MainWindow : Window
         ShowToast(_appSettings.StartMinimized
             ? Loc.T("Windows açılışında pencere gösterilmeden tepside başlayacak")
             : Loc.T("Windows açılışında pencere açık başlayacak"));
+    }
+
+    /// <summary>
+    /// The hardware-layer rollback switch. Nothing is reconnected here: the backend is chosen at start, so the
+    /// setting takes effect on the next launch and the toast says so instead of pretending the change is live.
+    /// </summary>
+    private void ChkUseDirectWmiBackend_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkUseDirectWmiBackend == null) return;
+        _appSettings.UseDirectWmiBackend = ChkUseDirectWmiBackend.IsChecked == true;
+        SaveSettings();
+        ShowToast(_appSettings.UseDirectWmiBackend
+            ? Loc.T("Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır")
+            : Loc.T("Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır"));
     }
 
     private bool _ramCleanBusy;

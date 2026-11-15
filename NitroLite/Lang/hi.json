@@ -991,5 +991,9 @@
  "Saf Siyah (OLED)": "शुद्ध काला (OLED)",
  "Soğuk Antrasit": "ठंडा एंथ्रासाइट",
  "Kehribar Konsol": "एम्बर कंसोल",
- "Kuzey Buzulu": "नॉर्ड फ्रॉस्ट"
+ "Kuzey Buzulu": "नॉर्ड फ्रॉस्ट",
+ "Doğrudan WMI arka ucu": "सीधा WMI बैकएंड",
+ "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Acer सेवा न चलने पर हार्डवेयर को WMI से प्रबंधित करने का प्रयास करता है। केवल Acer सेवा उपयोग करने के लिए इसे बंद करें।",
+ "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "सीधा WMI बैकएंड सक्षम; अगली बार शुरू होने पर लागू होगा",
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "केवल Acer सेवा का उपयोग होगा; अगली बार शुरू होने पर लागू होगा"
 }

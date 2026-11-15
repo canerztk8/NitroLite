@@ -35,6 +35,21 @@ public sealed record AcerWmiProbeResult
     /// <summary>True when the probe did not finish in time. A hung provider is a distinct outcome from a missing one.</summary>
     public bool TimedOut { get; init; }
 
+    /// <summary>
+    /// True when the class carries the <c>dynamic</c> qualifier, which means its methods live on instances rather
+    /// than on the class object. On such a class a class-level <c>InvokeMethod</c> fails with
+    /// <c>WBEM_E_INVALID_METHOD_PARAMETERS</c> no matter what parameters are passed, so that error says nothing
+    /// about the provider being broken.
+    /// </summary>
+    public bool DynamicClass { get; init; }
+
+    /// <summary>
+    /// True when the class advertises instances but enumerating them was refused. On an AN16-41 this is what an
+    /// unelevated session gets: the class is registered and enumerable, every instance read returns Access Denied.
+    /// The capability may well exist; the probe simply was not allowed to ask.
+    /// </summary>
+    public bool InstanceAccessDenied { get; init; }
+
     /// <summary>One line for the report: registered but silent, working, or absent.</summary>
     public string Summary
     {
@@ -42,6 +57,8 @@ public sealed record AcerWmiProbeResult
         {
             if (TimedOut) return "probe timed out";
             if (!ClassPresent) return "not registered";
+            if (InstanceAccessDenied)
+                return $"registered ({Methods.Count} methods, dynamic), instance access denied: needs elevation";
             if (string.IsNullOrEmpty(CallMethod)) return $"registered ({Methods.Count} methods), not called";
             return CallSucceeded
                 ? $"registered, {CallMethod} answered"
@@ -105,10 +122,17 @@ public static class AcerWmiProbe
             }
             catch { }
 
+            // AcerGamingFunction is a dynamic class: its methods belong to instances, not to the class object. A
+            // class-level InvokeMethod therefore fails with WBEM_E_INVALID_METHOD_PARAMETERS (0x8004102F) whatever
+            // parameters are passed, and an earlier version of this probe read that as "the provider is broken".
+            // It is not: the same call on an instance works, but only from an elevated session. Reading the
+            // qualifier lets the report say which of the two situations it is looking at.
+            bool dynamicClass = false;
+            try { dynamicClass = cls.Qualifiers["dynamic"]?.Value is bool b && b; }
+            catch { }
+
             // Only getters are tried: a setter would change the machine, and this probe is read-only. The first one
-            // that answers settles the question. Picking a single method up front was wrong: on an AN16-41 every
-            // method declares in-parameters, so the chosen one came back as InvalidMethodParameters and the report
-            // blamed the provider for a probe mistake.
+            // that answers settles the question.
             var candidates = methods
                 .Where(m => m.StartsWith("Get", StringComparison.Ordinal))
                 .Take(MaxProbeCalls)
@@ -120,7 +144,8 @@ public static class AcerWmiProbe
                 {
                     ClassPresent = true,
                     ProviderVersion = providerVersion,
-                    Methods = methods
+                    Methods = methods,
+                    DynamicClass = dynamicClass
                 };
             }
 
@@ -138,6 +163,7 @@ public static class AcerWmiProbe
                         ClassPresent = true,
                         ProviderVersion = providerVersion,
                         Methods = methods,
+                        DynamicClass = dynamicClass,
                         CallMethod = candidate,
                         CallSucceeded = true
                     };
@@ -152,11 +178,38 @@ public static class AcerWmiProbe
                 }
             }
 
+            // Every class-level call failed. On a dynamic class that is expected, so the useful question becomes
+            // whether an instance can be reached at all: that is the difference between "no rights" and "no
+            // hardware", and only the first one is worth retrying elevated.
+            bool instanceDenied = false;
+            if (dynamicClass)
+            {
+                try
+                {
+                    foreach (ManagementObject instance in cls.GetInstances())
+                    {
+                        instance.Dispose();
+                        break;
+                    }
+                }
+                catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.AccessDenied)
+                {
+                    instanceDenied = true;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    instanceDenied = true;
+                }
+                catch { }
+            }
+
             return new AcerWmiProbeResult
             {
                 ClassPresent = true,
                 ProviderVersion = providerVersion,
                 Methods = methods,
+                DynamicClass = dynamicClass,
+                InstanceAccessDenied = instanceDenied,
                 CallMethod = lastMethod,
                 CallSucceeded = false,
                 CallError = lastError

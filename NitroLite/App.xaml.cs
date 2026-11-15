@@ -95,6 +95,16 @@ public partial class App : System.Windows.Application
             }
         }
 
+        // 0.5 Elevated WMI helper. Decided before the single-instance mutex on purpose: the helper is a second
+        // process of this same executable, so the mutex would treat it as a duplicate, signal the running window to
+        // come forward and exit — leaving the caller waiting on a pipe nobody is listening to.
+        var startupMode = StartupMode.Parse(e.Args);
+        if (startupMode.IsWmiWorker)
+        {
+            Environment.Exit(RunWmiWorker(startupMode));
+            return;
+        }
+
         var options = StartupOptions.Parse(e.Args);
 
         // 1. Single Instance Check via Mutex
@@ -419,6 +429,27 @@ public partial class App : System.Windows.Application
             mutex?.Dispose();
             return new Mutex(false);
         }
+    }
+
+    /// <summary>
+    /// The elevated WMI helper. This is the skeleton only: it validates its arguments and refuses to run without
+    /// them, so a build that cannot yet serve the pipe never leaves an elevated process sitting in the background
+    /// with no owner. The pipe server, the nonce handshake and the narrow command set land in the next step.
+    /// </summary>
+    /// <returns>0 when the helper ran to completion, 2 for a rejected request, 3 while it is not implemented.</returns>
+    private static int RunWmiWorker(StartupMode mode)
+    {
+        if (!mode.IsValidWorkerRequest)
+        {
+            // Logged rather than printed: the helper is started by the window, not by a person reading a console.
+            AppLog.Warn("--wmi-worker reddedildi: eksik veya geçersiz argüman",
+                $"pipe='{mode.PipeName}' parent={mode.ParentProcessId} nonce={mode.Nonce.Length} karakter");
+            return 2;
+        }
+
+        AppLog.Warn("--wmi-worker istendi ancak yardımcı süreç henüz uygulanmadı",
+            $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
+        return 3;
     }
 
     private static int RunHardwareReport(string[] args)

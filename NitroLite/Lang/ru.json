@@ -991,5 +991,9 @@
  "Saf Siyah (OLED)": "Чистый чёрный (OLED)",
  "Soğuk Antrasit": "Холодный антрацит",
  "Kehribar Konsol": "Янтарная консоль",
- "Kuzey Buzulu": "Северный иней"
+ "Kuzey Buzulu": "Северный иней",
+ "Doğrudan WMI arka ucu": "Прямой бэкенд WMI",
+ "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Пытается управлять оборудованием через WMI, когда служба Acer не запущена. Отключите, чтобы использовать только службу Acer.",
+ "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "Прямой бэкенд WMI включён; применится при следующем запуске",
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Будет использоваться только служба Acer; применится при следующем запуске"
 }

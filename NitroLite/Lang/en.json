@@ -991,5 +991,9 @@
  "Saf Siyah (OLED)": "Midnight OLED",
  "Soğuk Antrasit": "Slate Steel",
  "Kehribar Konsol": "Amber Console",
- "Kuzey Buzulu": "Nord Frost"
+ "Kuzey Buzulu": "Nord Frost",
+ "Doğrudan WMI arka ucu": "Direct WMI backend",
+ "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Tries to manage the hardware over WMI while the Acer service is not running. Turn it off to use the Acer service only.",
+ "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "Direct WMI backend enabled; applied on the next launch",
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Only the Acer service will be used; applied on the next launch"
 }

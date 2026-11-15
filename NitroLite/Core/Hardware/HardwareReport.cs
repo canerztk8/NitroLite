@@ -261,6 +261,8 @@ public static class HardwareReport
         {
             ["classPresent"] = wmi.ClassPresent,
             ["methods"] = new JsonArray(wmi.Methods.Select(m => (JsonNode?)JsonValue.Create(m)).ToArray()),
+            ["dynamicClass"] = wmi.DynamicClass,
+            ["instanceAccessDenied"] = wmi.InstanceAccessDenied,
             ["callMethod"] = wmi.CallMethod,
             ["callSucceeded"] = wmi.CallSucceeded,
             ["callError"] = wmi.CallError

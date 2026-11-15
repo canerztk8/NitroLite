@@ -991,5 +991,9 @@
  "Saf Siyah (OLED)": "Preto puro (OLED)",
  "Soğuk Antrasit": "Antracite frio",
  "Kehribar Konsol": "Consola âmbar",
- "Kuzey Buzulu": "Geada nórdica"
+ "Kuzey Buzulu": "Geada nórdica",
+ "Doğrudan WMI arka ucu": "Backend WMI direto",
+ "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Tenta gerenciar o hardware via WMI quando o serviço da Acer não está em execução. Desative para usar apenas o serviço da Acer.",
+ "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "Backend WMI direto ativado; aplicado na próxima inicialização",
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Apenas o serviço da Acer será usado; aplicado na próxima inicialização"
 }

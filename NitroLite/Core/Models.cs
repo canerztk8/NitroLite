@@ -303,6 +303,19 @@ public class AppSettings
     [JsonPropertyName("auto_update_check")]
     public bool AutoUpdateCheck { get; set; } = true;
 
+    /// <summary>
+    /// Emergency rollback switch for the hardware layer. On (the default) NitroLite may reach the hardware through a
+    /// direct WMI backend when the Acer service is not running; off pins every read and write to the Acer service
+    /// socket, which is the behaviour before the hardware abstraction existed.
+    /// <para>
+    /// A setting rather than a build flag on purpose: a machine where the new path misbehaves has to be able to get
+    /// back to the old one without waiting for a release, and the person reporting the bug needs to be able to say
+    /// which path they were on.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("use_direct_wmi_backend")]
+    public bool UseDirectWmiBackend { get; set; } = true;
+
     // Custom fan speeds (%), used when the fan mode is "Özel". Kept within MinCustomFanPercent..100.
     [JsonPropertyName("custom_fan_cpu_percent")]
     public int CustomFanCpuPercent { get; set; } = 50;
