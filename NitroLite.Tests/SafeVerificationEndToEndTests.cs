@@ -952,18 +952,35 @@ function global:Disable-ScheduledTask {
     public async Task TestCase6f_DebloatService_DebloatScript_ExitsWithOneIfServiceFailsToStop()
     {
         var service = new DebloatService();
-        var mockServices = new Dictionary<string, (string Status, string StartType)>
+        var tempBackup = Path.Combine(Path.GetTempPath(), $"debloat_test_stopfail_{Guid.NewGuid():N}.json");
+
+        try
         {
-            ["AcerServiceSvc"] = ("Running", "Automatic")
-        };
+            // Pin the baseline through the seams. Reading it from the real registry makes the test host-dependent:
+            // on a machine without the Acer services the generated script targets nothing, exits 0, and the
+            // "stop failed" path is never exercised.
+            service.BackupStateFilePath = tempBackup;
+            service.ServiceStartupTypeQuerySeam = _ => "Automatic";
+            service.ServiceStatusQuerySeam = _ => "Running";
+            service.ScheduledTaskStateQuerySeam = _ => "Unknown";
 
-        // When stop fails, the generated script must throw and exit 1
-        service.PowerShellRunner = (script, elevated) =>
-            ExecuteScriptWithMockCmdletsAsync(script, mockServices, simulateStopError: true);
+            var mockServices = new Dictionary<string, (string Status, string StartType)>
+            {
+                ["AcerServiceSvc"] = ("Running", "Automatic")
+            };
 
-        bool ok = await service.ApplyTier1DebloatAsync();
-        Assert.False(ok);
-        Assert.NotNull(service.LastError);
+            // When stop fails, the generated script must throw and exit 1
+            service.PowerShellRunner = (script, elevated) =>
+                ExecuteScriptWithMockCmdletsAsync(script, mockServices, simulateStopError: true);
+
+            bool ok = await service.ApplyTier1DebloatAsync();
+            Assert.False(ok);
+            Assert.NotNull(service.LastError);
+        }
+        finally
+        {
+            if (File.Exists(tempBackup)) File.Delete(tempBackup);
+        }
     }
 
     [Fact]
