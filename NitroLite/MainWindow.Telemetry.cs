@@ -292,9 +292,6 @@ public partial class MainWindow
 
                 RenderTelemetryChart();
                 RenderModeTrace();
-
-                // Live standby/free sizes in the RAM card while it is on screen (one cheap syscall).
-                if (IsVisible && TabMonitoring?.Visibility == Visibility.Visible && !_ramCleanBusy) UpdateMemoryListText();
             }
 
             // Auto-sync game dropdown to running active game if tab is visible
@@ -449,8 +446,6 @@ public partial class MainWindow
             double x = (d.Timestamp - windowStart).TotalSeconds / span.TotalSeconds * width;
             samples.Add((x, v.Value));
         }
-
-        if (TxtTraceSpan != null) TxtTraceSpan.Text = Loc.T($"KAYIT · {span.TotalSeconds:0} SANİYE");
 
         if (samples.Count < 2)
         {
@@ -823,7 +818,7 @@ public partial class MainWindow
                 }
                 if (TxtSubSsd1Temp != null)
                 {
-                    ShowTemperature(TxtSubSsd1Temp, TelemetryFormatter.FormatTemperature(d0.Temperature));
+                    ShowTemperature(TxtSubSsd1Temp, TelemetryFormatter.FormatTemperature(d0.Temperature), TxtSubSsd1Smart);
                     if (TxtSubSsd1Label != null) TxtSubSsd1Label.Text = string.IsNullOrEmpty(d0.DriveLetter) ? Loc.T("Disk 1") : Loc.T($"Disk 1 ({d0.DriveLetter}:)");
                     if (TxtSubSsd1Name != null) TxtSubSsd1Name.Text = d0.Model;
                 }
@@ -868,7 +863,7 @@ public partial class MainWindow
                 }
                 if (TxtSubSsd2Temp != null)
                 {
-                    ShowTemperature(TxtSubSsd2Temp, TelemetryFormatter.FormatTemperature(d1.Temperature));
+                    ShowTemperature(TxtSubSsd2Temp, TelemetryFormatter.FormatTemperature(d1.Temperature), TxtSubSsd2Smart);
                     if (TxtSubSsd2Label != null) TxtSubSsd2Label.Text = string.IsNullOrEmpty(d1.DriveLetter) ? Loc.T("Disk 2") : Loc.T($"Disk 2 ({d1.DriveLetter}:)");
                     if (TxtSubSsd2Name != null) TxtSubSsd2Name.Text = d1.Model;
                 }
@@ -906,11 +901,20 @@ public partial class MainWindow
     /// card whose sensor never answers reads as a broken value; the model name underneath already says what the
     /// component is, so the line is dropped instead of standing there empty.
     /// </summary>
-    private static void ShowTemperature(TextBlock? block, string text)
+    private static void ShowTemperature(TextBlock? block, string text, TextBlock? fallback = null)
     {
         if (block == null) return;
         bool hasReading = !string.IsNullOrWhiteSpace(text) && !text.Contains("--");
         block.Text = hasReading ? text : string.Empty;
         block.Visibility = hasReading ? Visibility.Visible : Visibility.Collapsed;
+        // The thermal matrix columns sit side by side, so a dropped line left one column shorter than its
+        // neighbours. The fallback keeps the height and says something true about the drive instead.
+        if (fallback != null) fallback.Visibility = hasReading ? Visibility.Collapsed : Visibility.Visible;
     }
+
+    /// <summary>
+    /// Colours the 6px dot beside a rail reading. The dot is the one place the rail carries state by colour, so the
+    /// thresholds are the same ones the thermal matrix uses: green below 60, olive to 75, vermilion to 90, red above.
+    /// A reading of 0 or less means nothing was measured, and the dot goes quiet rather than green.
+    /// </summary>
 }

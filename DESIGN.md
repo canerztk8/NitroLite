@@ -194,7 +194,7 @@ WPF has no letter-spacing setting; the airiness of the micro labels comes from u
 
 ## Layout
 
-- Window: 1060×730 default, grows to 2560×1380. Sidebar fixed at **200px**, content `*`.
+- Window: 1060×730 default, grows to 2560×1380. Sidebar **215px** default, resizable 175–290px by dragging its edge, content `*`. The width is persisted; double-clicking the edge restores 215px.
 - Content padding **26px** horizontal, **20px** vertical. Between sections **14–18px**.
 - Vertical rhythm in multiples of 4: 4 / 8 / 12 / 16 / 20.
 - **Sections are cards.** A section is a `card` ground with a 1px `rule` frame, an 8px corner and 12px 14px padding. The card is the grouping unit: it says "these controls belong together" and nothing more. Cards stack in one column and are never nested.
@@ -249,7 +249,7 @@ The template draws the resting frame and the accent frame as two layers, because
 
 **Section** — the `CardBorder` style: `card` ground, a 1px `rule` frame, an 8px corner, 12px 14px padding. Title in `title`, at most one line of `hint` below it, then the content. All 21 uses inherit the same language, so every page groups its content the same way.
 
-**Info badge** — a 15px circle, 1px `rule-strong` frame at 75% opacity, a 9.5px `?` in `ink-faint`, `Cursor=Help`. It sits 6px to the right of a heading and holds the detail the one-line hint leaves out, in its `ToolTip`. It is not a button and stays out of the tab order: it answers a hover and nothing else. One badge per heading at most.
+**Info badge** — a 15px circle, 1px `rule-strong` frame at 75% opacity, a 9.5px `?` in `ink-faint`, `Cursor=Hand`. It sits 6px to the right of a heading and holds the detail the one-line hint leaves out. It answers a hover with its `ToolTip` after 120ms, and a click opens the same text in a themed popup under the badge, so the detail is reachable without knowing to hover. It stays out of the tab order. One badge per heading at most.
 
 **Stat cell** — not a card: a 1px line on top, then a micro label + mono value + note. Four of them side by side form a reading strip.
 

@@ -247,12 +247,6 @@ public partial class MainWindow
         // A boost level is a setting, not an alarm: it is set in ink like every other readout.
         var brush = TryFindResource("InkSoft") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
 
-        if (TxtBoostStatusBadge != null)
-        {
-            TxtBoostStatusBadge.Text = $" ({name})";
-            TxtBoostStatusBadge.Foreground = brush;
-        }
-
         if (TxtSideCpuBoost != null)
         {
             TxtSideCpuBoost.Text = (int)mode is 0 or 1 or 2 or 4 ? name : Loc.T("Diğer");
@@ -494,11 +488,6 @@ public partial class MainWindow
             else
             {
                 _currentGpuMode = null;
-                if (TxtGpuModeBadge != null)
-                {
-                    TxtGpuModeBadge.Text = Loc.T("Bilinmiyor");
-                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
-                }
             }
 
             if (CmbGpuMode != null && CmbGpuMode.SelectedIndex == -1 && CmbGpuMode.Items.Count > 0)
@@ -524,41 +513,31 @@ public partial class MainWindow
         {
             _currentGpuMode = null;
             SetGpuModeControlsEnabled(false, Loc.T("GPU modu desteği Acer servisinden doğrulanamadı; güvenlik için mod değiştirme kapalı."));
-            if (TxtGpuModeBadge != null)
-            {
-                TxtGpuModeBadge.Text = Loc.T("Bilinmiyor");
-                TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("TextMuted");
-            }
             // Trace only reaches a debugger. A GPU mode query that failed is exactly what a bug report needs to
             // show, so it goes to the same log the user can open from the settings card.
             AppLog.Warn("GPU modu okunamadı", ex.Message);
         }
     }
 
+    /// <summary>
+    /// Points the combo box at the mode the service reported. The current mode is shown by that selection alone:
+    /// a second readout beside the title only repeated it.
+    /// </summary>
     private void UpdateGpuModeUi(GpuOperatingMode mode)
     {
         _currentGpuMode = mode;
-        if (TxtGpuModeBadge != null)
+        switch (mode)
         {
-            switch (mode)
-            {
-                case GpuOperatingMode.DiscreteGpu:
-                    TxtGpuModeBadge.Text = Loc.T("NVIDIA GPU Yalnızca (dGPU)");
-                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentRed");
-                    SelectGpuModeCombo("DiscreteGpu");
-                    break;
-                case GpuOperatingMode.Optimus:
-                    TxtGpuModeBadge.Text = Loc.T("Optimus (Hibrit iGPU + dGPU)");
-                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentGreen");
-                    SelectGpuModeCombo("Optimus");
-                    break;
-                case GpuOperatingMode.Automatic:
-                default:
-                    TxtGpuModeBadge.Text = Loc.T("Otomatik Seçim (DDS / Dynamic)");
-                    TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentCyan");
-                    SelectGpuModeCombo("Automatic");
-                    break;
-            }
+            case GpuOperatingMode.DiscreteGpu:
+                SelectGpuModeCombo("DiscreteGpu");
+                break;
+            case GpuOperatingMode.Optimus:
+                SelectGpuModeCombo("Optimus");
+                break;
+            case GpuOperatingMode.Automatic:
+            default:
+                SelectGpuModeCombo("Automatic");
+                break;
         }
     }
 
@@ -570,11 +549,15 @@ public partial class MainWindow
         _ => Loc.T("Bilinmiyor")
     };
 
+    /// <summary>
+    /// After a mode is applied, says which one is waiting for a restart. This used to be a badge beside the title;
+    /// it now shares the note under it, so the pending state is not lost with the badge.
+    /// </summary>
     private void ShowPendingGpuModeBadge()
     {
-        if (TxtGpuModeBadge == null || !_pendingGpuMode.HasValue) return;
-        TxtGpuModeBadge.Text = Loc.T($"{GpuModeShortName(_currentGpuMode)} → {GpuModeShortName(_pendingGpuMode)} (yeniden başlatma bekleniyor)");
-        TxtGpuModeBadge.Foreground = (SolidColorBrush)FindResource("AccentCyan");
+        if (TxtGpuModeNote == null || !_pendingGpuMode.HasValue) return;
+        TxtGpuModeNote.Text = Loc.T($"{GpuModeShortName(_currentGpuMode)} → {GpuModeShortName(_pendingGpuMode)} (yeniden başlatma bekleniyor)");
+        TxtGpuModeNote.Visibility = Visibility.Visible;
     }
 
     private void SelectGpuModeCombo(string tag)
@@ -728,19 +711,19 @@ public partial class MainWindow
         switch (mode)
         {
             case OperatingMode.Quiet:
-                SetModeCardActive(BtnModeQuiet, IndQuiet, TxtIndQuiet, signal);
+                SetModeCardActive(BtnModeQuiet, IndQuiet, TxtIndQuiet, signal, LedQuiet);
                 break;
             case OperatingMode.Default:
-                SetModeCardActive(BtnModeDefault, IndDefault, TxtIndDefault, signal);
+                SetModeCardActive(BtnModeDefault, IndDefault, TxtIndDefault, signal, LedDefault);
                 break;
             case OperatingMode.Extreme:
-                SetModeCardActive(BtnModeExtreme, IndExtreme, TxtIndExtreme, signal);
+                SetModeCardActive(BtnModeExtreme, IndExtreme, TxtIndExtreme, signal, LedExtreme);
                 break;
             case OperatingMode.Turbo:
-                SetModeCardActive(BtnModeTurbo, IndTurbo, TxtIndTurbo, signal);
+                SetModeCardActive(BtnModeTurbo, IndTurbo, TxtIndTurbo, signal, LedTurbo);
                 break;
             case OperatingMode.Eco:
-                SetModeCardActive(BtnModeEco, IndEco, TxtIndEco, signal);
+                SetModeCardActive(BtnModeEco, IndEco, TxtIndEco, signal, LedEco);
                 break;
         }
 
@@ -749,11 +732,11 @@ public partial class MainWindow
 
     private void ResetAllModeCards()
     {
-        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet);
-        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault);
-        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme);
-        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo);
-        ResetModeCard(BtnModeEco, IndEco, TxtIndEco);
+        ResetModeCard(BtnModeQuiet, IndQuiet, TxtIndQuiet, LedQuiet);
+        ResetModeCard(BtnModeDefault, IndDefault, TxtIndDefault, LedDefault);
+        ResetModeCard(BtnModeExtreme, IndExtreme, TxtIndExtreme, LedExtreme);
+        ResetModeCard(BtnModeTurbo, IndTurbo, TxtIndTurbo, LedTurbo);
+        ResetModeCard(BtnModeEco, IndEco, TxtIndEco, LedEco);
     }
 
     private void ShowUnknownModeUi()
@@ -890,16 +873,20 @@ public partial class MainWindow
         }
     }
 
-    private void ResetModeCard(WpfButton? btn, Border? ind, TextBlock? txt)
+    private void ResetModeCard(WpfButton? btn, Border? ind, TextBlock? txt, System.Windows.Shapes.Ellipse? led = null)
     {
         if (ind != null)
         {
+            // The chip is not a "SEÇ" prompt any more: an inactive card shows nothing, so the row of tiles reads as
+            // four choices rather than four buttons asking to be pressed.
+            ind.Visibility = Visibility.Collapsed;
             ind.Background = System.Windows.Media.Brushes.Transparent;
             ind.BorderBrush = TryFindResource("Rule") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         }
+        if (led != null) led.Visibility = Visibility.Collapsed;
         if (txt != null)
         {
-            txt.Text = Loc.T("SEÇ");
+            txt.Text = Loc.T("AKTİF");
             txt.Foreground = TryFindResource("TextMuted") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
         }
         if (btn != null)
@@ -916,12 +903,19 @@ public partial class MainWindow
     /// vermilion chip; the other rows drop back to soft ink. State by de-emphasis, never by a fill,
     /// so the eye never has to relearn what a colour means.
     /// </summary>
-    private void SetModeCardActive(WpfButton? btn, Border? ind, TextBlock? txt, SolidColorBrush accent)
+    private void SetModeCardActive(WpfButton? btn, Border? ind, TextBlock? txt, SolidColorBrush accent,
+        System.Windows.Shapes.Ellipse? led = null)
     {
         if (ind != null)
         {
+            ind.Visibility = Visibility.Visible;
             ind.Background = System.Windows.Media.Brushes.Transparent;
             ind.BorderBrush = accent;
+        }
+        if (led != null)
+        {
+            led.Fill = accent;
+            led.Visibility = Visibility.Visible;
         }
         if (txt != null)
         {

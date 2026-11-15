@@ -79,6 +79,30 @@ public static class LightingPolicy
         string.Equals(effect, "STATIC", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The effect name to actually send to the firmware for a configuration.
+    /// <para>
+    /// The keyboard advertises how many colours each of its modes takes, and on the AN16-41 that number is 1 for
+    /// STATIC and 4 for DIRECT (see <c>GET_CONNECTED_DEVICE</c>). NitroLite's own "static" means "a fixed colour
+    /// per zone", so a configuration carrying more than one zone colour has to go out as DIRECT: sending four
+    /// colours under STATIC is why only one of them ever reached the keyboard. A single colour stays STATIC, which
+    /// is the mode that also carries a speed and a direction.
+    /// </para>
+    /// </summary>
+    public static string DeviceEffectFor(string effect, IEnumerable<string>? zoneColors)
+    {
+        var upper = (effect ?? "STATIC").Trim().ToUpperInvariant();
+        if (upper != "STATIC" || zoneColors == null) return upper;
+
+        var distinct = zoneColors
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Select(c => c.Trim().ToUpperInvariant())
+            .Distinct()
+            .Count();
+
+        return distinct > 1 ? "DIRECT" : upper;
+    }
+
+    /// <summary>
     /// The label shown for a device effect name. The catalogue key is the Turkish source label the XAML already
     /// carries, so a rebuilt list reads exactly like the one it replaces. A name the catalogue does not know is
     /// shown as the device reports it rather than hidden.

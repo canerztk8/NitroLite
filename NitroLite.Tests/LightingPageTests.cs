@@ -25,6 +25,55 @@ public class LightingPolicyTests
         Assert.False(LightingPolicy.EffectUsesZoneColors("WAVE"));
     }
 
+    // The AN16-41 reports maximum_number_of_colors = 1 for STATIC and 4 for DIRECT. NitroLite's "static" means a
+    // fixed colour per zone, so four different zone colours have to leave as DIRECT; sending them under STATIC is
+    // what made only one of the four colours light up on the keyboard.
+    [Fact]
+    public void FourDistinctZoneColours_GoOutAsDirect()
+    {
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.Equal("DIRECT", LightingPolicy.DeviceEffectFor("STATIC", zones));
+    }
+
+    [Fact]
+    public void OneColourForEveryZone_StaysStatic()
+    {
+        var zones = new[] { "#00E5FF", "#00E5FF", "#00E5FF", "#00E5FF" };
+        Assert.Equal("STATIC", LightingPolicy.DeviceEffectFor("STATIC", zones));
+    }
+
+    [Fact]
+    public void TwoZonesThatDiffer_AreEnoughToNeedDirect()
+    {
+        var zones = new[] { "#FF0000", "#FF0000", "#FF0000", "#0000FF" };
+        Assert.Equal("DIRECT", LightingPolicy.DeviceEffectFor("STATIC", zones));
+    }
+
+    [Fact]
+    public void ZoneColourComparison_IgnoresCaseAndSurroundingSpace()
+    {
+        var zones = new[] { "#00e5ff", " #00E5FF ", "#00E5FF", "#00E5FF" };
+        Assert.Equal("STATIC", LightingPolicy.DeviceEffectFor("STATIC", zones));
+    }
+
+    [Theory]
+    [InlineData("WAVE")]
+    [InlineData("BREATHING")]
+    [InlineData("OFF")]
+    public void AnAnimatedEffect_IsNeverRewrittenToDirect(string effect)
+    {
+        // Only STATIC is translated: the other modes take a single colour by design, and rewriting them would
+        // silently change an animation the user picked.
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.Equal(effect, LightingPolicy.DeviceEffectFor(effect, zones));
+    }
+
+    [Fact]
+    public void NoZoneColours_LeavesTheEffectAlone()
+    {
+        Assert.Equal("STATIC", LightingPolicy.DeviceEffectFor("STATIC", null));
+    }
+
     [Fact]
     public void Directions_FollowNitroSenseEnum()
     {

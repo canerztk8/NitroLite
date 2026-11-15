@@ -500,22 +500,27 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Shows the default-profile badge only when it has something to say: a pending apply, a rejection, or the
+    /// reason a write failed. The combo box already shows which profile is chosen, so a permanent
+    /// "Config 1 (Aktif)" beside the title was a second copy of the same fact.
+    /// </summary>
     private void UpdateDefaultMouseProfileBadge(int profile, bool confirmed = true, string? status = null, string? tooltip = null)
     {
-        if (TxtDefaultMouseProfileStatus == null) return;
+        if (TxtDefaultMouseProfileStatus == null || BadgeDefaultMouseProfile == null) return;
+
+        // Confirmed with no explicit status is the steady state: nothing to report.
+        if (confirmed && status == null)
+        {
+            BadgeDefaultMouseProfile.Visibility = Visibility.Collapsed;
+            TxtDefaultMouseProfileStatus.ToolTip = null;
+            return;
+        }
+
         TxtDefaultMouseProfileStatus.ToolTip = tooltip;
-        if (profile >= 1 && profile <= 4)
-        {
-            string suffix = status ?? (confirmed ? Loc.T("Aktif") : Loc.T("Uygulanıyor…"));
-            string brushKey = confirmed ? "AccentGreen" : "TextSecondary";
-            TxtDefaultMouseProfileStatus.Text = Loc.T($"Config {profile} ({suffix})");
-            TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource(brushKey);
-        }
-        else
-        {
-            TxtDefaultMouseProfileStatus.Text = Loc.T("Son Kullanılan (Pasif)");
-            TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
-        }
+        TxtDefaultMouseProfileStatus.Text = status ?? Loc.T("Uygulanıyor…");
+        TxtDefaultMouseProfileStatus.Foreground = (SolidColorBrush)FindResource(confirmed ? "AccentGreen" : "TextSecondary");
+        BadgeDefaultMouseProfile.Visibility = Visibility.Visible;
     }
 
     private void CmbDefaultAtkMouseProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)

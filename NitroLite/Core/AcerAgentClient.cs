@@ -902,9 +902,8 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return false;
 
-            var effUpper = (effect ?? "STATIC").ToUpperInvariant();
-            var isOff = effUpper == "OFF" || brightness <= 0;
-            var isStatic = effUpper == "STATIC" || isOff;
+            var requested = (effect ?? "STATIC").ToUpperInvariant();
+            var isOff = requested == "OFF" || brightness <= 0;
 
             var safePrimary = NormalizeHexColor(primaryColor, "#00E5FF");
             string[] leds;
@@ -921,6 +920,11 @@ public class AcerAgentClient : IDisposable
                     leds[i] = NormalizeHexColor(source, safePrimary);
                 }
             }
+
+            // The firmware's STATIC mode takes one colour; DIRECT is the mode that addresses each zone separately.
+            // Four colours sent under STATIC is why only one of them ever reached the keyboard.
+            var effUpper = isOff ? "OFF" : LightingPolicy.DeviceEffectFor(requested, leds);
+            var isStatic = isOff || effUpper is "STATIC" or "DIRECT";
 
             var actualBrightness = isOff ? 0 : Math.Clamp(brightness, 0, 9);
             var actualColor = isOff ? "#000000" : safePrimary;

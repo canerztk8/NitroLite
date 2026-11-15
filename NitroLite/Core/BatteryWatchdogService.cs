@@ -27,9 +27,6 @@ public class BatteryWatchdogService : IDisposable
     private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(3));
     private readonly CancellationTokenSource _cts = new();
 
-    private readonly object _dischargeLock = new();
-    private CancellationTokenSource? _dischargeCts;
-    private bool _isDischarging = false;
     private bool _isDisposed = false;
     private double _smoothedDischargeRateMw = 0.0;
     private bool _emaInitialized = false;
@@ -48,23 +45,15 @@ public class BatteryWatchdogService : IDisposable
     public bool IsGameSessionActive { get; set; } = false;
 
     /// <summary>
-    /// Set while school mode is on. The discharge target still raises its event and the UI still says so; only the
-    /// system sound is skipped, because a quiet mode that beeps is not quiet.
+    /// Set while school mode is on. Only the system sound is skipped, because a quiet mode that beeps is not quiet.
     /// </summary>
     public bool SuppressSounds { get; set; }
 
-    public bool IsDischarging => _isDischarging;
-
     /// <summary>
-    /// Test seam: replaces the Win32 power-status read so the discharge state machine can be driven from a test
-    /// without a real battery. Null in production, where the P/Invoke below is used.
+    /// Test seam: replaces the Win32 power-status read so the watchdog can be driven from a test without a real
+    /// battery. Null in production, where the P/Invoke below is used.
     /// </summary>
     internal Func<(bool Ok, byte AcLineStatus, byte BatteryLifePercent)>? PowerStatusSeam { get; set; }
-
-    /// <summary>The load thread while a discharge is running, so a test can check its priority and count.</summary>
-    internal Thread? DischargeWorker => _dischargeWorker;
-
-    private Thread? _dischargeWorker;
 
     private bool TryGetPowerStatus(out SYSTEM_POWER_STATUS status)
     {
@@ -81,7 +70,6 @@ public class BatteryWatchdogService : IDisposable
 
     public event Action<BatteryStatusInfo>? StatusUpdated;
     public event Action<int>? OverchargeAlert;
-    public event Action? DischargeTargetReached;
 
     public BatteryWatchdogService(bool attachSystemEvents = true)
     {
@@ -511,119 +499,6 @@ public class BatteryWatchdogService : IDisposable
         return prefix.Length is > 0 and <= 16 ? prefix : "";
     }
 
-    /// <summary>Raised whenever discharge starts (true) or stops for any reason (false), e.g. the adapter was reconnected.</summary>
-    public event Action<bool>? DischargeStateChanged;
-
-    /// <summary>Starts the load. Returns false (nothing started) on AC power or when already at or below 80 %.</summary>
-    public bool StartSafeDischarge()
-    {
-        CancellationTokenSource cts;
-        lock (_dischargeLock)
-        {
-            if (_isDisposed) return false;
-            if (_isDischarging) return true;
-            if (!TryGetPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent is <= 80 or > 100)
-                return false;
-            _isDischarging = true;
-            cts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
-            _dischargeCts = cts;
-        }
-        try { DischargeStateChanged?.Invoke(true); }
-        finally { _ = RunDischargeAsync(cts); }
-        return true;
-    }
-
-    private async Task RunDischargeAsync(CancellationTokenSource cts)
-    {
-        var token = cts.Token;
-
-        // One dedicated thread at the lowest priority, not two pool threads. The load exists only to drain the
-        // battery, so it must never compete with the 1 s telemetry loop or the thermal safety floor, and a pool
-        // thread would carry the lowered priority back into the pool once it finished. The 20 ms pause between
-        // bursts keeps the core busy without pinning it at 100 % for the whole half hour.
-        var worker = new Thread(() =>
-        {
-            while (!token.IsCancellationRequested)
-            {
-                double d = 1.0001;
-                for (int j = 0; j < 50000; j++) d = Math.Sin(d) * Math.Cos(d);
-                Thread.Sleep(20);
-            }
-        })
-        {
-            IsBackground = true,
-            Priority = ThreadPriority.Lowest,
-            Name = "NitroLite.SafeDischarge"
-        };
-        worker.Start();
-        _dischargeWorker = worker;
-
-        bool reachedTarget = false;
-        try
-        {
-            while (!token.IsCancellationRequested)
-            {
-                // This safety check needs only adapter and charge state. WMI telemetry must not block it.
-                if (!TryGetPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent > 100)
-                    break;
-                if (power.BatteryLifePercent <= 80)
-                {
-                    reachedTarget = true;
-                    break;
-                }
-                await Task.Delay(500, token).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        finally
-        {
-            cts.Cancel();
-            // The worker only checks the token between bursts, so it is gone within one 20 ms pause. The wait is
-            // off the caller's thread because this continuation can land on the pool.
-            await Task.Run(() => worker.Join(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
-            _dischargeWorker = null;
-            bool notify;
-            lock (_dischargeLock)
-            {
-                notify = ReferenceEquals(_dischargeCts, cts);
-                if (notify)
-                {
-                    _dischargeCts = null;
-                    _isDischarging = false;
-                }
-                cts.Dispose();
-            }
-            if (notify)
-            {
-                DischargeStateChanged?.Invoke(false);
-                if (reachedTarget)
-                {
-                    if (!SuppressSounds)
-                    {
-                        try { SystemSounds.Asterisk.Play(); } catch { }
-                    }
-                    DischargeTargetReached?.Invoke();
-                }
-            }
-        }
-    }
-
-    public void StopSafeDischarge()
-    {
-        lock (_dischargeLock)
-        {
-            if (!_isDischarging) return;
-            _isDischarging = false;
-            try
-            {
-                _dischargeCts?.Cancel();
-                _dischargeCts = null;
-            }
-            catch { }
-        }
-        DischargeStateChanged?.Invoke(false);
-    }
-
     public void Dispose()
     {
         if (_isDisposed) return;
@@ -637,16 +512,6 @@ public class BatteryWatchdogService : IDisposable
 
         _cts.Cancel();
         _cts.Dispose();
-        lock (_dischargeLock)
-        {
-            try
-            {
-                _dischargeCts?.Cancel();
-                _dischargeCts = null;
-                _isDischarging = false;
-            }
-            catch { }
-        }
         _timer.Dispose();
     }
 }

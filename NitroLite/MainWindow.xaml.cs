@@ -10,7 +10,6 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
-using WpfBrush = System.Windows.Media.Brush;
 using WpfButton = System.Windows.Controls.Button;
 using WpfComboBox = System.Windows.Controls.ComboBox;
 using WpfLine = System.Windows.Shapes.Line;
@@ -248,6 +247,10 @@ public partial class MainWindow : Window
         InitializeComponent();
         LocXaml.Apply(this);
         WindowChromeHelper.Attach(this, _appSettings.Theme);
+        RestoreSidebarWidth();
+        // A popup is placed in screen coordinates, so it has to close when the window it points into moves.
+        LocationChanged += OnWindowGeometryChangedForInfoPopup;
+        SizeChanged += OnWindowGeometryChangedForInfoPopup;
         ShowAppVersion();
         SetupTrayIcon();
         SetupTimers();
@@ -452,8 +455,6 @@ public partial class MainWindow : Window
     {
         _batteryService.StatusUpdated += OnBatteryStatusUpdated;
         _batteryService.OverchargeAlert += OnOverchargeAlert;
-        _batteryService.DischargeTargetReached += OnDischargeTargetReached;
-        _batteryService.DischargeStateChanged += OnDischargeStateChanged;
         _batteryService.Start();
 
         // Game Detection Hooks
@@ -1073,10 +1074,10 @@ public partial class MainWindow : Window
         }
     }
 
-    // The idle look of each segmented button is whatever the XAML declared (a red "Maksimum", an
-    // amber "Özel"), captured once so switching back restores it instead of flattening the colour.
-    private readonly Dictionary<WpfButton, (WpfBrush Background, WpfBrush Foreground)> _segIdle =
-        new Dictionary<WpfButton, (WpfBrush, WpfBrush)>();
+    // Which option of each segmented control is chosen. Only the state is remembered: the brushes are
+    // resolved on every apply, so a live theme switch repaints the idle options in the new palette
+    // instead of leaving the previous theme's ink on them.
+    private readonly Dictionary<WpfButton, bool> _segActive = new Dictionary<WpfButton, bool>();
 
     /// <summary>
     /// Marks one option of a segmented control as chosen: the whole button takes the board's signal
@@ -1085,21 +1086,35 @@ public partial class MainWindow : Window
     private void SetSegActive(WpfButton? button, bool active)
     {
         if (button == null) return;
-        if (!_segIdle.ContainsKey(button))
-            _segIdle[button] = (button.Background, button.Foreground);
+        _segActive[button] = active;
+        ApplySegActive(button, active);
+    }
 
+    /// <summary>Paints one segmented option from the palette that is loaded right now.</summary>
+    private void ApplySegActive(WpfButton button, bool active)
+    {
         var ink = TryFindResource("TextPrimary") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
         var deep = TryFindResource("PanelBg") as SolidColorBrush ?? System.Windows.Media.Brushes.LightGray;
         var rule = TryFindResource("BorderDark") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
-        var idle = _segIdle[button];
+        var idleInk = TryFindResource("InkSoft") as SolidColorBrush ?? System.Windows.Media.Brushes.Gray;
 
         // The chosen option is pressed into the paper, not painted red: a deeper ground, full ink
         // type and a 2px ink rule under it. Vermilion stays reserved for what is live right now.
-        button.Background = active ? deep : idle.Background;
-        button.Foreground = active ? ink : idle.Foreground;
+        button.Background = active ? deep : System.Windows.Media.Brushes.Transparent;
+        button.Foreground = active ? ink : idleInk;
         button.BorderBrush = active ? ink : rule;
         button.BorderThickness = active ? new Thickness(1, 1, 1, 2) : new Thickness(1);
         button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
+    }
+
+    /// <summary>
+    /// Repaints every segmented option after the palette changed under the live window. The chosen
+    /// option is re-applied too, because its ground and rule come from the same swapped brushes.
+    /// </summary>
+    private void RepaintSegmentedControls()
+    {
+        foreach (var pair in _segActive)
+            ApplySegActive(pair.Key, pair.Value);
     }
 
     // ---------------------------------------------------------------- custom fan speeds
@@ -1453,8 +1468,6 @@ public partial class MainWindow : Window
 
         _batteryService.StatusUpdated -= OnBatteryStatusUpdated;
         _batteryService.OverchargeAlert -= OnOverchargeAlert;
-        _batteryService.DischargeTargetReached -= OnDischargeTargetReached;
-        _batteryService.DischargeStateChanged -= OnDischargeStateChanged;
         _gameService.GameStarted -= OnGameStarted;
         _gameService.GameEnded -= OnGameEnded;
 

@@ -281,6 +281,24 @@ public class AppSettings
     [JsonPropertyName("mode_trace_collapsed")]
     public bool ModeTraceCollapsed { get; set; } = false;
 
+    /// <summary>
+    /// Width of the left navigation rail, in device-independent pixels. Persisted because it is a layout choice:
+    /// someone who widened the rail to read a long translated label wants it wide next time too. Clamped to
+    /// <see cref="MinSidebarWidth"/>..<see cref="MaxSidebarWidth"/> on read, so a hand-edited file cannot leave the
+    /// window with no content area.
+    /// </summary>
+    [JsonPropertyName("sidebar_width")]
+    public double SidebarWidth { get; set; } = DefaultSidebarWidth;
+
+    public const double DefaultSidebarWidth = 215;
+    public const double MinSidebarWidth = 175;
+    public const double MaxSidebarWidth = 290;
+
+    public static double ClampSidebarWidth(double value) =>
+        double.IsNaN(value) || double.IsInfinity(value)
+            ? DefaultSidebarWidth
+            : Math.Clamp(value, MinSidebarWidth, MaxSidebarWidth);
+
     /// <summary>Ask GitHub for a newer release shortly after start and every six hours.</summary>
     [JsonPropertyName("auto_update_check")]
     public bool AutoUpdateCheck { get; set; } = true;

@@ -52,10 +52,6 @@ public partial class MainWindow
         try
         {
             ChkSchoolMode.IsChecked = _appSettings.SchoolModeEnabled;
-            if (TxtSchoolModeDetail != null)
-            {
-                TxtSchoolModeDetail.Text = Loc.T("Eco · Boost Kapalı · 60 Hz · %40 Parlaklık (kapatınca geri döner)");
-            }
         }
         finally
         {

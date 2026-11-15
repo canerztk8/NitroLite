@@ -4,17 +4,17 @@ using Microsoft.Win32;
 namespace NitroLite.Core;
 
 /// <summary>
-/// Loads the chosen palette into <see cref="Application.Resources"/> before any window is built.
+/// Loads the chosen palette into <see cref="Application.Resources"/>.
 /// <para>
-/// The XAML refers to brushes with <c>StaticResource</c>, which resolves once, when the element is loaded. That is
-/// why a theme change restarts NitroLite instead of swapping the dictionary under a live window: the merged
-/// dictionary has to be in place before <c>InitializeComponent</c> runs. The cost is one restart per theme change,
-/// and the benefit is that nothing in the window has to be re-bound or re-coloured at runtime.
+/// The XAML refers to brushes with <c>DynamicResource</c>, which re-resolves whenever the merged dictionary changes.
+/// That is what lets a theme change happen under a live window: <see cref="Apply"/> swaps the dictionary and every
+/// brush reference in the tree follows, with no restart and nothing re-bound by hand. The few places that paint
+/// themselves in code (the fan curve, the wear trend, the status colours) are re-run by the window after the swap.
 /// </para>
 /// <para>
-/// <see cref="AppTheme.System"/> is resolved to a concrete palette here, at startup. Windows can flip its own theme
-/// while NitroLite runs; the window keeps the palette it was built with until the next launch, which is the same
-/// rule the explicit Light and Dark choices follow.
+/// <see cref="AppTheme.System"/> is resolved to a concrete palette here. Windows can flip its own theme while
+/// NitroLite runs; the window keeps the palette it was built with until the next launch, which is the same rule the
+/// explicit Light and Dark choices follow.
 /// </para>
 /// </summary>
 public static class ThemeManager
@@ -90,4 +90,54 @@ public static class ThemeManager
 
         merged.Add(dictionary);
     }
+
+    /// <summary>
+    /// The five colours that identify a palette at a glance: the page, the card, the frame, the body ink and the
+    /// accent. The settings picker draws them as swatches so the choice is made by looking rather than by reading
+    /// seven names that mean nothing until the window has already changed.
+    /// </summary>
+    public readonly record struct ThemePreview(
+        System.Windows.Media.Color Paper,
+        System.Windows.Media.Color Card,
+        System.Windows.Media.Color Border,
+        System.Windows.Media.Color Ink,
+        System.Windows.Media.Color Accent);
+
+    /// <summary>
+    /// Reads the preview colours out of a palette's dictionary. A dictionary that cannot be loaded, or one missing a
+    /// key, falls back to the light palette rather than throwing: the picker is decoration, and a swatch is never a
+    /// reason to lose the settings page.
+    /// </summary>
+    public static ThemePreview Preview(AppTheme theme)
+    {
+        var resolved = Resolve(theme);
+        try
+        {
+            var dictionary = new ResourceDictionary
+            {
+                Source = new Uri(ThemeCatalog.DictionaryPath(resolved), UriKind.Relative)
+            };
+
+            return new ThemePreview(
+                Read(dictionary, "Paper"),
+                Read(dictionary, "CardBg"),
+                Read(dictionary, "BorderDark"),
+                Read(dictionary, "Ink"),
+                Read(dictionary, "Vermilion"));
+        }
+        catch
+        {
+            return new ThemePreview(
+                System.Windows.Media.Color.FromRgb(0xF2, 0xED, 0xE3),
+                System.Windows.Media.Color.FromRgb(0xF8, 0xF4, 0xEB),
+                System.Windows.Media.Color.FromRgb(0xCF, 0xC4, 0xAF),
+                System.Windows.Media.Color.FromRgb(0x1B, 0x19, 0x17),
+                System.Windows.Media.Color.FromRgb(0xC0, 0x39, 0x2B));
+        }
+    }
+
+    private static System.Windows.Media.Color Read(ResourceDictionary dictionary, string key) =>
+        dictionary[key] is System.Windows.Media.SolidColorBrush brush
+            ? brush.Color
+            : System.Windows.Media.Colors.Transparent;
 }

@@ -117,7 +117,6 @@ public partial class MainWindow
             ShowToast(Loc.T($"Önbellek boşaltıldı: {freedStr} serbest bırakıldı, kullanılabilir bellek {before} → {after} GB."), isSuccess: true, trayBalloon: false);
             SetRamCleanStatus(Loc.T($" ({freedStr} serbest bırakıldı)"), "AccentGreen");
         }
-        UpdateMemoryListText();
     }
 
     private void SetRamCleanStatus(string text, string brushKey)
@@ -141,19 +140,7 @@ public partial class MainWindow
             if (installed) SetRamCleanStatus(Loc.T(" (Hazır)"), "AccentGreen");
             else SetRamCleanStatus(Loc.T(" (Araç kurulu değil)"), "TextSecondary");
         }
-        UpdateMemoryListText();
         return Task.CompletedTask;
     }
 
-    /// <summary>Live standby/free sizes in the RAM card (readable without administrator rights).</summary>
-    private void UpdateMemoryListText()
-    {
-        if (TxtRamCleanNote == null) return;
-        var lists = MemoryCleanerService.ReadMemoryLists();
-        string sizes = lists.HasValue
-            ? Loc.TInv($"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. ")
-            : "";
-        TxtRamCleanNote.Text = Loc.T("Windows önbelleğindeki bekleme listesini temizler");
-        TxtRamCleanNote.ToolTip = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz, bu yüzden kullanılan RAM çubuğu değişmez. Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.");
-    }
 }

@@ -444,8 +444,9 @@ public partial class MainWindow
         {
             if (zones[i] == null) continue;
             // Off is an unlit slot, not a solid block: an ink fill read as a dead black rectangle in the light theme
-            // and a white one in the dark, and neither said "this zone is a control you can click".
-            if (IsLightingOff(cfg)) zones[i].Background = TryFindResource("PaperDeep") as SolidColorBrush ?? System.Windows.Media.Brushes.Transparent;
+            // and a white one in the dark, and neither said "this zone is a control you can click". CardBg rather
+            // than PaperDeep, because the zones now sit on a PaperDeep deck and would otherwise vanish into it.
+            if (IsLightingOff(cfg)) zones[i].Background = TryFindResource("CardBg") as SolidColorBrush ?? System.Windows.Media.Brushes.Transparent;
             else if (!LightingPolicy.EffectUsesColor(cfg.Effect)) zones[i].Background = RainbowBrush(i);
             else if (LightingPolicy.EffectUsesZoneColors(cfg.Effect)) zones[i].Background = SolidOrFallback(i < cfg.LEDs.Count ? cfg.LEDs[i] : cfg.Color);
             else zones[i].Background = SolidOrFallback(cfg.Color);
@@ -453,7 +454,7 @@ public partial class MainWindow
         }
 
         if (IsLightingOff(cfg))
-            note = Loc.T("Aydınlatma kapalı. Parlaklığı artırmak, bir efekt ya da renk seçmek son ayarla geri açar.");
+            note = "";
         else if (!LightingPolicy.EffectUsesColor(cfg.Effect))
             note = Loc.T("Bu efekt klavyenin kendi renk döngüsünü kullanır; seçilen renk uygulanmaz.");
         else if (!LightingPolicy.EffectUsesZoneColors(cfg.Effect))

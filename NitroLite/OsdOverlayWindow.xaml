@@ -12,41 +12,49 @@
         Focusable="False"
         ShowActivated="False">
 
-    <!-- No DropShadowEffect: on a layered (transparent) window every 1 s update would be re-rendered in software. -->
-    <Border Background="#F20F1115" BorderBrush="#252B38" BorderThickness="1" CornerRadius="6" Padding="12,8">
+    <!-- The overlay is the same recording sheet as the window, floating over a game: paper ground, ink figures,
+         faint labels, one hairline frame. Every brush is a DynamicResource, so the OSD follows a live theme swap
+         instead of keeping the palette it was built with.
+         No DropShadowEffect: on a layered (transparent) window every 1 s update would be re-rendered in software.
+         The ground is its own layer at 94 % so the game still shows through, while the text above it stays at full
+         opacity — fading the whole border would fade the figures too. -->
+    <Grid>
+        <Border Background="{DynamicResource Paper}" Opacity="0.94" CornerRadius="6" />
 
-        <StackPanel TextElement.FontFamily="Consolas, Cascadia Code, Courier New, monospace">
-            <!-- CPU Row -->
-            <StackPanel Orientation="Horizontal" Margin="0,1">
-                <TextBlock Text="CPU: " Foreground="#9BA5B7" FontSize="11" FontWeight="Bold" />
-                <TextBlock x:Name="TxtOsdCpuTemp" Text="-- °C" Foreground="#0EA5E9" FontSize="11" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="11" />
-                <TextBlock x:Name="TxtOsdCpuPower" Text="-- W" Foreground="#10B981" FontSize="11" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="11" />
-                <TextBlock x:Name="TxtOsdCpuFreq" Text="-- GHz" Foreground="#F1F4F9" FontSize="11" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="11" />
-                <TextBlock x:Name="TxtOsdCpuUsage" Text="-- %" Foreground="#9BA5B7" FontSize="11" />
-            </StackPanel>
+        <Border BorderBrush="{DynamicResource RuleStrong}" BorderThickness="1" CornerRadius="6" Padding="12,8">
+            <StackPanel TextElement.FontFamily="Cascadia Mono, Consolas, Courier New, monospace">
+                <!-- CPU Row -->
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="CPU: " Foreground="{DynamicResource InkSoft}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock x:Name="TxtOsdCpuTemp" Text="-- °C" Foreground="{DynamicResource Ink}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="11" />
+                    <TextBlock x:Name="TxtOsdCpuPower" Text="-- W" Foreground="{DynamicResource Ink}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="11" />
+                    <TextBlock x:Name="TxtOsdCpuFreq" Text="-- GHz" Foreground="{DynamicResource Ink}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="11" />
+                    <TextBlock x:Name="TxtOsdCpuUsage" Text="-- %" Foreground="{DynamicResource InkSoft}" FontSize="11" />
+                </StackPanel>
 
-            <!-- GPU Row -->
-            <StackPanel Orientation="Horizontal" Margin="0,1">
-                <TextBlock Text="GPU: " Foreground="#9BA5B7" FontSize="11" FontWeight="Bold" />
-                <TextBlock x:Name="TxtOsdGpuTemp" Text="-- °C" Foreground="#EF4444" FontSize="11" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="11" />
-                <TextBlock x:Name="TxtOsdGpuPower" Text="-- W" Foreground="#F59E0B" FontSize="11" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="11" />
-                <TextBlock x:Name="TxtOsdGpuFreq" Text="-- MHz" Foreground="#F1F4F9" FontSize="11" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="11" />
-                <TextBlock x:Name="TxtOsdVram" Text="VRAM: -- GB" Foreground="#0EA5E9" FontSize="11" FontWeight="Bold" />
-            </StackPanel>
+                <!-- GPU Row -->
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="GPU: " Foreground="{DynamicResource InkSoft}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock x:Name="TxtOsdGpuTemp" Text="-- °C" Foreground="{DynamicResource Ink}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="11" />
+                    <TextBlock x:Name="TxtOsdGpuPower" Text="-- W" Foreground="{DynamicResource Ink}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="11" />
+                    <TextBlock x:Name="TxtOsdGpuFreq" Text="-- MHz" Foreground="{DynamicResource Ink}" FontSize="11" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="11" />
+                    <TextBlock x:Name="TxtOsdVram" Text="VRAM: -- GB" Foreground="{DynamicResource InkSoft}" FontSize="11" FontWeight="Bold" />
+                </StackPanel>
 
-            <!-- RAM & Fan Row -->
-            <StackPanel Orientation="Horizontal" Margin="0,1">
-                <TextBlock Text="RAM: " Foreground="#9BA5B7" FontSize="10" />
-                <TextBlock x:Name="TxtOsdRam" Text="-- GB" Foreground="#10B981" FontSize="10" FontWeight="Bold" />
-                <TextBlock Text=" | " Foreground="#3A4356" FontSize="10" />
-                <TextBlock x:Name="TxtOsdFan" Text="FAN: -- RPM" Foreground="#9BA5B7" FontSize="10" />
+                <!-- RAM & Fan Row -->
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <TextBlock Text="RAM: " Foreground="{DynamicResource InkSoft}" FontSize="10" />
+                    <TextBlock x:Name="TxtOsdRam" Text="-- GB" Foreground="{DynamicResource Ink}" FontSize="10" FontWeight="Bold" />
+                    <TextBlock Text=" | " Foreground="{DynamicResource Rule}" FontSize="10" />
+                    <TextBlock x:Name="TxtOsdFan" Text="FAN: -- RPM" Foreground="{DynamicResource InkSoft}" FontSize="10" />
+                </StackPanel>
             </StackPanel>
-        </StackPanel>
-    </Border>
+        </Border>
+    </Grid>
 </Window>

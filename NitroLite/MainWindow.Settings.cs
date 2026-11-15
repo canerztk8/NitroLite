@@ -50,6 +50,7 @@ public partial class MainWindow
             _isInitializingUi = false;
         }
 
+        BuildThemeCards();
         _settingsCardReady = true;
         StartUpdateChecks();
     }
@@ -76,9 +77,9 @@ public partial class MainWindow
         // while the preference itself still has to be saved.
         if (theme == _appSettings.Theme) return;
 
-        _appSettings.Theme = theme;
-        SaveSettings();
-        RestartForSettingChange(Loc.T("Tema değişikliği için NitroLite yeniden başlatılıyor…"));
+        // No restart: the brushes are DynamicResource, so the swap reaches the live window. The few surfaces that
+        // paint themselves in code are re-run inside ApplyThemeLive.
+        ApplyThemeLive(theme);
     }
 
     private void ChkAutoUpdateCheck_Changed(object sender, RoutedEventArgs e)

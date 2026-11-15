@@ -113,21 +113,6 @@ public class AuditDefectRemediationTests
     }
 
     [Fact]
-    public void BatteryWatchdogService_StopDischarge_ThreadSafeWithoutObjectDisposedException()
-    {
-        using var watchdog = new BatteryWatchdogService();
-
-        // Concurrently call StartSafeDischarge and StopSafeDischarge
-        for (int i = 0; i < 20; i++)
-        {
-            watchdog.StartSafeDischarge();
-            watchdog.StopSafeDischarge();
-        }
-
-        Assert.False(watchdog.IsDischarging);
-    }
-
-    [Fact]
     public void OsdOverlayWindow_IsExiting_Property_CanBeSet()
     {
         var type = typeof(OsdOverlayWindow);

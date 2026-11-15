@@ -56,10 +56,13 @@ public partial class MainWindow
                     ? Loc.T("Fabrika: ") + TelemetryFormatter.MarkEstimated(FormattableString.Invariant($"{details.DesignCapacityMWh:F0} mWh"), details.IsDesignCapacityEstimated)
                     : Loc.T("Fabrika: --");
 
+            // A row that says "the battery software does not report this" is a row about the software, not about the
+            // battery. When there is no number, the line is simply not there.
             if (TxtBatCycleCount != null)
-                TxtBatCycleCount.Text = details.CycleCount.HasValue
-                    ? Loc.T($"Döngü: {details.CycleCount.Value}")
-                    : Loc.T("Döngü sayısı: pil yazılımı bildirmiyor");
+            {
+                TxtBatCycleCount.Text = details.CycleCount.HasValue ? Loc.T($"Döngü: {details.CycleCount.Value}") : string.Empty;
+                TxtBatCycleCount.Visibility = details.CycleCount.HasValue ? Visibility.Visible : Visibility.Collapsed;
+            }
 
             if (TxtBatVoltage != null)
                 TxtBatVoltage.Text = details.VoltageVolts > 0
@@ -76,15 +79,9 @@ public partial class MainWindow
                 TxtBatChemistry.Text = parts.Count > 0 ? string.Join(" · ", parts) : "--";
             }
 
-            if (TxtBatIdentity != null)
-            {
-                var id = string.Join(" ", new[] { details.Manufacturer, details.ModelName }.Where(s => !string.IsNullOrWhiteSpace(s)));
-                TxtBatIdentity.Text = id.Length > 0
-                    ? Loc.T($"{id} · Windows (WMI) üzerinden okunan kapasite ve gerilim.")
-                    : Loc.T("Windows (WMI) üzerinden okunan kapasite ve gerilim.");
-                if (TxtSubBatteryName != null)
-                    TxtSubBatteryName.Text = id.Length > 0 ? id : Loc.T("Pil");
-            }
+            var id = string.Join(" ", new[] { details.Manufacturer, details.ModelName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            if (TxtSubBatteryName != null)
+                TxtSubBatteryName.Text = id.Length > 0 ? id : Loc.T("Pil");
 
             RenderWearTrend();
         });
@@ -268,9 +265,12 @@ public partial class MainWindow
                 }
             }
 
+            // On the adapter there is no "time left" to report: the machine is not running off the pack, and the
+            // estimate the API returns in that state is a placeholder that read as "Hesaplanıyor..." forever.
             if (TxtBatRemainingTime != null)
             {
                 TxtBatRemainingTime.Text = Loc.T($"Kalan Süre: {TelemetryFormatter.FormatRemainingTime(status.EstimatedRemainingMinutes, status.IsPluggedIn, status.IsCharging)}");
+                TxtBatRemainingTime.Visibility = status.IsPluggedIn ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (status.IsOvercharged)
@@ -294,22 +294,6 @@ public partial class MainWindow
             // School mode is a quiet mode: the banner and the balloon still say it, the beep does not.
             if (!_appSettings.SchoolModeEnabled) SystemSounds.Exclamation.Play();
             _notifyIcon?.ShowBalloonTip(3000, Loc.T("NitroLite"), Loc.T($"Pil %{percent} seviyesine ulaştı (%80 eşiği aşıldı)."), System.Windows.Forms.ToolTipIcon.Warning);
-        });
-    }
-
-    private void OnDischargeTargetReached()
-    {
-        if (Dispatcher.HasShutdownStarted) return;
-        Dispatcher.Invoke(() =>
-        {
-            if (Dispatcher.HasShutdownStarted) return;
-            BtnToggleDischarge.Content = Loc.T("Deşarj İşlemini Başlat");
-            BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
-            TxtDischargeStatus.Text = Loc.T("Hedef seviyeye (%80) ulaşıldı. Şarj adaptörünü bağlayabilirsiniz.");
-            TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentGreen");
-
-            _notifyIcon?.ShowBalloonTip(4000, Loc.T("NitroLite"), Loc.T("Pil seviyesi %80 sınırına ulaştı. Adaptörü bağlayabilirsiniz."), System.Windows.Forms.ToolTipIcon.Info);
-            ShowToast(Loc.T("Pil seviyesi %80 hedef sınırına indirildi."), trayBalloon: false);
         });
     }
 
@@ -358,11 +342,6 @@ public partial class MainWindow
             {
                 _chargeLimitAvailable = state.Available;
                 if (ChkWatchdog != null) ChkWatchdog.IsEnabled = state.Available;
-                // The hint explains where the limit lives; with no agent it would contradict the note below it.
-                if (TxtChargeLimitHint != null)
-                {
-                    TxtChargeLimitHint.Visibility = state.Available ? Visibility.Visible : Visibility.Collapsed;
-                }
                 bool certificateChanged = !state.Available && _careCenterClient.CertificateMismatch;
                 if (TxtChargeLimitNote != null)
                 {
@@ -429,64 +408,5 @@ public partial class MainWindow
         {
             ChkWatchdog.IsEnabled = true;
         }
-    }
-
-    private void BtnToggleDischarge_Click(object sender, RoutedEventArgs e)
-    {
-        if (_batteryService.IsDischarging)
-        {
-            _batteryService.StopSafeDischarge(); // UI follows via DischargeStateChanged
-            return;
-        }
-
-        // The load runs the CPU for up to half an hour, so the heat and the fan noise are part of the deal. The
-        // user has to agree to them before it starts, not discover them ten minutes in.
-        var confirm = System.Windows.MessageBox.Show(this,
-            Loc.T("Güvenli deşarj, pili %80 sınırına indirmek için işlemciyi 30 dakikaya kadar yük altında çalıştırır. Bu süre boyunca işlemci ısınır ve fanlar hızlanır.\n\nDevam edilsin mi?"),
-            Loc.T("Pil Şarj Sınırı ve Güvenli Deşarj"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
-
-        if (_batteryService.CurrentStatus.IsPluggedIn)
-        {
-            var res = System.Windows.MessageBox.Show(this,
-                Loc.T("Adaptör bağlıyken batarya deşarj edilemez.\n\nAdaptörü çıkardıktan sonra 'Evet'e tıklayın."),
-                Loc.T("Adaptör Bağlantısı"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (res != MessageBoxResult.Yes) return;
-        }
-
-        // The service re-reads the battery; it refuses on AC or at <= 80 %, and the UI only shows "active" if it started.
-        if (!_batteryService.StartSafeDischarge())
-        {
-            var st = _batteryService.CurrentStatus;
-            ShowToast(st.IsPluggedIn
-                ? Loc.T("Adaptör hâlâ bağlı; deşarj başlatılmadı.")
-                : Loc.T($"Pil seviyesi (%{st.BatteryPercent}) zaten %80 veya altında; deşarja gerek yok."), isSuccess: false);
-        }
-    }
-
-    /// <summary>Keeps the discharge card in sync with the service, including stops caused by reconnecting the adapter.</summary>
-    private void OnDischargeStateChanged(bool active)
-    {
-        if (Dispatcher.HasShutdownStarted) return;
-        // Invoke (not BeginInvoke): keeps the order with DischargeTargetReached, whose message must win.
-        Dispatcher.Invoke(new Action(() =>
-        {
-            if (BtnToggleDischarge == null || TxtDischargeStatus == null) return;
-            if (active)
-            {
-                BtnToggleDischarge.Content = Loc.T("Deşarjı Durdur");
-                BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentRed");
-                TxtDischargeStatus.Text = Loc.T("Deşarj işlemi aktif: Pil seviyesi %80 sınırına indiriliyor...");
-                TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("AccentCyan");
-            }
-            else
-            {
-                BtnToggleDischarge.Content = Loc.T("Deşarj İşlemini Başlat");
-                BtnToggleDischarge.Background = (SolidColorBrush)FindResource("AccentCyan");
-                bool plugged = _batteryService.CurrentStatus.IsPluggedIn;
-                TxtDischargeStatus.Text = plugged ? Loc.T("Durum: Durdu (adaptör bağlandı).") : Loc.T("Durum: Durduruldu.");
-                TxtDischargeStatus.Foreground = (SolidColorBrush)FindResource("TextSecondary");
-            }
-        }));
     }
 }

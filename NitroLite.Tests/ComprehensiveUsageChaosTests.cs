@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using NitroLite.Core;
@@ -51,8 +51,8 @@ public class ComprehensiveUsageChaosTests
         // Game sessions and display.
         GameStartA, GameStartB, GameEnd, GameCrash, RefreshRateSwitch, ExternalMonitor,
 
-        // Battery and safe discharge.
-        ChargeLimitOn, ChargeLimitOff, DischargeStart, DischargeStop,
+        // Battery.
+        ChargeLimitOn, ChargeLimitOff,
 
         // Peripherals and RGB.
         MousePlug, MouseUnplug, RgbChange, RgbIdleTimeout,
@@ -79,7 +79,6 @@ public class ComprehensiveUsageChaosTests
         ChaosEvent.TempCritical, ChaosEvent.TempPersistentFailure,
         ChaosEvent.SchoolModeOn, ChaosEvent.SchoolModeOff,
         ChaosEvent.GameStartA, ChaosEvent.GameEnd,
-        ChaosEvent.DischargeStart, ChaosEvent.DischargeStop,
         ChaosEvent.UpdateAvailable, ChaosEvent.UpdateInstalled
     };
 
@@ -175,7 +174,6 @@ public class ComprehensiveUsageChaosTests
                 case ChaosEvent.PlugAc:
                     OnAc = true;
                     await Window.PowerAutomation!.EvaluatePowerStateAsync(forceAcStatus: true);
-                    _acPluggedAtTick = Environment.TickCount64;
                     break;
                 case ChaosEvent.UnplugDc: OnAc = false; await Window.PowerAutomation!.EvaluatePowerStateAsync(forceAcStatus: false); break;
                 case ChaosEvent.SleepResume: await Window.ReassertOperatingModeAsync(isBoot: false); break;
@@ -225,7 +223,6 @@ public class ComprehensiveUsageChaosTests
                     await SchoolModeAsync(true);
                     OnAc = !OnAc;
                     await Window.PowerAutomation!.EvaluatePowerStateAsync(forceAcStatus: OnAc);
-                    if (OnAc) _acPluggedAtTick = Environment.TickCount64;
                     break;
 
                 case ChaosEvent.GameStartA: await StartGameAsync(GameA); break;
@@ -256,11 +253,6 @@ public class ComprehensiveUsageChaosTests
 
                 case ChaosEvent.ChargeLimitOn: ChargeLimitOn = true; break;
                 case ChaosEvent.ChargeLimitOff: ChargeLimitOn = false; break;
-                case ChaosEvent.DischargeStart:
-                    if (Battery.StartSafeDischarge()) { }
-                    break;
-                case ChaosEvent.DischargeStop: Battery.StopSafeDischarge(); break;
-
                 case ChaosEvent.MousePlug: MouseReceiverPresent = true; break;
                 case ChaosEvent.MouseUnplug: MouseReceiverPresent = false; break;
                 case ChaosEvent.RgbChange: RgbBrightness = Rng.Next(0, 101); break;
@@ -295,14 +287,6 @@ public class ComprehensiveUsageChaosTests
             // A dropout is a missing reading, not a cold one: the curve is fed the same value the poll would carry.
             await Window.ApplyFanCurveAsync(TemperatureC);
         }
-
-        /// <summary>
-        /// When the adapter was last plugged in. The discharge loop re-reads the adapter on its own 500 ms poll, so a
-        /// stop it decides by itself lands a moment after the plug. The invariant allows that window and nothing
-        /// more; waiting the poll out inside the step instead cost half a second on every plug and measured the
-        /// interval rather than the rule.
-        /// </summary>
-        private long _acPluggedAtTick;
 
         private async Task SchoolModeAsync(bool on)
         {
@@ -416,12 +400,6 @@ public class ComprehensiveUsageChaosTests
                     Fail("I4 school immunity",
                         $"LastOperatingMode {_lastOperatingModeBeforeSchool} became {Settings.LastOperatingMode}");
             }
-
-            // 7. Safe discharge bounds. Never on AC, never below the 80 % target. The loop only notices either on its
-            //    next 500 ms poll, so the window right after the adapter goes in is allowed and nothing beyond it.
-            if (Battery.IsDischarging && (OnAc || BatteryPercent <= 80)
-                && Environment.TickCount64 - _acPluggedAtTick > 600)
-                Fail("I7 discharge", $"discharging on AC={OnAc} at {BatteryPercent}%");
 
             // 9. Update notice sync. The two halves are one notice, and the page is always https.
             if (UpdateBadge.Visibility != ReleaseNotes.Visibility)
@@ -604,8 +582,6 @@ public class ComprehensiveUsageChaosTests
             < 945 => ChaosEvent.UpdateNetworkError,
             < 955 => ChaosEvent.UpdateInstalled,
             < 965 => ChaosEvent.BadUrl,
-            < 975 => ChaosEvent.DischargeStart,
-            < 985 => ChaosEvent.DischargeStop,
             < 990 => ChaosEvent.MousePlug,
             < 995 => ChaosEvent.MouseUnplug,
             _ => ChaosEvent.RgbChange
@@ -667,9 +643,6 @@ public class ComprehensiveUsageChaosTests
         (ChaosEvent.FanCurveOn, ChaosEvent.ModeTurbo, ChaosEvent.TempCritical),
         (ChaosEvent.FanCurveOn, ChaosEvent.SchoolModeOn, ChaosEvent.TempCritical),
         (ChaosEvent.FanCurveOn, ChaosEvent.SchoolModeOn, ChaosEvent.SchoolModeOff),
-        (ChaosEvent.DischargeStart, ChaosEvent.PlugAc, ChaosEvent.DischargeStop),
-        (ChaosEvent.DischargeStart, ChaosEvent.UnplugDc, ChaosEvent.DischargeStop),
-        (ChaosEvent.DischargeStart, ChaosEvent.SchoolModeOn, ChaosEvent.DischargeStop),
         (ChaosEvent.UpdateAvailable, ChaosEvent.UpdateInstalled, ChaosEvent.UpdateNone),
         (ChaosEvent.UpdateAvailable, ChaosEvent.BadUrl, ChaosEvent.UpdateInstalled),
         (ChaosEvent.ModeTurbo, ChaosEvent.UnplugDc, ChaosEvent.SleepResume),
