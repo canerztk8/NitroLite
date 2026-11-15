@@ -230,8 +230,13 @@ public partial class App : System.Windows.Application
             if (persistLanguage) PersistStartupLanguage(startup, language);
 
             // An update renames the previous executable instead of overwriting it; the process that owned it is gone
-            // by now, so the leftover can go.
-            UpdateService.CleanUpPreviousVersion();
+            // by now, so the leftover can go. A run that died between the two moves of the commit phase left the
+            // destination missing and its only good copy under .old, so the pass restores before it sweeps.
+            var recovery = UpdateService.RecoverInterruptedUpdate();
+            if (recovery.Restored.Count > 0)
+                WriteLog("Update Recovery", "Restored: " + string.Join(", ", recovery.Restored));
+            if (recovery.Failed.Count > 0)
+                WriteLog("Update Recovery", "Could not restore: " + string.Join(", ", recovery.Failed));
 
             var win = new MainWindow(startMinimized);
             MainWindow = win;

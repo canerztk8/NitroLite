@@ -449,6 +449,64 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// One poll of the fan-stall watchdog. A die at 88 °C or hotter whose fan is under 400 RPM for ten seconds is
+    /// a failed fan, a loose header or a stuck EC, not a setting: the firmware would have spun it up long before.
+    /// The user is told, and the machine drops to the lowest power mode so it stops adding heat on its own.
+    /// </summary>
+    /// <remarks>
+    /// Only called with a real AASSvc sample. The fallback path reports 0 RPM because nothing measured the fans,
+    /// and judging that would fire on every machine whose service is not running.
+    /// </remarks>
+    internal async Task CheckFanStallAsync(MonitorData data)
+    {
+        var verdict = _fanStallWatchdog.Observe(
+            data.CpuTemperature, data.GpuTemperature, data.CpuFanSpeed, data.GpuFanSpeed, DateTime.UtcNow);
+        if (verdict == null) return;
+
+        string which = verdict.Target switch
+        {
+            FanStallTarget.Cpu => Loc.T("CPU fanı"),
+            FanStallTarget.Gpu => Loc.T("GPU fanı"),
+            _ => Loc.T("CPU ve GPU fanı")
+        };
+
+        AppLog.Error("Fan arızası şüphesi",
+            $"{verdict.Target}: {verdict.TemperatureC} °C, {verdict.FanRpm} RPM, {verdict.Sustained.TotalSeconds:F0} sn");
+
+        ShowToast(Loc.T($"{which} dönmüyor: {verdict.TemperatureC} °C sıcaklıkta {verdict.FanRpm} RPM. Fan arızası veya EC kilidi olabilir; bilgisayarı kapatıp fanı kontrol edin."), false);
+
+        if (!_appSettings.FanStallProtectionEnabled) return;
+
+        // The lowest power mode is the only lever left: it cannot repair the fan, but it stops the machine from
+        // cooking itself while the user reads the warning. Eco is allowed on the adapter and on battery alike.
+        try
+        {
+            await SetManualModeAsync(OperatingMode.Eco);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fan arızası koruması uygulanamadı", ex.ToString());
+        }
+    }
+
+    /// <summary>Puts the checkbox in line with the stored preference without firing its handler.</summary>
+    private void SyncFanStallProtectionUi()
+    {
+        if (ChkFanStallProtection == null) return;
+        bool previous = _isSyncingFanStallProtectionUi;
+        _isSyncingFanStallProtectionUi = true;
+        try { ChkFanStallProtection.IsChecked = _appSettings.FanStallProtectionEnabled; }
+        finally { _isSyncingFanStallProtectionUi = previous; }
+    }
+
+    private void ChkFanStallProtection_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isInitializingUi || _isSyncingFanStallProtectionUi || ChkFanStallProtection == null) return;
+        _appSettings.FanStallProtectionEnabled = ChkFanStallProtection.IsChecked == true;
+        SaveSettings();
+    }
+
+    /// <summary>
     /// Arms the curve a game profile asked for. The shape is the profile's own anchors when it has them and the
     /// desktop curve otherwise, so a profile that only wants "my curve, but for this game" needs no second editor.
     /// </summary>

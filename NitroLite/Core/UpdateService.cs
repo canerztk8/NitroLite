@@ -21,6 +21,23 @@ public sealed record UpdateInfo(
 }
 
 /// <summary>
+/// What the startup recovery pass found: the files it put back from a backup, the leftovers it swept, and the
+/// files it could not repair.
+/// </summary>
+/// <remarks>
+/// <see cref="Failed"/> is not cosmetic. A file listed there still has its only surviving copy sitting next to it
+/// under a <c>.old</c> or <c>.new</c> name, which is why the sweep is skipped entirely when the list is not empty.
+/// </remarks>
+public sealed record UpdateRecoveryReport(
+    IReadOnlyList<string> Restored,
+    IReadOnlyList<string> Removed,
+    IReadOnlyList<string> Failed)
+{
+    /// <summary>True when the install folder needed no repair and held no leftovers.</summary>
+    public bool IsClean => Restored.Count == 0 && Removed.Count == 0 && Failed.Count == 0;
+}
+
+/// <summary>
 /// Checks GitHub for a newer release, downloads it, verifies the SHA-256 GitHub publishes for the asset, and swaps
 /// the running executable.
 /// <para>
@@ -414,9 +431,16 @@ public static class UpdateService
         return target;
     }
 
-    private static void TryDelete(string path)
+    /// <summary>Deletes a file if it is there. Returns true only when something was actually removed.</summary>
+    private static bool TryDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
+        try
+        {
+            if (!File.Exists(path)) return false;
+            File.Delete(path);
+            return true;
+        }
+        catch { return false; }
     }
 
     /// <summary>
@@ -425,13 +449,92 @@ public static class UpdateService
     /// stale copy. Only the package's own files are swept, so a user file that happens to end in <c>.old</c> is
     /// never touched.
     /// </summary>
-    public static void CleanUpPreviousVersion()
+    public static void CleanUpPreviousVersion() => SweepLeftovers(AppContext.BaseDirectory);
+
+    /// <summary>
+    /// Repairs an install folder an interrupted update left behind, then sweeps what is left over.
+    /// </summary>
+    /// <remarks>
+    /// The commit phase moves each destination aside to <c>.old</c> and then moves its <c>.new</c> into place. A
+    /// crash, a power cut or a forced shutdown between those two moves leaves the destination missing while the
+    /// only good copy sits under <c>.old</c>; the old sweep then deleted that copy and the file was gone for good.
+    /// This pass puts it back instead, and only sweeps once nothing is left half-restored.
+    /// <para>
+    /// A destination that exists but is empty counts as missing: a truncated copy is what a power cut during the
+    /// copy leaves, and running from it is no better than running from nothing.
+    /// </para>
+    /// </remarks>
+    public static UpdateRecoveryReport RecoverInterruptedUpdate() => RecoverInterruptedUpdate(AppContext.BaseDirectory);
+
+    /// <inheritdoc cref="RecoverInterruptedUpdate()"/>
+    public static UpdateRecoveryReport RecoverInterruptedUpdate(string installDirectory)
     {
+        var restored = new List<string>();
+        var failed = new List<string>();
+
         foreach (var relative in PackageFiles)
         {
-            var path = Path.Combine(AppContext.BaseDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
-            TryDelete(path + ".old");
-            TryDelete(path + ".new");
+            var path = Path.Combine(installDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (IsUsable(path)) continue;
+
+            var backup = path + ".old";
+            var pending = path + ".new";
+
+            // The backup is the last build that worked, so it wins over the half-copied new file.
+            if (IsUsable(backup) && TryMove(backup, path)) { restored.Add(path); continue; }
+            if (IsUsable(pending) && TryMove(pending, path)) { restored.Add(path); continue; }
+
+            // Nothing usable to restore from. An empty leftover is garbage and the sweep below takes it; a usable
+            // one that could not be moved is the only copy left, so it stays and the file is reported.
+            if (IsUsable(backup) || IsUsable(pending)) failed.Add(path);
+        }
+
+        // Sweeping after a failed restore would delete the copy this method exists to preserve.
+        var removed = failed.Count == 0 ? SweepLeftovers(installDirectory) : new List<string>();
+
+        if (restored.Count > 0)
+            AppLog.Warn("Yarım kalan güncelleme kurtarıldı", string.Join(", ", restored));
+        if (failed.Count > 0)
+            AppLog.Error("Yarım kalan güncelleme kurtarılamadı", string.Join(", ", failed));
+
+        return new UpdateRecoveryReport(restored, removed, failed);
+    }
+
+    /// <summary>Deletes every <c>.old</c> and <c>.new</c> the package owns and reports the ones that went.</summary>
+    private static List<string> SweepLeftovers(string installDirectory)
+    {
+        var removed = new List<string>();
+        foreach (var relative in PackageFiles)
+        {
+            var path = Path.Combine(installDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
+            foreach (var suffix in new[] { ".old", ".new" })
+            {
+                var leftover = path + suffix;
+                if (TryDelete(leftover)) removed.Add(leftover);
+            }
+        }
+        return removed;
+    }
+
+    /// <summary>True when the file exists and holds something; a zero-byte file is a failed copy, not a file.</summary>
+    private static bool IsUsable(string path)
+    {
+        try { return File.Exists(path) && new FileInfo(path).Length > 0; }
+        catch { return false; }
+    }
+
+    /// <summary>Moves a backup into place, reporting rather than throwing so one bad file cannot stop the pass.</summary>
+    private static bool TryMove(string source, string destination)
+    {
+        try
+        {
+            File.Move(source, destination, overwrite: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Güncelleme dosyası geri konamadı", $"{source}: {ex.Message}");
+            return false;
         }
     }
 

@@ -284,6 +284,13 @@ public class AppSettings
     public FanCurve BuildFanCurve() => new(FanCurvePoints, FanCurveHysteresisC, FanCurveMinDwellSeconds);
 
     /// <summary>
+    /// When a fan has stopped while its die is hot, drop to the lowest power mode instead of only warning. On by
+    /// default: a machine that is cooking itself is not the moment to ask the user to pick a setting.
+    /// </summary>
+    [JsonPropertyName("fan_stall_protection_enabled")]
+    public bool FanStallProtectionEnabled { get; set; } = true;
+
+    /// <summary>
     /// Brings every value that came out of a settings file back into the range the app can act on.
     /// System.Text.Json accepts any number for an enum, so a hand-edited or half-written file can carry
     /// (OperatingMode)99 or a fan speed of 400 without failing to parse. Nothing here invents a preference:

@@ -717,6 +717,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            // Mirrored while the flag is still up: the checkbox handler must not treat the initial value as a click.
+            SyncFanStallProtectionUi();
             _isInitializingUi = false;
             // The card reads the settings, so it is filled once they are loaded, not in the constructor.
             SetupSettingsCard();
@@ -1086,11 +1088,21 @@ public partial class MainWindow : Window
     private int _fanCurveLastPercent;
 
     /// <summary>
+    /// Watches for a fan that has stopped while its die is hot. Fed only by a real AASSvc sample: the fallback
+    /// path reports 0 RPM because nothing measured the fans, and judging that would fire on every machine without
+    /// the service.
+    /// </summary>
+    private readonly FanStallWatchdog _fanStallWatchdog = new();
+
+    /// <summary>
     /// True while neither temperature sensor is answering. The curve then holds full speed instead of the
     /// speed the last good reading asked for, and the status line says why.
     /// </summary>
     private bool _fanCurveSensorDead;
     private bool _isUpdatingFanCurveUi;
+
+    /// <summary>True while code (not the user) moves the fan-stall protection checkbox.</summary>
+    private bool _isSyncingFanStallProtectionUi;
 
     /// <summary>The six sliders of the curve editor, in anchor order. Null before the window is built.</summary>
     private Slider?[] FanCurveSliders => new Slider?[] { SliderCurve0, SliderCurve1, SliderCurve2, SliderCurve3, SliderCurve4, SliderCurve5 };

@@ -160,6 +160,10 @@ public partial class MainWindow
                 UpdateFanCurveStatusText();
             }
 
+            // A fan that is not turning while its die is hot is a hardware fault, not a preference. Judged only on
+            // a real AASSvc sample: the fallback path reports 0 RPM because nothing measured the fans.
+            if (!isFallback) await CheckFanStallAsync(data);
+
             bool isWindowVisible = IsVisible && WindowState != WindowState.Minimized;
             bool isGpuSleeping = data.GpuTemperature <= 0;
 
