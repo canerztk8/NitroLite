@@ -1,0 +1,191 @@
+name: Release
+
+# A tag is the only thing that publishes. Nothing here runs on a branch push, so a
+# release can never be cut from a half-merged tree, and the binary users download is
+# the one this workflow built from the tag in public.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+# Two tags pushed at once must not race for the same release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, test and publish
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+        with:
+          # git describe needs the tags, and the release notes are built from the log.
+          fetch-depth: 0
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: |
+            NitroLite/NitroLite.csproj
+            NitroLite.Tests/NitroLite.Tests.csproj
+
+      - name: Read the version from the project file
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content NitroLite/NitroLite.csproj
+          $version = ($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
+          if (-not $version) { throw 'Version not found in NitroLite.csproj' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "NitroLite.csproj says $version, the tag says $env:TAG"
+
+      - name: Check the tag matches the project version
+        shell: pwsh
+        run: |
+          $tag = $env:TAG.TrimStart('v', 'V')
+          $version = '${{ steps.version.outputs.version }}'
+          if ($tag -ne $version) {
+            throw "Tag $env:TAG does not match <Version>$version</Version> in NitroLite.csproj. Bump the project file and retag, or delete the tag."
+          }
+          Write-Host "Tag and project version agree: $version"
+
+      - name: Test
+        # The packaging script runs the same suite unless it is told not to. Running it
+        # here instead keeps the result visible as its own step, and runs it only once.
+        run: dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --nologo -v q
+
+      - name: Package
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1 -SkipTests
+
+      - name: Write the SHA-256 file
+        id: package
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $zip = "artifacts/NitroLite-v$version-win-x64.zip"
+          if (-not (Test-Path $zip)) { throw "The packaging script did not produce $zip" }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          # sha256sum format, so `sha256sum -c` and Get-FileHash agree on the same file.
+          "$hash  NitroLite-v$version-win-x64.zip" | Set-Content "$zip.sha256" -Encoding ascii
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          Write-Host "SHA-256 $hash"
+
+      - name: Upload the package as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NitroLite-v${{ steps.version.outputs.version }}-win-x64
+          path: |
+            artifacts/NitroLite-v${{ steps.version.outputs.version }}-win-x64.zip
+            artifacts/NitroLite-v${{ steps.version.outputs.version }}-win-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build the release notes
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $hash = '${{ steps.package.outputs.sha256 }}'
+          # Backticks are escape characters inside a double-quoted here-string, so the
+          # markdown fences are built from a variable instead of being written literally.
+          ${tick} = [char]96
+          $fence = "${tick}${tick}${tick}"
+          $fencePs = $fence + 'powershell'
+
+          # The changelog is the commit log since the previous tag, so it cannot drift
+          # from what actually shipped.
+          $previous = git describe --tags --abbrev=0 "$env:TAG^" 2>$null
+          if ($LASTEXITCODE -ne 0 -or -not $previous) { $previous = $null }
+          $range = if ($previous) { "$previous..$env:TAG" } else { $env:TAG }
+          # git log returns one string per commit; joining with a space would flatten the
+          # whole changelog into a single line.
+          $changes = (git log $range --no-merges --pretty=format:'- %s (%h)') -join [char]10
+          if (-not $changes) { $changes = '- No commits recorded for this tag.' }
+
+          $notes = @"
+          NitroLite v${version}: a lightweight, open-source replacement for NitroSense on Acer Nitro laptops.
+
+          Built by GitHub Actions from the ${tick}$env:TAG${tick} tag on a clean windows-latest runner. The log of
+          that build is linked at the bottom of this page, so the binary can be traced back to the source it came
+          from.
+
+          ## Install
+
+          1. Download ${tick}NitroLite-v$version-win-x64.zip${tick} below.
+          2. Extract it to a permanent folder, for example ${tick}C:\Users\<you>\Programs\NitroLite${tick}. Do not
+             leave it in Downloads: the autostart entry remembers where the exe lives.
+          3. Run ${tick}NitroLite\NitroLite.exe${tick}. No installer, no .NET install needed.
+
+          Or with Scoop:
+
+          $fencePs
+          scoop install https://raw.githubusercontent.com/canerztk8/NitroLite/main/packaging/scoop/nitrolite.json
+          $fence
+
+          ## Verify the download
+
+          $fencePs
+          Get-FileHash .\NitroLite-v$version-win-x64.zip -Algorithm SHA256
+          $fence
+
+          The digest must be:
+
+          $fence
+          $hash
+          $fence
+
+          The same value is attached as ${tick}NitroLite-v$version-win-x64.zip.sha256${tick}.
+
+          ## SmartScreen
+
+          NitroLite is not code-signed, so Windows shows "Windows protected your PC" the first time you run it. That
+          warning is about the missing publisher signature, not about anything found in the file. Choose
+          **More info -> Run anyway**, or install through Scoop, which does not set the Mark of the Web.
+
+          ## What changed
+
+          $changes
+          "@
+
+          # Written without a BOM: gh would otherwise carry it into the release body.
+          [IO.File]::WriteAllText((Join-Path $PWD 'release-notes.md'), $notes, (New-Object Text.UTF8Encoding $false))
+          Write-Host $notes
+
+      - name: Publish the GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $zip = "artifacts/NitroLite-v$version-win-x64.zip"
+          # --verify-tag refuses to invent a tag that is not on the remote.
+          gh release create "v$version" $zip "$zip.sha256" `
+            --title "NitroLite v$version" `
+            --notes-file release-notes.md `
+            --verify-tag
+
+      - name: Summarise
+        if: always()
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          @"
+          ### NitroLite v$version
+
+          | | |
+          |---|---|
+          | Tag | ${env:TAG} |
+          | Package | NitroLite-v$version-win-x64.zip |
+          | SHA-256 | ${{ steps.package.outputs.sha256 }} |
+          | Release | https://github.com/${{ github.repository }}/releases/tag/v$version |
+          "@ >> $env:GITHUB_STEP_SUMMARY

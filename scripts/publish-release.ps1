@@ -9,6 +9,9 @@
     - tools\WinMemoryCleaner.exe: the unmodified upstream release, so the memory card works out of the box.
       GPL-3.0, distributed as an aggregate next to MIT-licensed NitroLite; see third-party\WinMemoryCleaner\NOTICE.md.
       Both the version and the SHA-256 are pinned, so a re-uploaded or tampered asset fails the build.
+    - packaging\scoop\nitrolite.json: version, url and hash are rewritten from the package just built, so the
+      manifest in main always describes the newest release. The WinGet manifest is submitted by hand and is only
+      checked for drift.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
@@ -43,7 +46,11 @@ function Invoke-Step([string]$title, [scriptblock]$block) {
     if ($LASTEXITCODE -ne 0) { throw "$title failed (exit $LASTEXITCODE)" }
 }
 
-if (Test-Path $artifacts) { Remove-Item $artifacts -Recurse -Force }
+# Only the previous package is removed. artifacts\ also holds hand-written release notes
+# (release-notes-v1.2.3.md) that a rebuild must not destroy, so the delete is narrowed to
+# the files this script produces instead of taking the whole folder.
+New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
+Get-ChildItem $artifacts -Force | Where-Object { $_.Name -like 'NitroLite*' } | Remove-Item -Recurse -Force
 # Always publish from a clean win-x64 build: an incremental build once kept a stale g.resources without app.ico,
 # and the packaged window then failed to open. (The normal Release build folder is left alone.)
 foreach ($p in 'NitroLite\obj\Release\net10.0-windows\win-x64', 'NitroLite\bin\Release\net10.0-windows\win-x64') {
@@ -122,6 +129,12 @@ $unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
 }
 if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
 
+# Compress-Archive stores each entry's timestamp, so two builds of the same source produced
+# two different digests. Pinning the timestamps makes the archive byte-for-byte reproducible,
+# which is what lets anyone rebuild the tag and compare the SHA-256 with the published one.
+$epoch = [datetime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
+Get-ChildItem $stage -Recurse | ForEach-Object { $_.LastWriteTimeUtc = $epoch }
+
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -131,3 +144,43 @@ Write-Host "Package : $zip" -ForegroundColor Green
 Write-Host ("Size    : {0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
 Write-Host "SHA-256 : $hash"
 Get-ChildItem $stage -Recurse -File | ForEach-Object { "  {0,-45} {1,8:N0} KB" -f $_.FullName.Substring($stage.Length + 1), ($_.Length / 1KB) }
+
+# ---------------------------------------------------------------------------
+# Package manifests. The digest is written where the package manager reads it, so a
+# published release and its manifest cannot drift apart. Only the three values that
+# change per release are replaced; the rest of the file keeps its hand-written shape,
+# because ConvertTo-Json would reformat the whole thing.
+# ---------------------------------------------------------------------------
+$scoopManifest = Join-Path $root 'packaging\scoop\nitrolite.json'
+if (-not (Test-Path $scoopManifest)) { throw "Scoop manifest not found: $scoopManifest" }
+
+$releaseUrl = "https://github.com/canerztk8/NitroLite/releases/download/v$version/NitroLite-v$version-win-x64.zip"
+$lowerHash  = $hash.ToLowerInvariant()
+$text = Get-Content $scoopManifest -Raw
+$text = [regex]::Replace($text, '(?m)^(\s*"version"\s*:\s*")[^"]*(")', "`${1}$version`${2}")
+$text = [regex]::Replace($text, 'https://github\.com/canerztk8/NitroLite/releases/download/v[0-9.]+/NitroLite-v[0-9.]+-win-x64\.zip', $releaseUrl)
+$text = [regex]::Replace($text, '(?m)^(\s*"hash"\s*:\s*")[0-9a-fA-F]{64}(")', "`${1}$lowerHash`${2}")
+[IO.File]::WriteAllText($scoopManifest, $text, (New-Object Text.UTF8Encoding $false))
+
+# Read it back. A manifest that no longer parses, or that names another digest, is worse
+# than no manifest at all, and this is the only place that can catch it.
+$scoop = Get-Content $scoopManifest -Raw | ConvertFrom-Json
+if ($scoop.version -ne $version) { throw "Scoop manifest version is $($scoop.version), expected $version" }
+if ($scoop.architecture.'64bit'.url -ne $releaseUrl) { throw "Scoop manifest url is $($scoop.architecture.'64bit'.url)" }
+if ($scoop.architecture.'64bit'.hash -ne $lowerHash) { throw 'Scoop manifest hash does not match the package' }
+Write-Host "==> packaging\scoop\nitrolite.json -> $version, $($lowerHash.Substring(0, 12))..." -ForegroundColor Cyan
+
+# The WinGet manifest is submitted by hand and reviewed by a moderator, so it is not
+# rewritten here. A stale one is still worth saying out loud.
+$wingetManifest = Join-Path $root "packaging\winget\manifests\c\canerztk8\NitroLite\$version\canerztk8.NitroLite.installer.yaml"
+if (-not (Test-Path $wingetManifest)) {
+    Write-Warning "No WinGet manifest for $version. Copy packaging\winget\manifests\c\canerztk8\NitroLite\<version> and bump it before submitting to winget-pkgs."
+} else {
+    $wingetHash = Get-Content $wingetManifest |
+        Where-Object { $_ -match '^\s*InstallerSha256:\s*(\S+)' } |
+        ForEach-Object { $Matches[1] } |
+        Select-Object -First 1
+    if ($wingetHash -ne $hash) {
+        Write-Warning "WinGet manifest InstallerSha256 is $wingetHash, the package is $hash. Update packaging\winget\...\$version before submitting."
+    }
+}

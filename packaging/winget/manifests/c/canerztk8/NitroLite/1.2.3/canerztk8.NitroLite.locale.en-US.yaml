@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: canerztk8.NitroLite
+PackageVersion: 1.2.3
+PackageLocale: en-US
+Publisher: Caner Öztürk
+PublisherUrl: https://github.com/canerztk8
+PublisherSupportUrl: https://github.com/canerztk8/NitroLite/issues
+Author: Caner Öztürk
+PackageName: NitroLite
+PackageUrl: https://github.com/canerztk8/NitroLite
+License: MIT
+LicenseUrl: https://github.com/canerztk8/NitroLite/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Caner Öztürk
+ShortDescription: Lightweight open-source replacement for NitroSense on Acer Nitro laptops
+Description: >-
+  NitroLite controls the operating mode, fan speed, CPU boost, GPU (MUX) mode, keyboard RGB and the 80 % charge
+  limit of Acer Nitro laptops through the same Acer services NitroSense uses, with no kernel driver and no
+  background service of its own. It also adds a software fan curve, per-game profiles, an on-screen display,
+  battery wear history and a set of repair tools. The interface is available in eight languages.
+Moniker: nitrolite
+Tags:
+  - acer
+  - nitro
+  - nitrosense
+  - fan-control
+  - power-management
+  - rgb
+  - telemetry
+  - battery
+ReleaseNotesUrl: https://github.com/canerztk8/NitroLite/releases/tag/v1.2.3
+Documentations:
+  - DocumentLabel: README
+    DocumentUrl: https://github.com/canerztk8/NitroLite/blob/main/README.md
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

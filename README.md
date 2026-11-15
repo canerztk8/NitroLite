@@ -312,7 +312,20 @@ NitroLite
 
 ---
 
-## Install (download and run)
+## Install and verify
+
+### Scoop (no SmartScreen prompt)
+
+```powershell
+scoop install https://raw.githubusercontent.com/canerztk8/NitroLite/main/packaging/scoop/nitrolite.json
+```
+
+Scoop unpacks the release into `~\scoop\apps\nitrolite\current`, puts a `NitroLite` shim on `PATH` and adds a Start
+menu shortcut. The file never passes through a browser, so it carries no Mark of the Web and SmartScreen has no
+reputation check to run: the "Windows protected your PC" prompt does not appear. `scoop update nitrolite` picks up a
+new version once the manifest is bumped, which `scripts/publish-release.ps1` does on every release.
+
+### Manual download
 
 1. Download `NitroLite-v1.2.3-win-x64.zip` from the
    **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page.
@@ -320,11 +333,50 @@ NitroLite
    Downloads: "run at Windows startup" remembers where the exe lives.
 3. Open `NitroLite\NitroLite.exe`. There is no installer and **no .NET install needed**; the runtime is inside the
    exe.
-4. If Windows says "**Windows protected your PC**" (SmartScreen), click **More info → Run anyway**. The warning
-   appears because NitroLite is an unsigned open-source application.
+4. If Windows says "**Windows protected your PC**", click **More info → Run anyway**, or read
+   [Why SmartScreen warns](#why-smartscreen-warns) first.
 
 Closing the window keeps NitroLite running in the system tray. To quit completely, right-click the tray icon and
 choose **Exit**.
+
+### Verify the download
+
+One line, in PowerShell, in the folder you downloaded to:
+
+```powershell
+Get-FileHash .\NitroLite-v1.2.3-win-x64.zip -Algorithm SHA256 | Format-List
+```
+
+`Hash` must equal the digest printed on the release page. The same value is attached to the release as
+`NitroLite-v1.2.3-win-x64.zip.sha256`, in `sha256sum` format, so `sha256sum -c` works too. The updater inside the app
+performs this comparison itself and refuses to swap the executable on a mismatch.
+
+### Why SmartScreen warns
+
+The prompt is about **provenance, not detection**. It does not mean Microsoft found something in the file.
+
+- A browser tags every download with the **Mark of the Web** (an NTFS alternate data stream, `Zone.Identifier`).
+  Windows sees that tag and runs the file through SmartScreen before the first launch.
+- SmartScreen looks for an **Authenticode signature** and for **reputation** attached to the file's hash and its
+  publisher. NitroLite has neither: a code-signing certificate that SmartScreen accepts costs a few hundred dollars
+  a year and needs a registered business, which this project does not have.
+- An unsigned binary has no publisher to accumulate reputation against, so every new build starts at zero and is
+  reported as unrecognised. That is the whole of the warning.
+- You can confirm the file is unsigned rather than tampered with:
+
+  ```powershell
+  Get-AuthenticodeSignature .\NitroLite-v1.2.3-win-x64.zip | Format-List Status, StatusMessage
+  ```
+
+  `Status` reads `NotSigned`. That is expected, and it is the same answer you get for any unsigned open-source
+  binary.
+
+If you want Microsoft to look at the file rather than take the author's word for it, submit it through
+**[Microsoft Security Intelligence: submit a file](https://www.microsoft.com/en-us/wdsi/filesubmission)**. The
+result is public and does not depend on this repository.
+
+The digest only proves the download matches the release; it says nothing about who published it. See
+[Trust and code signing](#trust-and-code-signing) for what that does and does not cover.
 
 ### Requirements
 - **Windows 11** (Windows 10 x64 also works), 64-bit.
@@ -359,8 +411,9 @@ What you can check instead, without trusting the author:
 | Check | How |
 |---|---|
 | The download came from this repository | The link on the Releases page points at `github.com/canerztk8/NitroLite`; HTTPS to GitHub is the transport. |
-| The file is the one that was published | `Get-FileHash NitroLite-v1.2.3-win-x64.zip -Algorithm SHA256` and compare it with the digest GitHub lists on the release. |
-| The source matches the binary | Build it yourself from the tag; `scripts\publish-release.ps1` is the same script that produced the release. |
+| The binary was built in public | Every release is built by [GitHub Actions](.github/workflows/release.yml) on a `windows-latest` runner from the tag, not on the author's laptop. The workflow run is linked from the release page, and its log shows the test run and the packaging step. |
+| The file is the one that was published | [`Get-FileHash`](#verify-the-download) and compare it with the digest on the release. |
+| The source matches the binary | Build it yourself from the tag; `scripts\publish-release.ps1` is the same script the workflow runs. |
 | The updater does not take a shortcut | It compares the downloaded package's SHA-256 against the digest GitHub publishes and refuses to swap the exe on a mismatch. |
 
 The honest limit: if this GitHub account were taken over, an attacker could publish a release and its digest together,
@@ -391,7 +444,21 @@ powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 This writes `artifacts\NitroLite-v<version>-win-x64.zip`: a self-contained single-file `NitroLite.exe`, the licence,
 a third-party notice, and `tools\WinMemoryCleaner.exe` with its own licence and source archive. The script pins the
 .NET runtime to the patched version (10.0.14, CVE-2026-111497) and refuses to package a build that does not reference
-it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or tampered asset fails the build.
+it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or tampered asset fails the build. It
+rewrites `packaging\scoop\nitrolite.json` with the new version, URL and digest, and reads the file back to prove it
+still parses.
+
+**To cut a release:** bump `<Version>` in `NitroLite/NitroLite.csproj`, commit, then push a matching tag.
+
+```powershell
+git tag v1.2.4
+git push origin v1.2.4
+```
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) takes it from there: it fails if the tag and the
+project version disagree, runs the test suite, packages the zip, writes the `.sha256` file and publishes the GitHub
+Release. Nothing is published from a branch push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet
+manifests.
 
 ---
 
