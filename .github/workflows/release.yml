@@ -24,13 +24,13 @@ jobs:
       TAG: ${{ github.ref_name }}
     steps:
       - name: Check out the tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # git describe needs the tags, and the release notes are built from the log.
           fetch-depth: 0
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
           cache: true
@@ -82,7 +82,7 @@ jobs:
           Write-Host "SHA-256 $hash"
 
       - name: Upload the package as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: NitroLite-v${{ steps.version.outputs.version }}-win-x64
           path: |
