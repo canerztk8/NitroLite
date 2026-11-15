@@ -136,7 +136,6 @@
  "Fan arızasında otomatik koruma (Eco moduna geç)": "Автоматическая защита при отказе вентилятора (переход в режим Eco)",
  "Fan eğrisi değiştirilemedi: {0}": "Не удалось изменить кривую вентилятора: {0}",
  "GPU fanı": "Вентилятор ГП",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı.": "Не удалось записать запись для отмены (диск заполнен или папка доступна только для чтения); настройки придётся вернуть вручную.",
  "Işık Kapalı (Blackout)": "Свет выключен (Blackout)",
  "Saf Beyaz": "Чистый белый",
  "Kırmızı Nefes": "Красное дыхание",
@@ -926,5 +925,8 @@
  "Tıklayın": "Клик",
  "Oyun bitince": "После игры",
  "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Не меняется во время игровой сессии. Будет применено после закрытия игры.",
- "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Беспроводная мышь уснула. Щёлкните её один раз; профиль применится в момент щелчка."
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Беспроводная мышь уснула. Щёлкните её один раз; профиль применится в момент щелчка.",
+ "Okul modu açık · fan eğrisi askıda": "Школьный режим включён · кривая вентилятора приостановлена",
+ "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "Кривая вентилятора отключена, пока включён школьный режим; она вернётся, когда вы его выключите.",
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Не удалось записать запись для отмены (диск заполнен или папка только для чтения); школьный режим не применён."
 }

@@ -136,7 +136,6 @@
  "Fan arızasında otomatik koruma (Eco moduna geç)": "Automatischer Schutz bei Lüfterausfall (in den Eco-Modus wechseln)",
  "Fan eğrisi değiştirilemedi: {0}": "Die Lüfterkurve konnte nicht geändert werden: {0}",
  "GPU fanı": "GPU-Lüfter",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı.": "Der Rückgängig-Datensatz konnte nicht geschrieben werden (Datenträger voll oder Ordner schreibgeschützt); die Einstellungen müssen manuell zurückgesetzt werden.",
  "Işık Kapalı (Blackout)": "Licht aus (Blackout)",
  "Saf Beyaz": "Reines Weiß",
  "Kırmızı Nefes": "Rotes Atmen",
@@ -926,5 +925,8 @@
  "Tıklayın": "Klicken",
  "Oyun bitince": "Nach dem Spiel",
  "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Wird während einer Spielsitzung nicht geändert. Es wird angewendet, wenn das Spiel geschlossen wird.",
- "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Die Funkmaus ist in den Ruhezustand gegangen. Klicken Sie einmal; das Profil wird im Moment des Klicks angewendet."
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Die Funkmaus ist in den Ruhezustand gegangen. Klicken Sie einmal; das Profil wird im Moment des Klicks angewendet.",
+ "Okul modu açık · fan eğrisi askıda": "Schulmodus aktiv · Lüfterkurve ausgesetzt",
+ "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "Die Lüfterkurve ist bei aktivem Schulmodus aus; sie kehrt zurück, sobald Sie den Schulmodus ausschalten.",
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Der Rückgängig-Datensatz konnte nicht geschrieben werden (Datenträger voll oder Ordner schreibgeschützt); der Schulmodus wurde nicht angewendet."
 }

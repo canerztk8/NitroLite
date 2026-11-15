@@ -254,7 +254,8 @@ public partial class MainWindow
     private void UpdateDesktopBaselineForManualChange(
         OperatingMode? mode = null,
         CpuBoostMode? boost = null,
-        FanMode? fan = null)
+        FanMode? fan = null,
+        bool persist = true)
     {
         if (_isGameSessionActive) return;
 
@@ -263,7 +264,7 @@ public partial class MainWindow
             _savedModeBeforeGame = mode.Value;
             _pendingModeRestore = false;
             _powerAutomationService?.UpdateManualOperatingMode(mode.Value);
-            if (!_isInitializingUi && _settingsLoaded)
+            if (!_isInitializingUi && _settingsLoaded && persist)
             {
                 _appSettings.LastOperatingMode = mode.Value;
                 SaveSettings();
@@ -921,7 +922,12 @@ public partial class MainWindow
         }
     }
 
-    internal async Task<bool> SetManualModeAsync(OperatingMode mode)
+    /// <param name="persist">
+    /// False for a change the app made on the user's behalf — the fan-stall protection dropping to Eco. The machine
+    /// really is in that mode, so the automation is told about it, but the saved preference is left alone: a safety
+    /// action must not decide what the laptop boots into next time.
+    /// </param>
+    internal async Task<bool> SetManualModeAsync(OperatingMode mode, bool persist = true)
     {
         var (onAc, percent) = PowerStateProvider();
         if (!ModePolicy.IsModeAllowed(mode, onAc, percent))
@@ -939,9 +945,12 @@ public partial class MainWindow
             if (ok)
             {
                 _currentMode = mode;
-                UpdateDesktopBaselineForManualChange(mode: mode);
-                _appSettings.LastOperatingMode = mode;
-                SaveSettings();
+                UpdateDesktopBaselineForManualChange(mode: mode, persist: persist);
+                if (persist)
+                {
+                    _appSettings.LastOperatingMode = mode;
+                    SaveSettings();
+                }
             }
             return ok;
         }

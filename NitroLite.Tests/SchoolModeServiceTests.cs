@@ -428,7 +428,7 @@ public class SchoolModeServiceTests
     }
 
     [Fact]
-    public async Task EnableAsync_WhenTheDataFolderIsReadOnly_StillApplies()
+    public async Task EnableAsync_CreatesAMissingDataFolderForTheUndoRecord()
     {
         var h = new Harness().WithPreviousValues();
         h.Service.BackupPath = Path.Combine(Path.GetTempPath(), "nitrolite_missing_" + Guid.NewGuid().ToString("N"), "backup.json");
@@ -437,6 +437,40 @@ public class SchoolModeServiceTests
 
         Assert.True(outcome.Success, string.Join(", ", outcome.Failed));
         Assert.True(h.Settings.SchoolModeEnabled);
+        Assert.True(File.Exists(h.Service.BackupPath));
+    }
+
+    /// <summary>
+    /// The undo record is the whole promise of the switch. When it cannot be written, nothing is changed: a mode
+    /// the user cannot turn off is worse than no mode, and the settings page cannot put back what was never saved.
+    /// </summary>
+    [Fact]
+    public async Task EnableAsync_RefusesToApplyWhenTheUndoRecordCannotBeWritten()
+    {
+        var h = new Harness().WithPreviousValues();
+
+        // A file where the folder should be: the record cannot be written, whatever the underlying reason.
+        string blocker = Path.Combine(Path.GetTempPath(), "nitrolite_blocker_" + Guid.NewGuid().ToString("N"));
+        File.WriteAllText(blocker, "x");
+        try
+        {
+            h.Service.BackupPath = Path.Combine(blocker, "backup.json");
+
+            var outcome = await h.Service.EnableAsync();
+
+            Assert.True(outcome.Refused);
+            Assert.False(outcome.Success);
+            Assert.False(h.Settings.SchoolModeEnabled);
+
+            // Nothing reached the machine: no power-scheme write, no mode change, no fan change.
+            Assert.Empty(h.Scheme.Writes);
+            Assert.Empty(h.Agent.Attempts);
+            Assert.Equal(FanMode.Auto, h.Agent.CurrentFanMode);
+        }
+        finally
+        {
+            try { File.Delete(blocker); } catch { }
+        }
     }
 
     [Fact]

@@ -99,6 +99,33 @@ public class MemoryCleanerToolTests
         Assert.NotEqual(PortableCopy, MemoryCleanerService.FindTool());
     }
 
+    /// <summary>
+    /// The tool is launched with Verb = "runas", so a directory the user can write to must never be a candidate:
+    /// a per-user PATH entry would turn "clean the standby list" into "run whatever is called
+    /// WinMemoryCleaner.exe as administrator". Nothing else in the app reads PATH, so changing it here is safe.
+    /// </summary>
+    [Fact]
+    public void FindTool_NeverLooksAtPath()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "nitrolite_path_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string fake = Path.Combine(folder, MemoryCleanerService.ToolFileName);
+        File.WriteAllText(fake, "stub");
+
+        string? original = Environment.GetEnvironmentVariable("PATH");
+        try
+        {
+            Environment.SetEnvironmentVariable("PATH", folder + Path.PathSeparator + original);
+            Assert.NotEqual(fake, MemoryCleanerService.FindTool());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", original);
+            try { File.Delete(fake); } catch { }
+            try { Directory.Delete(folder); } catch { }
+        }
+    }
+
     [Fact]
     public async Task CleanMemory_ReportsTheToolMissingInsteadOfThrowing()
     {

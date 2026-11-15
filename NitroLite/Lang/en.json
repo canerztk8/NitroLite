@@ -136,7 +136,6 @@
  "Fan arızasında otomatik koruma (Eco moduna geç)": "Automatic protection on fan failure (switch to Eco mode)",
  "Fan eğrisi değiştirilemedi: {0}": "The fan curve could not be changed: {0}",
  "GPU fanı": "GPU fan",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı.": "The undo record could not be written (disk full or folder read-only); the settings have to be reverted by hand.",
  "Işık Kapalı (Blackout)": "Lights Off (Blackout)",
  "Saf Beyaz": "Pure White",
  "Kırmızı Nefes": "Red Breathing",
@@ -926,5 +925,8 @@
  "Tıklayın": "Click",
  "Oyun bitince": "After game",
  "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Not changed during a game session. It will be applied when the game closes.",
- "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "The wireless mouse has gone to sleep. Click it once; the profile is applied the moment you click."
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "The wireless mouse has gone to sleep. Click it once; the profile is applied the moment you click.",
+ "Okul modu açık · fan eğrisi askıda": "School mode on · fan curve suspended",
+ "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "The fan curve is off while school mode is on; it comes back when you turn school mode off.",
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "The undo record could not be written (disk full or read-only folder); school mode was not applied."
 }

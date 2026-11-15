@@ -55,6 +55,12 @@ public sealed class SchoolModeOutcome
     /// <summary>Things the user should know that did not stop school mode from being applied.</summary>
     public List<string> Warnings { get; } = new();
 
+    /// <summary>
+    /// True when school mode was not applied at all — the undo record could not be written, so nothing was
+    /// changed. The caller must leave the switch off and hand the machine back exactly as it found it.
+    /// </summary>
+    public bool Refused { get; set; }
+
     public bool Success => Failed.Count == 0;
 }
 
@@ -204,18 +210,18 @@ public sealed class SchoolModeService
         });
 
         // The undo record goes to disk before the first change, so a crash or a forced exit still leaves a way back.
-        // If it cannot be written, nothing is changed: a mode the user cannot turn off is worse than no mode.
-        // The undo record is written first, but a failure to write it does not cancel school mode: the user asked
-        // for battery savings, and refusing outright leaves them with nothing. They are told instead, and the
-        // settings page still lists every value school mode changes.
-        bool backupWritten = WriteBackup(backup);
+        // If it cannot be written, nothing is changed: a mode the user cannot turn off is worse than no mode, and
+        // "switching this off puts everything back" is the whole promise the switch makes.
+        if (!WriteBackup(backup))
+        {
+            var refused = new SchoolModeOutcome { Refused = true };
+            refused.Failed.Add(Loc.T("Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı."));
+            return refused;
+        }
+
         _settings.SchoolModeEnabled = true;
 
         var outcome = await ApplyAsync(BackedUpSettings(backup));
-        if (!backupWritten)
-        {
-            outcome.Warnings.Add(Loc.T("Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı."));
-        }
         if (TurnLightingOffAsync != null)
         {
             // A keyboard that refuses the command must not undo the rest: the power settings are already written and
@@ -223,7 +229,14 @@ public sealed class SchoolModeService
             try
             {
                 backup.LightingWasOn = await TurnLightingOffAsync();
-                WriteBackup(backup);
+                if (!WriteBackup(backup))
+                {
+                    // The one change made after the record was written could not be added to it, so it is undone
+                    // here: a school mode that cannot put the keyboard back is not one that can be undone.
+                    if (RestoreLightingAsync != null) await RestoreLightingAsync();
+                    backup.LightingWasOn = false;
+                    outcome.Failed.Add(Loc.T("Klavye ışığı"));
+                }
             }
             catch (Exception ex)
             {
@@ -436,9 +449,9 @@ public sealed class SchoolModeService
     }
 
     /// <summary>
-    /// Writes the undo record. Returns false when it could not be written; the caller then applies school mode
-    /// anyway and says so in <see cref="SchoolModeOutcome.Warnings"/>. Refusing outright would leave a user who
-    /// asked for battery savings with nothing, and the settings page still lists every value school mode changes.
+    /// Writes the undo record. Returns false when it could not be written, and the caller then refuses to apply
+    /// school mode at all: without a record there is no way back, and a switch that cannot be undone is worse than
+    /// one that never turned on.
     /// </summary>
     private bool WriteBackup(SchoolModeBackup backup)
     {

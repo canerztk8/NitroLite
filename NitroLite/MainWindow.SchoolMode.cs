@@ -68,15 +68,26 @@ public partial class MainWindow
         ChkSchoolMode.IsEnabled = false;
         try
         {
+            // School mode asks the firmware for automatic fans. An armed curve would take them back to Custom on
+            // the next poll, so it is suspended first and the switch's "Fan (Otomatik)" is what actually happens.
+            if (on) SuspendFanCurveForSchoolMode();
+
             var outcome = on ? await _schoolModeService.EnableAsync() : await _schoolModeService.DisableAsync();
-            _appSettings.SchoolModeEnabled = on;
+
+            // A refused enable changed nothing, so the curve goes straight back: leaving it suspended would
+            // silently disable a feature the user never turned off.
+            if (on && outcome.Refused) await ResumeFanCurveAfterSchoolModeAsync();
+
+            _appSettings.SchoolModeEnabled = on && !outcome.Refused;
             SaveSettings();
             ApplySchoolModeAutomationState();
 
-            if (!on && _powerAutomationService != null)
+            if (!on)
             {
-                // Hand the machine back to the automatic pass, which re-applies Eco when it is on battery.
-                await _powerAutomationService.EvaluatePowerStateAsync();
+                // Hand the machine back to the automatic pass, which re-applies Eco when it is on battery, and
+                // give the curve its fans back at the speed the current temperature asks for.
+                if (_powerAutomationService != null) await _powerAutomationService.EvaluatePowerStateAsync();
+                await ResumeFanCurveAfterSchoolModeAsync();
             }
 
             ShowSchoolModeOutcome(on, outcome);
@@ -85,6 +96,9 @@ public partial class MainWindow
         {
             AppLog.Error("Okul modu", ex.ToString());
             ShowToast(Loc.T($"Okul modu uygulanamadı: {ex.Message}"), false);
+
+            // A failed enable must not leave the curve suspended: nothing was applied, so nothing is held back.
+            if (!_appSettings.SchoolModeEnabled) await ResumeFanCurveAfterSchoolModeAsync();
         }
         finally
         {

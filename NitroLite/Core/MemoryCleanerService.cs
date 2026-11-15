@@ -139,7 +139,10 @@ public class MemoryCleanerService
         }
     }
 
-    /// <summary>Full path of an installed WinMemoryCleaner, or null when it is not on this machine.</summary>
+    /// <summary>
+    /// Full path of a WinMemoryCleaner NitroLite is willing to launch, or null when there is none. Only fixed
+    /// locations are searched: the tool runs elevated, so a directory the user can write to is not a candidate.
+    /// </summary>
     public static string? FindTool()
     {
         foreach (string candidate in ToolCandidates())
@@ -150,7 +153,7 @@ public class MemoryCleanerService
             }
             catch
             {
-                // A malformed PATH entry must not stop the search.
+                // A path the environment cannot even build must not stop the search.
             }
         }
         return null;
@@ -188,23 +191,10 @@ public class MemoryCleanerService
         if (!string.IsNullOrEmpty(programFiles))
             yield return Path.Combine(programFiles, "WinMemoryCleaner", ToolFileName);
 
-        string? path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrEmpty(path)) yield break;
-        foreach (string entry in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            string directory = entry.Trim().Trim('"');
-            if (directory.Length == 0) continue;
-            string full;
-            try
-            {
-                full = Path.Combine(directory, ToolFileName);
-            }
-            catch
-            {
-                continue;
-            }
-            yield return full;
-        }
+        // PATH is deliberately not searched. The tool is launched with Verb = "runas", so a directory the user can
+        // write to (a per-user PATH entry, a redirected profile) would turn "clean the standby list" into "run
+        // whatever is called WinMemoryCleaner.exe as administrator". Every candidate above is a fixed location the
+        // user cannot drop a file into without already having the rights the elevation prompt would grant.
     }
 
     /// <summary>

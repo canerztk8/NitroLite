@@ -136,7 +136,6 @@
  "Fan arızasında otomatik koruma (Eco moduna geç)": "Perlindungan otomatis saat kipas gagal (beralih ke mode Eco)",
  "Fan eğrisi değiştirilemedi: {0}": "Kurva kipas tidak dapat diubah: {0}",
  "GPU fanı": "Kipas GPU",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı.": "Catatan pembatalan tidak dapat ditulis (disk penuh atau folder hanya-baca); pengaturan harus dikembalikan secara manual.",
  "Işık Kapalı (Blackout)": "Lampu Mati (Blackout)",
  "Saf Beyaz": "Putih Bersih",
  "Kırmızı Nefes": "Napas Merah",
@@ -926,5 +925,8 @@
  "Tıklayın": "Klik",
  "Oyun bitince": "Setelah game",
  "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Tidak diubah selama sesi game. Akan diterapkan saat game ditutup.",
- "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Mouse nirkabel sudah tidur. Klik sekali; profil diterapkan saat Anda mengklik."
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Mouse nirkabel sudah tidur. Klik sekali; profil diterapkan saat Anda mengklik.",
+ "Okul modu açık · fan eğrisi askıda": "Mode sekolah aktif · kurva kipas ditangguhkan",
+ "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "Kurva kipas nonaktif selama mode sekolah aktif; kurva kembali saat mode sekolah dimatikan.",
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Catatan pembatalan tidak dapat ditulis (disk penuh atau folder hanya-baca); mode sekolah tidak diterapkan."
 }

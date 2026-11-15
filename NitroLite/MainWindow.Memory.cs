@@ -16,14 +16,22 @@ public partial class MainWindow
     /// in the next time the window was shown. The runtime's own collector already does this correctly, so the only
     /// thing left is the working-set trim, which is cheap and does not touch the heap.
     /// </para>
+    /// <para>
+    /// Returns what the kernel said. The old signature took <c>int</c> for the two size arguments, which on x64
+    /// passed 0x00000000FFFFFFFF instead of the all-ones value that means "trim every page": the call succeeded
+    /// and trimmed nothing. The arguments are <c>nint</c> now, so -1 really is -1.
+    /// </para>
     /// </summary>
-    public static void TrimMemory()
+    public static bool TrimMemory()
     {
         try
         {
-            SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
+            return SetProcessWorkingSetSize(GetCurrentProcess(), -1, -1);
         }
-        catch { }
+        catch
+        {
+            return false;
+        }
     }
 
     private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)

@@ -136,7 +136,6 @@
  "Fan arızasında otomatik koruma (Eco moduna geç)": "Protección automática si falla el ventilador (cambiar a modo Eco)",
  "Fan eğrisi değiştirilemedi: {0}": "No se pudo cambiar la curva del ventilador: {0}",
  "GPU fanı": "Ventilador de la GPU",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı.": "No se pudo escribir el registro de deshacer (disco lleno o carpeta de solo lectura); los ajustes deben revertirse a mano.",
  "Işık Kapalı (Blackout)": "Luces apagadas (Blackout)",
  "Saf Beyaz": "Blanco puro",
  "Kırmızı Nefes": "Respiración roja",
@@ -926,5 +925,8 @@
  "Tıklayın": "Clic",
  "Oyun bitince": "Tras el juego",
  "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "No se cambia durante una sesión de juego. Se aplicará al cerrar el juego.",
- "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "El ratón inalámbrico se ha dormido. Haz clic una vez; el perfil se aplica en el momento del clic."
+ "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "El ratón inalámbrico se ha dormido. Haz clic una vez; el perfil se aplica en el momento del clic.",
+ "Okul modu açık · fan eğrisi askıda": "Modo escolar activo · curva del ventilador suspendida",
+ "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "La curva del ventilador está desactivada mientras el modo escolar está activo; vuelve al desactivar el modo escolar.",
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "No se pudo escribir el registro de deshacer (disco lleno o carpeta de solo lectura); el modo escolar no se aplicó."
 }

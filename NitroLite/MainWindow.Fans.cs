@@ -206,6 +206,11 @@ public partial class MainWindow
     private void UpdateFanCurveStatusText()
     {
         if (TxtFanCurveStatus == null) return;
+        if (_fanCurveSuspendedBySchoolMode && _fanCurveOwner != FanCurveOwner.None)
+        {
+            TxtFanCurveStatus.Text = Loc.T("Okul modu açık · fan eğrisi askıda");
+            return;
+        }
         if (!_fanCurveEnabled)
         {
             TxtFanCurveStatus.Text = Loc.T("Kapalı");
@@ -370,6 +375,15 @@ public partial class MainWindow
     /// </summary>
     internal async Task<bool> SetFanCurveEnabledAsync(bool enabled, bool quiet = false)
     {
+        if (enabled && _fanCurveSuspendedBySchoolMode)
+        {
+            // School mode owns the fans while it is on. Arming the curve here would either be ignored or, worse,
+            // take the fans back a second later; saying so is the only honest answer.
+            if (!quiet) ShowToast(Loc.T("Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir."), false);
+            UpdateFanButtonsUi(_currentFanMode);
+            return false;
+        }
+
         if (enabled == _fanCurveEnabled)
         {
             UpdateFanButtonsUi(_currentFanMode);
@@ -435,6 +449,35 @@ public partial class MainWindow
         UpdateFanCurveStatusText();
     }
 
+    /// <summary>
+    /// School mode on: the curve stops writing so the firmware's automatic fans are what actually runs. The owner
+    /// and the saved preference are left alone, which is what lets <see cref="ResumeFanCurveAfterSchoolModeAsync"/>
+    /// put the same curve back without the user having to arm it again. The flag is set even when no curve is
+    /// armed: school mode owns the fans either way, so a game profile cannot arm one behind its back.
+    /// </summary>
+    internal void SuspendFanCurveForSchoolMode()
+    {
+        _fanCurveSuspendedBySchoolMode = true;
+        UpdateFanButtonsUi(_currentFanMode);
+        UpdateFanCurveStatusText();
+    }
+
+    /// <summary>
+    /// School mode off: the curve takes the fans back at the speed the current temperature asks for, instead of
+    /// waiting for the next poll to notice the mode changed. A temperature that was never read is left to that
+    /// poll: writing a curve from a zero reading would ask for full speed on a cold machine.
+    /// </summary>
+    internal async Task ResumeFanCurveAfterSchoolModeAsync()
+    {
+        if (!_fanCurveSuspendedBySchoolMode) return;
+        _fanCurveSuspendedBySchoolMode = false;
+        UpdateFanButtonsUi(_currentFanMode);
+        UpdateFanCurveStatusText();
+
+        if (_fanCurveOwner == FanCurveOwner.None || _fanCurveLastTemperatureC <= 0) return;
+        await ApplyFanCurveAsync(_fanCurveLastTemperatureC);
+    }
+
     private async void BtnFanCurve_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -479,9 +522,11 @@ public partial class MainWindow
 
         // The lowest power mode is the only lever left: it cannot repair the fan, but it stops the machine from
         // cooking itself while the user reads the warning. Eco is allowed on the adapter and on battery alike.
+        // Not persisted: the saved mode is the user's choice, and a safety action must not change what the laptop
+        // boots into next time.
         try
         {
-            await SetManualModeAsync(OperatingMode.Eco);
+            await SetManualModeAsync(OperatingMode.Eco, persist: false);
         }
         catch (Exception ex)
         {
@@ -512,6 +557,10 @@ public partial class MainWindow
     /// </summary>
     internal async Task<bool> ArmGameFanCurveAsync(GameProfile profile)
     {
+        // School mode owns the fans while it is on, and a game profile's curve would take them back to Custom the
+        // same way the desktop curve did. The profile still applies its mode and boost; only the fans are left alone.
+        if (_fanCurveSuspendedBySchoolMode) return false;
+
         var curve = new FanCurve(
             profile.TargetFanCurvePoints ?? _appSettings.FanCurvePoints,
             _appSettings.FanCurveHysteresisC,

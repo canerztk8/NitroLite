@@ -101,6 +101,7 @@ public partial class MainWindow : Window
     internal OperatingMode CurrentMode => _currentMode;
     internal AppSettings CurrentAppSettings => _appSettings;
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
+    internal void SetCurrentFanModeForTesting(FanMode m) => _currentFanMode = m;
     internal void SetLightingForTesting(LightingConfig cfg) => _lighting = cfg;
     internal void ReportServiceAvailabilityForTesting(bool available) => UpdateServiceTelemetryState(available);
     internal bool ServiceBannerShownForTesting => ServiceBanner?.Visibility == Visibility.Visible;
@@ -161,8 +162,11 @@ public partial class MainWindow : Window
     private static readonly string RgbPresetsFile = AppPaths.GetDataFile("rgb_presets.json");
     private AppSettings _appSettings = new();
 
+    // SIZE_T, not int: on x64 the two size arguments are eight bytes wide, and the old int signature passed
+    // 0x00000000FFFFFFFF instead of the all-ones value that means "trim every page". The call reported success
+    // and did nothing.
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-    private static extern bool SetProcessWorkingSetSize(IntPtr proc, int min, int max);
+    private static extern bool SetProcessWorkingSetSize(IntPtr proc, nint min, nint max);
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentProcess();
@@ -373,6 +377,7 @@ public partial class MainWindow : Window
         menu.Opening += (s, e) =>
         {
             UpdateTrayRetryMenuItemState();
+            var (onAc, percent) = PowerStateProvider();
             foreach (var item in menu.Items.OfType<System.Windows.Forms.ToolStripMenuItem>())
             {
                 item.Checked = item.Tag switch
@@ -381,6 +386,18 @@ public partial class MainWindow : Window
                     CpuBoostMode b => _lastShownBoost == b,
                     _ => false
                 };
+
+                if (item.Tag is not OperatingMode mode) continue;
+
+                // The mode cards hide a mode the model does not offer and grey out the high-power pair on battery.
+                // The tray menu is the same list, so it follows the same rules instead of offering a click that
+                // can only be refused. The active mode stays visible even when its group is hidden, so the menu
+                // always marks the mode the machine is actually in.
+                bool supported = ModePolicy.IsModeSupported(_supportedModes, mode);
+                item.Visible = supported || mode == _currentMode;
+                bool allowed = ModePolicy.IsModeAllowed(mode, onAc, percent);
+                item.Enabled = allowed;
+                item.ToolTipText = allowed ? string.Empty : ModePolicy.HighPowerBlockedMessage;
             }
         };
 
@@ -691,6 +708,9 @@ public partial class MainWindow : Window
             {
                 if (_appSettings.SchoolModeEnabled)
                 {
+                    // The curve was armed in step 1.0; school mode asks for automatic fans, so it is suspended
+                    // before the re-apply or the two would fight on every poll for the rest of the session.
+                    SuspendFanCurveForSchoolMode();
                     await _schoolModeService.ReapplyAsync();
                 }
                 else if (await _schoolModeService.RecoverOrphanedBackupAsync())
@@ -1074,7 +1094,15 @@ public partial class MainWindow : Window
     private enum FanCurveOwner { None, Desktop, Game }
 
     private FanCurveOwner _fanCurveOwner = FanCurveOwner.None;
-    private bool _fanCurveEnabled => _fanCurveOwner != FanCurveOwner.None;
+
+    /// <summary>
+    /// School mode asks the firmware for automatic fans, and an armed curve would take them back to Custom on the
+    /// next poll — the switch would say "Fan (Otomatik)" while the fans ran the user's shape. Suspending keeps the
+    /// curve armed (the saved preference is untouched) but stops it writing, so the two automations cannot fight.
+    /// </summary>
+    private bool _fanCurveSuspendedBySchoolMode;
+
+    private bool _fanCurveEnabled => _fanCurveOwner != FanCurveOwner.None && !_fanCurveSuspendedBySchoolMode;
 
     /// <summary>True while a curve is armed, whoever armed it.</summary>
     internal bool IsFanCurveArmed => _fanCurveEnabled;
