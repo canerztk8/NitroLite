@@ -304,3 +304,13 @@ A screenshot is the most expensive thing an agent can look at, and a session tha
 - **Never capture to compare themes.** If two themes must be compared, compare their dictionaries in a test.
 - **The one exception is a build asset, not a verification step.** `scripts/theme-previews.ps1` captures all six palettes in one run to regenerate the theme cards' pictures. Those files are written to disk and never read back into the session; the run is judged by the file sizes and the log, not by looking at them.
 
+## Releases
+
+> **Kullanıcı açıkça "release et" demeden release etme: ne tag at, ne `publish-release.ps1` ile yayınla, ne GitHub Release oluştur.**
+
+A release is public and hard to take back, so it is never a step an agent takes on its own initiative. Building, testing, packaging into `artifacts/`, committing and reporting the digest are all normal work; publishing is not.
+
+- **Wait for the words.** "Hazırla", "paketle", "denetle" are not "yayınla". If the task stops short of publishing, stop there and report what is ready.
+- **A tag is the publish button.** `.github/workflows/release.yml` runs on `v*` and creates the GitHub Release, so `git push origin vX.Y.Z` is the irreversible step, not the commit before it.
+- **Check the version before proposing one.** `git tag --list` and `git ls-remote --tags origin` decide what the next number is; a version the user names may already be published.
+- **The manifests carry the published digest, never a local build's.** `publish-release.ps1` warns when it runs under Windows PowerShell 5.1, because `Compress-Archive` does not emit the same archive as the workflow's `pwsh` 7. After a release, point `packaging/scoop/nitrolite.json` and the WinGet manifest at the digest from the release page.

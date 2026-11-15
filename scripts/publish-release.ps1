@@ -130,8 +130,14 @@ $unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
 if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
 
 # Compress-Archive stores each entry's timestamp, so two builds of the same source produced
-# two different digests. Pinning the timestamps makes the archive byte-for-byte reproducible,
-# which is what lets anyone rebuild the tag and compare the SHA-256 with the published one.
+# two different digests. Pinning the timestamps removes that one source of variance, which is
+# what makes a rebuild comparable at all.
+#
+# It does not make the archive byte-identical across hosts. Compress-Archive emits a different
+# archive from Windows PowerShell 5.1 than from pwsh 7, so a package built here and the one the
+# release workflow builds from the same tag carry different digests. The published artifact is
+# the one users download, so its digest is the one the manifests have to carry — never a local
+# build's. The warning below fires when this run cannot match the workflow.
 $epoch = [datetime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
 Get-ChildItem $stage -Recurse | ForEach-Object { $_.LastWriteTimeUtc = $epoch }
 
@@ -144,6 +150,17 @@ Write-Host "Package : $zip" -ForegroundColor Green
 Write-Host ("Size    : {0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
 Write-Host "SHA-256 : $hash"
 Get-ChildItem $stage -Recurse -File | ForEach-Object { "  {0,-45} {1,8:N0} KB" -f $_.FullName.Substring($stage.Length + 1), ($_.Length / 1KB) }
+
+# The manifests below are rewritten with the digest of the package this run just built. That is
+# right for a local test install and wrong for main: the release workflow builds its own package
+# from the tag, and the two do not hash the same. Say so at the moment the digest is printed,
+# because the mistake it prevents is committing this one.
+if ($PSVersionTable.PSEdition -ne 'Core') {
+    Write-Warning ("Running under Windows PowerShell $($PSVersionTable.PSVersion). The release workflow uses pwsh 7, and " +
+        'Compress-Archive does not emit the same archive from the two hosts, so the digest above will NOT match the ' +
+        'published package. After a release, point packaging\scoop\nitrolite.json and the WinGet manifest at the ' +
+        'digest from the release page.')
+}
 
 # ---------------------------------------------------------------------------
 # Package manifests. The digest is written where the package manager reads it, so a
