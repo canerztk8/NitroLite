@@ -946,5 +946,19 @@
  "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "Der Lüftermodus lässt sich bei aktivem Schulmodus nicht ändern; er kehrt zurück, sobald Sie den Schulmodus ausschalten.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Der Rückgängig-Datensatz konnte nicht geschrieben werden (Datenträger voll oder Ordner schreibgeschützt); der Schulmodus wurde nicht angewendet.",
  "Sürüm Notları": "Versionshinweise",
- "Bu sürümün GitHub sayfasını tarayıcıda açar": "Öffnet die GitHub-Seite dieser Version im Browser"
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "Öffnet die GitHub-Seite dieser Version im Browser",
+ "✓ Tamamlandı": "✓ Fertig",
+ "! Başarısız": "! Fehlgeschlagen",
+ "GÖSTER": "ANZEIGEN",
+ "GİZLE": "AUSBLENDEN",
+ "Grafiği göster": "Diagramm einblenden",
+ "Grafiği gizle": "Diagramm ausblenden",
+ "Donanım izleme sayfasını açar": "Öffnet die Hardware-Überwachung",
+ "Fan kontrolü için çalışma modlarına gider": "Wechselt für die Lüftersteuerung zu den Betriebsmodi",
+ "CPU Boost ayarı için çalışma modlarına gider": "Wechselt für die CPU-Boost-Einstellung zu den Betriebsmodi",
+ "Fare profili ayarına gider": "Wechselt zur Einstellung des Mausprofils",
+ "Çalışma modunu değiştir": "Betriebsmodus ändern",
+ "Bölge rengini değiştirmek için tıklayın": "Klicken, um die Farbe dieser Zone zu ändern",
+ "Tüm Bölgelere Uygula": "Auf alle Zonen anwenden",
+ "Seçili rengi dört bölgeye birden uygular": "Wendet die gewählte Farbe auf alle vier Zonen an"
 }

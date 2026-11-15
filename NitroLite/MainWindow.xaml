@@ -88,6 +88,58 @@
             <Setter Property="Padding" Value="14,12" />
         </Style>
 
+        <!-- The title bar's live figures are printed, not boxed. The MOD figure is the one that is also a control, so
+             it takes a hover tone and a hand cursor and nothing else: no frame at rest. -->
+        <Style x:Key="TitleBadgeButton" TargetType="Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Padding" Value="6,3" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource CardBgHover}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A zone swatch is a control, not a colour chip: it answers the pointer with an ink frame so it is obvious
+             that clicking it opens the picker. When the lights are off the swatch shows the empty paper tone instead
+             of a solid ink block, which read as a dead black rectangle in the light theme and a white one in the dark. -->
+        <Style x:Key="ZonePreview" TargetType="Border">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RuleStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+                    <Setter Property="BorderThickness" Value="2" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- A reading in the left rail. It reads as a figure, but it is also the shortcut to the page that owns it:
+             the hand cursor and the hover tone say so before the tooltip does. Not a card — a 2px corner and a
+             transparent frame that only appears under the pointer, so the rail keeps its printed look at rest. -->
+        <Style x:Key="SideStatRow" TargetType="Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource CardBgHover}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- A section's one-line summary. Smaller and fainter than the title, so the heading and the
              figures carry the hierarchy and the prose stays out of the way. -->
         <Style x:Key="SectionHint" TargetType="{x:Type TextBlock}">
@@ -677,7 +729,11 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="BadgeMode" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,20,0">
+                        <!-- The mode figure doubles as the quickest way to change it: the same list the tray menu
+                             offers, filtered by the same capability and battery rules. -->
+                        <Border x:Name="BadgeMode" Style="{StaticResource TitleBadgeButton}" Margin="0,0,14,0"
+                                MouseLeftButtonUp="BadgeMode_Click" WindowChrome.IsHitTestVisibleInChrome="True"
+                                ToolTip="Çalışma modunu değiştir">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="MOD" Foreground="{StaticResource InkFaint}" FontSize="10" FontWeight="SemiBold" Margin="0,0,6,0" VerticalAlignment="Center" />
                                 <TextBlock x:Name="TxtModeHeader" Text="DENGELİ" Foreground="{StaticResource Live}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -750,31 +806,43 @@
                             </TextBlock>
                             <Border Background="{StaticResource Rule}" Height="1" Margin="10,0,10,10" />
                             <TextBlock Text="SİSTEM" Style="{StaticResource LabelCaps}" Margin="10,0,0,6" />
-                            <Grid Margin="10,3">
-                                <TextBlock Text="CPU" Style="{StaticResource LabelCaps}" />
-                                <TextBlock x:Name="TxtSideCpuTemp" Text="-- °C" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
-                            </Grid>
-                            <Grid Margin="10,3">
-                                <TextBlock Text="GPU" Style="{StaticResource LabelCaps}" />
-                                <TextBlock x:Name="TxtSideGpuTemp" Text="-- °C" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
-                            </Grid>
-                            <Grid Margin="10,3">
-                                <TextBlock Text="FAN" Style="{StaticResource LabelCaps}" />
-                                <TextBlock x:Name="TxtSideCpuFan" Text="-- RPM" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
-                            </Grid>
-                            <Grid Margin="10,3">
-                                <TextBlock Text="BOOST" Style="{StaticResource LabelCaps}" />
-                                <TextBlock x:Name="TxtSideCpuBoost" Text="Agresif" Foreground="{StaticResource Ink}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                            </Grid>
-                            <Grid x:Name="RowSideMouseProfile" Margin="10,4" Visibility="Collapsed">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="FARE" Style="{StaticResource LabelCaps}" />
-                                <!-- Two columns + trimming: a long failure text used to overlap the label. -->
-                                <TextBlock Grid.Column="1" x:Name="TxtSideMouseProfile" Text="Config 1" Foreground="{StaticResource Olive}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="6,0,0,0" VerticalAlignment="Center" />
-                            </Grid>
+                            <!-- Each reading is a shortcut to the page that owns it. The figures keep their names and
+                                 their place; only the frame around them answers the pointer. -->
+                            <Border Style="{StaticResource SideStatRow}" Tag="Monitoring" MouseLeftButtonUp="SideStatRow_Click" ToolTip="Donanım izleme sayfasını açar">
+                                <Grid>
+                                    <TextBlock Text="CPU" Style="{StaticResource LabelCaps}" />
+                                    <TextBlock x:Name="TxtSideCpuTemp" Text="-- °C" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SideStatRow}" Tag="Monitoring" MouseLeftButtonUp="SideStatRow_Click" ToolTip="Donanım izleme sayfasını açar">
+                                <Grid>
+                                    <TextBlock Text="GPU" Style="{StaticResource LabelCaps}" />
+                                    <TextBlock x:Name="TxtSideGpuTemp" Text="-- °C" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SideStatRow}" Tag="Modes" MouseLeftButtonUp="SideStatRow_Click" ToolTip="Fan kontrolü için çalışma modlarına gider">
+                                <Grid>
+                                    <TextBlock Text="FAN" Style="{StaticResource LabelCaps}" />
+                                    <TextBlock x:Name="TxtSideCpuFan" Text="-- RPM" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
+                                </Grid>
+                            </Border>
+                            <Border Style="{StaticResource SideStatRow}" Tag="Modes" MouseLeftButtonUp="SideStatRow_Click" ToolTip="CPU Boost ayarı için çalışma modlarına gider">
+                                <Grid>
+                                    <TextBlock Text="BOOST" Style="{StaticResource LabelCaps}" />
+                                    <TextBlock x:Name="TxtSideCpuBoost" Text="Agresif" Foreground="{StaticResource Ink}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <Border x:Name="RowSideMouseProfile" Style="{StaticResource SideStatRow}" Tag="Mouse" MouseLeftButtonUp="SideStatRow_Click" Visibility="Collapsed" ToolTip="Fare profili ayarına gider">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="FARE" Style="{StaticResource LabelCaps}" />
+                                    <!-- Two columns + trimming: a long failure text used to overlap the label. -->
+                                    <TextBlock Grid.Column="1" x:Name="TxtSideMouseProfile" Text="Config 1" Foreground="{StaticResource Olive}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -815,21 +883,28 @@
                                 <!-- THE RECORDING: the last 60 seconds of CPU temperature as a continuous
                                      ink trace, a vermilion "now" edge, and a tick wherever the mode
                                      changed. This is the surface's signature move. -->
-                                <Grid Margin="0,16,0,0">
+                                <Grid Margin="0,12,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <Grid Grid.Row="0" Margin="0,0,0,4">
                                         <TextBlock x:Name="TxtTraceSpan" Text="KAYIT" Style="{StaticResource LabelCaps}" />
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                             <TextBlock Text="ARALIK" Style="{StaticResource LabelCaps}" Margin="0,0,6,0" />
                                             <TextBlock x:Name="TxtTraceRange" Text="--" Style="{StaticResource Figure}" Foreground="{StaticResource InkFaint}" FontSize="10" Margin="0,0,16,0" />
                                             <TextBlock Text="ŞİMDİ" Style="{StaticResource LabelCaps}" Margin="0,0,6,0" />
                                             <TextBlock x:Name="TxtTraceValue" Text="-- °C" Style="{StaticResource Figure}" FontSize="11" />
+                                            <!-- The strip is the tallest thing above the game profiles. One click folds it
+                                                 away and the choice is remembered. -->
+                                            <Button x:Name="BtnToggleTrace" Click="BtnToggleTrace_Click" Background="Transparent" BorderThickness="0" Padding="8,0,0,0" Margin="10,0,0,0" Cursor="Hand" ToolTip="Grafiği gizle">
+                                                <TextBlock x:Name="TxtToggleTrace" Text="GİZLE" Style="{StaticResource LabelCaps}" />
+                                            </Button>
                                         </StackPanel>
                                     </Grid>
-                                    <Border Grid.Row="1" Height="72" Background="{StaticResource PaperDeep}" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="2" ClipToBounds="True">
+                                    <!-- 36px: enough for the trace to keep its shape, thin enough that the game profiles
+                                         below it are reachable without scrolling. -->
+                                    <Border x:Name="TraceChartBorder" Grid.Row="1" Height="36" Background="{StaticResource PaperDeep}" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="2" ClipToBounds="True">
                                         <Grid>
                                             <Canvas x:Name="CanvasModeTrace" ClipToBounds="True">
                                                 <Polyline x:Name="TraceLine" Stroke="{StaticResource Ink}" StrokeThickness="1.4" StrokeLineJoin="Round" />
@@ -1687,19 +1762,19 @@
                                         <TextBlock Text="Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="0,0,0,10" TextWrapping="Wrap" />
                                         <UniformGrid Columns="4">
                                             <StackPanel>
-                                                <Border x:Name="PreviewZone1" Tag="0" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="{StaticResource AccentCyan}" Height="40" BorderBrush="{StaticResource RuleStrong}" BorderThickness="1" />
+                                                <Border x:Name="PreviewZone1" Tag="0" Style="{StaticResource ZonePreview}" MouseLeftButtonUp="PreviewZone_Click" ToolTip="Bölge rengini değiştirmek için tıklayın" Background="{StaticResource AccentCyan}" />
                                                 <TextBlock Text="Bölge 1 (Sol)" Foreground="{StaticResource TextMuted}" FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" />
                                             </StackPanel>
                                             <StackPanel>
-                                                <Border x:Name="PreviewZone2" Tag="1" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="{StaticResource AccentCyan}" Height="40" BorderBrush="{StaticResource RuleStrong}" BorderThickness="1" />
+                                                <Border x:Name="PreviewZone2" Tag="1" Style="{StaticResource ZonePreview}" MouseLeftButtonUp="PreviewZone_Click" ToolTip="Bölge rengini değiştirmek için tıklayın" Background="{StaticResource AccentCyan}" />
                                                 <TextBlock Text="Bölge 2 (Orta Sol)" Foreground="{StaticResource TextMuted}" FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" />
                                             </StackPanel>
                                             <StackPanel>
-                                                <Border x:Name="PreviewZone3" Tag="2" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="{StaticResource AccentCyan}" Height="40" BorderBrush="{StaticResource RuleStrong}" BorderThickness="1" />
+                                                <Border x:Name="PreviewZone3" Tag="2" Style="{StaticResource ZonePreview}" MouseLeftButtonUp="PreviewZone_Click" ToolTip="Bölge rengini değiştirmek için tıklayın" Background="{StaticResource AccentCyan}" />
                                                 <TextBlock Text="Bölge 3 (Orta Sağ)" Foreground="{StaticResource TextMuted}" FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" />
                                             </StackPanel>
                                             <StackPanel>
-                                                <Border x:Name="PreviewZone4" Tag="3" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="{StaticResource AccentCyan}" Height="40" BorderBrush="{StaticResource RuleStrong}" BorderThickness="1" />
+                                                <Border x:Name="PreviewZone4" Tag="3" Style="{StaticResource ZonePreview}" MouseLeftButtonUp="PreviewZone_Click" ToolTip="Bölge rengini değiştirmek için tıklayın" Background="{StaticResource AccentCyan}" />
                                                 <TextBlock Text="Bölge 4 (Sayısal)" Foreground="{StaticResource TextMuted}" FontSize="10" HorizontalAlignment="Center" Margin="0,6,0,0" />
                                             </StackPanel>
                                         </UniformGrid>
@@ -1787,6 +1862,9 @@
                                             <Button Click="BtnPresetColor_Click" Tag="#FFFFFF" Background="#FFFFFF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Beyaz" />
                                             <Button Click="BtnPresetColor_Click" Tag="#000000" Background="#000000" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Kapalı" />
                                             <Button x:Name="BtnCustomColor" Content="Özel Renk…" Click="BtnCustomColor_Click" Height="36" Padding="12,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Cursor="Hand" FontSize="11" FontWeight="SemiBold" ToolTip="Herhangi bir renk seçin (tüm bölgeler)" />
+                                            <!-- Spreads the colour the user last chose over all four zones, which is the
+                                                 one thing the per-zone picker cannot do in a single click. -->
+                                            <Button x:Name="BtnApplyAllZones" Content="Tüm Bölgelere Uygula" Click="BtnApplyAllZones_Click" Height="36" Padding="12,0" Margin="8,0,0,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Cursor="Hand" FontSize="11" FontWeight="SemiBold" ToolTip="Seçili rengi dört bölgeye birden uygular" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>

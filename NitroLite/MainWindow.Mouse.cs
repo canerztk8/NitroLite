@@ -488,6 +488,11 @@ public partial class MainWindow
     private async void BtnApplyDefaultMouseProfile_Click(object sender, RoutedEventArgs e)
     {
         if (CmbDefaultAtkMouseProfile == null) return;
+        await RunWithButtonFeedbackAsync(BtnApplyDefaultMouseProfile, "Uygula", ApplyDefaultMouseProfileAsync);
+    }
+
+    private async Task<bool> ApplyDefaultMouseProfileAsync()
+    {
         int val = 1;
         if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int parsed))
         {
@@ -500,37 +505,34 @@ public partial class MainWindow
 
         if (val >= 1 && val <= 4)
         {
-            if (BtnApplyDefaultMouseProfile != null) BtnApplyDefaultMouseProfile.IsEnabled = false;
-            try
+            var result = await ApplyDesktopMouseProfileAsync(val);
+            if (result == AtkMouseResult.Confirmed)
             {
-                var result = await ApplyDesktopMouseProfileAsync(val);
-                if (result == AtkMouseResult.Confirmed)
-                {
-                    ShowToast(Loc.T($"{saveStatus}. Fareye uygulandı."), saved);
-                }
-                else if (result is AtkMouseResult.Rejected)
-                {
-                    ShowToast($"{saveStatus}. {DescribeMouseFailure(result.Value)}.", false);
-                }
-                else if (result.HasValue)
-                {
-                    ShowToast(Loc.T($"{saveStatus}. {DescribeMouseFailure(result.Value)}. Tekrar denenecek."), false);
-                }
-                else if (_pendingDesktopMouseRequest?.Profile == val && _isGameSessionActive)
-                {
-                    ShowToast(Loc.T($"{saveStatus}. Oyun bitince uygulanacak."), saved);
-                }
+                ShowToast(Loc.T($"{saveStatus}. Fareye uygulandı."), saved);
+                return saved;
             }
-            finally
+            if (result is AtkMouseResult.Rejected)
             {
-                if (BtnApplyDefaultMouseProfile != null) BtnApplyDefaultMouseProfile.IsEnabled = true;
+                ShowToast($"{saveStatus}. {DescribeMouseFailure(result.Value)}.", false);
+                return false;
             }
+            if (result.HasValue)
+            {
+                ShowToast(Loc.T($"{saveStatus}. {DescribeMouseFailure(result.Value)}. Tekrar denenecek."), false);
+                return false;
+            }
+            if (_pendingDesktopMouseRequest?.Profile == val && _isGameSessionActive)
+            {
+                // Queued, not applied: the session owns the mouse until it ends.
+                ShowToast(Loc.T($"{saveStatus}. Oyun bitince uygulanacak."), saved);
+                return false;
+            }
+            return false;
         }
-        else
-        {
-            _pendingDesktopMouseRequest = null;
-            UpdateDefaultMouseProfileBadge(val);
-            if (saved) ShowToast(Loc.T("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi."));
-        }
+
+        _pendingDesktopMouseRequest = null;
+        UpdateDefaultMouseProfileBadge(val);
+        if (saved) ShowToast(Loc.T("Varsayılan fare profili otomatik koruma (pasif) olarak kaydedildi."));
+        return saved;
     }
 }

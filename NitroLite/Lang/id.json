@@ -946,5 +946,19 @@
  "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "Mode kipas tidak dapat diubah selama mode sekolah aktif; mode kembali saat mode sekolah dimatikan.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Catatan pembatalan tidak dapat ditulis (disk penuh atau folder hanya-baca); mode sekolah tidak diterapkan.",
  "Sürüm Notları": "Catatan Rilis",
- "Bu sürümün GitHub sayfasını tarayıcıda açar": "Membuka halaman GitHub rilis ini di browser"
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "Membuka halaman GitHub rilis ini di browser",
+ "✓ Tamamlandı": "✓ Selesai",
+ "! Başarısız": "! Gagal",
+ "GÖSTER": "TAMPILKAN",
+ "GİZLE": "SEMBUNYIKAN",
+ "Grafiği göster": "Tampilkan grafik",
+ "Grafiği gizle": "Sembunyikan grafik",
+ "Donanım izleme sayfasını açar": "Membuka halaman pemantauan perangkat keras",
+ "Fan kontrolü için çalışma modlarına gider": "Menuju mode kerja untuk kontrol kipas",
+ "CPU Boost ayarı için çalışma modlarına gider": "Menuju mode kerja untuk pengaturan CPU Boost",
+ "Fare profili ayarına gider": "Menuju pengaturan profil mouse",
+ "Çalışma modunu değiştir": "Ubah mode kerja",
+ "Bölge rengini değiştirmek için tıklayın": "Klik untuk mengubah warna zona ini",
+ "Tüm Bölgelere Uygula": "Terapkan ke Semua Zona",
+ "Seçili rengi dört bölgeye birden uygular": "Menerapkan warna terpilih ke keempat zona sekaligus"
 }

@@ -946,5 +946,19 @@
  "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "स्कूल मोड चालू रहने पर फ़ैन मोड बदला नहीं जा सकता; स्कूल मोड बंद करने पर यह वापस आ जाता है।",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "पूर्ववत करने का रिकॉर्ड लिखा नहीं जा सका (डिस्क भरी या फ़ोल्डर केवल-पढ़ने योग्य); स्कूल मोड लागू नहीं हुआ।",
  "Sürüm Notları": "रिलीज़ नोट्स",
- "Bu sürümün GitHub sayfasını tarayıcıda açar": "इस रिलीज़ का GitHub पेज ब्राउज़र में खोलता है"
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "इस रिलीज़ का GitHub पेज ब्राउज़र में खोलता है",
+ "✓ Tamamlandı": "✓ पूर्ण",
+ "! Başarısız": "! विफल",
+ "GÖSTER": "दिखाएँ",
+ "GİZLE": "छिपाएँ",
+ "Grafiği göster": "चार्ट दिखाएँ",
+ "Grafiği gizle": "चार्ट छिपाएँ",
+ "Donanım izleme sayfasını açar": "हार्डवेयर मॉनिटरिंग पेज खोलता है",
+ "Fan kontrolü için çalışma modlarına gider": "फ़ैन नियंत्रण के लिए कार्य मोड पर जाता है",
+ "CPU Boost ayarı için çalışma modlarına gider": "CPU बूस्ट सेटिंग के लिए कार्य मोड पर जाता है",
+ "Fare profili ayarına gider": "माउस प्रोफ़ाइल सेटिंग पर जाता है",
+ "Çalışma modunu değiştir": "कार्य मोड बदलें",
+ "Bölge rengini değiştirmek için tıklayın": "इस ज़ोन का रंग बदलने के लिए क्लिक करें",
+ "Tüm Bölgelere Uygula": "सभी ज़ोन पर लागू करें",
+ "Seçili rengi dört bölgeye birden uygular": "चयनित रंग को चारों ज़ोन पर एक साथ लागू करता है"
 }

@@ -61,6 +61,9 @@ public partial class MainWindow
 
         _appSettings.Language = code;
         SaveSettings();
+        // A button still holding "✓ Tamamlandı" would come back in the old language after the restart; putting every
+        // label back first means the new process starts from the catalogue, not from a stale capture.
+        RestoreAllButtonFeedback();
         RestartForSettingChange(Loc.T("Dil değişikliği için NitroLite yeniden başlatılıyor…"));
     }
 
@@ -387,6 +390,11 @@ public partial class MainWindow
     /// </remarks>
     private async void BtnCreateBackup_Click(object sender, RoutedEventArgs e)
     {
+        await RunWithButtonFeedbackAsync(BtnCreateBackup, "Yedekle", CreateBackupAsync);
+    }
+
+    private async Task<bool> CreateBackupAsync()
+    {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Title = Loc.T("NitroLite yedeğini kaydet"),
@@ -396,7 +404,7 @@ public partial class MainWindow
             AddExtension = true,
             OverwritePrompt = true
         };
-        if (dialog.ShowDialog(this) != true) return;
+        if (dialog.ShowDialog(this) != true) return false;
 
         // Taken on the UI thread: the window stays usable while the worker writes, and the lighting block is
         // replaced by reference on every change, so serialising the live object there could read a half-swapped one.
@@ -414,15 +422,17 @@ public partial class MainWindow
             if (!result.Success)
             {
                 ShowToast(result.Error ?? Loc.T("Yedek yazılamadı."), false);
-                return;
+                return false;
             }
 
             ShowToast(Loc.T($"Yedek kaydedildi: {Path.GetFileName(dialog.FileName)}"));
+            return true;
         }
         catch (Exception ex)
         {
             AppLog.Warn("Yedek oluşturulamadı", ex.ToString());
             ShowToast(Loc.T($"Yedek yazılamadı: {ex.Message}"), false);
+            return false;
         }
         finally
         {
@@ -446,6 +456,11 @@ public partial class MainWindow
             return;
         }
 
+        await RunWithButtonFeedbackAsync(BtnRestoreBackup, "Geri yükle", RestoreBackupAsync);
+    }
+
+    private async Task<bool> RestoreBackupAsync()
+    {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = Loc.T("NitroLite yedeğini seç"),
@@ -453,12 +468,12 @@ public partial class MainWindow
             Filter = Loc.T("NitroLite yedeği (*.json)|*.json|Tüm dosyalar (*.*)|*.*"),
             CheckFileExists = true
         };
-        if (dialog.ShowDialog(this) != true) return;
+        if (dialog.ShowDialog(this) != true) return false;
 
         var confirm = System.Windows.MessageBox.Show(this,
             Loc.T("Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?"),
             Loc.T("Yedeği geri yükle"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return false;
 
         SetBackupButtonsEnabled(false);
         BackupResult result;
@@ -471,7 +486,7 @@ public partial class MainWindow
         {
             AppLog.Warn("Yedek geri yüklenemedi", ex.ToString());
             ShowToast(Loc.T($"Yedek geri yüklenemedi: {ex.Message}"), false);
-            return;
+            return false;
         }
         finally
         {
@@ -481,7 +496,7 @@ public partial class MainWindow
         if (!result.Success)
         {
             ShowToast(result.Error ?? Loc.T("Yedek geri yüklenemedi."), false);
-            return;
+            return false;
         }
 
         // An older build reads the legacy copy; leaving it stale would resurrect the old settings on a downgrade.
@@ -501,6 +516,7 @@ public partial class MainWindow
             message += " " + Loc.T($"Yedekte olmayan bölümler atlandı: {string.Join(", ", result.Skipped.Select(label => Loc.T(label)))}");
         }
         RestartForSettingChange(message, discardInMemorySettings: true);
+        return true;
     }
 
     /// <summary>

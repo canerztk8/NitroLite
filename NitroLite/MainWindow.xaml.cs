@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -113,6 +114,7 @@ public partial class MainWindow : Window
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
     internal void SetCurrentFanModeForTesting(FanMode m) => _currentFanMode = m;
     internal void SetLightingForTesting(LightingConfig cfg) => _lighting = cfg;
+    internal LightingConfig LightingForTesting => _lighting;
     internal void ReportServiceAvailabilityForTesting(bool available) => UpdateServiceTelemetryState(available);
     internal bool ServiceBannerShownForTesting => ServiceBanner?.Visibility == Visibility.Visible;
     internal int TelemetryFailureCountForTesting => _consecutiveTelemetryFailures;
@@ -752,6 +754,8 @@ public partial class MainWindow : Window
         {
             // Mirrored while the flag is still up: the checkbox handler must not treat the initial value as a click.
             SyncFanStallProtectionUi();
+            // A layout choice, so it is restored without writing the settings file back.
+            SetModeTraceCollapsed(_appSettings.ModeTraceCollapsed, persist: false);
             _isInitializingUi = false;
             // The card reads the settings, so it is filled once they are loaded, not in the constructor.
             SetupSettingsCard();
@@ -1524,6 +1528,47 @@ public partial class MainWindow : Window
             _notifyIcon?.Dispose();
         }
         catch { }
+    }
+
+    /// <summary>
+    /// A reading in the left rail is also the way to the page that owns it. The mouse row goes to the tools page
+    /// when ATK integration is off, because that is where the switch that turns it on lives.
+    /// </summary>
+    /// <summary>
+    /// Which page a left-rail SİSTEM row opens. The mouse row depends on whether the ATK integration is on: with it
+    /// off there is no mouse profile to configure, so the row goes to the tools page where the integration is
+    /// switched on rather than to a page whose mouse section is hidden.
+    /// </summary>
+    internal string? SideStatRowTargetFor(string? tag) => tag switch
+    {
+        "Monitoring" => "Monitoring",
+        "Modes" => "Modes",
+        "Mouse" => _appSettings.AtkMouseIntegrationEnabled ? "Modes" : "Debloat",
+        _ => null
+    };
+
+    private void SideStatRow_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border row || row.Tag is not string tag) return;
+        try
+        {
+            switch (SideStatRowTargetFor(tag))
+            {
+                case "Monitoring":
+                    if (NavMonitoring != null) NavMonitoring.IsChecked = true;
+                    break;
+                case "Modes":
+                    if (NavModes != null) NavModes.IsChecked = true;
+                    break;
+                case "Debloat":
+                    if (NavDebloat != null) NavDebloat.IsChecked = true;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Kenar çubuğu satırı açılamadı", ex.ToString());
+        }
     }
 
     private async void Nav_Checked(object sender, RoutedEventArgs e)

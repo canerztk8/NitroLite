@@ -1,10 +1,14 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using NitroLite.Core;
 using WpfButton = System.Windows.Controls.Button;
+using WpfContextMenu = System.Windows.Controls.ContextMenu;
+using WpfMenuItem = System.Windows.Controls.MenuItem;
 
 namespace NitroLite;
 
@@ -937,6 +941,62 @@ public partial class MainWindow
     /// really is in that mode, so the automation is told about it, but the saved preference is left alone: a safety
     /// action must not decide what the laptop boots into next time.
     /// </param>
+    /// <summary>
+    /// The compact mode menu behind the title bar's MOD figure. It is the tray menu's list, not a second one: the same
+    /// capability filter hides a mode the model does not offer, the same battery rule greys out the high-power pair,
+    /// and every item goes through <see cref="SetManualModeAsync"/> so school mode and the power clamp still apply.
+    /// </summary>
+    internal WpfContextMenu BuildModeMenu()
+    {
+        var (onAc, percent) = PowerStateProvider();
+        var menu = new WpfContextMenu();
+        foreach (var mode in new[]
+                 {
+                     OperatingMode.Quiet, OperatingMode.Default, OperatingMode.Extreme,
+                     OperatingMode.Turbo, OperatingMode.Eco
+                 })
+        {
+            // The active mode stays visible even when its group is hidden, so the menu always marks the mode the
+            // machine is actually in.
+            if (!ModePolicy.IsModeSupported(_supportedModes, mode) && mode != _currentMode) continue;
+
+            bool allowed = ModePolicy.IsModeAllowed(mode, onAc, percent);
+            var item = new WpfMenuItem
+            {
+                Header = ModePolicy.DisplayName(mode),
+                IsEnabled = allowed,
+                IsChecked = mode == _currentMode,
+                Tag = mode,
+                ToolTip = allowed ? null : ModePolicy.HighPowerBlockedMessage
+            };
+            var target = mode;
+            item.Click += async (_, _) =>
+            {
+                try { await SetManualModeAsync(target); }
+                catch (Exception ex) { ShowToast(Loc.T($"Çalışma modu uygulanamadı: {ex.Message}"), false); }
+            };
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
+    private void BadgeMode_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement anchor) return;
+        try
+        {
+            var menu = BuildModeMenu();
+            if (menu.Items.Count == 0) return;
+            menu.PlacementTarget = anchor;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Mod menüsü açılamadı", ex.ToString());
+        }
+    }
+
     internal async Task<bool> SetManualModeAsync(OperatingMode mode, bool persist = true)
     {
         // School mode owns the machine while it is on. The mode cards, the tray menu and the mode key all land here,

@@ -27,7 +27,16 @@ internal sealed class ScenarioAgentClient : AcerAgentClient
     /// <summary>When set, the next monitor read returns this instead of the default sample.</summary>
     public Func<MonitorData?>? MonitorDataFactory { get; set; }
 
+    /// <summary>
+    /// What the capability query answers. Null means the device never said which modes it has, which the policy
+    /// reads as "show everything" — the same answer a service that is not running gives.
+    /// </summary>
+    public IReadOnlyList<OperatingMode>? SupportedModes { get; set; }
+
     public override Task<bool> EnsureConnectedAsync() => Task.FromResult(true);
+
+    public override Task<IReadOnlyList<OperatingMode>?> GetOperatingModesAsync() =>
+        Task.FromResult(SupportedModes);
 
     public override async Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {

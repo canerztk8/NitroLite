@@ -946,5 +946,19 @@
  "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "Режим вентилятора нельзя изменить, пока включён школьный режим; он вернётся, когда вы его выключите.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Не удалось записать запись для отмены (диск заполнен или папка только для чтения); школьный режим не применён.",
  "Sürüm Notları": "Примечания к выпуску",
- "Bu sürümün GitHub sayfasını tarayıcıda açar": "Открывает страницу этого выпуска на GitHub в браузере"
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "Открывает страницу этого выпуска на GitHub в браузере",
+ "✓ Tamamlandı": "✓ Готово",
+ "! Başarısız": "! Ошибка",
+ "GÖSTER": "ПОКАЗАТЬ",
+ "GİZLE": "СКРЫТЬ",
+ "Grafiği göster": "Показать график",
+ "Grafiği gizle": "Скрыть график",
+ "Donanım izleme sayfasını açar": "Открывает страницу мониторинга оборудования",
+ "Fan kontrolü için çalışma modlarına gider": "Переходит к режимам работы для управления вентилятором",
+ "CPU Boost ayarı için çalışma modlarına gider": "Переходит к режимам работы для настройки CPU Boost",
+ "Fare profili ayarına gider": "Переходит к настройке профиля мыши",
+ "Çalışma modunu değiştir": "Изменить режим работы",
+ "Bölge rengini değiştirmek için tıklayın": "Нажмите, чтобы изменить цвет этой зоны",
+ "Tüm Bölgelere Uygula": "Применить ко всем зонам",
+ "Seçili rengi dört bölgeye birden uygular": "Применяет выбранный цвет ко всем четырём зонам сразу"
 }

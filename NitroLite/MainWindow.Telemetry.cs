@@ -397,6 +397,27 @@ public partial class MainWindow
     /// is the surface's signature move, so it reads the same history the chart uses instead of
     /// running a second sampler.
     /// </summary>
+    private void BtnToggleTrace_Click(object sender, RoutedEventArgs e)
+    {
+        SetModeTraceCollapsed(!_appSettings.ModeTraceCollapsed, persist: true);
+    }
+
+    /// <summary>
+    /// Folds the live temperature strip away. The header row stays, so the way back is always on screen; only the
+    /// drawing area goes, which is the height the game profiles below it need.
+    /// </summary>
+    internal void SetModeTraceCollapsed(bool collapsed, bool persist)
+    {
+        _appSettings.ModeTraceCollapsed = collapsed;
+        if (TraceChartBorder != null)
+            TraceChartBorder.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        if (TxtToggleTrace != null)
+            TxtToggleTrace.Text = collapsed ? Loc.T("GÖSTER") : Loc.T("GİZLE");
+        if (BtnToggleTrace != null)
+            BtnToggleTrace.ToolTip = collapsed ? Loc.T("Grafiği göster") : Loc.T("Grafiği gizle");
+        if (persist) SaveSettings();
+    }
+
     private void RenderModeTrace()
     {
         if (CanvasModeTrace == null || TraceLine == null) return;

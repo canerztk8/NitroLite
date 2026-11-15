@@ -250,6 +250,13 @@ public class AppSettings
     [JsonPropertyName("theme")]
     public AppTheme Theme { get; set; } = AppTheme.Light;
 
+    /// <summary>
+    /// The live temperature strip on the modes page, hidden by the user. Persisted because it is a layout choice, not
+    /// a per-session one: someone who collapsed it to reach the game profiles wants it collapsed next time too.
+    /// </summary>
+    [JsonPropertyName("mode_trace_collapsed")]
+    public bool ModeTraceCollapsed { get; set; } = false;
+
     /// <summary>Ask GitHub for a newer release shortly after start and every six hours.</summary>
     [JsonPropertyName("auto_update_check")]
     public bool AutoUpdateCheck { get; set; } = true;

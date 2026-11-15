@@ -946,5 +946,19 @@
  "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "O modo do ventilador não pode ser alterado enquanto o modo escolar está ativo; ele volta quando você desativa o modo escolar.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Não foi possível gravar o registro de desfazer (disco cheio ou pasta somente leitura); o modo escolar não foi aplicado.",
  "Sürüm Notları": "Notas da versão",
- "Bu sürümün GitHub sayfasını tarayıcıda açar": "Abre a página desta versão no GitHub no navegador"
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "Abre a página desta versão no GitHub no navegador",
+ "✓ Tamamlandı": "✓ Concluído",
+ "! Başarısız": "! Falhou",
+ "GÖSTER": "MOSTRAR",
+ "GİZLE": "OCULTAR",
+ "Grafiği göster": "Mostrar o gráfico",
+ "Grafiği gizle": "Ocultar o gráfico",
+ "Donanım izleme sayfasını açar": "Abre a página de monitorização de hardware",
+ "Fan kontrolü için çalışma modlarına gider": "Vai aos modos de funcionamento para o controlo do ventilador",
+ "CPU Boost ayarı için çalışma modlarına gider": "Vai aos modos de funcionamento para a definição de CPU Boost",
+ "Fare profili ayarına gider": "Vai à definição do perfil do rato",
+ "Çalışma modunu değiştir": "Alterar o modo de funcionamento",
+ "Bölge rengini değiştirmek için tıklayın": "Clique para alterar a cor desta zona",
+ "Tüm Bölgelere Uygula": "Aplicar a todas as zonas",
+ "Seçili rengi dört bölgeye birden uygular": "Aplica a cor selecionada às quatro zonas de uma vez"
 }

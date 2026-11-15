@@ -37,6 +37,11 @@ public partial class MainWindow
     private async void BtnCleanRamCache_Click(object sender, RoutedEventArgs e)
     {
         if (_ramCleanBusy) return;
+        await RunWithButtonFeedbackAsync(BtnCleanRamCache, "Bekleme Belleğini Boşalt", CleanStandbyListAsync);
+    }
+
+    private async Task<bool> CleanStandbyListAsync()
+    {
         _ramCleanBusy = true;
         if (BtnCleanRamCache != null) BtnCleanRamCache.Opacity = 0.45;
         try
@@ -45,10 +50,12 @@ public partial class MainWindow
             SetRamCleanStatus(Loc.T(" (Boşaltılıyor…)"), "TextSecondary");
             var res = await _memoryService.CleanMemoryAsync();
             ShowMemoryCleanResult(res);
+            return res.Cleaned;
         }
         catch (Exception ex)
         {
             ShowToast(Loc.T($"Bekleme belleği boşaltılamadı: {ex.Message}"), false);
+            return false;
         }
         finally
         {

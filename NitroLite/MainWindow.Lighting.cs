@@ -14,6 +14,12 @@ namespace NitroLite;
 
 public partial class MainWindow
 {
+    /// <summary>
+    /// The colour the user last chose, from a preset swatch, the picker or a single zone. "Apply to all zones" spreads
+    /// this one rather than whatever sits in the first slot, which after a per-zone edit is a different colour.
+    /// </summary>
+    private string? _lastPickedColor;
+
     private void SaveActiveRgbState()
     {
         try
@@ -204,6 +210,7 @@ public partial class MainWindow
 
     private void UpdateEffectComboBox(string effect)
     {
+        if (CmbRgbEffect == null) return;
         for (int i = 0; i < CmbRgbEffect.Items.Count; i++)
         {
             if (CmbRgbEffect.Items[i] is not ComboBoxItem item) continue;
@@ -436,7 +443,9 @@ public partial class MainWindow
         for (int i = 0; i < zones.Length; i++)
         {
             if (zones[i] == null) continue;
-            if (IsLightingOff(cfg)) zones[i].Background = TryFindResource("Ink") as SolidColorBrush ?? System.Windows.Media.Brushes.Black;
+            // Off is an unlit slot, not a solid block: an ink fill read as a dead black rectangle in the light theme
+            // and a white one in the dark, and neither said "this zone is a control you can click".
+            if (IsLightingOff(cfg)) zones[i].Background = TryFindResource("PaperDeep") as SolidColorBrush ?? System.Windows.Media.Brushes.Transparent;
             else if (!LightingPolicy.EffectUsesColor(cfg.Effect)) zones[i].Background = RainbowBrush(i);
             else if (LightingPolicy.EffectUsesZoneColors(cfg.Effect)) zones[i].Background = SolidOrFallback(i < cfg.LEDs.Count ? cfg.LEDs[i] : cfg.Color);
             else zones[i].Background = SolidOrFallback(cfg.Color);
@@ -532,11 +541,12 @@ public partial class MainWindow
     {
         SetLightingSlidersSilently(() =>
         {
-            SliderBrightness.Value = cfg.Brightness;
-            SliderSpeed.Value = cfg.Speed;
+            if (SliderBrightness != null) SliderBrightness.Value = cfg.Brightness;
+            if (SliderSpeed != null) SliderSpeed.Value = cfg.Speed;
         });
-        TxtBrightnessVal.Text = IsLightingOff(cfg) ? Loc.T("0 / 9 (Kapalı)") : $"{cfg.Brightness} / 9";
-        TxtSpeedVal.Text = $"{cfg.Speed} / 9";
+        if (TxtBrightnessVal != null)
+            TxtBrightnessVal.Text = IsLightingOff(cfg) ? Loc.T("0 / 9 (Kapalı)") : $"{cfg.Brightness} / 9";
+        if (TxtSpeedVal != null) TxtSpeedVal.Text = $"{cfg.Speed} / 9";
 
         UpdatePreviewZones(cfg);
         UpdateLightingControlsForEffect(cfg);
@@ -571,6 +581,7 @@ public partial class MainWindow
     private async Task ApplyColorToAllZonesAsync(string hex)
     {
         CancelActiveLightingReassertion();
+        _lastPickedColor = hex;
         if (IsLightingOff(_lighting))
         {
             _lighting = LightingPolicy.ResumeFromOff(_appSettings.LastActiveLighting);
@@ -624,6 +635,36 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Spreads the colour the user last chose over all four zones. The per-zone picker can only ever change one, so
+    /// after giving a single zone its own colour this is the one click that puts the keyboard back on one colour.
+    /// </summary>
+    private async void BtnApplyAllZones_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ApplyLastPickedColorToAllZonesAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowToast(Loc.T($"Aydınlatma rengi ayarlanamadı: {ex.Message}"), false);
+        }
+    }
+
+    /// <summary>
+    /// Spreads the colour the user last chose over all four zones. The per-zone picker can only ever change one, so
+    /// after giving a single zone its own colour this is the one click that puts the keyboard back on one colour.
+    /// </summary>
+    internal async Task ApplyLastPickedColorToAllZonesAsync()
+    {
+        // The last colour the user picked, not the one sitting in the first slot: after a zone was given its own
+        // colour, "apply all" must spread that colour rather than the one that happened to be in zone 1.
+        var hex = _lastPickedColor
+                  ?? (IsLightingOff(_lighting) ? _appSettings.LastActiveLighting?.Color : _lighting.Color)
+                  ?? LightingPolicy.DefaultColor;
+        await ApplyColorToAllZonesAsync(hex);
+    }
+
     /// <summary>Click a zone to give it its own colour. Zone colours only exist in STATIC, so it switches to STATIC.</summary>
     private async void PreviewZone_Click(object sender, MouseButtonEventArgs e)
     {
@@ -643,6 +684,7 @@ public partial class MainWindow
 
             var hex = PickColor(leds[index]);
             if (hex == null) return;
+            _lastPickedColor = hex;
 
             leds[index] = hex;
             baseCfg.Effect = "STATIC";

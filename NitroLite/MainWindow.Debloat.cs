@@ -163,10 +163,15 @@ public partial class MainWindow
     private async void BtnFixLighting_Click(object sender, RoutedEventArgs e)
     {
         if (_serviceOperationBusy) return;
+        await RunWithButtonFeedbackAsync(BtnFixLighting, "Servisi Onar", FixKeyboardLightingAsync);
+    }
+
+    private async Task<bool> FixKeyboardLightingAsync()
+    {
         var confirm = System.Windows.MessageBox.Show(this,
             Loc.T("AcerLightingService kayıt defteri yolu ve başlangıç türü sürücü deposuyla eşitlenecek, ardından klavye servisi yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
             Loc.T("Klavye RGB Servisini Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return false;
 
         SetRepairToolBusy(true, Loc.T("Klavye aydınlatma servisi onarılıyor..."));
         try
@@ -175,11 +180,13 @@ public partial class MainWindow
             SetRepairToolStatus(res.Success, res.Message);
             ShowToast(res.Message, res.Success);
             await RefreshServiceListAsync();
+            return res.Success;
         }
         catch (Exception ex)
         {
             SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
             ShowToast(Loc.T($"Onarım hatası: {ex.Message}"), false);
+            return false;
         }
         finally
         {
@@ -190,10 +197,15 @@ public partial class MainWindow
     private async void BtnFixAcerServices_Click(object sender, RoutedEventArgs e)
     {
         if (_serviceOperationBusy) return;
+        await RunWithButtonFeedbackAsync(BtnFixAcerServices, "Servisleri Onar", FixAcerServicesAsync);
+    }
+
+    private async Task<bool> FixAcerServicesAsync()
+    {
         var confirm = System.Windows.MessageBox.Show(this,
             Loc.T("AcerCentralService ve AcerLightingService en güncel sürücü paketine bağlanacak, çakışan eski servis süreçleri kapatılıp servisler yeniden başlatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
             Loc.T("Acer & NitroSense Servislerini Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return false;
 
         SetRepairToolBusy(true, Loc.T("Acer arka plan servisleri güncelleniyor ve onarılıyor..."));
         try
@@ -202,11 +214,13 @@ public partial class MainWindow
             SetRepairToolStatus(res.Success, res.Message);
             ShowToast(res.Message, res.Success);
             await RefreshServiceListAsync();
+            return res.Success;
         }
         catch (Exception ex)
         {
             SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
             ShowToast(Loc.T($"Onarım hatası: {ex.Message}"), false);
+            return false;
         }
         finally
         {
@@ -217,10 +231,15 @@ public partial class MainWindow
     private async void BtnRestoreMux_Click(object sender, RoutedEventArgs e)
     {
         if (_serviceOperationBusy) return;
+        await RunWithButtonFeedbackAsync(BtnRestoreMux, "Kaydı Onar", RestoreMuxSwitchAsync);
+    }
+
+    private async Task<bool> RestoreMuxSwitchAsync()
+    {
         var confirm = System.Windows.MessageBox.Show(this,
             Loc.T("Kayıt defterinde discrete_gpu_support (1) değeri doğrulanacak, eski geçici logon görevleri temizlenecek ve Quick Access servisi başlatılacak. NitroSense açıksa kapatılacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
             Loc.T("MUX Switch Kaydını Onar"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return false;
 
         SetRepairToolBusy(true, Loc.T("MUX switch kaydı ve servisleri düzenleniyor..."));
         try
@@ -228,11 +247,13 @@ public partial class MainWindow
             var res = await SystemToolsService.RestoreMuxSwitchAsync();
             SetRepairToolStatus(res.Success, res.Message);
             ShowToast(res.Message, res.Success);
+            return res.Success;
         }
         catch (Exception ex)
         {
             SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
             ShowToast(Loc.T($"MUX onarım hatası: {ex.Message}"), false);
+            return false;
         }
         finally
         {
@@ -243,10 +264,15 @@ public partial class MainWindow
     private async void BtnOptimizePc_Click(object sender, RoutedEventArgs e)
     {
         if (_serviceOperationBusy) return;
+        await RunWithButtonFeedbackAsync(BtnOptimizePc, "Optimize Et", OptimizePcAsync);
+    }
+
+    private async Task<bool> OptimizePcAsync()
+    {
         var confirm = System.Windows.MessageBox.Show(this,
             Loc.T("Gereksiz müşteri deneyimi telemetri görevleri kapatılacak, HAGS (GPU donanım hızlandırmalı zamanlama) etkinleştirilecek, NVMe TRIM çalıştırılacak ve boşta kalan arka plan servisleri manuel moda alınacak. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
             Loc.T("Windows & Sistem Optimizasyonu"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return false;
 
         SetRepairToolBusy(true, Loc.T("Sistem ve arka plan optimizasyonları uygulanıyor..."));
         try
@@ -254,11 +280,13 @@ public partial class MainWindow
             var res = await SystemToolsService.OptimizePcAsync();
             SetRepairToolStatus(res.Success, res.Message);
             ShowToast(res.Message, res.Success);
+            return res.Success;
         }
         catch (Exception ex)
         {
             SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
             ShowToast(Loc.T($"Optimizasyon hatası: {ex.Message}"), false);
+            return false;
         }
         finally
         {
@@ -269,10 +297,15 @@ public partial class MainWindow
     private async void BtnRestoreOptimize_Click(object sender, RoutedEventArgs e)
     {
         if (_serviceOperationBusy) return;
+        await RunWithButtonFeedbackAsync(BtnRestoreOptimize, "Geri Al", RestoreOptimizePcAsync);
+    }
+
+    private async Task<bool> RestoreOptimizePcAsync()
+    {
         var confirm = System.Windows.MessageBox.Show(this,
             Loc.T("Optimizasyonun değiştirdiği servis başlangıç türleri, HAGS ayarı ve telemetri görevleri yedekten geri yüklenecek. Yönetici izni istenecek.\n\nDevam edilsin mi?"),
             Loc.T("Optimizasyonu Geri Al"), MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (confirm != MessageBoxResult.Yes) return;
+        if (confirm != MessageBoxResult.Yes) return false;
 
         SetRepairToolBusy(true, Loc.T("Optimizasyon öncesi ayarlar geri yükleniyor..."));
         try
@@ -280,11 +313,13 @@ public partial class MainWindow
             var res = await SystemToolsService.RestoreOptimizePcAsync();
             SetRepairToolStatus(res.Success, res.Message);
             ShowToast(res.Message, res.Success);
+            return res.Success;
         }
         catch (Exception ex)
         {
             SetRepairToolStatus(false, Loc.T($"Hata: {ex.Message}"));
             ShowToast(Loc.T($"Geri alma hatası: {ex.Message}"), false);
+            return false;
         }
         finally
         {
