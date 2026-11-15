@@ -349,6 +349,86 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Shows the capability summary on startup. A cached answer for this exact model and BIOS is used as-is; without
+    /// one the probe runs once in the background and the result is cached, so the second launch is instant. A probe
+    /// that fails leaves the line empty rather than claiming the machine has nothing.
+    /// </summary>
+    private async Task InitializeCapabilitySnapshotAsync()
+    {
+        try
+        {
+            var identity = HardwareDetector.Current;
+            var catalog = ProfileCatalog.Load();
+
+            var cached = CapabilityProbe.TryFromCache(_appSettings, identity, catalog);
+            if (cached != null)
+            {
+                UpdateCapabilitySummary(cached);
+                return;
+            }
+
+            var snapshot = await Task.Run(() => CapabilityProbe.Probe(identity, catalog));
+            CapabilityProbe.Store(_appSettings, snapshot);
+            SaveSettings();
+            UpdateCapabilitySummary(snapshot);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Donanım yetenekleri önbelleğe alınamadı", ex.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Drops the cached capability answer and asks the machine again. The probe is synchronous and touches WMI, so
+    /// it runs off the UI thread; the summary line is filled in when it comes back.
+    /// </summary>
+    private async void BtnRescanHardware_Click(object sender, RoutedEventArgs e)
+    {
+        if (BtnRescanHardware == null) return;
+        BtnRescanHardware.IsEnabled = false;
+        try
+        {
+            CapabilityProbe.Invalidate(_appSettings);
+            SaveSettings();
+
+            var identity = HardwareDetector.Current;
+            var catalog = ProfileCatalog.Load();
+            var snapshot = await Task.Run(() => CapabilityProbe.Probe(identity, catalog));
+            CapabilityProbe.Store(_appSettings, snapshot);
+            SaveSettings();
+
+            UpdateCapabilitySummary(snapshot);
+            ShowToast(Loc.T($"Donanım yetenekleri yeniden tarandı: {snapshot.ProfileId}"), true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Donanım yetenekleri taranamadı", ex.ToString());
+            ShowToast(Loc.T($"Donanım yetenekleri taranamadı: {ex.Message}"), false);
+        }
+        finally
+        {
+            BtnRescanHardware.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// One line under the rescan button: the matched profile and how many capabilities were confirmed. Deliberately
+    /// short — the full answer belongs in the hardware report, not in a settings row.
+    /// </summary>
+    private void UpdateCapabilitySummary(CapabilitySnapshot? snapshot)
+    {
+        if (TxtCapabilitySummary == null) return;
+        if (snapshot == null)
+        {
+            TxtCapabilitySummary.Text = string.Empty;
+            return;
+        }
+
+        int supported = snapshot.Capabilities.Count(c => c.IsSupported);
+        TxtCapabilitySummary.Text = Loc.T($"{snapshot.ProfileId} · {supported}/{snapshot.Capabilities.Count} yetenek doğrulandı");
+    }
+
+    /// <summary>
     /// Writes the hardware report next to the settings file and opens the folder, because the file is useless until
     /// the user can attach it to an issue. The toast names the file so it can be found in a crowded folder.
     /// </summary>

@@ -51,7 +51,8 @@ public static class HardwareReport
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
-        var wmi = AcerWmiProbe.ReadWithTimeout(TimeSpan.FromSeconds(5));
+        var probe = CapabilityProbe.Probe(identity, ProfileCatalog.Load());
+        var wmi = probe.Wmi;
         var sb = new StringBuilder();
 
         sb.AppendLine("NitroLite hardware report");
@@ -133,10 +134,47 @@ public static class HardwareReport
         sb.AppendLine($"  AcerGamingFunction             {wmi.Summary}");
         if (wmi.Methods.Count > 0)
             sb.AppendLine($"  Methods                        {string.Join(", ", wmi.Methods)}");
+        if (wmi.Signatures.Count > 0)
+        {
+            sb.AppendLine("  Signatures");
+            foreach (var signature in wmi.Signatures) sb.AppendLine($"    {signature}");
+        }
+
+        sb.AppendLine();
+        AppendProbeSection(sb, probe);
         sb.AppendLine();
 
         sb.AppendLine("This file contains no serial number, user name, file path or log content.");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The capability probe section: which profile matched, what each capability answered, and which profile records
+    /// were rejected. Written from the same snapshot the window uses, so a report and a bug report cannot disagree.
+    /// </summary>
+    private static void AppendProbeSection(StringBuilder sb, CapabilitySnapshot probe)
+    {
+        sb.AppendLine("CAPABILITY PROBE");
+        AppendField(sb, "Profile", $"{probe.ProfileId} ({probe.ProfileSource})");
+        AppendField(sb, "Cache key", probe.CacheKey);
+        AppendField(sb, "Sensors", string.Join(" ", new[]
+        {
+            $"cpu={probe.Sensors.CpuTempByte}",
+            $"gpu={probe.Sensors.GpuTempByte}",
+            $"sys1={probe.Sensors.Sys1TempByte}",
+            $"rpm={probe.Sensors.CpuFanRpmWord}/{probe.Sensors.GpuFanRpmWord}",
+            $"scale={probe.Sensors.RpmScale}",
+            probe.Sensors.Verified ? "(verified)" : "(unverified)"
+        }));
+        AppendField(sb, "Fan ceiling", $"CPU {probe.MaxCpuFanRpm} / GPU {probe.MaxGpuFanRpm} RPM");
+        foreach (var capability in probe.Capabilities)
+            sb.AppendLine($"  {capability.Capability,-30} {capability.Verdict}"
+                          + (string.IsNullOrWhiteSpace(capability.Detail) ? "" : $" ({capability.Detail})"));
+        if (probe.Rejections.Count > 0)
+        {
+            sb.AppendLine("  Rejected profiles");
+            foreach (var rejection in probe.Rejections) sb.AppendLine($"    {rejection}");
+        }
     }
 
     /// <summary>Builds the same data as JSON, for anyone who wants to script against it.</summary>
@@ -144,7 +182,8 @@ public static class HardwareReport
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
-        var wmi = AcerWmiProbe.ReadWithTimeout(TimeSpan.FromSeconds(5));
+        var probe = CapabilityProbe.Probe(identity, ProfileCatalog.Load());
+        var wmi = probe.Wmi;
 
         var services = new JsonArray();
         foreach (var name in ReportedServices)
@@ -193,10 +232,52 @@ public static class HardwareReport
             ["keyboard"] = BuildKeyboardNode(capabilities?.Keyboard),
             ["capabilities"] = BuildCapabilitiesNode(capabilities),
             ["acerServices"] = services,
-            ["acerWmi"] = BuildWmiNode(wmi)
+            ["acerWmi"] = BuildWmiNode(wmi),
+            ["capabilityProbe"] = BuildProbeNode(probe)
         };
 
         return root.ToJsonString(JsonOptions);
+    }
+
+    /// <summary>
+    /// The capability probe section. Every capability carries its outcome by name, so "access denied" and "not
+    /// supported" stay distinguishable in a file someone else reads.
+    /// </summary>
+    private static JsonObject BuildProbeNode(CapabilitySnapshot probe)
+    {
+        var capabilities = new JsonObject();
+        foreach (var capability in probe.Capabilities)
+        {
+            capabilities[capability.Capability] = new JsonObject
+            {
+                ["outcome"] = capability.Outcome.ToString(),
+                ["detail"] = capability.Detail
+            };
+        }
+
+        var rejections = new JsonArray();
+        foreach (var rejection in probe.Rejections) rejections.Add(rejection);
+
+        return new JsonObject
+        {
+            ["profile"] = probe.ProfileId,
+            ["profileSource"] = probe.ProfileSource,
+            ["cacheKey"] = probe.CacheKey,
+            ["sensors"] = new JsonObject
+            {
+                ["cpuTempByte"] = probe.Sensors.CpuTempByte,
+                ["gpuTempByte"] = probe.Sensors.GpuTempByte,
+                ["sys1TempByte"] = probe.Sensors.Sys1TempByte,
+                ["cpuFanRpmWord"] = probe.Sensors.CpuFanRpmWord,
+                ["gpuFanRpmWord"] = probe.Sensors.GpuFanRpmWord,
+                ["rpmScale"] = probe.Sensors.RpmScale,
+                ["verified"] = probe.Sensors.Verified
+            },
+            ["maxCpuFanRpm"] = probe.MaxCpuFanRpm,
+            ["maxGpuFanRpm"] = probe.MaxGpuFanRpm,
+            ["capabilities"] = capabilities,
+            ["rejectedProfiles"] = rejections
+        };
     }
 
     /// <summary>
@@ -261,6 +342,7 @@ public static class HardwareReport
         {
             ["classPresent"] = wmi.ClassPresent,
             ["methods"] = new JsonArray(wmi.Methods.Select(m => (JsonNode?)JsonValue.Create(m)).ToArray()),
+            ["signatures"] = new JsonArray(wmi.Signatures.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray()),
             ["dynamicClass"] = wmi.DynamicClass,
             ["instanceAccessDenied"] = wmi.InstanceAccessDenied,
             ["callMethod"] = wmi.CallMethod,

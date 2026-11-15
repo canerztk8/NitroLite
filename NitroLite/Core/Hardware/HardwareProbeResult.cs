@@ -70,23 +70,32 @@ public sealed record HardwareProbeResult
     public static HardwareProbeResult Failed(string capability, string detail = "") =>
         new() { Capability = capability, Outcome = HardwareProbeOutcome.Failed, Detail = detail };
 
+    /// <summary>Not asked, or asked and the answer could not be interpreted. Never treated as a "no".</summary>
+    public static HardwareProbeResult Unknown(string capability, string detail = "") =>
+        new() { Capability = capability, Outcome = HardwareProbeOutcome.Unknown, Detail = detail };
+
+    /// <summary>
+    /// The verdict as prose, lower case, for the report and the settings line. Kept in one place so the two never
+    /// disagree, and so <see cref="HardwareProbeOutcome.AccessDenied"/> reads as "access denied" rather than the
+    /// enum name run through a case change.
+    /// </summary>
+    public string Verdict => Outcome switch
+    {
+        HardwareProbeOutcome.Supported => "supported",
+        HardwareProbeOutcome.Unsupported => "not supported",
+        HardwareProbeOutcome.AccessDenied => "access denied",
+        HardwareProbeOutcome.TimedOut => "timed out",
+        HardwareProbeOutcome.Failed => "failed",
+        _ => "unknown"
+    };
+
     /// <summary>One line for the hardware report: the capability, the verdict, and the evidence behind it.</summary>
     public string Summary
     {
         get
         {
-            var verdict = Outcome switch
-            {
-                HardwareProbeOutcome.Supported => "supported",
-                HardwareProbeOutcome.Unsupported => "not supported",
-                HardwareProbeOutcome.AccessDenied => "access denied",
-                HardwareProbeOutcome.TimedOut => "timed out",
-                HardwareProbeOutcome.Failed => "failed",
-                _ => "unknown"
-            };
-
             var name = string.IsNullOrWhiteSpace(Capability) ? "capability" : Capability;
-            return string.IsNullOrWhiteSpace(Detail) ? $"{name}: {verdict}" : $"{name}: {verdict} ({Detail})";
+            return string.IsNullOrWhiteSpace(Detail) ? $"{name}: {Verdict}" : $"{name}: {Verdict} ({Detail})";
         }
     }
 }

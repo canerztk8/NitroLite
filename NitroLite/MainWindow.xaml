@@ -2825,6 +2825,26 @@
 
                                         <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />
 
+                                        <!-- Capability probe: the cached answer is dropped and the machine is asked
+                                             again. Useful after a BIOS update or when a control looks wrong. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Donanım yetenekleri" Style="{StaticResource RowTitle}" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Modeli, sensör düzenini ve hangi özelliklerin desteklendiğini yeniden tarar. BIOS güncellemesinden sonra önbellek kendiliğinden geçersiz olur." />
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtCapabilitySummary" Text="" Style="{StaticResource SectionHint}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnRescanHardware" Grid.Column="1" Content="Yeniden tara" Click="BtnRescanHardware_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                        </Grid>
+
+                                        <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />
+
                                         <!-- Hardware backend: the rollback switch for the hardware layer. Off pins
                                              every read and write to the Acer service socket. -->
                                         <Grid>

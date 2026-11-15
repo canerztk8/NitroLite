@@ -995,5 +995,11 @@
  "Doğrudan WMI arka ucu": "Backend WMI directo",
  "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Intenta gestionar el hardware por WMI cuando el servicio de Acer no está en ejecución. Desactívalo para usar solo el servicio de Acer.",
  "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "Backend WMI directo activado; se aplicará en el próximo inicio",
- "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Solo se usará el servicio de Acer; se aplicará en el próximo inicio"
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Solo se usará el servicio de Acer; se aplicará en el próximo inicio",
+ "Donanım yetenekleri": "Capacidades del hardware",
+ "Modeli, sensör düzenini ve hangi özelliklerin desteklendiğini yeniden tarar. BIOS güncellemesinden sonra önbellek kendiliğinden geçersiz olur.": "Vuelve a analizar el modelo, la disposición de sensores y las funciones compatibles. Tras una actualización de BIOS la caché se invalida sola.",
+ "Yeniden tara": "Volver a analizar",
+ "Donanım yetenekleri yeniden tarandı: {0}": "Capacidades del hardware reanalizadas: {0}",
+ "Donanım yetenekleri taranamadı: {0}": "No se pudieron analizar las capacidades del hardware: {0}",
+ "{0} · {1}/{2} yetenek doğrulandı": "{0} · {1}/{2} capacidades confirmadas"
 }

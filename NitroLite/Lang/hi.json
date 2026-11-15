@@ -995,5 +995,11 @@
  "Doğrudan WMI arka ucu": "सीधा WMI बैकएंड",
  "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Acer सेवा न चलने पर हार्डवेयर को WMI से प्रबंधित करने का प्रयास करता है। केवल Acer सेवा उपयोग करने के लिए इसे बंद करें।",
  "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "सीधा WMI बैकएंड सक्षम; अगली बार शुरू होने पर लागू होगा",
- "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "केवल Acer सेवा का उपयोग होगा; अगली बार शुरू होने पर लागू होगा"
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "केवल Acer सेवा का उपयोग होगा; अगली बार शुरू होने पर लागू होगा",
+ "Donanım yetenekleri": "हार्डवेयर क्षमताएँ",
+ "Modeli, sensör düzenini ve hangi özelliklerin desteklendiğini yeniden tarar. BIOS güncellemesinden sonra önbellek kendiliğinden geçersiz olur.": "मॉडल, सेंसर लेआउट और समर्थित सुविधाओं को फिर से स्कैन करता है। BIOS अपडेट के बाद कैश अपने आप अमान्य हो जाता है।",
+ "Yeniden tara": "फिर से स्कैन करें",
+ "Donanım yetenekleri yeniden tarandı: {0}": "हार्डवेयर क्षमताएँ फिर से स्कैन की गईं: {0}",
+ "Donanım yetenekleri taranamadı: {0}": "हार्डवेयर क्षमताएँ स्कैन नहीं हो सकीं: {0}",
+ "{0} · {1}/{2} yetenek doğrulandı": "{0} · {1}/{2} क्षमताएँ पुष्ट"
 }

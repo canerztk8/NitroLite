@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 using WpfButton = System.Windows.Controls.Button;
 using WpfContextMenu = System.Windows.Controls.ContextMenu;
 using WpfMenuItem = System.Windows.Controls.MenuItem;
@@ -405,10 +406,13 @@ public partial class MainWindow
         return applied;
     }
 
-    public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode)    {
-        int mask = 1 << (int)mode;
-        return (capabilityBitmask & mask) != 0;
-    }
+    /// <summary>
+    /// True when the mode is set in a capability bitmask. The bit position is the enum value. The implementation
+    /// lives in <see cref="AcerRegistrySnapshot.IsGpuModeSupported"/> so the registry probe and the picker cannot
+    /// drift apart; this stays as the call site the window already uses.
+    /// </summary>
+    public static bool IsGpuModeSupported(int capabilityBitmask, GpuOperatingMode mode) =>
+        AcerRegistrySnapshot.IsGpuModeSupported(capabilityBitmask, mode);
 
     /// <summary>
     /// Mirrors NitroSense (personal-settings updateGPU_Mode): the GPU Operating card is shown whenever AASSvc reports

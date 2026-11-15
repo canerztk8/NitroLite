@@ -822,6 +822,9 @@ public partial class MainWindow : Window
         {
             ChkUseDirectWmiBackend.IsChecked = _appSettings.UseDirectWmiBackend;
         }
+        // Fire-and-forget: the capability probe touches WMI and must not hold the window open. It fills the settings
+        // row when it comes back, and caches the answer so the next launch is instant.
+        _ = InitializeCapabilitySnapshotAsync();
         if (ChkAtkMouseIntegration != null)
         {
             ChkAtkMouseIntegration.IsChecked = _appSettings.AtkMouseIntegrationEnabled;

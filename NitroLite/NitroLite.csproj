@@ -27,6 +27,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The model table: sensor layouts, fan plausibility ceilings and known-broken WMI methods per Acer model.
+         Embedded and read-only; a user override lives in the data folder as profiles.user.json and is validated
+         as strictly as this one. ProfileCatalog finds it by the ".profiles.json" suffix. -->
+    <EmbeddedResource Include="Core\Hardware\Profiles\profiles.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The theme cards' previews: one screenshot of the app per palette, captured from the English UI by
          scripts/theme-previews.ps1. Embedded for the same reason as the catalogues, and because a card that
          reads a loose file would show an empty frame in the single-file package. -->

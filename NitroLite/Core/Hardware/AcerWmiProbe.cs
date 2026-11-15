@@ -23,6 +23,13 @@ public sealed record AcerWmiProbeResult
     /// <summary>Method names the class advertises. Empty when the class is absent or enumeration failed.</summary>
     public IReadOnlyList<string> Methods { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// One line per method with its parameter types, e.g. <c>GetGamingMiscSetting(gmInput:UInt32) -> gmOutput:UInt64</c>.
+    /// The capability probe needs the shapes, not just the names: a getter that takes a UInt32 and returns a UInt64
+    /// is the WMID_Gaming convention, and a method that does not follow it is a different interface.
+    /// </summary>
+    public IReadOnlyList<string> Signatures { get; init; } = Array.Empty<string>();
+
     /// <summary>The method the probe actually invoked, or "" when it invoked none.</summary>
     public string CallMethod { get; init; } = "";
 
@@ -102,11 +109,14 @@ public static class AcerWmiProbe
         try
         {
             var methods = new List<string>();
+            var signatures = new List<string>();
             try
             {
                 foreach (MethodData m in cls.Methods)
                 {
-                    if (!string.IsNullOrWhiteSpace(m.Name)) methods.Add(m.Name);
+                    if (string.IsNullOrWhiteSpace(m.Name)) continue;
+                    methods.Add(m.Name);
+                    signatures.Add(DescribeMethod(m));
                 }
             }
             catch { }
@@ -145,6 +155,7 @@ public static class AcerWmiProbe
                     ClassPresent = true,
                     ProviderVersion = providerVersion,
                     Methods = methods,
+                    Signatures = signatures,
                     DynamicClass = dynamicClass
                 };
             }
@@ -163,6 +174,7 @@ public static class AcerWmiProbe
                         ClassPresent = true,
                         ProviderVersion = providerVersion,
                         Methods = methods,
+                        Signatures = signatures,
                         DynamicClass = dynamicClass,
                         CallMethod = candidate,
                         CallSucceeded = true
@@ -208,6 +220,7 @@ public static class AcerWmiProbe
                 ClassPresent = true,
                 ProviderVersion = providerVersion,
                 Methods = methods,
+                Signatures = signatures,
                 DynamicClass = dynamicClass,
                 InstanceAccessDenied = instanceDenied,
                 CallMethod = lastMethod,
@@ -254,6 +267,95 @@ public static class AcerWmiProbe
         var match = VersionPattern.Match(description);
         return match.Success ? match.Groups[1].Value : "";
     }
+
+    /// <summary>
+    /// One method with its parameter types: <c>GetGamingMiscSetting(gmInput:UInt32) -> gmOutput:UInt64</c>. The
+    /// shapes are what tell a WMID_Gaming getter from an unrelated method, so the report carries them next to the
+    /// names. Never throws: a method whose parameter metadata cannot be read is reported by name alone.
+    /// </summary>
+    public static string DescribeMethod(MethodData method)
+    {
+        try
+        {
+            var inputs = DescribeParameters(method.InParameters);
+            var outputs = DescribeParameters(method.OutParameters);
+            return $"{method.Name}({inputs}) -> {outputs}";
+        }
+        catch
+        {
+            return method.Name ?? "";
+        }
+    }
+
+    private static string DescribeParameters(ManagementBaseObject? parameters)
+    {
+        if (parameters == null) return "";
+        try
+        {
+            var parts = new List<string>();
+            foreach (PropertyData property in parameters.Properties)
+            {
+                if (string.IsNullOrWhiteSpace(property.Name)) continue;
+                parts.Add($"{property.Name}:{property.Type}");
+            }
+
+            return string.Join(", ", parts);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// The GUID qualifier of every <c>root\WMI</c> class whose name starts with "Acer", keyed by class name.
+    /// <para>
+    /// This is how the probe answers "is the battery charge limit interface present" without hardcoding a class
+    /// name: WMID_GUID5 (<c>79772EC5-04B1-4BFD-843C-61E7F77B6CC9</c>) is registered under whatever name the firmware
+    /// chose, and on an AN16-41 it is not registered at all. Enumerating only the Acer-prefixed classes keeps the
+    /// query cheap; <c>root\WMI</c> carries thousands of classes and a full walk takes seconds.
+    /// </para>
+    /// <para>Read-only, never throws. An empty result means "could not ask", not "nothing is there".</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ReadAcerClassGuids()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var scope = new ManagementScope(WmiNamespace);
+            scope.Connect();
+            using var searcher = new ManagementObjectSearcher(
+                scope,
+                new ObjectQuery("SELECT * FROM meta_class WHERE __CLASS LIKE 'Acer%'"));
+            using var classes = searcher.Get();
+            foreach (ManagementClass cls in classes)
+            {
+                using (cls)
+                {
+                    try
+                    {
+                        var name = cls.ClassPath.ClassName;
+                        var guid = cls.Qualifiers["guid"]?.Value?.ToString();
+                        if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(guid))
+                            result[name] = guid!.Trim();
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Normalises a GUID for comparison: braces and whitespace removed, upper case. The qualifier is stored as
+    /// <c>{7A4DDFE7-...}</c> on some providers and bare on others.
+    /// </summary>
+    public static string NormalizeGuid(string? guid) =>
+        string.IsNullOrWhiteSpace(guid)
+            ? ""
+            : guid.Trim().Trim('{', '}').Replace(" ", "").ToUpperInvariant();
 
     private static readonly Regex VersionPattern = new(
         @"Version\s+([0-9]+(?:\.[0-9]+)*)",

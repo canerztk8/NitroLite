@@ -995,5 +995,11 @@
  "Doğrudan WMI arka ucu": "Backend WMI langsung",
  "Acer servisi kapalıyken donanımı WMI üzerinden yönetmeyi dener. Kapatırsanız yalnızca Acer servisi kullanılır.": "Mencoba mengelola perangkat keras melalui WMI saat layanan Acer tidak berjalan. Matikan untuk hanya memakai layanan Acer.",
  "Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır": "Backend WMI langsung aktif; diterapkan pada peluncuran berikutnya",
- "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Hanya layanan Acer yang akan dipakai; diterapkan pada peluncuran berikutnya"
+ "Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır": "Hanya layanan Acer yang akan dipakai; diterapkan pada peluncuran berikutnya",
+ "Donanım yetenekleri": "Kemampuan perangkat keras",
+ "Modeli, sensör düzenini ve hangi özelliklerin desteklendiğini yeniden tarar. BIOS güncellemesinden sonra önbellek kendiliğinden geçersiz olur.": "Memindai ulang model, tata letak sensor, dan fitur yang didukung. Setelah pembaruan BIOS cache menjadi tidak berlaku dengan sendirinya.",
+ "Yeniden tara": "Pindai ulang",
+ "Donanım yetenekleri yeniden tarandı: {0}": "Kemampuan perangkat keras dipindai ulang: {0}",
+ "Donanım yetenekleri taranamadı: {0}": "Kemampuan perangkat keras tidak dapat dipindai: {0}",
+ "{0} · {1}/{2} yetenek doğrulandı": "{0} · {1}/{2} kemampuan terkonfirmasi"
 }

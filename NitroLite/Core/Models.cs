@@ -211,6 +211,31 @@ public class ThermalStabilityTrend
     public double CoefficientOfVariation { get; set; }
 }
 
+/// <summary>
+/// One capability answer as it is written to the settings file. The outcome is stored by name rather than by number
+/// so a reordered enum cannot turn "access denied" into "supported" on the next launch.
+/// </summary>
+public class CachedCapability
+{
+    public string Capability { get; set; } = "";
+    public string Outcome { get; set; } = "";
+    public string Detail { get; set; } = "";
+}
+
+/// <summary>
+/// The capability probe result, cached so the window does not re-probe WMI and the registry on every launch.
+/// <para>
+/// <see cref="Key"/> is "model code|BIOS version". A BIOS update changes it, which is the point: a firmware update
+/// can add or remove a WMI method, so an answer captured under the old firmware must not be reused.
+/// </para>
+/// </summary>
+public class HardwareCapabilityCache
+{
+    public string Key { get; set; } = "";
+    public DateTime CapturedUtc { get; set; }
+    public List<CachedCapability> Capabilities { get; set; } = new();
+}
+
 public class AppSettings
 {
     public bool StartMinimized { get; set; } = false;
@@ -315,6 +340,13 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("use_direct_wmi_backend")]
     public bool UseDirectWmiBackend { get; set; } = true;
+
+    /// <summary>
+    /// The last capability probe result, keyed by model code and BIOS version. Null means "not probed yet", which is
+    /// the state a fresh install is in. A BIOS update changes the key, so a stale answer is never reused.
+    /// </summary>
+    [JsonPropertyName("hardware_capability_cache")]
+    public HardwareCapabilityCache? HardwareCapabilityCache { get; set; }
 
     // Custom fan speeds (%), used when the fan mode is "Özel". Kept within MinCustomFanPercent..100.
     [JsonPropertyName("custom_fan_cpu_percent")]
