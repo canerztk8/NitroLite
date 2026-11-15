@@ -421,6 +421,7 @@ public partial class MainWindow : Window
 
         _notifyIcon.ContextMenuStrip = menu;
         _notifyIcon.DoubleClick += (s, e) => ShowWindow();
+        ApplyTrayMenuTheme();
     }
 
     private void UpdateTrayRetryMenuItemState()

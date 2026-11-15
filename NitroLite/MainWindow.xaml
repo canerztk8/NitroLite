@@ -841,9 +841,9 @@
             </Setter>
         </Style>
 
-        <!-- A theme preview: five swatches of the palette it names, so the choice is made by looking rather
-             than by reading seven names. The active card is marked by the accent frame the code-behind writes
-             into BorderBrush, the same rule the mode tiles follow. -->
+        <!-- A theme preview: a screenshot of the app in the palette it names, so the choice is made by looking at
+             the window rather than by reading seven names. The active card is marked by the accent frame the
+             code-behind writes into BorderBrush, the same rule the mode tiles follow. -->
         <Style x:Key="ThemeCard" TargetType="{x:Type Button}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -1539,7 +1539,7 @@
                                         <Grid Margin="0,0,0,12">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="Oyun Profilleri" Foreground="{DynamicResource TextPrimary}" FontSize="13" FontWeight="Bold" />
+                                                    <TextBlock Text="Oyun Profilleri" Style="{StaticResource RowTitle}" />
                                                     <Border x:Name="BadgeGameStatus" Background="Transparent" BorderThickness="0" Padding="0" Margin="10,0,0,0">
                                                         <!-- The badge carries a live game name, and a long one ("Tom Clancy's
                                                              Rainbow Six Siege") used to run under the checkbox on the right:
@@ -1798,7 +1798,7 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" x:Name="TxtMonCpuName" Text="İşlemci" Foreground="{DynamicResource TextPrimary}" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Column="0" x:Name="TxtMonCpuName" Text="İşlemci" Style="{StaticResource RowTitle}" TextWrapping="Wrap" />
                                                 <TextBlock Grid.Column="1" x:Name="TxtCpuCoreCount" Text=" (16 Çekirdek)" Foreground="{DynamicResource TextMuted}" FontSize="12" VerticalAlignment="Top" />
                                             </Grid>
                                             
@@ -1835,7 +1835,7 @@
                                     <!-- GPU CARD -->
                                     <Border Style="{StaticResource CardBorder}" Margin="6,0,0,0">
                                         <StackPanel>
-                                            <TextBlock x:Name="TxtMonGpuName" Text="Ekran Kartı" Foreground="{DynamicResource TextPrimary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,8" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="TxtMonGpuName" Text="Ekran Kartı" Style="{StaticResource RowTitle}" Margin="0,0,0,8" TextWrapping="Wrap" />
                                             
                                             <!-- Temp -->
                                             <Grid Margin="0,3">
@@ -1931,7 +1931,7 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="Telemetri Geçmiş Grafiği" Foreground="{DynamicResource TextPrimary}" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" />
+                                                    <TextBlock Text="Telemetri Geçmiş Grafiği" Style="{StaticResource RowTitle}" />
                                                     <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
                                                                     ToolTip="Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez." />
                                                 </StackPanel>
@@ -2328,7 +2328,7 @@
                                     <StackPanel>
                                         <Grid Margin="0,0,0,12">
                                             <StackPanel>
-                                                <TextBlock Text="Batarya Kapasite ve Aşınma Durumu" Foreground="{DynamicResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                                <TextBlock Text="Batarya Kapasite ve Aşınma Durumu" Style="{StaticResource RowTitle}" />
                                             </StackPanel>
                                         </Grid>
 
@@ -2408,7 +2408,7 @@
                                 <!-- ALT BİLEŞEN TERMAL TELEMETRİ MATRİSİ (VRM, NVMe SSD'ler, PİL) -->
                                 <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
-                                        <TextBlock Text="Bileşen Sıcaklık Matrisi" Foreground="{DynamicResource TextPrimary}" FontWeight="Bold" FontSize="13" Margin="0,0,0,10" />
+                                        <TextBlock Text="Bileşen Sıcaklık Matrisi" Style="{StaticResource RowTitle}" Margin="0,0,0,10" />
 
                                         <UniformGrid Columns="4">
                                             <!-- Motherboard / VRM -->
@@ -2458,7 +2458,7 @@
                                     <StackPanel>
                                         <Grid Margin="0,0,0,12">
                                             <StackPanel>
-                                                <TextBlock Text="Depolama Sürücüleri" Foreground="{DynamicResource TextPrimary}" FontWeight="Bold" FontSize="13" />
+                                                <TextBlock Text="Depolama Sürücüleri" Style="{StaticResource RowTitle}" />
                                             </StackPanel>
                                             <TextBlock x:Name="TxtStorageBadge" Text="--" Foreground="{DynamicResource InkSoft}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>

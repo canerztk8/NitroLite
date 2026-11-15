@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Captures NitroLite pages to PNG without leaving the window on your desktop.
+    Captures NitroLite pages to small JPEGs without leaving the window on your desktop.
 
 .DESCRIPTION
     Starts NitroLite against a throwaway data folder, parks the window out of the way, walks the
@@ -11,6 +11,11 @@
 
     Pages are addressed by AutomationId, not by their visible label, so the same command works in
     every language: NavModes, NavMonitoring, NavRgb, NavBattery, NavDebloat.
+
+    Every capture is downscaled to -MaxWidth (1280px by default) and written as a JPEG, because a
+    full-size PNG of a 1325px window is several times larger than anything needed to check layout
+    and colour. The output folder is cleared of the previous run's captures first, so a folder never
+    accumulates images that then get read back into a session.
 
 .PARAMETER Page
     AutomationId of the page to capture. Ignored when -All is given.
@@ -25,7 +30,21 @@
     Language code: en, tr, de, es, ru, pt, hi, id.
 
 .PARAMETER Out
-    Output folder. One PNG per page, named <language>-<theme>-<page>.png.
+    Output folder. One image per page, named <language>-<theme>-<page>.<ext>. Captures left there by
+    an earlier run are deleted before the first shot.
+
+.PARAMETER MaxWidth
+    Downscale each capture to this width in pixels before saving. Default 1280. A window already
+    narrower than this is saved at its own size; the aspect ratio is always preserved.
+
+.PARAMETER Format
+    jpeg (default) or png. JPEG at the default quality is roughly a tenth of the PNG size.
+
+.PARAMETER Quality
+    JPEG quality, 1-100. Default 78, which keeps text edges legible.
+
+.PARAMETER KeepOld
+    Leave the previous captures in the output folder instead of clearing them first.
 
 .PARAMETER Position
     corner (default), bottom, center, or an explicit "X,Y".
@@ -81,6 +100,10 @@ param(
     [ValidateSet('light', 'dark', 'midnightoled', 'slatesteel', 'amberconsole', 'nordfrost')][string]$Theme = 'light',
     [string]$Language = 'tr',
     [string]$Out = '',
+    [int]$MaxWidth = 1280,
+    [ValidateSet('jpeg', 'png')][string]$Format = 'jpeg',
+    [ValidateRange(1, 100)][int]$Quality = 78,
+    [switch]$KeepOld,
     [string]$Position = 'corner',
     [string]$Size = '1325x913',
     [int]$Scrolls = 0,
@@ -179,6 +202,21 @@ $json += "`r`n}`r`n"
 if (-not $Out) { $Out = Join-Path ([IO.Path]::GetTempPath()) 'nl-shots' }
 New-Item -ItemType Directory -Path $Out -Force | Out-Null
 
+# ---- clear the previous run's captures ---------------------------------------------------------
+# Only files this script names are touched, so pointing -Out at a folder that holds other images is
+# safe. The downscale below is pointless if a stale folder keeps handing back full-size PNGs.
+if (-not $KeepOld) {
+    $stale = @(Get-ChildItem -Path $Out -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^[a-z]{2,3}-[a-z]+-Nav[A-Za-z]+\.(png|jpg|jpeg)$' })
+    foreach ($f in $stale) { Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue }
+    if ($stale.Count -gt 0) { Write-Host "Cleared $($stale.Count) old capture(s) from $Out" }
+}
+
+$ext = if ($Format -eq 'png') { 'png' } else { 'jpg' }
+$jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+    Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
+if ($Format -ne 'png' -and -not $jpegCodec) { throw 'No JPEG encoder is available; pass -Format png.' }
+
 $pages = if ($All) { @('NavModes', 'NavMonitoring', 'NavRgb', 'NavBattery', 'NavDebloat') } else { @($Page) }
 
 # ---- launch -----------------------------------------------------------------------------------
@@ -245,8 +283,35 @@ function Save-Window([IntPtr]$handle, [string]$path) {
     $hdc = $g.GetHdc()
     $ok = [Shot]::PrintWindow($handle, $hdc, 2)
     $g.ReleaseHdc($hdc)
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $g.Dispose(); $bmp.Dispose()
+    $g.Dispose()
+
+    # Downscale before saving. The extra pixels of a 1325px window buy nothing when the image is only
+    # read to check layout and colour, and they are what pushes a session over its image budget.
+    $target = $bmp
+    if ($MaxWidth -gt 0 -and $w -gt $MaxWidth) {
+        $sh = [int][Math]::Round($h * ($MaxWidth / $w))
+        $target = New-Object System.Drawing.Bitmap $MaxWidth, $sh
+        $tg = [System.Drawing.Graphics]::FromImage($target)
+        $tg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $tg.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $tg.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+        $tg.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $tg.DrawImage($bmp, 0, 0, $MaxWidth, $sh)
+        $tg.Dispose()
+    }
+
+    if ($Format -eq 'png') {
+        $target.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    } else {
+        $ep = New-Object System.Drawing.Imaging.EncoderParameters 1
+        $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter(
+            [System.Drawing.Imaging.Encoder]::Quality, [int]$Quality)
+        $target.Save($path, $jpegCodec, $ep)
+        $ep.Dispose()
+    }
+
+    if (-not [Object]::ReferenceEquals($target, $bmp)) { $target.Dispose() }
+    $bmp.Dispose()
     return $ok
 }
 
@@ -302,7 +367,7 @@ foreach ($pageId in $pages) {
         Start-Sleep -Milliseconds 900
     }
 
-    $file = Join-Path $Out ("{0}-{1}-{2}.png" -f $Language, $Theme, $pageId)
+    $file = Join-Path $Out ("{0}-{1}-{2}.{3}" -f $Language, $Theme, $pageId, $ext)
     $ok = Save-Window $hwnd $file
     if ($ok) {
         Write-Host ("  {0,-14} -> {1}" -f $pageId, $file) -ForegroundColor Green

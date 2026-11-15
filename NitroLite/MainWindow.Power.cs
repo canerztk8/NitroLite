@@ -497,7 +497,10 @@ public partial class MainWindow
 
             if (cap.HasValue && cap.Value > 0 && CmbGpuMode?.Items.Count > 0)
             {
-                SetGpuModeControlsEnabled(true, Loc.T("Değişiklik, bilgisayar yeniden başlatıldıktan sonra geçerli olur."));
+                // No note: the (?) badge already says the change needs a restart, and a line that repeats the
+                // tooltip is the kind of description this page is being cleared of. The notes below stay, because
+                // they explain a control that is greyed out and nothing else would.
+                SetGpuModeControlsEnabled(true, null);
             }
             else if (cap.HasValue)
             {

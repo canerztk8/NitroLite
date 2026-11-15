@@ -1,12 +1,14 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using NitroLite.Core;
 // WinForms is referenced for the tray icon, so these three names exist twice.
 using WpfButton = System.Windows.Controls.Button;
 using WpfBrushes = System.Windows.Media.Brushes;
+using WpfImage = System.Windows.Controls.Image;
 using WpfOrientation = System.Windows.Controls.Orientation;
 
 namespace NitroLite;
@@ -16,6 +18,9 @@ public partial class MainWindow
     // ---------------------------------------------------------------------------------------------------------------
     // Theme: preview cards, and a palette swap that happens under the live window instead of restarting the app.
     // ---------------------------------------------------------------------------------------------------------------
+
+    /// <summary>Width of the screenshot on a theme card, in device-independent pixels.</summary>
+    private const double ThemePreviewWidth = 200;
 
     /// <summary>
     /// Builds one preview card per palette. The cards are generated from <see cref="ThemeCatalog.All"/> rather than
@@ -28,9 +33,52 @@ public partial class MainWindow
         PanelThemeCards.Children.Clear();
         foreach (var theme in ThemeCatalog.All)
         {
-            var preview = ThemeManager.Preview(theme);
+            var label = new TextBlock
+            {
+                Text = Loc.T(ThemeCatalog.DisplayNameKey(theme)),
+                FontSize = 11,
+                Margin = new Thickness(0, 6, 0, 0),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
 
-            var swatches = new StackPanel { Orientation = WpfOrientation.Horizontal };
+            var card = new WpfButton
+            {
+                Style = TryFindResource("ThemeCard") as Style,
+                Tag = theme,
+                MinWidth = ThemePreviewWidth + 18,
+                Content = new StackPanel { Children = { ThemePreviewVisual(theme), label } },
+                ToolTip = Loc.T(ThemeCatalog.DisplayNameKey(theme))
+            };
+            card.Click += ThemeCard_Click;
+            PanelThemeCards.Children.Add(card);
+        }
+
+        RefreshThemeCards();
+    }
+
+    /// <summary>
+    /// The picture on a theme card: a screenshot of the app in that palette, framed by a hairline in the palette's own
+    /// rule colour. Five swatches said what the colours were; the window says what the theme looks like, which is the
+    /// question the card is there to answer.
+    /// </summary>
+    /// <remarks>
+    /// The assets come from <c>scripts/theme-previews.ps1</c>, captured from the English UI so one set serves all
+    /// eight languages. A build without them falls back to the swatch strip rather than showing an empty frame.
+    /// </remarks>
+    private FrameworkElement ThemePreviewVisual(AppTheme theme)
+    {
+        var preview = ThemeManager.Preview(theme);
+        var shot = LoadThemePreview(theme);
+
+        if (shot == null)
+        {
+            var swatches = new StackPanel
+            {
+                Orientation = WpfOrientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+            };
             foreach (var colour in new[] { preview.Paper, preview.Card, preview.Border, preview.Ink, preview.Accent })
             {
                 swatches.Children.Add(new Border
@@ -45,29 +93,57 @@ public partial class MainWindow
                     SnapsToDevicePixels = true
                 });
             }
-
-            var label = new TextBlock
-            {
-                Text = Loc.T(ThemeCatalog.DisplayNameKey(theme)),
-                FontSize = 11,
-                Margin = new Thickness(0, 5, 0, 0),
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            label.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-
-            var card = new WpfButton
-            {
-                Style = TryFindResource("ThemeCard") as Style,
-                Tag = theme,
-                MinWidth = 104,
-                Content = new StackPanel { Children = { swatches, label } },
-                ToolTip = Loc.T(ThemeCatalog.DisplayNameKey(theme))
-            };
-            card.Click += ThemeCard_Click;
-            PanelThemeCards.Children.Add(card);
+            return swatches;
         }
 
-        RefreshThemeCards();
+        var image = new WpfImage
+        {
+            Source = shot,
+            Width = ThemePreviewWidth,
+            Stretch = Stretch.Uniform
+        };
+        // The asset is captured at twice this width, so it stays sharp on a high-DPI display; the downscale is
+        // asked for the good filter rather than the default one.
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+
+        var frame = new Border
+        {
+            CornerRadius = new CornerRadius(4),
+            BorderBrush = new SolidColorBrush(preview.Border),
+            BorderThickness = new Thickness(1),
+            ClipToBounds = true,
+            Child = image
+        };
+        // A Border clips to its rectangle, not to the rounded corner, so the clip is set by hand once the size is known.
+        frame.SizeChanged += (_, e) =>
+            frame.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), 4, 4);
+        return frame;
+    }
+
+    /// <summary>
+    /// Loads the embedded screenshot for a palette. <see cref="AppTheme.System"/> has no picture of its own: it shows
+    /// whatever it currently resolves to, which is the window the user is actually looking at.
+    /// </summary>
+    private static ImageSource? LoadThemePreview(AppTheme theme)
+    {
+        var shown = ThemeManager.Resolve(theme);
+        var uri = new Uri($"pack://application:,,,/Assets/themes/{shown.ToString().ToLowerInvariant()}.jpg",
+                          UriKind.Absolute);
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.UriSource = uri;
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Tema önizlemesi yüklenemedi", $"{shown}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -135,6 +211,7 @@ public partial class MainWindow
 
         RepaintThemeDependentVisuals();
         RefreshThemeCards();
+        ApplyTrayMenuTheme();
     }
 
     /// <summary>
@@ -163,6 +240,32 @@ public partial class MainWindow
             // telemetry tick repaints the same surfaces anyway.
             AppLog.Warn("Tema sonrası yeniden çizim başarısız", ex.ToString());
         }
+    }
+
+    /// <summary>
+    /// Repaints the tray menu in the palette the window is using. The menu is a WinForms control, so it does not
+    /// follow the WPF dictionaries on its own and would otherwise drop a light menu out of a dark window.
+    /// </summary>
+    private void ApplyTrayMenuTheme()
+    {
+        if (_notifyIcon?.ContextMenuStrip is not { } menu) return;
+
+        static System.Drawing.Color Read(FrameworkElement? owner, string key, System.Drawing.Color fallback)
+        {
+            var brush = owner?.TryFindResource(key) as SolidColorBrush;
+            return brush == null
+                ? fallback
+                : System.Drawing.Color.FromArgb(brush.Color.A, brush.Color.R, brush.Color.G, brush.Color.B);
+        }
+
+        TrayMenuTheme.Apply(menu, new TrayMenuTheme.Palette(
+            Ground: Read(this, "CardBg", System.Drawing.SystemColors.Control),
+            Hover: Read(this, "CardBgHover", System.Drawing.SystemColors.Highlight),
+            Ink: Read(this, "Ink", System.Drawing.SystemColors.ControlText),
+            InkFaint: Read(this, "InkFaint", System.Drawing.SystemColors.GrayText),
+            Rule: Read(this, "Rule", System.Drawing.SystemColors.ControlDark),
+            Frame: Read(this, "RuleStrong", System.Drawing.SystemColors.ControlDarkDark),
+            Accent: Read(this, "Vermilion", System.Drawing.SystemColors.Highlight)));
     }
 
     /// <summary>
