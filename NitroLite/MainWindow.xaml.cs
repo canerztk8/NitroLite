@@ -1603,24 +1603,35 @@ public partial class MainWindow : Window
         TabBattery.Visibility = NavBattery.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         TabDebloat.Visibility = NavDebloat.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
-        if (NavMonitoring.IsChecked == true)
+        // Everything below reads from a source that can fail: a WMI query, the registry, the Care Center agent. This
+        // handler is async void, so an exception that escapes it takes the process down on a tab click instead of
+        // leaving the page stale. The refreshes handle their own failures; this is the backstop that keeps a failed
+        // one from closing the window.
+        try
         {
-            RenderTelemetryChart();
-        }
+            if (NavMonitoring.IsChecked == true)
+            {
+                RenderTelemetryChart();
+            }
 
-        if (NavDebloat.IsChecked == true)
-        {
-            // NitroSense may have been opened or closed, or services changed outside NitroLite, since the last look.
-            await RefreshServiceListAsync();
-        }
+            if (NavDebloat.IsChecked == true)
+            {
+                // NitroSense may have been opened or closed, or services changed outside NitroLite, since the last look.
+                await RefreshServiceListAsync();
+            }
 
-        if (NavBattery.IsChecked == true)
+            if (NavBattery.IsChecked == true)
+            {
+                await RefreshBatteryHealthAsync();
+                await RefreshStorageHealthUi();
+                // Acer Care Center may have been installed since the last look; the checkbox stays disabled until a
+                // probe succeeds, so retry while it is still marked unavailable.
+                if (_chargeLimitAvailable == false) await SyncChargeLimitFromCareCenterAsync();
+            }
+        }
+        catch (Exception ex)
         {
-            await RefreshBatteryHealthAsync();
-            await RefreshStorageHealthUi();
-            // Acer Care Center may have been installed since the last look; the checkbox stays disabled until a
-            // probe succeeds, so retry while it is still marked unavailable.
-            if (_chargeLimitAvailable == false) await SyncChargeLimitFromCareCenterAsync();
+            AppLog.Warn("Sayfa yenilenemedi", ex.ToString());
         }
     }
 

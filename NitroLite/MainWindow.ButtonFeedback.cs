@@ -52,7 +52,13 @@ public partial class MainWindow
     /// <returns>What <paramref name="action"/> reported, so a caller can chain on it.</returns>
     internal async Task<bool> RunWithButtonFeedbackAsync(WpfButton? button, string sourceText, Func<Task<bool>> action)
     {
-        if (button == null) return await action();
+        if (button == null)
+        {
+            // No button to show progress on, but the caller is still an async void handler: an exception escaping
+            // here would take the process down instead of ending the action the way the button path does.
+            try { return await action(); }
+            catch (Exception ex) { AppLog.Error("Buton işlemi", ex.ToString()); return false; }
+        }
 
         // A second press while the first outcome is still on screen. The state to go back to is the one from before
         // the first press: the button is disabled and labelled by the feedback itself right now, so capturing the
