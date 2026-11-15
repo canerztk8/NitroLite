@@ -892,6 +892,7 @@
  "Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?": "Настройки, игровые профили и профили RGB из этой копии заменят текущие. Продолжить?",
  "Yedeği geri yükle": "Восстановить копию",
  "Yedek geri yüklenemedi.": "Не удалось восстановить резервную копию.",
+ "Yedek geri yüklenemedi: {0}": "Не удалось восстановить резервную копию: {0}",
  "Yedek geri yüklendi; NitroLite yeniden başlatılıyor…": "Копия восстановлена; NitroLite перезапускается…",
  "Yedekte olmayan bölümler atlandı: {0}": "Отсутствующие в резервной копии разделы пропущены: {0}",
  "Yedek dosyası yolu boş.": "Путь к файлу копии пуст.",

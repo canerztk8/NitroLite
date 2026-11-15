@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -369,7 +370,12 @@ public partial class MainWindow
     /// Writes settings, game profiles and RGB presets into one file the user picks. The live settings object is used,
     /// so a change made a second ago is in the file even if it has not been flushed to disk yet.
     /// </summary>
-    private void BtnCreateBackup_Click(object sender, RoutedEventArgs e)
+    /// <remarks>
+    /// The dialog stays on the UI thread; only the write moves to a worker, because the target can be a slow or a
+    /// network drive and a frozen window during a save reads as a crash. Both backup buttons are held shut for the
+    /// duration: a second click would start a second write over the same file.
+    /// </remarks>
+    private async void BtnCreateBackup_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
@@ -382,27 +388,47 @@ public partial class MainWindow
         };
         if (dialog.ShowDialog(this) != true) return;
 
-        var result = BackupService.Create(
-            dialog.FileName,
-            _appSettings,
-            GameProfilesFile,
-            RgbPresetsFile,
-            UpdateService.CurrentVersionText);
-
-        if (!result.Success)
+        // Taken on the UI thread: the window stays usable while the worker writes, and the lighting block is
+        // replaced by reference on every change, so serialising the live object there could read a half-swapped one.
+        var snapshot = SnapshotSettings();
+        SetBackupButtonsEnabled(false);
+        try
         {
-            ShowToast(result.Error ?? Loc.T("Yedek yazılamadı."), false);
-            return;
-        }
+            var result = await Task.Run(() => BackupService.Create(
+                dialog.FileName,
+                snapshot,
+                GameProfilesFile,
+                RgbPresetsFile,
+                UpdateService.CurrentVersionText));
 
-        ShowToast(Loc.T($"Yedek kaydedildi: {Path.GetFileName(dialog.FileName)}"));
+            if (!result.Success)
+            {
+                ShowToast(result.Error ?? Loc.T("Yedek yazılamadı."), false);
+                return;
+            }
+
+            ShowToast(Loc.T($"Yedek kaydedildi: {Path.GetFileName(dialog.FileName)}"));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Yedek oluşturulamadı", ex.ToString());
+            ShowToast(Loc.T($"Yedek yazılamadı: {ex.Message}"), false);
+        }
+        finally
+        {
+            SetBackupButtonsEnabled(true);
+        }
     }
 
     /// <summary>
     /// Puts a backup file back over the live settings and profiles, then restarts so the restored settings are the
     /// ones the app reads. Refused during a game session: the restart would drop the profile the session runs on.
     /// </summary>
-    private void BtnRestoreBackup_Click(object sender, RoutedEventArgs e)
+    /// <remarks>
+    /// The dialogs stay on the UI thread; the read of the chosen file and the three writes move to a worker, so a
+    /// slow or a network drive does not freeze the window.
+    /// </remarks>
+    private async void BtnRestoreBackup_Click(object sender, RoutedEventArgs e)
     {
         if (_isGameSessionActive)
         {
@@ -424,7 +450,24 @@ public partial class MainWindow
             Loc.T("Yedeği geri yükle"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes) return;
 
-        var result = BackupService.Restore(dialog.FileName, AppSettingsConfigFile, GameProfilesFile, RgbPresetsFile);
+        SetBackupButtonsEnabled(false);
+        BackupResult result;
+        try
+        {
+            result = await Task.Run(() =>
+                BackupService.Restore(dialog.FileName, AppSettingsConfigFile, GameProfilesFile, RgbPresetsFile));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Yedek geri yüklenemedi", ex.ToString());
+            ShowToast(Loc.T($"Yedek geri yüklenemedi: {ex.Message}"), false);
+            return;
+        }
+        finally
+        {
+            SetBackupButtonsEnabled(true);
+        }
+
         if (!result.Success)
         {
             ShowToast(result.Error ?? Loc.T("Yedek geri yüklenemedi."), false);
@@ -448,6 +491,34 @@ public partial class MainWindow
             message += " " + Loc.T($"Yedekte olmayan bölümler atlandı: {string.Join(", ", result.Skipped.Select(label => Loc.T(label)))}");
         }
         RestartForSettingChange(message, discardInMemorySettings: true);
+    }
+
+    /// <summary>
+    /// Holds both backup buttons shut while a file operation runs, so a second click cannot start a second write
+    /// over the same file. The buttons are null in the test harness, which builds no XAML.
+    /// </summary>
+    private void SetBackupButtonsEnabled(bool enabled)
+    {
+        if (BtnCreateBackup != null) BtnCreateBackup.IsEnabled = enabled;
+        if (BtnRestoreBackup != null) BtnRestoreBackup.IsEnabled = enabled;
+    }
+
+    /// <summary>
+    /// A copy of the live settings, taken on the UI thread before the backup moves to a worker.
+    /// </summary>
+    private AppSettings SnapshotSettings()
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_appSettings)) ?? _appSettings;
+        }
+        catch (Exception ex)
+        {
+            // A snapshot that cannot be taken is not a reason to refuse the backup: the live object is what the
+            // previous build wrote anyway.
+            AppLog.Warn("Ayar anlık görüntüsü alınamadı", ex.Message);
+            return _appSettings;
+        }
     }
 
     private void OpenUrl(string url)

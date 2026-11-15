@@ -70,7 +70,12 @@ public partial class MainWindow
             4 => 3, // Config 4
             _ => 4  // Son Kullanılanı Koru (0)
         };
-        CmbDefaultAtkMouseProfile.SelectedIndex = selectIdx;
+        // The combo is filled from the stored setting, not by the user: the handler would save the settings file
+        // again and overwrite the badge this method is about to set.
+        bool wasSyncing = _isSyncingDefaultMouseProfileUi;
+        _isSyncingDefaultMouseProfileUi = true;
+        try { CmbDefaultAtkMouseProfile.SelectedIndex = selectIdx; }
+        finally { _isSyncingDefaultMouseProfileUi = wasSyncing; }
 
         if (!_appSettings.AtkMouseIntegrationEnabled)
         {
@@ -462,7 +467,7 @@ public partial class MainWindow
 
     private void CmbDefaultAtkMouseProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_isInitializingUi || CmbDefaultAtkMouseProfile == null) return;
+        if (_isInitializingUi || _isSyncingDefaultMouseProfileUi || CmbDefaultAtkMouseProfile == null) return;
         if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int val))
         {
             if (val != _appSettings.DefaultAtkMouseProfile) _pendingDesktopMouseRequest = null;

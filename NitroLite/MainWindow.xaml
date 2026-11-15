@@ -1098,7 +1098,7 @@
                                                 <Button x:Name="BtnBoostDisabled" Style="{StaticResource SegButton}" Content="Devre Dışı" Click="BtnBoost_Click" Tag="Disabled" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" FontSize="11" ToolTip="Windows boost değeri 0: işlemci taban frekansının üzerine çıkmaz" />
                                             </StackPanel>
                                         </Grid>
-                                        <TextBlock Grid.Row="1" Text="Windows güç planı işlemci saat frekansı davranışı." Foreground="{StaticResource InkFaint}" FontSize="11" Margin="0,8,0,0" />
+                                        <TextBlock Grid.Row="1" Text="Windows güç planı işlemci saat frekansı davranışı." Foreground="{StaticResource InkFaint}" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
                                     </Grid>
                                 </Border>
 
@@ -1138,10 +1138,16 @@
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="Oyun Profili Yönetimi" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
                                                     <Border x:Name="BadgeGameStatus" Background="Transparent" BorderThickness="0" Padding="0" Margin="10,0,0,0">
-                                                        <TextBlock x:Name="TxtGameStatus" Text="Durum: Beklemede (Aktif oyun yok)" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" />
+                                                        <!-- The badge carries a live game name, and a long one ("Tom Clancy's
+                                                             Rainbow Six Siege") used to run under the checkbox on the right:
+                                                             a horizontal StackPanel hands its children infinite width, so
+                                                             the text could neither wrap nor trim. MaxWidth bounds it and
+                                                             the tooltip, bound to the text itself, keeps the full string
+                                                             readable without a second place to update. -->
+                                                        <TextBlock x:Name="TxtGameStatus" Text="Durum: Beklemede (Aktif oyun yok)" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="Yürütülebilir dosya algılandığında ilgili mod ve fan yapılandırması otomatik uygulanır." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" />
+                                                <TextBlock Text="Yürütülebilir dosya algılandığında ilgili mod ve fan yapılandırması otomatik uygulanır." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
 
                                             <!-- Auto Mode Global Switch -->
@@ -1617,7 +1623,7 @@
                                 <!-- 4 Zones Visual Preview -->
                                 <Border x:Name="CardZonePreview" Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>
-                                        <TextBlock Text="Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="0,0,0,10" />
+                                        <TextBlock Text="Dört Bölgeli Aydınlatma Düzeni (rengini değiştirmek için bölgeye tıklayın)" Foreground="{StaticResource TextMuted}" FontSize="11" FontWeight="Bold" Margin="0,0,0,10" TextWrapping="Wrap" />
                                         <UniformGrid Columns="4">
                                             <StackPanel>
                                                 <Border x:Name="PreviewZone1" Tag="0" MouseLeftButtonUp="PreviewZone_Click" Cursor="Hand" ToolTip="Bu bölgenin rengini seçmek için tıklayın (Sabit Renk efektinde)" Background="{StaticResource AccentCyan}" Height="40" BorderBrush="{StaticResource RuleStrong}" BorderThickness="1" />
@@ -1647,7 +1653,7 @@
                                         <Grid Margin="0,0,0,8">
                                             <StackPanel>
                                                 <TextBlock Text="Aydınlatma Profilleri" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" />
-                                                <TextBlock Text="Ön tanımlı aydınlatma temalarını uygulayabilir veya özel konfigürasyon kaydedebilirsiniz." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0" />
+                                                <TextBlock Text="Ön tanımlı aydınlatma temalarını uygulayabilir veya özel konfigürasyon kaydedebilirsiniz." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Grid>
                                         
@@ -2069,7 +2075,7 @@
                                         <TextBlock Text="[ ! ]" Foreground="{StaticResource AccentRed}" FontWeight="Bold" FontSize="14" Margin="0,0,10,0" VerticalAlignment="Center" />
                                         <StackPanel>
                                             <TextBlock Text="Şarj Eşiği Aşıldı" Foreground="{StaticResource AccentRed}" FontWeight="Bold" FontSize="12" />
-                                            <TextBlock x:Name="TxtOverchargeMsg" Text="Pil seviyesi %80 sınırının üzerindedir. Dilerseniz hedef seviyeye deşarj işlemini başlatabilirsiniz." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="TxtOverchargeMsg" Text="Pil seviyesi %80 sınırının üzerindedir. Dilerseniz hedef seviyeye deşarj işlemini başlatabilirsiniz." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
@@ -2235,7 +2241,7 @@
                                         <Grid>
                                             <StackPanel Margin="0,0,16,0" MaxWidth="760" HorizontalAlignment="Left">
                                                 <TextBlock Text="ATK Fare Entegrasyonu (ATK A9 vb.)" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="ATK fare donanım protokolünü, profil geçişlerini ve oyuna özel fare profili atamalarını etkinleştirir." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" />
+                                                <TextBlock Text="ATK fare donanım protokolünü, profil geçişlerini ve oyuna özel fare profili atamalarını etkinleştirir." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
                                             <CheckBox x:Name="ChkAtkMouseIntegration" Checked="ChkAtkMouseIntegration_Changed" Unchecked="ChkAtkMouseIntegration_Changed" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                         </Grid>

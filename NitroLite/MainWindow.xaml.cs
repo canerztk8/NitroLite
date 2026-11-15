@@ -1208,6 +1208,11 @@ public partial class MainWindow : Window
 
     private bool _isSyncingDirectionUi;
 
+    // True while code (not the user) moves the default-mouse-profile combo. Without it the assignment in
+    // InitializeDefaultMouseProfileUi fired the SelectionChanged handler, which saved the settings file a second
+    // time and briefly replaced the badge with "press Apply" before the apply result overwrote it.
+    private bool _isSyncingDefaultMouseProfileUi;
+
     // ==========================================
     // UI Event Handlers
     // ==========================================

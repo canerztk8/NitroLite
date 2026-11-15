@@ -892,6 +892,7 @@
  "Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?": "इस बैकअप की सेटिंग्स, गेम प्रोफ़ाइल और RGB प्रोफ़ाइल आपकी मौजूदा सेटिंग्स पर लिख दी जाएँगी। जारी रखें?",
  "Yedeği geri yükle": "बैकअप पुनर्स्थापित करें",
  "Yedek geri yüklenemedi.": "बैकअप पुनर्स्थापित नहीं हो सका।",
+ "Yedek geri yüklenemedi: {0}": "बैकअप पुनर्स्थापित नहीं हो सका: {0}",
  "Yedek geri yüklendi; NitroLite yeniden başlatılıyor…": "बैकअप पुनर्स्थापित; NitroLite फिर से शुरू हो रहा है…",
  "Yedekte olmayan bölümler atlandı: {0}": "बैकअप में मौजूद न होने वाले भाग छोड़ दिए गए: {0}",
  "Yedek dosyası yolu boş.": "बैकअप फ़ाइल का पथ खाली है।",

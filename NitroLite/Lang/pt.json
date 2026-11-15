@@ -892,6 +892,7 @@
  "Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?": "As configurações, os perfis de jogo e os perfis RGB desta cópia substituem os atuais. Continuar?",
  "Yedeği geri yükle": "Restaurar cópia",
  "Yedek geri yüklenemedi.": "Não foi possível restaurar a cópia.",
+ "Yedek geri yüklenemedi: {0}": "Não foi possível restaurar a cópia: {0}",
  "Yedek geri yüklendi; NitroLite yeniden başlatılıyor…": "Cópia restaurada; o NitroLite está a reiniciar…",
  "Yedekte olmayan bölümler atlandı: {0}": "As partes ausentes na cópia de segurança foram ignoradas: {0}",
  "Yedek dosyası yolu boş.": "O caminho do ficheiro de cópia está vazio.",

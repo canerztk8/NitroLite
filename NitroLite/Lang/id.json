@@ -892,6 +892,7 @@
  "Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?": "Pengaturan, profil game, dan profil RGB dalam cadangan ini akan menimpa yang sekarang. Lanjutkan?",
  "Yedeği geri yükle": "Pulihkan cadangan",
  "Yedek geri yüklenemedi.": "Cadangan tidak dapat dipulihkan.",
+ "Yedek geri yüklenemedi: {0}": "Cadangan tidak dapat dipulihkan: {0}",
  "Yedek geri yüklendi; NitroLite yeniden başlatılıyor…": "Cadangan dipulihkan; NitroLite memulai ulang…",
  "Yedekte olmayan bölümler atlandı: {0}": "Bagian yang tidak ada di cadangan dilewati: {0}",
  "Yedek dosyası yolu boş.": "Jalur berkas cadangan kosong.",

@@ -892,6 +892,7 @@
  "Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?": "The settings, game profiles and RGB presets in this backup will overwrite your current ones. Continue?",
  "Yedeği geri yükle": "Restore backup",
  "Yedek geri yüklenemedi.": "The backup could not be restored.",
+ "Yedek geri yüklenemedi: {0}": "The backup could not be restored: {0}",
  "Yedek geri yüklendi; NitroLite yeniden başlatılıyor…": "Backup restored; NitroLite is restarting…",
  "Yedekte olmayan bölümler atlandı: {0}": "Parts missing from the backup were skipped: {0}",
  "Yedek dosyası yolu boş.": "The backup file path is empty.",

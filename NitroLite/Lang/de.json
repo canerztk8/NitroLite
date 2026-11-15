@@ -892,6 +892,7 @@
  "Bu yedekteki ayarlar, oyun profilleri ve RGB profilleri şu anki ayarlarınızın üzerine yazılacak. Devam edilsin mi?": "Die Einstellungen, Spielprofile und RGB-Profile aus dieser Sicherung überschreiben Ihre aktuellen. Fortfahren?",
  "Yedeği geri yükle": "Sicherung wiederherstellen",
  "Yedek geri yüklenemedi.": "Die Sicherung konnte nicht wiederhergestellt werden.",
+ "Yedek geri yüklenemedi: {0}": "Die Sicherung konnte nicht wiederhergestellt werden: {0}",
  "Yedek geri yüklendi; NitroLite yeniden başlatılıyor…": "Sicherung wiederhergestellt; NitroLite wird neu gestartet…",
  "Yedekte olmayan bölümler atlandı: {0}": "Im Backup fehlende Teile wurden übersprungen: {0}",
  "Yedek dosyası yolu boş.": "Der Pfad der Sicherungsdatei ist leer.",
