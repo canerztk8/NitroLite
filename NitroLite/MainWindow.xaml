@@ -107,8 +107,7 @@
                     <ControlTemplate TargetType="{x:Type ContentControl}">
                         <Border Width="15" Height="15" CornerRadius="7.5"
                                 Background="Transparent"
-                                BorderBrush="{DynamicResource RuleStrong}" BorderThickness="1"
-                                Opacity="0.75">
+                                BorderBrush="{DynamicResource RuleStrong}" BorderThickness="1">
                             <TextBlock Text="?" FontSize="9.5" FontWeight="SemiBold"
                                        Foreground="{DynamicResource InkFaint}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -1768,20 +1767,24 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Color Presets & Turn Off Controls -->
-                                <StackPanel Margin="0,0,0,16">
-                                    <TextBlock Text="Hızlı Renk Seçimi" Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="Bold" Margin="0,0,0,8" />
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button Click="BtnPresetColor_Click" Tag="#00E5FF" Background="#00E5FF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Camgöbeği (Cyan)" />
-                                        <Button Click="BtnPresetColor_Click" Tag="#FF2A55" Background="#FF2A55" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Kırmızı" />
-                                        <Button Click="BtnPresetColor_Click" Tag="#00FFA3" Background="#00FFA3" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Yeşil" />
-                                        <Button Click="BtnPresetColor_Click" Tag="#BD00FF" Background="#BD00FF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Mor" />
-                                        <Button Click="BtnPresetColor_Click" Tag="#FFAA00" Background="#FFAA00" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Turuncu" />
-                                        <Button Click="BtnPresetColor_Click" Tag="#FFFFFF" Background="#FFFFFF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Beyaz" />
-                                        <Button Click="BtnPresetColor_Click" Tag="#000000" Background="#000000" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Kapalı" />
-                                        <Button x:Name="BtnCustomColor" Content="Özel Renk…" Click="BtnCustomColor_Click" Height="36" Padding="12,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Cursor="Hand" FontSize="11" FontWeight="SemiBold" ToolTip="Herhangi bir renk seçin (tüm bölgeler)" />
+                                <!-- Color Presets & Turn Off Controls. Its own card, not a bare row between two
+                                     cards: the swatches are a control group with a title, and a block that floats
+                                     on the page ground reads as an accident. -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
+                                    <StackPanel>
+                                        <TextBlock Text="Hızlı Renk Seçimi" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button Click="BtnPresetColor_Click" Tag="#00E5FF" Background="#00E5FF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Camgöbeği (Cyan)" />
+                                            <Button Click="BtnPresetColor_Click" Tag="#FF2A55" Background="#FF2A55" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Kırmızı" />
+                                            <Button Click="BtnPresetColor_Click" Tag="#00FFA3" Background="#00FFA3" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Yeşil" />
+                                            <Button Click="BtnPresetColor_Click" Tag="#BD00FF" Background="#BD00FF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Mor" />
+                                            <Button Click="BtnPresetColor_Click" Tag="#FFAA00" Background="#FFAA00" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Turuncu" />
+                                            <Button Click="BtnPresetColor_Click" Tag="#FFFFFF" Background="#FFFFFF" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Beyaz" />
+                                            <Button Click="BtnPresetColor_Click" Tag="#000000" Background="#000000" Width="36" Height="36" Margin="0,0,8,0" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Cursor="Hand" ToolTip="Kapalı" />
+                                            <Button x:Name="BtnCustomColor" Content="Özel Renk…" Click="BtnCustomColor_Click" Height="36" Padding="12,0" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Cursor="Hand" FontSize="11" FontWeight="SemiBold" ToolTip="Herhangi bir renk seçin (tüm bölgeler)" />
+                                        </StackPanel>
                                     </StackPanel>
-                                </StackPanel>
+                                </Border>
 
                                 <!-- Controls: Effect, Brightness, Speed, Timeout -->
                                 <Border Style="{StaticResource CardBorder}">

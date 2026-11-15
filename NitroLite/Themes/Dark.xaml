@@ -9,8 +9,8 @@
     <SolidColorBrush x:Key="BgDark" Color="#15130F" />
     <SolidColorBrush x:Key="CardBg" Color="#1B1813" />
     <SolidColorBrush x:Key="CardBgHover" Color="#24201A" />
-    <SolidColorBrush x:Key="BorderDark" Color="#2E2A22" />
-    <SolidColorBrush x:Key="BorderStrong" Color="#443E33" />
+    <SolidColorBrush x:Key="BorderDark" Color="#3D382D" />
+    <SolidColorBrush x:Key="BorderStrong" Color="#524B3D" />
     <SolidColorBrush x:Key="PanelBg" Color="#1E1B15" />
     <SolidColorBrush x:Key="RailBg" Color="#1A1712" />
     <SolidColorBrush x:Key="AccentRed" Color="#E05A48" />
@@ -31,8 +31,8 @@
     <SolidColorBrush x:Key="Ink" Color="#EDE6D8" />
     <SolidColorBrush x:Key="InkSoft" Color="#B8AE9C" />
     <SolidColorBrush x:Key="InkFaint" Color="#8A8071" />
-    <SolidColorBrush x:Key="Rule" Color="#2E2A22" />
-    <SolidColorBrush x:Key="RuleStrong" Color="#443E33" />
+    <SolidColorBrush x:Key="Rule" Color="#3D382D" />
+    <SolidColorBrush x:Key="RuleStrong" Color="#524B3D" />
     <SolidColorBrush x:Key="Vermilion" Color="#E05A48" />
     <SolidColorBrush x:Key="Slate" Color="#7FA0B8" />
     <SolidColorBrush x:Key="Olive" Color="#9DB06A" />
