@@ -117,6 +117,10 @@ public class PowerSchoolModeScenarios
     {
         var rig = new ScenarioRig();
         var service = rig.BuildSchoolMode();
+        // The previous values have to be readable first: a setting school mode could not read is skipped rather
+        // than written, so without them this would test the skip path instead of the refused-write path.
+        foreach (var setting in SchoolModeService.PowerSettings)
+            rig.Scheme.Dc[(setting.SubGroup, setting.Setting)] = 100;
         rig.Scheme.WritesSucceed = false;
 
         var outcome = await service.EnableAsync();

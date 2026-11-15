@@ -106,7 +106,7 @@ public partial class MainWindow
 
         if (samples.Count == 0)
         {
-            TxtWearTrendSummary.Text = Loc.T("Henüz ölçüm yok. NitroLite günde bir ölçüm kaydeder; birkaç gün sonra eğri görünür.");
+            TxtWearTrendSummary.Text = Loc.T("Henüz ölçüm yok. NitroLite iki haftada bir ölçüm kaydeder; eğri birkaç ölçümden sonra görünür.");
             if (TxtWearTrendNote != null) TxtWearTrendNote.Visibility = Visibility.Collapsed;
             CanvasWearTrend.Visibility = Visibility.Collapsed;
             if (GridWearTrendAxis != null) GridWearTrendAxis.Visibility = Visibility.Collapsed;

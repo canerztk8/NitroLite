@@ -503,6 +503,66 @@ public class SchoolModeServiceTests
     }
 
     /// <summary>
+    /// A setting whose current value cannot be read has nothing to put back, so school mode must not write it:
+    /// "turning it off restores everything" is only true for the values it recorded first.
+    /// </summary>
+    [Fact]
+    public async Task EnableAsync_LeavesASettingAloneWhenItsCurrentValueCannotBeRead()
+    {
+        var h = new Harness().WithPreviousValues();
+        var unreadable = SchoolModeService.PowerSettings[0];
+        h.Scheme.Values.Remove((unreadable.SubGroup, unreadable.Setting));
+
+        var outcome = await h.Service.EnableAsync();
+
+        Assert.DoesNotContain(h.Scheme.Writes, w => w.SubGroup == unreadable.SubGroup && w.Setting == unreadable.Setting);
+        Assert.False(h.Scheme.Values.ContainsKey((unreadable.SubGroup, unreadable.Setting)));
+        Assert.NotEmpty(outcome.Warnings);
+
+        // The rest of school mode still applies: one unreadable setting does not cost the user the whole switch.
+        foreach (var setting in SchoolModeService.PowerSettings.Skip(1))
+            Assert.Equal(setting.TargetDc, h.Scheme.Values[(setting.SubGroup, setting.Setting)]);
+    }
+
+    /// <summary>The other half of the same promise: switching off writes back only what was recorded.</summary>
+    [Fact]
+    public async Task DisableAsync_NeverWritesASettingItCouldNotRecord()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        var unreadable = SchoolModeService.PowerSettings[0];
+        h.Scheme.Values.Remove((unreadable.SubGroup, unreadable.Setting));
+
+        await h.Service.EnableAsync();
+        h.Scheme.Writes.Clear();
+        await h.Service.DisableAsync();
+
+        Assert.DoesNotContain(h.Scheme.Writes, w => w.SubGroup == unreadable.SubGroup && w.Setting == unreadable.Setting);
+        Assert.False(h.Scheme.Values.ContainsKey((unreadable.SubGroup, unreadable.Setting)));
+        foreach (var setting in SchoolModeService.PowerSettings.Skip(1))
+            Assert.Equal(55u, h.Scheme.Values[(setting.SubGroup, setting.Setting)]);
+    }
+
+    /// <summary>
+    /// Re-applying at the start of a new session reads the undo record from disk, so it has to honour it too:
+    /// a setting the record does not hold was never readable and must stay untouched.
+    /// </summary>
+    [Fact]
+    public async Task ReapplyAsync_HonoursTheUndoRecordOnDisk()
+    {
+        var h = new Harness().WithPreviousValues();
+        var unreadable = SchoolModeService.PowerSettings[0];
+        h.Scheme.Values.Remove((unreadable.SubGroup, unreadable.Setting));
+        await h.Service.EnableAsync();
+
+        h.Scheme.Writes.Clear();
+        await h.Service.ReapplyAsync();
+
+        Assert.DoesNotContain(h.Scheme.Writes, w => w.SubGroup == unreadable.SubGroup && w.Setting == unreadable.Setting);
+        foreach (var setting in SchoolModeService.PowerSettings.Skip(1))
+            Assert.Equal(setting.TargetDc, h.Scheme.Values[(setting.SubGroup, setting.Setting)]);
+    }
+
+    /// <summary>
     /// The one part the fake scheme cannot prove: that every GUID school mode writes really exists in the active
     /// Windows power scheme and that powrprof accepts a write. Each value is written back exactly as it was read, so
     /// the machine is left untouched.

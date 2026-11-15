@@ -211,7 +211,7 @@ public sealed class SchoolModeService
         bool backupWritten = WriteBackup(backup);
         _settings.SchoolModeEnabled = true;
 
-        var outcome = await ApplyAsync();
+        var outcome = await ApplyAsync(BackedUpSettings(backup));
         if (!backupWritten)
         {
             outcome.Warnings.Add(Loc.T("Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); ayarlar elle geri alınmalı."));
@@ -327,7 +327,11 @@ public sealed class SchoolModeService
     /// <summary>Applies the school-mode values again without touching the undo record (start of a new session).</summary>
     public async Task<SchoolModeOutcome> ReapplyAsync()
     {
-        var outcome = await ApplyAsync();
+        // The undo record from the first enable decides what may be written. A setting it does not hold was never
+        // readable, so re-applying it would change a value switching school mode off cannot restore. A missing
+        // record means the machine is already in school-mode values, so writing them again loses nothing.
+        var backup = ReadBackup();
+        var outcome = await ApplyAsync(backup == null ? null : BackedUpSettings(backup));
         if (TurnLightingOffAsync != null)
         {
             try { await TurnLightingOffAsync(); } catch { }
@@ -335,24 +339,58 @@ public sealed class SchoolModeService
         return outcome;
     }
 
-    private async Task<SchoolModeOutcome> ApplyAsync()
+    /// <summary>
+    /// The power-scheme settings whose previous value is in the undo record. A setting that could not be read is
+    /// not in it, and writing that setting would change something switching school mode off could not put back.
+    /// </summary>
+    private static HashSet<(Guid SubGroup, Guid Setting)> BackedUpSettings(SchoolModeBackup backup)
+    {
+        var set = new HashSet<(Guid, Guid)>();
+        foreach (var saved in backup.PowerSettings)
+        {
+            if (Guid.TryParse(saved.SubGroup, out var subGroup) && Guid.TryParse(saved.Setting, out var setting))
+            {
+                set.Add((subGroup, setting));
+            }
+        }
+        return set;
+    }
+
+    /// <summary>
+    /// Applies the school-mode values. <paramref name="only"/> restricts the power-scheme writes to the settings
+    /// whose previous value is in the undo record; null means "no record to respect" and every setting is written.
+    /// </summary>
+    private async Task<SchoolModeOutcome> ApplyAsync(IReadOnlySet<(Guid SubGroup, Guid Setting)>? only = null)
     {
         var outcome = new SchoolModeOutcome();
 
         // Eight powercfg writes, each a process launch. Off the UI thread for the same reason as the read above.
-        var (powerApplied, powerFailed) = await Task.Run(() =>
+        var (powerApplied, powerFailed, powerSkipped) = await Task.Run(() =>
         {
             var applied = new List<string>();
             var failed = new List<string>();
+            var skipped = new List<string>();
             foreach (var setting in PowerSettings)
             {
+                if (only != null && !only.Contains((setting.SubGroup, setting.Setting)))
+                {
+                    // Its current value could not be read, so it is not in the undo record. Writing it would
+                    // break the promise that switching school mode off puts everything back.
+                    skipped.Add(Loc.T(setting.Label));
+                    continue;
+                }
                 if (_scheme.TryWriteDc(setting.SubGroup, setting.Setting, setting.TargetDc)) applied.Add(Loc.T(setting.Label));
                 else failed.Add(Loc.T(setting.Label));
             }
-            return (applied, failed);
+            return (applied, failed, skipped);
         });
         outcome.Applied.AddRange(powerApplied);
         outcome.Failed.AddRange(powerFailed);
+        if (powerSkipped.Count > 0)
+        {
+            AppLog.Warn("Okul modu: okunamayan ayarlar atlandı", string.Join(", ", powerSkipped));
+            outcome.Warnings.Add(Loc.T($"Okul modu: mevcut değeri okunamayan ayarlar değiştirilmedi: {string.Join(", ", powerSkipped)}"));
+        }
 
         if (await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true))
             outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
