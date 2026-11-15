@@ -955,10 +955,11 @@
  "Grafiği gizle": "Sembunyikan grafik",
  "Donanım izleme sayfasını açar": "Membuka halaman pemantauan perangkat keras",
  "Fan kontrolü için çalışma modlarına gider": "Menuju mode kerja untuk kontrol kipas",
- "CPU Boost ayarı için çalışma modlarına gider": "Menuju mode kerja untuk pengaturan CPU Boost",
- "Fare profili ayarına gider": "Menuju pengaturan profil mouse",
+ "CPU Boost modunu seç": "Pilih mode boost CPU",
+ "Fare profilini seç": "Pilih profil mouse",
  "Çalışma modunu değiştir": "Ubah mode kerja",
  "Bölge rengini değiştirmek için tıklayın": "Klik untuk mengubah warna zona ini",
  "Tüm Bölgelere Uygula": "Terapkan ke Semua Zona",
- "Seçili rengi dört bölgeye birden uygular": "Menerapkan warna terpilih ke keempat zona sekaligus"
+ "Seçili rengi dört bölgeye birden uygular": "Menerapkan warna terpilih ke keempat zona sekaligus",
+ "Fare profili uygulanamadı: {0}": "Profil mouse tidak dapat diterapkan: {0}"
 }

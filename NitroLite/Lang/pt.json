@@ -955,10 +955,11 @@
  "Grafiği gizle": "Ocultar o gráfico",
  "Donanım izleme sayfasını açar": "Abre a página de monitorização de hardware",
  "Fan kontrolü için çalışma modlarına gider": "Vai aos modos de funcionamento para o controlo do ventilador",
- "CPU Boost ayarı için çalışma modlarına gider": "Vai aos modos de funcionamento para a definição de CPU Boost",
- "Fare profili ayarına gider": "Vai à definição do perfil do rato",
+ "CPU Boost modunu seç": "Selecionar o modo de boost da CPU",
+ "Fare profilini seç": "Selecionar o perfil do rato",
  "Çalışma modunu değiştir": "Alterar o modo de funcionamento",
  "Bölge rengini değiştirmek için tıklayın": "Clique para alterar a cor desta zona",
  "Tüm Bölgelere Uygula": "Aplicar a todas as zonas",
- "Seçili rengi dört bölgeye birden uygular": "Aplica a cor selecionada às quatro zonas de uma vez"
+ "Seçili rengi dört bölgeye birden uygular": "Aplica a cor selecionada às quatro zonas de uma vez",
+ "Fare profili uygulanamadı: {0}": "Não foi possível aplicar o perfil do rato: {0}"
 }

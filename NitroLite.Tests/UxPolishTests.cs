@@ -510,6 +510,7 @@ public class UxPolishTests
     [Theory]
     [InlineData("Monitoring", "Monitoring")]
     [InlineData("Modes", "Modes")]
+    [InlineData("Boost", "Boost")]
     [InlineData("", null)]
     [InlineData("Nonsense", null)]
     public async Task SideStatRow_MapsTheTagToAPage(string tag, string? expected)
@@ -529,13 +530,147 @@ public class UxPolishTests
             using var world = new UxWorld();
 
             world.Settings.AtkMouseIntegrationEnabled = true;
-            Assert.Equal("Modes", world.Window.SideStatRowTargetFor("Mouse"));
+            Assert.Equal("Mouse", world.Window.SideStatRowTargetFor("Mouse"));
 
             // With the integration off there is no mouse profile to configure, so the row goes to the tools page
             // where it can be switched on rather than to a page whose mouse section is hidden.
             world.Settings.AtkMouseIntegrationEnabled = false;
             Assert.Equal("Debloat", world.Window.SideStatRowTargetFor("Mouse"));
         });
+    }
+
+    // =============================================================================================================
+    // 6. The BOOST and FARE menus.
+    // =============================================================================================================
+
+    [Fact]
+    public async Task BoostMenu_OffersTheThreeLevelsAndChecksTheCurrentOne()
+    {
+        await RunStaAsync(async () =>
+        {
+            using var world = new UxWorld();
+            world.Cpu.SetCurrentModeForTesting(CpuBoostMode.Efficient);
+
+            var menu = world.Window.BuildBoostMenu();
+            var items = menu.Items.Cast<WpfMenuItem>().ToList();
+
+            Assert.Equal(3, items.Count);
+            Assert.Equal(
+                new[] { CpuBoostMode.Aggressive, CpuBoostMode.Efficient, CpuBoostMode.Disabled },
+                items.Select(i => (CpuBoostMode)i.Tag!).ToArray());
+
+            var checkedItems = items.Where(i => i.IsChecked).ToList();
+            Assert.Single(checkedItems);
+            Assert.Equal(CpuBoostMode.Efficient, (CpuBoostMode)checkedItems[0].Tag!);
+        });
+    }
+
+    [Fact]
+    public async Task BoostMenu_AnItemGoesThroughSetManualCpuBoostAsync()
+    {
+        await RunStaAsync(async () =>
+        {
+            using var world = new UxWorld();
+            world.Cpu.Mode = CpuBoostMode.Aggressive;
+
+            var menu = world.Window.BuildBoostMenu();
+            var disabled = menu.Items.Cast<WpfMenuItem>().Single(i => (CpuBoostMode)i.Tag! == CpuBoostMode.Disabled);
+
+            disabled.RaiseEvent(new RoutedEventArgs(WpfMenuItem.ClickEvent));
+            await WaitUntilAsync(() => world.Cpu.Writes.Contains(CpuBoostMode.Disabled));
+
+            // The menu is a second door into the same call the segmented buttons use, so the desktop baseline is
+            // updated exactly as it is from the page.
+            Assert.Contains(CpuBoostMode.Disabled, world.Cpu.Writes);
+            Assert.Equal(CpuBoostMode.Disabled, world.Cpu.Mode);
+        });
+    }
+
+    [Fact]
+    public async Task MouseProfileMenu_OffersTheFiveChoicesAndChecksTheSavedOne()
+    {
+        await RunStaAsync(async () =>
+        {
+            using var world = new UxWorld();
+            world.Settings.DefaultAtkMouseProfile = 3;
+
+            var menu = world.Window.BuildMouseProfileMenu();
+            var items = menu.Items.Cast<WpfMenuItem>().ToList();
+
+            Assert.Equal(5, items.Count);
+            Assert.Equal(
+                new[] { 1, 2, 3, 4, 0 },
+                items.Select(i => (int)i.Tag!).ToArray());
+
+            var checkedItems = items.Where(i => i.IsChecked).ToList();
+            Assert.Single(checkedItems);
+            Assert.Equal(3, (int)checkedItems[0].Tag!);
+        });
+    }
+
+    [Fact]
+    public async Task MouseProfileMenu_AnItemSavesAndAppliesTheProfile()
+    {
+        await RunStaAsync(async () =>
+        {
+            using var world = new UxWorld();
+            world.Settings.AtkMouseIntegrationEnabled = true;
+            world.Settings.DefaultAtkMouseProfile = 1;
+
+            var applied = new List<int>();
+            world.Window.MouseProfileSwitcher = profile =>
+            {
+                applied.Add(profile);
+                return true;
+            };
+
+            var menu = world.Window.BuildMouseProfileMenu();
+            var config2 = menu.Items.Cast<WpfMenuItem>().Single(i => (int)i.Tag! == 2);
+
+            config2.RaiseEvent(new RoutedEventArgs(WpfMenuItem.ClickEvent));
+            await WaitUntilAsync(() => applied.Contains(2));
+
+            Assert.Contains(2, applied);
+            Assert.Equal(2, world.Settings.DefaultAtkMouseProfile);
+        });
+    }
+
+    [Fact]
+    public async Task MouseProfileMenu_KeepLastUsed_IsSavedWithoutTouchingTheMouse()
+    {
+        await RunStaAsync(async () =>
+        {
+            using var world = new UxWorld();
+            world.Settings.AtkMouseIntegrationEnabled = true;
+            world.Settings.DefaultAtkMouseProfile = 2;
+
+            var applied = new List<int>();
+            world.Window.MouseProfileSwitcher = profile =>
+            {
+                applied.Add(profile);
+                return true;
+            };
+
+            var menu = world.Window.BuildMouseProfileMenu();
+            var keepLast = menu.Items.Cast<WpfMenuItem>().Single(i => (int)i.Tag! == 0);
+
+            keepLast.RaiseEvent(new RoutedEventArgs(WpfMenuItem.ClickEvent));
+            await WaitUntilAsync(() => world.Settings.DefaultAtkMouseProfile == 0);
+
+            // "Keep the last one" is a preference, not a profile: nothing is sent to the hardware.
+            Assert.Empty(applied);
+            Assert.Equal(0, world.Settings.DefaultAtkMouseProfile);
+        });
+    }
+
+    [Fact]
+    public void MouseProfileIndex_MatchesTheComboOrder()
+    {
+        Assert.Equal(0, MainWindow.DefaultMouseProfileIndex(1));
+        Assert.Equal(1, MainWindow.DefaultMouseProfileIndex(2));
+        Assert.Equal(2, MainWindow.DefaultMouseProfileIndex(3));
+        Assert.Equal(3, MainWindow.DefaultMouseProfileIndex(4));
+        Assert.Equal(4, MainWindow.DefaultMouseProfileIndex(0));
     }
 
     // =============================================================================================================

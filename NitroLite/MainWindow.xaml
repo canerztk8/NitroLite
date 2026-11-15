@@ -826,13 +826,13 @@
                                     <TextBlock x:Name="TxtSideCpuFan" Text="-- RPM" Style="{StaticResource Figure}" HorizontalAlignment="Right" />
                                 </Grid>
                             </Border>
-                            <Border Style="{StaticResource SideStatRow}" Tag="Modes" MouseLeftButtonUp="SideStatRow_Click" ToolTip="CPU Boost ayarı için çalışma modlarına gider">
+                            <Border Style="{StaticResource SideStatRow}" Tag="Boost" MouseLeftButtonUp="SideStatRow_Click" ToolTip="CPU Boost modunu seç">
                                 <Grid>
                                     <TextBlock Text="BOOST" Style="{StaticResource LabelCaps}" />
                                     <TextBlock x:Name="TxtSideCpuBoost" Text="Agresif" Foreground="{StaticResource Ink}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                 </Grid>
                             </Border>
-                            <Border x:Name="RowSideMouseProfile" Style="{StaticResource SideStatRow}" Tag="Mouse" MouseLeftButtonUp="SideStatRow_Click" Visibility="Collapsed" ToolTip="Fare profili ayarına gider">
+                            <Border x:Name="RowSideMouseProfile" Style="{StaticResource SideStatRow}" Tag="Mouse" MouseLeftButtonUp="SideStatRow_Click" Visibility="Collapsed" ToolTip="Fare profilini seç">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />

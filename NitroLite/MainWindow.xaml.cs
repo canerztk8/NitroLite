@@ -1535,15 +1535,17 @@ public partial class MainWindow : Window
     /// when ATK integration is off, because that is where the switch that turns it on lives.
     /// </summary>
     /// <summary>
-    /// Which page a left-rail SİSTEM row opens. The mouse row depends on whether the ATK integration is on: with it
-    /// off there is no mouse profile to configure, so the row goes to the tools page where the integration is
-    /// switched on rather than to a page whose mouse section is hidden.
+    /// What a left-rail SİSTEM row does when it is clicked. The two readings that are also a single setting — BOOST
+    /// and the mouse profile — open their menu in place; the rest open the page that owns them. The mouse row depends
+    /// on whether the ATK integration is on: with it off there is no profile to pick, so the row goes to the tools
+    /// page where the integration is switched on rather than to a page whose mouse section is hidden.
     /// </summary>
     internal string? SideStatRowTargetFor(string? tag) => tag switch
     {
         "Monitoring" => "Monitoring",
         "Modes" => "Modes",
-        "Mouse" => _appSettings.AtkMouseIntegrationEnabled ? "Modes" : "Debloat",
+        "Boost" => "Boost",
+        "Mouse" => _appSettings.AtkMouseIntegrationEnabled ? "Mouse" : "Debloat",
         _ => null
     };
 
@@ -1562,6 +1564,12 @@ public partial class MainWindow : Window
                     break;
                 case "Debloat":
                     if (NavDebloat != null) NavDebloat.IsChecked = true;
+                    break;
+                case "Boost":
+                    OpenContextMenu(row, BuildBoostMenu());
+                    break;
+                case "Mouse":
+                    OpenContextMenu(row, BuildMouseProfileMenu());
                     break;
             }
         }

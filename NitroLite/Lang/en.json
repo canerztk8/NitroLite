@@ -955,10 +955,11 @@
  "Grafiği gizle": "Hide the chart",
  "Donanım izleme sayfasını açar": "Opens the hardware monitoring page",
  "Fan kontrolü için çalışma modlarına gider": "Goes to the operating modes for fan control",
- "CPU Boost ayarı için çalışma modlarına gider": "Goes to the operating modes for the CPU boost setting",
- "Fare profili ayarına gider": "Goes to the mouse profile setting",
+ "CPU Boost modunu seç": "Select the CPU boost mode",
+ "Fare profilini seç": "Select the mouse profile",
  "Çalışma modunu değiştir": "Change the operating mode",
  "Bölge rengini değiştirmek için tıklayın": "Click to change this zone's colour",
  "Tüm Bölgelere Uygula": "Apply to All Zones",
- "Seçili rengi dört bölgeye birden uygular": "Applies the selected colour to all four zones at once"
+ "Seçili rengi dört bölgeye birden uygular": "Applies the selected colour to all four zones at once",
+ "Fare profili uygulanamadı: {0}": "The mouse profile could not be applied: {0}"
 }

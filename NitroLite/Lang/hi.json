@@ -955,10 +955,11 @@
  "Grafiği gizle": "चार्ट छिपाएँ",
  "Donanım izleme sayfasını açar": "हार्डवेयर मॉनिटरिंग पेज खोलता है",
  "Fan kontrolü için çalışma modlarına gider": "फ़ैन नियंत्रण के लिए कार्य मोड पर जाता है",
- "CPU Boost ayarı için çalışma modlarına gider": "CPU बूस्ट सेटिंग के लिए कार्य मोड पर जाता है",
- "Fare profili ayarına gider": "माउस प्रोफ़ाइल सेटिंग पर जाता है",
+ "CPU Boost modunu seç": "CPU बूस्ट मोड चुनें",
+ "Fare profilini seç": "माउस प्रोफ़ाइल चुनें",
  "Çalışma modunu değiştir": "कार्य मोड बदलें",
  "Bölge rengini değiştirmek için tıklayın": "इस ज़ोन का रंग बदलने के लिए क्लिक करें",
  "Tüm Bölgelere Uygula": "सभी ज़ोन पर लागू करें",
- "Seçili rengi dört bölgeye birden uygular": "चयनित रंग को चारों ज़ोन पर एक साथ लागू करता है"
+ "Seçili rengi dört bölgeye birden uygular": "चयनित रंग को चारों ज़ोन पर एक साथ लागू करता है",
+ "Fare profili uygulanamadı: {0}": "माउस प्रोफ़ाइल लागू नहीं हो सकी: {0}"
 }

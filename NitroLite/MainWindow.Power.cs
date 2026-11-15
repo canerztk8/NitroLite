@@ -980,16 +980,48 @@ public partial class MainWindow
         return menu;
     }
 
+    /// <summary>
+    /// The compact CPU boost menu behind the left rail's BOOST figure. The same three levels as the segmented buttons
+    /// on the modes page, and the same call: <see cref="SetManualCpuBoostAsync"/>, so the desktop baseline and the
+    /// game-session lock behave exactly as they do from the page.
+    /// </summary>
+    internal WpfContextMenu BuildBoostMenu()
+    {
+        var menu = new WpfContextMenu();
+        foreach (var mode in new[] { CpuBoostMode.Aggressive, CpuBoostMode.Efficient, CpuBoostMode.Disabled })
+        {
+            var item = new WpfMenuItem
+            {
+                Header = ModePolicy.BoostDisplayName(mode),
+                IsChecked = mode == _cpuPowerService.CurrentMode,
+                Tag = mode
+            };
+            var target = mode;
+            item.Click += async (_, _) =>
+            {
+                try { await SetManualCpuBoostAsync(target); }
+                catch (Exception ex) { ShowToast(Loc.T($"CPU modu uygulanamadı: {ex.Message}"), false); }
+            };
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
+    /// <summary>Opens <paramref name="menu"/> under the control that was clicked.</summary>
+    private void OpenContextMenu(FrameworkElement anchor, WpfContextMenu menu)
+    {
+        if (menu.Items.Count == 0) return;
+        menu.PlacementTarget = anchor;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
     private void BadgeMode_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement anchor) return;
         try
         {
-            var menu = BuildModeMenu();
-            if (menu.Items.Count == 0) return;
-            menu.PlacementTarget = anchor;
-            menu.Placement = PlacementMode.Bottom;
-            menu.IsOpen = true;
+            OpenContextMenu(anchor, BuildModeMenu());
         }
         catch (Exception ex)
         {

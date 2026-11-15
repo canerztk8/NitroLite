@@ -1,7 +1,10 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using NitroLite.Core;
+using WpfContextMenu = System.Windows.Controls.ContextMenu;
+using WpfMenuItem = System.Windows.Controls.MenuItem;
 
 namespace NitroLite;
 
@@ -58,24 +61,62 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// The five choices the default-profile combo offers, in the order it offers them. The menu behind the left
+    /// rail's FARE figure is built from this list, so the two can never disagree about what Config 3 means.
+    /// </summary>
+    internal static readonly (int Profile, string Label)[] MouseProfileChoices =
+    {
+        (1, "Config 1 (Önerilen)"),
+        (2, "Config 2"),
+        (3, "Config 3"),
+        (4, "Config 4"),
+        (0, "Son Kullanılanı Koru")
+    };
+
+    /// <summary>Where a profile number sits in the combo. 0 ("keep the last one") is the last row.</summary>
+    internal static int DefaultMouseProfileIndex(int profile) => profile switch
+    {
+        1 => 0,
+        2 => 1,
+        3 => 2,
+        4 => 3,
+        _ => 4
+    };
+
+    /// <summary>
+    /// The compact mouse profile menu behind the left rail's FARE figure. It goes through the same apply path as the
+    /// page's combo and Uygula button, so the saved setting, the badge and the hardware stay in step.
+    /// </summary>
+    internal WpfContextMenu BuildMouseProfileMenu()
+    {
+        var menu = new WpfContextMenu();
+        foreach (var (profile, label) in MouseProfileChoices)
+        {
+            var item = new WpfMenuItem
+            {
+                Header = Loc.T(label),
+                IsChecked = profile == _appSettings.DefaultAtkMouseProfile,
+                Tag = profile
+            };
+            var target = profile;
+            item.Click += async (_, _) =>
+            {
+                try { await ApplyDefaultMouseProfileAsync(target); }
+                catch (Exception ex) { ShowToast(Loc.T($"Fare profili uygulanamadı: {ex.Message}"), false); }
+            };
+            menu.Items.Add(item);
+        }
+        return menu;
+    }
+
     private void InitializeDefaultMouseProfileUi()
     {
         if (CmbDefaultAtkMouseProfile == null) return;
         int profile = _appSettings.DefaultAtkMouseProfile; // 0..4, default is 1
-        int selectIdx = profile switch
-        {
-            1 => 0, // Config 1
-            2 => 1, // Config 2
-            3 => 2, // Config 3
-            4 => 3, // Config 4
-            _ => 4  // Son Kullanılanı Koru (0)
-        };
         // The combo is filled from the stored setting, not by the user: the handler would save the settings file
         // again and overwrite the badge this method is about to set.
-        bool wasSyncing = _isSyncingDefaultMouseProfileUi;
-        _isSyncingDefaultMouseProfileUi = true;
-        try { CmbDefaultAtkMouseProfile.SelectedIndex = selectIdx; }
-        finally { _isSyncingDefaultMouseProfileUi = wasSyncing; }
+        SyncDefaultMouseProfileCombo(profile);
 
         if (!_appSettings.AtkMouseIntegrationEnabled)
         {
@@ -86,6 +127,18 @@ public partial class MainWindow
         // Nothing is shown as active until the mouse itself confirms it.
         UpdateSideMouseProfileStatus(0);
         _ = ApplyDesktopMouseProfileAsync(profile);
+    }
+
+    /// <summary>Points the page's combo at <paramref name="profile"/> without letting its handler save again.</summary>
+    private void SyncDefaultMouseProfileCombo(int profile)
+    {
+        if (CmbDefaultAtkMouseProfile == null) return;
+        int index = DefaultMouseProfileIndex(profile);
+        if (CmbDefaultAtkMouseProfile.SelectedIndex == index) return;
+        bool wasSyncing = _isSyncingDefaultMouseProfileUi;
+        _isSyncingDefaultMouseProfileUi = true;
+        try { CmbDefaultAtkMouseProfile.SelectedIndex = index; }
+        finally { _isSyncingDefaultMouseProfileUi = wasSyncing; }
     }
 
     /// <summary>
@@ -494,10 +547,21 @@ public partial class MainWindow
     private async Task<bool> ApplyDefaultMouseProfileAsync()
     {
         int val = 1;
-        if (CmbDefaultAtkMouseProfile.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int parsed))
+        if (CmbDefaultAtkMouseProfile?.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out int parsed))
         {
             val = parsed;
         }
+        return await ApplyDefaultMouseProfileAsync(val);
+    }
+
+    /// <summary>
+    /// Saves <paramref name="val"/> as the default profile and, for a real config, sends it to the mouse. Shared by
+    /// the page's Uygula button and the left rail's FARE menu so both report the same outcome.
+    /// </summary>
+    internal async Task<bool> ApplyDefaultMouseProfileAsync(int val)
+    {
+        // The menu is a second way to make the same choice, so the page has to show it too.
+        SyncDefaultMouseProfileCombo(val);
 
         _appSettings.DefaultAtkMouseProfile = val;
         bool saved = SaveSettings();
