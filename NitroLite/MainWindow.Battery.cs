@@ -291,7 +291,8 @@ public partial class MainWindow
         Dispatcher.Invoke(() =>
         {
             if (Dispatcher.HasShutdownStarted) return;
-            SystemSounds.Exclamation.Play();
+            // School mode is a quiet mode: the banner and the balloon still say it, the beep does not.
+            if (!_appSettings.SchoolModeEnabled) SystemSounds.Exclamation.Play();
             _notifyIcon?.ShowBalloonTip(3000, Loc.T("NitroLite"), Loc.T($"Pil %{percent} seviyesine ulaştı (%80 eşiği aşıldı)."), System.Windows.Forms.ToolTipIcon.Warning);
         });
     }

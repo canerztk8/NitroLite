@@ -100,6 +100,7 @@ public partial class MainWindow : Window
     internal FanMode CurrentFanMode => _currentFanMode;
     internal OperatingMode CurrentMode => _currentMode;
     internal AppSettings CurrentAppSettings => _appSettings;
+    internal BatteryWatchdogService BatteryServiceForTesting => _batteryService;
     internal void SetCurrentModeForTesting(OperatingMode m) => _currentMode = m;
     internal void SetCurrentFanModeForTesting(FanMode m) => _currentFanMode = m;
     internal void SetLightingForTesting(LightingConfig cfg) => _lighting = cfg;
@@ -953,6 +954,9 @@ public partial class MainWindow : Window
             if (!IsVisible || WindowState == WindowState.Minimized)
             {
                 if (!trayBalloon || _notifyIcon == null || _isExiting || _isInitializingUi || _isGameSessionActive) return;
+                // School mode is a quiet mode: a confirmation balloon is noise, but a warning is the one thing the
+                // user must still see, so only the success ones are dropped.
+                if (isSuccess && _appSettings.SchoolModeEnabled) return;
                 try
                 {
                     _notifyIcon.ShowBalloonTip(isSuccess ? 2500 : 4000, Loc.T("NitroLite"), message,
@@ -1014,7 +1018,9 @@ public partial class MainWindow : Window
                 else
                 {
                     UpdateModeUi(mode.Value);
-                    if (!_isGameSessionActive) UpdateDesktopBaselineForManualChange(mode: mode.Value);
+                    // School mode writes its own mode straight to the device, so the difference is not a user
+                    // choice: recording it here overwrote the saved Turbo preference with Eco within five seconds.
+                    if (!_isGameSessionActive && !_appSettings.SchoolModeEnabled) UpdateDesktopBaselineForManualChange(mode: mode.Value);
                 }
             }
 
@@ -1123,10 +1129,22 @@ public partial class MainWindow : Window
     private readonly FanStallWatchdog _fanStallWatchdog = new();
 
     /// <summary>
-    /// True while neither temperature sensor is answering. The curve then holds full speed instead of the
-    /// speed the last good reading asked for, and the status line says why.
+    /// True once neither temperature sensor has answered for <see cref="FanCurveDeadSensorPollThreshold"/> polls in
+    /// a row. The curve then holds full speed instead of the speed the last good reading asked for, and the status
+    /// line says why.
     /// </summary>
     private bool _fanCurveSensorDead;
+
+    /// <summary>
+    /// Consecutive polls whose temperature was missing or impossible. One bad reading is a service hiccup, not a
+    /// dead sensor: acting on it took the fans to full speed for a second and dropped them back, which is a jet
+    /// engine in a library. Only a run of them means the sensor is really gone.
+    /// </summary>
+    private int _fanCurveDeadSensorPolls;
+
+    /// <summary>How many consecutive bad temperature polls count as a dead sensor.</summary>
+    internal const int FanCurveDeadSensorPollThreshold = 3;
+
     private bool _isUpdatingFanCurveUi;
 
     /// <summary>True while code (not the user) moves the fan-stall protection checkbox.</summary>

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using NitroLite.Core;
 using NitroLite.Tests.Scenarios;
@@ -126,8 +126,9 @@ public class FuzzInvariantTests
     }
 
     /// <summary>
-    /// A dead sensor pair is not a cool machine: the window holds full speed instead of leaving the fans wherever
-    /// the last good reading put them.
+    /// A dead sensor pair is not a cool machine: once the outage has lasted
+    /// <see cref="MainWindow.FanCurveDeadSensorPollThreshold"/> polls the window holds full speed instead of leaving
+    /// the fans wherever the last good reading put them. A single bad poll is a hiccup and must not spin them up.
     /// </summary>
     [Fact]
     public Task BothSensorsDeadHoldsFullSpeed() => Sta.RunAsync(async () =>
@@ -139,7 +140,16 @@ public class FuzzInvariantTests
         await world.Window.ApplyFanCurveAsync(40, 40);
         Assert.True(world.Agent.CustomCpuPercent < FanCurve.MaxPercent);
 
+        // One bad poll is a hiccup, not a dead sensor: the fans stay where the last good reading put them.
         await world.Window.ApplyFanCurveAsync(0, 0);
+        Assert.True(world.Agent.CustomCpuPercent < FanCurve.MaxPercent,
+            $"a single dead poll took the fans to {world.Agent.CustomCpuPercent} %");
+
+        // A run of them is a dead sensor, and then the curve holds full speed.
+        for (int i = 1; i < MainWindow.FanCurveDeadSensorPollThreshold; i++)
+        {
+            await world.Window.ApplyFanCurveAsync(0, 0);
+        }
 
         Assert.Equal(FanCurve.MaxPercent, world.Agent.CustomCpuPercent);
         Assert.Equal(FanCurve.MaxPercent, world.Agent.CustomFanGpuPercent);

@@ -156,6 +156,11 @@ public partial class MainWindow
         if (!_appSettings.LastOperatingMode.HasValue) return;
         if (_debloatService.IsNitroSenseRunning()) return;
 
+        // School mode owns the machine while it is on. Reasserting the saved mode here wrote Turbo on the adapter
+        // (or the battery-clamped Default) over the quiet mode the switch promises, on every resume, unlock and
+        // boot: the fans spun up in the middle of a lecture with the switch still showing on.
+        if (_appSettings.SchoolModeEnabled) return;
+
         CancelActiveOperatingModeReassertion();
         var cts = new CancellationTokenSource();
         _modeReassertCts = cts;
@@ -171,6 +176,8 @@ public partial class MainWindow
             {
                 await Task.Delay(delay, token);
                 if (token.IsCancellationRequested || _isExiting || _isGameSessionActive) return;
+                // The switch can be turned on between two attempts; the remaining ones must not undo it.
+                if (_appSettings.SchoolModeEnabled) return;
 
                 var (onAc, percent) = PowerStateProvider();
                 var targetMode = ModePolicy.ClampForPower(_appSettings.LastOperatingMode.Value, onAc, percent);

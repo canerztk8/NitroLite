@@ -537,6 +537,16 @@ public partial class MainWindow
     internal async Task HandleGameStartedAsync(GameProfile profile)
     {
         if (Dispatcher.HasShutdownStarted) return;
+
+        // School mode owns the machine while it is on. A profile would take the fans to Max and the mode to Turbo,
+        // which is the opposite of what the switch promises; the profile is skipped rather than queued, so closing
+        // the game later cannot apply it retroactively either.
+        if (_appSettings.SchoolModeEnabled)
+        {
+            AppLog.Warn("Oyun profili atlandı", $"Okul modu açık: '{profile.DisplayName}' profili uygulanmadı.");
+            return;
+        }
+
         int sessionGen = Interlocked.Increment(ref _gameSessionGeneration);
         try
         {

@@ -46,6 +46,13 @@ public class BatteryWatchdogService : IDisposable
 
     public bool WatchdogEnabled { get; set; } = true;
     public bool IsGameSessionActive { get; set; } = false;
+
+    /// <summary>
+    /// Set while school mode is on. The discharge target still raises its event and the UI still says so; only the
+    /// system sound is skipped, because a quiet mode that beeps is not quiet.
+    /// </summary>
+    public bool SuppressSounds { get; set; }
+
     public bool IsDischarging => _isDischarging;
 
     public BatteryStatusInfo CurrentStatus { get; private set; } = new();
@@ -558,7 +565,10 @@ public class BatteryWatchdogService : IDisposable
                 DischargeStateChanged?.Invoke(false);
                 if (reachedTarget)
                 {
-                    try { SystemSounds.Asterisk.Play(); } catch { }
+                    if (!SuppressSounds)
+                    {
+                        try { SystemSounds.Asterisk.Play(); } catch { }
+                    }
                     DischargeTargetReached?.Invoke();
                 }
             }

@@ -34,12 +34,15 @@ public partial class MainWindow
     /// While school mode is on it owns the machine: the automatic battery/AC pass would otherwise undo its quiet
     /// mode, fan and refresh rate the moment the adapter comes back.
     /// </summary>
-    private void ApplySchoolModeAutomationState()
+    internal void ApplySchoolModeAutomationState()
     {
         if (_powerAutomationService != null)
         {
             _powerAutomationService.AutomationSuspended = _appSettings.SchoolModeEnabled;
         }
+
+        // The battery watchdog beeps on its own thread when the discharge target is reached; it has to be told.
+        _batteryService.SuppressSounds = _appSettings.SchoolModeEnabled;
     }
 
     private void UpdateSchoolModeUi()
@@ -70,7 +73,13 @@ public partial class MainWindow
         {
             // School mode asks the firmware for automatic fans. An armed curve would take them back to Custom on
             // the next poll, so it is suspended first and the switch's "Fan (Otomatik)" is what actually happens.
-            if (on) SuspendFanCurveForSchoolMode();
+            if (on)
+            {
+                SuspendFanCurveForSchoolMode();
+                // A boot or resume reassertion still waiting on its 3 s / 7 s / 15 s attempt would write the saved
+                // mode over the quiet one a few seconds from now. Turning the switch on cancels it outright.
+                CancelActiveOperatingModeReassertion();
+            }
 
             var outcome = on ? await _schoolModeService.EnableAsync() : await _schoolModeService.DisableAsync();
 

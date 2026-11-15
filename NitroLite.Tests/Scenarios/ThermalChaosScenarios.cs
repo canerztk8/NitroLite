@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using NitroLite.Core;
 using Xunit;
 
@@ -395,8 +395,10 @@ public class ThermalChaosScenarios
     });
 
     /// <summary>
-    /// Neither sensor answering is not a cool machine. The curve holds full speed instead of leaving the fans
-    /// wherever the last write put them, and it writes once rather than on every poll.
+    /// Neither sensor answering is not a cool machine. Once the outage has lasted
+    /// <see cref="MainWindow.FanCurveDeadSensorPollThreshold"/> polls the curve holds full speed instead of leaving
+    /// the fans wherever the last write put them, and it writes once rather than on every poll. A single bad poll is
+    /// a service hiccup and must not spin them up.
     /// </summary>
     [Fact]
     public Task BothSensorsDead_AsksForFullSpeedOnce() => Sta.RunAsync(async () =>
@@ -406,12 +408,20 @@ public class ThermalChaosScenarios
         Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
         agent.FanWrites.Clear();
 
+        // A single bad poll is a hiccup, not a dead sensor: nothing is written and the fans stay where they were.
+        await window.ApplyFanCurveAsync(0, 0);
+        Assert.Empty(agent.FanWrites);
+
+        await window.ApplyFanCurveAsync(0, 0);
+        Assert.Empty(agent.FanWrites);
+
+        // The third in a row is a sensor that is really gone, and then the curve holds full speed.
         await window.ApplyFanCurveAsync(0, 0);
         Assert.Single(agent.FanWrites);
         Assert.Equal(FanCurve.MaxPercent, agent.FanWrites[0].Cpu);
         Assert.Equal(FanCurve.MaxPercent, agent.FanWrites[0].Gpu);
 
-        // A second dead poll must not repeat the write.
+        // A further dead poll must not repeat the write.
         await window.ApplyFanCurveAsync(0, 0);
         Assert.Single(agent.FanWrites);
     });
@@ -427,7 +437,10 @@ public class ThermalChaosScenarios
         var window = BuildCurveWindow(agent);
         Assert.True(await window.SetFanCurveEnabledAsync(true, quiet: true));
 
-        await window.ApplyFanCurveAsync(0, 0);
+        for (int i = 0; i < MainWindow.FanCurveDeadSensorPollThreshold; i++)
+        {
+            await window.ApplyFanCurveAsync(0, 0);
+        }
         Assert.Equal(FanCurve.MaxPercent, agent.FanWrites[^1].Cpu);
 
         agent.FanWrites.Clear();

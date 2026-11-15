@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using NitroLite.Core;
 using NitroLite.Tests.Scenarios;
 
@@ -63,6 +63,13 @@ internal sealed class FuzzWorld : IDisposable
     };
 
     private readonly Dictionary<(Guid SubGroup, Guid Setting), uint> _beforeSchoolMode = new();
+
+    /// <summary>
+    /// Consecutive polls whose hottest reading was missing. The window holds the last good speed through a short
+    /// outage and only takes the fans to full speed once the sensor has been gone for
+    /// <see cref="MainWindow.FanCurveDeadSensorPollThreshold"/> polls, so the invariant waits the same three.
+    /// </summary>
+    private int _deadPollRun;
     private readonly List<(Guid SubGroup, Guid Setting)> _schoolModeWrote = new();
     private int _validatedFanWrites;
 
@@ -183,6 +190,8 @@ internal sealed class FuzzWorld : IDisposable
             case FuzzEvent.FanCurveToggle:
                 await Window.SetFanCurveEnabledAsync(!Window.IsFanCurveArmed, quiet: true);
                 if (Window.IsFanCurveArmed) CurveArmings++;
+                // Arming and disarming both clear the window's outage counter, so the invariant's has to follow.
+                _deadPollRun = 0;
                 break;
 
             case FuzzEvent.Temperature:
@@ -265,6 +274,11 @@ internal sealed class FuzzWorld : IDisposable
 
         if (hottest <= 0)
         {
+            // A single bad poll is a service hiccup, not a dead sensor: the window holds the last good speed
+            // through it. Only a run of them has to end at full speed.
+            _deadPollRun++;
+            if (_deadPollRun < MainWindow.FanCurveDeadSensorPollThreshold) return;
+
             DeadSensorChecks++;
             if (Agent.CustomCpuPercent != FanCurve.MaxPercent || Agent.CustomFanGpuPercent != FanCurve.MaxPercent)
             {
@@ -273,6 +287,8 @@ internal sealed class FuzzWorld : IDisposable
             }
             return;
         }
+
+        _deadPollRun = 0;
 
         int floor = FanCurve.SafetyFloorAt(hottest);
         if (Agent.CustomCpuPercent < floor)

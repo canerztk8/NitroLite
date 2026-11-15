@@ -302,15 +302,29 @@ public partial class MainWindow
         // ever taken and a 92 °C GPU could not raise the fans.
         int temperatureC = Math.Max(cpuTemperatureC, gpuTemperatureC);
 
-        // Neither sensor answered. The curve asks for full speed instead of leaving the fans wherever the last
-        // write put them: a curve the user turned on must not go quiet because a sensor died.
-        _fanCurveSensorDead = temperatureC <= 0;
-        if (_fanCurveSensorDead)
+        // A reading that is missing or impossible is not a temperature. 0 is what the fallback sample carries when
+        // AASSvc did not answer, and 0xFF (255) is the sentinel a sensor that did not answer leaves behind; the
+        // formatter already refuses to show either, so the curve must refuse to act on either.
+        bool implausible = temperatureC <= 0 || temperatureC > TelemetryFormatter.MaxPlausibleTemperature;
+        if (implausible)
         {
+            // One bad poll is a service hiccup, a restart or an EC glitch. Holding the last good speed through it
+            // is what keeps a library quiet; only a run of them means the sensor is really gone, and then the curve
+            // asks for full speed instead of leaving the fans wherever the last write put them.
+            _fanCurveDeadSensorPolls++;
+            if (_fanCurveDeadSensorPolls < FanCurveDeadSensorPollThreshold)
+            {
+                _fanCurveSensorDead = false;
+                return;
+            }
+
+            _fanCurveSensorDead = true;
             await ApplyFanCurveFullSpeedAsync();
             return;
         }
 
+        _fanCurveDeadSensorPolls = 0;
+        _fanCurveSensorDead = false;
         _fanCurveLastTemperatureC = temperatureC;
 
         // While the curve is on it owns the fans. Anything else holding a different mode — NitroSense, the mode
@@ -394,6 +408,10 @@ public partial class MainWindow
         {
             _fanCurveOwner = FanCurveOwner.Desktop;
             _appSettings.FanCurveEnabled = true;
+            // A half-counted outage from the previous arming must not carry over: the new curve starts from a clean
+            // slate and only its own readings can declare the sensor dead.
+            _fanCurveDeadSensorPolls = 0;
+            _fanCurveSensorDead = false;
             _fanCurveEvaluator = new FanCurveEvaluator(_appSettings.BuildFanCurve());
             SaveSettings();
             UpdateFanButtonsUi(_currentFanMode);
@@ -445,6 +463,10 @@ public partial class MainWindow
         if (_fanCurveOwner == FanCurveOwner.Desktop) _appSettings.FanCurveEnabled = false;
         _fanCurveOwner = FanCurveOwner.None;
         _fanCurveEvaluator = null;
+        // The outage counter belongs to the arming that was watching it. Left behind, a curve armed later would
+        // start one poll away from full speed on a machine whose sensor is perfectly fine.
+        _fanCurveDeadSensorPolls = 0;
+        _fanCurveSensorDead = false;
         SaveSettings();
         UpdateFanCurveStatusText();
     }
@@ -567,6 +589,8 @@ public partial class MainWindow
             _appSettings.FanCurveMinDwellSeconds);
 
         _fanCurveOwner = FanCurveOwner.Game;
+        _fanCurveDeadSensorPolls = 0;
+        _fanCurveSensorDead = false;
         _fanCurveEvaluator = new FanCurveEvaluator(curve);
 
         int percent = _fanCurveLastTemperatureC > 0

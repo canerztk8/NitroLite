@@ -153,7 +153,11 @@ public partial class MainWindow
             // The GPU reading goes along: the curve follows the hotter die, so a stuck CPU sensor cannot leave the
             // fans at idle speed while the GPU cooks.
             int hottestReading = Math.Max(data.CpuTemperature, data.GpuTemperature);
-            if (hottestReading > 0) _fanCurveLastTemperatureC = hottestReading;
+            // A sentinel (0xFF) is not a temperature: storing it would make the next curve edit ask for full speed.
+            if (hottestReading > 0 && hottestReading <= TelemetryFormatter.MaxPlausibleTemperature)
+            {
+                _fanCurveLastTemperatureC = hottestReading;
+            }
             if (_fanCurveEnabled)
             {
                 await ApplyFanCurveAsync(data.CpuTemperature, data.GpuTemperature);
