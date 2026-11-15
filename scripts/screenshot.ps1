@@ -19,7 +19,7 @@
     Capture all five pages.
 
 .PARAMETER Theme
-    light or dark.
+    light, dark, midnightoled, slatesteel, amberconsole or nordfrost.
 
 .PARAMETER Language
     Language code: en, tr, de, es, ru, pt, hi, id.
@@ -78,7 +78,7 @@
 param(
     [string]$Page = 'NavModes',
     [switch]$All,
-    [ValidateSet('light', 'dark')][string]$Theme = 'light',
+    [ValidateSet('light', 'dark', 'midnightoled', 'slatesteel', 'amberconsole', 'nordfrost')][string]$Theme = 'light',
     [string]$Language = 'tr',
     [string]$Out = '',
     [string]$Position = 'corner',
@@ -154,8 +154,16 @@ if ($Seed) {
     if (-not (Test-Path $Seed)) { throw "Seed folder not found: $Seed" }
     Copy-Item -Path (Join-Path $Seed '*') -Destination $dataDir -Force
 }
-$themeValue = if ($Theme -eq 'dark') { 1 } else { 0 }
-$json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": $themeValue"
+# The palette is stored by name, so the capture script names it rather than numbering it.
+$themeValue = switch ($Theme) {
+    'light' { 'Light' }
+    'dark' { 'Dark' }
+    'midnightoled' { 'MidnightOled' }
+    'slatesteel' { 'SlateSteel' }
+    'amberconsole' { 'AmberConsole' }
+    'nordfrost' { 'NordFrost' }
+}
+$json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": `"$themeValue`""
 if ($PSBoundParameters.ContainsKey('MouseProfile')) {
     $json += ",`r`n  `"atk_mouse_integration_enabled`": true,`r`n  `"default_atk_mouse_profile`": $MouseProfile"
 }

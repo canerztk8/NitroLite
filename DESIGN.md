@@ -161,6 +161,16 @@ Colour never carries meaning on its own: every state chip also writes text ("ACT
 
 **Measurement bars carry no colour.** The track is `rule`, the fill is `ink`. A bar shows a measurement, not a judgement; the judgement lives in the text and the badge beside it. The only exceptions are disk usage above 85 % and a running discharge — a real threshold and a real live state.
 
+### Palettes
+
+The colours above are the **Light** palette. Five more ship beside it — `Dark`, `MidnightOled`, `SlateSteel`, `AmberConsole`, `NordFrost` — and `System` follows the Windows light/dark setting, so the picker offers seven entries over six dictionaries. The world does not change between them: same paper-and-ink hierarchy, same single accent, same three jobs for it. Only the temperature of the ground and the hue of the stamp move.
+
+- **One key set, no exceptions.** Every dictionary in `NitroLite/Themes/` defines the identical set of `Color` and `SolidColorBrush` keys. A palette that is missing one throws `ResourceReferenceKeyNotFoundException` the moment a control asks for it, so `ThemeDictionaryTests` compares the key sets rather than trusting the eye.
+- **`ThemeCatalog.IsDarkTheme` is the only place that decides "dark".** The DWM window frame, the OSD and the chart ink ask it; nothing compares against `AppTheme.Dark` or `!= AppTheme.Light`. A new palette is one enum member, one dictionary and one entry in `ThemeCatalog.All`.
+- **Contrast floors, measured not eyeballed.** `Ink` on `CardBg` ≥ 4.5:1 (WCAG AA) and `BorderDark` on `Paper` ≥ 1.45:1, so a 1px card frame never dissolves into the ground. `ThemeDictionaryTests` computes both ratios for every palette; a hand-picked hex that fails is a failing test, not a judgement call.
+- **The accent is `Vermilion`; danger is `AccentRed`.** In a palette whose accent is not red — Slate Steel's ice blue, Nord Frost's turquoise — `Vermilion` carries the stamp (the live mode, the active tile frame, the "now" line) and `AccentRed` keeps the warning hue. The three-jobs rule applies to whichever brush is the accent.
+- **The stored value is the palette name.** `config.json` carries `"theme": "NordFrost"`; the legacy numbers (`0`, `1`, `2`) still read, and a name the app does not know falls back to `System` rather than leaving the window unthemed.
+
 ## Typography
 
 Two families, a strict division of labour: **recorded figures** in Cascadia Mono (falling back to Consolas, Courier New), **written text** in Segoe UI Variable Text. No custom font is loaded — the lightweight constraint.

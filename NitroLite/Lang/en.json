@@ -961,5 +961,9 @@
  "Bölge rengini değiştirmek için tıklayın": "Click to change this zone's colour",
  "Tüm Bölgelere Uygula": "Apply to All Zones",
  "Seçili rengi dört bölgeye birden uygular": "Applies the selected colour to all four zones at once",
- "Fare profili uygulanamadı: {0}": "The mouse profile could not be applied: {0}"
+ "Fare profili uygulanamadı: {0}": "The mouse profile could not be applied: {0}",
+ "Saf Siyah (OLED)": "Midnight OLED",
+ "Soğuk Antrasit": "Slate Steel",
+ "Kehribar Konsol": "Amber Console",
+ "Kuzey Buzulu": "Nord Frost"
 }

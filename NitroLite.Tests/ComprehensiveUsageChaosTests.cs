@@ -1007,7 +1007,9 @@ public class ComprehensiveUsageChaosTests
             SettingsManager.SaveSettingsAtomic(primary, good);
             SettingsManager.SaveSettingsAtomic(backup, good);
 
-            foreach (var garbage in new[] { "", "{", "null", "[]", "{\"theme\":\"nonsense\"}", new string('x', 4096) })
+            // An unknown theme name is not in this list: the theme converter recovers from it, so the file still
+            // parses and the rest of the settings survive. Only shapes that cannot be read at all belong here.
+            foreach (var garbage in new[] { "", "{", "null", "[]", "{\"OsdCorner\":\"nine\"}", new string('x', 4096) })
             {
                 File.WriteAllText(primary, garbage);
                 var result = SettingsManager.LoadSettings(primary, backup);

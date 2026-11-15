@@ -247,7 +247,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         LocXaml.Apply(this);
-        WindowChromeHelper.Attach(this);
+        WindowChromeHelper.Attach(this, _appSettings.Theme);
         ShowAppVersion();
         SetupTrayIcon();
         SetupTimers();
@@ -300,7 +300,7 @@ public partial class MainWindow : Window
         {
             InitializeComponent();
             LocXaml.Apply(this);
-            WindowChromeHelper.Attach(this);
+            WindowChromeHelper.Attach(this, _appSettings.Theme);
             SetupTrayIcon();
             SetupTimers();
             SetupEvents();

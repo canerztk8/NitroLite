@@ -961,5 +961,9 @@
  "Bölge rengini değiştirmek için tıklayın": "Нажмите, чтобы изменить цвет этой зоны",
  "Tüm Bölgelere Uygula": "Применить ко всем зонам",
  "Seçili rengi dört bölgeye birden uygular": "Применяет выбранный цвет ко всем четырём зонам сразу",
- "Fare profili uygulanamadı: {0}": "Не удалось применить профиль мыши: {0}"
+ "Fare profili uygulanamadı: {0}": "Не удалось применить профиль мыши: {0}",
+ "Saf Siyah (OLED)": "Чистый чёрный (OLED)",
+ "Soğuk Antrasit": "Холодный антрацит",
+ "Kehribar Konsol": "Янтарная консоль",
+ "Kuzey Buzulu": "Северный иней"
 }

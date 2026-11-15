@@ -33,11 +33,12 @@ public partial class MainWindow
                 ?? CmbLanguage.Items[0];
 
             CmbTheme.Items.Clear();
-            CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T("Sistem varsayılanı"), Tag = AppTheme.System });
-            CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T("Aydınlık"), Tag = AppTheme.Light });
-            CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T("Koyu"), Tag = AppTheme.Dark });
+            // Built from the catalogue, not from a hand-written list: the picker and the palettes cannot drift, and
+            // the tag is the stable enum member rather than a row number.
+            foreach (var theme in ThemeCatalog.All)
+                CmbTheme.Items.Add(new ComboBoxItem { Content = Loc.T(ThemeCatalog.DisplayNameKey(theme)), Tag = theme });
             // Selected by the stored preference, not by the resolved palette: "System" has to stay selected even
-            // though the window is currently showing one of the two concrete themes.
+            // though the window is currently showing one of the concrete themes.
             CmbTheme.SelectedItem = CmbTheme.Items.OfType<ComboBoxItem>()
                 .FirstOrDefault(i => i.Tag is AppTheme t && t == _appSettings.Theme) ?? CmbTheme.Items[0];
 

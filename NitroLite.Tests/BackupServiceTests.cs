@@ -243,7 +243,7 @@ public class BackupServiceTests : IDisposable
         var restored = LoadRestored();
         Assert.Equal(100, restored.CustomFanCpuPercent);
         Assert.Equal(AppSettings.MinCustomFanPercent, restored.CustomFanGpuPercent);
-        Assert.Equal(AppTheme.Light, restored.Theme);
+        Assert.Equal(AppTheme.System, restored.Theme);
         Assert.Equal(DcPowerProfilePreference.Eco, restored.DcPowerMode);
         Assert.InRange(restored.OsdCorner, 0, 3);
     }

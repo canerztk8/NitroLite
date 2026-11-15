@@ -32,7 +32,14 @@ public enum DcPowerProfilePreference
     Balanced = 1  // Retain active settings (NitroSense behavior)
 }
 
-/// <summary>Colour world of the window. The OSD is always dark and does not follow this.</summary>
+/// <summary>
+/// Colour world of the window. The OSD is always dark and does not follow this.
+/// </summary>
+/// <remarks>
+/// The numeric values are the on-disk contract: a settings file written before the extra palettes existed carries
+/// <c>0</c>, <c>1</c> or <c>2</c>, and those still mean Light, Dark and System. New members are appended, never
+/// inserted, and <see cref="ThemeCatalog"/> is what decides which of them are dark.
+/// </remarks>
 public enum AppTheme
 {
     /// <summary>The light "recording paper" surface NitroLite shipped with.</summary>
@@ -43,7 +50,19 @@ public enum AppTheme
     /// Follow the Windows app theme. Stored as its own value, not resolved on save, so a user who picked "System"
     /// keeps following Windows instead of being frozen into whichever palette was current that day.
     /// </summary>
-    System = 2
+    System = 2,
+
+    /// <summary>Pure black for OLED panels, with Nitro red as the only accent.</summary>
+    MidnightOled = 3,
+
+    /// <summary>Cold anthracite with an ice-blue accent.</summary>
+    SlateSteel = 4,
+
+    /// <summary>Warm coffee ground with a gold accent.</summary>
+    AmberConsole = 5,
+
+    /// <summary>Nord's polar-night greys with a glacier-turquoise accent.</summary>
+    NordFrost = 6
 }
 
 public class MonitorData
@@ -247,7 +266,12 @@ public class AppSettings
     [JsonPropertyName("language")]
     public string? Language { get; set; }
 
+    /// <summary>
+    /// The chosen palette. Written as its member name and read as either that name or the number older builds
+    /// wrote, so a config.json from any version still loads.
+    /// </summary>
     [JsonPropertyName("theme")]
+    [JsonConverter(typeof(AppThemeJsonConverter))]
     public AppTheme Theme { get; set; } = AppTheme.Light;
 
     /// <summary>
@@ -310,7 +334,8 @@ public class AppSettings
     /// </summary>
     public void Normalize()
     {
-        if (!Enum.IsDefined(Theme)) Theme = AppTheme.Light;
+        // An unusable theme name falls back to following Windows rather than to a palette the user never chose.
+        if (!Enum.IsDefined(Theme)) Theme = AppTheme.System;
         if (LastOperatingMode.HasValue && !Enum.IsDefined(LastOperatingMode.Value)) LastOperatingMode = null;
         if (!Enum.IsDefined(DcPowerMode)) DcPowerMode = DcPowerProfilePreference.Eco;
 

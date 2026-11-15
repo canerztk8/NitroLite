@@ -1,0 +1,45 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Saf siyah, for OLED panels. Not #000: on a true black ground the 1px rule and the card tone
+         collapse into each other, and most panels remap #000 to grey anyway. Nitro red is the only
+         accent; green and violet appear only on status readings.
+         Every brush is solid, exactly as in Themes/Light.xaml and Themes/Dark.xaml: no
+         gradients, no effects, no transparency layers. The key set is identical to
+         Themes/Dark.xaml, which ThemeDictionaryTests enforces. -->
+
+    <SolidColorBrush x:Key="BgDark" Color="#09090B" />
+    <SolidColorBrush x:Key="CardBg" Color="#111114" />
+    <SolidColorBrush x:Key="CardBgHover" Color="#18181C" />
+    <SolidColorBrush x:Key="BorderDark" Color="#303035" />
+    <SolidColorBrush x:Key="BorderStrong" Color="#3F3F46" />
+    <SolidColorBrush x:Key="PanelBg" Color="#0C0C0E" />
+    <SolidColorBrush x:Key="RailBg" Color="#0A0A0C" />
+    <SolidColorBrush x:Key="AccentRed" Color="#E11D48" />
+    <SolidColorBrush x:Key="AccentCyan" Color="#F4F4F5" />
+    <SolidColorBrush x:Key="Live" Color="#E11D48" />
+    <SolidColorBrush x:Key="AccentGreen" Color="#4ADE80" />
+    <SolidColorBrush x:Key="AccentPurple" Color="#A78BFA" />
+    <SolidColorBrush x:Key="TextPrimary" Color="#F4F4F5" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#A1A1AA" />
+    <SolidColorBrush x:Key="TextMuted" Color="#787882" />
+    <SolidColorBrush x:Key="OnAccent" Color="#09090B" />
+    <SolidColorBrush x:Key="WarnBg" Color="#2A1215" />
+
+    <!-- The world's own names, for the parts written fresh. -->
+    <SolidColorBrush x:Key="Paper" Color="#09090B" />
+    <SolidColorBrush x:Key="PaperDeep" Color="#050507" />
+    <SolidColorBrush x:Key="Ink" Color="#F4F4F5" />
+    <SolidColorBrush x:Key="InkSoft" Color="#A1A1AA" />
+    <SolidColorBrush x:Key="InkFaint" Color="#787882" />
+    <SolidColorBrush x:Key="Rule" Color="#303035" />
+    <SolidColorBrush x:Key="RuleStrong" Color="#3F3F46" />
+    <SolidColorBrush x:Key="Vermilion" Color="#E11D48" />
+    <SolidColorBrush x:Key="Slate" Color="#93A5C4" />
+    <SolidColorBrush x:Key="Olive" Color="#4ADE80" />
+    <SolidColorBrush x:Key="Link" Color="#7DD3FC" />
+
+    <!-- The telemetry graph's wash: ink at 8 % over the paper. -->
+    <SolidColorBrush x:Key="ChartFill" Color="#14F4F4F5" />
+
+</ResourceDictionary>

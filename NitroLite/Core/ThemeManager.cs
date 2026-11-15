@@ -24,8 +24,7 @@ public static class ThemeManager
     private const string AppsUseLightThemeValue = "AppsUseLightTheme";
 
     /// <summary>The dictionary file for a theme, relative to the application root.</summary>
-    public static string DictionaryPath(AppTheme theme) =>
-        Resolve(theme) == AppTheme.Dark ? "Themes/Dark.xaml" : "Themes/Light.xaml";
+    public static string DictionaryPath(AppTheme theme) => ThemeCatalog.DictionaryPath(Resolve(theme));
 
     /// <summary>
     /// Turns a stored preference into the palette that is actually loaded. <see cref="AppTheme.System"/> asks
@@ -33,10 +32,17 @@ public static class ThemeManager
     /// </summary>
     public static AppTheme Resolve(AppTheme? theme) => theme switch
     {
-        AppTheme.Dark => AppTheme.Dark,
         AppTheme.System => SystemPrefersDark() ? AppTheme.Dark : AppTheme.Light,
+        // Every concrete palette is its own answer: the four extra dark ones are not aliases of Dark.
+        { } concrete when ThemeCatalog.All.Contains(concrete) => concrete,
         _ => AppTheme.Light
     };
+
+    /// <summary>
+    /// True when the palette that will actually be loaded is dark-based. This is what the window frame, the OSD and
+    /// the chart ask, so a new dark palette needs no change at any of those call sites.
+    /// </summary>
+    public static bool IsDark(AppTheme? theme) => ThemeCatalog.IsDarkTheme(Resolve(theme));
 
     /// <summary>
     /// True when Windows is set to the dark app theme. A missing value or a locked-down registry reads as light,

@@ -35,7 +35,9 @@ public class UnexpectedValueTests : IDisposable
 
         settings.Normalize();
 
-        Assert.Equal(AppTheme.Light, settings.Theme);
+        // An unknown palette falls back to following Windows rather than to a fixed one: the user's own light/dark
+        // preference is a better guess than either palette.
+        Assert.Equal(AppTheme.System, settings.Theme);
         Assert.Null(settings.LastOperatingMode);
         Assert.Equal(DcPowerProfilePreference.Eco, settings.DcPowerMode);
     }
@@ -124,7 +126,7 @@ public class UnexpectedValueTests : IDisposable
         // The file parses, so it is used rather than discarded; every unusable value is replaced by its default.
         Assert.Equal(SettingsLoadSource.Primary, result.Source);
         Assert.False(result.PrimaryCorrupt);
-        Assert.Equal(AppTheme.Light, result.Settings.Theme);
+        Assert.Equal(AppTheme.System, result.Settings.Theme);
         Assert.Null(result.Settings.LastOperatingMode);
         Assert.Equal(DcPowerProfilePreference.Eco, result.Settings.DcPowerMode);
         Assert.InRange(result.Settings.OsdCorner, 0, 3);
@@ -139,14 +141,35 @@ public class UnexpectedValueTests : IDisposable
     public void LoadSettings_StillDiscardsAFileWithTheWrongType()
     {
         var path = Path.Combine(_dir, "settings.json");
-        File.WriteAllText(path, """{ "theme": "dark" }""");
+        File.WriteAllText(path, """{ "OsdCorner": "nine" }""");
 
         var result = SettingsManager.LoadSettings(path);
 
-        // A string where a number belongs cannot be coerced, so the file is rejected and the defaults win.
+        // A string where a number belongs cannot be coerced, so the file is rejected and the defaults win. The
+        // default palette is still Light: only a theme *name* the app cannot read falls back to System.
         Assert.True(result.PrimaryCorrupt);
         Assert.Equal(SettingsLoadSource.Defaults, result.Source);
         Assert.Equal(AppTheme.Light, result.Settings.Theme);
+    }
+
+    [Fact]
+    public void LoadSettings_ReadsAThemeNameAndFallsBackForAnUnknownOne()
+    {
+        // The theme is stored by name, so a string is the expected shape here rather than the wrong type. An
+        // unrecognised name costs the palette, not the rest of the file.
+        var path = Path.Combine(_dir, "settings.json");
+
+        File.WriteAllText(path, """{ "theme": "NordFrost", "language": "de" }""");
+        var named = SettingsManager.LoadSettings(path);
+        Assert.Equal(SettingsLoadSource.Primary, named.Source);
+        Assert.Equal(AppTheme.NordFrost, named.Settings.Theme);
+        Assert.Equal("de", named.Settings.Language);
+
+        File.WriteAllText(path, """{ "theme": "nonsense", "language": "de" }""");
+        var unknown = SettingsManager.LoadSettings(path);
+        Assert.Equal(SettingsLoadSource.Primary, unknown.Source);
+        Assert.Equal(AppTheme.System, unknown.Settings.Theme);
+        Assert.Equal("de", unknown.Settings.Language);
     }
 
     // ---- values that come back from the Acer service ------------------------------------------------------
