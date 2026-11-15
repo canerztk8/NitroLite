@@ -942,6 +942,8 @@
  "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Die Funkmaus ist in den Ruhezustand gegangen. Klicken Sie einmal; das Profil wird im Moment des Klicks angewendet.",
  "Okul modu açık · fan eğrisi askıda": "Schulmodus aktiv · Lüfterkurve ausgesetzt",
  "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "Die Lüfterkurve ist bei aktivem Schulmodus aus; sie kehrt zurück, sobald Sie den Schulmodus ausschalten.",
+ "Okul modu açıkken çalışma modu değiştirilemez; okul modunu kapatınca geri gelir.": "Der Betriebsmodus lässt sich bei aktivem Schulmodus nicht ändern; er kehrt zurück, sobald Sie den Schulmodus ausschalten.",
+ "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "Der Lüftermodus lässt sich bei aktivem Schulmodus nicht ändern; er kehrt zurück, sobald Sie den Schulmodus ausschalten.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Der Rückgängig-Datensatz konnte nicht geschrieben werden (Datenträger voll oder Ordner schreibgeschützt); der Schulmodus wurde nicht angewendet.",
  "Sürüm Notları": "Versionshinweise",
  "Bu sürümün GitHub sayfasını tarayıcıda açar": "Öffnet die GitHub-Seite dieser Version im Browser"

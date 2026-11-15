@@ -939,6 +939,16 @@ public partial class MainWindow
     /// </param>
     internal async Task<bool> SetManualModeAsync(OperatingMode mode, bool persist = true)
     {
+        // School mode owns the machine while it is on. The mode cards, the tray menu and the mode key all land here,
+        // and without this guard any of them took the machine to Turbo with the switch still showing on: the fans
+        // spun up in the middle of a lecture and the "turning this off puts everything back" promise was already
+        // broken. Going quieter stays allowed, which is what the fan-stall protection asks for when it drops to Eco.
+        if (_appSettings.SchoolModeEnabled && mode != OperatingMode.Eco && mode != OperatingMode.Quiet)
+        {
+            ShowToast(Loc.T("Okul modu açıkken çalışma modu değiştirilemez; okul modunu kapatınca geri gelir."), false);
+            return false;
+        }
+
         var (onAc, percent) = PowerStateProvider();
         if (!ModePolicy.IsModeAllowed(mode, onAc, percent))
         {

@@ -33,6 +33,12 @@ public partial class MainWindow : Window
     private AtkMouseService _atkMouseService;
     private PowerAutomationService? _powerAutomationService;
     private SchoolModeService? _schoolModeService;
+
+    /// <summary>
+    /// The power scheme school mode reads and writes. Null means the real one; a scenario hands in an in-memory
+    /// scheme so the round trip can be asserted without launching nine powercfg processes.
+    /// </summary>
+    private readonly IPowerSchemeAccess? _schoolModeScheme;
     private readonly BatteryWearHistory _wearHistory;
     // The vermilion dot on the newest wear reading, created once and moved on every render.
     private System.Windows.Shapes.Ellipse? _wearTrendDot;
@@ -268,7 +274,8 @@ public partial class MainWindow : Window
         IDisplayRefreshRateService? displayService = null,
         HardwareMonitorService? hardwareService = null,
         IScreenBrightnessService? screenBrightnessService = null,
-        BatteryWearHistory? wearHistory = null)
+        BatteryWearHistory? wearHistory = null,
+        IPowerSchemeAccess? schoolModeScheme = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
@@ -281,6 +288,7 @@ public partial class MainWindow : Window
         _memoryService = new MemoryCleanerService();
         _storageService = new StorageHealthService();
         _wearHistory = wearHistory ?? new BatteryWearHistory();
+        _schoolModeScheme = schoolModeScheme;
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         _screenBrightnessService = screenBrightnessService ?? (isTestHarness ? new TestScreenBrightnessService() : new ScreenBrightnessService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
@@ -1148,6 +1156,28 @@ public partial class MainWindow : Window
 
     /// <summary>How many consecutive bad temperature polls count as a dead sensor.</summary>
     internal const int FanCurveDeadSensorPollThreshold = 3;
+
+    /// <summary>The speed the curve last wrote, for the chaos invariants.</summary>
+    internal int FanCurveLastPercentForTesting => _fanCurveLastPercent;
+
+    /// <summary>
+    /// The temperature the curve last acted on. Not the same as the live reading: while the curve is off nothing
+    /// updates it, so arming the curve uses the last value it saw. The thermal-floor invariant has to judge a write
+    /// against the temperature that produced it, not against whatever the sensor says now.
+    /// </summary>
+    internal int FanCurveLastTemperatureForTesting => _fanCurveLastTemperatureC;
+
+    /// <summary>Consecutive polls whose temperature was missing or impossible.</summary>
+    internal int FanCurveDeadSensorPollsForTesting => _fanCurveDeadSensorPolls;
+
+    /// <summary>True once the curve has given up on the sensor and holds full speed.</summary>
+    internal bool FanCurveSensorDeadForTesting => _fanCurveSensorDead;
+
+    /// <summary>True while school mode has the curve suspended.</summary>
+    internal bool FanCurveSuspendedBySchoolModeForTesting => _fanCurveSuspendedBySchoolMode;
+
+    /// <summary>The school mode service the window drives, so a scenario can read its undo record.</summary>
+    internal SchoolModeService? SchoolModeServiceForTesting => _schoolModeService;
 
     private bool _isUpdatingFanCurveUi;
 

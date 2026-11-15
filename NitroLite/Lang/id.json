@@ -942,6 +942,8 @@
  "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "Mouse nirkabel sudah tidur. Klik sekali; profil diterapkan saat Anda mengklik.",
  "Okul modu açık · fan eğrisi askıda": "Mode sekolah aktif · kurva kipas ditangguhkan",
  "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "Kurva kipas nonaktif selama mode sekolah aktif; kurva kembali saat mode sekolah dimatikan.",
+ "Okul modu açıkken çalışma modu değiştirilemez; okul modunu kapatınca geri gelir.": "Mode kerja tidak dapat diubah selama mode sekolah aktif; mode kembali saat mode sekolah dimatikan.",
+ "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "Mode kipas tidak dapat diubah selama mode sekolah aktif; mode kembali saat mode sekolah dimatikan.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Catatan pembatalan tidak dapat ditulis (disk penuh atau folder hanya-baca); mode sekolah tidak diterapkan.",
  "Sürüm Notları": "Catatan Rilis",
  "Bu sürümün GitHub sayfasını tarayıcıda açar": "Membuka halaman GitHub rilis ini di browser"

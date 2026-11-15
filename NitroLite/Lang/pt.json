@@ -942,6 +942,8 @@
  "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "O mouse sem fio entrou em repouso. Clique uma vez; o perfil é aplicado no momento do clique.",
  "Okul modu açık · fan eğrisi askıda": "Modo escolar ativo · curva do ventilador suspensa",
  "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "A curva do ventilador fica desativada enquanto o modo escolar está ativo; ela volta quando você desativa o modo escolar.",
+ "Okul modu açıkken çalışma modu değiştirilemez; okul modunu kapatınca geri gelir.": "O modo de funcionamento não pode ser alterado enquanto o modo escolar está ativo; ele volta quando você desativa o modo escolar.",
+ "Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir.": "O modo do ventilador não pode ser alterado enquanto o modo escolar está ativo; ele volta quando você desativa o modo escolar.",
  "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "Não foi possível gravar o registro de desfazer (disco cheio ou pasta somente leitura); o modo escolar não foi aplicado.",
  "Sürüm Notları": "Notas da versão",
  "Bu sürümün GitHub sayfasını tarayıcıda açar": "Abre a página desta versão no GitHub no navegador"

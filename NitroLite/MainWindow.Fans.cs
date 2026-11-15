@@ -795,6 +795,14 @@ public partial class MainWindow
 
     internal async Task<bool> SetManualFanModeAsync(FanMode mode)
     {
+        // School mode owns the fans while it is on: the switch promises "Fan (Otomatik)", and a Max click here took
+        // them to full speed with the switch still showing on. The curve is already refused the same way.
+        if (_appSettings.SchoolModeEnabled)
+        {
+            ShowToast(Loc.T("Okul modu açıkken fan modu değiştirilemez; okul modunu kapatınca geri gelir."), false);
+            return false;
+        }
+
         // Choosing a fan mode by hand is a statement that the curve should stop: otherwise the next poll would
         // take the fans straight back and the button would look broken.
         if (_fanCurveEnabled) DisableFanCurveState();

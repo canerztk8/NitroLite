@@ -16,7 +16,7 @@ public partial class MainWindow
     /// </summary>
     private SchoolModeService CreateSchoolModeService()
     {
-        var service = new SchoolModeService(_agentClient, _cpuPowerService, _displayService, _screenBrightnessService, _appSettings)
+        var service = new SchoolModeService(_agentClient, _cpuPowerService, _displayService, _screenBrightnessService, _appSettings, _schoolModeScheme)
         {
             GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode,
             GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode,
