@@ -12,6 +12,6 @@ NestedInstallerFiles:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/canerztk8/NitroLite/releases/download/v1.2.5/NitroLite-v1.2.5-win-x64.zip
-    InstallerSha256: 2D16B7FB2F505A7A2B9A9F3B27C3FE478E3B0C19001129E6DB6C7291E89B71FC
+    InstallerSha256: 6D31E857CFE3D4CF84AC0D1C0E1C87E98A186B100EE42647A08830A50D0981C1
 ManifestType: installer
 ManifestVersion: 1.6.0
