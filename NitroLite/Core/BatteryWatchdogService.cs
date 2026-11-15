@@ -498,7 +498,7 @@ public class BatteryWatchdogService : IDisposable
     };
 
     /// <summary>
-    /// Win32_Battery.DeviceID is typically serial + manufacturer + name (e.g. "34643LGCAP21A8T"): strip the name at
+    /// Win32_Battery.DeviceID is typically serial + manufacturer + name (e.g. "00000LGCAP21A8T"): strip the name at
     /// the end and the leading serial digits to get the manufacturer ("LGC"). Empty when it does not follow that shape.
     /// </summary>
     public static string ParseBatteryManufacturer(string? deviceId, string? name)

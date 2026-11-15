@@ -28,7 +28,7 @@ public class InternalPanelTests
 public class BatteryIdentityTests
 {
     [Theory]
-    [InlineData("34643LGCAP21A8T", "AP21A8T", "LGC")]
+    [InlineData("00000LGCAP21A8T", "AP21A8T", "LGC")]
     [InlineData("AP21A8T", "AP21A8T", "")]        // nothing besides the name
     [InlineData("12345SMPXYZ", "ABC", "")]        // name not at the end
     [InlineData(null, "AP21A8T", "")]

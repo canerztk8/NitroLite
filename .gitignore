@@ -13,6 +13,13 @@
 .idea/
 *.DotSettings.user
 
+## Secrets and local environment overrides
+.env
+.env.*
+!.env.example
+*.secret
+secrets.json
+
 ## Temporary, Cache & Log files
 *.log
 *.tmp
