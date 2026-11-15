@@ -942,5 +942,7 @@
  "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "El ratón inalámbrico se ha dormido. Haz clic una vez; el perfil se aplica en el momento del clic.",
  "Okul modu açık · fan eğrisi askıda": "Modo escolar activo · curva del ventilador suspendida",
  "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "La curva del ventilador está desactivada mientras el modo escolar está activo; vuelve al desactivar el modo escolar.",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "No se pudo escribir el registro de deshacer (disco lleno o carpeta de solo lectura); el modo escolar no se aplicó."
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "No se pudo escribir el registro de deshacer (disco lleno o carpeta de solo lectura); el modo escolar no se aplicó.",
+ "Sürüm Notları": "Notas de la versión",
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "Abre la página de GitHub de esta versión en el navegador"
 }

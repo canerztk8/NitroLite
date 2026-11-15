@@ -660,6 +660,11 @@
                         <Button x:Name="BtnUpdateNow" Click="BtnUpdateNow_Click" Visibility="Collapsed" Margin="10,0,0,0" VerticalAlignment="Center" Background="{StaticResource PanelBg}" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource BorderDark}" BorderThickness="1" Padding="8,3" Cursor="Hand" FontSize="10" FontWeight="SemiBold" WindowChrome.IsHitTestVisibleInChrome="True">
                             <TextBlock x:Name="TxtUpdateNow" Text="Güncelle" />
                         </Button>
+                        <!-- The notes for that same release, 6px to its right. It is the second half of one notice, so
+                             it never shows on its own: UpdateNotice.Apply moves both, and nothing else touches this. -->
+                        <Button x:Name="BtnReleaseNotes" Click="BtnReleaseNotes_Click" Visibility="Collapsed" Margin="6,0,0,0" VerticalAlignment="Center" Background="{DynamicResource PanelBg}" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource BorderDark}" BorderThickness="1" Padding="8,3" Cursor="Hand" FontSize="10" FontWeight="SemiBold" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Bu sürümün GitHub sayfasını tarayıcıda açar">
+                            <TextBlock Text="Sürüm Notları" />
+                        </Button>
                     </StackPanel>
 
                     <!-- Right Controls: live figures + window buttons. No boxes: the figures sit on the

@@ -189,17 +189,14 @@ public partial class MainWindow
             if (info == null)
             {
                 _pendingUpdate = null;
-                if (BtnUpdateNow != null) BtnUpdateNow.Visibility = Visibility.Collapsed;
+                UpdateNotice.Apply(BtnUpdateNow, BtnReleaseNotes, null);
                 if (!silent) ShowToast(Loc.T("Güncel sürümü kullanıyorsunuz."));
                 return;
             }
 
             _pendingUpdate = info;
-            if (BtnUpdateNow != null && TxtUpdateNow != null)
-            {
-                TxtUpdateNow.Text = Loc.T($"Güncelle {info.DisplayVersion}");
-                BtnUpdateNow.Visibility = Visibility.Visible;
-            }
+            if (TxtUpdateNow != null) TxtUpdateNow.Text = Loc.T($"Güncelle {info.DisplayVersion}");
+            UpdateNotice.Apply(BtnUpdateNow, BtnReleaseNotes, info);
             if (!silent) ShowToast(Loc.T($"Yeni sürüm var: {info.DisplayVersion}"));
         }
         catch (Exception ex)
@@ -268,6 +265,11 @@ public partial class MainWindow
             staging = UpdateService.ExtractToStaging(zip);
             var exe = UpdateService.InstallFromStaging(staging, AppContext.BaseDirectory);
 
+            // The release is installed, not pending, so the notice goes with it. Cleared before the restart: a slow
+            // start must not leave a badge offering an update that is already on disk.
+            _pendingUpdate = null;
+            UpdateNotice.Apply(BtnUpdateNow, BtnReleaseNotes, null);
+
             ShowToast(Loc.T("Güncelleme hazır; NitroLite yeniden başlatılıyor."));
             App.ReleaseSingleInstanceMutex();
             UpdateService.StartInstalled(exe);
@@ -294,6 +296,14 @@ public partial class MainWindow
             }
         }
     }
+
+    /// <summary>
+    /// Opens the pending release's page in the browser. The address comes out of the GitHub payload, so
+    /// <see cref="UpdateService.ReleaseNotesUrl"/> checks it for an https scheme before the shell sees it; a payload
+    /// with no usable page falls back to the repository's releases list.
+    /// </summary>
+    private void BtnReleaseNotes_Click(object sender, RoutedEventArgs e) =>
+        OpenUrl(UpdateService.ReleaseNotesUrl(_pendingUpdate));
 
     /// <summary>
     /// Opens a prefilled GitHub issue. Only the version, the Windows build, the laptop model and the language go in;

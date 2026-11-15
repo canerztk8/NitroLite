@@ -942,5 +942,7 @@
  "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "The wireless mouse has gone to sleep. Click it once; the profile is applied the moment you click.",
  "Okul modu açık · fan eğrisi askıda": "School mode on · fan curve suspended",
  "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "The fan curve is off while school mode is on; it comes back when you turn school mode off.",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "The undo record could not be written (disk full or read-only folder); school mode was not applied."
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "The undo record could not be written (disk full or read-only folder); school mode was not applied.",
+ "Sürüm Notları": "Release Notes",
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "Opens this release's GitHub page in your browser"
 }

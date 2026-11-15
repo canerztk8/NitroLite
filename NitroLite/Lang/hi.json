@@ -942,5 +942,7 @@
  "Kablosuz fare uykuya geçmiş. Fareye bir kez tıklayın; profil tıklama anında uygulanır.": "वायरलेस माउस सो गया है। एक बार क्लिक करें; क्लिक करते ही प्रोफ़ाइल लागू हो जाएगी।",
  "Okul modu açık · fan eğrisi askıda": "स्कूल मोड चालू · फ़ैन कर्व निलंबित",
  "Okul modu açıkken fan eğrisi devre dışı; okul modunu kapatınca geri gelir.": "स्कूल मोड चालू रहने पर फ़ैन कर्व बंद रहता है; स्कूल मोड बंद करने पर यह वापस आ जाता है।",
- "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "पूर्ववत करने का रिकॉर्ड लिखा नहीं जा सका (डिस्क भरी या फ़ोल्डर केवल-पढ़ने योग्य); स्कूल मोड लागू नहीं हुआ।"
+ "Geri alma kaydı yazılamadı (disk dolu veya klasör salt okunur); okul modu uygulanmadı.": "पूर्ववत करने का रिकॉर्ड लिखा नहीं जा सका (डिस्क भरी या फ़ोल्डर केवल-पढ़ने योग्य); स्कूल मोड लागू नहीं हुआ।",
+ "Sürüm Notları": "रिलीज़ नोट्स",
+ "Bu sürümün GitHub sayfasını tarayıcıda açar": "इस रिलीज़ का GitHub पेज ब्राउज़र में खोलता है"
 }

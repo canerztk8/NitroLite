@@ -9,13 +9,18 @@ using System.Text.Json;
 namespace NitroLite.Core;
 
 /// <summary>A newer release found on GitHub, with everything needed to fetch and verify it.</summary>
+/// <param name="HtmlUrl">
+/// The release's own page on GitHub, as the API reported it. Null when the payload carried none, which is why
+/// <see cref="UpdateService.ReleaseNotesUrl"/> exists rather than this being read directly.
+/// </param>
 public sealed record UpdateInfo(
     Version Version,
     string Tag,
     string AssetName,
     string DownloadUrl,
     string? Sha256,
-    long SizeBytes)
+    long SizeBytes,
+    string? HtmlUrl = null)
 {
     public string DisplayVersion => $"v{Version.Major}.{Version.Minor}.{Version.Build}";
 }
@@ -72,6 +77,24 @@ public static class UpdateService
     public static string LatestReleaseApi => $"https://api.github.com/repos/{Owner}/{Repository}/releases/latest";
     public static string ReleasePageUrl => $"https://github.com/{Owner}/{Repository}/releases/latest";
     public static string NewIssueUrl => $"https://github.com/{Owner}/{Repository}/issues/new";
+
+    /// <summary>
+    /// True when <paramref name="url"/> is an absolute https address with a host. The scheme check is the point:
+    /// the address comes out of a JSON payload and is handed straight to the shell, so anything that is not https
+    /// (<c>file:</c>, <c>http:</c>, a bare path, a <c>javascript:</c> URL) must never reach the browser.
+    /// </summary>
+    public static bool IsSafeHttpsUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && uri.Host.Length > 0;
+
+    /// <summary>
+    /// The page the release-notes button opens: the release's own page when GitHub reported a usable one, and the
+    /// repository's releases list otherwise. A pending update always has a page to show, so the button never opens
+    /// nothing.
+    /// </summary>
+    public static string ReleaseNotesUrl(UpdateInfo? info) =>
+        info?.HtmlUrl is { } url && IsSafeHttpsUrl(url) ? url : ReleasePageUrl;
 
     /// <summary>
     /// True when NitroLite runs from the published single-file package. A development build has a real assembly
@@ -135,6 +158,11 @@ public static class UpdateService
 
         if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) return null;
 
+        // The release's own page, for the release-notes button. Optional: a payload without it still updates, the
+        // button just falls back to the releases list.
+        var htmlUrl = release.TryGetProperty("html_url", out var h) && h.ValueKind == JsonValueKind.String
+            ? h.GetString() : null;
+
         foreach (var asset in assets.EnumerateArray())
         {
             if (asset.ValueKind != JsonValueKind.Object) continue;
@@ -163,7 +191,7 @@ public static class UpdateService
                     sha = digest[prefix.Length..].Trim().ToLowerInvariant();
             }
 
-            return new UpdateInfo(version, tag, name, url!, sha, size);
+            return new UpdateInfo(version, tag, name, url!, sha, size, htmlUrl);
         }
 
         return null;
