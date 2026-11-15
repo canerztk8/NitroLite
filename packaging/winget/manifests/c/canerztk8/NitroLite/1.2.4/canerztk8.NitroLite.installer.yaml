@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: canerztk8.NitroLite
+PackageVersion: 1.2.4
+Platform:
+  - Windows.Desktop
+MinimumOSVersion: 10.0.0.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: NitroLite\NitroLite.exe
+    PortableCommandAlias: nitrolite
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/canerztk8/NitroLite/releases/download/v1.2.4/NitroLite-v1.2.4-win-x64.zip
+    InstallerSha256: 02FAEDD1BCFF8652887EFE50ABBADC4E05FD5428884E2DE5D148E516385A082C
+ManifestType: installer
+ManifestVersion: 1.6.0

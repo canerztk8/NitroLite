@@ -48,7 +48,7 @@ The same hardware control, delivered in a single process with no extra backgroun
 ## Evidence on Hand
 
 - A working application and a published package (`artifacts/`).
-- 1467 tests: 1464 pass, 3 live-hardware tests skipped.
+- 1597 tests: 1594 pass, 3 live-hardware tests skipped.
 - Real hardware telemetry verified on this machine (CPU/GPU temperature, fan RPM, battery, ATK receiver).
 - No customers, references, benchmarks or press coverage to invent.
 
