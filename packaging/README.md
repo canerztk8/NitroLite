@@ -10,8 +10,9 @@ half. See [Trust and code signing](../README.md#trust-and-code-signing).
 ## Scoop
 
 `packaging/scoop/nitrolite.json` is a live manifest, not a template. `scripts/publish-release.ps1` rewrites its
-`version`, `url` and `hash` from the package it just built, so the manifest in `main` always describes the newest
-release and cannot drift from it.
+`version`, `url` and `hash` from the package it just built. Run the script locally and commit the result: the release
+workflow runs the same script on the runner and never commits its output back, so a release cut only from a tag
+leaves the manifest in `main` describing the previous version.
 
 ```powershell
 scoop install https://raw.githubusercontent.com/canerztk8/NitroLite/main/packaging/scoop/nitrolite.json
@@ -39,7 +40,7 @@ terminal. Nothing is persisted: settings live in `%LOCALAPPDATA%\NitroLite`, out
 requires, so the folder can be copied in unchanged:
 
 ```
-packaging/winget/manifests/c/canerztk8/NitroLite/1.2.3/
+packaging/winget/manifests/c/canerztk8/NitroLite/1.2.4/
 ├── canerztk8.NitroLite.yaml              # version
 ├── canerztk8.NitroLite.installer.yaml    # URL and SHA-256
 └── canerztk8.NitroLite.locale.en-US.yaml # description, licence, links
@@ -57,8 +58,8 @@ To submit a new version:
 3. Validate and try it locally:
 
    ```powershell
-   winget validate --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.3
-   winget install --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.3
+   winget validate --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.4
+   winget install --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.4
    ```
 
 4. Open the pull request against `microsoft/winget-pkgs`.

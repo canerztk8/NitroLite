@@ -215,9 +215,11 @@ NitroLite restarts itself in about a second to apply it.
 
 ## Theme
 
-**Settings → Theme** offers **System default**, the light "paper" theme and a dark theme built from the same accent
-colours. System default follows the Windows app theme, resolved at launch. The OSD is dark in every case. Like the
-language, the theme applies after a quick restart.
+**Settings → Theme** offers **System default** plus six palettes: the light "paper" theme, `Dark`, and four dark
+variants — **Midnight OLED** (true black), **Slate Steel** (cold anthracite), **Amber Console** (warm amber) and
+**Nord Frost** (glacier turquoise). All six share one key set and the same paper-and-ink hierarchy; only the
+temperature of the ground and the hue of the accent move. System default follows the Windows app theme, resolved at
+launch. The OSD is dark in every case. Like the language, the theme applies after a quick restart.
 
 <p align="center">
   <img src="docs/screenshots/modes-dark.png" alt="NitroLite in the dark theme" width="100%">
@@ -288,7 +290,7 @@ NitroLite
 │   ├── MemoryCleanerService.cs     # Standby memory measurement; launches WinMemoryCleaner
 │   ├── SystemToolsService.cs       # Keyboard, Acer service, MUX and Windows repair engine
 │   ├── Loc.cs / LocXaml.cs         # Translation catalogues and the {loc:T} markup extension
-│   ├── ThemeManager.cs             # Light and dark palettes
+│   ├── ThemeManager.cs             # Palette loading; ThemeCatalog marks which ones are dark
 │   ├── UpdateService.cs            # GitHub release check, digest verification, executable swap
 │   ├── AppPaths.cs                 # Data folder and system tool paths
 │   ├── TelemetryFormatter.cs       # Value formatting and "(estimated)" labels
@@ -301,7 +303,7 @@ NitroLite
 │       ├── DeviceCapabilities.cs   # Everything the service reports, in one record
 │       └── HardwareReport.cs       # The text and JSON report users attach to issues
 ├── Lang/                           # en, tr, de, es, ru, pt, hi, id
-├── Themes/                         # Light.xaml, Dark.xaml
+├── Themes/                         # Light, Dark, MidnightOled, SlateSteel, AmberConsole, NordFrost
 ├── OsdOverlayWindow.xaml           # OSD window
 ├── MainWindow.xaml                 # Main interface
 └── App.xaml                        # Single instance, CLI flags, error logging
@@ -446,7 +448,8 @@ a third-party notice, and `tools\WinMemoryCleaner.exe` with its own licence and 
 .NET runtime to the patched version (10.0.14, CVE-2026-111497) and refuses to package a build that does not reference
 it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or tampered asset fails the build. It
 rewrites `packaging\scoop\nitrolite.json` with the new version, URL and digest, and reads the file back to prove it
-still parses.
+still parses. That rewrite only reaches `main` if you run the script locally and commit it: the release workflow runs
+the same script on the runner and does not commit its output back.
 
 **To cut a release:** bump `<Version>` in `NitroLite/NitroLite.csproj`, commit, then push a matching tag.
 
