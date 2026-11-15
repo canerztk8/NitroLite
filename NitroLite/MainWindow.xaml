@@ -2270,7 +2270,7 @@
                                                         <TextBlock Text="Anlık Güç Akışı:" Foreground="{DynamicResource TextMuted}" FontSize="10" FontWeight="Bold" />
                                                         <TextBlock x:Name="TxtBatDischargeRate" Text="0.0 W (Adaptörde)" Foreground="{DynamicResource AccentCyan}" FontSize="14" FontWeight="Bold" Margin="0,2,0,0" TextWrapping="Wrap" />
                                                     </StackPanel>
-                                                    <TextBlock Grid.Column="1" x:Name="TxtBatRemainingTime" Text="Kalan Süre: --" Foreground="{DynamicResource TextSecondary}" FontSize="11" MaxWidth="200" Margin="12,0,0,0" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="1" x:Name="TxtBatRemainingTime" Text="Kalan Süre: --" Visibility="Collapsed" Foreground="{DynamicResource TextSecondary}" FontSize="11" MaxWidth="200" Margin="12,0,0,0" TextWrapping="Wrap" TextAlignment="Right" VerticalAlignment="Center" />
                                                 </Grid>
                                             </Border>
 
