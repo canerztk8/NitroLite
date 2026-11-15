@@ -348,6 +348,24 @@ public class AppSettings
     [JsonPropertyName("hardware_capability_cache")]
     public HardwareCapabilityCache? HardwareCapabilityCache { get; set; }
 
+    /// <summary>
+    /// How many consecutive sessions a direct-WMI capability has failed its read-back, keyed by capability name.
+    /// <para>
+    /// A single failed session is usually the EC being busy during sleep or a resume, so it must not kill a working
+    /// feature. Only when the count reaches three does the capability get switched off for good, and a successful
+    /// read-back resets it to zero. The rescan button clears the whole map.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("capability_session_failures")]
+    public Dictionary<string, int> CapabilitySessionFailures { get; set; } = new();
+
+    /// <summary>
+    /// Capabilities the direct-WMI path gave up on after three consecutive failed sessions. Kept as a list rather
+    /// than a set so the settings file stays readable and the order is stable.
+    /// </summary>
+    [JsonPropertyName("disabled_capabilities")]
+    public List<string> DisabledCapabilities { get; set; } = new();
+
     // Custom fan speeds (%), used when the fan mode is "Özel". Kept within MinCustomFanPercent..100.
     [JsonPropertyName("custom_fan_cpu_percent")]
     public int CustomFanCpuPercent { get; set; } = 50;

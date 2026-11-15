@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Wmi;
 
 namespace NitroLite;
 
@@ -363,6 +364,7 @@ public partial class MainWindow
             var cached = CapabilityProbe.TryFromCache(_appSettings, identity, catalog);
             if (cached != null)
             {
+                _capabilitySnapshot = cached;
                 UpdateCapabilitySummary(cached);
                 return;
             }
@@ -370,6 +372,7 @@ public partial class MainWindow
             var snapshot = await Task.Run(() => CapabilityProbe.Probe(identity, catalog));
             CapabilityProbe.Store(_appSettings, snapshot);
             SaveSettings();
+            _capabilitySnapshot = snapshot;
             UpdateCapabilitySummary(snapshot);
         }
         catch (Exception ex)
@@ -389,6 +392,11 @@ public partial class MainWindow
         try
         {
             CapabilityProbe.Invalidate(_appSettings);
+
+            // A rescan is the user saying "try again", so the read-back counters go with the cache. Without this a
+            // capability that was switched off after three bad sessions would stay off even after the cause was
+            // fixed, and the only way back would be editing the settings file by hand.
+            (_hardware as HybridHardwareController)?.ReadBack?.ResetAll();
             SaveSettings();
 
             var identity = HardwareDetector.Current;
@@ -396,6 +404,7 @@ public partial class MainWindow
             var snapshot = await Task.Run(() => CapabilityProbe.Probe(identity, catalog));
             CapabilityProbe.Store(_appSettings, snapshot);
             SaveSettings();
+            _capabilitySnapshot = snapshot;
 
             UpdateCapabilitySummary(snapshot);
             ShowToast(Loc.T($"Donanım yetenekleri yeniden tarandı: {snapshot.ProfileId}"), true);
@@ -409,6 +418,75 @@ public partial class MainWindow
         {
             BtnRescanHardware.IsEnabled = true;
         }
+    }
+
+    /// <summary>
+    /// Starts the elevated WMI helper on purpose. This is the only place a UAC prompt can appear, and it appears
+    /// because the user pressed a button that says so — never on startup, and never twice in one session.
+    /// </summary>
+    private async void BtnStartDirectWmi_Click(object sender, RoutedEventArgs e)
+    {
+        if (BtnStartDirectWmi == null) return;
+        BtnStartDirectWmi.IsEnabled = false;
+        try
+        {
+            if (_hardware is not HybridHardwareController hybrid)
+            {
+                ShowToast(Loc.T("Doğrudan WMI arka ucu bu oturumda kullanılamıyor"), false);
+                return;
+            }
+
+            var started = await hybrid.StartDirectWmiAsync();
+            UpdateDirectWmiStatus(hybrid);
+
+            if (started)
+            {
+                ShowToast(Loc.T("Doğrudan WMI kontrolü etkin"), true);
+            }
+            else if (hybrid.UserDeclinedElevation)
+            {
+                // Declining is a legitimate answer, not an error: the app keeps working on the service path.
+                ShowToast(Loc.T("Yönetici izni verilmedi; bu oturumda doğrudan WMI kullanılmayacak"), false);
+            }
+            else
+            {
+                ShowToast(Loc.T("Doğrudan WMI başlatılamadı"), false);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Doğrudan WMI başlatılamadı", ex.ToString());
+            ShowToast(Loc.T($"Doğrudan WMI başlatılamadı: {ex.Message}"), false);
+        }
+        finally
+        {
+            BtnStartDirectWmi.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
+    /// One line under the direct-WMI row: which backend is live, and why the WMI path is not, when it is not.
+    /// </summary>
+    private void UpdateDirectWmiStatus(HybridHardwareController? hybrid = null)
+    {
+        if (TxtDirectWmiStatus == null) return;
+
+        hybrid ??= _hardware as HybridHardwareController;
+        if (hybrid == null)
+        {
+            TxtDirectWmiStatus.Text = string.Empty;
+            return;
+        }
+
+        if (hybrid.UserDeclinedElevation)
+        {
+            TxtDirectWmiStatus.Text = Loc.T("Yönetici izni verilmedi; Acer servisi kullanılıyor");
+            return;
+        }
+
+        TxtDirectWmiStatus.Text = hybrid.DirectWmi?.IsAvailable == true
+            ? Loc.T("Doğrudan WMI bağlı")
+            : Loc.T("Acer servisi kullanılıyor");
     }
 
     /// <summary>

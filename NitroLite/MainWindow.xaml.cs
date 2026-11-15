@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Wmi;
 using WpfButton = System.Windows.Controls.Button;
 using WpfComboBox = System.Windows.Controls.ComboBox;
 using WpfLine = System.Windows.Shapes.Line;
@@ -20,6 +21,18 @@ namespace NitroLite;
 public partial class MainWindow : Window
 {
     private AcerAgentClient _agentClient;
+
+    /// <summary>
+    /// Every hardware read and write goes through this, not through <see cref="_agentClient"/>. The hybrid picks the
+    /// Acer service when it answers and the direct-WMI backend when it does not, so the pages never have to know
+    /// which path is live. The agent client is still kept for its service events and for the two services that take
+    /// it directly.
+    /// </summary>
+    private readonly IHardwareController _hardware;
+
+    /// <summary>The last capability probe result, so the WMI backend can use the matched sensor layout.</summary>
+    private CapabilitySnapshot? _capabilitySnapshot;
+
     private BatteryWatchdogService _batteryService;
     private readonly DebloatService _debloatService;
     private CpuPowerService _cpuPowerService;
@@ -231,6 +244,7 @@ public partial class MainWindow : Window
     public MainWindow(bool startMinimized = false)
     {
         _agentClient = new();
+        _hardware = CreateHardwareController(_agentClient, allowDirectWmi: true);
         _batteryService = new();
         _debloatService = new();
         _cpuPowerService = new();
@@ -280,7 +294,8 @@ public partial class MainWindow : Window
         HardwareMonitorService? hardwareService = null,
         IScreenBrightnessService? screenBrightnessService = null,
         BatteryWearHistory? wearHistory = null,
-        IPowerSchemeAccess? schoolModeScheme = null)
+        IPowerSchemeAccess? schoolModeScheme = null,
+        IHardwareController? hardware = null)
     {
         _agentClient = agentClient;
         _cpuPowerService = cpuPowerService;
@@ -297,6 +312,10 @@ public partial class MainWindow : Window
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         _screenBrightnessService = screenBrightnessService ?? (isTestHarness ? new TestScreenBrightnessService() : new ScreenBrightnessService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
+
+        // Built after the settings are in place: the read-back policy keeps a reference to the settings object, and
+        // the test harness never gets a direct-WMI backend because a test must not be able to raise a UAC prompt.
+        _hardware = hardware ?? CreateHardwareController(agentClient, allowDirectWmi: !isTestHarness);
         if (mouseProfileSwitcher != null) MouseProfileSwitcher = mouseProfileSwitcher;
 
         if (!isTestHarness)
@@ -324,6 +343,24 @@ public partial class MainWindow : Window
             _powerAutomationService.PowerModeSwitched += OnPowerModeSwitchedHandler;
             _schoolModeService = CreateSchoolModeService();
         }
+    }
+
+    /// <summary>
+    /// Builds the hardware layer for this window. The Acer-service backend is always present; the direct-WMI backend
+    /// is only attached when the caller allows it, because attaching it is what makes an elevation prompt possible.
+    /// </summary>
+    private IHardwareController CreateHardwareController(AcerAgentClient agent, bool allowDirectWmi)
+    {
+        var agentController = new AgentHardwareController(agent, _careCenterClient);
+        if (!allowDirectWmi) return agentController;
+
+        return new HybridHardwareController(
+            agentController,
+            wmiFactory: () => new WmiHardwareController(
+                new WmiWorkerLauncher(),
+                new ReadBackPolicy(_appSettings),
+                () => _capabilitySnapshot),
+            useDirectWmi: () => _appSettings.UseDirectWmiBackend);
     }
 
     /// <summary>Shows the version from the project file (Version in NitroLite.csproj) instead of a hard-coded label.</summary>
@@ -590,7 +627,7 @@ public partial class MainWindow : Window
             _ = ReassertOperatingModeAsync(isBoot: true);
 
             // 1.0 Initial fan mode: read it instead of assuming Auto (NitroSense may have left it on Max).
-            var initialFan = await _agentClient.GetFanModeAsync();
+            var initialFan = await _hardware.GetFanModeAsync();
             if (initialFan.HasValue) _currentFanMode = initialFan.Value;
             UpdateFanButtonsUi(_currentFanMode, initialFan.HasValue);
 
@@ -621,7 +658,7 @@ public partial class MainWindow : Window
                 _lighting.LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" };
                 UpdateLightingUi(_lighting);
                 UpdateEffectComboBox("OFF");
-                await _agentClient.TurnOffLightingAsync();
+                await _hardware.TurnOffLightingAsync();
                 restoredSavedRgb = true;
             }
             else if (_appSettings.KeyboardLighting != null)
@@ -632,11 +669,11 @@ public partial class MainWindow : Window
 
                 if (_lighting.Brightness == 0 || _lighting.Effect.Equals("OFF", StringComparison.OrdinalIgnoreCase))
                 {
-                    await _agentClient.TurnOffLightingAsync();
+                    await _hardware.TurnOffLightingAsync();
                 }
                 else
                 {
-                    await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+                    await _hardware.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
                 }
                 restoredSavedRgb = true;
             }
@@ -654,11 +691,11 @@ public partial class MainWindow : Window
 
                         if (_lighting.Brightness == 0 || string.Equals(_lighting.Effect, "OFF", StringComparison.OrdinalIgnoreCase))
                         {
-                            await _agentClient.TurnOffLightingAsync();
+                            await _hardware.TurnOffLightingAsync();
                         }
                         else
                         {
-                            await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+                            await _hardware.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
                         }
                         restoredSavedRgb = true;
                     }
@@ -668,7 +705,7 @@ public partial class MainWindow : Window
 
             if (!restoredSavedRgb)
             {
-                var cfg = await _agentClient.GetLightingConfigAsync();
+                var cfg = await _hardware.GetLightingConfigAsync();
                 if (cfg != null)
                 {
                     _lighting = cfg;
@@ -822,6 +859,7 @@ public partial class MainWindow : Window
         {
             ChkUseDirectWmiBackend.IsChecked = _appSettings.UseDirectWmiBackend;
         }
+        UpdateDirectWmiStatus();
         // Fire-and-forget: the capability probe touches WMI and must not hold the window open. It fills the settings
         // row when it comes back, and caches the answer so the next launch is instant.
         _ = InitializeCapabilitySnapshotAsync();
@@ -1032,7 +1070,7 @@ public partial class MainWindow : Window
         if (!await _gameProfileTransitionLock.WaitAsync(0)) return;
         try
         {
-            var mode = await _agentClient.TryGetOperatingModeAsync();
+            var mode = await _hardware.GetOperatingModeAsync();
             if (mode.HasValue && mode.Value != _currentMode)
             {
                 // If a boot/resume reassertion is in progress for a saved mode, do not treat the EC's boot default as a user change
@@ -1049,7 +1087,7 @@ public partial class MainWindow : Window
                 }
             }
 
-            var fan = await _agentClient.GetFanModeAsync();
+            var fan = await _hardware.GetFanModeAsync();
             if (fan.HasValue && fan.Value != _currentFanMode)
             {
                 _currentFanMode = fan.Value;
@@ -1447,7 +1485,7 @@ public partial class MainWindow : Window
             // takes the fans again.
             if (_fanCurveEnabled)
             {
-                if (await _agentClient.SetFanModeAsync(FanMode.Auto))
+                if (await _hardware.SetFanModeAsync(FanMode.Auto))
                 {
                     _currentFanMode = FanMode.Auto;
                     _powerAutomationService?.UpdateManualFanMode(FanMode.Auto);
@@ -1496,6 +1534,7 @@ public partial class MainWindow : Window
         _cpuPowerService.Dispose();
         _gameService.Dispose();
         _batteryService.Dispose();
+        _hardware.Dispose();
         _agentClient.Dispose();
         // NotifyIcon.Dispose only unregisters the tray icon: the Icon and the ContextMenuStrip it was given are
         // GDI/User handles that outlive it until the process ends.
@@ -1523,7 +1562,7 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    Task.Run(async () => { await _agentClient.SetFanModeAsync(FanMode.Auto); })
+                    Task.Run(async () => { await _hardware.SetFanModeAsync(FanMode.Auto); })
                         .Wait(TimeSpan.FromSeconds(4));
                 }
                 catch { }
@@ -1545,6 +1584,7 @@ public partial class MainWindow : Window
             _cpuPowerService.Dispose();
             _gameService.Dispose();
             _batteryService.Dispose();
+            _hardware.Dispose();
             _agentClient.Dispose();
             _notifyIcon?.Dispose();
         }
@@ -1700,7 +1740,7 @@ public partial class MainWindow : Window
         if (Interlocked.Exchange(ref _modeSwitchKeyBusy, 1) != 0) return;
         try
         {
-            var current = await _agentClient.TryGetOperatingModeAsync() ?? _currentMode;
+            var current = await _hardware.GetOperatingModeAsync() ?? _currentMode;
             var (onAc, percent) = PowerStateProvider();
             var next = ModeSwitchKey.Next(current, onAc, percent);
             await SetManualModeAsync(next);
@@ -1772,17 +1812,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The hardware-layer rollback switch. Nothing is reconnected here: the backend is chosen at start, so the
-    /// setting takes effect on the next launch and the toast says so instead of pretending the change is live.
+    /// The hardware-layer rollback switch. The hybrid controller reads it on every call, so the change is live:
+    /// turning it off pins the next read or write to the Acer service socket without a restart.
     /// </summary>
     private void ChkUseDirectWmiBackend_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkUseDirectWmiBackend == null) return;
         _appSettings.UseDirectWmiBackend = ChkUseDirectWmiBackend.IsChecked == true;
         SaveSettings();
+        UpdateDirectWmiStatus();
         ShowToast(_appSettings.UseDirectWmiBackend
-            ? Loc.T("Doğrudan WMI arka ucu etkin; bir sonraki açılışta uygulanır")
-            : Loc.T("Yalnızca Acer servisi kullanılacak; bir sonraki açılışta uygulanır"));
+            ? Loc.T("Doğrudan WMI arka ucu etkin")
+            : Loc.T("Yalnızca Acer servisi kullanılacak"));
     }
 
     private bool _ramCleanBusy;

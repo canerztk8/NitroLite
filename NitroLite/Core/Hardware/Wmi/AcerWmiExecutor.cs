@@ -170,6 +170,10 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 var mux = InvokeGetter(gaming, "GetGamingMiscSetting", AcerWmiProtocol.MiscIndexMux);
                 if (mux.HasValue)
                 {
+                    // The raw answer is reported as well as the decoded mode: the caller has to be able to tell a
+                    // firmware that numbers the modes from one from one that numbers them from zero before it
+                    // writes a MUX value it cannot take back.
+                    data["muxRaw"] = mux.Value;
                     data["muxStatus"] = AcerWmiProtocol.DecodeStatus(mux.Value);
                     var decoded = AcerWmiProtocol.DecodeMuxMode(mux.Value);
                     if (decoded.HasValue) data["muxMode"] = decoded.Value.ToString();
