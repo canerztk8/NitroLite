@@ -1,8 +1,5 @@
-﻿using System;
-using System.IO;
-using System.Linq;
+﻿using System.IO;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 using NitroLite.Core;
 using Xunit;
 
@@ -171,7 +168,7 @@ public class AuditRound2Tests
             Assert.True(service.SaveProfile(new GameProfile { ExeName = exe, DisplayName = "First" }));
             Assert.True(service.SaveProfile(new GameProfile { ExeName = exe, DisplayName = "Second", InstallPath = path }));
 
-            Assert.Single(service.GetProfiles().Where(p => p.ExeName.Equals(exe, StringComparison.OrdinalIgnoreCase)));
+            Assert.Single(service.GetProfiles(), p => p.ExeName.Equals(exe, StringComparison.OrdinalIgnoreCase));
             Assert.Equal("Second", service.GetProfile(exe, path)!.DisplayName);
         }
         finally

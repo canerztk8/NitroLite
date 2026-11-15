@@ -1,6 +1,4 @@
-using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using Xunit;

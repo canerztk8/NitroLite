@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Text.Json.Nodes;
-using System.Threading.Tasks;
+﻿using System.Text.Json.Nodes;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using Xunit;

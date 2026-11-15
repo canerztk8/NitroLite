@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using NitroLite.Core;
 using Xunit;
 
@@ -19,27 +13,6 @@ namespace NitroLite.Tests;
 /// </summary>
 public class SafeVerificationEndToEndTests
 {
-    private static async Task RunInStaAsync(Func<Task> action)
-    {
-        var tcs = new TaskCompletionSource<object?>();
-        var thread = new Thread(async () =>
-        {
-            try
-            {
-                await action();
-                tcs.SetResult(null);
-            }
-            catch (Exception ex)
-            {
-                tcs.SetException(ex);
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.IsBackground = true;
-        thread.Start();
-        await tcs.Task;
-    }
-
     #region Mock Helpers
 
     private class TestAcerAgentClient : AcerAgentClient
@@ -127,7 +100,7 @@ public class SafeVerificationEndToEndTests
         var settingsPath = AppPaths.GetDataFile("settings.json");
         const string userSettings = "{ \"StartMinimized\": true, \"atk_mouse_integration_enabled\": true }";
 
-        await RunInStaAsync(() =>
+        await StaTestRunner.RunInStaAsync(() =>
         {
             File.WriteAllText(settingsPath, userSettings);
 
@@ -152,7 +125,7 @@ public class SafeVerificationEndToEndTests
     [Fact]
     public async Task TestCase1_RapidGameSwitch_GameAPending_GameBOpens_PreservesOriginalDesktopReferenceAndExecutesInOrder()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -250,7 +223,7 @@ public class SafeVerificationEndToEndTests
     [Fact]
     public async Task TestCase2_PartialDesktopRestoreFailure_IndependentStepsContinue_TrayRetryExecutesOnlyPendingSteps()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient();
             var mockCpu = new TestCpuPowerService();
@@ -323,7 +296,7 @@ public class SafeVerificationEndToEndTests
     }
 
     [Fact]
-    public Task ManualChangeAfterFailedRestore_DropsTheStaleCrashRecord() => RunInStaAsync(async () =>
+    public Task ManualChangeAfterFailedRestore_DropsTheStaleCrashRecord() => StaTestRunner.RunInStaAsync(async () =>
     {
         // A game ends with the CPU boost restore failing, so active_game_session.json stays behind. The user then
         // picks a boost value by hand. That satisfies the last pending step, and the crash record has to go with
@@ -366,7 +339,7 @@ public class SafeVerificationEndToEndTests
     #region School mode: the keyboard backlight
 
     [Fact]
-    public Task SchoolMode_DoesNotClaimTheBacklightWasOnWhenItWasAlreadyOff() => RunInStaAsync(async () =>
+    public Task SchoolMode_DoesNotClaimTheBacklightWasOnWhenItWasAlreadyOff() => StaTestRunner.RunInStaAsync(async () =>
     {
         // SchoolModeService restores the backlight only when the delegate says it was on. Returning true for a
         // backlight that was already off made switching school mode off turn the keyboard on with a default
@@ -391,7 +364,7 @@ public class SafeVerificationEndToEndTests
     [Fact]
     public async Task TestCase3_TrayRetryInterruptedByNewGame_AbortsPromptlyAndDoesNotOverwriteNewProfile()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient();
             var mockCpu = new TestCpuPowerService();
@@ -473,7 +446,7 @@ public class SafeVerificationEndToEndTests
     [Fact]
     public async Task TestCase4_MouseRestoreRetentionAcrossGamesWithoutMouseProfiles()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient();
             var mockCpu = new TestCpuPowerService();
@@ -1252,7 +1225,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase8c_GameEndsOnBatteryEco_RestoresQuietEcoAndPreservesDesktopBaselineForAc()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -1362,7 +1335,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase4c_LiveProfileSave_MouseDisabledRestoresToDesktopAndClearsFlag()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient();
             var mockCpu = new TestCpuPowerService();
@@ -1432,7 +1405,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase8e_GameStartedOnBatteryEco_PreservesOriginalAcBaseline()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -1496,7 +1469,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase8f_RetryPendingDesktopRestore_OnBattery_AppliesEcoQuietNotDesktop()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -1547,7 +1520,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase4d_DisablingMouseIntegrationCheckbox_RestoresMouseAndClearsDebt()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient();
             var mockCpu = new TestCpuPowerService();
@@ -1595,7 +1568,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase8g_PendingAcRestore_RetriedAndExposedToTray()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -1636,7 +1609,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase8h_PowerModeSwitched_PartialFailure_DoesNotCorruptUiFields()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Extreme };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -1676,7 +1649,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_AdapterPending_GameStart_CapturesFreshBaseline()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
         var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Turbo };
         var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Efficient };
@@ -1738,7 +1711,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_MouseIntegration_DisabledWhileCommandInFlight_RestoresMouse()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
         var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
         var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -1806,7 +1779,7 @@ function global:Disable-ScheduledTask {
     }
 
     [Fact]
-    public Task InterruptedGameRecovery_KeepsFailedFanAndRestoresBoostPerPowerSource() => RunInStaAsync(async () =>
+    public Task InterruptedGameRecovery_KeepsFailedFanAndRestoresBoostPerPowerSource() => StaTestRunner.RunInStaAsync(async () =>
     {
         var writes = new List<(CpuBoostMode Mode, bool Ac, bool Dc)>();
         int modeCalls = 0, fanCalls = 0;
@@ -1845,7 +1818,7 @@ function global:Disable-ScheduledTask {
     });
 
     [Fact]
-    public Task DesktopMouseProfile_RetriesWhenReceiverStartsResponding() => RunInStaAsync(async () =>
+    public Task DesktopMouseProfile_RetriesWhenReceiverStartsResponding() => StaTestRunner.RunInStaAsync(async () =>
     {
         var profiles = new List<int>();
         var window = new MainWindow(new TestAcerAgentClient(), new TestCpuPowerService(),
@@ -1865,7 +1838,7 @@ function global:Disable-ScheduledTask {
     });
 
     [Fact]
-    public Task DesktopMouseProfile_RetriesAsSoonAsTheUserTouchesTheMouse() => RunInStaAsync(async () =>
+    public Task DesktopMouseProfile_RetriesAsSoonAsTheUserTouchesTheMouse() => StaTestRunner.RunInStaAsync(async () =>
     {
         // A wireless mouse answers only while it is awake, and it wakes on user input. Waiting out the backoff
         // meant every attempt landed after the mouse had gone back to sleep, so the profile only applied when
@@ -1901,7 +1874,7 @@ function global:Disable-ScheduledTask {
     });
 
     [Fact]
-    public Task DesktopMouseProfile_DoesNotStackAttemptsWhileOneIsOnTheWire() => RunInStaAsync(async () =>
+    public Task DesktopMouseProfile_DoesNotStackAttemptsWhileOneIsOnTheWire() => StaTestRunner.RunInStaAsync(async () =>
     {
         // The input shortcut can make a retry due at any moment, so a second attempt must not start while the
         // first is still waiting on the mouse.
@@ -1941,7 +1914,7 @@ function global:Disable-ScheduledTask {
     });
 
     [Fact]
-    public Task DesktopMouseProfile_QueuedRetryYieldsToNewerSelection() => RunInStaAsync(async () =>
+    public Task DesktopMouseProfile_QueuedRetryYieldsToNewerSelection() => StaTestRunner.RunInStaAsync(async () =>
     {
         var profiles = new List<int>();
         var window = new MainWindow(new TestAcerAgentClient(), new TestCpuPowerService(),
@@ -2005,7 +1978,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_BalancedDcMode_AcReconnect_DoesNotCorruptCurrentMode()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
         var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
         var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2046,7 +2019,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_RetryPendingAcRestore_UpdatesUiAfterSuccess()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
         var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
         var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2095,7 +2068,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_RetrySuccess_SubsequentGame_RestoresDesktopCorrectly()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2179,7 +2152,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_AcRetry_PartialSuccess_UpdatesOnlySuccessfulStepsInUi()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2227,7 +2200,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_AcRetry_OnlyFanPending_DoesNotOverwriteUserSelectedMode()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2277,7 +2250,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_ManualModeSelection_UpdatesAcPendingTarget_NotOverwrittenByRetry()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2328,7 +2301,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_ManualCpuBoostSelection_UpdatesAcPendingTarget_NotOverwrittenByRetry()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2376,7 +2349,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_ManualFanSelection_UpdatesAcPendingTarget_NotOverwrittenByRetry()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2427,7 +2400,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_FanPending_ManualTurbo_GameStartAndEnd_RestoresTurbo()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2492,7 +2465,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_BatteryManualFanChange_ReconnectAc_RestoresModeAndBoost_KeepsFanMax()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2545,7 +2518,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_BatteryManualModeChange_ReconnectAc_RestoresBoostAndFan_KeepsModeTurbo()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2598,7 +2571,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_BatteryManualCpuBoostChange_ReconnectAc_RestoresModeAndFan_KeepsBoostEfficient()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2670,7 +2643,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_StartupOperatingModeRestoration_OverridesEcBalancedDefault()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             // Device initially boots into Default (Balanced) as Acer EC does on cold boot/reboot
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
@@ -2706,7 +2679,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task TestCase_SetManualModeAsync_PersistsToAppSettings()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var mockAgent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default };
             var mockCpu = new TestCpuPowerService { CurrentMode = CpuBoostMode.Aggressive };
@@ -2743,7 +2716,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task EnablingTheFanCurve_TakesTheFansInCustomModeAndRemembersIt()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings
@@ -2768,7 +2741,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task DisablingTheFanCurve_HandsTheFansBackToTheFirmware()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings { CustomFanCpuPercent = 70, CustomFanGpuPercent = 65 };
@@ -2789,7 +2762,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task SessionEnding_HandsTheFansBackToTheFirmwareWhenTheCurveOwnsThem()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings { CustomFanCpuPercent = 55 };
@@ -2809,7 +2782,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task SessionEnding_LeavesAManualFanModeAlone()
     {
-        await RunInStaAsync(() =>
+        await StaTestRunner.RunInStaAsync(() =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Max };
             var window = FanCurveWindow(agent, new AppSettings());
@@ -2825,7 +2798,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task ChoosingAFanModeByHand_StopsTheCurve()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings();
@@ -2843,7 +2816,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task AFailedCurveStart_LeavesTheSettingOffAndTheFansAlone()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             agent.OnSetFanModeAsync = _ => Task.FromResult(false);
@@ -2875,7 +2848,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task AGameProfileWithItsOwnCurve_TakesTheFansInCustomModeInsteadOfItsFixedSpeed()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings { CustomFanCpuPercent = 50 };
@@ -2895,7 +2868,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task AGameProfileWithoutItsOwnAnchors_FollowsTheDesktopCurve()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings
@@ -2919,7 +2892,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task EndingAGameWithItsOwnCurve_HandsTheFansBackToTheDesktopCurve()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings
@@ -2949,7 +2922,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task EndingAGameWithItsOwnCurve_LeavesTheDesktopCurveOffWhenTheUserHadItOff()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings { CustomFanCpuPercent = 50, FanCurveEnabled = false };
@@ -2967,7 +2940,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task AGameWithoutACurve_SuspendsTheDesktopCurveAndResumesItAfter()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             var settings = new AppSettings
@@ -2997,7 +2970,7 @@ function global:Disable-ScheduledTask {
     [Fact]
     public async Task AFailedGameCurveStart_LeavesNoCurveArmed()
     {
-        await RunInStaAsync(async () =>
+        await StaTestRunner.RunInStaAsync(async () =>
         {
             var agent = new TestAcerAgentClient { CurrentMode = OperatingMode.Default, CurrentFanMode = FanMode.Auto };
             agent.OnSetFanModeAsync = _ => Task.FromResult(false);

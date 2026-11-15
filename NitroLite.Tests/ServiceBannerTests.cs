@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using NitroLite.Core;
 using Xunit;
 
@@ -12,27 +9,6 @@ namespace NitroLite.Tests;
 /// </summary>
 public class ServiceBannerTests
 {
-    private static async Task RunInStaAsync(Func<Task> action)
-    {
-        var tcs = new TaskCompletionSource<object?>();
-        var thread = new Thread(async () =>
-        {
-            try
-            {
-                await action();
-                tcs.SetResult(null);
-            }
-            catch (Exception ex)
-            {
-                tcs.SetException(ex);
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.IsBackground = true;
-        thread.Start();
-        await tcs.Task;
-    }
-
     private static MainWindow CreateWindow() => new(
         new MockAcerAgentClient(),
         new MockCpuPowerService(),
@@ -44,7 +20,7 @@ public class ServiceBannerTests
     [Fact]
     public async Task ReportingAvailability_DoesNotThrowWhenTheXamlWasNeverLoaded()
     {
-        await RunInStaAsync(() =>
+        await StaTestRunner.RunInStaAsync(() =>
         {
             var window = CreateWindow();
             try
@@ -65,7 +41,7 @@ public class ServiceBannerTests
     [Fact]
     public async Task ASingleDroppedPoll_IsNotReportedAsLoss()
     {
-        await RunInStaAsync(() =>
+        await StaTestRunner.RunInStaAsync(() =>
         {
             var window = CreateWindow();
             try
@@ -96,7 +72,7 @@ public class ServiceBannerTests
     [Fact]
     public async Task Recovery_ClearsTheFailureCount()
     {
-        await RunInStaAsync(() =>
+        await StaTestRunner.RunInStaAsync(() =>
         {
             var window = CreateWindow();
             try

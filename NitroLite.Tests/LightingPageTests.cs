@@ -1,4 +1,3 @@
-using System.Linq;
 using NitroLite.Core;
 using Xunit;
 

@@ -1,4 +1,3 @@
-using System;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using Xunit;

@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 using NitroLite.Core;
 using Xunit;
@@ -101,13 +100,13 @@ public class MemoryCleanerToolTests
     }
 
     [Fact]
-    public void CleanMemory_ReportsTheToolMissingInsteadOfThrowing()
+    public async Task CleanMemory_ReportsTheToolMissingInsteadOfThrowing()
     {
         try { File.Delete(PortableCopy); } catch { }
 
         if (MemoryCleanerService.FindTool() != null) return; // installed on this machine; nothing to assert
 
-        var result = new MemoryCleanerService().CleanMemoryAsync().GetAwaiter().GetResult();
+        var result = await new MemoryCleanerService().CleanMemoryAsync();
         Assert.True(result.ToolMissing);
         Assert.False(result.Cleaned);
         Assert.Equal(0, result.FreedMegabytes);

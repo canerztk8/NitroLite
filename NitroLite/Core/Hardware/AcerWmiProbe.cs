@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Management;
+﻿using System.Management;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace NitroLite.Core.Hardware;
 
@@ -209,19 +205,4 @@ public static class AcerWmiProbe
     private static readonly Regex VersionPattern = new(
         @"Version\s+([0-9]+(?:\.[0-9]+)*)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-    /// <summary>True when the method declares no in-parameters, so calling it needs no crafted input structure.</summary>
-    private static bool IsParameterless(ManagementClass cls, string methodName)
-    {
-        try
-        {
-            foreach (MethodData m in cls.Methods)
-            {
-                if (!m.Name.Equals(methodName, StringComparison.Ordinal)) continue;
-                return m.InParameters == null || m.InParameters.Properties.Count == 0;
-            }
-        }
-        catch { }
-        return false;
-    }
 }

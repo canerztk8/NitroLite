@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading;
+﻿using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
 namespace NitroLite.Core;
@@ -26,11 +23,9 @@ public class AtkMouseService
     private const uint FILE_FLAG_OVERLAPPED = 0x40000000;
 
     private const uint WAIT_OBJECT_0 = 0x00000000;
-    private const uint WAIT_TIMEOUT = 0x00000102;
     private const uint WAIT_FAILED = 0xFFFFFFFF;
     private const int ERROR_IO_PENDING = 997;
     private const int ERROR_NO_MORE_ITEMS = 259;
-    private const int ERROR_OPERATION_ABORTED = 995;
 
     // ATK Official Vendor ID (14139 in decimal).
     // Note: VID 3554 is VXE mechanical keyboard dongle and MUST NEVER be targeted!

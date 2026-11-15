@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using Xunit;
 
 namespace NitroLite.Tests;

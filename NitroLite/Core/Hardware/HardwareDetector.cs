@@ -1,4 +1,3 @@
-using System;
 
 namespace NitroLite.Core.Hardware;
 

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using Xunit;
 
 namespace NitroLite.Tests;

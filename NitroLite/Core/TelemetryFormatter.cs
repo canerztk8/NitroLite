@@ -1,5 +1,4 @@
-﻿using System;
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace NitroLite.Core;
 
@@ -22,8 +21,6 @@ public static class TelemetryFormatter
         if (!isEstimated || string.IsNullOrWhiteSpace(text) || text.Contains("--")) return text;
         return "~" + text + EstimatedSuffix;
     }
-
-    private static readonly CultureInfo TrCulture = new("tr-TR");
 
     /// <summary>
     /// Highest temperature a laptop CPU or GPU can report. Anything above it is a sentinel from a sensor that did

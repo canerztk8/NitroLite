@@ -1,11 +1,8 @@
 ﻿using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Media;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -98,7 +95,6 @@ public partial class MainWindow : Window
     internal bool PendingMouseRestore => _pendingMouseRestore;
     internal OperatingMode SavedModeBeforeGame => _savedModeBeforeGame;
     internal CpuBoostMode SavedCpuBoostBeforeGame => _savedCpuBoostBeforeGame;
-    internal FanMode SavedFanModeBeforeGame => _savedFanModeBeforeGame;
     internal int SavedMouseProfileBeforeGame => _savedMouseProfileBeforeGame;
     internal bool HasGameBaselineCaptured => _hasGameBaselineCaptured;
     internal FanMode CurrentFanMode => _currentFanMode;
@@ -111,9 +107,7 @@ public partial class MainWindow : Window
     internal int TelemetryFailureCountForTesting => _consecutiveTelemetryFailures;
     internal bool? LastServiceTelemetryAvailableForTesting => _lastServiceTelemetryAvailable;
     internal bool IsGameSessionActive => _isGameSessionActive;
-    internal int GameSessionGeneration => _gameSessionGeneration;
     internal SemaphoreSlim GameProfileTransitionLock => _gameProfileTransitionLock;
-    internal System.Windows.Forms.ToolStripMenuItem? MenuItemRetryDesktop => _menuItemRetryDesktop;
     internal Func<Func<Task>, Task>? DispatcherRunner { get; set; }
     internal Func<int, bool>? MouseProfileSwitcher { get; set; }
 

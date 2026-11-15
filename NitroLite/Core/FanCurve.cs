@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
+﻿
 namespace NitroLite.Core;
 
 /// <summary>One anchor of the fan curve: at this CPU temperature, run the fans at this percentage.</summary>
