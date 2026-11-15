@@ -439,6 +439,13 @@ public partial class MainWindow
             return;
         }
 
+        // The load runs the CPU for up to half an hour, so the heat and the fan noise are part of the deal. The
+        // user has to agree to them before it starts, not discover them ten minutes in.
+        var confirm = System.Windows.MessageBox.Show(this,
+            Loc.T("Güvenli deşarj, pili %80 sınırına indirmek için işlemciyi 30 dakikaya kadar yük altında çalıştırır. Bu süre boyunca işlemci ısınır ve fanlar hızlanır.\n\nDevam edilsin mi?"),
+            Loc.T("Pil Şarj Sınırı ve Güvenli Deşarj"), MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
         if (_batteryService.CurrentStatus.IsPluggedIn)
         {
             var res = System.Windows.MessageBox.Show(this,

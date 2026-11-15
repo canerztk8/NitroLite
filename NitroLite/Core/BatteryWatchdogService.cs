@@ -55,6 +55,28 @@ public class BatteryWatchdogService : IDisposable
 
     public bool IsDischarging => _isDischarging;
 
+    /// <summary>
+    /// Test seam: replaces the Win32 power-status read so the discharge state machine can be driven from a test
+    /// without a real battery. Null in production, where the P/Invoke below is used.
+    /// </summary>
+    internal Func<(bool Ok, byte AcLineStatus, byte BatteryLifePercent)>? PowerStatusSeam { get; set; }
+
+    /// <summary>The load thread while a discharge is running, so a test can check its priority and count.</summary>
+    internal Thread? DischargeWorker => _dischargeWorker;
+
+    private Thread? _dischargeWorker;
+
+    private bool TryGetPowerStatus(out SYSTEM_POWER_STATUS status)
+    {
+        if (PowerStatusSeam != null)
+        {
+            var (ok, acLine, percent) = PowerStatusSeam();
+            status = new SYSTEM_POWER_STATUS { ACLineStatus = acLine, BatteryLifePercent = percent };
+            return ok;
+        }
+        return GetSystemPowerStatus(out status);
+    }
+
     public BatteryStatusInfo CurrentStatus { get; private set; } = new();
 
     public event Action<BatteryStatusInfo>? StatusUpdated;
@@ -500,7 +522,7 @@ public class BatteryWatchdogService : IDisposable
         {
             if (_isDisposed) return false;
             if (_isDischarging) return true;
-            if (!GetSystemPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent is <= 80 or > 100)
+            if (!TryGetPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent is <= 80 or > 100)
                 return false;
             _isDischarging = true;
             cts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
@@ -514,19 +536,27 @@ public class BatteryWatchdogService : IDisposable
     private async Task RunDischargeAsync(CancellationTokenSource cts)
     {
         var token = cts.Token;
-        var workers = new Task[2];
-        for (int i = 0; i < workers.Length; i++)
+
+        // One dedicated thread at the lowest priority, not two pool threads. The load exists only to drain the
+        // battery, so it must never compete with the 1 s telemetry loop or the thermal safety floor, and a pool
+        // thread would carry the lowered priority back into the pool once it finished. The 20 ms pause between
+        // bursts keeps the core busy without pinning it at 100 % for the whole half hour.
+        var worker = new Thread(() =>
         {
-            workers[i] = Task.Run(() =>
+            while (!token.IsCancellationRequested)
             {
-                while (!token.IsCancellationRequested)
-                {
-                    double d = 1.0001;
-                    for (int j = 0; j < 50000; j++) d = Math.Sin(d) * Math.Cos(d);
-                    Thread.Sleep(5);
-                }
-            });
-        }
+                double d = 1.0001;
+                for (int j = 0; j < 50000; j++) d = Math.Sin(d) * Math.Cos(d);
+                Thread.Sleep(20);
+            }
+        })
+        {
+            IsBackground = true,
+            Priority = ThreadPriority.Lowest,
+            Name = "NitroLite.SafeDischarge"
+        };
+        worker.Start();
+        _dischargeWorker = worker;
 
         bool reachedTarget = false;
         try
@@ -534,7 +564,7 @@ public class BatteryWatchdogService : IDisposable
             while (!token.IsCancellationRequested)
             {
                 // This safety check needs only adapter and charge state. WMI telemetry must not block it.
-                if (!GetSystemPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent > 100)
+                if (!TryGetPowerStatus(out var power) || power.ACLineStatus != 0 || power.BatteryLifePercent > 100)
                     break;
                 if (power.BatteryLifePercent <= 80)
                 {
@@ -548,7 +578,10 @@ public class BatteryWatchdogService : IDisposable
         finally
         {
             cts.Cancel();
-            await Task.WhenAll(workers).ConfigureAwait(false);
+            // The worker only checks the token between bursts, so it is gone within one 20 ms pause. The wait is
+            // off the caller's thread because this continuation can land on the pool.
+            await Task.Run(() => worker.Join(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+            _dischargeWorker = null;
             bool notify;
             lock (_dischargeLock)
             {

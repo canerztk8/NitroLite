@@ -70,6 +70,14 @@ public partial class App : System.Windows.Application
                 return;
             }
 
+            // Run this before deleting the folder. NitroLite has no installer, so nothing else undoes the
+            // Windows-level changes "PC Optimize" makes or removes the autostart entry.
+            if (HasFlag(e.Args, "--uninstall-cleanup"))
+            {
+                Environment.Exit(RunCliTask("--uninstall-cleanup", SystemToolsService.UninstallCleanupAsync, e.Args));
+                return;
+            }
+
             // Read-only diagnostic: prints what NitroLite can see about this laptop. No --yes, because it changes
             // nothing; a user pasting the output into an issue is the whole point.
             if (HasFlag(e.Args, "--hardware-report"))

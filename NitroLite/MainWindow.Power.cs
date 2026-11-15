@@ -195,7 +195,10 @@ public partial class MainWindow
                         {
                             if (!_isExiting && !Dispatcher.HasShutdownStarted)
                             {
-                                Dispatcher.Invoke(() =>
+                                // InvokeAsync, not Invoke: this runs while _gameProfileTransitionLock is held, and a
+                                // synchronous hop to the UI thread is a deadlock waiting for the first UI-thread
+                                // caller that waits on the same lock.
+                                await Dispatcher.InvokeAsync(() =>
                                 {
                                     UpdateModeUi(targetMode);
                                     UpdateDesktopBaselineForManualChange(mode: targetMode);

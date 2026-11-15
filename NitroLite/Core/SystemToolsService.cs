@@ -445,6 +445,49 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
         };
     }
 
+    /// <summary>
+    /// The cleanup a user is expected to run before deleting the folder. NitroLite has no installer, so nothing
+    /// calls this automatically: without it, "PC Optimize" leaves SysMain disabled and HAGS on after the app is
+    /// gone, and the autostart entry keeps pointing at an exe that no longer exists.
+    /// </summary>
+    public static async Task<ToolExecutionResult> UninstallCleanupAsync()
+    {
+        var parts = new List<string>();
+        bool ok = true;
+
+        if (File.Exists(OptimizeBackupPath))
+        {
+            var restore = await RestoreOptimizePcAsync();
+            ok &= restore.Success;
+            parts.Add(restore.Message);
+        }
+
+        bool autoStartRemoved = RemoveAutoStartEntry();
+        ok &= autoStartRemoved;
+        parts.Add(autoStartRemoved
+            ? Loc.T("Otomatik başlatma kaydı kaldırıldı.")
+            : Loc.T("Otomatik başlatma kaydı kaldırılamadı."));
+
+        return new ToolExecutionResult { Success = ok, Message = string.Join(" ", parts) };
+    }
+
+    /// <summary>Deletes the HKCU Run value NitroLite writes when autostart is enabled. True when it is gone.</summary>
+    internal static bool RemoveAutoStartEntry()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run", writable: true);
+            if (key == null) return true;
+            key.DeleteValue("NitroLite", throwOnMissingValue: false);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static async Task<(bool ok, string? error)> RunElevatedScriptAsync(string script, string prefix)
     {
         if (ElevatedRunnerSeam != null)

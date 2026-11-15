@@ -614,10 +614,14 @@ public static class UpdateService
             using var results = searcher.Get();
             foreach (System.Management.ManagementObject item in results)
             {
-                var manufacturer = (item["Manufacturer"]?.ToString() ?? "").Trim();
-                var model = (item["Model"]?.ToString() ?? "").Trim();
-                var text = string.Join(" ", new[] { manufacturer, model }.Where(part => part.Length > 0));
-                if (text.Length > 0) return text;
+                // ManagementObject wraps a native COM object; the collection does not dispose the items in it.
+                using (item)
+                {
+                    var manufacturer = (item["Manufacturer"]?.ToString() ?? "").Trim();
+                    var model = (item["Model"]?.ToString() ?? "").Trim();
+                    var text = string.Join(" ", new[] { manufacturer, model }.Where(part => part.Length > 0));
+                    if (text.Length > 0) return text;
+                }
             }
         }
         catch { }

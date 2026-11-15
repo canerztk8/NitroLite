@@ -212,6 +212,14 @@ public class CpuPowerService : IDisposable
             return CurrentMode;
         }
 
+        // Only the real spawn is cached. A test seam has no process to avoid, and caching it would hide a change
+        // the test made between two calls.
+        bool cacheable = MockPowerCfgQueryOutput == null && ProcessInfoFactory == null;
+        if (cacheable && TryGetCachedPowerCfgMode(isAc, out var cached))
+        {
+            return cached;
+        }
+
         try
         {
             string output;
@@ -288,11 +296,15 @@ public class CpuPowerService : IDisposable
             {
                 // 3, 5 and 6 are real Windows values with no matching enum member. They are still the value the
                 // firmware holds, so they are reported as-is; only values above 6 are rejected.
-                return val.Value <= 6 ? (CpuBoostMode)val.Value : null;
+                CpuBoostMode? parsed = val.Value <= 6 ? (CpuBoostMode)val.Value : null;
+                if (cacheable) StorePowerCfgMode(isAc, parsed);
+                return parsed;
             }
         }
         catch { }
 
+        // A failed read is cached too: retrying a hung powercfg every 5 s is exactly what this cache is for.
+        if (cacheable) StorePowerCfgMode(isAc, null);
         return null;
     }
 
@@ -340,6 +352,45 @@ public class CpuPowerService : IDisposable
     internal Process? _hangingProcess;
     internal Func<string, ProcessStartInfo>? ProcessInfoFactory { get; set; }
 
+    /// <summary>
+    /// How long a real <c>powercfg.exe</c> read is reused. The native read fails on schemes where the boost setting
+    /// is hidden, and the fallback then spawns a process; <c>SyncDeviceStateAsync</c> asks for the mode every 5 s,
+    /// so without this that is ~12 process spawns a minute for the whole session. The value only changes when this
+    /// app or the user writes it, and every write path calls <see cref="InvalidatePowerCfgCache"/>.
+    /// </summary>
+    private static readonly TimeSpan PowerCfgCacheTtl = TimeSpan.FromSeconds(60);
+
+    private (CpuBoostMode? Mode, DateTime At) _powerCfgCacheAc;
+    private (CpuBoostMode? Mode, DateTime At) _powerCfgCacheDc;
+
+    /// <summary>Test seam: the clock the cache TTL is measured against.</summary>
+    internal Func<DateTime> UtcNowFactory { get; set; } = () => DateTime.UtcNow;
+
+    internal bool TryGetCachedPowerCfgMode(bool isAc, out CpuBoostMode? mode)
+    {
+        var entry = isAc ? _powerCfgCacheAc : _powerCfgCacheDc;
+        if (entry.At != default && UtcNowFactory() - entry.At < PowerCfgCacheTtl)
+        {
+            mode = entry.Mode;
+            return true;
+        }
+        mode = null;
+        return false;
+    }
+
+    internal void StorePowerCfgMode(bool isAc, CpuBoostMode? mode)
+    {
+        if (isAc) _powerCfgCacheAc = (mode, UtcNowFactory());
+        else _powerCfgCacheDc = (mode, UtcNowFactory());
+    }
+
+    /// <summary>Drops the cached fallback read so the next one goes back to the hardware.</summary>
+    internal void InvalidatePowerCfgCache()
+    {
+        _powerCfgCacheAc = default;
+        _powerCfgCacheDc = default;
+    }
+
     internal bool EnsureNoHangingProcess()
     {
         if (_hangingProcess != null)
@@ -383,6 +434,7 @@ public class CpuPowerService : IDisposable
 
             if (BypassNativePowerCalls)
             {
+                InvalidatePowerCfgCache();
                 UpdateCurrentModeAfterSuccess(mode, targetAc, targetDc);
                 IsModeVerified = true;
                 return true;
@@ -425,6 +477,8 @@ public class CpuPowerService : IDisposable
 
                         if (success)
                         {
+                            // The value just changed, so the cached fallback read is stale by definition.
+                            InvalidatePowerCfgCache();
                             UpdateCurrentModeAfterSuccess(mode, targetAc, targetDc);
                             return true;
                         }
@@ -530,6 +584,7 @@ public class CpuPowerService : IDisposable
                 return false;
             }
 
+            InvalidatePowerCfgCache();
             UpdateCurrentModeAfterSuccess(mode, targetAc, targetDc);
             return true;
         }

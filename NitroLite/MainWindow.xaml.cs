@@ -39,6 +39,9 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _pollTimer = new();
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
+    // The icon NitroLite created itself. SystemIcons.Application is a shared cached instance and must not be
+    // disposed, so the tray icon cannot be disposed through _notifyIcon.Icon.
+    private System.Drawing.Icon? _trayIcon;
     private System.Windows.Forms.ToolStripMenuItem? _menuItemRetryDesktop;
     private OsdOverlayWindow? _osdWindow;
     private bool _isOsdOpen = false;
@@ -335,6 +338,7 @@ public partial class MainWindow : Window
         }
         catch { }
 
+        _trayIcon = appIcon;
         _notifyIcon = new System.Windows.Forms.NotifyIcon
         {
             Icon = appIcon ?? System.Drawing.SystemIcons.Application,
@@ -1438,6 +1442,10 @@ public partial class MainWindow : Window
         _gameService.Dispose();
         _batteryService.Dispose();
         _agentClient.Dispose();
+        // NotifyIcon.Dispose only unregisters the tray icon: the Icon and the ContextMenuStrip it was given are
+        // GDI/User handles that outlive it until the process ends.
+        _trayIcon?.Dispose();
+        _notifyIcon?.ContextMenuStrip?.Dispose();
         _notifyIcon?.Dispose();
         System.Windows.Application.Current.Shutdown();
     }

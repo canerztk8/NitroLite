@@ -138,9 +138,12 @@ Every Acer and Windows maintenance task runs from the **System Services & Tools*
 - **Windows & system optimisation:** HAGS (GPU hardware scheduling), NVMe TRIM, disabling telemetry tasks and
   background service cleanup. Every change is backed up to `optimize_backup.json`; **Restore** puts service start
   types, the HAGS value and the telemetry tasks back.
-- **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`
-  and `--restore-optimize`. Commands that change system settings ask for confirmation:
+- **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`,
+  `--restore-optimize` and `--uninstall-cleanup`. Commands that change system settings ask for confirmation:
   `NitroLite.exe --optimize-pc --yes`.
+- **Before you delete the folder:** run `NitroLite.exe --uninstall-cleanup --yes`. NitroLite has no installer, so
+  nothing else undoes the Windows-level changes **Windows & system optimisation** makes or removes the autostart
+  entry. Skipping it leaves SysMain disabled and HAGS enabled after the app is gone.
 - **One-shot hardware commands:** `--mode`, `--fan` and `--profile` change the machine and exit without opening the
   window, so a script, a launcher or a macro pad can drive them. They never write to `settings.json`; a running
   NitroLite picks the change up as an external change on its next poll.
