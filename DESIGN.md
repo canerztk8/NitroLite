@@ -1,4 +1,4 @@
----
+﻿---
 name: NitroLite
 description: A lightweight NitroSense alternative for Acer Nitro laptops — the visual world of Kandilli seismograph paper
 colors:
@@ -153,13 +153,13 @@ Surface mode **Operate**: the user finishes a task. Not decoration; scan speed a
 - **vermilion `#C0392B`** — the world's only accent, and **for exactly three jobs**: (1) what is live right now — the mode in the title bar, the end point of the chart, the "now" line; (2) a state that needs attention — a threshold crossed, a maintenance suggestion, a blocked mode; (3) destructive action text. Nowhere else.
 - **vermilion-deep `#9B2C1F`** — destructive button text and warning headings. A touch darker than the bright vermilion, so it shouts less as button text.
 - **olive `#5F6B3E`** — verified good state: battery health, SSD temperature, nominal stability.
-- **slate `#4A6274`** — the neutral third measurement (battery voltage, the GPU mode badge).
+- **slate `#4A6274`** — the neutral third measurement (battery voltage).
 - **on-accent `#F7F2E8`** — text and tick on an ink fill.
 - **warn-bg `#F0E2D2`** — the ground of the warning band, together with vermilion text.
 
 Colour never carries meaning on its own: every state chip also writes text ("ACTIVE", "SELECT", "Disabled", "Service Recommended").
 
-**Measurement bars carry no colour.** The track is `rule`, the fill is `ink`. A bar shows a measurement, not a judgement; the judgement lives in the text and the badge beside it. The only exceptions are disk usage above 85 % and a running discharge — a real threshold and a real live state.
+**Measurement bars carry no colour.** The track is `rule`, the fill is `ink`. A bar shows a measurement, not a judgement; the judgement lives in the text and the badge beside it. The only exception is disk usage above 85 % — a real threshold.
 
 ### Palettes
 

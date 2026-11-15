@@ -1135,7 +1135,7 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid Grid.Row="0" Margin="0,0,0,4">
-                                        <TextBlock x:Name="TxtTraceSpan" Text="60 SANİYE" Style="{StaticResource LabelCaps}" />
+                                        <TextBlock Text="60 SANİYE" Style="{StaticResource LabelCaps}" />
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                             <TextBlock Text="ARALIK" Style="{StaticResource LabelCaps}" Margin="0,0,6,0" />
                                             <TextBlock x:Name="TxtTraceRange" Text="--" Style="{StaticResource Figure}" Foreground="{DynamicResource InkFaint}" FontSize="10" Margin="0,0,16,0" />

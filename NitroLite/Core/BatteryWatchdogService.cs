@@ -49,23 +49,6 @@ public class BatteryWatchdogService : IDisposable
     /// </summary>
     public bool SuppressSounds { get; set; }
 
-    /// <summary>
-    /// Test seam: replaces the Win32 power-status read so the watchdog can be driven from a test without a real
-    /// battery. Null in production, where the P/Invoke below is used.
-    /// </summary>
-    internal Func<(bool Ok, byte AcLineStatus, byte BatteryLifePercent)>? PowerStatusSeam { get; set; }
-
-    private bool TryGetPowerStatus(out SYSTEM_POWER_STATUS status)
-    {
-        if (PowerStatusSeam != null)
-        {
-            var (ok, acLine, percent) = PowerStatusSeam();
-            status = new SYSTEM_POWER_STATUS { ACLineStatus = acLine, BatteryLifePercent = percent };
-            return ok;
-        }
-        return GetSystemPowerStatus(out status);
-    }
-
     public BatteryStatusInfo CurrentStatus { get; private set; } = new();
 
     public event Action<BatteryStatusInfo>? StatusUpdated;

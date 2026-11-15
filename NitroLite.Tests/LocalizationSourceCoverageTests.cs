@@ -151,6 +151,62 @@ public class LocalizationSourceCoverageTests
             + string.Join("\n", missing.Distinct().OrderBy(m => m, StringComparer.Ordinal)));
     }
 
+    /// <summary>
+    /// The XAML keeps the Turkish source text, which is also the catalogue key, so a string edited in the markup
+    /// stops being translated without anything failing: the window still opens, in Turkish, in all seven languages.
+    /// The code-side scan above cannot see this, because the string never passes through <c>Loc.T</c>.
+    /// </summary>
+    [Fact]
+    public void EveryTranslatableXamlStringExistsInTheEnglishCatalogue()
+    {
+        var keys = EnglishKeys();
+        var missing = new List<string>();
+
+        foreach (var file in Directory.GetFiles(Path.Combine(RepoRoot(), "NitroLite"), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var (value, where) in XamlStrings(File.ReadAllText(file), Path.GetFileName(file)))
+            {
+                if (!keys.Contains(value)) missing.Add($"{where}  \"{value}\"");
+            }
+        }
+
+        Assert.True(missing.Count == 0,
+            "These XAML strings are not catalogue keys, so they stay Turkish in every language:\n"
+            + string.Join("\n", missing.Distinct().OrderBy(m => m, StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// The properties <see cref="NitroLite.Core.LocXaml"/> rewrites, minus the values that are not prose: a markup
+    /// extension, a glyph entity, and anything without a run of two letters (<c>%80</c>, <c>60°</c>, <c>v1.2</c>).
+    /// </summary>
+    private static IEnumerable<(string Value, string Where)> XamlStrings(string source, string file)
+    {
+        var attribute = new Regex("\\b(?:Text|Content|Header|ToolTip|Title)=\"(?<value>[^\"]*)\"", RegexOptions.Compiled);
+        var run = new Regex("<Run\\b[^>]*\\bText=\"(?<value>[^\"]*)\"", RegexOptions.Compiled);
+
+        foreach (var regex in new[] { attribute, run })
+        {
+            foreach (Match match in regex.Matches(source))
+            {
+                var raw = match.Groups["value"].Value;
+                if (raw.Contains("&#x", StringComparison.Ordinal)) continue;
+                if (raw.StartsWith('{')) continue;
+
+                var value = System.Net.WebUtility.HtmlDecode(raw);
+                if (!Regex.IsMatch(value, "[A-Za-zÇĞİÖŞÜçğıöşü]{2}")) continue;
+
+                var line = source.Take(match.Index).Count(c => c == '\n') + 1;
+                yield return (value, $"{file}:{line}");
+            }
+        }
+    }
+
     [Fact]
     public void TheScannerUnderstandsBothLiteralForms()
     {

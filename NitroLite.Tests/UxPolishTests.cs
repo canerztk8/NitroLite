@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using NitroLite.Core;
@@ -43,8 +43,7 @@ public class UxPolishTests
         {
             Battery = new BatteryWatchdogService(attachSystemEvents: false)
             {
-                SuppressSounds = true,
-                PowerStatusSeam = () => (true, (byte)(OnAc ? 1 : 0), (byte)BatteryPercent)
+                SuppressSounds = true
             };
 
             Window = new MainWindow(

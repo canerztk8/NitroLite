@@ -130,8 +130,7 @@ public class ComprehensiveUsageChaosTests
 
             Battery = new BatteryWatchdogService(attachSystemEvents: false)
             {
-                SuppressSounds = true,
-                PowerStatusSeam = () => (true, (byte)(OnAc ? 1 : 0), (byte)BatteryPercent)
+                SuppressSounds = true
             };
 
             Window = new MainWindow(

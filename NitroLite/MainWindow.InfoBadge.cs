@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -79,11 +79,11 @@ public partial class MainWindow
         {
             PlacementTarget = badge,
             Placement = PlacementMode.Bottom,
+            // A popup that stays open after a click elsewhere would float over other applications.
             StaysOpen = false,
             AllowsTransparency = true,
             PopupAnimation = PopupAnimation.Fade,
             Child = _infoPopupCard,
-            // A popup that stays open after the window loses focus would float over other applications.
             HorizontalOffset = -8,
             VerticalOffset = 4
         };
