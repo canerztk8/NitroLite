@@ -2,7 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1597-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1623-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -329,7 +329,7 @@ new version once the manifest is bumped, which `scripts/publish-release.ps1` doe
 
 ### Manual download
 
-1. Download `NitroLite-v1.2.4-win-x64.zip` from the
+1. Download `NitroLite-v1.2.5-win-x64.zip` from the
    **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page.
 2. Extract it to a **permanent folder**, for example `C:\Users\<you>\Programs\NitroLite`. Do not leave it in
    Downloads: "run at Windows startup" remembers where the exe lives.
@@ -346,11 +346,11 @@ choose **Exit**.
 One line, in PowerShell, in the folder you downloaded to:
 
 ```powershell
-Get-FileHash .\NitroLite-v1.2.4-win-x64.zip -Algorithm SHA256 | Format-List
+Get-FileHash .\NitroLite-v1.2.5-win-x64.zip -Algorithm SHA256 | Format-List
 ```
 
 `Hash` must equal the digest printed on the release page. The same value is attached to the release as
-`NitroLite-v1.2.4-win-x64.zip.sha256`, in `sha256sum` format, so `sha256sum -c` works too. The updater inside the app
+`NitroLite-v1.2.5-win-x64.zip.sha256`, in `sha256sum` format, so `sha256sum -c` works too. The updater inside the app
 performs this comparison itself and refuses to swap the executable on a mismatch.
 
 ### Why SmartScreen warns
@@ -367,7 +367,7 @@ The prompt is about **provenance, not detection**. It does not mean Microsoft fo
 - You can confirm the file is unsigned rather than tampered with:
 
   ```powershell
-  Get-AuthenticodeSignature .\NitroLite-v1.2.4-win-x64.zip | Format-List Status, StatusMessage
+  Get-AuthenticodeSignature .\NitroLite-v1.2.5-win-x64.zip | Format-List Status, StatusMessage
   ```
 
   `Status` reads `NotSigned`. That is expected, and it is the same answer you get for any unsigned open-source
@@ -467,7 +467,7 @@ manifests.
 
 ## Tests
 
-1597 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1623 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
