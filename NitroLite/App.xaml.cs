@@ -2,6 +2,7 @@
 using System.Windows;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Wmi;
 
 namespace NitroLite;
 
@@ -432,25 +433,12 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// The elevated WMI helper. This is the skeleton only: it validates its arguments and refuses to run without
-    /// them, so a build that cannot yet serve the pipe never leaves an elevated process sitting in the background
-    /// with no owner. The pipe server, the nonce handshake and the narrow command set land in the next step.
+    /// The elevated WMI helper. It validates its arguments, serves exactly one client over a current-user-only pipe
+    /// and exits when that client goes away. The work itself lives in <see cref="WmiWorkerHost"/> so it can be tested
+    /// without starting a process.
     /// </summary>
-    /// <returns>0 when the helper ran to completion, 2 for a rejected request, 3 while it is not implemented.</returns>
-    private static int RunWmiWorker(StartupMode mode)
-    {
-        if (!mode.IsValidWorkerRequest)
-        {
-            // Logged rather than printed: the helper is started by the window, not by a person reading a console.
-            AppLog.Warn("--wmi-worker reddedildi: eksik veya geçersiz argüman",
-                $"pipe='{mode.PipeName}' parent={mode.ParentProcessId} nonce={mode.Nonce.Length} karakter");
-            return 2;
-        }
-
-        AppLog.Warn("--wmi-worker istendi ancak yardımcı süreç henüz uygulanmadı",
-            $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
-        return 3;
-    }
+    /// <returns>0 when the helper served its client, 2 for a rejected request, 4 when nobody connected.</returns>
+    private static int RunWmiWorker(StartupMode mode) => WmiWorkerHost.Run(mode);
 
     private static int RunHardwareReport(string[] args)
     {
