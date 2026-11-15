@@ -146,7 +146,7 @@ public partial class MainWindow
         string sizes = lists.HasValue
             ? Loc.TInv($"Şu an bekleme listesinde {lists.Value.StandbyGigabytes:F1} GB, boşta {lists.Value.FreeGigabytes:F1} GB var. ")
             : "";
-        TxtRamCleanNote.Text = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz, bu yüzden kullanılan RAM çubuğu değişmez. ")
-                               + Loc.T("Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.");
+        TxtRamCleanNote.Text = Loc.T("Windows önbelleğindeki bekleme listesini temizler");
+        TxtRamCleanNote.ToolTip = sizes + Loc.T("Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz, bu yüzden kullanılan RAM çubuğu değişmez. Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar.");
     }
 }

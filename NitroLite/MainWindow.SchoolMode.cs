@@ -54,7 +54,7 @@ public partial class MainWindow
             ChkSchoolMode.IsChecked = _appSettings.SchoolModeEnabled;
             if (TxtSchoolModeDetail != null)
             {
-                TxtSchoolModeDetail.Text = Loc.T("Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner.");
+                TxtSchoolModeDetail.Text = Loc.T("Eco · Boost Kapalı · 60 Hz · %40 Parlaklık (kapatınca geri döner)");
             }
         }
         finally

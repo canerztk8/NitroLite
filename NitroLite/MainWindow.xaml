@@ -77,14 +77,45 @@
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <!-- A section is a ruled band on the paper, never a card floating on it: one hairline above,
-             generous space below. The 21 existing CardBorder usages inherit this language. -->
+        <!-- A section is a card on the paper: a ground one tone off the page, one hairline frame, an
+             8px corner. The 21 existing CardBorder usages inherit this language, so every page groups
+             its content the same way. -->
         <Style x:Key="CardBorder" TargetType="Border">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
-            <Setter Property="BorderThickness" Value="0,1,0,0" />
-            <Setter Property="CornerRadius" Value="0" />
-            <Setter Property="Padding" Value="0,14,0,0" />
+            <Setter Property="Background" Value="{DynamicResource CardBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Rule}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,12" />
+        </Style>
+
+        <!-- A section's one-line summary. Smaller and fainter than the title, so the heading and the
+             figures carry the hierarchy and the prose stays out of the way. -->
+        <Style x:Key="SectionHint" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{DynamicResource InkFaint}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- The (?) badge: a quiet ring that holds the detail a one-line summary leaves out. It only
+             answers a hover, so it stays out of the tab order and never competes with a control. -->
+        <Style x:Key="InfoBadge" TargetType="{x:Type ContentControl}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Help" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContentControl}">
+                        <Border Width="15" Height="15" CornerRadius="7.5"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource RuleStrong}" BorderThickness="1"
+                                Opacity="0.75">
+                            <TextBlock Text="?" FontSize="9.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource InkFaint}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Flat button: no chrome, no bevel. Hover is a paper tone, never a colour. -->
@@ -538,40 +569,39 @@
             </Setter>
         </Style>
 
-        <!-- A mode is a ruled row on the recording paper, not a card. The active row is marked by a
-             3x18 vermilion time mark in the left margin (BorderBrush drives the mark), full ink type
-             and a vermilion chip; the other rows drop to soft ink. State by de-emphasis, never by fill. -->
-        <Style x:Key="ModeRowButton" TargetType="Button">
+        <!-- A mode is a compact tile, not a full-width row: the name, a two-word label and the state
+             chip. The active tile is marked by the vermilion frame the code-behind writes into
+             BorderBrush, plus the chip; the fill never changes, so state is still built by
+             de-emphasis rather than by a coloured band. -->
+        <Style x:Key="ModeCardButton" TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="1" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="{StaticResource Rule}" />
-                            <Border x:Name="hover" Grid.Row="1" Background="{StaticResource CardBgHover}" Opacity="0" />
-                            <Grid Grid.Row="1">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="14" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Rectangle x:Name="mark" Grid.Column="0" Width="3" Height="18"
-                                           Fill="{TemplateBinding BorderBrush}" VerticalAlignment="Center"
-                                           HorizontalAlignment="Left" />
-                                <ContentPresenter Grid.Column="1" Margin="0,12,14,12" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
-                            </Grid>
+                            <!-- The resting frame is always drawn; the accent frame sits on top of it
+                                 and is transparent until the mode becomes the active one. -->
+                            <Border x:Name="ground"
+                                    Background="{DynamicResource Paper}"
+                                    BorderBrush="{DynamicResource Rule}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    SnapsToDevicePixels="True" />
+                            <Border x:Name="accent"
+                                    Background="Transparent"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    SnapsToDevicePixels="True" />
+                            <ContentPresenter Margin="11,9" HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="hover" Property="Opacity" Value="1" />
+                                <Setter TargetName="ground" Property="Background" Value="{DynamicResource CardBgHover}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -777,12 +807,11 @@
                         <ScrollViewer VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                             <StackPanel>
                                 <TextBlock Text="Çalışma Modları" Foreground="{StaticResource Ink}" FontSize="18" FontWeight="SemiBold" />
-                                <TextBlock Text="Donanım güç limitleri, fan profilleri ve oyuna özel yapılandırmalar." Foreground="{StaticResource InkSoft}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" />
 
                                 <!-- THE RECORDING: the last 60 seconds of CPU temperature as a continuous
                                      ink trace, a vermilion "now" edge, and a tick wherever the mode
                                      changed. This is the surface's signature move. -->
-                                <Grid Margin="0,20,0,0">
+                                <Grid Margin="0,16,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
@@ -808,104 +837,106 @@
                                     </Border>
                                 </Grid>
 
-                                <!-- Modes as ruled rows on the recording paper: the active row carries a
-                                     3px vermilion time mark above it and full ink, the others drop back.
-                                     Texts follow NitroSense's own mode descriptions. -->
-                                <StackPanel Margin="0,18,0,0">
-                                    <!-- QUIET -->
-                                    <Button x:Name="BtnModeQuiet" Style="{StaticResource ModeRowButton}" Click="BtnMode_Click" Tag="Quiet">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="Sessiz" FontWeight="SemiBold" FontSize="14" />
-                                                <TextBlock Text="Olabildiğince sessiz; toplantı, ders, internet gibi hafif kullanım" FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <Border x:Name="IndQuiet" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="1" Padding="7,2" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                <TextBlock x:Name="TxtIndQuiet" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
-                                            </Border>
-                                        </Grid>
-                                    </Button>
+                                <!-- MODES: four compact tiles in one row instead of four full-width rows,
+                                     so the game profile below is reachable without scrolling. Eco joins
+                                     them on battery, where the high-power pair is hidden. -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,12,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="Güç Modları" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+                                        <UniformGrid Columns="4" Margin="0,0,-6,-6">
+                                            <!-- QUIET -->
+                                            <Button x:Name="BtnModeQuiet" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Quiet" Margin="0,0,6,6">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Sessiz" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Border x:Name="IndQuiet" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <TextBlock x:Name="TxtIndQuiet" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="Hafif kullanım" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                </StackPanel>
+                                            </Button>
 
-                                    <!-- BALANCED / DEFAULT -->
-                                    <Button x:Name="BtnModeDefault" Style="{StaticResource ModeRowButton}" Click="BtnMode_Click" Tag="Default">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="Dengeli" FontWeight="SemiBold" FontSize="14" />
-                                                <TextBlock Text="Günlük kullanım için önerilen; ofis ve genel işler" FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <Border x:Name="IndDefault" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="1" Padding="7,2" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                <TextBlock x:Name="TxtIndDefault" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
-                                            </Border>
-                                        </Grid>
-                                    </Button>
+                                            <!-- BALANCED / DEFAULT -->
+                                            <Button x:Name="BtnModeDefault" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Default" Margin="0,0,6,6">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Dengeli" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Border x:Name="IndDefault" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <TextBlock x:Name="TxtIndDefault" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="Günlük önerilen" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                </StackPanel>
+                                            </Button>
 
-                                    <!-- PERFORMANCE / EXTREME -->
-                                    <Button x:Name="BtnModeExtreme" Style="{StaticResource ModeRowButton}" Click="BtnMode_Click" Tag="Extreme">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="Performans" FontWeight="SemiBold" FontSize="14" />
-                                                <TextBlock Text="Oyun için; CPU ve GPU hız aşırtmalı, fan devri sınırlı" FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <Border x:Name="IndExtreme" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="1" Padding="7,2" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                <TextBlock x:Name="TxtIndExtreme" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
-                                            </Border>
-                                        </Grid>
-                                    </Button>
+                                            <!-- PERFORMANCE / EXTREME -->
+                                            <Button x:Name="BtnModeExtreme" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Extreme" Margin="0,0,6,6">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Performans" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Border x:Name="IndExtreme" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <TextBlock x:Name="TxtIndExtreme" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="Yüksek oyun gücü" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                </StackPanel>
+                                            </Button>
 
-                                    <!-- TURBO -->
-                                    <Button x:Name="BtnModeTurbo" Style="{StaticResource ModeRowButton}" Click="BtnMode_Click" Tag="Turbo">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="Turbo" FontWeight="SemiBold" FontSize="14" />
-                                                <TextBlock Text="Sınırsız oyun; en yüksek hız aşırtma ve fan devri" FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <Border x:Name="IndTurbo" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="1" Padding="7,2" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                <TextBlock x:Name="TxtIndTurbo" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
-                                            </Border>
-                                        </Grid>
-                                    </Button>
+                                            <!-- TURBO -->
+                                            <Button x:Name="BtnModeTurbo" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Turbo" Margin="0,0,6,6">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Turbo" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Border x:Name="IndTurbo" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <TextBlock x:Name="TxtIndTurbo" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="Maksimum performans" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                </StackPanel>
+                                            </Button>
 
-                                    <!-- ECO (reported by AASSvc as mode 6; NitroSense offers it on battery) -->
-                                    <Button x:Name="BtnModeEco" Style="{StaticResource ModeRowButton}" Click="BtnMode_Click" Tag="Eco">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="Eco" FontWeight="SemiBold" FontSize="14" />
-                                                <TextBlock Text="En düşük güç tüketimi; pilde daha uzun kullanım" FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,2,0,0" />
-                                            </StackPanel>
-                                            <Border x:Name="IndEco" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="1" Padding="7,2" VerticalAlignment="Center" Margin="16,0,0,0">
-                                                <TextBlock x:Name="TxtIndEco" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
-                                            </Border>
-                                        </Grid>
-                                    </Button>
-                                </StackPanel>
-                                <Border Height="1" Background="{StaticResource Rule}" Margin="0,0,0,0" />
-                                
-                                <TextBlock x:Name="TxtModeLockNote" Visibility="Collapsed" Foreground="{StaticResource AccentRed}" FontSize="11" TextWrapping="Wrap" Margin="4,0,4,0" />
-                                <Border Height="10" />
+                                            <!-- ECO (reported by AASSvc as mode 6; NitroSense offers it on battery) -->
+                                            <Button x:Name="BtnModeEco" Style="{StaticResource ModeCardButton}" Click="BtnMode_Click" Tag="Eco" Margin="0,0,6,6">
+                                                <StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="Eco" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                        <Border x:Name="IndEco" Grid.Column="1" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <TextBlock x:Name="TxtIndEco" Text="SEÇ" Foreground="{StaticResource TextMuted}" FontSize="9" FontWeight="SemiBold" />
+                                                        </Border>
+                                                    </Grid>
+                                                    <TextBlock Text="En düşük tüketim" FontSize="11" Opacity="0.8" TextWrapping="Wrap" Margin="0,3,0,0" />
+                                                </StackPanel>
+                                            </Button>
+                                        </UniformGrid>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock x:Name="TxtModeLockNote" Visibility="Collapsed" Foreground="{StaticResource AccentRed}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
 
 
-                                <!-- ROW: FAN CONTROL & GLOBAL CPU BOOST -->
-                                <!-- FAN: a ruled section. Readouts on the left, the choice on the right. -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,18">
+                                <!-- FAN: readouts on the left, the choice on the right. -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,10">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
@@ -915,8 +946,8 @@
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
 
-                                        <Grid Grid.Row="0" Margin="0,0,0,14">
-                                            <TextBlock Text="FAN" Style="{StaticResource LabelCaps}" />
+                                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                                            <TextBlock Text="Fan Kontrolü" Style="{StaticResource SectionTitle}" />
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                 <Button x:Name="BtnFanAuto" Style="{StaticResource SegButton}" Content="Otomatik" Click="BtnFanAuto_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" Margin="0,0,6,0" FontSize="11" />
                                                 <Button x:Name="BtnFanMax" Style="{StaticResource SegButton}" Content="Maksimum" Click="BtnFanMax_Click" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" Margin="0,0,6,0" FontSize="11" />
@@ -967,14 +998,18 @@
                                             <TextBlock Grid.Row="1" Text="GPU" Style="{StaticResource LabelCaps}" Margin="0,8,10,0" />
                                             <Slider x:Name="SliderFanGpu" Grid.Row="1" Grid.Column="1" Minimum="30" Maximum="100" Value="50" SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="SliderCustomFan_ValueChanged" VerticalAlignment="Center" Margin="0,8,0,0" />
                                             <TextBlock x:Name="TxtFanGpuPercent" Grid.Row="1" Grid.Column="2" Text="%50" Style="{StaticResource Figure}" HorizontalAlignment="Right" Margin="0,8,0,0" />
-                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="Sabit hız: fan yüke göre hızlanmaz. Ağır yükte sıcaklığı izleyin; ısınırsa Otomatik'e dönün." Foreground="{StaticResource InkFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="Sabit hız: fan yüke göre hızlanmaz." Style="{StaticResource SectionHint}" ToolTip="Ağır yükte sıcaklığı izleyin; ısınırsa Otomatik'e dönün." Margin="0,8,0,0" />
                                         </Grid>
 
                                         <!-- SOFTWARE FAN CURVE (shown in "Eğri" mode) -->
                                         <StackPanel x:Name="PnlFanCurve" Grid.Row="3" Margin="0,16,0,0" Visibility="Collapsed">
                                             <Border Height="1" Background="{StaticResource Rule}" Margin="0,0,0,12" />
                                             <Grid>
-                                                <TextBlock Text="FAN EĞRİSİ" Style="{StaticResource LabelCaps}" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="FAN EĞRİSİ" Style="{StaticResource LabelCaps}" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. 85 °C ve üstünde fan hiçbir zaman %60'ın altına inmez. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir." />
+                                                </StackPanel>
                                                 <TextBlock x:Name="TxtFanCurveStatus" Text="--" HorizontalAlignment="Right" Style="{StaticResource Figure}" FontSize="11" Foreground="{StaticResource InkSoft}" />
                                             </Grid>
                                             <!-- Templates: one click fills the six anchors below. A preset is a shortcut, not a
@@ -1076,12 +1111,11 @@
                                                     <TextBlock x:Name="TxtCurve5" Grid.Column="2" Text="%100" Style="{StaticResource Figure}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                                 </Grid>
                                             </Grid>
-                                            <TextBlock Text="Eğri CPU sıcaklığını izler: sıcaklık yükselince fan hemen hızlanır, düşünce histerezis kadar bekleyip yavaşlar. 85 °C ve üstünde fan hiçbir zaman %60'ın altına inmez. Oyun oturumu sırasında oyun profilinin fan ayarı geçerlidir." Foreground="{StaticResource InkFaint}" FontSize="10" TextWrapping="Wrap" Margin="0,10,0,0" />
                                         </StackPanel>
 
                                         <!-- FAN STALL WATCHDOG: a fan that stops turning while the die is hot is a hardware
                                              fault, not a tuning choice, so the guard is offered in every fan mode. -->
-                                        <CheckBox x:Name="ChkFanStallProtection" Grid.Row="4" Margin="0,14,0,0"
+                                        <CheckBox x:Name="ChkFanStallProtection" Grid.Row="4" Margin="0,10,0,0"
                                                   Content="Fan arızasında otomatik koruma (Eco moduna geç)"
                                                   Checked="ChkFanStallProtection_Changed" Unchecked="ChkFanStallProtection_Changed"
                                                   Foreground="{StaticResource InkSoft}" FontSize="11"
@@ -1089,14 +1123,14 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- CPU BOOST: the same ruled section, the choice on the right. -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,18">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <Grid Grid.Row="0">
+                                <!-- GPU & CPU: one card, two rows. The boost behaviour on top, the MUX
+                                     switch below, separated by a hairline instead of a second box. -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="GPU &amp; CPU" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
+
+                                        <!-- CPU BOOST -->
+                                        <Grid>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="CPU BOOST" Style="{StaticResource LabelCaps}" />
                                                 <TextBlock x:Name="TxtBoostStatusBadge" Text="(--)" Style="{StaticResource LabelCaps}" Foreground="{StaticResource InkSoft}" Margin="8,0,0,0" />
@@ -1107,35 +1141,37 @@
                                                 <Button x:Name="BtnBoostDisabled" Style="{StaticResource SegButton}" Content="Devre Dışı" Click="BtnBoost_Click" Tag="Disabled" Background="Transparent" Foreground="{StaticResource InkSoft}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,5" FontSize="11" ToolTip="Windows boost değeri 0: işlemci taban frekansının üzerine çıkmaz" />
                                             </StackPanel>
                                         </Grid>
-                                        <TextBlock Grid.Row="1" Text="Windows güç planı işlemci saat frekansı davranışı." Foreground="{StaticResource InkFaint}" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
-                                    </Grid>
-                                </Border>
+                                        <TextBlock Text="Windows güç planı işlemci saat frekansı davranışı." Style="{StaticResource SectionHint}" Margin="0,6,0,0" />
 
-                                <!-- GPU OPERATING MODE / MUX SWITCH CARD -->
-                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,16">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                                        <Border Height="1" Background="{DynamicResource Rule}" Margin="0,10,0,10" />
 
-                                        <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="GPU Çalışma Modu (MUX Switch)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
-                                                <Border x:Name="BadgeGpuMode" Background="Transparent" BorderThickness="0" Padding="0" Margin="10,0,0,0">
-                                                    <TextBlock x:Name="TxtGpuModeBadge" Text="Yükleniyor..." Foreground="{StaticResource AccentCyan}" FontSize="11" FontWeight="Bold" />
-                                                </Border>
+                                        <!-- MUX SWITCH -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="MUX Switch" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Ekran kartı bağlantı modu. Harici GPU doğrudan ekrana bağlanarak gecikmeyi düşürür ve maksimum FPS sağlar." />
+                                                    <Border x:Name="BadgeGpuMode" Background="Transparent" BorderThickness="0" Padding="0" Margin="10,0,0,0">
+                                                        <TextBlock x:Name="TxtGpuModeBadge" Text="Yükleniyor..." Foreground="{StaticResource AccentCyan}" FontSize="11" FontWeight="Bold" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="Harici GPU doğrudan ekrana bağlanır (yeniden başlatma gerekir)" Style="{StaticResource SectionHint}" Margin="0,3,0,0" />
+                                                <TextBlock x:Name="TxtGpuModeNote" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{StaticResource InkSoft}" FontSize="11" Margin="0,6,0,0" />
                                             </StackPanel>
-                                            <TextBlock Text="Ekran kartı bağlantı modu. Harici GPU doğrudan ekrana bağlanarak gecikmeyi düşürür ve maksimum FPS sağlar." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
-                                            <TextBlock x:Name="TxtGpuModeNote" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{StaticResource InkSoft}" FontSize="11" Margin="0,6,0,0" />
-                                        </StackPanel>
 
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <!-- Items are filled only from the modes AASSvc reports as supported (SUPPORT_GPU_MODE_CAPABILITY). -->
-                                            <ComboBox x:Name="CmbGpuMode" MinWidth="230" MaxWidth="340" Margin="0,0,8,0" IsEnabled="False" />
-                                            <Button x:Name="BtnApplyGpuMode" IsEnabled="False" Content="Modu Uygula" Click="BtnApplyGpuMode_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,7" Cursor="Hand" FontWeight="SemiBold" FontSize="11" ToolTip="Seçilen GPU modunu uygular." />
-                                        </StackPanel>
-                                    </Grid>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <!-- Items are filled only from the modes AASSvc reports as supported (SUPPORT_GPU_MODE_CAPABILITY). -->
+                                                <ComboBox x:Name="CmbGpuMode" MinWidth="230" MaxWidth="340" Margin="0,0,8,0" IsEnabled="False" />
+                                                <Button x:Name="BtnApplyGpuMode" IsEnabled="False" Content="Modu Uygula" Click="BtnApplyGpuMode_Click" Background="Transparent" Foreground="{StaticResource Ink}" BorderBrush="{StaticResource Rule}" BorderThickness="1" Padding="14,7" Cursor="Hand" FontWeight="SemiBold" FontSize="11" ToolTip="Seçilen GPU modunu uygular." />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
                                 </Border>
 
                                 <!-- ENHANCED PER-GAME PROFILE & AUTO DETECTION -->
@@ -1145,7 +1181,7 @@
                                         <Grid Margin="0,0,0,12">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="Oyun Profili Yönetimi" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
+                                                    <TextBlock Text="Oyun Profilleri" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
                                                     <Border x:Name="BadgeGameStatus" Background="Transparent" BorderThickness="0" Padding="0" Margin="10,0,0,0">
                                                         <!-- The badge carries a live game name, and a long one ("Tom Clancy's
                                                              Rainbow Six Siege") used to run under the checkbox on the right:
@@ -1156,7 +1192,7 @@
                                                         <TextBlock x:Name="TxtGameStatus" Text="Durum: Beklemede (Aktif oyun yok)" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
                                                     </Border>
                                                 </StackPanel>
-                                                <TextBlock Text="Yürütülebilir dosya algılandığında ilgili mod ve fan yapılandırması otomatik uygulanır." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                                <TextBlock Text="Yürütülebilir dosya algılandığında ilgili mod ve fan yapılandırması otomatik uygulanır." Style="{StaticResource SectionHint}" Margin="0,3,0,0" />
                                             </StackPanel>
 
                                             <!-- Auto Mode Global Switch -->
@@ -1172,12 +1208,14 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="Masaüstü &amp; Varsayılan Fare Profili:" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" />
+                                                        <TextBlock Text="Varsayılan Fare Profili" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                                                        <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                        ToolTip="Oyunlar kapandığında veya masaüstü kullanımında farenin otomatik döneceği varsayılan donanım profili." />
                                                         <Border x:Name="BadgeDefaultMouseProfile" Background="Transparent" BorderThickness="0" Padding="0" Margin="10,0,0,0">
                                                             <TextBlock x:Name="TxtDefaultMouseProfileStatus" Text="Config 1 (Aktif)" Foreground="{StaticResource AccentGreen}" FontSize="11" FontWeight="Bold" />
                                                         </Border>
                                                     </StackPanel>
-                                                    <TextBlock Text="Oyunlar kapandığında veya masaüstü kullanımında farenin otomatik döneceği varsayılan donanım profili." Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                                    <TextBlock Text="Oyun kapanınca dönülecek profil." Style="{StaticResource SectionHint}" Margin="0,3,0,0" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                     <ComboBox x:Name="CmbDefaultAtkMouseProfile" MinWidth="180" MaxWidth="320" Margin="0,0,8,0" SelectionChanged="CmbDefaultAtkMouseProfile_SelectionChanged">
@@ -1492,9 +1530,13 @@
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                                <TextBlock Text="Sistem Sıcaklığı" Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="Bold" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Sistem Sıcaklığı" Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Sensörün konumu Acer tarafından belirtilmiyor." />
+                                                </StackPanel>
                                                 <TextBlock x:Name="TxtMonSysTemp" Text="-- °C" Foreground="{StaticResource TextPrimary}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-                                                <TextBlock Text="Acer servisinin SYS1 sensörü (konumu Acer tarafından belirtilmiyor)" Foreground="{StaticResource TextMuted}" FontSize="11" TextWrapping="Wrap" />
+                                                <TextBlock Text="Acer servisinin SYS1 sensörü" Style="{StaticResource SectionHint}" />
                                             </StackPanel>
                                         </Grid>
 
@@ -1508,10 +1550,12 @@
 
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                                                        <TextBlock Text="Bekleme Belleğini Boşaltma" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" />
+                                                        <TextBlock Text="Bekleme Belleğini Boşaltma" Foreground="{StaticResource TextPrimary}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" />
+                                                        <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                        ToolTip="Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz, bu yüzden kullanılan RAM çubuğu değişmez. Oyunun kendi bellek sızıntısını geri vermez; boş bellek azaldığında oluşan takılmalara karşı işe yarar." />
                                                         <TextBlock x:Name="TxtRamCleanStatus" Text=" (Hazır)" Foreground="{StaticResource AccentGreen}" FontSize="11" FontWeight="Bold" Margin="4,0,0,0" />
                                                     </StackPanel>
-                                                    <TextBlock x:Name="TxtRamCleanNote" Text="Windows'un önbellekte tuttuğu (bekleme listesi) belleği boş belleğe çevirir; çalışan programların belleğine dokunmaz, bu yüzden kullanılan RAM çubuğu değişmez." Foreground="{StaticResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                                    <TextBlock x:Name="TxtRamCleanNote" Text="Windows önbelleğindeki bekleme listesini temizler" Style="{StaticResource SectionHint}" Margin="0,3,0,0" />
                                                     <Button x:Name="BtnGetMemoryCleaner" Content="WinMemoryCleaner'ı indir (ücretsiz, GPL-3.0)" Click="BtnGetMemoryCleaner_Click" Visibility="Collapsed" HorizontalAlignment="Left" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{StaticResource Link}" FontSize="10" Cursor="Hand" ToolTip="WinMemoryCleaner, NitroLite paketiyle birlikte gelir. Yalnızca dosya eksikse bu buton resmi GitHub indirme sayfasını açar." />
                                                 </StackPanel>
 
@@ -1530,8 +1574,12 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                                <TextBlock Text="Telemetri Geçmiş Grafiği" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" />
-                                                <TextBlock Text="Seçili metriğin son 60 saniyesi. Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez." Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Telemetri Geçmiş Grafiği" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez." />
+                                                </StackPanel>
+                                                <TextBlock Text="Seçili metriğin son 60 saniyesi" Style="{StaticResource SectionHint}" Margin="0,2,0,0" />
                                             </StackPanel>
 
                                             <!-- Metric Selection Dropdown -->
@@ -1847,10 +1895,14 @@
                                     </Border>
 
                                     <!-- SAFE DISCHARGE CARD -->
-                                    <Border Style="{StaticResource CardBorder}" Margin="6,0,0,0">
+                                    <Border Style="{StaticResource CardBorder}" Margin="6,0,0,0" VerticalAlignment="Top">
                                         <StackPanel>
-                                            <TextBlock Text="Hedef Seviyeye Deşarj" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" Margin="0,0,0,6" />
-                                            <TextBlock Text="Pildeyken işlemciye hafif yük vererek pili %80'e indirir ve otomatik durur. Isı üretir; şarj sınırı açıksa pil zaten %80'i geçmediği için çoğu zaman gerekmez. Pil sağlığı için şart değildir." Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                <TextBlock Text="Hedef Seviyeye Deşarj" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                                                <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                ToolTip="Isı üretir; şarj sınırı açıksa pil zaten %80'i geçmediği için çoğu zaman gerekmez. Pil sağlığı için şart değildir." />
+                                            </StackPanel>
+                                            <TextBlock Text="Pildeyken hafif yükle %80'e indirir (işlemci ısınır)" Style="{StaticResource SectionHint}" Margin="0,0,0,12" />
 
                                             <Border x:Name="DischargeStatusBox" Background="Transparent" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" CornerRadius="0" Padding="0,8,0,0" Margin="0,0,0,12">
                                                 <TextBlock x:Name="TxtDischargeStatus" Text="Durum: Boşta" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" />
@@ -1868,13 +1920,17 @@
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="Okul Modu" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                                                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                            <TextBlock Text="Okul Modu" Foreground="{StaticResource TextPrimary}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                                                            <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                            ToolTip="Pilde en tasarruflu ayarlar: Eco mod, CPU boost kapalı, işlemci %60, pasif soğutma, pil tasarrufu açık, ekran 3 dk / uyku 10 dk, 60 Hz, %40 parlaklık, klavye ışığı kapalı. Kapatınca hepsi geri döner." />
+                                                        </StackPanel>
                                                         <!-- "Etkin" reads as a state, so it is correct both checked and
                                                              unchecked; "Açık" read as an instruction and was wrong once
                                                              the box was on. -->
                                                         <CheckBox x:Name="ChkSchoolMode" Grid.Column="1" Checked="ChkSchoolMode_Changed" Unchecked="ChkSchoolMode_Changed" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="11" Content="Etkin" />
                                                     </Grid>
-                                                    <TextBlock x:Name="TxtSchoolModeDetail" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,4,0,0" />
+                                                    <TextBlock x:Name="TxtSchoolModeDetail" Text="Eco · Boost Kapalı · 60 Hz · %40 Parlaklık (kapatınca geri döner)" Style="{StaticResource SectionHint}" Margin="0,3,0,0" />
                                                     <TextBlock x:Name="TxtSchoolModeStatus" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold" Margin="0,6,0,0" Visibility="Collapsed" />
                                                 </StackPanel>
                                             </Border>
