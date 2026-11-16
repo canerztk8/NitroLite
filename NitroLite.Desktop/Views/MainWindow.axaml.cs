@@ -43,8 +43,17 @@ public partial class MainWindow : Window
     /// </summary>
     private static readonly TimeSpan HiddenInterval = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// The polling interval while the overlay is on screen. Twice the visible rate: an OSD that lags the game by a
+    /// second is worse than no OSD, and the extra reads are cheap next to a frame.
+    /// </summary>
+    private static readonly TimeSpan OsdInterval = TimeSpan.FromMilliseconds(500);
+
     private readonly DispatcherTimer _timer;
     private MainViewModel? _viewModel;
+
+    /// <summary>The in-game overlay, created with the window and shown only while the setting is on.</summary>
+    private OsdOverlayWindow? _osd;
 
     /// <summary>
     /// The last size and position the window had while it was not maximised. Avalonia has no <c>RestoreBounds</c>, so
@@ -76,6 +85,13 @@ public partial class MainWindow : Window
 
             RestoreWindowPosition();
             await _viewModel.InitializeAsync();
+
+            // The overlay is a second window bound to the same view model, so the two can never disagree about a
+            // reading. It is created here rather than in the XAML because it must not be a child of this window.
+            _osd = new OsdOverlayWindow { DataContext = _viewModel };
+            _viewModel.OsdChanged += (_, _) => ApplyOsd();
+            ApplyOsd();
+
             _timer.Start();
         };
 
@@ -83,7 +99,12 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => CaptureNormalBounds();
 
         Closing += OnClosing;
-        Closed += (_, _) => _timer.Stop();
+        Closed += (_, _) =>
+        {
+            _timer.Stop();
+            _osd?.Close();
+            _osd = null;
+        };
     }
 
     /// <summary>
@@ -190,6 +211,19 @@ public partial class MainWindow : Window
     {
         if (_viewModel == null) return;
         await _viewModel.RefreshTelemetryAsync();
+
+        // Re-placed on every tick because the frame's own size changes with the numbers it holds: a GPU name that
+        // wraps would otherwise push a bottom corner off the edge.
+        ApplyOsd();
+    }
+
+    /// <summary>Shows, hides or moves the overlay to match the view model.</summary>
+    private void ApplyOsd()
+    {
+        if (_viewModel == null || _osd == null) return;
+
+        _osd.Apply(_viewModel);
+        UpdateTelemetryPollingRate();
     }
 
     /// <summary>
@@ -198,7 +232,11 @@ public partial class MainWindow : Window
     /// </summary>
     private void UpdateTelemetryPollingRate()
     {
-        var wanted = IsVisible ? VisibleInterval : HiddenInterval;
+        // The overlay wins over the window's own visibility: a user in a game has the window hidden and the OSD on,
+        // and that is exactly the case the fast rate exists for.
+        var wanted = _viewModel?.OsdEnabled == true
+            ? OsdInterval
+            : IsVisible ? VisibleInterval : HiddenInterval;
         if (_timer.Interval == wanted) return;
 
         _timer.Interval = wanted;

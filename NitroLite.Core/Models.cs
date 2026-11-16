@@ -133,6 +133,17 @@ public class MonitorData
     [JsonIgnore]
     public bool IsFanRpmMeasured { get; set; }
 
+    /// <summary>
+    /// The processor's marketing name, filled by the platform monitor rather than by the Acer backend: the firmware
+    /// answers sensors, not model strings. Empty when nothing could read it, and the page then shows its own label.
+    /// </summary>
+    [JsonIgnore]
+    public string CpuName { get; set; } = "";
+
+    /// <summary>The discrete graphics adapter's name, from the same source as <see cref="CpuName"/>.</summary>
+    [JsonIgnore]
+    public string GpuName { get; set; } = "";
+
     public DateTime Timestamp { get; set; } = DateTime.Now;
 }
 

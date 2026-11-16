@@ -7,15 +7,24 @@
 
   <!--
     Page 2: the readings. The WPF page put the processor and the graphics card side by side as two cards of labelled
-    rows, each row a name, a figure and a 4px bar, then a wider card for the machine as a whole. That is the shape
-    here too; the rows that only a Windows sensor can answer (package watts, VRAM, clock) are simply not offered,
-    because a row that always prints a placeholder is worse than no row.
+    rows, each row a name, a figure and a 4px bar, then a wider card for the machine as a whole, then the history
+    chart. That is the shape here too, with the mode trace added as its own card because a mode change is only
+    interesting against the temperature it happened at.
   -->
   <ScrollViewer VerticalScrollBarVisibility="Hidden">
     <StackPanel>
 
-      <TextBlock Classes="pagetitle" Text="{Binding Labels.MonitoringPageTitle}" Margin="0,0,0,14"
-                 TextWrapping="Wrap" />
+      <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+        <TextBlock Classes="pagetitle" Text="{Binding Labels.MonitoringPageTitle}" TextWrapping="Wrap"
+                   Margin="0,0,16,0" VerticalAlignment="Center" />
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+          <Button Classes="primary" Content="{Binding Labels.Osd}" Padding="12,7" FontSize="11"
+                  Command="{Binding ToggleOsdCommand}" ToolTip.Tip="{Binding Labels.OsdHint}" />
+          <Button Classes="primary" Content="{Binding Labels.ChangePosition}" Padding="10,7" FontSize="11"
+                  Command="{Binding CycleOsdCornerCommand}" />
+        </StackPanel>
+      </Grid>
 
       <!-- ============================================================ processor and graphics -->
 
@@ -23,152 +32,263 @@
 
         <Border Classes="card" Margin="0,0,6,0">
           <StackPanel>
-            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-              <TextBlock Classes="rowtitle" Text="{Binding Labels.Cpu}" TextWrapping="Wrap" />
-              <Border Grid.Column="1" Classes="pill" VerticalAlignment="Top">
-                <TextBlock Text="{Binding FanRpmSourceText}" />
-              </Border>
+            <!-- Both headers reserve two lines, so a long processor name cannot push the CPU rows below the GPU ones. -->
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8" MinHeight="34">
+              <TextBlock Classes="rowtitle" Text="{Binding CpuNameText}" TextWrapping="Wrap" MaxLines="2"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Top" />
+              <TextBlock Grid.Column="1" Text="{Binding CpuCoreCountText}" FontSize="12"
+                         Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Top" />
             </Grid>
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.Temperatures}" />
-              <TextBlock Grid.Column="1" Text="{Binding CpuTemperatureText}" FontSize="11"
-                         FontWeight="Bold" HorizontalAlignment="Right" />
+              <TextBlock Classes="hint" Text="{Binding Labels.Temperature}" />
+              <TextBlock Grid.Column="1" Text="{Binding CpuTemperatureText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
             </Grid>
             <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding CpuTemperature}"
                          Margin="0,0,0,6" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.FanRpm}" />
-              <TextBlock Grid.Column="1" Text="{Binding CpuFanRpmText}" FontSize="11"
-                         FontWeight="Bold" HorizontalAlignment="Right" />
+              <TextBlock Classes="hint" Text="{Binding Labels.PackagePower}" />
+              <TextBlock Grid.Column="1" Text="{Binding CpuPowerText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
             </Grid>
-            <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding CpuFanBarPercent}" />
+            <ProgressBar Height="4" Minimum="0" Maximum="80" Value="{Binding CpuPowerWatts}"
+                         Margin="0,0,0,6" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+              <TextBlock Classes="hint" Text="{Binding Labels.Usage}" />
+              <TextBlock Grid.Column="1" Text="{Binding CpuUsageText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
+            </Grid>
+            <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding CpuUsage}"
+                         Margin="0,0,0,6" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+              <TextBlock Classes="hint" Text="{Binding Labels.ClockSpeed}" />
+              <TextBlock Grid.Column="1" Text="{Binding CpuFrequencyText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
+            </Grid>
+            <ProgressBar Height="4" Minimum="0" Maximum="5100" Value="{Binding CpuFrequencyMhz}" />
           </StackPanel>
         </Border>
 
         <Border Classes="card" Margin="6,0,0,0">
           <StackPanel>
-            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-              <TextBlock Classes="rowtitle" Text="{Binding Labels.Gpu}" TextWrapping="Wrap" />
-              <Border Grid.Column="1" Classes="pill" VerticalAlignment="Top">
-                <TextBlock Text="{Binding FanRpmSourceText}" />
-              </Border>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8" MinHeight="34">
+              <TextBlock Classes="rowtitle" Text="{Binding GpuNameText}" TextWrapping="Wrap" MaxLines="2"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Top" />
             </Grid>
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.Temperatures}" />
-              <TextBlock Grid.Column="1" Text="{Binding GpuTemperatureText}" FontSize="11"
-                         FontWeight="Bold" HorizontalAlignment="Right" />
+              <TextBlock Classes="hint" Text="{Binding Labels.Temperature}" />
+              <TextBlock Grid.Column="1" Text="{Binding GpuTemperatureText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
             </Grid>
             <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding GpuTemperature}"
                          Margin="0,0,0,6" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.FanRpm}" />
-              <TextBlock Grid.Column="1" Text="{Binding GpuFanRpmText}" FontSize="11"
-                         FontWeight="Bold" HorizontalAlignment="Right" />
+              <TextBlock Classes="hint" Text="{Binding Labels.PackagePower}" />
+              <TextBlock Grid.Column="1" Text="{Binding GpuPowerText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
             </Grid>
-            <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding GpuFanBarPercent}" />
+            <ProgressBar Height="4" Minimum="0" Maximum="140" Value="{Binding GpuPowerWatts}"
+                         Margin="0,0,0,6" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+              <TextBlock Classes="hint" Text="{Binding Labels.Usage}" />
+              <TextBlock Grid.Column="1" Text="{Binding GpuUsageText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
+            </Grid>
+            <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding GpuUsage}"
+                         Margin="0,0,0,6" />
+
+            <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+              <TextBlock Classes="hint" Text="{Binding Labels.Vram}" />
+              <TextBlock Grid.Column="1" Text="{Binding VramText}" FontSize="11" FontWeight="Bold"
+                         HorizontalAlignment="Right" />
+            </Grid>
+            <ProgressBar Height="4" Minimum="0" Maximum="100" Value="{Binding VramBarPercent}" />
           </StackPanel>
         </Border>
       </UniformGrid>
 
-      <!-- ============================================================ the machine as a whole -->
+      <!-- ============================================================ memory, system temperature, cleaner -->
 
       <Border Classes="card" Margin="0,0,0,14">
-        <Grid ColumnDefinitions="*,*">
+        <StackPanel>
+          <Grid ColumnDefinitions="*,*" Margin="0,0,0,12">
 
-          <StackPanel Grid.Column="0" Margin="0,0,12,0">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="rowtitle" Text="{Binding Labels.Sys}" VerticalAlignment="Center" />
-              <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ThermalFloorSummary}">
-                <TextBlock Text="?" />
-              </Border>
+            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.SystemMemory}" />
+              <Grid ColumnDefinitions="*,Auto" Margin="0,6">
+                <TextBlock Text="{Binding RamDetailText}" FontSize="15" FontWeight="Bold" />
+                <TextBlock Grid.Column="1" Text="{Binding RamPercentText}" FontWeight="Bold"
+                           HorizontalAlignment="Right" Foreground="{DynamicResource SuccessBrush}" />
+              </Grid>
+              <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding RamBarPercent}" />
+              <TextBlock Classes="hint" Text="{Binding MemoryInfoText}" Margin="0,6,0,0"
+                         IsVisible="{Binding HasMemoryInfo}" />
             </StackPanel>
-            <TextBlock Text="{Binding SysTemperatureText}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-            <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding SysTemperature}" />
-          </StackPanel>
 
-          <StackPanel Grid.Column="1" Margin="12,0,0,0">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.BatteryStatus}" />
-            <Grid ColumnDefinitions="*,Auto" Margin="0,6">
-              <TextBlock Text="{Binding BatteryPercentText}" FontSize="15" FontWeight="Bold" />
-              <TextBlock Grid.Column="1" Text="{Binding BatteryStateText}" FontSize="11"
-                         FontWeight="Bold" HorizontalAlignment="Right"
-                         Foreground="{DynamicResource SuccessBrush}" />
+            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.SystemTemperature}" VerticalAlignment="Center" />
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ThermalFloorSummary}">
+                  <TextBlock Text="?" />
+                </Border>
+              </StackPanel>
+              <TextBlock Text="{Binding SysTemperatureText}" FontSize="18" FontWeight="Bold" Margin="0,4" />
+              <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding SysTemperature}" />
+            </StackPanel>
+          </Grid>
+
+          <!-- The standby-list cleaner. Hidden on a platform with no standby list rather than shown disabled. -->
+          <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0"
+                  IsVisible="{Binding MemoryCleanAvailable}">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Text="{Binding Labels.MemoryCleanTitle}" FontSize="11" FontWeight="Bold"
+                             VerticalAlignment="Center" />
+                  <Border Classes="infobadge" ToolTip.Tip="{Binding Labels.MemoryCleanHint}">
+                    <TextBlock Text="?" />
+                  </Border>
+                  <TextBlock Text="{Binding MemoryCleanStatus}" FontSize="11" FontWeight="Bold"
+                             IsVisible="{Binding HasMemoryCleanStatus}"
+                             Foreground="{DynamicResource TextSecondaryBrush}" />
+                </StackPanel>
+              </StackPanel>
+
+              <Button Grid.Column="1" Classes="primary" Content="{Binding MemoryCleanButtonText}"
+                      Padding="12,7" FontSize="11" VerticalAlignment="Center"
+                      Command="{Binding CleanMemoryCommand}" />
             </Grid>
-            <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding BatteryBarPercent}" />
-          </StackPanel>
-        </Grid>
+          </Border>
+        </StackPanel>
       </Border>
 
-      <!-- ============================================================ the last minute -->
+      <!-- ============================================================ the history chart -->
+
+      <Border Classes="card" Margin="0,0,0,14">
+        <StackPanel>
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.TelemetryCharts}" />
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ChartEmptyHint}">
+                  <TextBlock Text="?" />
+                </Border>
+              </StackPanel>
+              <TextBlock Classes="hint" Text="{Binding Labels.LastMinute}" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <ComboBox Grid.Column="1" MinWidth="240" MaxWidth="340" HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      ItemsSource="{Binding ChartMetrics}" SelectedItem="{Binding SelectedChartMetric}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChartMetricChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                  BorderThickness="1" CornerRadius="2" Height="200" ClipToBounds="True">
+            <Grid ColumnDefinitions="*,54">
+              <controls:TelemetryChart Grid.Column="0" Margin="0,0,0,0"
+                                       Values="{Binding ChartValues}"
+                                       Minimum="{Binding ChartMinimum}"
+                                       Maximum="{Binding ChartMaximum}"
+                                       Stroke="{DynamicResource TextPrimaryBrush}"
+                                       Fill="{DynamicResource ChartFillBrush}"
+                                       Grid="{DynamicResource CardBorderBrush}"
+                                       Dot="{DynamicResource AccentBrush}"
+                                       DotRing="{DynamicResource CardBrush}" />
+
+              <Border Grid.Column="1" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1,0,0,0">
+                <Grid>
+                  <TextBlock Text="{Binding ChartGridTopText}" FontSize="9" Margin="8,20,0,0"
+                             HorizontalAlignment="Left" VerticalAlignment="Top"
+                             Foreground="{DynamicResource TextMutedBrush}" />
+                  <TextBlock Text="{Binding ChartGridMidText}" FontSize="9" Margin="8,84,0,0"
+                             HorizontalAlignment="Left" VerticalAlignment="Top"
+                             Foreground="{DynamicResource TextMutedBrush}" />
+                  <TextBlock Text="{Binding ChartGridBottomText}" FontSize="9" Margin="8,148,0,0"
+                             HorizontalAlignment="Left" VerticalAlignment="Top"
+                             Foreground="{DynamicResource TextMutedBrush}" />
+                </Grid>
+              </Border>
+
+              <!-- An empty chart says why it is empty instead of showing a grid with nothing in it. -->
+              <TextBlock Grid.ColumnSpan="2" Text="{Binding Labels.ChartEmptyHint}" FontSize="11"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Foreground="{DynamicResource TextMutedBrush}"
+                         IsVisible="{Binding ChartEmpty}" />
+            </Grid>
+          </Border>
+
+          <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Margin="0,12,0,0"
+                  Padding="0,10,0,0">
+            <UniformGrid Columns="4">
+              <StackPanel>
+                <TextBlock Classes="caps" Text="{Binding Labels.Current}" />
+                <TextBlock Text="{Binding ChartCurrentText}" FontSize="15" FontWeight="Bold" Margin="0,3,0,0"
+                           Foreground="{DynamicResource AccentBrush}" />
+              </StackPanel>
+              <StackPanel Margin="16,0,0,0">
+                <TextBlock Classes="caps" Text="{Binding Labels.Minimum}" />
+                <TextBlock Text="{Binding ChartMinText}" FontSize="15" FontWeight="Bold" Margin="0,3,0,0" />
+              </StackPanel>
+              <StackPanel Margin="16,0,0,0">
+                <TextBlock Classes="caps" Text="{Binding Labels.Maximum}" />
+                <TextBlock Text="{Binding ChartMaxText}" FontSize="15" FontWeight="Bold" Margin="0,3,0,0" />
+              </StackPanel>
+              <StackPanel Margin="16,0,0,0">
+                <TextBlock Classes="caps" Text="{Binding Labels.Average}" />
+                <TextBlock Text="{Binding ChartAverageText}" FontSize="15" FontWeight="Bold" Margin="0,3,0,0" />
+              </StackPanel>
+            </UniformGrid>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ the mode trace -->
 
       <Border Classes="card">
         <StackPanel>
           <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-            <TextBlock Classes="section" Text="{Binding Labels.TelemetryCharts}" />
-            <TextBlock Grid.Column="1" Classes="caps" Text="{Binding Labels.Last60Seconds}" />
+            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.ModeTrace}" />
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ModeTraceHint}">
+                  <TextBlock Text="?" />
+                </Border>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,0">
+                <TextBlock Classes="caps" Text="{Binding ModeTraceModeText}"
+                           Foreground="{DynamicResource AccentBrush}" />
+                <TextBlock Classes="caps" Text="{Binding ModeTraceRangeText}" />
+                <TextBlock Classes="caps" Text="{Binding ModeTraceNowText}" />
+              </StackPanel>
+            </StackPanel>
+
+            <Button Grid.Column="1" Classes="primary" Content="{Binding ModeTraceToggleText}" Padding="10,5"
+                    FontSize="11" VerticalAlignment="Center" Command="{Binding ToggleModeTraceCommand}" />
           </Grid>
 
-          <UniformGrid Columns="2">
-            <StackPanel Margin="0,0,12,10">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caps" Text="{Binding Labels.Cpu}" />
-                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding CpuTemperatureText}" />
-              </Grid>
-              <Border Height="34" Margin="0,4,0,0" Background="{DynamicResource PanelBrush}"
-                      BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                      CornerRadius="2" ClipToBounds="True">
-                <controls:SparklineChart Values="{Binding CpuTemperatureHistory}"
-                                         Stroke="{DynamicResource TextPrimaryBrush}"
-                                         Baseline="{DynamicResource CardBorderStrongBrush}" />
-              </Border>
-            </StackPanel>
-
-            <StackPanel Margin="0,0,0,10">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caps" Text="{Binding Labels.Gpu}" />
-                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding GpuTemperatureText}" />
-              </Grid>
-              <Border Height="34" Margin="0,4,0,0" Background="{DynamicResource PanelBrush}"
-                      BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                      CornerRadius="2" ClipToBounds="True">
-                <controls:SparklineChart Values="{Binding GpuTemperatureHistory}"
-                                         Stroke="{DynamicResource TextPrimaryBrush}"
-                                         Baseline="{DynamicResource CardBorderStrongBrush}" />
-              </Border>
-            </StackPanel>
-
-            <StackPanel Margin="0,0,12,0">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caps" Text="{Binding Labels.Sys}" />
-                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding SysTemperatureText}" />
-              </Grid>
-              <Border Height="34" Margin="0,4,0,0" Background="{DynamicResource PanelBrush}"
-                      BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                      CornerRadius="2" ClipToBounds="True">
-                <controls:SparklineChart Values="{Binding SysTemperatureHistory}"
-                                         Stroke="{DynamicResource TextPrimaryBrush}"
-                                         Baseline="{DynamicResource CardBorderStrongBrush}" />
-              </Border>
-            </StackPanel>
-
-            <StackPanel>
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caps" Text="{Binding Labels.FanRpm}" />
-                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding CpuFanRpmText}" />
-              </Grid>
-              <Border Height="34" Margin="0,4,0,0" Background="{DynamicResource PanelBrush}"
-                      BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                      CornerRadius="2" ClipToBounds="True">
-                <controls:SparklineChart Values="{Binding CpuFanHistory}"
-                                         Stroke="{DynamicResource TextPrimaryBrush}"
-                                         Baseline="{DynamicResource CardBorderStrongBrush}" />
-              </Border>
-            </StackPanel>
-          </UniformGrid>
+          <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                  BorderThickness="1" CornerRadius="2" Height="64" ClipToBounds="True"
+                  IsVisible="{Binding ModeTraceVisible}">
+            <controls:ModeTraceChart Values="{Binding CpuTemperatureHistory}"
+                                     Marks="{Binding ModeTraceMarks}"
+                                     Stroke="{DynamicResource TextPrimaryBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Mark="{DynamicResource AccentBrush}"
+                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
+          </Border>
         </StackPanel>
       </Border>
     </StackPanel>

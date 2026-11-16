@@ -9,6 +9,16 @@ public static class LightingPolicy
 {
     public const string DefaultColor = "#00E5FF";
 
+    /// <summary>
+    /// The nine effects the keyboard offers, in the order the WPF page listed them. OFF is last because it is
+    /// NitroLite's own "brightness zero" rather than a device effect, and a list that put it anywhere else would read
+    /// as one more animation.
+    /// </summary>
+    public static IReadOnlyList<string> AllEffects { get; } = new[]
+    {
+        "STATIC", "WAVE", "BREATHING", "NEON", "SHIFTING", "ZOOM", "METEOR", "TWINKLING", "OFF"
+    };
+
     public static bool IsOff(LightingConfig cfg) =>
         cfg.Brightness <= 0 || string.Equals(cfg.Effect, "OFF", StringComparison.OrdinalIgnoreCase);
 

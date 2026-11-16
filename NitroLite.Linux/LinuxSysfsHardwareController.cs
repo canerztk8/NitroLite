@@ -32,7 +32,7 @@ namespace NitroLite.Linux;
 /// place.
 /// </para>
 /// </remarks>
-public sealed class LinuxSysfsHardwareController : IHardwareController, IRescannableBackend
+public sealed class LinuxSysfsHardwareController : IHardwareController, IRescannableBackend, IOpenRgbStatusProvider
 {
     /// <summary>The message shown when a write was refused for lack of permission.</summary>
     public const string UdevHint =
@@ -120,6 +120,23 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     void IRescannableBackend.ResetReadBackCounters() => _readBack.ResetAll();
 
     public Task<bool> EnsureConnectedAsync() => Task.FromResult(IsAvailable);
+
+    /// <summary>
+    /// The OpenRGB SDK's state, for the lighting page's status line. Null until the fallback has been tried, so a
+    /// machine that never needed it shows nothing rather than a claim about a server nobody asked.
+    /// </summary>
+    public string? OpenRgbStatus
+    {
+        get
+        {
+            if (_openRgb == null || !_openRgbProbed) return null;
+            if (_openRgbAvailable) return Loc.T("OpenRGB SDK bağlı (127.0.0.1:6742)");
+            var error = _openRgb.LastError;
+            return string.IsNullOrWhiteSpace(error)
+                ? Loc.T("OpenRGB SDK bulunamadı; sysfs düğümleri kullanılıyor.")
+                : Loc.T($"OpenRGB SDK bulunamadı: {error}");
+        }
+    }
 
     /// <summary>
     /// The probe's answer, with one correction: a keyboard whose sysfs attributes are missing but which OpenRGB can

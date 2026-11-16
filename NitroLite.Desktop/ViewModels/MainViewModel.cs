@@ -420,6 +420,64 @@ public sealed class CurveAnchorViewModel : ObservableObject
 }
 
 /// <summary>
+/// One row of the lighting page's direction list. A class rather than an int so the combo box can show a translated
+/// name while the backend keeps the protocol's own number.
+/// </summary>
+public sealed class DirectionChoice
+{
+    public DirectionChoice(int direction, string label)
+    {
+        Direction = direction;
+        Label = label;
+    }
+
+    /// <summary>The protocol's direction number: 1 right, 2 left, 3 up, 4 down.</summary>
+    public int Direction { get; }
+
+    public string Label { get; }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// One row of the chart's series selector. A class rather than a bare string so the combo box can show a translated
+/// label while the settings file keeps the stable identifier.
+/// </summary>
+public sealed class ChartMetricChoice
+{
+    public ChartMetricChoice(string id, string label)
+    {
+        Id = id;
+        Label = label;
+    }
+
+    /// <summary>The stable identifier written to the settings file, e.g. <c>CPU_TEMP</c>.</summary>
+    public string Id { get; }
+
+    public string Label { get; }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// The four statistics and the three grid labels the chart's strip shows, already formatted. A record because the seven
+/// strings are always replaced together: a half-updated strip would show a maximum from one series beside a minimum
+/// from another.
+/// </summary>
+public sealed record ChartStats(
+    string Current,
+    string Min,
+    string Max,
+    string Average,
+    string GridTop,
+    string GridMid,
+    string GridBottom)
+{
+    /// <summary>The strip before the first pair of samples: every cell a dash, so the layout does not jump.</summary>
+    public static ChartStats Empty { get; } = new("--", "--", "--", "--", "--", "--", "--");
+}
+
+/// <summary>
 /// Everything the window binds to: telemetry, the mode and fan controls, the lighting page, the extras and the
 /// settings page.
 /// </summary>
@@ -498,8 +556,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private readonly IDialogService? _dialogs;
 
+    /// <summary>
+    /// The operating system's half of the monitoring page: model strings, load, package watts, VRAM and RAM. Null
+    /// leaves those rows at zero, which the page reads as "no reading" rather than as a measurement.
+    /// </summary>
+    private readonly IHardwareMonitor? _monitor;
+
+    /// <summary>
+    /// The standby-list cleaner, or null when the caller did not wire one. Null hides the card, which is what a
+    /// platform with no standby list should do.
+    /// </summary>
+    private readonly IMemoryCleaner? _memoryCleaner;
+
     /// <summary>The palette applier, or null when the caller did not wire one (a test that does not need it).</summary>
     private readonly IThemeApplier? _themeApplier;
+
+    /// <summary>
+    /// The backend's OpenRGB status, or null when the platform does not speak the SDK. Null hides the lighting page's
+    /// status line rather than claiming the server is absent.
+    /// </summary>
+    private readonly IOpenRgbStatusProvider? _openRgb;
 
     /// <summary>
     /// The last minute of telemetry, one ring buffer per series. Kept here rather than in the chart so the samples
@@ -510,6 +586,55 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly SparklineHistory _sysTemperatureHistory = new();
     private readonly SparklineHistory _cpuFanHistory = new();
     private readonly SparklineHistory _gpuFanHistory = new();
+
+    /// <summary>
+    /// Every sample inside the chart's window, kept whole rather than pre-reduced to one series: the selector can switch
+    /// to any of the nine metrics and redraw from what is already held, instead of starting from an empty chart.
+    /// </summary>
+    private readonly List<MonitorData> _telemetryHistory = new();
+
+    /// <summary>The window the chart and the mode trace both draw: one minute, matching the sparkline history.</summary>
+    private static readonly TimeSpan ChartWindow = TimeSpan.FromSeconds(60);
+
+    // The monitoring page's live readings, filled from the sample the platform monitor enriched.
+    private int _cpuCores;
+    private double _cpuUsage;
+    private double _cpuPowerWatts;
+    private double _cpuFrequencyMhz;
+    private double _gpuUsage;
+    private double _gpuPowerWatts;
+    private double _gpuFrequencyMhz;
+    private double _vramUsedMb;
+    private double _vramTotalMb;
+    private double _ramUsage;
+    private double _ramTotalMb;
+
+    // The chart's series, its samples and its statistics, recomputed from the history on every tick.
+    private ChartMetricChoice? _selectedChartMetric;
+    private IReadOnlyList<double> _chartValues = Array.Empty<double>();
+    private (double Low, double High) _chartRange = (0, 1);
+    private ChartStats _chartStats = ChartStats.Empty;
+
+    // The mode trace: the changes inside the window, and the strip's own two labels.
+    private readonly List<(DateTime At, OperatingMode Mode)> _modeMarks = new();
+    private IReadOnlyList<double> _modeTraceMarks = Array.Empty<double>();
+    private bool _modeTraceVisible;
+    private string _modeTraceRange = "--";
+    private string _modeTraceNow = "-- °C";
+
+    // The lighting page's direction list, the zone the deck pointed the palette at, and the extra switch.
+    private DirectionChoice? _selectedDirection;
+    private bool _winKeyLockOn;
+
+    // The on-screen display: whether it is drawn, which corner, and which display.
+    private bool _osdEnabled;
+    private int _osdCorner;
+    private int _osdMonitor;
+
+    // The standby-list cleaner's last result.
+    private bool _memoryCleanRunning;
+    private string _memoryCleanStatus = "";
+    private bool _memoryCleanSucceeded;
 
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
@@ -642,7 +767,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ICpuBoostAccess? cpuBoost = null,
         IGameLibraryScanner? gameLibrary = null,
         IMouseProfileService? mouseProfiles = null,
-        IDialogService? dialogs = null)
+        IHardwareMonitor? monitor = null,
+        IMemoryCleaner? memoryCleaner = null,
+        IDialogService? dialogs = null,
+        IOpenRgbStatusProvider? openRgb = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -660,7 +788,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _cpuBoost = cpuBoost;
         _gameLibrary = gameLibrary;
         _mouseProfiles = mouseProfiles;
+        _monitor = monitor;
+        _memoryCleaner = memoryCleaner;
         _dialogs = dialogs;
+        _openRgb = openRgb;
         _schoolModeOn = settings.SchoolModeEnabled;
         _fanProtectionOn = settings.FanFailureProtection;
         _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);
@@ -688,6 +819,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BuildFanSegments();
         BuildCpuBoostChoices();
         BuildColorPalette();
+        BuildChartMetrics();
+        BuildDirectionChoices();
+        _osdEnabled = settings.OsdEnabled;
+        _osdCorner = Math.Clamp(settings.OsdCorner, 0, 3);
+        _osdMonitor = Math.Max(0, settings.OsdMonitor);
+        _modeTraceVisible = !settings.ModeTraceCollapsed;
 
         // The stored palette goes on before the window exists, so the first frame is already the right colour rather
         // than flashing the default and repainting.
@@ -724,6 +861,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ApplyDefaultMouseProfileCommand = new AsyncCommand(ApplyDefaultMouseProfileAsync);
         CopyDesktopCurveCommand = new RelayCommand(CopyDesktopCurveToGame);
         ToastActionCommand = new RelayCommand(RunToastAction);
+        ToggleModeTraceCommand = new RelayCommand(() => ModeTraceVisible = !ModeTraceVisible);
+        CleanMemoryCommand = new RelayCommand(() => _ = CleanMemoryAsync());
+        CycleOsdCornerCommand = new RelayCommand(CycleOsdCorner);
+        ToggleOsdCommand = new RelayCommand(() => OsdEnabled = !OsdEnabled);
+        CustomColorCommand = new RelayCommand(OpenCustomColor);
+        ApplyAllZonesCommand = new RelayCommand(ApplyAllZones);
     }
 
     // ---------------------------------------------------------------- labels and status
@@ -1425,6 +1568,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _cpuFanHistory.Add(data.CpuFanSpeed);
         _gpuFanHistory.Add(data.GpuFanSpeed);
 
+        // The chart keeps whole samples rather than one series, so the selector can redraw without waiting a minute for
+        // a new history. Trimmed to the window on every tick, which is also what keeps the list from growing forever.
+        _telemetryHistory.Add(data);
+        var windowStart = DateTime.Now - ChartWindow;
+        _telemetryHistory.RemoveAll(sample => sample.Timestamp < windowStart);
+
+        RefreshChart();
+        RefreshModeTrace();
+
         Raise(nameof(CpuTemperatureHistory));
         Raise(nameof(GpuTemperatureHistory));
         Raise(nameof(SysTemperatureHistory));
@@ -1433,6 +1585,503 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(SparklineRangeText));
         Raise(nameof(SparklineEmpty));
     }
+
+    // ---------------------------------------------------------------- monitoring page
+
+    /// <summary>True when the operating system answered at least one of the rows the Acer backend cannot.</summary>
+    public bool MonitorAvailable => _monitor?.IsAvailable == true;
+
+    /// <summary>The processor's marketing name, or the page's own label when nothing could read it.</summary>
+    public string CpuNameText
+    {
+        get
+        {
+            var name = _monitor?.Info.CpuName ?? "";
+            return name.Length > 0 ? name : Labels.Cpu;
+        }
+    }
+
+    /// <summary>" (8 çekirdek / 16 iş parçacığı)", or empty when the platform did not say.</summary>
+    public string CpuCoreCountText
+    {
+        get
+        {
+            var info = _monitor?.Info;
+            if (info == null) return "";
+            var text = info.FormatCoreText(CpuCores);
+            return text.Length > 0 ? $" ({text})" : "";
+        }
+    }
+
+    /// <summary>The discrete adapter's name, or the page's own label when nothing could read it.</summary>
+    public string GpuNameText
+    {
+        get
+        {
+            var name = _monitor?.Info.GpuName ?? "";
+            return name.Length > 0 ? name : Labels.Gpu;
+        }
+    }
+
+    /// <summary>"DDR5 5600 MT/s · 2 modül · 32 GB", or empty when the platform did not say.</summary>
+    public string MemoryInfoText => _monitor?.Info.MemoryText ?? "";
+
+    public bool HasMemoryInfo => MemoryInfoText.Length > 0;
+
+    /// <summary>Logical processors, from the sample or from the platform's own description.</summary>
+    public int CpuCores
+    {
+        get => _cpuCores;
+        private set
+        {
+            if (!Set(ref _cpuCores, value)) return;
+            Raise(nameof(CpuCoreCountText));
+        }
+    }
+
+    public double CpuUsage
+    {
+        get => _cpuUsage;
+        private set
+        {
+            if (!Set(ref _cpuUsage, value)) return;
+            Raise(nameof(CpuUsageText));
+        }
+    }
+
+    public string CpuUsageText => $"{CpuUsage:F1} %";
+
+    public double CpuPowerWatts
+    {
+        get => _cpuPowerWatts;
+        private set
+        {
+            if (!Set(ref _cpuPowerWatts, value)) return;
+            Raise(nameof(CpuPowerText));
+        }
+    }
+
+    /// <summary>
+    /// The package power with its unit. Marked as an estimate because it is one: no sensor reports it, the figure is
+    /// built from load and clock, and presenting it as a measurement would be a lie about the hardware.
+    /// </summary>
+    public string CpuPowerText => CpuPowerWatts > 0
+        ? $"{CpuPowerWatts:F1} W{TelemetryFormatter.EstimatedSuffix}"
+        : "-- W";
+
+    public double CpuFrequencyMhz
+    {
+        get => _cpuFrequencyMhz;
+        private set
+        {
+            if (!Set(ref _cpuFrequencyMhz, value)) return;
+            Raise(nameof(CpuFrequencyText));
+        }
+    }
+
+    public string CpuFrequencyText => CpuFrequencyMhz > 0 ? $"{CpuFrequencyMhz / 1000.0:F2} GHz" : "-- GHz";
+
+    public double GpuUsage
+    {
+        get => _gpuUsage;
+        private set
+        {
+            if (!Set(ref _gpuUsage, value)) return;
+            Raise(nameof(GpuUsageText));
+        }
+    }
+
+    public string GpuUsageText => GpuUsage > 0 ? $"{GpuUsage:F1} %" : "-- %";
+
+    public double GpuPowerWatts
+    {
+        get => _gpuPowerWatts;
+        private set
+        {
+            if (!Set(ref _gpuPowerWatts, value)) return;
+            Raise(nameof(GpuPowerText));
+        }
+    }
+
+    public string GpuPowerText => GpuPowerWatts > 0 ? $"{GpuPowerWatts:F1} W" : "-- W";
+
+    public double GpuFrequencyMhz
+    {
+        get => _gpuFrequencyMhz;
+        private set
+        {
+            if (!Set(ref _gpuFrequencyMhz, value)) return;
+            Raise(nameof(GpuFrequencyText));
+        }
+    }
+
+    public string GpuFrequencyText => GpuFrequencyMhz > 0 ? $"{GpuFrequencyMhz:F0} MHz" : "-- MHz";
+
+    public double VramUsedMb
+    {
+        get => _vramUsedMb;
+        private set
+        {
+            if (!Set(ref _vramUsedMb, value)) return;
+            Raise(nameof(VramText));
+            Raise(nameof(VramBarPercent));
+        }
+    }
+
+    public double VramTotalMb
+    {
+        get => _vramTotalMb;
+        private set
+        {
+            if (!Set(ref _vramTotalMb, value)) return;
+            Raise(nameof(VramText));
+            Raise(nameof(VramBarPercent));
+        }
+    }
+
+    /// <summary>"3.2 GB / 8.0 GB", or the placeholder when NVML did not answer.</summary>
+    public string VramText => VramTotalMb > 0
+        ? $"{VramUsedMb / 1024.0:F1} GB / {VramTotalMb / 1024.0:F1} GB"
+        : "-- GB / -- GB";
+
+    public double VramBarPercent => VramTotalMb > 0 ? Math.Clamp(VramUsedMb / VramTotalMb * 100.0, 0, 100) : 0;
+
+    public double RamUsage
+    {
+        get => _ramUsage;
+        private set
+        {
+            if (!Set(ref _ramUsage, value)) return;
+            Raise(nameof(RamPercentText));
+            Raise(nameof(RamBarPercent));
+            Raise(nameof(RamDetailText));
+        }
+    }
+
+    public double RamTotalMb
+    {
+        get => _ramTotalMb;
+        private set
+        {
+            if (!Set(ref _ramTotalMb, value)) return;
+            Raise(nameof(RamDetailText));
+        }
+    }
+
+    /// <summary>"12.4 GB / 31.2 GB", or the placeholder when the platform did not report the total.</summary>
+    public string RamDetailText => RamTotalMb > 0
+        ? $"{RamTotalMb * (RamUsage / 100.0) / 1024.0:F1} GB / {RamTotalMb / 1024.0:F1} GB"
+        : "-- GB / -- GB";
+
+    public string RamPercentText => RamTotalMb > 0 ? $"{RamUsage:F1} %" : "-- %";
+
+    public double RamBarPercent => RamTotalMb > 0 ? Math.Clamp(RamUsage, 0, 100) : 0;
+
+    /// <summary>
+    /// Temperature is the one metric where colour carries meaning rather than decoration: the bar and its reading turn
+    /// red once the part runs hot, so the panel answers "is anything wrong" at a glance. The threshold is the first
+    /// thermal safety floor, not a number invented for the page.
+    /// </summary>
+    public bool CpuTempHot => CpuTemperature >= FanCurve.SafetyTemperatureC;
+
+    public bool GpuTempHot => GpuTemperature >= FanCurve.SafetyTemperatureC;
+
+    // ---------------------------------------------------------------- the telemetry chart
+
+    /// <summary>The nine series the chart can draw.</summary>
+    public ObservableCollection<ChartMetricChoice> ChartMetrics { get; } = new();
+
+    /// <summary>
+    /// The series the chart is drawing. Assigning it persists the choice and redraws from the samples already held, so
+    /// switching series never waits for the next tick.
+    /// </summary>
+    public ChartMetricChoice? SelectedChartMetric
+    {
+        get => _selectedChartMetric;
+        set
+        {
+            if (!Set(ref _selectedChartMetric, value)) return;
+            _settings.SelectedChartMetric = value?.Id ?? TelemetryMetrics.CpuTemp;
+            SaveSettings();
+            RefreshChart();
+        }
+    }
+
+    /// <summary>The measured samples of the selected series inside the window, oldest first.</summary>
+    public IReadOnlyList<double> ChartValues => _chartValues;
+
+    public double ChartMinimum => _chartRange.Low;
+
+    public double ChartMaximum => _chartRange.High;
+
+    public string ChartCurrentText => _chartStats.Current;
+    public string ChartMinText => _chartStats.Min;
+    public string ChartMaxText => _chartStats.Max;
+    public string ChartAverageText => _chartStats.Average;
+    public string ChartGridTopText => _chartStats.GridTop;
+    public string ChartGridMidText => _chartStats.GridMid;
+    public string ChartGridBottomText => _chartStats.GridBottom;
+
+    /// <summary>True while the chart has fewer than two measured samples, so the card can say why it is empty.</summary>
+    public bool ChartEmpty => _chartValues.Count < 2;
+
+    // ---------------------------------------------------------------- the mode trace
+
+    /// <summary>
+    /// The operating-mode changes recorded inside the window, as fractions of the strip's width. The chart draws a tick
+    /// at each one, so a mode switch is visible against the temperature it happened at.
+    /// </summary>
+    public IReadOnlyList<double> ModeTraceMarks => _modeTraceMarks;
+
+    public bool ModeTraceVisible
+    {
+        get => _modeTraceVisible;
+        set
+        {
+            if (!Set(ref _modeTraceVisible, value)) return;
+            _settings.ModeTraceCollapsed = !value;
+            SaveSettings();
+            Raise(nameof(ModeTraceToggleText));
+        }
+    }
+
+    /// <summary>The band's own toggle caption: GİZLE while it is drawn, GÖSTER while it is folded away.</summary>
+    public string ModeTraceToggleText => ModeTraceVisible ? Labels.HideCaption : Labels.ShowCaption;
+
+    public string ModeTraceRangeText => _modeTraceRange;
+    public string ModeTraceNowText => _modeTraceNow;
+
+    /// <summary>The mode the machine is in now, which is what the strip's label names.</summary>
+    public string ModeTraceModeText => SelectedMode?.Label ?? Labels.NotConnected;
+
+    public RelayCommand ToggleModeTraceCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Records a mode change for the strip. Called from the mode setter and from the game-profile switch, so a change
+    /// made by a game is marked exactly like one made by a click.
+    /// </summary>
+    private void RecordModeMark(OperatingMode mode)
+    {
+        if (_modeMarks.Count > 0 && _modeMarks[^1].Mode == mode) return;
+        _modeMarks.Add((DateTime.Now, mode));
+        if (_modeMarks.Count > 64) _modeMarks.RemoveAt(0);
+
+        // Redrawn here rather than only on the next telemetry tick: a click that moves the mode should move the tick
+        // under the cursor, not a second later.
+        RefreshModeTrace();
+    }
+
+    /// <summary>Recomputes the strip's marks and its two labels from the samples already held.</summary>
+    private void RefreshModeTrace()
+    {
+        var windowStart = DateTime.Now - ChartWindow;
+
+        var marks = new List<double>();
+        foreach (var (at, _) in _modeMarks)
+        {
+            if (at < windowStart) continue;
+            marks.Add(Math.Clamp((at - windowStart).TotalSeconds / ChartWindow.TotalSeconds, 0, 1));
+        }
+        _modeTraceMarks = marks;
+
+        var values = new List<double>();
+        foreach (var sample in _telemetryHistory)
+        {
+            if (sample.Timestamp < windowStart) continue;
+            if (sample.CpuTemperature > 0) values.Add(sample.CpuTemperature);
+        }
+
+        if (values.Count == 0)
+        {
+            _modeTraceRange = "--";
+            _modeTraceNow = "-- °C";
+        }
+        else
+        {
+            double low = values[0];
+            double high = values[0];
+            foreach (var value in values)
+            {
+                if (value < low) low = value;
+                if (value > high) high = value;
+            }
+            _modeTraceRange = $"{low:0}–{high:0} °C";
+            _modeTraceNow = $"{values[^1]:0} °C";
+        }
+
+        Raise(nameof(ModeTraceMarks));
+        Raise(nameof(ModeTraceRangeText));
+        Raise(nameof(ModeTraceNowText));
+        Raise(nameof(ModeTraceModeText));
+    }
+
+    /// <summary>
+    /// Recomputes the chart's samples, its range and its four statistics from the history already held. Called on every
+    /// tick and whenever the series changes, so the two can never disagree about what is on screen.
+    /// </summary>
+    private void RefreshChart()
+    {
+        var metric = SelectedChartMetric?.Id ?? TelemetryMetrics.CpuTemp;
+        var windowStart = DateTime.Now - ChartWindow;
+
+        var values = new List<double>();
+        foreach (var sample in _telemetryHistory)
+        {
+            if (sample.Timestamp < windowStart) continue;
+            var value = TelemetryMetrics.Value(metric, sample);
+            if (value.HasValue) values.Add(value.Value);
+        }
+
+        _chartValues = values;
+        _chartRange = TelemetryMetrics.Range(metric, values);
+
+        if (values.Count < 2)
+        {
+            string unit = TelemetryMetrics.Unit(metric);
+            string dash = unit.Length > 0 ? $"-- {unit}" : "--";
+            _chartStats = new ChartStats(dash, dash, dash, dash, dash, dash, dash);
+        }
+        else
+        {
+            double current = values[^1];
+            double min = values[0];
+            double max = values[0];
+            double sum = 0;
+            foreach (var value in values)
+            {
+                if (value < min) min = value;
+                if (value > max) max = value;
+                sum += value;
+            }
+
+            _chartStats = new ChartStats(
+                TelemetryMetrics.Format(metric, current),
+                TelemetryMetrics.Format(metric, min),
+                TelemetryMetrics.Format(metric, max),
+                TelemetryMetrics.Format(metric, sum / values.Count),
+                TelemetryMetrics.FormatGrid(metric, _chartRange.High),
+                TelemetryMetrics.FormatGrid(metric, (_chartRange.Low + _chartRange.High) / 2.0),
+                TelemetryMetrics.FormatGrid(metric, _chartRange.Low));
+        }
+
+        Raise(nameof(ChartValues));
+        Raise(nameof(ChartMinimum));
+        Raise(nameof(ChartMaximum));
+        Raise(nameof(ChartCurrentText));
+        Raise(nameof(ChartMinText));
+        Raise(nameof(ChartMaxText));
+        Raise(nameof(ChartAverageText));
+        Raise(nameof(ChartGridTopText));
+        Raise(nameof(ChartGridMidText));
+        Raise(nameof(ChartGridBottomText));
+        Raise(nameof(ChartEmpty));
+    }
+
+    private void BuildChartMetrics()
+    {
+        ChartMetrics.Clear();
+        foreach (var metric in TelemetryMetrics.All)
+        {
+            ChartMetrics.Add(new ChartMetricChoice(metric, TelemetryMetrics.Label(metric)));
+        }
+
+        var stored = _settings.SelectedChartMetric;
+        SelectedChartMetric = ChartMetrics.FirstOrDefault(m => m.Id == stored) ?? ChartMetrics[0];
+    }
+
+    // ---------------------------------------------------------------- the standby-list cleaner
+
+    /// <summary>True when this platform has a standby list to release. False hides the whole card.</summary>
+    public bool MemoryCleanAvailable => _memoryCleaner?.IsSupported == true;
+
+    public bool MemoryCleanRunning
+    {
+        get => _memoryCleanRunning;
+        private set
+        {
+            if (!Set(ref _memoryCleanRunning, value)) return;
+            Raise(nameof(MemoryCleanButtonText));
+        }
+    }
+
+    public string MemoryCleanButtonText => MemoryCleanRunning ? Labels.Cleaning : Labels.CleanStandby;
+
+    /// <summary>The last result, in the card's own words. Empty until the button has been pressed once.</summary>
+    public string MemoryCleanStatus
+    {
+        get => _memoryCleanStatus;
+        private set
+        {
+            if (!Set(ref _memoryCleanStatus, value)) return;
+            Raise(nameof(HasMemoryCleanStatus));
+        }
+    }
+
+    public bool HasMemoryCleanStatus => MemoryCleanStatus.Length > 0;
+
+    /// <summary>True when the last clean succeeded, so the status line can be painted green rather than red.</summary>
+    public bool MemoryCleanSucceeded
+    {
+        get => _memoryCleanSucceeded;
+        private set => Set(ref _memoryCleanSucceeded, value);
+    }
+
+    public RelayCommand CleanMemoryCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Releases the standby list and reports what happened. The result is described in the card rather than only in a
+    /// toast: a toast is gone after three seconds, and "how much did that free" is the whole point of the button.
+    /// </summary>
+    public async Task CleanMemoryAsync()
+    {
+        if (_memoryCleaner == null || !_memoryCleaner.IsSupported || MemoryCleanRunning) return;
+
+        MemoryCleanRunning = true;
+        MemoryCleanStatus = Labels.Cleaning;
+        MemoryCleanSucceeded = false;
+        try
+        {
+            var result = await _memoryCleaner.CleanStandbyMemoryAsync().ConfigureAwait(true);
+
+            if (result.ToolMissing)
+            {
+                MemoryCleanStatus = Labels.MemoryCleanToolMissing;
+                return;
+            }
+
+            if (result.ElevationRefused)
+            {
+                MemoryCleanStatus = Labels.MemoryCleanElevationRefused;
+                return;
+            }
+
+            if (!result.Cleaned)
+            {
+                MemoryCleanStatus = Labels.MemoryCleanFailed;
+                return;
+            }
+
+            MemoryCleanSucceeded = true;
+            MemoryCleanStatus = result.FreedMegabytes <= 0
+                ? Labels.MemoryCleanAlreadyClean
+                : Labels.MemoryCleanFreed(FormatMegabytes(result.FreedMegabytes),
+                    result.AvailableBeforeGigabytes, result.AvailableGigabytes);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Bekleme belleği boşaltılamadı", ex.ToString());
+            MemoryCleanStatus = Labels.MemoryCleanFailed;
+        }
+        finally
+        {
+            MemoryCleanRunning = false;
+        }
+    }
+
+    /// <summary>Megabytes below a gigabyte, gigabytes above it, because "2048 MB" is a number nobody converts in place.</summary>
+    private static string FormatMegabytes(double megabytes) => megabytes >= 1024
+        ? $"{megabytes / 1024.0:F1} GB"
+        : $"{megabytes:F0} MB";
 
     // ---------------------------------------------------------------- operating mode
 
@@ -1449,6 +2098,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _selectedMode, value)) return;
             SyncModeSelection();
             Raise(nameof(ModeBadgeText));
+            if (value != null) RecordModeMark(value.Mode);
             if (!_suppressWrite) _ = ApplyModeAsync(value?.Mode);
         }
     }
@@ -1568,19 +2218,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public EffectChoice? SelectedEffect
     {
         get => _selectedEffect;
-        set => Set(ref _selectedEffect, value);
+        set
+        {
+            if (!Set(ref _selectedEffect, value)) return;
+            BuildDirectionChoices();
+            Raise(nameof(ZoneRainbow));
+            Raise(nameof(ZoneSolid));
+            Raise(nameof(ZonePreviewNote));
+            Raise(nameof(HasZonePreviewNote));
+        }
     }
 
     public int BrightnessLevel
     {
         get => _brightnessLevel;
-        set => Set(ref _brightnessLevel, Math.Clamp(value, 0, LightingLimits.MaxBrightnessLevel));
+        set
+        {
+            if (!Set(ref _brightnessLevel, Math.Clamp(value, 0, LightingLimits.MaxBrightnessLevel))) return;
+            Raise(nameof(BrightnessLabel));
+        }
     }
 
     public int SpeedLevel
     {
         get => _speedLevel;
-        set => Set(ref _speedLevel, Math.Clamp(value, 0, LightingLimits.MaxSpeed));
+        set
+        {
+            if (!Set(ref _speedLevel, Math.Clamp(value, 0, LightingLimits.MaxSpeed))) return;
+            Raise(nameof(SpeedLabel));
+        }
     }
 
     public int DirectionLevel
@@ -1607,6 +2273,215 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public int MaxBrightness => LightingLimits.MaxBrightnessLevel;
     public int MaxSpeed => LightingLimits.MaxSpeed;
     public int MaxDirection => LightingLimits.MaxDirection;
+
+    /// <summary>
+    /// True when the selected effect paints the keyboard's own colours, so the four zone bars show a rainbow instead of
+    /// a colour the effect will ignore. Read from the policy rather than from a list here, so the two cannot drift.
+    /// </summary>
+    public bool ZoneRainbow => SelectedEffect != null && !LightingPolicy.EffectUsesColor(SelectedEffect.Id);
+
+    /// <summary>The inverse of <see cref="ZoneRainbow"/>, so the deck can show one bar or the other without a converter.</summary>
+    public bool ZoneSolid => !ZoneRainbow;
+
+    /// <summary>The line under the deck that explains the rainbow, or empty when the zones show real colours.</summary>
+    public string ZonePreviewNote => ZoneRainbow ? Labels.ZonePreviewNote : "";
+
+    public bool HasZonePreviewNote => ZonePreviewNote.Length > 0;
+
+    /// <summary>Brightness as "Parlaklık: 5 / 9", so the slider's value is readable without counting ticks.</summary>
+    public string BrightnessLabel => Labels.BrightnessLevel(BrightnessLevel, MaxBrightness);
+
+    public string SpeedLabel => Labels.SpeedLevel(SpeedLevel, MaxSpeed);
+
+    /// <summary>The directions the selected effect accepts. Empty for the seven effects that take none.</summary>
+    public ObservableCollection<DirectionChoice> DirectionChoices { get; } = new();
+
+    public DirectionChoice? SelectedDirection
+    {
+        get => _selectedDirection;
+        set
+        {
+            if (!Set(ref _selectedDirection, value)) return;
+            if (value != null) DirectionLevel = value.Direction;
+        }
+    }
+
+    /// <summary>True when the effect has a direction to choose, which is what shows the row.</summary>
+    public bool ShowDirectionPanel => DirectionChoices.Count > 0;
+
+    /// <summary>
+    /// True once a click on the deck has pointed the palette at a zone. Avalonia has no modal colour dialog, so the
+    /// click selects the zone and the palette beside it becomes the picker; the flag is what the view uses to bring
+    /// that card into view.
+    /// </summary>
+    public bool ZonePickerOpen { get; private set; }
+
+    /// <summary>
+    /// Selects a zone from a click on the deck. Zone 0 is the primary colour, 1..4 the four bars, which is the same
+    /// numbering the palette's own buttons use.
+    /// </summary>
+    public void SelectZoneForPicker(int zone)
+    {
+        ActiveZone = Math.Clamp(zone, 0, LightingLimits.ZoneCount);
+        ZonePickerOpen = true;
+        Raise(nameof(ZonePickerOpen));
+        Status = $"{Labels.Zone(Math.Max(1, zone))} · {Labels.ColorPalette}";
+    }
+
+    public RelayCommand CustomColorCommand { get; private set; } = null!;
+    public RelayCommand ApplyAllZonesCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Spreads the colour the palette last wrote over all four zones. The per-zone picker cannot do this in one click,
+    /// and one colour for the whole keyboard is the common case.
+    /// </summary>
+    private void ApplyAllZones()
+    {
+        var color = LightingPolicy.NormalizeHex(PrimaryColor, LightingPolicy.DefaultColor);
+        Zone1 = color;
+        Zone2 = color;
+        Zone3 = color;
+        Zone4 = color;
+        Status = Labels.ApplyToAllZones;
+    }
+
+    /// <summary>
+    /// Points the palette at the primary colour and opens it. The hex box beside the swatches is the custom picker:
+    /// Avalonia ships no colour dialog, and a hand-rolled one would be a second place to get hex validation wrong.
+    /// </summary>
+    private void OpenCustomColor()
+    {
+        ActiveZone = 0;
+        ZonePickerOpen = true;
+        Raise(nameof(ZonePickerOpen));
+        Status = Labels.CustomColor;
+    }
+
+    /// <summary>
+    /// Rebuilds the direction list for the selected effect. WAVE takes four directions, SHIFTING two, and the rest
+    /// none, so the row disappears rather than offering a choice the firmware would ignore.
+    /// </summary>
+    private void BuildDirectionChoices()
+    {
+        var effect = SelectedEffect?.Id ?? "STATIC";
+        var allowed = LightingPolicy.AllowedDirections(effect);
+
+        DirectionChoices.Clear();
+        foreach (var direction in allowed)
+        {
+            DirectionChoices.Add(new DirectionChoice(direction, LightingPolicy.DirectionName(direction)));
+        }
+
+        SelectedDirection = DirectionChoices.FirstOrDefault(d => d.Direction == DirectionLevel)
+                            ?? DirectionChoices.FirstOrDefault();
+
+        Raise(nameof(ShowDirectionPanel));
+    }
+
+    // ---------------------------------------------------------------- the on-screen display
+
+    /// <summary>
+    /// Whether the overlay is drawn. Persisted, because an OSD someone turned on for a game session is a preference,
+    /// not a per-session one.
+    /// </summary>
+    public bool OsdEnabled
+    {
+        get => _osdEnabled;
+        set
+        {
+            if (!Set(ref _osdEnabled, value)) return;
+            _settings.OsdEnabled = value;
+            SaveSettings();
+            Raise(nameof(OsdToggleText));
+            OsdChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>The toggle's own caption: GİZLE while the overlay is drawn, GÖSTER while it is not.</summary>
+    public string OsdToggleText => OsdEnabled ? Labels.HideCaption : Labels.ShowCaption;
+
+    /// <summary>Which corner the overlay sits in: 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right.</summary>
+    public int OsdCorner
+    {
+        get => _osdCorner;
+        set
+        {
+            if (!Set(ref _osdCorner, Math.Clamp(value, 0, 3))) return;
+            _settings.OsdCorner = _osdCorner;
+            SaveSettings();
+            Raise(nameof(OsdCornerName));
+            Raise(nameof(OsdPositionText));
+            OsdChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Which display the overlay is on, as an index into the screens the window can see.</summary>
+    public int OsdMonitor
+    {
+        get => _osdMonitor;
+        set
+        {
+            if (!Set(ref _osdMonitor, Math.Max(0, value))) return;
+            _settings.OsdMonitor = _osdMonitor;
+            SaveSettings();
+            Raise(nameof(OsdPositionText));
+            OsdChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// How many displays the overlay may move between. Set by the window, which is the only thing that can ask the
+    /// platform; a view model that guessed would cycle onto a screen that is not there.
+    /// </summary>
+    public int OsdMonitorCount { get; set; } = 1;
+
+    public string OsdCornerName => OsdCorner switch
+    {
+        1 => Labels.OsdCornerTopRight,
+        2 => Labels.OsdCornerBottomLeft,
+        3 => Labels.OsdCornerBottomRight,
+        _ => Labels.OsdCornerTopLeft
+    };
+
+    public string OsdPositionText => Labels.OsdPosition(OsdCornerName, OsdMonitor + 1);
+
+    public RelayCommand CycleOsdCornerCommand { get; private set; } = null!;
+
+    /// <summary>Shows or hides the overlay. The button carries the caption, so one command serves both states.</summary>
+    public RelayCommand ToggleOsdCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// The overlay's three rows, composed here rather than in the window so the separators and the units are decided
+    /// once. The overlay is a second window with no view model of its own: it binds to this one, which is what keeps
+    /// the OSD and the page showing the same numbers on the same tick.
+    /// </summary>
+    public string OsdCpuLine =>
+        $"{Labels.Cpu}: {CpuTemperatureText} | {CpuPowerText} | {CpuFrequencyText} | {CpuUsageText}";
+
+    public string OsdGpuLine =>
+        $"{Labels.Gpu}: {GpuTemperatureText} | {GpuPowerText} | {GpuFrequencyText} | {VramText}";
+
+    public string OsdRamLine =>
+        $"{Labels.SystemMemory}: {RamDetailText} | {Labels.FanRpm}: {CpuFanRpmText}";
+
+    /// <summary>Raised when the overlay's visibility or position changed, so the window can move or hide it.</summary>
+    public event EventHandler? OsdChanged;
+
+    /// <summary>
+    /// Steps the overlay through the four corners, then onto the next display. One button rather than two pickers: the
+    /// overlay is a small box, and the corner it is in is easier to see than to describe.
+    /// </summary>
+    private void CycleOsdCorner()
+    {
+        if (OsdCorner < 3)
+        {
+            OsdCorner++;
+            return;
+        }
+
+        OsdCorner = 0;
+        OsdMonitor = (OsdMonitor + 1) % Math.Max(1, OsdMonitorCount);
+    }
 
     // ---------------------------------------------------------------- extras
 
@@ -1646,10 +2521,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool WinKeyLockAvailable => _capabilities.WinKeyLock;
+
+    /// <summary>
+    /// The Windows-key lock. There is no getter in the contract, so this is the state the user asked for rather than a
+    /// state read back from the firmware; the write's own answer is what the status line reports.
+    /// </summary>
+    public bool WinKeyLockOn
+    {
+        get => _winKeyLockOn;
+        set
+        {
+            if (!Set(ref _winKeyLockOn, value)) return;
+            if (!_suppressWrite) _ = RunWriteAsync(() => _hardware!.SetWinKeyLockAsync(value), Labels.WinKeyLock);
+        }
+    }
+
+    /// <summary>The OpenRGB SDK's state, or empty on a platform that does not speak it. Empty hides the line.</summary>
+    public string OpenRgbStatus => _openRgb?.OpenRgbStatus ?? "";
+
+    public bool HasOpenRgbStatus => OpenRgbStatus.Length > 0;
+
     public bool BatteryLimitAvailable => _capabilities.BatteryChargeLimit;
 
     /// <summary>True when the backend reports at least one of the optional switches this page carries.</summary>
-    public bool HasAnyExtra => CoolBoostAvailable || LcdOverdriveAvailable || BacklightTimeoutAvailable;
+    public bool HasAnyExtra =>
+        CoolBoostAvailable || LcdOverdriveAvailable || WinKeyLockAvailable || BacklightTimeoutAvailable;
 
     /// <summary>
     /// True when the probe found none of the optional nodes this page carries, so the page can say so once. The battery
@@ -1666,7 +2563,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// True when the extras card has something to show: a switch, or the one-line "nothing here" badge. A platform
     /// that cannot answer hides the card instead of leaving a titled empty box.
     /// </summary>
-    public bool ShowExtrasCard => HasAnyExtra || NegativeAnswersAreConclusive;
+    public bool ShowExtrasCard => HasAnyExtra || HasOpenRgbStatus || NegativeAnswersAreConclusive;
 
     /// <summary>
     /// True when a "not supported" answer from this platform is a real answer rather than "could not ask". False on
@@ -2997,6 +3894,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(CoolBoostAvailable));
             Raise(nameof(LcdOverdriveAvailable));
             Raise(nameof(BacklightTimeoutAvailable));
+            Raise(nameof(WinKeyLockAvailable));
             Raise(nameof(HasAnyExtra));
             Raise(nameof(NoExtrasAvailable));
             Raise(nameof(ShowExtrasCard));
@@ -3051,7 +3949,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         try
         {
             var data = await _hardware.GetMonitorDataAsync().ConfigureAwait(true);
+
+            // A backend that did not answer is not a machine with nothing to show. The platform monitor can still
+            // report load, clocks and memory, which is what keeps the page useful on a machine whose Acer service is
+            // missing; the temperatures stay at zero, and zero is what the page reads as "no reading".
+            data ??= _monitor?.CreateFallback();
             if (data == null) return;
+
+            // The backend answers sensors; the model strings, load, package watts, VRAM and RAM come from the platform
+            // monitor. Enriching here rather than in the backend keeps the Acer transport free of OS-specific reads.
+            _monitor?.Enrich(data);
 
             CpuTemperature = data.CpuTemperature;
             GpuTemperature = data.GpuTemperature;
@@ -3060,6 +3967,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             GpuFanRpm = data.GpuFanSpeed;
             FanRpmMeasured = data.IsFanRpmMeasured;
             Raise(nameof(CurvePreview));
+
+            CpuCores = data.CpuCores > 0 ? data.CpuCores : _monitor?.Info.CpuThreads ?? 0;
+            CpuUsage = data.CpuUsage;
+            CpuPowerWatts = data.CpuPowerWatts;
+            CpuFrequencyMhz = data.CpuFrequencyMHz;
+            GpuUsage = data.GpuUsage;
+            GpuPowerWatts = data.GpuPowerWatts;
+            GpuFrequencyMhz = data.GpuFrequencyMHz;
+            VramUsedMb = data.VramUsedMB;
+            VramTotalMb = data.VramTotalMB;
+            RamUsage = data.RamUsage;
+            RamTotalMb = data.RamTotalMB;
+
+            // The overlay is a second window bound to this view model, so its rows are raised on the same tick the
+            // page's figures are. A separate timer would let the two disagree by a second.
+            Raise(nameof(OsdCpuLine));
+            Raise(nameof(OsdGpuLine));
+            Raise(nameof(OsdRamLine));
 
             RecordHistory(data);
 
@@ -3289,9 +4214,43 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (_hardware == null || SelectedEffect is not EffectChoice effect) return;
 
         var zones = new[] { Zone1, Zone2, Zone3, Zone4 };
-        await RunWriteAsync(
-            () => _hardware.SetLightingAsync(effect.Id, BrightnessLevel, SpeedLevel, DirectionLevel, PrimaryColor, zones),
-            Labels.KeyboardLighting).ConfigureAwait(true);
+        var config = new LightingConfig
+        {
+            Effect = effect.Id,
+            Brightness = BrightnessLevel,
+            Speed = SpeedLevel,
+            Direction = DirectionLevel,
+            Color = LightingPolicy.NormalizeHex(PrimaryColor, LightingPolicy.DefaultColor),
+            LEDs = zones.Select(z => LightingPolicy.NormalizeHex(z, LightingPolicy.DefaultColor)).ToList()
+        };
+
+        await _writeGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            bool ok = await _hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
+                config.Direction, config.Color, zones).ConfigureAwait(true);
+            Status = ok
+                ? $"{Labels.Applied}: {Labels.KeyboardLighting}"
+                : $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
+            if (!ok) return;
+
+            // The recovery copy is written only after the firmware accepted the write, so a resume puts back the
+            // lighting the keyboard actually had rather than the one the user last clicked.
+            ActiveRgbStateStore.Save(_settingsPath, config);
+            _settings.LastActiveLighting = config;
+            _settings.KeyboardLighting = config;
+            _settings.IsBacklightOff = false;
+            SaveSettings();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Donanım yazımı başarısız", $"{Labels.KeyboardLighting}: {ex.Message}");
+            Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 
     private async Task TurnOffLightingAsync()
@@ -3602,22 +4561,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// Re-applies the stored keyboard lighting. Called when the window comes back from the tray, because the firmware
     /// drops the lighting on some machines after a suspend and a keyboard that stayed dark reads as a broken app.
     /// </summary>
+    /// <remarks>
+    /// The recovery copy wins over the settings file. <c>active_rgb_state.json</c> is written only after a lighting
+    /// write succeeded, so it describes the keyboard; the settings file describes what the user last clicked, which
+    /// may be a colour the firmware refused.
+    /// </remarks>
     public async Task ReassertKeyboardLightingAsync()
     {
-        if (_hardware == null) return;
+        if (_hardware == null || !LightingAvailable) return;
 
-        var last = _settings.LastActiveLighting ?? _settings.KeyboardLighting;
-        if (last == null) return;
+        var last = ActiveRgbStateStore.Load(_settingsPath)
+                   ?? _settings.LastActiveLighting
+                   ?? _settings.KeyboardLighting;
+        if (last == null || LightingPolicy.IsOff(last)) return;
 
         try
         {
+            var zones = (last.LEDs ?? new List<string>()).Take(LightingLimits.ZoneCount).ToArray();
             await _hardware.SetLightingAsync(
                 last.Effect,
                 last.Brightness,
                 last.Speed,
                 last.Direction,
                 last.Color,
-                last.LEDs.ToArray()).ConfigureAwait(true);
+                zones).ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -3731,6 +4698,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(CoolBoostAvailable));
         Raise(nameof(LcdOverdriveAvailable));
         Raise(nameof(BacklightTimeoutAvailable));
+        Raise(nameof(WinKeyLockAvailable));
         Raise(nameof(HasAnyExtra));
         Raise(nameof(NoExtrasAvailable));
         Raise(nameof(ShowExtrasCard));
@@ -3750,13 +4718,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void BuildChoices()
     {
+        // All nine, in the order the WPF page listed them, with the device's own names. The list is the policy's, so
+        // an effect added there cannot be missing here.
         Effects.Clear();
-        Effects.Add(new EffectChoice("STATIC", Loc.T("Sabit")));
-        Effects.Add(new EffectChoice("BREATHING", Loc.T("Nefes")));
-        Effects.Add(new EffectChoice("NEON", Loc.T("Neon")));
-        Effects.Add(new EffectChoice("WAVE", Loc.T("Dalga")));
-        Effects.Add(new EffectChoice("SHIFTING", Loc.T("Kayma")));
-        Effects.Add(new EffectChoice("ZOOM", Loc.T("Zoom")));
+        foreach (var effect in LightingPolicy.AllEffects)
+        {
+            Effects.Add(new EffectChoice(effect, LightingPolicy.EffectDisplayName(effect)));
+        }
         SelectedEffect = Effects[0];
 
         FanModes.Clear();

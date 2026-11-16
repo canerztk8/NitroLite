@@ -374,4 +374,64 @@ public sealed class ShellLabels
 
     public string DeviceCapabilities => Loc.T("Cihaz & Yetenek Özeti");
     public string Appearance => Loc.T("Görünüm");
+    // ---------------------------------------------------------------- page 2: the monitoring cards
+
+    public string Processor => Loc.T("İşlemci");
+    public string GraphicsCard => Loc.T("Ekran Kartı");
+    public string SystemMemory => Loc.T("Sistem Belleği");
+    public string SystemTemperature => Loc.T("Sistem Sıcaklığı");
+    public string Cores => Loc.T("Çekirdek");
+    public string Threads => Loc.T("İş parçacığı");
+    public string Temperature => Loc.T("Sıcaklık");
+    public string PackagePower => Loc.T("Paket Gücü");
+    public string Usage => Loc.T("Kullanım");
+    public string ClockSpeed => Loc.T("Saat Frekansı");
+    public string Vram => Loc.T("VRAM");
+    public string MemoryCleanTitle => Loc.T("Bekleme Belleğini Boşaltma");
+    public string MemoryCleanHint => Loc.T("Windows'un bekleme listesindeki önbelleği serbest bırakır; çalışan uygulamalar kapanmaz.");
+    public string Cleaning => Loc.T("Boşaltılıyor…");
+    public string CleanStandby => Loc.T("Bekleme Belleğini Boşalt");
+    public string MemoryCleanToolMissing => Loc.T("Bellek temizleme aracı bulunamadı.");
+    public string MemoryCleanElevationRefused => Loc.T("Yönetici izni verilmedi; bekleme belleği boşaltılamadı.");
+    public string MemoryCleanFailed => Loc.T("Bekleme belleği boşaltılamadı.");
+    public string MemoryCleanAlreadyClean => Loc.T("Boşaltılacak bekleme belleği yoktu.");
+    public string MemoryCleanFreed(string freed, double before, double after) =>
+        Loc.T($"Bellek boşaltıldı: {freed} serbest bırakıldı ({before:F1} GB → {after:F1} GB)");
+
+    // ---------------------------------------------------------------- page 2: the chart and the mode trace
+
+    public string ChartMetric => Loc.T("Grafik ölçütü");
+    public string Current => Loc.T("Mevcut");
+    public string Minimum => Loc.T("Min");
+    public string Maximum => Loc.T("Maks");
+    public string Average => Loc.T("Ortalama");
+    public string ModeTrace => Loc.T("Mod İzleme");
+    public string ModeTraceHint => Loc.T("Çalışma modu değişimleri, sıcaklık şeridinin üzerinde işaretlenir.");
+    public string ChartEmptyHint => Loc.T("Grafik için henüz yeterli örnek yok; birkaç saniye içinde dolacak.");
+
+    // ---------------------------------------------------------------- page 2: the on-screen display
+
+    public string Osd => Loc.T("Ekran Üstü Gösterge (OSD)");
+    public string OsdHint => Loc.T("Oyun içinde sıcaklık, yük ve fan devrini küçük bir katmanda gösterir.");
+    public string ChangePosition => Loc.T("Konum Değiştir");
+    public string OsdCornerTopLeft => Loc.T("Sol üst");
+    public string OsdCornerTopRight => Loc.T("Sağ üst");
+    public string OsdCornerBottomLeft => Loc.T("Sol alt");
+    public string OsdCornerBottomRight => Loc.T("Sağ alt");
+    public string OsdPosition(string corner, int monitor) => Loc.T($"Konum: {corner} · Monitör {monitor}");
+
+    // ---------------------------------------------------------------- page 3: the lighting controls
+
+    public string Effects => Loc.T("Efektler");
+    public string EffectDirection => Loc.T("Efekt Yönü");
+    public string EffectSpeed => Loc.T("Efekt Hızı");
+    public string CustomColor => Loc.T("Özel Renk…");
+    public string ApplyToAllZones => Loc.T("Tüm Bölgelere Uygula");
+    public string TurnOffLighting => Loc.T("Aydınlatmayı Kapat");
+    public string ZonePreviewNote => Loc.T("Bu efekt renk kullanmaz; bölgeler gökkuşağı gradyanıyla gösterilir.");
+    public string WinKeyLock => Loc.T("WinKey Kilidi");
+    public string OpenRgbStatus => Loc.T("OpenRGB durumu");
+    public string BacklightTimeoutHint => Loc.T("30 saniye boşta kaldığında aydınlatmayı kapat");
+    public string BrightnessLevel(int level, int max) => Loc.T($"Parlaklık: {level} / {max}");
+    public string SpeedLevel(int level, int max) => Loc.T($"Efekt Hızı: {level} / {max}");
 }

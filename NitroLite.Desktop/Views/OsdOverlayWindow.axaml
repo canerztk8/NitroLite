@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:NitroLite.Desktop.ViewModels"
+        x:Class="NitroLite.Desktop.Views.OsdOverlayWindow"
+        x:DataType="vm:MainViewModel"
+        Title="NitroLite OSD"
+        SystemDecorations="None"
+        CanResize="False"
+        CanMinimize="False"
+        CanMaximize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Focusable="False"
+        ShowActivated="False"
+        SizeToContent="WidthAndHeight"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        WindowStartupLocation="Manual">
+
+  <!--
+    The overlay is the same sheet as the window, floating over a game: the theme's card ground, ink figures, faint
+    labels, one hairline frame. Every brush is a DynamicResource, so the OSD follows a live theme swap instead of
+    keeping the palette it was built with.
+
+    The ground is its own layer at 94 % so the game still shows through, while the text above it stays at full
+    opacity: fading the whole border would fade the figures too. No shadow, because on a transparent window every
+    one-second update would be re-rendered in software.
+  -->
+  <Grid>
+    <Border Background="{DynamicResource CardBrush}" Opacity="0.94" CornerRadius="6" />
+
+    <Border BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" CornerRadius="6"
+            Padding="12,8">
+      <StackPanel Spacing="2">
+        <TextBlock Text="{Binding OsdCpuLine}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+                   FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{Binding OsdGpuLine}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+                   FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{Binding OsdRamLine}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+                   FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</Window>

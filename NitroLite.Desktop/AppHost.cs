@@ -34,7 +34,10 @@ public sealed record PlatformServices(
     Func<(bool OnAc, int? BatteryPercent)>? PowerState,
     ICpuBoostAccess? CpuBoost,
     IGameLibraryScanner? GameLibrary,
-    IMouseProfileService? MouseProfiles);
+    IMouseProfileService? MouseProfiles,
+    IHardwareMonitor? Monitor,
+    IMemoryCleaner? MemoryCleaner,
+    IOpenRgbStatusProvider? OpenRgb);
 
 /// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
@@ -81,7 +84,10 @@ public sealed class AppHost : IDisposable
             services.CpuBoost,
             services.GameLibrary,
             services.MouseProfiles,
-            dialogs);
+            services.Monitor,
+            services.MemoryCleaner,
+            dialogs,
+            services.OpenRgb);
     }
 
     public MainViewModel ViewModel { get; }
@@ -125,6 +131,9 @@ public sealed class AppHost : IDisposable
         ICpuBoostAccess? cpuBoost = null;
         IGameLibraryScanner? gameLibrary = null;
         IMouseProfileService? mouseProfiles = null;
+        IHardwareMonitor? monitor = null;
+        IMemoryCleaner? memoryCleaner = null;
+        IOpenRgbStatusProvider? openRgb = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -141,6 +150,12 @@ public sealed class AppHost : IDisposable
                 // The library scan reads the Steam registry and the Epic manifests; the mouse is a USB HID device.
                 gameLibrary = new WindowsGameLibraryScanner();
                 mouseProfiles = new AtkMouseProfileService();
+
+                // The OS half of the monitoring page: model strings, load, package watts, VRAM and the standby-list
+                // cleaner. Separate from the Acer backend on purpose, so a machine whose service is missing still
+                // shows a useful page.
+                monitor = new WindowsHardwareMonitor();
+                memoryCleaner = new WindowsMemoryCleaner();
             }
             catch (Exception ex)
             {
@@ -180,6 +195,15 @@ public sealed class AppHost : IDisposable
                 // backend yet, so the row stays hidden rather than offering four buttons that write nowhere.
                 gameLibrary = new LinuxGameLibraryScanner();
                 mouseProfiles = new NullMouseProfileService();
+
+                // /proc and hwmon answer the same rows Windows answers through WMI and NVML. The standby-list cleaner
+                // reports itself unsupported, so its card hides rather than offering a button that does nothing.
+                monitor = new LinuxHardwareMonitor(fs);
+                memoryCleaner = new LinuxMemoryCleaner();
+
+                // The SDK is the third lighting path, and the only one that can say whether it answered. The status
+                // line stays hidden until the fallback has actually been tried.
+                openRgb = controller;
             }
             catch (Exception ex)
             {
@@ -191,7 +215,7 @@ public sealed class AppHost : IDisposable
 
         return new PlatformServices(
             settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
-            refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles);
+            refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb);
     }
 
 #if WINDOWS

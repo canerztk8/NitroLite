@@ -6,6 +6,20 @@
              x:Class="NitroLite.Desktop.Views.LightingView"
              x:DataType="vm:MainViewModel">
 
+  <UserControl.Resources>
+    <!--
+      The rainbow the deck shows for an effect that paints its own colours. A gradient rather than four fixed hues,
+      because the point is "this effect ignores your colour", and four hues would read as four chosen colours.
+    -->
+    <LinearGradientBrush x:Key="RainbowBrush" StartPoint="0%,0%" EndPoint="100%,0%">
+      <GradientStop Offset="0" Color="#FF2A55" />
+      <GradientStop Offset="0.25" Color="#FFAA00" />
+      <GradientStop Offset="0.5" Color="#00FFA3" />
+      <GradientStop Offset="0.75" Color="#00E5FF" />
+      <GradientStop Offset="1" Color="#BD00FF" />
+    </LinearGradientBrush>
+  </UserControl.Resources>
+
   <!--
     Page 3: the keyboard. The WPF page led with the four-zone deck — the four bars on a darker ground with thin key
     rows under them, so the block reads as a keyboard rather than as four swatches — then the saved profiles, then the
@@ -17,8 +31,9 @@
       <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,16">
         <TextBlock Classes="pagetitle" Text="{Binding Labels.LightingPageTitle}" TextWrapping="Wrap"
                    Margin="0,0,16,0" />
-        <Button Grid.Column="1" Classes="primary" Content="{Binding Labels.TurnOff}" Padding="12,6"
-                FontSize="11" VerticalAlignment="Center" IsEnabled="{Binding LightingAvailable}" />
+        <Button Grid.Column="1" Classes="primary" Content="{Binding Labels.TurnOffLighting}" Padding="12,6"
+                FontSize="11" VerticalAlignment="Center" IsEnabled="{Binding LightingAvailable}"
+                Command="{Binding TurnOffLightingCommand}" />
       </Grid>
 
       <!-- ============================================================ the four-zone deck -->
@@ -33,22 +48,38 @@
             <StackPanel>
               <UniformGrid Columns="4">
                 <StackPanel Margin="0,0,6,0">
-                  <Border Classes="zone" Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                  <Border Classes="zone" Tag="1" PointerPressed="OnZonePressed"
+                          Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                          IsVisible="{Binding ZoneSolid}" />
+                  <Border Classes="zone" Tag="1" PointerPressed="OnZonePressed"
+                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone1}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Margin="3,0">
-                  <Border Classes="zone" Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                  <Border Classes="zone" Tag="2" PointerPressed="OnZonePressed"
+                          Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                          IsVisible="{Binding ZoneSolid}" />
+                  <Border Classes="zone" Tag="2" PointerPressed="OnZonePressed"
+                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone2}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Margin="3,0">
-                  <Border Classes="zone" Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                  <Border Classes="zone" Tag="3" PointerPressed="OnZonePressed"
+                          Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                          IsVisible="{Binding ZoneSolid}" />
+                  <Border Classes="zone" Tag="3" PointerPressed="OnZonePressed"
+                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone3}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Margin="6,0,0,0">
-                  <Border Classes="zone" Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                  <Border Classes="zone" Tag="4" PointerPressed="OnZonePressed"
+                          Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                          IsVisible="{Binding ZoneSolid}" />
+                  <Border Classes="zone" Tag="4" PointerPressed="OnZonePressed"
+                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone4}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
@@ -72,6 +103,8 @@
             </StackPanel>
           </Border>
 
+          <TextBlock Classes="hint" Text="{Binding ZonePreviewNote}" Margin="3,8,3,0" TextWrapping="Wrap"
+                     IsVisible="{Binding HasZonePreviewNote}" />
         </StackPanel>
       </Border>
 
@@ -81,7 +114,7 @@
         <StackPanel>
           <TextBlock Classes="rowtitle" Text="{Binding Labels.RgbProfiles}" Margin="0,0,0,10" />
 
-          <Grid ColumnDefinitions="*,*,Auto,Auto">
+          <Grid ColumnDefinitions="*,*,Auto,Auto,Auto">
             <ComboBox ItemsSource="{Binding RgbProfiles}" SelectedItem="{Binding SelectedRgbProfile}"
                       HorizontalAlignment="Stretch">
               <ComboBox.ItemTemplate>
@@ -94,9 +127,11 @@
             <TextBox Grid.Column="1" Margin="10,0" Text="{Binding NewProfileName}"
                      Watermark="{Binding Labels.ProfileName}" />
 
-            <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.SaveProfile}"
-                    Padding="12,7" FontSize="11" Command="{Binding SaveRgbProfileCommand}" />
-            <Button Grid.Column="3" Classes="primary" Content="{Binding Labels.DeleteProfile}"
+            <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.Apply}"
+                    Padding="12,7" FontSize="11" Command="{Binding ApplyRgbProfileCommand}" />
+            <Button Grid.Column="3" Classes="primary" Content="{Binding Labels.SaveProfile}"
+                    Padding="12,7" FontSize="11" Margin="6,0,0,0" Command="{Binding SaveRgbProfileCommand}" />
+            <Button Grid.Column="4" Classes="primary" Content="{Binding Labels.DeleteProfile}"
                     Padding="12,7" FontSize="11" Margin="6,0,0,0"
                     Foreground="{DynamicResource DangerBrush}"
                     Command="{Binding DeleteRgbProfileCommand}" />
@@ -138,6 +173,11 @@
             </ItemsControl>
 
             <TextBox Width="110" Text="{Binding PrimaryColor}" Watermark="#00E5FF" />
+
+            <Button Classes="primary" Content="{Binding Labels.CustomColor}" Padding="12,7" FontSize="11"
+                    Command="{Binding CustomColorCommand}" />
+            <Button Classes="primary" Content="{Binding Labels.ApplyToAllZones}" Padding="12,7" FontSize="11"
+                    Command="{Binding ApplyAllZonesCommand}" />
           </StackPanel>
 
           <!-- Which zone the palette writes to. The four buttons are the same choice the deck above shows. -->
@@ -162,7 +202,7 @@
         <StackPanel>
           <Grid ColumnDefinitions="*,*">
             <StackPanel Grid.Column="0" Margin="0,0,16,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.Effect}" Margin="0,0,0,4" />
+              <TextBlock Classes="caps" Text="{Binding Labels.Effects}" Margin="0,0,0,4" />
               <ComboBox ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect}"
                         HorizontalAlignment="Stretch">
                 <ComboBox.ItemTemplate>
@@ -172,32 +212,39 @@
                 </ComboBox.ItemTemplate>
               </ComboBox>
 
-              <TextBlock Classes="caps" Text="{Binding Labels.Direction}" Margin="0,12,0,4" />
-              <Slider Minimum="1" Maximum="{Binding MaxDirection}" TickFrequency="1"
-                      IsSnapToTickEnabled="True" Value="{Binding DirectionLevel}" />
+              <StackPanel IsVisible="{Binding ShowDirectionPanel}" Margin="0,12,0,0">
+                <TextBlock Classes="caps" Text="{Binding Labels.EffectDirection}" Margin="0,0,0,4" />
+                <ComboBox ItemsSource="{Binding DirectionChoices}" SelectedItem="{Binding SelectedDirection}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DirectionChoice">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
             </StackPanel>
 
             <StackPanel Grid.Column="1">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
-                <TextBlock Grid.Column="1" Text="{Binding BrightnessLevel}" FontWeight="Bold"
+                <TextBlock Grid.Column="1" Text="{Binding BrightnessLabel}" FontWeight="Bold"
                            FontSize="11" HorizontalAlignment="Right"
-                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource AccentBrush}" />
               </Grid>
               <Slider Minimum="0" Maximum="{Binding MaxBrightness}" TickFrequency="1"
                       IsSnapToTickEnabled="True" Value="{Binding BrightnessLevel}" Margin="0,4,0,0" />
 
               <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0">
-                <TextBlock Classes="caps" Text="{Binding Labels.Speed}" />
-                <TextBlock Grid.Column="1" Text="{Binding SpeedLevel}" FontWeight="Bold"
+                <TextBlock Classes="caps" Text="{Binding Labels.EffectSpeed}" />
+                <TextBlock Grid.Column="1" Text="{Binding SpeedLabel}" FontWeight="Bold"
                            FontSize="11" HorizontalAlignment="Right"
-                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                           Foreground="{DynamicResource AccentBrush}" />
               </Grid>
               <Slider Minimum="0" Maximum="{Binding MaxSpeed}" TickFrequency="1"
                       IsSnapToTickEnabled="True" Value="{Binding SpeedLevel}" Margin="0,4,0,0" />
             </StackPanel>
           </Grid>
-
         </StackPanel>
       </Border>
 
@@ -210,6 +257,12 @@
             <TextBlock Classes="section" Text="{Binding Labels.Extras}" />
           </StackPanel>
 
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding BacklightTimeoutAvailable}">
+            <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center" />
+            <TextBlock Classes="hint" Text="{Binding Labels.BacklightTimeoutHint}" Margin="8,0,0,0"
+                       VerticalAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+
           <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding CoolBoostAvailable}">
             <ToggleButton Classes="toggle" IsChecked="{Binding CoolBoostOn}" VerticalAlignment="Center" />
             <TextBlock Classes="hint" Text="{Binding Labels.CoolBoost}" Margin="8,0,0,0" />
@@ -220,16 +273,18 @@
             <TextBlock Classes="hint" Text="{Binding Labels.LcdOverdrive}" Margin="8,0,0,0" />
           </StackPanel>
 
-          <!-- The backlight timeout is an optional hardware switch too, so it lives with the others. Keeping it in
-               the effects card left this card titled but empty on a machine whose only extra is the timeout. -->
-          <StackPanel Orientation="Horizontal" IsVisible="{Binding BacklightTimeoutAvailable}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center" />
-            <TextBlock Classes="hint" Text="{Binding Labels.BacklightTimeout}" Margin="8,0,0,0" />
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding WinKeyLockAvailable}">
+            <ToggleButton Classes="toggle" IsChecked="{Binding WinKeyLockOn}" VerticalAlignment="Center" />
+            <TextBlock Classes="hint" Text="{Binding Labels.WinKeyLock}" Margin="8,0,0,0" />
           </StackPanel>
 
           <!-- Nothing to switch: one line instead of an empty grey box. -->
           <TextBlock Classes="hint" Text="{Binding Labels.NotOnThisMachine}"
                      IsVisible="{Binding NoExtrasAvailable}" />
+
+          <!-- The third lighting path's state. Hidden until the SDK has actually been asked. -->
+          <TextBlock Classes="hint" Text="{Binding OpenRgbStatus}" Margin="0,6,0,0" TextWrapping="Wrap"
+                     IsVisible="{Binding HasOpenRgbStatus}" />
         </StackPanel>
       </Border>
     </StackPanel>
