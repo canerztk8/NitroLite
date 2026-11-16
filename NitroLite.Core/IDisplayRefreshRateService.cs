@@ -7,6 +7,12 @@ namespace NitroLite.Core;
 public interface IDisplayRefreshRateService
 {
     /// <summary>
+    /// False on a platform where the refresh rate cannot be changed without a display-server specific API, which is
+    /// the Linux case today. School mode then leaves the panel alone instead of reporting a failure it cannot fix.
+    /// </summary>
+    bool IsSupported => true;
+
+    /// <summary>
     /// Gets the active display refresh rate in Hertz (e.g. 60 or 165).
     /// </summary>
     int GetCurrentRefreshRate();

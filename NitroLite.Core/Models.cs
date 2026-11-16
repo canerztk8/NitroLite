@@ -203,6 +203,32 @@ public class GameProfile
     public bool IsInstalled => string.IsNullOrWhiteSpace(InstallPath) || File.Exists(InstallPath);
 }
 
+/// <summary>
+/// The game rules a fresh install starts from, and the list <see cref="AppSettings.GameProfiles"/> falls back to when
+/// a settings file predates the field.
+/// </summary>
+/// <remarks>
+/// These are the same titles the Windows build seeds into <c>game_profiles.json</c>, so a user who moves between the
+/// two front ends recognises the list. They are only defaults: a settings file that carries its own list — including
+/// an empty one, which is how a user says "no automatic switching" — is never re-seeded.
+/// </remarks>
+public static class GameProfileDefaults
+{
+    public static List<GameProfile> Create() => new()
+    {
+        new GameProfile { ExeName = "cs2", DisplayName = "Counter-Strike 2", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive },
+        new GameProfile { ExeName = "VALORANT-Win64-Shipping", DisplayName = "Valorant", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive },
+        new GameProfile { ExeName = "bfv", DisplayName = "Battlefield V", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive },
+        new GameProfile { ExeName = "P5R", DisplayName = "Persona 5 Royal", TargetMode = OperatingMode.Extreme, TargetCpuBoost = CpuBoostMode.Efficient },
+        new GameProfile { ExeName = "TslGame", DisplayName = "PUBG: BATTLEGROUNDS", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive, TargetFanMode = FanMode.Max },
+        new GameProfile { ExeName = "Balatro", DisplayName = "Balatro", TargetMode = OperatingMode.Default, TargetCpuBoost = CpuBoostMode.Disabled },
+        new GameProfile { ExeName = "Cyberpunk2077", DisplayName = "Cyberpunk 2077", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive },
+        new GameProfile { ExeName = "b1-Win64-Shipping", DisplayName = "Black Myth: Wukong", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive },
+        new GameProfile { ExeName = "GTA5", DisplayName = "Grand Theft Auto V", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Efficient },
+        new GameProfile { ExeName = "RainbowSix", DisplayName = "Tom Clancy's Rainbow Six Siege", TargetMode = OperatingMode.Turbo, TargetCpuBoost = CpuBoostMode.Aggressive }
+    };
+}
+
 public enum ThermalStatusLevel
 {
     Excellent,
@@ -305,6 +331,18 @@ public class AppSettings
 
     [JsonPropertyName("auto_game_mode_enabled")]
     public bool AutoGameModeEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The game rules automatic switching matches against: one entry per title, keyed by executable name.
+    /// </summary>
+    /// <remarks>
+    /// This is the cross-platform half of the Windows <c>game_profiles.json</c>. It lives in the settings file because
+    /// the Linux front end has no separate profile store, and because a rule that changes the machine's mode belongs
+    /// next to the other preferences rather than in a second file the user has to find. An empty list is a valid
+    /// answer — it means "never switch automatically" — so the defaults are only applied when the field is absent.
+    /// </remarks>
+    [JsonPropertyName("game_profiles")]
+    public List<GameProfile> GameProfiles { get; set; } = GameProfileDefaults.Create();
 
     [JsonPropertyName("battery_watchdog_enabled")]
     public bool BatteryWatchdogEnabled { get; set; } = true;
@@ -480,6 +518,21 @@ public class AppSettings
         FanCurveMinDwellSeconds = Math.Clamp(FanCurveMinDwellSeconds, 0, 120);
 
         if (Language != null && !Loc.IsSupported(Language)) Language = null;
+
+        // A game rule with no executable can never match, and one with a broken curve would leave the fans under
+        // software control with nothing to follow. Both are dropped or repaired here rather than at detection time,
+        // where the cost would be paid on every scan.
+        GameProfiles ??= new List<GameProfile>();
+        GameProfiles.RemoveAll(p => p == null || string.IsNullOrWhiteSpace(p.ExeName));
+        foreach (var profile in GameProfiles)
+        {
+            profile.ExeName = profile.ExeName.Trim();
+            if (string.IsNullOrWhiteSpace(profile.DisplayName)) profile.DisplayName = profile.ExeName;
+            if (!Enum.IsDefined(profile.TargetMode)) profile.TargetMode = OperatingMode.Default;
+            if (!Enum.IsDefined(profile.TargetFanMode)) profile.TargetFanMode = FanMode.Auto;
+            if (!Enum.IsDefined(profile.TargetCpuBoost)) profile.TargetCpuBoost = CpuBoostMode.Enabled;
+            if (profile.TargetFanCurvePoints != null) profile.TargetFanCurvePoints = FanCurve.Sanitize(profile.TargetFanCurvePoints);
+        }
 
         // The lighting block is the one part of the file that is not a number or an enum: it carries strings and a
         // list. A null Effect or a null LEDs list used to reach cfg.Effect.Equals(...) and cfg.LEDs.ToArray() in the

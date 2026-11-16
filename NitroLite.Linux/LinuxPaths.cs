@@ -72,6 +72,39 @@ public static class LinuxPaths
     /// <summary>The standard kernel battery charge limit, 0-100.</summary>
     public const string ChargeControlEndThreshold = "charge_control_end_threshold";
 
+    /// <summary>
+    /// The process table. Read through the same file-system abstraction as <c>/sys</c> because both are kernel
+    /// pseudo-filesystems with identical semantics: a directory per entry, plain files inside, no seeking.
+    /// </summary>
+    public const string ProcRoot = "/proc";
+
+    /// <summary>The kernel's short process name, truncated to 15 characters.</summary>
+    public const string ProcComm = "comm";
+
+    /// <summary>The full command line, NUL separated. The first field is the executable.</summary>
+    public const string ProcCmdline = "cmdline";
+
+    /// <summary>One directory per panel backlight device.</summary>
+    public const string BacklightRoot = "/sys/class/backlight";
+
+    /// <summary>Current backlight level, in the device's own units.</summary>
+    public const string Brightness = "brightness";
+
+    /// <summary>The level that means 100 %.</summary>
+    public const string MaxBrightness = "max_brightness";
+
+    /// <summary>0 or 1: the processor's own boost (turbo) control. Present on most AMD and many Intel machines.</summary>
+    public const string CpuFreqBoost = "/sys/devices/system/cpu/cpufreq/boost";
+
+    /// <summary>0 or 1, inverted: 1 means turbo is disabled. The Intel equivalent of <see cref="CpuFreqBoost"/>.</summary>
+    public const string IntelNoTurbo = "/sys/devices/system/cpu/intel_pstate/no_turbo";
+
+    /// <summary>
+    /// <c>active</c> or <c>passive</c>. The closest thing <c>amd_pstate</c> offers to a boost switch: the passive
+    /// governor does not scale above the nominal frequency, which is what school mode wants.
+    /// </summary>
+    public const string AmdPstateStatus = "/sys/devices/system/cpu/amd_pstate/status";
+
     /// <summary>Joins a root and a relative attribute name with a single slash.</summary>
     public static string Combine(string root, string name) => $"{root.TrimEnd('/')}/{name}";
 }

@@ -25,6 +25,12 @@ public sealed record EffectChoice(string Id, string Label)
     public override string ToString() => Label;
 }
 
+/// <summary>One entry in the GPU (MUX) selector. <see cref="Mode"/> is what the backend expects.</summary>
+public sealed record GpuModeChoice(GpuOperatingMode Mode, string Label)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>
 /// One anchor of the fan curve. The slider edits <see cref="Percent"/>; <see cref="EffectivePercent"/> is what the
 /// fans will actually get, because the safety floor is applied on top and cannot be edited away.
@@ -96,6 +102,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
+    /// <summary>Automatic game switching, or null when the caller did not wire it (a test that does not need it).</summary>
+    private readonly GameProfileService? _gameProfiles;
+
+    /// <summary>School mode, or null when the caller did not wire it.</summary>
+    private readonly SchoolModeService? _schoolMode;
+
+    private readonly RgbProfileService _rgbProfiles;
+
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
 
@@ -108,6 +122,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _suppressWrite = true;
     private bool _refreshing;
     private bool _disposed;
+
+    /// <summary>Telemetry ticks since the window opened. Game detection runs on every other one.</summary>
+    private int _tick;
 
     private ShellLabels _labels = new();
     private string _status = "";
@@ -145,17 +162,43 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _udevCommand = "";
     private bool _needsUdevRule;
 
-    public MainViewModel(AppSettings settings, IHardwareController? hardware, LinuxCapabilities? linux, string settingsPath)
+    private GpuModeChoice? _selectedGpuMode;
+    private bool _schoolModeOn;
+    private string _schoolModeDetail = "";
+    private RgbPreset? _selectedRgbProfile;
+    private string _newProfileName = "";
+    private string _rgbProfileStatus = "";
+    private bool _gameActive;
+    private string _gameStatus = "";
+
+    /// <summary>
+    /// <paramref name="gameProfiles"/>, <paramref name="schoolMode"/> and <paramref name="rgbProfiles"/> are optional so
+    /// the window can be built without them — a test that only checks telemetry does not need a process scanner — and
+    /// so the composition root stays the only place that decides which platform services exist.
+    /// </summary>
+    public MainViewModel(
+        AppSettings settings,
+        IHardwareController? hardware,
+        LinuxCapabilities? linux,
+        string settingsPath,
+        GameProfileService? gameProfiles = null,
+        SchoolModeService? schoolMode = null,
+        RgbProfileService? rgbProfiles = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
         _linux = linux;
         _settingsPath = settingsPath;
+        _gameProfiles = gameProfiles;
+        _schoolMode = schoolMode;
+        _rgbProfiles = rgbProfiles ?? new RgbProfileService();
+        _schoolModeOn = settings.SchoolModeEnabled;
 
         _curveEvaluator = new FanCurveEvaluator(settings.BuildFanCurve());
 
         BuildCurveAnchors();
         BuildChoices();
+        RefreshRgbProfiles();
 
         _selectedLanguage = Loc.Languages.FirstOrDefault(l => l.Code == Loc.Language) ?? Loc.Languages[0];
         _needsUdevRule = linux?.NeedsUdevRule == true;
@@ -175,6 +218,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         TurnOffLightingCommand = new AsyncCommand(TurnOffLightingAsync);
         CopyUdevCommand = new RelayCommand(CopyUdevCommandText);
         RescanCommand = new AsyncCommand(RescanAsync);
+        ApplyGpuModeCommand = new AsyncCommand(ApplyGpuModeAsync);
+        ApplyRgbProfileCommand = new AsyncCommand(ApplyRgbProfileAsync);
+        SaveRgbProfileCommand = new RelayCommand(SaveRgbProfile);
+        DeleteRgbProfileCommand = new RelayCommand(DeleteRgbProfile);
+        CopyHardwareReportCommand = new RelayCommand(CopyHardwareReport);
     }
 
     // ---------------------------------------------------------------- labels and status
@@ -509,6 +557,128 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ---------------------------------------------------------------- MUX switch
+
+    /// <summary>
+    /// The GPU modes the switch offers. Automatic is deliberately absent: it is a firmware decision (Advanced
+    /// Optimus), not something the user can select, and the backend refuses to write it.
+    /// </summary>
+    public ObservableCollection<GpuModeChoice> GpuModes { get; } = new();
+
+    public GpuModeChoice? SelectedGpuMode
+    {
+        get => _selectedGpuMode;
+        set => Set(ref _selectedGpuMode, value);
+    }
+
+    /// <summary>True when the module exposes <c>dgpu_mode</c>. The card hides itself otherwise.</summary>
+    public bool MuxAvailable => _capabilities.MuxSwitch;
+
+    /// <summary>
+    /// How many columns the school-mode card takes. Two when the MUX card is hidden, so the row does not keep an empty
+    /// half on the machines that have no switch — which is most of them.
+    /// </summary>
+    public int SchoolModeColumnSpan => MuxAvailable ? 1 : 2;
+
+    // ---------------------------------------------------------------- school mode
+
+    /// <summary>True when the composition root wired a school-mode state machine.</summary>
+    public bool SchoolModeAvailable => _schoolMode != null;
+
+    /// <summary>
+    /// The switch. Turning it on applies the school-mode values and writes the undo record first; turning it off puts
+    /// every recorded value back. The setter is guarded by <see cref="_suppressWrite"/> so reading the persisted state
+    /// at startup does not re-apply it.
+    /// </summary>
+    public bool SchoolModeOn
+    {
+        get => _schoolModeOn;
+        set
+        {
+            if (!Set(ref _schoolModeOn, value)) return;
+            if (_suppressWrite) return;
+            _ = SetSchoolModeAsync(value);
+        }
+    }
+
+    /// <summary>What the last school-mode change managed to do, or why it refused.</summary>
+    public string SchoolModeDetail
+    {
+        get => _schoolModeDetail;
+        private set => Set(ref _schoolModeDetail, value);
+    }
+
+    // ---------------------------------------------------------------- RGB profiles
+
+    public ObservableCollection<RgbPreset> RgbProfiles { get; } = new();
+
+    public RgbPreset? SelectedRgbProfile
+    {
+        get => _selectedRgbProfile;
+        set => Set(ref _selectedRgbProfile, value);
+    }
+
+    /// <summary>The name typed into the save box. Empty means "nothing to save yet".</summary>
+    public string NewProfileName
+    {
+        get => _newProfileName;
+        set => Set(ref _newProfileName, value);
+    }
+
+    /// <summary>The result of the last profile action, shown under the list.</summary>
+    public string RgbProfileStatus
+    {
+        get => _rgbProfileStatus;
+        private set => Set(ref _rgbProfileStatus, value);
+    }
+
+    /// <summary>Set when the presets file existed but could not be read, so the page can say so.</summary>
+    public string? RgbProfileLoadError => _rgbProfiles.LoadError;
+
+    // ---------------------------------------------------------------- game detection
+
+    /// <summary>True while a configured game is running and its profile is in effect.</summary>
+    public bool GameActive
+    {
+        get => _gameActive;
+        private set
+        {
+            if (!Set(ref _gameActive, value)) return;
+            Raise(nameof(GameStatusText));
+        }
+    }
+
+    /// <summary>"Oyun profili uygulandı: …" or the idle line. Never empty, so the card always says something.</summary>
+    public string GameStatusText => string.IsNullOrEmpty(_gameStatus) ? Labels.GameIdle : _gameStatus;
+
+    /// <summary>True when automatic switching is wired and enabled in the settings.</summary>
+    public bool AutoGameModeAvailable => _gameProfiles != null;
+
+    public bool AutoGameModeOn
+    {
+        get => _settings.AutoGameModeEnabled;
+        set
+        {
+            if (_settings.AutoGameModeEnabled == value) return;
+            _settings.AutoGameModeEnabled = value;
+            SaveSettings();
+            Raise(nameof(AutoGameModeOn));
+            // Turning it off while a game is running has to end the session, or the override would stay in place and
+            // the switch would look broken.
+            if (!value) _ = PollGameAsync();
+        }
+    }
+
+    // ---------------------------------------------------------------- hardware report
+
+    /// <summary>
+    /// The privacy-safe Markdown report. Built on demand rather than cached: it is a few hundred bytes of string work
+    /// and the probe state can change after a rescan.
+    /// </summary>
+    public string HardwareReportText => _linux == null ? "" : LinuxHardwareReport.Build(_linux);
+
+    public bool HardwareReportAvailable => _linux != null;
+
     // ---------------------------------------------------------------- settings page
 
     public IReadOnlyList<LocLanguage> Languages => Loc.Languages;
@@ -588,6 +758,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public AsyncCommand TurnOffLightingCommand { get; }
     public RelayCommand CopyUdevCommand { get; }
     public AsyncCommand RescanCommand { get; }
+    public AsyncCommand ApplyGpuModeCommand { get; }
+    public AsyncCommand ApplyRgbProfileCommand { get; }
+    public RelayCommand SaveRgbProfileCommand { get; }
+    public RelayCommand DeleteRgbProfileCommand { get; }
+    public RelayCommand CopyHardwareReportCommand { get; }
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -597,6 +772,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task InitializeAsync()
     {
+        // School mode's undo record is checked before anything else: a run that died between writing the record and
+        // saving the setting leaves the machine at 60 % processor and a dim screen with nothing in the UI to say so.
+        if (_schoolMode != null)
+        {
+            try
+            {
+                if (await _schoolMode.RecoverOrphanedBackupAsync().ConfigureAwait(true))
+                {
+                    _schoolModeOn = false;
+                    Raise(nameof(SchoolModeOn));
+                    SchoolModeDetail = Labels.SchoolModeRecovered;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Okul modu kurtarma başarısız", ex.Message);
+            }
+        }
+
         if (_hardware == null) return;
 
         try
@@ -612,6 +806,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(LcdOverdriveAvailable));
             Raise(nameof(BacklightTimeoutAvailable));
             Raise(nameof(BatteryLimitAvailable));
+            Raise(nameof(MuxAvailable));
+            Raise(nameof(SchoolModeColumnSpan));
             Raise(nameof(CapabilitySummaryText));
 
             await ReadStateAsync().ConfigureAwait(true);
@@ -667,6 +863,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(CurvePreview));
 
             await StepCurveAsync(data.CpuTemperature).ConfigureAwait(true);
+
+            // Game detection runs on the same tick as telemetry, every other second: a /proc scan is cheap but not
+            // free, and a game that starts is not going to be missed by a one-second delay.
+            if (++_tick % 2 == 0) await PollGameAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -730,6 +930,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             var charge = await _hardware.GetBatteryChargeModeAsync().ConfigureAwait(true);
             if (charge is BatteryChargeMode battery) BatteryLimitOn = battery == BatteryChargeMode.Optimized80;
+
+            var gpu = await _hardware.GetGpuModeAsync().ConfigureAwait(true);
+            if (gpu is GpuOperatingMode gpuMode)
+                SelectedGpuMode = GpuModes.FirstOrDefault(m => m.Mode == gpuMode) ?? SelectedGpuMode;
         }
         finally
         {
@@ -809,6 +1013,334 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await RunWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
     }
 
+    // ---------------------------------------------------------------- MUX, school mode, profiles, report
+
+    private async Task ApplyGpuModeAsync()
+    {
+        if (_hardware == null || SelectedGpuMode is not GpuModeChoice choice) return;
+
+        await RunWriteAsync(() => _hardware.SetGpuModeAsync(choice.Mode), Labels.GpuMode).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Applies or undoes school mode. The state machine writes its undo record before the first change, so a refusal
+    /// here means nothing was touched and the switch has to go back off.
+    /// </summary>
+    private async Task SetSchoolModeAsync(bool enable)
+    {
+        if (_schoolMode == null) return;
+
+        await _writeGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            var outcome = enable
+                ? await _schoolMode.EnableAsync().ConfigureAwait(true)
+                : await _schoolMode.DisableAsync().ConfigureAwait(true);
+
+            SchoolModeDetail = DescribeOutcome(outcome);
+
+            if (outcome.Refused)
+            {
+                // Nothing was changed, so the switch must not stay on: it would claim a state the machine is not in.
+                _schoolModeOn = false;
+                Raise(nameof(SchoolModeOn));
+                Status = Labels.SchoolModeRefused;
+                return;
+            }
+
+            Status = enable ? Labels.SchoolModeApplied : Labels.SchoolModeDisabled;
+
+            // The state machine changed the mode and the fan behind the view model's back, so the controls are read
+            // back instead of being assumed.
+            await ReadStateAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Okul modu değiştirilemedi", ex.Message);
+            Status = Labels.SchoolModeRefused;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    /// <summary>One line describing what school mode managed to change.</summary>
+    private string DescribeOutcome(SchoolModeOutcome outcome)
+    {
+        if (outcome.Refused) return Labels.SchoolModeRefused;
+        if (outcome.Failed.Count == 0) return Labels.SchoolModeApplied;
+        return $"{Labels.SchoolModePartial}: {string.Join(", ", outcome.Failed)}";
+    }
+
+    /// <summary>Reloads the preset list, keeping the selection when the preset still exists.</summary>
+    private void RefreshRgbProfiles()
+    {
+        var previous = SelectedRgbProfile?.Name;
+
+        RgbProfiles.Clear();
+        foreach (var preset in _rgbProfiles.GetPresets()) RgbProfiles.Add(preset);
+
+        SelectedRgbProfile = RgbProfiles.FirstOrDefault(p => p.Name == previous) ?? RgbProfiles.FirstOrDefault();
+        Raise(nameof(RgbProfileLoadError));
+    }
+
+    /// <summary>
+    /// Loads a preset into the editor and writes it. The editor is filled first so the user can see what was applied
+    /// and adjust it afterwards, which is the whole point of a saved profile.
+    /// </summary>
+    private async Task ApplyRgbProfileAsync()
+    {
+        if (SelectedRgbProfile is not RgbPreset preset) return;
+
+        SelectedEffect = Effects.FirstOrDefault(e => e.Id == preset.Effect.ToUpperInvariant()) ?? SelectedEffect;
+        BrightnessLevel = preset.Brightness;
+        SpeedLevel = preset.Speed;
+        DirectionLevel = preset.Direction;
+        PrimaryColor = preset.Color;
+
+        if (preset.LEDs.Count > 0) Zone1 = preset.LEDs[0];
+        if (preset.LEDs.Count > 1) Zone2 = preset.LEDs[1];
+        if (preset.LEDs.Count > 2) Zone3 = preset.LEDs[2];
+        if (preset.LEDs.Count > 3) Zone4 = preset.LEDs[3];
+
+        await ApplyLightingAsync().ConfigureAwait(true);
+
+        _settings.SelectedRgbPreset = preset.Name;
+        SaveSettings();
+        RgbProfileStatus = $"{Labels.Applied}: {preset.DisplayName}";
+    }
+
+    /// <summary>Saves the editor's current state under the typed name.</summary>
+    private void SaveRgbProfile()
+    {
+        var name = NewProfileName?.Trim() ?? "";
+        if (name.Length == 0)
+        {
+            RgbProfileStatus = Labels.ProfileNameRequired;
+            return;
+        }
+
+        try
+        {
+            _rgbProfiles.SaveCustomPreset(
+                name,
+                SelectedEffect?.Id ?? "STATIC",
+                BrightnessLevel,
+                SpeedLevel,
+                DirectionLevel,
+                PrimaryColor,
+                new List<string> { Zone1, Zone2, Zone3, Zone4 });
+
+            NewProfileName = "";
+            RefreshRgbProfiles();
+            SelectedRgbProfile = RgbProfiles.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                                 ?? SelectedRgbProfile;
+            RgbProfileStatus = $"{Labels.Applied}: {name}";
+        }
+        catch (Exception ex)
+        {
+            // The service already localises its refusals (a built-in name, a disk that will not take the write).
+            RgbProfileStatus = ex.Message;
+        }
+    }
+
+    private void DeleteRgbProfile()
+    {
+        if (SelectedRgbProfile is not RgbPreset preset) return;
+
+        if (preset.IsBuiltIn)
+        {
+            RgbProfileStatus = Labels.BuiltInProfileLocked;
+            return;
+        }
+
+        bool deleted = _rgbProfiles.DeletePreset(preset.Name);
+        RefreshRgbProfiles();
+        RgbProfileStatus = deleted ? $"{Labels.Deleted}: {preset.DisplayName}" : Labels.DeleteFailed;
+    }
+
+    private void CopyHardwareReport()
+    {
+        var report = HardwareReportText;
+        if (string.IsNullOrEmpty(report))
+        {
+            Status = Labels.NoBackend;
+            return;
+        }
+
+        ClipboardService.SetText(report);
+        Status = Labels.ReportCopied;
+    }
+
+    // ---------------------------------------------------------------- game detection
+
+    /// <summary>
+    /// One detection pass, and the control updates that follow it. Public so a test can drive it without waiting for
+    /// the telemetry timer.
+    /// </summary>
+    public async Task PollGameAsync()
+    {
+        if (_gameProfiles == null) return;
+
+        var result = await _gameProfiles.PollAsync().ConfigureAwait(true);
+        if (!result.IsTransition) return;
+
+        if (result.Change == GameDetectionChange.Started && result.Profile is GameProfile started)
+        {
+            GameActive = true;
+            _gameStatus = Labels.GameStarted(started.DisplayName);
+
+            // The service already wrote the mode and the fan; the controls follow so the window does not show the
+            // user's old selection while the machine is in the game's.
+            SyncControls(() =>
+            {
+                SelectedMode = Modes.FirstOrDefault(m => m.Mode == started.TargetMode) ?? SelectedMode;
+                var fan = started.TargetFanCurveEnabled ? FanMode.Custom : started.TargetFanMode;
+                SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
+            });
+
+            // A game that brought its own curve replaces the shape the loop follows; one that did not keeps the
+            // user's curve, which is what "follow the curve set on the fan card" means.
+            var points = _gameProfiles.ActiveCurvePoints;
+            _curveEvaluator = new FanCurveEvaluator(points != null ? new FanCurve(points) : _settings.BuildFanCurve());
+            _curveEvaluator.Reset();
+        }
+        else if (result.Change == GameDetectionChange.Ended && result.Previous is GameProfile ended)
+        {
+            GameActive = false;
+            _gameStatus = Labels.GameEnded(ended.DisplayName);
+
+            var snapshot = result.Snapshot;
+            if (snapshot != null)
+            {
+                SyncControls(() =>
+                {
+                    SelectedMode = Modes.FirstOrDefault(m => m.Mode == snapshot.Mode) ?? SelectedMode;
+                    SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == snapshot.Fan) ?? SelectedFanMode;
+                    CustomCpuPercent = snapshot.CustomCpuPercent;
+                    CustomGpuPercent = snapshot.CustomGpuPercent;
+                });
+
+                // The curve flag is restored without going through its setter: that setter saves the settings file and
+                // re-applies the fan mode, and the service has just written the fan mode that has to survive.
+                _curveEnabled = snapshot.CurveEnabled;
+                Raise(nameof(CurveEnabled));
+                _curveEvaluator = new FanCurveEvaluator(
+                    snapshot.CurvePoints is { Count: > 0 } points ? new FanCurve(points) : _settings.BuildFanCurve());
+                _curveEvaluator.Reset();
+            }
+        }
+
+        Raise(nameof(GameStatusText));
+        Status = _gameStatus;
+    }
+
+    /// <summary>
+    /// Runs a control update without letting the setters write to the hardware. Used when the backend has already
+    /// been changed by something else and the controls only have to catch up.
+    /// </summary>
+    private void SyncControls(Action update)
+    {
+        bool previous = _suppressWrite;
+        _suppressWrite = true;
+        try
+        {
+            update();
+        }
+        finally
+        {
+            _suppressWrite = previous;
+        }
+    }
+
+    // ---------------------------------------------------------------- tray
+
+    /// <summary>
+    /// The quick modes the tray menu offers, in the order NitroSense lists them. The menu is built from this list so
+    /// the two can never disagree about which modes exist.
+    /// </summary>
+    public IReadOnlyList<OperatingMode> QuickModes { get; } = new[]
+    {
+        OperatingMode.Quiet,
+        OperatingMode.Default,
+        OperatingMode.Extreme,
+        OperatingMode.Turbo,
+        OperatingMode.Eco
+    };
+
+    /// <summary>The label for a quick mode, translated.</summary>
+    public string QuickModeLabel(OperatingMode mode) => ModeLabel(mode);
+
+    /// <summary>
+    /// Applies a mode from the tray. The same path as the mode card, so the battery rule for Turbo and Performance
+    /// applies here too instead of the menu offering a click that can only be refused.
+    /// </summary>
+    public async Task ApplyModeFromTrayAsync(OperatingMode mode)
+    {
+        if (_hardware == null) return;
+
+        SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == mode) ?? SelectedMode);
+        await ApplyModeAsync(mode).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Hands the fans back to the firmware and disarms the curve. Called before the process exits so a machine is not
+    /// left with a fixed fan speed written by a program that is no longer running.
+    /// </summary>
+    public async Task<bool> RestoreFansToAutoAsync()
+    {
+        if (_hardware == null) return true;
+
+        await _writeGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            _curveEnabled = false;
+            Raise(nameof(CurveEnabled));
+            _settings.FanCurveEnabled = false;
+            SaveSettings();
+            _curveEvaluator.Reset();
+
+            bool ok = await _hardware.SetFanModeAsync(FanMode.Auto).ConfigureAwait(true);
+            SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fanlar otomatiğe alınamadı", ex.Message);
+            return false;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Called when the window is hidden to the tray, so the footer explains where the app went instead of leaving the
+    /// last write result on screen as if nothing had happened.
+    /// </summary>
+    public void NotifyHiddenToTray() => Status = Labels.MinimizedToTray;
+
+    /// <summary>
+    /// Clean exit: end any game session, put the fans back under firmware control, and report whether that worked.
+    /// The caller shuts the application down afterwards; nothing here closes a window.
+    /// </summary>
+    public async Task CleanExitAsync()
+    {
+        try
+        {
+            if (_gameProfiles != null) await _gameProfiles.StopAsync().ConfigureAwait(true);
+            bool ok = await RestoreFansToAutoAsync().ConfigureAwait(true);
+            Status = ok ? Labels.CleanExitDone : Labels.CleanExitPartial;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Temiz çıkış başarısız", ex.Message);
+            Status = Labels.CleanExitPartial;
+        }
+    }
+
     /// <summary>
     /// Runs one write behind the gate and turns the result into a status line. A refusal is not an exception: the
     /// backend reports "the firmware said no" as false, and the user needs to see which control it was.
@@ -859,6 +1391,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(LcdOverdriveAvailable));
         Raise(nameof(BacklightTimeoutAvailable));
         Raise(nameof(BatteryLimitAvailable));
+        Raise(nameof(MuxAvailable));
+        Raise(nameof(SchoolModeColumnSpan));
+        Raise(nameof(HardwareReportText));
 
         await ReadStateAsync().ConfigureAwait(true);
         Status = Labels.Ready;
@@ -882,6 +1417,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         FanModes.Add(new FanModeChoice(FanMode.Max, Labels.Max));
         FanModes.Add(new FanModeChoice(FanMode.Custom, Labels.CustomCurve));
         SelectedFanMode = FanModes[0];
+
+        // Automatic is not offered: it is a firmware decision (Advanced Optimus), and the backend refuses to write it.
+        GpuModes.Clear();
+        GpuModes.Add(new GpuModeChoice(GpuOperatingMode.Optimus, Labels.GpuHybrid));
+        GpuModes.Add(new GpuModeChoice(GpuOperatingMode.DiscreteGpu, Labels.GpuDiscrete));
+        SelectedGpuMode = GpuModes[0];
 
         BuildModeChoices();
     }

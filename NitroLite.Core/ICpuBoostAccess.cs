@@ -12,6 +12,12 @@ namespace NitroLite.Core;
 public interface ICpuBoostAccess
 {
     /// <summary>
+    /// False when the kernel exposes no boost control at all. School mode then leaves the processor alone rather than
+    /// reporting a failure for a node that does not exist on this machine.
+    /// </summary>
+    bool IsSupported => true;
+
+    /// <summary>
     /// The exact boost mode stored for <paramref name="isAc"/>, or null when the setting is absent or unreadable.
     /// "Exact" matters: the friendly <c>QueryBoostMode</c> collapses several stored values into one label, and the
     /// undo record has to put back the value that was actually there.

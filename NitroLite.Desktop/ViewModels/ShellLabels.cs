@@ -88,6 +88,59 @@ public sealed class ShellLabels
     public string Copied => Loc.T("Kopyalandı");
     public string LanguageRestartHint => Loc.T("Dil değişikliği hemen uygulanır.");
 
+    // ---------------------------------------------------------------- MUX switch
+    public string MuxSwitch => Loc.T("MUX Switch");
+    public string GpuMode => Loc.T("GPU modu");
+    public string GpuHybrid => Loc.T("Hibrit (Optimus)");
+    public string GpuDiscrete => Loc.T("Harici GPU (Discrete)");
+    public string MuxHint => Loc.T("Geçişten sonra oturumu kapatıp açmanız gerekebilir.");
+
+    // ---------------------------------------------------------------- school mode
+    public string SchoolMode => Loc.T("Okul modu");
+    public string SchoolModeHint => Loc.T("Pil ömrünü en üst düzeye çıkarır: %40 parlaklık, 60 Hz, CPU Boost kapalı.");
+    public string SchoolModeApplied => Loc.T("Okul modu uygulandı.");
+    public string SchoolModeDisabled => Loc.T("Okul modu kapatıldı; önceki ayarlar geri yüklendi.");
+    public string SchoolModeRefused => Loc.T("Okul modu uygulanamadı: geri alma kaydı yazılamadı.");
+    public string SchoolModePartial => Loc.T("Okul modu kısmen uygulandı");
+    public string SchoolModeRecovered => Loc.T("Yarım kalan okul modu geri alındı.");
+
+    // ---------------------------------------------------------------- game detection
+    public string GameMode => Loc.T("Oyun modu");
+    public string GameIdle => Loc.T("Oyun yok; kullanıcı ayarları geçerli.");
+    public string AutoGameMode => Loc.T("Otomatik oyun modu");
+    public string AutoGameModeHint => Loc.T("Tanımlı bir oyun açıldığında moda ve fan eğrisine geçer, kapandığında geri döner.");
+
+    /// <summary>"Oyun profili uygulandı: Counter-Strike 2".</summary>
+    public string GameStarted(string name) => Loc.T($"Oyun profili uygulandı: {name}");
+
+    /// <summary>"Oyun kapandı; önceki ayarlara dönüldü: Counter-Strike 2".</summary>
+    public string GameEnded(string name) => Loc.T($"Oyun kapandı; önceki ayarlara dönüldü: {name}");
+
+    // ---------------------------------------------------------------- RGB profiles
+    public string RgbProfiles => Loc.T("RGB profilleri");
+    public string ProfileName => Loc.T("Profil adı");
+    public string SaveProfile => Loc.T("Profili kaydet");
+    public string DeleteProfile => Loc.T("Profili sil");
+    public string ApplyProfile => Loc.T("Profili uygula");
+    public string ProfileNameRequired => Loc.T("Profil adı gerekli.");
+    public string BuiltInProfileLocked => Loc.T("Fabrika profili silinemez.");
+    public string Deleted => Loc.T("Silindi");
+    public string DeleteFailed => Loc.T("Silinemedi");
+
+    // ---------------------------------------------------------------- hardware report
+    public string HardwareReport => Loc.T("Donanım raporu");
+    public string HardwareReportHint => Loc.T("Seri numarası, UUID, kullanıcı adı ve kişisel dosya yolu içermez.");
+    public string CopyReport => Loc.T("Raporu kopyala");
+    public string ReportCopied => Loc.T("Donanım raporu panoya kopyalandı.");
+
+    // ---------------------------------------------------------------- tray
+    public string TrayShow => Loc.T("Pencereyi Göster");
+    public string TrayCleanExit => Loc.T("Temiz Çıkış");
+    public string TrayQuickMode => Loc.T("Hızlı mod");
+    public string MinimizedToTray => Loc.T("Arka planda çalışıyor. Kapatmak için sistem tepsisinden Temiz Çıkış'ı kullanın.");
+    public string CleanExitDone => Loc.T("Fanlar otomatiğe alındı; çıkılıyor.");
+    public string CleanExitPartial => Loc.T("Fanlar otomatiğe alınamadı; yine de çıkılıyor.");
+
     // ---------------------------------------------------------------- capability names
     public string CapFanControl => Loc.T("Fan kontrolü");
     public string CapOperatingMode => Loc.T("Çalışma modu kontrolü");

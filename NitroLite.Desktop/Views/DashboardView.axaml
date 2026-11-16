@@ -129,6 +129,54 @@
         </Border>
       </Grid>
 
+      <Grid ColumnDefinitions="*,*">
+        <Border Classes="card" Margin="0,0,10,0" IsVisible="{Binding MuxAvailable}">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="h2" Text="{Binding Labels.MuxSwitch}" />
+            <ComboBox ItemsSource="{Binding GpuModes}"
+                      SelectedItem="{Binding SelectedGpuMode}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:GpuModeChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="caption" Text="{Binding Labels.MuxHint}" />
+            <Button Classes="primary"
+                    Content="{Binding Labels.Apply}"
+                    Command="{Binding ApplyGpuModeCommand}"
+                    HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="1" Grid.ColumnSpan="{Binding SchoolModeColumnSpan}" Classes="card" IsVisible="{Binding SchoolModeAvailable}">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="h2" Text="{Binding Labels.SchoolMode}" VerticalAlignment="Center" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding SchoolModeOn}" />
+            </Grid>
+            <TextBlock Classes="caption" Text="{Binding Labels.SchoolModeHint}" />
+            <TextBlock Classes="caption" Text="{Binding SchoolModeDetail}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Automatic game switching. The card is only shown when the composition root wired a process scanner, so a
+           build without one does not offer a switch that can never fire. -->
+      <Border Classes="card" IsVisible="{Binding AutoGameModeAvailable}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="{Binding Labels.GameMode}" VerticalAlignment="Center" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoGameModeOn}" />
+          </Grid>
+          <TextBlock Classes="caption" Text="{Binding Labels.AutoGameModeHint}" />
+          <Border Classes="pill" HorizontalAlignment="Left">
+            <TextBlock Classes="caption" Text="{Binding GameStatusText}" />
+          </Border>
+        </StackPanel>
+      </Border>
+
       <Border Classes="card">
         <StackPanel Spacing="10">
           <Grid ColumnDefinitions="*,Auto">

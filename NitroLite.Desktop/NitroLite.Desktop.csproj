@@ -41,4 +41,11 @@
                       LogicalName="NitroLite.Desktop.99-nitrolite.rules" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The tray icon. Shared with the Windows build rather than copied, so the two front ends cannot drift apart, and
+         an AvaloniaResource rather than an EmbeddedResource because TrayIcon takes a WindowIcon, which is loaded
+         through AssetLoader from avares://. -->
+    <AvaloniaResource Include="..\NitroLite\app.ico" Link="Assets\app.ico" />
+  </ItemGroup>
+
 </Project>

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
+             xmlns:core="using:NitroLite.Core"
              x:Class="NitroLite.Desktop.Views.LightingView"
              x:DataType="vm:MainViewModel">
 
@@ -88,6 +89,43 @@
         <StackPanel Spacing="6">
           <TextBlock Classes="h2" Text="{Binding Labels.KeyboardLighting}" />
           <TextBlock Classes="caption" Text="{Binding Labels.NotOnThisMachine}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Saved profiles. The list is the same one the Windows build keeps in rgb_presets.json, so a user who moves
+           between the two front ends finds their own presets already there. -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="{Binding Labels.RgbProfiles}" />
+
+          <ComboBox ItemsSource="{Binding RgbProfiles}"
+                    SelectedItem="{Binding SelectedRgbProfile}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:RgbPreset">
+                <TextBlock Text="{Binding DisplayName}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button Classes="primary"
+                    Content="{Binding Labels.ApplyProfile}"
+                    Command="{Binding ApplyRgbProfileCommand}" />
+            <Button Classes="ghost"
+                    Content="{Binding Labels.DeleteProfile}"
+                    Command="{Binding DeleteRgbProfileCommand}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Text="{Binding NewProfileName}" Watermark="{Binding Labels.ProfileName}" />
+            <Button Grid.Column="1" Classes="ghost" Margin="10,0,0,0"
+                    Content="{Binding Labels.SaveProfile}"
+                    Command="{Binding SaveRgbProfileCommand}" />
+          </Grid>
+
+          <TextBlock Classes="caption" Text="{Binding RgbProfileStatus}" />
+          <TextBlock Classes="caption" Text="{Binding RgbProfileLoadError}" />
         </StackPanel>
       </Border>
 

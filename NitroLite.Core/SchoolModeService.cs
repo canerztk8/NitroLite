@@ -10,6 +10,12 @@ public sealed record SchoolModePowerSetting(Guid SubGroup, Guid Setting, uint Ta
 /// <summary>Reads and writes battery (DC) values of the active power scheme.</summary>
 public interface IPowerSchemeAccess
 {
+    /// <summary>
+    /// False on a platform that has no power schemes at all, which is every Linux distribution. School mode then
+    /// skips these settings instead of reporting eight failures for a feature the machine never had.
+    /// </summary>
+    bool IsSupported => true;
+
     bool TryReadDc(Guid subGroup, Guid setting, out uint value);
     bool TryWriteDc(Guid subGroup, Guid setting, uint value);
 }
@@ -186,21 +192,26 @@ public sealed class SchoolModeService
             {
                 Mode = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
                 Fan = GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
-                DcBoost = TryQueryDcBoost(),
-                RefreshRate = _displayService.GetCurrentRefreshRate() is var hz && hz > 0 ? hz : null,
+                DcBoost = _cpuBoost.IsSupported ? TryQueryDcBoost() : null,
+                RefreshRate = _displayService.IsSupported ? TryQueryRefreshRate() : null,
                 Brightness = _brightnessService.GetBrightness()
             };
 
-            foreach (var setting in PowerSettings)
+            // A platform with no power schemes has nothing to record here, and recording nothing is what makes the
+            // undo record honest: switching school mode off will not try to write settings that were never read.
+            if (_scheme.IsSupported)
             {
-                if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
+                foreach (var setting in PowerSettings)
                 {
-                    state.PowerSettings.Add(new SchoolModePowerBackup
+                    if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
                     {
-                        SubGroup = setting.SubGroup.ToString(),
-                        Setting = setting.Setting.ToString(),
-                        PreviousDc = previous
-                    });
+                        state.PowerSettings.Add(new SchoolModePowerBackup
+                        {
+                            SubGroup = setting.SubGroup.ToString(),
+                            Setting = setting.Setting.ToString(),
+                            PreviousDc = previous
+                        });
+                    }
                 }
             }
 
@@ -300,7 +311,7 @@ public sealed class SchoolModeService
             outcome.Applied.AddRange(restored);
             outcome.Failed.AddRange(restoreFailed);
 
-            if (backup.DcBoost.HasValue)
+            if (backup.DcBoost.HasValue && _cpuBoost.IsSupported)
             {
                 if (await _cpuBoost.SetBoostModeAsync(backup.DcBoost.Value, targetAc: false, targetDc: true))
                     outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
@@ -313,7 +324,7 @@ public sealed class SchoolModeService
             if (await _hardware.SetFanModeAsync(backup.Fan)) outcome.Applied.Add(Loc.T("Fan"));
             else outcome.Failed.Add(Loc.T("Fan"));
 
-            if (backup.RefreshRate is int rate && rate > 0)
+            if (backup.RefreshRate is int rate && rate > 0 && _displayService.IsSupported)
             {
                 if (_displayService.SetRefreshRate(rate)) outcome.Applied.Add(Loc.T("Ekran tazeleme hızı"));
                 else outcome.Failed.Add(Loc.T("Ekran tazeleme hızı"));
@@ -376,34 +387,43 @@ public sealed class SchoolModeService
         var outcome = new SchoolModeOutcome();
 
         // Eight powercfg writes, each a process launch. Off the UI thread for the same reason as the read above.
-        var (powerApplied, powerFailed, powerSkipped) = await Task.Run(() =>
+        // A platform without power schemes skips the whole block: reporting eight failures for settings the machine
+        // does not have would make a working school mode look broken.
+        if (_scheme.IsSupported)
         {
-            var applied = new List<string>();
-            var failed = new List<string>();
-            var skipped = new List<string>();
-            foreach (var setting in PowerSettings)
+            var (powerApplied, powerFailed, powerSkipped) = await Task.Run(() =>
             {
-                if (only != null && !only.Contains((setting.SubGroup, setting.Setting)))
+                var applied = new List<string>();
+                var failed = new List<string>();
+                var skipped = new List<string>();
+                foreach (var setting in PowerSettings)
                 {
-                    // Its current value could not be read, so it is not in the undo record. Writing it would
-                    // break the promise that switching school mode off puts everything back.
-                    skipped.Add(Loc.T(setting.Label));
-                    continue;
+                    if (only != null && !only.Contains((setting.SubGroup, setting.Setting)))
+                    {
+                        // Its current value could not be read, so it is not in the undo record. Writing it would
+                        // break the promise that switching school mode off puts everything back.
+                        skipped.Add(Loc.T(setting.Label));
+                        continue;
+                    }
+                    if (_scheme.TryWriteDc(setting.SubGroup, setting.Setting, setting.TargetDc)) applied.Add(Loc.T(setting.Label));
+                    else failed.Add(Loc.T(setting.Label));
                 }
-                if (_scheme.TryWriteDc(setting.SubGroup, setting.Setting, setting.TargetDc)) applied.Add(Loc.T(setting.Label));
-                else failed.Add(Loc.T(setting.Label));
+                return (applied, failed, skipped);
+            });
+            outcome.Applied.AddRange(powerApplied);
+            outcome.Failed.AddRange(powerFailed);
+            if (powerSkipped.Count > 0)
+            {
+                AppLog.Warn("Okul modu: okunamayan ayarlar atlandı", string.Join(", ", powerSkipped));
+                outcome.Warnings.Add(Loc.T($"Okul modu: mevcut değeri okunamayan ayarlar değiştirilmedi: {string.Join(", ", powerSkipped)}"));
             }
-            return (applied, failed, skipped);
-        });
-        outcome.Applied.AddRange(powerApplied);
-        outcome.Failed.AddRange(powerFailed);
-        if (powerSkipped.Count > 0)
-        {
-            AppLog.Warn("Okul modu: okunamayan ayarlar atlandı", string.Join(", ", powerSkipped));
-            outcome.Warnings.Add(Loc.T($"Okul modu: mevcut değeri okunamayan ayarlar değiştirilmedi: {string.Join(", ", powerSkipped)}"));
         }
 
-        if (await _cpuBoost.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true))
+        if (!_cpuBoost.IsSupported)
+        {
+            // No boost node on this kernel: nothing to disable, and nothing to report.
+        }
+        else if (await _cpuBoost.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true))
             outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
         else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
 
@@ -423,10 +443,13 @@ public sealed class SchoolModeService
         if (await _hardware.SetFanModeAsync(FanMode.Auto)) outcome.Applied.Add(Loc.T("Fan (Otomatik)"));
         else outcome.Failed.Add(Loc.T("Fan (Otomatik)"));
 
-        int currentRate = _displayService.GetCurrentRefreshRate();
-        if (currentRate > 0 && currentRate <= TargetRefreshRate) outcome.Applied.Add(Loc.T("Ekran 60 Hz"));
-        else if (_displayService.SetRefreshRate(TargetRefreshRate)) outcome.Applied.Add(Loc.T("Ekran 60 Hz"));
-        else outcome.Failed.Add(Loc.T("Ekran 60 Hz"));
+        if (_displayService.IsSupported)
+        {
+            int currentRate = _displayService.GetCurrentRefreshRate();
+            if (currentRate > 0 && currentRate <= TargetRefreshRate) outcome.Applied.Add(Loc.T("Ekran 60 Hz"));
+            else if (_displayService.SetRefreshRate(TargetRefreshRate)) outcome.Applied.Add(Loc.T("Ekran 60 Hz"));
+            else outcome.Failed.Add(Loc.T("Ekran 60 Hz"));
+        }
 
         // A panel that does not report brightness (external monitor only) is not a failure: there is nothing to dim.
         int? brightness = _brightnessService.GetBrightness();
@@ -443,6 +466,17 @@ public sealed class SchoolModeService
     private CpuBoostMode? TryQueryDcBoost()
     {
         try { return _cpuBoost.QueryBoostModeExact(false); }
+        catch { return null; }
+    }
+
+    /// <summary>The current refresh rate, or null when the panel does not report one.</summary>
+    private int? TryQueryRefreshRate()
+    {
+        try
+        {
+            int hz = _displayService.GetCurrentRefreshRate();
+            return hz > 0 ? hz : null;
+        }
         catch { return null; }
     }
 

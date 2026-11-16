@@ -73,6 +73,19 @@
         </StackPanel>
       </Border>
 
+      <!-- The report is built from model-level facts only: no serial number, no UUID, no user name, no personal path.
+           It is meant to be pasted into a public issue, so the hint says so before the user presses the button. -->
+      <Border Classes="card" IsVisible="{Binding HardwareReportAvailable}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="h2" Text="{Binding Labels.HardwareReport}" />
+          <TextBlock Classes="caption" Text="{Binding Labels.HardwareReportHint}" />
+          <Button Classes="primary"
+                  Content="{Binding Labels.CopyReport}"
+                  Command="{Binding CopyHardwareReportCommand}"
+                  HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
       <Border Classes="card">
         <StackPanel Spacing="8">
           <TextBlock Classes="h2" Text="{Binding Labels.Notes}" />

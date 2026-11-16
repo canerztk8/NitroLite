@@ -1,0 +1,180 @@
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+using NitroLite.Core.Hardware;
+
+namespace NitroLite.Linux;
+
+/// <summary>
+/// Builds the Markdown hardware report a user pastes into a GitHub issue.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The report is deliberately English: it is read by maintainers, it is pasted next to English issue templates, and a
+/// translated report would make two machines impossible to compare. The button and the status line around it are
+/// localised; the payload is not.
+/// </para>
+/// <para>
+/// Privacy is a hard requirement, not a nicety. The report is built from <see cref="LinuxCapabilities"/>, which carries
+/// only model-level facts: SMBIOS product and board names, BIOS version and vendor, the processor name, which sysfs
+/// attributes exist and what the capability probe concluded. It never reads <c>product_serial</c>,
+/// <c>board_serial</c>, <c>product_uuid</c> or <c>chassis_serial</c>, it never touches the user's home directory, and
+/// every line is passed through <see cref="Redact"/> before it is emitted so a note that happens to carry a path
+/// cannot leak one either.
+/// </para>
+/// </remarks>
+public static class LinuxHardwareReport
+{
+    /// <summary>Home directories, which identify a person rather than a machine.</summary>
+    private static readonly Regex HomePath = new(
+        @"(?<root>/home|/Users|/root)(/[^\s""'<>|]+)?",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>Anything that names a unit rather than a model. Belt and braces: nothing here reads one.</summary>
+    private static readonly Regex UnitIdentifier = new(
+        @"\b(serial(?:\s*(?:number|no\.?))?|uuid|machine-id|hostname)\b\s*[:=]\s*\S+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>The report for this build, generated now.</summary>
+    public static string Build(LinuxCapabilities capabilities) =>
+        Build(capabilities, AppVersion(), DateTime.UtcNow);
+
+    /// <summary>
+    /// The report for a specific build and timestamp. The two are parameters so a test can pin the output instead of
+    /// matching a moving date.
+    /// </summary>
+    public static string Build(LinuxCapabilities capabilities, string appVersion, DateTime generatedUtc)
+    {
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        var identity = capabilities.Identity;
+        var nodes = capabilities.Nodes;
+        var hardware = capabilities.Hardware;
+        var text = new StringBuilder();
+
+        text.AppendLine("# NitroLite — Linux hardware report");
+        text.AppendLine();
+        text.AppendLine($"- NitroLite: {Clean(appVersion)}");
+        text.AppendLine($"- Generated (UTC): {generatedUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}");
+        text.AppendLine($"- Backend: {Clean(hardware.Backend)}");
+        text.AppendLine($"- Tier: {Clean(capabilities.Tier)}");
+        text.AppendLine($"- udev rule needed: {(capabilities.NeedsUdevRule ? "yes" : "no")}");
+        text.AppendLine();
+
+        text.AppendLine("## Device (DMI)");
+        text.AppendLine();
+        text.AppendLine($"- Manufacturer: {Clean(identity.Manufacturer)}");
+        text.AppendLine($"- Model: {Clean(identity.Model)}");
+        text.AppendLine($"- Model code: {Clean(identity.ModelCode)}");
+        text.AppendLine($"- Family: {Clean(identity.ModelFamily)}");
+        text.AppendLine($"- Board: {Clean(identity.BoardProduct)}");
+        text.AppendLine($"- BIOS: {Clean(identity.BiosVersion)} ({Clean(identity.BiosVendor)})");
+        text.AppendLine($"- CPU: {Clean(identity.CpuName)} [{identity.CpuVendor}]");
+        text.AppendLine($"- Acer: {(identity.IsAcer ? "yes" : "no")}");
+        text.AppendLine();
+
+        text.AppendLine("## Kernel modules");
+        text.AppendLine();
+        text.AppendLine($"- acer-wmi (platform_profile): {(nodes.PlatformProfile != null ? "present" : "absent")}");
+        if (nodes.PlatformProfileChoices != null)
+        {
+            var choices = Clean(nodes.PlatformProfileChoices);
+            text.AppendLine($"- platform_profile_choices: {choices}");
+        }
+        text.AppendLine($"- Linuwu-Sense: {(nodes.SenseRoot != null ? "present" : "absent")}");
+        text.AppendLine();
+
+        text.AppendLine("## hwmon");
+        text.AppendLine();
+        if (nodes.Hwmon.Count == 0)
+        {
+            text.AppendLine("- none");
+        }
+        else
+        {
+            foreach (var device in nodes.Hwmon)
+            {
+                text.AppendLine(
+                    $"- {Clean(device.Name)}: {device.TemperaturesC.Count} temperature(s), {device.FanRpms.Count} fan(s)");
+            }
+        }
+        text.AppendLine();
+
+        text.AppendLine("## sysfs attributes");
+        text.AppendLine();
+        AppendNode(text, "platform_profile", nodes.PlatformProfile);
+        AppendNode(text, "fan_speed", nodes.FanSpeed);
+        AppendNode(text, "backlight_timeout", nodes.BacklightTimeout);
+        AppendNode(text, "battery_limiter", nodes.BatteryLimiter);
+        AppendNode(text, "charge_control_end_threshold", nodes.ChargeThreshold);
+        AppendNode(text, "lcd_override", nodes.LcdOverride);
+        AppendNode(text, "cool_boost", nodes.CoolBoost);
+        AppendNode(text, "dgpu_mode", nodes.DgpuMode);
+        AppendNode(text, "per_zone_mode", nodes.PerZoneMode);
+        AppendNode(text, "four_zone_mode", nodes.FourZoneMode);
+        text.AppendLine();
+
+        text.AppendLine("## Capabilities");
+        text.AppendLine();
+        AppendCapability(text, "fan control", hardware.FanControl);
+        AppendCapability(text, "operating mode", hardware.OperatingModeControl);
+        AppendCapability(text, "MUX switch", hardware.MuxSwitch);
+        AppendCapability(text, "battery charge limit", hardware.BatteryChargeLimit);
+        AppendCapability(text, "keyboard lighting", hardware.KeyboardLighting);
+        AppendCapability(text, "backlight timeout", hardware.BacklightTimeout);
+        AppendCapability(text, "CoolBoost", hardware.CoolBoost);
+        AppendCapability(text, "LCD overdrive", hardware.LcdOverdrive);
+        AppendCapability(text, "WinKey lock", hardware.WinKeyLock);
+        text.AppendLine();
+
+        text.AppendLine("## Model profile");
+        text.AppendLine();
+        text.AppendLine($"- Matched: {Clean(capabilities.Profile.Id)}");
+        text.AppendLine($"- Model codes: {Clean(string.Join(", ", capabilities.Profile.ModelCodes))}");
+        text.AppendLine($"- CPU fan ceiling: {capabilities.Profile.MaxCpuFanRpm} RPM");
+        text.AppendLine($"- GPU fan ceiling: {capabilities.Profile.MaxGpuFanRpm} RPM");
+        text.AppendLine();
+
+        text.AppendLine("## Probe notes");
+        text.AppendLine();
+        if (capabilities.Notes.Count == 0)
+        {
+            text.AppendLine("- none");
+        }
+        else
+        {
+            foreach (var note in capabilities.Notes) text.AppendLine($"- {Clean(note)}");
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Removes anything that identifies a person or a specific unit: home directories and any <c>serial:</c>,
+    /// <c>uuid:</c> or <c>hostname:</c> pair that reached the text through a note.
+    /// </summary>
+    public static string Redact(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+
+        var redacted = HomePath.Replace(value, match => match.Groups["root"].Value + "/<redacted>");
+        redacted = UnitIdentifier.Replace(redacted, match => match.Groups[1].Value + ": <redacted>");
+        return redacted;
+    }
+
+    /// <summary>One line of the report: redacted, and with newlines flattened so a note cannot break the list.</summary>
+    private static string Clean(string? value) =>
+        Redact(value).Replace("\r", " ").Replace("\n", " ").Trim();
+
+    private static void AppendNode(StringBuilder text, string name, string? path) =>
+        text.AppendLine($"- {name}: {(path != null ? "present" : "absent")}");
+
+    private static void AppendCapability(StringBuilder text, string name, bool supported) =>
+        text.AppendLine($"- {name}: {(supported ? "yes" : "no")}");
+
+    private static string AppVersion()
+    {
+        var version = typeof(LinuxHardwareReport).Assembly.GetName().Version;
+        return version == null ? "unknown" : $"{version.Major}.{version.Minor}.{version.Build}";
+    }
+}

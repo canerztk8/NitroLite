@@ -11,10 +11,18 @@ namespace NitroLite.Desktop.Views;
 /// The shell window: header, three tabs, status line, and the telemetry timer.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The one-second loop lives here rather than in <see cref="MainViewModel"/> because the view model deliberately has no
 /// Avalonia types in it — that is what lets it be constructed and asserted on in a unit test with no display attached.
-/// The timer stops when the window closes, so a closed window stops reading <c>/sys</c> instead of polling a machine
-/// nobody is looking at.
+/// The timer stops when the window is really closed, so a closed window stops reading <c>/sys</c> instead of polling a
+/// machine nobody is looking at.
+/// </para>
+/// <para>
+/// Closing the window hides it instead of ending the process. That is what keeps a custom fan curve running while the
+/// user is in a game: the curve is driven by the telemetry timer, and a timer that stops on close would stop exactly
+/// when the machine gets hot. The process ends only through the tray's "Temiz Çıkış", which hands the fans back to the
+/// firmware first and then sets <see cref="AllowClose"/>.
+/// </para>
 /// </remarks>
 public partial class MainWindow : Window
 {
@@ -45,7 +53,23 @@ public partial class MainWindow : Window
             _timer.Start();
         };
 
+        Closing += OnClosing;
         Closed += (_, _) => _timer.Stop();
+    }
+
+    /// <summary>
+    /// Set by the clean-exit path once the fans have been handed back. Until then a close request only hides the
+    /// window, which is what keeps the background work alive.
+    /// </summary>
+    public bool AllowClose { get; set; }
+
+    private void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (AllowClose) return;
+
+        e.Cancel = true;
+        Hide();
+        _viewModel?.NotifyHiddenToTray();
     }
 
     private async Task TickAsync()
