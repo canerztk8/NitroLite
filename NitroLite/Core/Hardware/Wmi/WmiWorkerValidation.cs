@@ -80,4 +80,17 @@ public static class WmiWorkerValidation
         mode = BatteryChargeMode.Optimized80;
         return false;
     }
+
+    /// <summary>
+    /// True when the value is a usable keyboard zone mask: at least one zone, and no bit outside the four zones.
+    /// <para>
+    /// Zero is rejected rather than treated as "all zones". The firmware answers <c>gmOutput = 0x01</c> to a mask of
+    /// zero and applies nothing, so accepting it here would turn a caller's mistake into a silent no-op that looks
+    /// like a successful write.
+    /// </para>
+    /// </summary>
+    public static bool IsValidLedZoneMask(int mask) => mask is >= 1 and <= AcerWmiProtocol.LedZoneAll;
+
+    /// <summary>True when the value fits in one colour channel.</summary>
+    public static bool IsValidColorChannel(int value) => value is >= 0 and <= 255;
 }

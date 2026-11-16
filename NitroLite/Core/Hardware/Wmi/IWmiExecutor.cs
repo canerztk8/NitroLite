@@ -90,4 +90,17 @@ public interface IWmiExecutor : IDisposable
 
     /// <summary>Sets the battery charge limit. Reports not-supported when WMID_GUID5 is absent.</summary>
     WmiOperationResult SetBatteryLimit(BatteryChargeMode mode);
+
+    /// <summary>
+    /// Reads the keyboard backlight: brightness, the colour the firmware reports, and the raw 15-byte structure from
+    /// <c>GetGamingKBBacklight</c>. The raw bytes are included because the getter only ever reflects zone 1, so a
+    /// caller comparing a four-zone write needs to see what the firmware actually stored.
+    /// </summary>
+    WmiOperationResult GetKeyboardBacklight();
+
+    /// <summary>
+    /// Writes one colour to the zones named by <paramref name="zoneMask"/>. The mask must be non-zero: the firmware
+    /// rejects a write with no zone selected, which is why the four-zone picker never worked before.
+    /// </summary>
+    WmiOperationResult SetKeyboardBacklight(int zoneMask, int red, int green, int blue);
 }

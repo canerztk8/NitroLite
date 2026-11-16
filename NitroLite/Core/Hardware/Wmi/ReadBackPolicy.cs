@@ -74,6 +74,9 @@ public sealed class ReadBackPolicy
     /// <summary>Battery charge limit through WMID_GUID5.</summary>
     public const string BatteryLimit = "wmi.batteryLimit";
 
+    /// <summary>Keyboard backlight colour through <c>SetGamingRgbKb</c>.</summary>
+    public const string KeyboardLighting = "wmi.keyboardLighting";
+
     private readonly AppSettings _settings;
     private readonly Func<TimeSpan, Task> _delay;
 

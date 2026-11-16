@@ -15,10 +15,11 @@ namespace NitroLite.Core.Hardware.Wmi;
 /// is told the write worked.
 /// </para>
 /// <para>
-/// Keyboard lighting and the backlight timeout are not implemented here. The gaming class does expose
-/// <c>SetGamingRgbKb</c>, but its packet layout differs per chassis and getting it wrong writes arbitrary bytes into
-/// the keyboard controller. That work belongs with the OpenRGB client, and until then those two capabilities stay on
-/// the Acer service path.
+/// Keyboard lighting is implemented for colour only. <c>SetGamingRgbKb</c> takes a packed colour plus a zone mask and
+/// was verified on an AN16-41: mask <c>0x00</c> is rejected with <c>gmOutput = 0x01</c>, masks <c>0x01</c> and
+/// <c>0x0F</c> apply the colour. Brightness and the 30-second backlight timeout are not writable on this path —
+/// <c>SetGamingKBBacklight</c>, the only method that carries brightness, rejects every payload tried — so those two
+/// stay on the Acer service path.
 /// </para>
 /// </summary>
 public sealed class WmiHardwareController : IHardwareController
@@ -106,7 +107,7 @@ public sealed class WmiHardwareController : IHardwareController
             OperatingModeControl = ReadBool(data, "operatingMode"),
             MuxSwitch = ReadBool(data, "muxSwitch"),
             BatteryChargeLimit = ReadBool(data, "batteryLimit"),
-            KeyboardLighting = false,
+            KeyboardLighting = ReadBool(data, "keyboardLighting"),
             BacklightTimeout = false
         };
     }
@@ -115,8 +116,17 @@ public sealed class WmiHardwareController : IHardwareController
 
     /// <summary>
     /// One sample from <c>GetGamingSysInfo</c>. Temperatures come straight out of the raw bytes at the offsets the
-    /// matched profile declares. Fan speeds do not: the firmware reports a percentage, not an RPM, so the RPM shown
-    /// is derived from the profile's ceiling and is an estimate rather than a measurement.
+    /// matched profile declares — but only when the profile says the machine actually carries live sensors there.
+    /// <para>
+    /// On an AN16-41 it does not. <c>GetGamingSysInfo</c> answers the same bytes across runs minutes apart while the
+    /// CPU temperature moves and the fan speed changes, so those bytes are static configuration, not a sensor page.
+    /// Decoding them would print a plausible-looking number that is not a temperature, which is worse than printing
+    /// nothing: the UI renders 0 as "-- °C".
+    /// </para>
+    /// <para>
+    /// Fan speeds are always derived from the percentage the firmware reports, never measured, so
+    /// <see cref="MonitorData.IsFanRpmMeasured"/> stays false and the stall watchdog keeps its hands off them.
+    /// </para>
     /// </summary>
     public async Task<MonitorData?> GetMonitorDataAsync()
     {
@@ -129,9 +139,9 @@ public sealed class WmiHardwareController : IHardwareController
 
         return new MonitorData
         {
-            CpuTemperature = AcerWmiProtocol.ByteAt(bytes, layout.CpuTempByte) ?? 0,
-            GpuTemperature = AcerWmiProtocol.ByteAt(bytes, layout.GpuTempByte) ?? 0,
-            SysTemperature = AcerWmiProtocol.ByteAt(bytes, layout.Sys1TempByte) ?? 0,
+            CpuTemperature = layout.Supported ? AcerWmiProtocol.ByteAt(bytes, layout.CpuTempByte) ?? 0 : 0,
+            GpuTemperature = layout.Supported ? AcerWmiProtocol.ByteAt(bytes, layout.GpuTempByte) ?? 0 : 0,
+            SysTemperature = layout.Supported ? AcerWmiProtocol.ByteAt(bytes, layout.Sys1TempByte) ?? 0 : 0,
             CpuFanSpeed = DeriveRpm(ReadInt(data, "cpuFanPercent") ?? 0, snapshot?.MaxCpuFanRpm ?? 0),
             GpuFanSpeed = DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, snapshot?.MaxGpuFanRpm ?? 0),
 
@@ -274,14 +284,137 @@ public sealed class WmiHardwareController : IHardwareController
         ? 50
         : Math.Clamp(percent, AcerWmiProtocol.MinFanPercent, AcerWmiProtocol.MaxFanPercent);
 
-    // ---------------------------------------------------------------- keyboard lighting (not on this backend)
+    // ---------------------------------------------------------------- keyboard lighting
 
-    public Task<LightingConfig?> GetLightingConfigAsync() => Task.FromResult<LightingConfig?>(null);
+    /// <summary>
+    /// The part of the keyboard state the firmware reports back: the colour of zone 1, packed as <c>0xRRGGBB</c>.
+    /// <para>
+    /// Brightness is deliberately not part of it. <c>SetGamingRgbKb</c> carries a colour and a zone mask but no
+    /// brightness, and the only method that does carry brightness — <c>SetGamingKBBacklight</c> — answers
+    /// <c>gmOutput = 0x01</c> and changes nothing on an AN16-41. Comparing a brightness the backend cannot write
+    /// would make every read-back fail and disable the capability for a fault that is not there.
+    /// </para>
+    /// </summary>
+    private readonly record struct LightingState(int Rgb);
 
-    public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors) =>
-        Task.FromResult(false);
+    public async Task<LightingConfig?> GetLightingConfigAsync()
+    {
+        var response = await SendAsync(WmiWorkerCommand.GetKeyboardBacklight).ConfigureAwait(false);
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
 
-    public Task<bool> TurnOffLightingAsync() => Task.FromResult(false);
+        var red = (byte)(ReadInt(data, "red") ?? 0);
+        var green = (byte)(ReadInt(data, "green") ?? 0);
+        var blue = (byte)(ReadInt(data, "blue") ?? 0);
+        var percent = ReadInt(data, "brightness") ?? 0;
+
+        var color = AcerWmiProtocol.FormatHexColor(red, green, blue);
+        var level = AcerWmiProtocol.BrightnessPercentToLevel(percent);
+        var isOff = level == 0 || (red == 0 && green == 0 && blue == 0);
+
+        return new LightingConfig
+        {
+            Effect = isOff ? "OFF" : "STATIC",
+            Brightness = isOff ? 0 : Math.Max(level, 1),
+            Speed = 3,
+            Direction = 1,
+            Color = color,
+            LEDs = new List<string> { color, color, color, color }
+        };
+    }
+
+    /// <summary>
+    /// Writes the keyboard colour, one zone at a time.
+    /// <para>
+    /// The firmware takes one colour per call plus a zone mask, so four different zone colours are four writes. A
+    /// mask of zero is rejected by the EC, which is why the four-zone picker never worked through the service path:
+    /// the colour was sent with no zone to put it in.
+    /// </para>
+    /// <para>
+    /// Effects (wave, breathing, ripple) are an animation the Acer service runs; the firmware only stores a static
+    /// colour. A caller asking for one gets that colour held steady rather than a control that does nothing.
+    /// Brightness is not writable on this path — see <see cref="LightingState"/> — so a level of zero means "black"
+    /// and any other level means "on".
+    /// </para>
+    /// </summary>
+    public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors)
+    {
+        var requested = (effect ?? "STATIC").Trim().ToUpperInvariant();
+        var isOff = requested == "OFF" || brightness <= 0;
+
+        var zones = new (byte Red, byte Green, byte Blue)[AcerWmiProtocol.LedZoneCount];
+        if (!isOff)
+        {
+            for (int i = 0; i < zones.Length; i++)
+            {
+                var source = zoneColors != null && i < zoneColors.Length ? zoneColors[i] : primaryColor;
+                if (!AcerWmiProtocol.TryParseHexColor(source, out var red, out var green, out var blue) &&
+                    !AcerWmiProtocol.TryParseHexColor(primaryColor, out red, out green, out blue))
+                {
+                    red = green = blue = 0;
+                }
+
+                zones[i] = (red, green, blue);
+            }
+        }
+
+        var target = new LightingState(PackRgb(zones[0]));
+
+        var result = await ApplyAsync(
+            ReadBackPolicy.KeyboardLighting,
+            write: async () => await WriteZonesAsync(zones).ConfigureAwait(false),
+            readBack: ReadLightingStateAsync,
+            matches: observed => observed.Rgb == target.Rgb).ConfigureAwait(false);
+
+        return result.Applied;
+    }
+
+    public Task<bool> TurnOffLightingAsync() =>
+        SetLightingAsync("OFF", 0, 1, 1, "#000000", new[] { "#000000", "#000000", "#000000", "#000000" });
+
+    /// <summary>
+    /// Sends one write per zone. Zones that share a colour are still written separately: the mask is what selects
+    /// them, and a combined mask would overwrite a neighbour that was set a moment ago.
+    /// </summary>
+    private async Task<bool> WriteZonesAsync((byte Red, byte Green, byte Blue)[] zones)
+    {
+        for (int i = 0; i < zones.Length; i++)
+        {
+            var mask = (byte)(AcerWmiProtocol.LedZone1 << i);
+            var response = await SendAsync(WmiWorkerCommand.SetKeyboardBacklight, new JsonObject
+            {
+                ["zoneMask"] = mask,
+                ["red"] = zones[i].Red,
+                ["green"] = zones[i].Green,
+                ["blue"] = zones[i].Blue
+            }).ConfigureAwait(false);
+
+            if (response is not { Ok: true }) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>Reads the zone-1 colour the firmware reports, for the read-back comparison.</summary>
+    private async Task<LightingState?> ReadLightingStateAsync()
+    {
+        var response = await SendAsync(WmiWorkerCommand.GetKeyboardBacklight).ConfigureAwait(false);
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
+
+        // The packed getter is preferred: it is the same field the write sets, with no byte-offset guesswork.
+        if (TryReadUlong(data, "rgbRaw", out var packed))
+        {
+            var (red, green, blue, _) = AcerWmiProtocol.DecodeRgbKb(packed);
+            return new LightingState(PackRgb((red, green, blue)));
+        }
+
+        var r = (byte)(ReadInt(data, "red") ?? 0);
+        var g = (byte)(ReadInt(data, "green") ?? 0);
+        var b = (byte)(ReadInt(data, "blue") ?? 0);
+        return new LightingState(PackRgb((r, g, b)));
+    }
+
+    private static int PackRgb((byte Red, byte Green, byte Blue) color) =>
+        (color.Red << 16) | (color.Green << 8) | color.Blue;
 
     public Task<bool?> GetBacklightTimeoutAsync() => Task.FromResult<bool?>(null);
 

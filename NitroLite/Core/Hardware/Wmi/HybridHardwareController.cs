@@ -28,8 +28,10 @@ public sealed record ReconciliationResult(bool Switched, bool Reapplied, string?
 /// the socket, so "the port accepts a connection" is not evidence that anything is listening.
 /// </para>
 /// <para>
-/// Keyboard lighting and the backlight timeout always go to the service. The direct-WMI backend does not implement
-/// them, and routing them to a backend that would answer "no" would turn a working control into a dead one.
+/// Keyboard lighting follows the same rule. The service path supports effects, speed, direction and brightness; the
+/// direct-WMI path writes a static colour per zone and nothing else. Routing lighting to the service whenever it
+/// answers keeps the richer feature set where it works, and still gives a machine with no Acer software a colour
+/// control instead of a dead one.
 /// </para>
 /// <para>
 /// A handover in the other direction needs care. While the app was on WMI it wrote the EC directly; if the user then
@@ -308,15 +310,20 @@ public sealed class HybridHardwareController : IHardwareController
         await (await ResolveAsync().ConfigureAwait(false))
             .SetFanModeAsync(mode, cpuPercent, gpuPercent).ConfigureAwait(false);
 
-    // Keyboard lighting and the backlight timeout stay on the service path: the direct-WMI backend does not
-    // implement them, and a control that silently stops working is worse than one that reports the service is down.
+    // Keyboard lighting follows the same arbitration as everything else: the service when it answers, direct WMI
+    // when it does not. The WMI path writes colour only — no effects, no brightness — so a machine that still has
+    // Acer's software keeps the full feature set, and a machine without it gets a working colour control instead of
+    // a dead one. The 30-second backlight timeout has no WMI equivalent and stays on the service path.
 
-    public Task<LightingConfig?> GetLightingConfigAsync() => _agent.GetLightingConfigAsync();
+    public async Task<LightingConfig?> GetLightingConfigAsync() =>
+        await (await ResolveAsync().ConfigureAwait(false)).GetLightingConfigAsync().ConfigureAwait(false);
 
-    public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors) =>
-        _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors);
+    public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors) =>
+        await (await ResolveAsync().ConfigureAwait(false))
+            .SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors).ConfigureAwait(false);
 
-    public Task<bool> TurnOffLightingAsync() => _agent.TurnOffLightingAsync();
+    public async Task<bool> TurnOffLightingAsync() =>
+        await (await ResolveAsync().ConfigureAwait(false)).TurnOffLightingAsync().ConfigureAwait(false);
 
     public Task<bool?> GetBacklightTimeoutAsync() => _agent.GetBacklightTimeoutAsync();
 

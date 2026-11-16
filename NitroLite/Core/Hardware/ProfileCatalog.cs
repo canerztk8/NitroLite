@@ -320,7 +320,7 @@ public sealed class ProfileCatalog
     {
         var unknown = node.Select(p => p.Key)
             .Where(k => k is not ("cpuTempByte" or "gpuTempByte" or "sys1TempByte" or "cpuFanRpmWord"
-                or "gpuFanRpmWord" or "rpmScale" or "verified"))
+                or "gpuFanRpmWord" or "rpmScale" or "verified" or "supported"))
             .ToList();
         if (unknown.Count > 0)
         {
@@ -336,7 +336,8 @@ public sealed class ProfileCatalog
             CpuFanRpmWord = ReadInt(node, "cpuFanRpmWord") ?? 2,
             GpuFanRpmWord = ReadInt(node, "gpuFanRpmWord") ?? 3,
             RpmScale = ReadInt(node, "rpmScale") ?? 100,
-            Verified = ReadBool(node, "verified") ?? false
+            Verified = ReadBool(node, "verified") ?? false,
+            Supported = ReadBool(node, "supported") ?? true
         };
 
         return layout.IsValid ? layout : null;

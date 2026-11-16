@@ -540,6 +540,30 @@ public class WmiWorkerTests
                 : WmiOperationResult.NotSupported("WMID_GUID5 is not registered on this machine");
         }
 
+        public int GetKeyboardBacklightCalls { get; private set; }
+        public int SetKeyboardBacklightCalls { get; private set; }
+        public (int Mask, int Red, int Green, int Blue) LastKeyboardWrite { get; private set; }
+
+        public WmiOperationResult GetKeyboardBacklight()
+        {
+            GetKeyboardBacklightCalls++;
+            return WmiOperationResult.Success(new JsonObject
+            {
+                ["brightness"] = 100,
+                ["red"] = 0,
+                ["green"] = 255,
+                ["blue"] = 0,
+                ["rgbRaw"] = 0x0000000000FF0000UL
+            });
+        }
+
+        public WmiOperationResult SetKeyboardBacklight(int zoneMask, int red, int green, int blue)
+        {
+            SetKeyboardBacklightCalls++;
+            LastKeyboardWrite = (zoneMask, red, green, blue);
+            return WmiOperationResult.Success(new JsonObject { ["zoneMask"] = zoneMask });
+        }
+
         public void Dispose() { }
     }
 }

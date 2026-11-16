@@ -224,6 +224,30 @@ public sealed class WmiWorkerServer : IDisposable
                     return WmiWorkerResponse.FromResult(_executor.SetBatteryLimit(mode));
                 }
 
+                case WmiWorkerCommand.GetKeyboardBacklight:
+                    return WmiWorkerResponse.FromResult(_executor.GetKeyboardBacklight());
+
+                case WmiWorkerCommand.SetKeyboardBacklight:
+                {
+                    if (!TryReadInt(request.Args, "zoneMask", out var zoneMask) ||
+                        !WmiWorkerValidation.IsValidLedZoneMask(zoneMask))
+                        return Invalid($"zoneMask {zoneMask} is not a 1..15 zone bitmask");
+
+                    if (!TryReadInt(request.Args, "red", out var red) ||
+                        !WmiWorkerValidation.IsValidColorChannel(red))
+                        return Invalid($"red {red} is outside 0..255");
+
+                    if (!TryReadInt(request.Args, "green", out var green) ||
+                        !WmiWorkerValidation.IsValidColorChannel(green))
+                        return Invalid($"green {green} is outside 0..255");
+
+                    if (!TryReadInt(request.Args, "blue", out var blue) ||
+                        !WmiWorkerValidation.IsValidColorChannel(blue))
+                        return Invalid($"blue {blue} is outside 0..255");
+
+                    return WmiWorkerResponse.FromResult(_executor.SetKeyboardBacklight(zoneMask, red, green, blue));
+                }
+
                 default:
                     return Invalid($"unknown command {(int)request.Command}");
             }

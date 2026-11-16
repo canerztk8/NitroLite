@@ -57,6 +57,29 @@ public static class AcerWmiProtocol
     /// <summary>Misc index for the platform (power) profile.</summary>
     public const byte MiscIndexPlatformProfile = 0x0B;
 
+    // ---------------------------------------------------------------- keyboard RGB (Get / SetGamingRgbKb)
+
+    /// <summary>Zone mask bit for keyboard zone 1.</summary>
+    public const byte LedZone1 = 0x01;
+
+    /// <summary>Zone mask bit for keyboard zone 2.</summary>
+    public const byte LedZone2 = 0x02;
+
+    /// <summary>Zone mask bit for keyboard zone 3.</summary>
+    public const byte LedZone3 = 0x04;
+
+    /// <summary>Zone mask bit for keyboard zone 4.</summary>
+    public const byte LedZone4 = 0x08;
+
+    /// <summary>Every zone at once.</summary>
+    public const byte LedZoneAll = LedZone1 | LedZone2 | LedZone3 | LedZone4;
+
+    /// <summary>How many independently addressable keyboard zones the firmware exposes.</summary>
+    public const int LedZoneCount = 4;
+
+    /// <summary>Highest brightness level the app's lighting model uses (0..9).</summary>
+    public const int MaxBrightnessLevel = 9;
+
     /// <summary>Status byte the firmware returns when it accepted the call.</summary>
     public const byte StatusOk = 0x00;
 
@@ -153,6 +176,63 @@ public static class AcerWmiProtocol
         if (raw < 0 || raw > (int)GpuOperatingMode.Automatic) return null;
         return (GpuOperatingMode)raw;
     }
+
+    // ---------------------------------------------------------------- keyboard RGB
+
+    /// <summary>
+    /// <c>(b &lt;&lt; 24) | (g &lt;&lt; 16) | (r &lt;&lt; 8) | zoneMask</c>.
+    /// <para>
+    /// The low byte is the zone mask, and it must not be zero. Measured on an AN16-41: a write with mask
+    /// <c>0x00</c> answers <c>gmOutput = 0x00000001</c> and changes nothing, while <c>0x01</c> and <c>0x0F</c> both
+    /// answer <c>0x00000000</c> and apply the colour. That is the whole reason the four-zone picker never worked
+    /// through the service path: the colour was sent without a zone to put it in.
+    /// </para>
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The mask is zero or outside the four zone bits.</exception>
+    public static ulong EncodeRgbKb(byte red, byte green, byte blue, byte zoneMask)
+    {
+        if (zoneMask == 0 || (zoneMask & ~LedZoneAll) != 0)
+            throw new ArgumentOutOfRangeException(nameof(zoneMask), zoneMask, "zone mask must be 1..15");
+
+        return ((ulong)blue << 24) | ((ulong)green << 16) | ((ulong)red << 8) | zoneMask;
+    }
+
+    /// <summary>Splits a <c>GetGamingRgbKb</c> answer into its colour and zone mask.</summary>
+    public static (byte Red, byte Green, byte Blue, byte ZoneMask) DecodeRgbKb(ulong output) =>
+        ((byte)((output >> 8) & 0xFF),
+         (byte)((output >> 16) & 0xFF),
+         (byte)((output >> 24) & 0xFF),
+         (byte)(output & 0xFF));
+
+    /// <summary>Parses <c>#RRGGBB</c> (the app's colour format) into its three channels.</summary>
+    public static bool TryParseHexColor(string? color, out byte red, out byte green, out byte blue)
+    {
+        red = green = blue = 0;
+        if (string.IsNullOrWhiteSpace(color)) return false;
+
+        var text = color.Trim();
+        if (text.StartsWith('#')) text = text[1..];
+        if (text.Length != 6) return false;
+
+        if (!byte.TryParse(text[..2], System.Globalization.NumberStyles.HexNumber, null, out red)) return false;
+        if (!byte.TryParse(text[2..4], System.Globalization.NumberStyles.HexNumber, null, out green)) return false;
+        if (!byte.TryParse(text[4..], System.Globalization.NumberStyles.HexNumber, null, out blue)) return false;
+        return true;
+    }
+
+    /// <summary>Formats three channels as <c>#RRGGBB</c>, the app's colour format.</summary>
+    public static string FormatHexColor(byte red, byte green, byte blue) => $"#{red:X2}{green:X2}{blue:X2}";
+
+    /// <summary>
+    /// The app's 0..9 brightness level as the 0..100 percentage the firmware stores. The mapping round-trips:
+    /// <c>BrightnessPercentToLevel(BrightnessLevelToPercent(n)) == n</c> for every level.
+    /// </summary>
+    public static int BrightnessLevelToPercent(int level) =>
+        Math.Clamp(level, 0, MaxBrightnessLevel) * 100 / MaxBrightnessLevel;
+
+    /// <summary>The firmware's 0..100 percentage as the app's 0..9 brightness level.</summary>
+    public static int BrightnessPercentToLevel(int percent) =>
+        (int)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * MaxBrightnessLevel);
 
     // ---------------------------------------------------------------- raw dump
 

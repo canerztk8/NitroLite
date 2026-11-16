@@ -1,14 +1,5 @@
 {
   "schemaVersion": 1,
-  "defaultSensorLayout": {
-    "cpuTempByte": 0,
-    "gpuTempByte": 1,
-    "sys1TempByte": 2,
-    "cpuFanRpmWord": 2,
-    "gpuFanRpmWord": 3,
-    "rpmScale": 100,
-    "verified": false
-  },
   "profiles": [
     {
       "id": "nitro-16-an16-41",
@@ -16,11 +7,12 @@
         "modelCodes": [ "AN16-41" ],
         "familyPatterns": [ "Nitro 16" ]
       },
+      "sensors": { "supported": false },
       "maxFanRpm": { "cpu": 6200, "gpu": 6000 },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Reference machine. AcerGamingFunction is registered as a dynamic class; instance access needs elevation."
+      "notes": "Reference machine. AcerGamingFunction is registered as a dynamic class; instance access needs elevation. GetGamingSysInfo returns static configuration here, not a sensor page: the same bytes came back across runs minutes apart while the CPU temperature moved and the fan speed changed, so no temperature is decoded from it. Keyboard colour is written through SetGamingRgbKb with a non-zero zone mask; SetGamingKBBacklight rejects every payload tried."
     },
     {
       "id": "nitro-17-an17-42",
@@ -85,9 +77,10 @@
     {
       "id": "acer-gaming-default",
       "match": { "anyAcer": true },
+      "sensors": { "supported": false },
       "maxFanRpm": { "cpu": 7000, "gpu": 7000 },
       "unsupportedMethods": [],
-      "notes": "Fallback for any Acer machine the table does not name. Deliberately permissive: a wrong ceiling only widens the plausibility bound, it never enables a feature."
+      "notes": "Fallback for any Acer machine the table does not name. Deliberately permissive: a wrong ceiling only widens the plausibility bound, it never enables a feature. No sensor offsets are claimed because none have been confirmed on a machine this table does not name."
     }
   ]
 }

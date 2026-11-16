@@ -28,7 +28,22 @@ public sealed record SensorLayout
     /// <summary>True only when the offsets were confirmed against a real read-back on this model.</summary>
     public bool Verified { get; init; }
 
-    public static SensorLayout Default { get; } = new();
+    /// <summary>
+    /// False when <c>GetGamingSysInfo</c> carries no live sensor data on this model, so the offsets above describe
+    /// nothing and must not be decoded.
+    /// <para>
+    /// An AN16-41 answers the same bytes across runs minutes apart while the CPU temperature moves and the fan speed
+    /// changes: that is static configuration, not a sensor page. Decoding it would print a plausible-looking number
+    /// that is not a temperature. The UI renders 0 as "-- °C", which is the honest answer.
+    /// </para>
+    /// </summary>
+    public bool Supported { get; init; } = true;
+
+    /// <summary>
+    /// The layout used when nothing better is known. <see cref="Supported"/> is false because no shipped offset has
+    /// ever been confirmed against hardware; a profile that has real offsets sets it back to true.
+    /// </summary>
+    public static SensorLayout Default { get; } = new() { Supported = false, Verified = false };
 
     /// <summary>
     /// A layout is usable when every offset lands inside the 64-bit answer and the scale cannot divide by zero.

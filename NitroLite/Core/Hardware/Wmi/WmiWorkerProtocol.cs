@@ -43,7 +43,13 @@ public enum WmiWorkerCommand
     SetMuxMode = 7,
 
     /// <summary>Battery charge limit, when WMID_GUID5 exists.</summary>
-    SetBatteryLimit = 8
+    SetBatteryLimit = 8,
+
+    /// <summary>Keyboard backlight state: brightness, colour and the raw 15-byte structure.</summary>
+    GetKeyboardBacklight = 9,
+
+    /// <summary>One colour written to the zones named by a non-zero mask.</summary>
+    SetKeyboardBacklight = 10
 }
 
 /// <summary>

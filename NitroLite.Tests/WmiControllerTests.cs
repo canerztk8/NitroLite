@@ -394,7 +394,7 @@ public class WmiControllerTests
     }
 
     [Fact]
-    public async Task Hybrid_KeyboardLighting_AlwaysUsesTheAgent()
+    public async Task Hybrid_KeyboardLighting_FollowsTheSameArbitrationAsTheRest()
     {
         var agent = new RecordingController("AASSvc");
         var wmi = new RecordingController("WMI");
@@ -408,9 +408,29 @@ public class WmiControllerTests
         await hybrid.TurnOffLightingAsync();
         await hybrid.SetBacklightTimeoutAsync(true);
 
-        Assert.Equal(1, agent.SetLightingCalls);
-        Assert.Equal(1, agent.TurnOffLightingCalls);
+        // The service is down, so colour writes go to the WMI backend, which can drive the zones directly.
+        Assert.Equal(1, wmi.SetLightingCalls);
+        Assert.Equal(1, wmi.TurnOffLightingCalls);
+        Assert.Equal(0, agent.SetLightingCalls);
+
+        // The 30-second backlight timeout has no WMI equivalent, so it stays on the agent.
         Assert.Equal(1, agent.SetBacklightTimeoutCalls);
+    }
+
+    [Fact]
+    public async Task Hybrid_KeyboardLighting_UsesTheAgentWhenTheServiceIsHealthy()
+    {
+        var agent = new RecordingController("AASSvc");
+        var wmi = new RecordingController("WMI");
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => wmi,
+            useDirectWmi: () => true,
+            serviceHealthy: () => Task.FromResult(true));
+
+        await hybrid.SetLightingAsync("STATIC", 80, 50, 0, "#FF0000", null);
+
+        Assert.Equal(1, agent.SetLightingCalls);
         Assert.Equal(0, wmi.SetLightingCalls);
     }
 

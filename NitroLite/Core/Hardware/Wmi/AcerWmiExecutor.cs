@@ -65,10 +65,19 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             var registry = AcerRegistrySnapshot.Read();
 
             var methods = new JsonArray();
+            var methodNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (gaming != null)
             {
-                foreach (var name in MethodNames(gaming)) methods.Add(name);
+                foreach (var name in MethodNames(gaming))
+                {
+                    methods.Add(name);
+                    methodNames.Add(name);
+                }
             }
+
+            // The keyboard is only writable when the colour setter is actually on the class. A machine that exposes
+            // the fan methods but no SetGamingRgbKb must not be offered a lighting control that cannot work.
+            bool keyboardLighting = methodNames.Contains("SetGamingRgbKb");
 
             return WmiOperationResult.Success(new JsonObject
             {
@@ -79,6 +88,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 ["operatingMode"] = gaming != null,
                 ["muxSwitch"] = registry.DgpuModeCapability is > 0,
                 ["batteryLimit"] = battery != null,
+                ["keyboardLighting"] = keyboardLighting,
                 ["dgpuModeCapability"] = registry.DgpuModeCapability,
                 ["keyboardArea"] = registry.KeyboardArea
             });
@@ -373,6 +383,108 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
     }
 
+    // ---------------------------------------------------------------- keyboard backlight
+
+    /// <summary>
+    /// Reads the keyboard backlight. <c>GetGamingKBBacklight(0x01)</c> answers a 15-byte structure whose byte 2 is
+    /// brightness (0..100) and bytes 5..7 are the colour; <c>GetGamingRgbKb(0x01)</c> answers the same colour packed
+    /// into a 64-bit integer. Both are reported because the packed form is what a write is compared against.
+    /// </summary>
+    public WmiOperationResult GetKeyboardBacklight()
+    {
+        lock (_gate)
+        {
+            var gaming = EnsureGaming();
+            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
+
+            try
+            {
+                var data = new JsonObject();
+
+                var structure = InvokeArrayGetter(gaming, "GetGamingKBBacklight", 1);
+                if (structure.HasValue)
+                {
+                    var bytes = new JsonArray();
+                    foreach (var b in structure.Value.Bytes) bytes.Add(b);
+                    data["rawBytes"] = bytes;
+                    data["status"] = structure.Value.Status;
+                    data["brightness"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 2) ?? 0;
+                    data["red"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 5) ?? 0;
+                    data["green"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 6) ?? 0;
+                    data["blue"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 7) ?? 0;
+                }
+
+                var packed = InvokeGetter(gaming, "GetGamingRgbKb", 1);
+                if (packed.HasValue)
+                {
+                    var (red, green, blue, mask) = AcerWmiProtocol.DecodeRgbKb(packed.Value);
+                    data["rgbRaw"] = packed.Value;
+                    data["rgbRed"] = red;
+                    data["rgbGreen"] = green;
+                    data["rgbBlue"] = blue;
+                    data["rgbZoneMask"] = mask;
+                }
+
+                if (!structure.HasValue && !packed.HasValue)
+                    return WmiOperationResult.NotSupported("this machine exposes no keyboard backlight getter");
+
+                return WmiOperationResult.Success(data);
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes one colour to the zones in <paramref name="zoneMask"/> through <c>SetGamingRgbKb</c>.
+    /// <para>
+    /// <c>SetGamingKBBacklight</c> is deliberately not used. It is declared with a 16-byte input while its getter
+    /// returns 15, and on an AN16-41 every payload tried — 15 bytes, 16 bytes, three different tail bytes — answered
+    /// <c>gmOutput = 0x01</c> and changed nothing. <c>SetGamingRgbKb</c> is the method that actually applies a colour.
+    /// </para>
+    /// </summary>
+    public WmiOperationResult SetKeyboardBacklight(int zoneMask, int red, int green, int blue)
+    {
+        if (!WmiWorkerValidation.IsValidLedZoneMask(zoneMask))
+            return WmiOperationResult.InvalidArgument($"zone mask {zoneMask} is not a 1..15 zone bitmask");
+        if (!WmiWorkerValidation.IsValidColorChannel(red))
+            return WmiOperationResult.InvalidArgument($"red {red} is outside 0..255");
+        if (!WmiWorkerValidation.IsValidColorChannel(green))
+            return WmiOperationResult.InvalidArgument($"green {green} is outside 0..255");
+        if (!WmiWorkerValidation.IsValidColorChannel(blue))
+            return WmiOperationResult.InvalidArgument($"blue {blue} is outside 0..255");
+
+        lock (_gate)
+        {
+            var gaming = EnsureGaming();
+            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
+
+            try
+            {
+                var input = AcerWmiProtocol.EncodeRgbKb((byte)red, (byte)green, (byte)blue, (byte)zoneMask);
+                var status = InvokeSetter(gaming, "SetGamingRgbKb", input);
+                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetGamingRgbKb returned no status");
+                if (status.Value != AcerWmiProtocol.StatusOk)
+                    return WmiOperationResult.StatusError($"SetGamingRgbKb status 0x{status.Value:X2}");
+
+                return WmiOperationResult.Success(new JsonObject
+                {
+                    ["input"] = input,
+                    ["zoneMask"] = zoneMask,
+                    ["red"] = red,
+                    ["green"] = green,
+                    ["blue"] = blue
+                });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- WMI plumbing
 
     /// <summary>
@@ -482,12 +594,47 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         return raw == null ? null : Convert.ToUInt32(raw, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// A getter whose answer is a byte array rather than a 64-bit integer. <c>GetGamingKBBacklight</c> is the only
+    /// one, and its status lives in a separate <c>gmReturn</c> byte instead of the low byte of the answer.
+    /// </summary>
+    private static (byte[] Bytes, byte Status)? InvokeArrayGetter(ManagementObject instance, string method, uint input)
+    {
+        using var inParams = instance.GetMethodParameters(method);
+        inParams["gmInput"] = input;
+        using var outParams = instance.InvokeMethod(method, inParams, null);
+        if (outParams?["gmOutput"] is not byte[] bytes) return null;
+
+        byte status = 0;
+        var rawStatus = outParams["gmReturn"];
+        if (rawStatus != null)
+        {
+            try { status = Convert.ToByte(rawStatus, CultureInfo.InvariantCulture); }
+            catch { status = 0; }
+        }
+
+        return (bytes, status);
+    }
+
+    /// <summary>
+    /// Reports one fan's percentage and status.
+    /// <para>
+    /// The percentage is only published when the status byte says the answer is valid. The EC answers status
+    /// <c>0x01</c> while a fan sits in auto mode with no setpoint — measured on an AN16-41, where
+    /// <c>GetGamingFanSpeed(0x04)</c> returned <c>0x0001</c> in one run and <c>0x2200</c> (34 %, status 0) in the
+    /// next. The value in a status-1 answer is not a speed, and publishing it would show a fan at 0 % that is
+    /// physically spinning.
+    /// </para>
+    /// </summary>
     private static void AppendFanSpeed(JsonObject data, ManagementObject gaming, string prefix, byte fanId)
     {
         var answer = InvokeGetter(gaming, "GetGamingFanSpeed", fanId);
         if (!answer.HasValue) return;
-        data[$"{prefix}FanPercent"] = AcerWmiProtocol.DecodeFanPercent(answer.Value);
-        data[$"{prefix}FanStatus"] = AcerWmiProtocol.DecodeStatus(answer.Value);
+
+        var status = AcerWmiProtocol.DecodeStatus(answer.Value);
+        data[$"{prefix}FanStatus"] = status;
+        if (status == AcerWmiProtocol.StatusOk)
+            data[$"{prefix}FanPercent"] = AcerWmiProtocol.DecodeFanPercent(answer.Value);
     }
 
     private static BatteryChargeMode? ReadBatteryLimit(ManagementObject battery)
