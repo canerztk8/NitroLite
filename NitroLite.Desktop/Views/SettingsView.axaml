@@ -107,6 +107,21 @@
         </StackPanel>
       </Border>
 
+      <!-- The sign-in entry. Only Windows supplies a mechanism, so the card hides itself everywhere else rather than
+           offering a switch that cannot work. -->
+      <Border Classes="card" IsVisible="{Binding AutoStartAvailable}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoStartOn}" />
+          </Grid>
+          <TextBlock Classes="caption" Text="{Binding Labels.AutoStartHint}" />
+          <TextBlock Classes="caption" Text="{Binding AutoStartStatus}"
+                     IsVisible="{Binding HasAutoStartStatus}" />
+        </StackPanel>
+      </Border>
+
       <!-- The udev banner only appears when a write actually failed for lack of permission, so a user who already
            installed the rule never sees it. -->
       <Border Classes="card" IsVisible="{Binding NeedsUdevRule}">

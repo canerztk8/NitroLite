@@ -32,7 +32,7 @@ namespace NitroLite.Linux;
 /// place.
 /// </para>
 /// </remarks>
-public sealed class LinuxSysfsHardwareController : IHardwareController
+public sealed class LinuxSysfsHardwareController : IHardwareController, IRescannableBackend
 {
     /// <summary>The message shown when a write was refused for lack of permission.</summary>
     public const string UdevHint =
@@ -112,6 +112,12 @@ public sealed class LinuxSysfsHardwareController : IHardwareController
 
     /// <summary>The udev hint, or null when no write has been refused for lack of permission.</summary>
     public string? PermissionHint => PermissionHintRaised ? UdevHint : null;
+
+    /// <summary>The probe result in the platform-neutral shape the shared window binds to.</summary>
+    IPlatformSnapshot IRescannableBackend.Snapshot => _caps;
+
+    /// <summary>Clears the read-back counters, so a rescan retries a capability that was switched off.</summary>
+    void IRescannableBackend.ResetReadBackCounters() => _readBack.ResetAll();
 
     public Task<bool> EnsureConnectedAsync() => Task.FromResult(IsAvailable);
 

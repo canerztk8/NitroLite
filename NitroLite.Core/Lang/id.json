@@ -1196,5 +1196,13 @@
   "Süreç adı gerekli.": "Nama proses wajib diisi.",
   "Yok / Desteklenmiyor": "Tidak ada / Tidak didukung",
   "acer-wmi (çekirdek modülü)": "acer-wmi (modul kernel)",
-  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense"
+  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense",
+  "Doğrudan WMI (yükseltilmiş yardımcı)": "WMI langsung (helper yang ditingkatkan)",
+  "Acer hizmeti (AASSvc)": "Layanan Acer (AASSvc)",
+  "Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.": "Pengisian berhenti pada 80 %; ini memperpanjang usia baterai.",
+  "Görev Zamanlayıcı ile UAC'siz otomatik başlatma": "Mulai otomatis tanpa UAC melalui Penjadwal Tugas",
+  "Oturum açılışında yükseltilmiş olarak, soru sorulmadan başlar.": "Dimulai dengan hak istimewa saat masuk, tanpa bertanya.",
+  "Otomatik başlatma açıldı.": "Mulai otomatis diaktifkan.",
+  "Otomatik başlatma kapatıldı.": "Mulai otomatis dinonaktifkan.",
+  "Otomatik başlatma değiştirilemedi.": "Mulai otomatis tidak dapat diubah."
 }

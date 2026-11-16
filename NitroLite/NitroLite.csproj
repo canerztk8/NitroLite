@@ -24,6 +24,10 @@
     <!-- Everything platform-independent: the hardware contract, the thermal and school-mode rules, the model table
          and the language catalogues. It targets plain net10.0 so a Linux front end can load the same assembly. -->
     <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
+
+    <!-- The Windows hardware and system services. They live in their own assembly so the Avalonia front end can use
+         them on Windows without referencing this WPF project, which is what makes one UI serve both platforms. -->
+    <ProjectReference Include="..\NitroLite.Windows\NitroLite.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>

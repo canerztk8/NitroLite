@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- net10.0-windows, not net10.0: this assembly is the Windows half of the hardware layer and it is allowed to
+         use the registry, System.Management and P/Invoke. It carries no WPF and no XAML, so the Avalonia front end can
+         reference it on Windows without dragging a second UI framework into the process. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NitroLite.Windows</RootNamespace>
+    <AssemblyName>NitroLite.Windows</AssemblyName>
+    <Version>1.2.5-f</Version>
+    <Authors>NitroLite Team</Authors>
+
+    <!-- The Linux CI restores NitroLite.Desktop, which multi-targets and therefore pulls this project in. Without this
+         the restore fails with NETSDK1100 before the net10.0 half is ever reached. It is a no-op on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The hardware contract, the settings file, the fan curve, the thermal rules and the language catalogues. -->
+    <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WMI: the Acer root\WMI classes, the SMBIOS identity and the battery class. -->
+    <PackageReference Include="System.Management" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The WPF front end still owns the pages, and the test suite drives both front ends. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NitroLite</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NitroLite.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

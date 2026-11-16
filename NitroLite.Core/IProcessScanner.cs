@@ -12,13 +12,18 @@ namespace NitroLite.Core;
 public readonly record struct RunningProcess(int Pid, string Name, string ExecutablePath)
 {
     /// <summary>The executable's file name without a directory, or the short name when the path is empty.</summary>
+    /// <remarks>
+    /// Both separators are honoured. The Linux scanner only ever produces <c>/</c>, but the Windows scanner produces
+    /// <c>\</c>, and a matcher that split on one of them would compare a whole path against a bare executable name and
+    /// never match a game on the other platform.
+    /// </remarks>
     public string FileName
     {
         get
         {
             if (string.IsNullOrWhiteSpace(ExecutablePath)) return Name;
-            var trimmed = ExecutablePath.TrimEnd('/');
-            int slash = trimmed.LastIndexOf('/');
+            var trimmed = ExecutablePath.TrimEnd('/', '\\');
+            int slash = trimmed.LastIndexOfAny(['/', '\\']);
             return slash >= 0 && slash + 1 < trimmed.Length ? trimmed[(slash + 1)..] : trimmed;
         }
     }

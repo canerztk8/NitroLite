@@ -1,4 +1,5 @@
 using System.Globalization;
+using NitroLite.Core;
 using NitroLite.Core.Hardware.OpenRgb;
 
 namespace NitroLite.Linux;
@@ -34,22 +35,22 @@ public readonly record struct LinuxEffectLighting(int Mode, int Speed, int Brigh
 public static class LinuxKeyboardProtocol
 {
     /// <summary>Zones the module addresses. Four on every model that has the attribute.</summary>
-    public const int ZoneCount = 4;
+    public const int ZoneCount = LightingLimits.ZoneCount;
 
     /// <summary>Highest brightness the module accepts, as a percentage.</summary>
     public const int MaxBrightnessPercent = 100;
 
     /// <summary>Highest brightness NitroLite stores, as a level.</summary>
-    public const int MaxBrightnessLevel = 9;
+    public const int MaxBrightnessLevel = LightingLimits.MaxBrightnessLevel;
 
     /// <summary>Highest effect speed the module accepts.</summary>
-    public const int MaxSpeed = 9;
+    public const int MaxSpeed = LightingLimits.MaxSpeed;
 
     /// <summary>
     /// Highest direction the module accepts. It knows left and right only, while NitroLite's WAVE effect also offers up
     /// and down, so a vertical direction is clamped rather than rejected.
     /// </summary>
-    public const int MaxDirection = 2;
+    public const int MaxDirection = LightingLimits.MaxDirection;
 
     /// <summary>Highest effect mode the module accepts.</summary>
     public const int MaxMode = 7;

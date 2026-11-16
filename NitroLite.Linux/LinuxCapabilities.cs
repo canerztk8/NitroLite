@@ -1,4 +1,5 @@
-﻿using NitroLite.Core.Hardware;
+﻿using NitroLite.Core;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite.Linux;
 
@@ -61,7 +62,7 @@ public sealed record LinuxNodes
 /// What the Linux probe concluded: who this machine is, which profile it matched, which nodes exist, and what that
 /// adds up to in <see cref="HardwareCapabilities"/>.
 /// </summary>
-public sealed record LinuxCapabilities
+public sealed record LinuxCapabilities : IPlatformSnapshot
 {
     public DeviceIdentity Identity { get; init; } = new();
 
@@ -83,4 +84,10 @@ public sealed record LinuxCapabilities
 
     /// <summary>Human-readable notes about what was missing and why, in the user's language.</summary>
     public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// The privacy-safe Markdown report: DMI, the acer-wmi and Linuwu-Sense nodes, hwmon and the udev state. No serial
+    /// number, machine UUID, user name or personal file path, which is what makes it safe to paste into an issue.
+    /// </summary>
+    public string BuildHardwareReport() => LinuxHardwareReport.Build(this);
 }

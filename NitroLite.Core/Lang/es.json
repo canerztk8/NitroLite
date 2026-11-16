@@ -1196,5 +1196,13 @@
   "Süreç adı gerekli.": "Se requiere un nombre de proceso.",
   "Yok / Desteklenmiyor": "Ninguno / No compatible",
   "acer-wmi (çekirdek modülü)": "acer-wmi (módulo del kernel)",
-  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense"
+  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense",
+  "Doğrudan WMI (yükseltilmiş yardımcı)": "WMI directo (ayudante elevado)",
+  "Acer hizmeti (AASSvc)": "Servicio Acer (AASSvc)",
+  "Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.": "La carga se detiene al 80 %; esto prolonga la vida de la batería.",
+  "Görev Zamanlayıcı ile UAC'siz otomatik başlatma": "Iniciar automáticamente sin UAC mediante el Programador de tareas",
+  "Oturum açılışında yükseltilmiş olarak, soru sorulmadan başlar.": "Se inicia con privilegios elevados al iniciar sesión, sin preguntar.",
+  "Otomatik başlatma açıldı.": "Inicio automático activado.",
+  "Otomatik başlatma kapatıldı.": "Inicio automático desactivado.",
+  "Otomatik başlatma değiştirilemedi.": "No se pudo cambiar el inicio automático."
 }

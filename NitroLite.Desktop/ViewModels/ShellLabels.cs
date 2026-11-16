@@ -75,6 +75,7 @@ public sealed class ShellLabels
     public string LcdOverdrive => Loc.T("LCD Overdrive");
     public string BacklightTimeout => Loc.T("Arka ışık zaman aşımı (30 sn)");
     public string BatteryLimit => Loc.T("Pil şarj sınırı (%80)");
+    public string BatteryLimitHint => Loc.T("Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.");
     public string NotOnThisMachine => Loc.T("Bu cihazda yok");
 
     // ---------------------------------------------------------------- settings
@@ -86,6 +87,8 @@ public sealed class ShellLabels
     public string TierAcerWmi => Loc.T("acer-wmi (çekirdek modülü)");
     public string TierLinuwuSense => Loc.T("Linuwu-Sense (topluluk modülü)");
     public string TierBoth => Loc.T("acer-wmi + Linuwu-Sense");
+    public string TierWmi => Loc.T("Doğrudan WMI (yükseltilmiş yardımcı)");
+    public string TierAassvc => Loc.T("Acer hizmeti (AASSvc)");
     public string CapabilitySummary => Loc.T("Yetenek özeti");
     public string Language => Loc.T("Dil");
     public string DataFolder => Loc.T("Veri klasörü");
@@ -101,6 +104,13 @@ public sealed class ShellLabels
     public string Theme => Loc.T("Tema");
     public string ThemeApplied => Loc.T("Tema seçimi hemen uygulanır.");
     public string LastMinute => Loc.T("Son 60 saniye");
+
+    // ---------------------------------------------------------------- sign-in launch
+    public string AutoStart => Loc.T("Görev Zamanlayıcı ile UAC'siz otomatik başlatma");
+    public string AutoStartHint => Loc.T("Oturum açılışında yükseltilmiş olarak, soru sorulmadan başlar.");
+    public string AutoStartEnabled => Loc.T("Otomatik başlatma açıldı.");
+    public string AutoStartDisabled => Loc.T("Otomatik başlatma kapatıldı.");
+    public string AutoStartFailed => Loc.T("Otomatik başlatma değiştirilemedi.");
 
     // ---------------------------------------------------------------- MUX switch
     public string MuxSwitch => Loc.T("MUX Switch");

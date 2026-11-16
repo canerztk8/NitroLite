@@ -1196,5 +1196,13 @@
   "Süreç adı gerekli.": "Требуется имя процесса.",
   "Yok / Desteklenmiyor": "Нет / Не поддерживается",
   "acer-wmi (çekirdek modülü)": "acer-wmi (модуль ядра)",
-  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense"
+  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense",
+  "Doğrudan WMI (yükseltilmiş yardımcı)": "Прямой WMI (повышенный помощник)",
+  "Acer hizmeti (AASSvc)": "Служба Acer (AASSvc)",
+  "Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.": "Зарядка останавливается на 80 %; это продлевает срок службы батареи.",
+  "Görev Zamanlayıcı ile UAC'siz otomatik başlatma": "Автозапуск без UAC через Планировщик заданий",
+  "Oturum açılışında yükseltilmiş olarak, soru sorulmadan başlar.": "Запускается с повышенными правами при входе, без запроса.",
+  "Otomatik başlatma açıldı.": "Автозапуск включён.",
+  "Otomatik başlatma kapatıldı.": "Автозапуск отключён.",
+  "Otomatik başlatma değiştirilemedi.": "Не удалось изменить автозапуск."
 }

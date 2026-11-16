@@ -3,7 +3,6 @@ using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Desktop.Mvvm;
-using NitroLite.Linux;
 
 namespace NitroLite.Desktop.ViewModels;
 
@@ -214,7 +213,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly IHardwareController? _hardware;
-    private readonly LinuxCapabilities? _linux;
+    /// <summary>
+    /// What the platform probe concluded, or null when there is no probe. An interface rather than the Linux record
+    /// so the same window shows a Windows machine's identity, tier and report.
+    /// </summary>
+    private readonly IPlatformSnapshot? _platform;
+
+    /// <summary>The backend that can be asked again, or null when this platform cannot re-probe.</summary>
+    private readonly IRescannableBackend? _rescan;
+
+    /// <summary>
+    /// The optional sign-in launch, or null when this platform has no such mechanism. Windows supplies one so the app
+    /// can start elevated without a UAC prompt; the settings card hides itself everywhere else.
+    /// </summary>
+    private readonly IAutoStartService? _autoStart;
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
@@ -286,6 +298,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _lcdOverdriveOn;
     private bool _backlightTimeoutOn;
     private bool _batteryLimitOn;
+    private bool _autoStartOn;
+    private string _autoStartStatus = "";
 
     private LocLanguage? _selectedLanguage;
     private ThemeChoice? _selectedTheme;
@@ -315,16 +329,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public MainViewModel(
         AppSettings settings,
         IHardwareController? hardware,
-        LinuxCapabilities? linux,
+        IPlatformSnapshot? platform,
         string settingsPath,
         GameProfileService? gameProfiles = null,
         SchoolModeService? schoolMode = null,
         RgbProfileService? rgbProfiles = null,
-        IThemeApplier? themeApplier = null)
+        IThemeApplier? themeApplier = null,
+        IRescannableBackend? rescan = null,
+        IAutoStartService? autoStart = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
-        _linux = linux;
+        _platform = platform;
+        _rescan = rescan;
+        _autoStart = autoStart;
         _settingsPath = settingsPath;
         _gameProfiles = gameProfiles;
         _schoolMode = schoolMode;
@@ -345,7 +363,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _themeApplier?.Apply(_selectedTheme?.Theme ?? settings.Theme);
 
         _selectedLanguage = Loc.Languages.FirstOrDefault(l => l.Code == Loc.Language) ?? Loc.Languages[0];
-        _needsUdevRule = linux?.NeedsUdevRule == true;
+        _needsUdevRule = platform?.NeedsUdevRule == true;
         if (_needsUdevRule)
         {
             var rulePath = UdevGuide.EnsureRuleFile();
@@ -664,19 +682,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public int BrightnessLevel
     {
         get => _brightnessLevel;
-        set => Set(ref _brightnessLevel, Math.Clamp(value, 0, LinuxKeyboardProtocol.MaxBrightnessLevel));
+        set => Set(ref _brightnessLevel, Math.Clamp(value, 0, LightingLimits.MaxBrightnessLevel));
     }
 
     public int SpeedLevel
     {
         get => _speedLevel;
-        set => Set(ref _speedLevel, Math.Clamp(value, 0, LinuxKeyboardProtocol.MaxSpeed));
+        set => Set(ref _speedLevel, Math.Clamp(value, 0, LightingLimits.MaxSpeed));
     }
 
     public int DirectionLevel
     {
         get => _directionLevel;
-        set => Set(ref _directionLevel, Math.Clamp(value, 1, LinuxKeyboardProtocol.MaxDirection));
+        set => Set(ref _directionLevel, Math.Clamp(value, 1, LightingLimits.MaxDirection));
     }
 
     public string PrimaryColor
@@ -694,9 +712,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     // The slider ranges come from the protocol constants rather than from numbers typed into the XAML, so a change to
     // the sysfs contract cannot leave the UI offering a level the kernel will reject.
-    public int MaxBrightness => LinuxKeyboardProtocol.MaxBrightnessLevel;
-    public int MaxSpeed => LinuxKeyboardProtocol.MaxSpeed;
-    public int MaxDirection => LinuxKeyboardProtocol.MaxDirection;
+    public int MaxBrightness => LightingLimits.MaxBrightnessLevel;
+    public int MaxSpeed => LightingLimits.MaxSpeed;
+    public int MaxDirection => LightingLimits.MaxDirection;
 
     // ---------------------------------------------------------------- extras
 
@@ -738,9 +756,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public bool BatteryLimitAvailable => _capabilities.BatteryChargeLimit;
 
-    /// <summary>True when the probe found none of the four optional nodes, so the page can say so once.</summary>
+    /// <summary>
+    /// True when the probe found none of the optional nodes this page carries, so the page can say so once. The battery
+    /// limit is not in that list: it has its own card on the dashboard, where a user looks for it.
+    /// </summary>
     public bool NoExtrasAvailable =>
-        !CoolBoostAvailable && !LcdOverdriveAvailable && !BacklightTimeoutAvailable && !BatteryLimitAvailable;
+        !CoolBoostAvailable && !LcdOverdriveAvailable && !BacklightTimeoutAvailable;
 
     public bool BatteryLimitOn
     {
@@ -756,6 +777,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         }
     }
+
+    // ---------------------------------------------------------------- sign-in launch
+
+    /// <summary>True when the composition root supplied a sign-in mechanism. The card hides itself otherwise.</summary>
+    public bool AutoStartAvailable => _autoStart != null;
+
+    /// <summary>
+    /// The Task Scheduler entry that starts the app elevated without a UAC prompt. The setter registers or removes it
+    /// and then re-reads the real state, because a cancelled prompt must not leave the switch showing "on".
+    /// </summary>
+    public bool AutoStartOn
+    {
+        get => _autoStartOn;
+        set
+        {
+            if (!Set(ref _autoStartOn, value)) return;
+            if (!_suppressWrite) _ = ApplyAutoStartAsync(value);
+        }
+    }
+
+    /// <summary>What the last attempt did, or empty. The row is hidden rather than left blank.</summary>
+    public string AutoStartStatus
+    {
+        get => _autoStartStatus;
+        private set
+        {
+            if (!Set(ref _autoStartStatus, value)) return;
+            Raise(nameof(HasAutoStartStatus));
+        }
+    }
+
+    public bool HasAutoStartStatus => !string.IsNullOrWhiteSpace(AutoStartStatus);
 
     // ---------------------------------------------------------------- MUX switch
 
@@ -1016,9 +1069,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// The privacy-safe Markdown report. Built on demand rather than cached: it is a few hundred bytes of string work
     /// and the probe state can change after a rescan.
     /// </summary>
-    public string HardwareReportText => _linux == null ? "" : LinuxHardwareReport.Build(_linux);
+    public string HardwareReportText => _platform?.BuildHardwareReport() ?? "";
 
-    public bool HardwareReportAvailable => _linux != null;
+    public bool HardwareReportAvailable => _platform != null;
 
     // ---------------------------------------------------------------- settings page
 
@@ -1081,9 +1134,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(SelectedTheme));
     }
 
-    public string DeviceModel => _linux?.Identity.ModelCode is { Length: > 0 } code
-        ? $"{_linux.Identity.Model} ({code})"
-        : _linux?.Identity.Model ?? "";
+    public string DeviceModel => _platform?.Identity.ModelCode is { Length: > 0 } code
+        ? $"{_platform.Identity.Model} ({code})"
+        : _platform?.Identity.Model ?? "";
 
     /// <summary>
     /// False when the probe could not name the machine. The header hides the badge rather than showing an empty pill,
@@ -1091,13 +1144,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public bool HasDeviceName => !string.IsNullOrWhiteSpace(DeviceModel);
 
-    public string DeviceBios => _linux?.Identity.BiosVersion ?? "";
+    public string DeviceBios => _platform?.Identity.BiosVersion ?? "";
 
     /// <summary>False when the probe could not read the BIOS version, so the row is dropped instead of left blank.</summary>
     public bool HasDeviceBios => !string.IsNullOrWhiteSpace(DeviceBios);
 
     /// <summary>The raw tier the probe reported: "acer-wmi", "linuwu-sense", "both" or "none".</summary>
-    public string TierText => _linux?.Tier ?? "none";
+    public string TierText => _platform?.Tier ?? "none";
 
     /// <summary>
     /// The same value in the user's language. "none" is a diagnostic string, not something to show a user, so the
@@ -1108,12 +1161,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         "acer-wmi" => Labels.TierAcerWmi,
         "linuwu-sense" => Labels.TierLinuwuSense,
         "both" => Labels.TierBoth,
+        "wmi" => Labels.TierWmi,
+        "aassvc" => Labels.TierAassvc,
         _ => Labels.TierNone
     };
 
     public string DataFolder => AppPaths.DataDirectory;
 
-    public IReadOnlyList<string> Notes => _linux?.Notes ?? Array.Empty<string>();
+    public IReadOnlyList<string> Notes => _platform?.Notes ?? Array.Empty<string>();
 
     /// <summary>True when the probe had something to say. The Notes card is hidden rather than shown empty.</summary>
     public bool HasNotes => Notes.Count > 0;
@@ -1205,6 +1260,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 AppLog.Warn("Okul modu kurtarma başarısız", ex.Message);
             }
         }
+
+        // Read before the hardware guard: the sign-in entry is a Windows task, not a hardware capability, and a
+        // machine with no Acer nodes still has one.
+        await RefreshAutoStartAsync().ConfigureAwait(true);
 
         if (_hardware == null) return;
 
@@ -1373,6 +1432,55 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (lighting.LEDs.Count > 1) Zone2 = lighting.LEDs[1];
         if (lighting.LEDs.Count > 2) Zone3 = lighting.LEDs[2];
         if (lighting.LEDs.Count > 3) Zone4 = lighting.LEDs[3];
+    }
+
+    // ---------------------------------------------------------------- sign-in launch
+
+    /// <summary>
+    /// Registers or removes the sign-in entry, then re-reads the real state. The re-read is the point: a UAC prompt the
+    /// user cancelled leaves the entry absent, and a switch that stayed on would be lying about the machine.
+    /// </summary>
+    private async Task ApplyAutoStartAsync(bool enable)
+    {
+        if (_autoStart == null) return;
+
+        try
+        {
+            bool ok = enable
+                ? await _autoStart.EnableAsync().ConfigureAwait(true)
+                : await _autoStart.DisableAsync().ConfigureAwait(true);
+
+            AutoStartStatus = ok
+                ? (enable ? Labels.AutoStartEnabled : Labels.AutoStartDisabled)
+                : Labels.AutoStartFailed;
+
+            await RefreshAutoStartAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Otomatik başlatma değiştirilemedi", ex.ToString());
+            AutoStartStatus = Labels.AutoStartFailed;
+        }
+    }
+
+    /// <summary>Reads the entry's real state without writing anything.</summary>
+    private async Task RefreshAutoStartAsync()
+    {
+        if (_autoStart == null) return;
+
+        try
+        {
+            bool enabled = await _autoStart.IsEnabledAsync().ConfigureAwait(true);
+
+            bool previous = _suppressWrite;
+            _suppressWrite = true;
+            AutoStartOn = enabled;
+            _suppressWrite = previous;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Otomatik başlatma durumu okunamadı", ex.Message);
+        }
     }
 
     // ---------------------------------------------------------------- writes
@@ -1797,11 +1905,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task RescanAsync()
     {
-        if (_hardware is not LinuxSysfsHardwareController linux) return;
+        if (_hardware == null || _rescan == null) return;
 
-        linux.ReadBack.ResetAll();
-        _capabilities = await linux.GetCapabilitiesAsync().ConfigureAwait(true);
-        NeedsUdevRule = linux.Capabilities.NeedsUdevRule || linux.PermissionHintRaised;
+        _rescan.ResetReadBackCounters();
+        _capabilities = await _hardware.GetCapabilitiesAsync().ConfigureAwait(true);
+        NeedsUdevRule = _rescan.Snapshot.NeedsUdevRule || _rescan.PermissionHintRaised;
 
         Raise(nameof(CapabilitySummaryText));
         Raise(nameof(ModeControlAvailable));

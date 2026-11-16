@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Plain net10.0, like NitroLite.Core and NitroLite.Linux: this is the cross-platform front end and it must not
-         pull in WPF, WinForms, the registry, System.Management or a P/Invoke. The Windows front end stays in
-         NitroLite (net10.0-windows); this one runs on Linux against the sysfs backend. -->
+    <!-- One UI, two backends. net10.0 is the Linux build and sees only NitroLite.Core and NitroLite.Linux; the
+         net10.0-windows build sees NitroLite.Core and NitroLite.Windows. Neither target can accidentally compile
+         against the other platform's hardware layer, because the reference is per-target. -->
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NitroLite.Desktop</RootNamespace>
@@ -17,7 +17,22 @@
          Every view declares x:DataType, which is also what makes the XAML readable without the view model open. -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+
+    <!-- The Linux CI restores this project, which evaluates both targets. Without this the restore fails with
+         NETSDK1100 before the net10.0 half is ever built. It is a no-op on Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <!-- The Linux manifest: asInvoker, because the udev rule grants the session user write access and a manifest that
+         asked for elevation would make the app unusable on a desktop with no sudo prompt. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <!-- The same asInvoker manifest the WPF front end ships, shared rather than copied so the two Windows builds
+         cannot drift apart on the execution level or the DPI awareness. -->
+    <ApplicationManifest>..\NitroLite\app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,10 +43,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Core for the hardware contract, the settings file, the fan curve and the eight language catalogues; Linux for
-         the sysfs backend. Nothing else: the Windows half of the hardware layer is not referenced at all. -->
+    <!-- Core for the hardware contract, the settings file, the fan curve and the eight language catalogues. -->
     <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <!-- The sysfs backend. Nothing Windows is referenced here at all. -->
     <ProjectReference Include="..\NitroLite.Linux\NitroLite.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <!-- The WMI and Acer-service backend, plus the Windows system services school mode needs. -->
+    <ProjectReference Include="..\NitroLite.Windows\NitroLite.Windows.csproj" />
   </ItemGroup>
 
   <ItemGroup>

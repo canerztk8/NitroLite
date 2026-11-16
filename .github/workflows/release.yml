@@ -36,6 +36,9 @@ jobs:
           cache: true
           cache-dependency-path: |
             NitroLite/NitroLite.csproj
+            NitroLite.Core/NitroLite.Core.csproj
+            NitroLite.Windows/NitroLite.Windows.csproj
+            NitroLite.Desktop/NitroLite.Desktop.csproj
             NitroLite.Tests/NitroLite.Tests.csproj
 
       - name: Read the version from the project file
@@ -222,6 +225,7 @@ jobs:
           cache-dependency-path: |
             NitroLite.Core/NitroLite.Core.csproj
             NitroLite.Linux/NitroLite.Linux.csproj
+            NitroLite.Windows/NitroLite.Windows.csproj
             NitroLite.Desktop/NitroLite.Desktop.csproj
 
       - name: Read the version from the project file
@@ -236,7 +240,7 @@ jobs:
       - name: Publish the self-contained single-file build
         run: >
           dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj
-          -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true
+          -c Release -f net10.0 -r linux-x64 --self-contained true -p:PublishSingleFile=true
           -o staging/NitroLite-linux-x64 --nologo
 
       - name: Assemble and verify the tarball

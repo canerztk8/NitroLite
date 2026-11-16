@@ -165,10 +165,8 @@
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding BacklightTimeoutOn}" />
           </Grid>
 
-          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding BatteryLimitAvailable}">
-            <TextBlock Classes="label" Text="{Binding Labels.BatteryLimit}" />
-            <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
-          </Grid>
+          <!-- The battery charge limit is not here: it has its own card on the dashboard, where a user looks for it,
+               and two switches bound to one firmware state would only be a way to disagree with itself. -->
 
           <!-- Nothing at all on this machine: one line, not an empty card. The card already says "Ekstralar", so the
                row carries only the badge. -->

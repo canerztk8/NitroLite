@@ -1196,5 +1196,13 @@
   "Süreç adı gerekli.": "प्रक्रिया नाम आवश्यक है।",
   "Yok / Desteklenmiyor": "कोई नहीं / समर्थित नहीं",
   "acer-wmi (çekirdek modülü)": "acer-wmi (कर्नेल मॉड्यूल)",
-  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense"
+  "acer-wmi + Linuwu-Sense": "acer-wmi + Linuwu-Sense",
+  "Doğrudan WMI (yükseltilmiş yardımcı)": "प्रत्यक्ष WMI (उन्नत सहायक)",
+  "Acer hizmeti (AASSvc)": "Acer सेवा (AASSvc)",
+  "Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.": "80 % पर चार्जिंग रुक जाती है; इससे बैटरी की उम्र बढ़ती है।",
+  "Görev Zamanlayıcı ile UAC'siz otomatik başlatma": "कार्य शेड्यूलर के माध्यम से UAC के बिना स्वतः प्रारंभ करें",
+  "Oturum açılışında yükseltilmiş olarak, soru sorulmadan başlar.": "साइन-इन पर बिना पूछे उन्नत रूप में प्रारंभ होता है।",
+  "Otomatik başlatma açıldı.": "स्वतः प्रारंभ सक्षम किया गया।",
+  "Otomatik başlatma kapatıldı.": "स्वतः प्रारंभ अक्षम किया गया।",
+  "Otomatik başlatma değiştirilemedi.": "स्वतः प्रारंभ बदला नहीं जा सका।"
 }

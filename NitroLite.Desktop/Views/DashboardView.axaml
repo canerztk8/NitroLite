@@ -221,6 +221,18 @@
         </Border>
       </Grid>
 
+      <!-- The 80 % charge limit. Shown only when the backend found the interface: on Windows that is the Acer service
+           or WMID_GUID5, on Linux charge_control_end_threshold. One card, one switch, both platforms. -->
+      <Border Classes="card" IsVisible="{Binding BatteryLimitAvailable}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="{Binding Labels.BatteryLimit}" VerticalAlignment="Center" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
+          </Grid>
+          <TextBlock Classes="caption" Text="{Binding Labels.BatteryLimitHint}" />
+        </StackPanel>
+      </Border>
+
       <!-- Automatic game switching. The card is only shown when the composition root wired a process scanner, so a
            build without one does not offer a switch that can never fire. -->
       <Border Classes="card" IsVisible="{Binding AutoGameModeAvailable}">
