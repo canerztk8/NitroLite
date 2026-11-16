@@ -159,6 +159,12 @@
       <Setter Property="Background" Value="Transparent" />
     </Style>
 
+    <!-- Fluent paints a grey plate behind a disabled button. The card sits on top of it, so any translucency in the
+         card let that grey through and the selected card came out washed out. -->
+    <Style Selector="Button.modecardbutton:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
     <Style Selector="Border.modecard">
       <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
@@ -174,8 +180,24 @@
     </Style>
 
     <Style Selector="Border.modecard.selected">
-      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <!-- A solid step up from the panel, not a tint of the accent: a translucent accent over a dark panel lands
+           somewhere in the middle greys, and the accent-coloured title on top of it was unreadable. The accent is
+           carried by the border, the icon and the dot instead, which stay legible on every palette. -->
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <!-- One pixel less padding, so the thicker border does not move the text. -->
+      <Setter Property="Padding" Value="11" />
+    </Style>
+
+    <!-- No backend means no card can be pressed. Dimming the text says so without washing the card out: an Opacity on
+         the border blends it with whatever is behind it, which is how the whole row turned grey. -->
+    <Style Selector="Border.modecard:disabled PathIcon">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <Style Selector="Border.modecard:disabled TextBlock.modetitle">
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
 
     <Style Selector="Border.modecard PathIcon">
@@ -195,7 +217,16 @@
     </Style>
 
     <Style Selector="Border.modecard.selected TextBlock.modetitle">
-      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- The dot is the selection marker that does not depend on telling two blues apart. -->
+    <Style Selector="Border.modecard Ellipse.selecteddot">
+      <Setter Property="Width" Value="7" />
+      <Setter Property="Height" Value="7" />
+      <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
     </Style>
 
     <!-- ============================================================ capability rows -->

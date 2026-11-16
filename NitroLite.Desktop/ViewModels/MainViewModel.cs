@@ -1093,6 +1093,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string DeviceBios => _linux?.Identity.BiosVersion ?? "";
 
+    /// <summary>False when the probe could not read the BIOS version, so the row is dropped instead of left blank.</summary>
+    public bool HasDeviceBios => !string.IsNullOrWhiteSpace(DeviceBios);
+
     /// <summary>The raw tier the probe reported: "acer-wmi", "linuwu-sense", "both" or "none".</summary>
     public string TierText => _linux?.Tier ?? "none";
 
@@ -1914,8 +1917,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _ => ""
     };
 
-    // 24×24 path data. Bars for the power ladder, a leaf for Eco: the shape says the same thing as the hint.
-    private const string ModeIconQuiet = "M4,16 H8 V20 H4 Z";
+    // 24×24 path data. Bars for the power ladder, a moon for Quiet and a leaf for Eco: the shape says the same thing
+    // as the hint. PathIcon stretches each geometry to fill its box, so a single short bar would have been blown up
+    // into a solid square; the two ends of the ladder therefore get glyphs that are meant to fill the box.
+    private const string ModeIconQuiet = "M12,3 C7.03,3 3,7.03 3,12 C3,16.97 7.03,21 12,21 C16.97,21 21,16.97 21,12 C21,11.54 20.96,11.08 20.9,10.64 C19.92,12.01 18.32,12.9 16.5,12.9 C13.52,12.9 11.1,10.48 11.1,7.5 C11.1,5.69 11.99,4.08 13.36,3.1 C12.92,3.04 12.46,3 12,3 Z";
     private const string ModeIconBalanced = "M4,12 H8 V20 H4 Z M10,16 H14 V20 H10 Z";
     private const string ModeIconPerformance = "M4,8 H8 V20 H4 Z M10,12 H14 V20 H10 Z M16,16 H20 V20 H16 Z";
     private const string ModeIconTurbo = "M2,4 H6 V20 H2 Z M8,8 H12 V20 H8 Z M14,12 H18 V20 H14 Z M20,16 H24 V20 H20 Z";

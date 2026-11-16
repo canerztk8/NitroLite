@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -19,6 +19,10 @@ namespace NitroLite.Desktop.Controls;
 /// The shaded bands are the point of the control. A user who drags the 90 °C anchor down to 40 % sees the line sit
 /// below the band and understands why the fans will not go that low, without having to read a paragraph about it.
 /// </para>
+/// <para>
+/// Every colour is a styled property rather than a constant, so the view binds them to the active palette. The
+/// defaults are the dark palette's own values, which keeps the control usable on its own in a designer or a test.
+/// </para>
 /// </remarks>
 public sealed class FanCurvePreview : Control
 {
@@ -28,17 +32,53 @@ public sealed class FanCurvePreview : Control
     public static readonly StyledProperty<double> CurrentTemperatureProperty =
         AvaloniaProperty.Register<FanCurvePreview, double>(nameof(CurrentTemperature));
 
-    private static readonly IBrush Background = new SolidColorBrush(Color.Parse("#11161D"));
-    private static readonly IBrush BandBrush = new SolidColorBrush(Color.Parse("#3A1F24"));
-    private static readonly IBrush CurveBrush = new SolidColorBrush(Color.Parse("#2F81F7"));
-    private static readonly IBrush MarkerBrush = new SolidColorBrush(Color.Parse("#F2A33A"));
-    private static readonly IBrush GridBrush = new SolidColorBrush(Color.Parse("#1E2530"));
-    private static readonly IBrush TextBrush = new SolidColorBrush(Color.Parse("#8A94A6"));
-    private static readonly IBrush FloorBrush = new SolidColorBrush(Color.Parse("#E5484D"));
+    /// <summary>The plate the plot is drawn on.</summary>
+    public static readonly StyledProperty<IBrush?> SurfaceBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(SurfaceBrush), new SolidColorBrush(Color.Parse("#11161D")));
+
+    /// <summary>The tint behind a thermal safety band.</summary>
+    public static readonly StyledProperty<IBrush?> BandBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(BandBrush), new SolidColorBrush(Color.Parse("#3A1F24")));
+
+    /// <summary>The curve and its anchors.</summary>
+    public static readonly StyledProperty<IBrush?> CurveBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(CurveBrush), new SolidColorBrush(Color.Parse("#2F81F7")));
+
+    /// <summary>The vertical line at the current temperature.</summary>
+    public static readonly StyledProperty<IBrush?> MarkerBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(MarkerBrush), new SolidColorBrush(Color.Parse("#F2A33A")));
+
+    /// <summary>The grid lines.</summary>
+    public static readonly StyledProperty<IBrush?> GridBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(GridBrush), new SolidColorBrush(Color.Parse("#1E2530")));
+
+    /// <summary>The axis labels.</summary>
+    public static readonly StyledProperty<IBrush?> TextBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(TextBrush), new SolidColorBrush(Color.Parse("#8A94A6")));
+
+    /// <summary>The dashed line at the minimum the fans will accept for a band.</summary>
+    public static readonly StyledProperty<IBrush?> FloorBrushProperty =
+        AvaloniaProperty.Register<FanCurvePreview, IBrush?>(
+            nameof(FloorBrush), new SolidColorBrush(Color.Parse("#E5484D")));
 
     static FanCurvePreview()
     {
-        AffectsRender<FanCurvePreview>(PointsProperty, CurrentTemperatureProperty);
+        AffectsRender<FanCurvePreview>(
+            PointsProperty,
+            CurrentTemperatureProperty,
+            SurfaceBrushProperty,
+            BandBrushProperty,
+            CurveBrushProperty,
+            MarkerBrushProperty,
+            GridBrushProperty,
+            TextBrushProperty,
+            FloorBrushProperty);
     }
 
     /// <summary>The anchors to draw. Null or empty draws the grid only.</summary>
@@ -55,6 +95,48 @@ public sealed class FanCurvePreview : Control
         set => SetValue(CurrentTemperatureProperty, value);
     }
 
+    public IBrush? SurfaceBrush
+    {
+        get => GetValue(SurfaceBrushProperty);
+        set => SetValue(SurfaceBrushProperty, value);
+    }
+
+    public IBrush? BandBrush
+    {
+        get => GetValue(BandBrushProperty);
+        set => SetValue(BandBrushProperty, value);
+    }
+
+    public IBrush? CurveBrush
+    {
+        get => GetValue(CurveBrushProperty);
+        set => SetValue(CurveBrushProperty, value);
+    }
+
+    public IBrush? MarkerBrush
+    {
+        get => GetValue(MarkerBrushProperty);
+        set => SetValue(MarkerBrushProperty, value);
+    }
+
+    public IBrush? GridBrush
+    {
+        get => GetValue(GridBrushProperty);
+        set => SetValue(GridBrushProperty, value);
+    }
+
+    public IBrush? TextBrush
+    {
+        get => GetValue(TextBrushProperty);
+        set => SetValue(TextBrushProperty, value);
+    }
+
+    public IBrush? FloorBrush
+    {
+        get => GetValue(FloorBrushProperty);
+        set => SetValue(FloorBrushProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         var width = Bounds.Width;
@@ -65,17 +147,23 @@ public sealed class FanCurvePreview : Control
         // against the plot height rather than the control's.
         double plotHeight = Math.Max(1, height - AxisHeight);
         var plot = new Rect(0, 0, width, plotHeight);
-        context.FillRectangle(Background, plot, 8);
+        if (SurfaceBrush is IBrush surface) context.FillRectangle(surface, plot, 8);
 
         // The safety bands, drawn first so the curve sits on top of them.
         foreach (var (bandTemperature, bandPercent) in FanCurve.SafetyFloor)
         {
             double x = XFor(bandTemperature, width);
             double right = bandTemperature >= FanCurve.SafetyFloor[^1].TemperatureC ? width : XFor(bandTemperature + 5, width);
-            context.FillRectangle(BandBrush, new Rect(x, 0, Math.Max(1, right - x), plotHeight));
+            if (BandBrush is IBrush band) context.FillRectangle(band, new Rect(x, 0, Math.Max(1, right - x), plotHeight));
 
             double y = YFor(bandPercent, plotHeight);
-            context.DrawLine(new Pen(FloorBrush, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(x, y), new Point(right, y));
+            if (FloorBrush is IBrush floor)
+            {
+                context.DrawLine(
+                    new Pen(floor, 1, new DashStyle(new double[] { 3, 3 }, 0)),
+                    new Point(x, y),
+                    new Point(right, y));
+            }
         }
 
         // Grid: one line per 20 % and per 20 °C, so a value can be read off without a tooltip.
@@ -151,9 +239,9 @@ public sealed class FanCurvePreview : Control
     /// <summary>The strip at the bottom reserved for the temperature labels.</summary>
     private const double AxisHeight = 16;
 
-    private static double Measure(string text) => Format(text).Width;
+    private double Measure(string text) => Format(text).Width;
 
-    private static FormattedText Format(string text) => new(
+    private FormattedText Format(string text) => new(
         text,
         CultureInfo.InvariantCulture,
         FlowDirection.LeftToRight,
@@ -175,6 +263,6 @@ public sealed class FanCurvePreview : Control
         return height - Math.Clamp(ratio, 0, 1) * height;
     }
 
-    private static void DrawLabel(DrawingContext context, string text, Point origin) =>
+    private void DrawLabel(DrawingContext context, string text, Point origin) =>
         context.DrawText(Format(text), origin);
 }

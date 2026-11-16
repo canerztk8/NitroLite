@@ -7,7 +7,7 @@
 
   <ScrollViewer>
     <!-- Capped and centred: on a 2K window an uncapped card row stretches until the numbers are a screen apart. -->
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
 
       <!-- A machine with no Acer nodes still opens a window; this is the sentence that explains it. -->
       <Border Classes="card" IsVisible="{Binding HasNoBackend}">
@@ -118,11 +118,14 @@
                         Command="{Binding SelectCommand}"
                         Margin="0,0,8,0">
                   <Border Classes="modecard" Classes.selected="{Binding IsSelected}">
-                    <StackPanel Spacing="6">
-                      <PathIcon Data="{Binding Icon}" HorizontalAlignment="Left" />
-                      <TextBlock Classes="modetitle" Text="{Binding Label}" />
-                      <TextBlock Classes="muted" Text="{Binding Description}" />
-                    </StackPanel>
+                    <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
+                      <PathIcon Grid.Row="0" Grid.Column="0" Data="{Binding Icon}" HorizontalAlignment="Left" />
+                      <Ellipse Grid.Row="0" Grid.Column="1" Classes="selecteddot" IsVisible="{Binding IsSelected}" />
+                      <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="modetitle"
+                                 Text="{Binding Label}" Margin="0,6,0,0" />
+                      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="muted"
+                                 Text="{Binding Description}" Margin="0,6,0,0" />
+                    </Grid>
                   </Border>
                 </Button>
               </DataTemplate>
@@ -149,11 +152,14 @@
                         Command="{Binding SelectCommand}"
                         Margin="0,0,8,0">
                   <Border Classes="modecard" Classes.selected="{Binding IsSelected}">
-                    <StackPanel Spacing="6">
-                      <PathIcon Data="{Binding Icon}" HorizontalAlignment="Left" />
-                      <TextBlock Classes="modetitle" Text="{Binding Label}" />
-                      <TextBlock Classes="muted" Text="{Binding Description}" />
-                    </StackPanel>
+                    <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
+                      <PathIcon Grid.Row="0" Grid.Column="0" Data="{Binding Icon}" HorizontalAlignment="Left" />
+                      <Ellipse Grid.Row="0" Grid.Column="1" Classes="selecteddot" IsVisible="{Binding IsSelected}" />
+                      <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="modetitle"
+                                 Text="{Binding Label}" Margin="0,6,0,0" />
+                      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="muted"
+                                 Text="{Binding Description}" Margin="0,6,0,0" />
+                    </Grid>
                   </Border>
                 </Button>
               </DataTemplate>
@@ -242,22 +248,36 @@
           <Grid ColumnDefinitions="*,*">
             <controls:FanCurvePreview Height="210"
                                       Points="{Binding CurvePoints}"
-                                      CurrentTemperature="{Binding CurrentTemperature}" />
+                                      CurrentTemperature="{Binding CurrentTemperature}"
+                                      SurfaceBrush="{DynamicResource PanelBrush}"
+                                      BandBrush="{DynamicResource DangerSoftBrush}"
+                                      CurveBrush="{DynamicResource AccentBrush}"
+                                      MarkerBrush="{DynamicResource WarningBrush}"
+                                      GridBrush="{DynamicResource CardBorderBrush}"
+                                      TextBrush="{DynamicResource TextMutedBrush}"
+                                      FloorBrush="{DynamicResource DangerBrush}" />
 
             <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="2">
               <ItemsControl ItemsSource="{Binding CurveAnchors}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:CurveAnchorViewModel">
-                    <Grid ColumnDefinitions="56,*,52,150" Margin="0,2">
-                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
-                      <Slider Grid.Column="1" Minimum="30" Maximum="100"
+                    <!-- Docked rather than a four-column Grid: the fixed columns of a Grid overflow the card once the
+                         window is near its minimum width, and the slider's thumb is centred on the track's start, so
+                         it hangs half outside the control. Docking gives the label an exact width and the slider the
+                         rest, and the margin keeps the thumb off the label at every width. -->
+                    <DockPanel Margin="0,2">
+                      <TextBlock DockPanel.Dock="Left" Width="52"
+                                 Text="{Binding Label}" VerticalAlignment="Center" />
+                      <TextBlock DockPanel.Dock="Right" Width="120" Classes="caption"
+                                 Text="{Binding SafetyText}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                      <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right"
+                                 Text="{Binding EffectiveText}" VerticalAlignment="Center" />
+                      <Slider Minimum="30" Maximum="100"
+                              Margin="10,0,10,0"
+                              MinWidth="60"
                               TickFrequency="1" IsSnapToTickEnabled="True"
                               Value="{Binding Percent}" />
-                      <TextBlock Grid.Column="2" Text="{Binding EffectiveText}"
-                                 VerticalAlignment="Center" HorizontalAlignment="Right" />
-                      <TextBlock Grid.Column="3" Classes="caption" Text="{Binding SafetyText}"
-                                 VerticalAlignment="Center" Margin="12,0,0,0" />
-                    </Grid>
+                    </DockPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>

@@ -130,7 +130,21 @@ public sealed class ThemePalette
             ["SliderTrackFill"] = Brush(CardBorderStrong),
             ["SliderTrackFillPointerOver"] = Brush(CardBorderStrong),
             ["SliderTrackFillPressed"] = Brush(CardBorderStrong),
-            ["SliderTrackFillDisabled"] = Brush(CardBorder)
+            ["SliderTrackFillDisabled"] = Brush(CardBorder),
+
+            // The switch, the same way. Fluent's default is the system accent, which on a machine whose Windows accent
+            // is red leaves a red switch in an ice-blue window. Verified against Avalonia 11.3.23 by reading the
+            // template's own parts back out of a live visual tree: FillOn paints Border#SwitchKnobBounds and
+            // KnobFillOn paints Ellipse#SwitchKnobOn.
+            ["ToggleSwitchFillOn"] = Brush(Accent),
+            ["ToggleSwitchFillOnPointerOver"] = Brush(AccentHover),
+            ["ToggleSwitchFillOnPressed"] = Brush(AccentHover),
+            ["ToggleSwitchStrokeOn"] = Brush(Accent),
+            ["ToggleSwitchStrokeOnPointerOver"] = Brush(AccentHover),
+            ["ToggleSwitchStrokeOnPressed"] = Brush(AccentHover),
+            ["ToggleSwitchKnobFillOn"] = Brush(OnAccent),
+            ["ToggleSwitchKnobFillOnPointerOver"] = Brush(OnAccent),
+            ["ToggleSwitchKnobFillOnPressed"] = Brush(OnAccent)
         };
 
         return resources;

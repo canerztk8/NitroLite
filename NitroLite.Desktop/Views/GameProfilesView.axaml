@@ -5,7 +5,7 @@
              x:DataType="vm:MainViewModel">
 
   <ScrollViewer>
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
 
       <!-- The master switch. It is the same setting the dashboard's game card toggles, so the two can never disagree. -->
       <Border Classes="card">

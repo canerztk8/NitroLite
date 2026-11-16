@@ -6,18 +6,24 @@
              x:DataType="vm:MainViewModel">
 
   <ScrollViewer>
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
 
       <Border Classes="card">
         <StackPanel Spacing="10">
           <TextBlock Classes="h2" Text="{Binding Labels.Device}" />
 
           <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Classes="caption" Text="{Binding Labels.Model}" Margin="0,0,0,6" />
-            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DeviceModel}" Margin="0,0,0,6" />
+            <!-- A row whose value the probe could not read is dropped rather than drawn as a label with nothing
+                 beside it, which reads as a broken page. -->
+            <TextBlock Grid.Row="0" Classes="caption" Text="{Binding Labels.Model}" Margin="0,0,0,6"
+                       IsVisible="{Binding HasDeviceName}" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DeviceModel}" Margin="0,0,0,6"
+                       IsVisible="{Binding HasDeviceName}" />
 
-            <TextBlock Grid.Row="1" Classes="caption" Text="{Binding Labels.Bios}" Margin="0,0,0,6" />
-            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DeviceBios}" Margin="0,0,0,6" />
+            <TextBlock Grid.Row="1" Classes="caption" Text="{Binding Labels.Bios}" Margin="0,0,0,6"
+                       IsVisible="{Binding HasDeviceBios}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DeviceBios}" Margin="0,0,0,6"
+                       IsVisible="{Binding HasDeviceBios}" />
 
             <TextBlock Grid.Row="2" Classes="caption" Text="{Binding Labels.Tier}" Margin="0,0,0,6" />
             <!-- The probe's own word is "none" or "acer-wmi"; neither belongs in front of a user. -->

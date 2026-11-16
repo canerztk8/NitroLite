@@ -541,7 +541,17 @@ public class DesktopViewModelTests
             "TextPrimaryBrush", "TextSecondaryBrush", "TextMutedBrush",
             "AccentBrush", "AccentHoverBrush", "AccentSoftBrush", "OnAccentBrush",
             "SuccessBrush", "SuccessSoftBrush", "WarningBrush", "WarningSoftBrush",
-            "DangerBrush", "DangerSoftBrush", "ChartFillBrush"
+            "DangerBrush", "DangerSoftBrush", "ChartFillBrush",
+
+            // Fluent's own slider and toggle-switch keys. Without them the controls fall back to the system accent,
+            // which is how the fan-curve thumbs ended up red in an ice-blue window.
+            "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed",
+            "SliderThumbBackgroundDisabled", "SliderTrackValueFill", "SliderTrackValueFillPointerOver",
+            "SliderTrackValueFillPressed", "SliderTrackValueFillDisabled", "SliderTrackFill",
+            "SliderTrackFillPointerOver", "SliderTrackFillPressed", "SliderTrackFillDisabled",
+            "ToggleSwitchFillOn", "ToggleSwitchFillOnPointerOver", "ToggleSwitchFillOnPressed",
+            "ToggleSwitchStrokeOn", "ToggleSwitchStrokeOnPointerOver", "ToggleSwitchStrokeOnPressed",
+            "ToggleSwitchKnobFillOn", "ToggleSwitchKnobFillOnPointerOver", "ToggleSwitchKnobFillOnPressed"
         };
 
         foreach (var theme in ThemeCatalog.All)

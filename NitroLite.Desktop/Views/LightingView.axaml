@@ -6,7 +6,7 @@
              x:DataType="vm:MainViewModel">
 
   <ScrollViewer>
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
 
       <Border Classes="card" IsVisible="{Binding LightingAvailable}">
         <StackPanel Spacing="12">
@@ -170,9 +170,9 @@
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
           </Grid>
 
-          <!-- Nothing at all on this machine: one line, not an empty card. -->
+          <!-- Nothing at all on this machine: one line, not an empty card. The card already says "Ekstralar", so the
+               row carries only the badge. -->
           <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding NoExtrasAvailable}">
-            <TextBlock Classes="label" Text="{Binding Labels.Extras}" />
             <Border Classes="badge">
               <TextBlock Text="{Binding Labels.NotOnThisMachine}" />
             </Border>
