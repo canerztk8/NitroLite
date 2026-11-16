@@ -211,6 +211,27 @@
         </StackPanel>
       </Border>
 
+      <!-- ============================================================ the Nitro key -->
+
+      <!-- One switch, and only on a machine that has the button. There is no shortcut to record: the key is physical
+           and has one meaning, so a key-binding editor here would be a different feature wearing the same name. -->
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding NitroKeyAvailable}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE92E;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.NitroKey}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroKeyToggle}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.NitroKeyHint}" Margin="10,0,0,0"
+                       VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding NitroKeyEnabled}"
+                          VerticalAlignment="Center" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ game profiles -->
 
       <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding AutoGameModeAvailable}">

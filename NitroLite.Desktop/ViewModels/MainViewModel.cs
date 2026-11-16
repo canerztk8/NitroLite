@@ -786,7 +786,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IUpdateService? updates = null,
         IDiagnosticsService? diagnostics = null,
         IDirectWmiControl? directWmi = null,
-        IRunAtStartupService? runAtStartup = null)
+        IRunAtStartupService? runAtStartup = null,
+        INitroKeyListener? nitroKey = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -816,6 +817,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _diagnostics = diagnostics;
         _directWmi = directWmi;
         _runAtStartup = runAtStartup;
+        _nitroKey = nitroKey;
         _schoolModeOn = settings.SchoolModeEnabled;
         _fanProtectionOn = settings.FanFailureProtection;
         _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);

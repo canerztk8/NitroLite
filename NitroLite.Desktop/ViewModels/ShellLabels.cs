@@ -547,6 +547,11 @@ public sealed class ShellLabels
     public string AtkMouseIntegration => Loc.T("ATK Fare Entegrasyonu");
     public string AtkMouseIntegrationHint => Loc.T("Kapalıyken fare profili satırı ve kartları gizlenir.");
 
+    // The Nitro key. One switch, no shortcut to record: the button is physical and has one meaning.
+    public string NitroKey => Loc.T("Nitro tuşu");
+    public string NitroKeyToggle => Loc.T("Nitro tuşu ile NitroLite'ı aç");
+    public string NitroKeyHint => Loc.T("Kapalıyken donanım tuşu yok sayılır.");
+
     public string UpdatesAndDiagnostics => Loc.T("Güncelleme, Teşhis ve Yedekleme");
     public string AutoUpdateCheck => Loc.T("Güncellemeleri otomatik denetle");
     public string Version => Loc.T("Sürüm");

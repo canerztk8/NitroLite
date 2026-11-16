@@ -427,6 +427,17 @@ public class AppSettings
     public bool AutoUpdateCheck { get; set; } = true;
 
     /// <summary>
+    /// Bring the window forward when the laptop's own Nitro key is pressed. On by default: the key exists to open
+    /// NitroSense, and a user who installs NitroLite expects it to answer the same button.
+    /// <para>
+    /// There is no shortcut to configure. The key is a physical button with one meaning, so this is a switch and not a
+    /// key binding, and a machine without the button never shows the switch at all.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("nitro_key_enabled")]
+    public bool NitroKeyEnabled { get; set; } = true;
+
+    /// <summary>
     /// Emergency rollback switch for the hardware layer. On (the default) NitroLite may reach the hardware through a
     /// direct WMI backend when the Acer service is not running; off pins every read and write to the Acer service
     /// socket, which is the behaviour before the hardware abstraction existed.

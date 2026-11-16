@@ -14,6 +14,8 @@ public partial class App : Application
     private AppHost? _host;
     private TrayIconHost? _tray;
     private MainWindow? _window;
+    private INitroKeyListener? _nitroKey;
+    private NitroKeyActivationGate? _nitroGate;
     private bool _exiting;
 
     /// <summary>
@@ -48,6 +50,19 @@ public partial class App : Application
             // window that explains why instead of failing to start. The dialog service takes the window as a delegate
             // because the window does not exist yet.
             _host = AppHost.Create(new AvaloniaDialogService(() => _window));
+
+            // The laptop's own Nitro key. Started before the window is built so the settings row's support check is
+            // already answered when the binding first reads it, and subscribed before Start so a press during startup
+            // is not lost. The gate reads the setting at press time, which is what makes turning the switch off take
+            // effect without a restart.
+            _nitroKey = _host.NitroKey;
+            if (_nitroKey != null)
+            {
+                _nitroGate = new NitroKeyActivationGate(() => _host?.ViewModel.NitroKeyEnabled == true, ShowWindow);
+                _nitroKey.NitroKeyPressed += OnNitroKeyPressed;
+                _nitroKey.Start();
+            }
+
             _window = new MainWindow { DataContext = _host.ViewModel };
             desktop.MainWindow = _window;
 
@@ -88,11 +103,16 @@ public partial class App : Application
     {
         if (_window == null) return;
 
-        _window.Show();
-        if (_window.WindowState == WindowState.Minimized) _window.WindowState = WindowState.Normal;
-        _window.Activate();
+        _window.BringToFront();
         _window.RestoreFromTray();
     }
+
+    /// <summary>
+    /// The Nitro key arrived on a background thread, so the hop to the UI thread is explicit. The gate reads the
+    /// setting at press time, which is what makes turning the switch off take effect without a restart.
+    /// </summary>
+    private void OnNitroKeyPressed(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(() => _nitroGate?.HandlePress());
 
     /// <summary>
     /// The only path that ends the process. The fans are handed back to the firmware first: a machine left with a
@@ -157,6 +177,17 @@ public partial class App : Application
 
     private void DisposeHost()
     {
+        // Unsubscribed before the host is disposed: the listener's read loop can raise one last event while it is
+        // shutting down, and a handler that reached a disposed view model would throw on a background thread.
+        if (_nitroKey != null)
+        {
+            _nitroKey.NitroKeyPressed -= OnNitroKeyPressed;
+            _nitroKey.Stop();
+            _nitroKey = null;
+        }
+
+        _nitroGate = null;
+
         _tray?.Dispose();
         _tray = null;
         _host?.Dispose();

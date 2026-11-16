@@ -191,6 +191,34 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Brings the window to the front from a trigger that is not the user clicking it — the Nitro key, or a second
+    /// launch.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Window.Activate"/> alone is not enough on Windows. The foreground lock lets a background process
+    /// change which window is active but not raise it above the one the user is typing in, so the Win32 call is made
+    /// as well; the two together are what actually puts the window on screen.
+    /// </remarks>
+    public void BringToFront()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+
+        if (!OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            var handle = TryGetPlatformHandle();
+            if (handle != null) SetForegroundWindow(handle.Handle);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Pencere öne getirilemedi", ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Drags the window by its header. The window has no system chrome, so this is the only way to move it; a
     /// double-click toggles the maximised state, which is what every other title bar does.
     /// </summary>
@@ -399,4 +427,7 @@ public partial class MainWindow : Window
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr minimumWorkingSetSize, IntPtr maximumWorkingSetSize);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hwnd);
 }

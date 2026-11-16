@@ -45,7 +45,8 @@ public sealed record PlatformServices(
     IUpdateService? Updates,
     IDiagnosticsService? Diagnostics,
     IDirectWmiControl? DirectWmi,
-    IRunAtStartupService? RunAtStartup);
+    IRunAtStartupService? RunAtStartup,
+    INitroKeyListener? NitroKey);
 
 /// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
@@ -72,10 +73,12 @@ public sealed record PlatformServices(
 public sealed class AppHost : IDisposable
 {
     private readonly IHardwareController? _hardware;
+    private readonly INitroKeyListener? _nitroKey;
 
     private AppHost(PlatformServices services, IDialogService? dialogs)
     {
         _hardware = services.Hardware;
+        _nitroKey = services.NitroKey;
         ViewModel = new MainViewModel(
             services.Settings,
             services.Hardware,
@@ -103,10 +106,17 @@ public sealed class AppHost : IDisposable
             services.Updates,
             services.Diagnostics,
             services.DirectWmi,
-            services.RunAtStartup);
+            services.RunAtStartup,
+            services.NitroKey);
     }
 
     public MainViewModel ViewModel { get; }
+
+    /// <summary>
+    /// The Nitro-key listener, owned here so the window can subscribe to it and the view model can ask whether the
+    /// machine has the button. Null only when the platform could not build one at all.
+    /// </summary>
+    public INitroKeyListener? NitroKey => _nitroKey;
 
     /// <summary>Builds everything. Never throws: a machine with no Acer support gets a window that explains it.</summary>
     public static AppHost Create(IDialogService? dialogs = null) => new(CreateServices(), dialogs);
@@ -158,6 +168,7 @@ public sealed class AppHost : IDisposable
         IDiagnosticsService? diagnostics = null;
         IDirectWmiControl? directWmi = null;
         IRunAtStartupService? runAtStartup = null;
+        INitroKeyListener? nitroKey = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -190,6 +201,10 @@ public sealed class AppHost : IDisposable
                 updates = new WindowsUpdateService();
                 diagnostics = new WindowsDiagnosticsService();
                 runAtStartup = new WindowsRunAtStartupService();
+
+                // The laptop's own Nitro key. Constructed here and started by the shell, because the listener has to
+                // outlive the window: the whole point is that the key works while the app sits in the tray.
+                nitroKey = new WindowsNitroKeyListener();
 
                 // The direct-WMI row is only meaningful when the hybrid controller is the one in use; a machine whose
                 // backend is something else gets no row rather than a button that cannot work.
@@ -256,6 +271,10 @@ public sealed class AppHost : IDisposable
                 updates = new LinuxUpdateService(fs);
                 diagnostics = new LinuxDiagnosticsService();
                 runAtStartup = new LinuxRunAtStartupService();
+
+                // The same button, read out of /dev/input instead of WMI. A machine without acer-wmi, or a user who is
+                // not in the input group, gets IsSupported false and no settings row.
+                nitroKey = new LinuxNitroKeyListener();
             }
             catch (Exception ex)
             {
@@ -268,7 +287,8 @@ public sealed class AppHost : IDisposable
         return new PlatformServices(
             settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
             refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb,
-            batteryHealth, storageHealth, debloat, systemTools, updates, diagnostics, directWmi, runAtStartup);
+            batteryHealth, storageHealth, debloat, systemTools, updates, diagnostics, directWmi, runAtStartup,
+            nitroKey);
     }
 
 #if WINDOWS
@@ -458,6 +478,7 @@ public sealed class AppHost : IDisposable
     public void Dispose()
     {
         ViewModel.Dispose();
+        _nitroKey?.Dispose();
         _hardware?.Dispose();
     }
 }

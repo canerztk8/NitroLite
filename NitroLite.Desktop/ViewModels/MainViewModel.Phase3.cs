@@ -110,6 +110,7 @@ public sealed partial class MainViewModel
     private readonly IDiagnosticsService? _diagnostics;
     private readonly IDirectWmiControl? _directWmi;
     private readonly IRunAtStartupService? _runAtStartup;
+    private readonly INitroKeyListener? _nitroKey;
 
     // ---------------------------------------------------------------- battery page state
 
@@ -541,6 +542,31 @@ public sealed partial class MainViewModel
             SaveSettings();
             Raise(nameof(ShowSystemMouseRow));
             Raise(nameof(SystemMouseText));
+        }
+    }
+
+    // ---------------------------------------------------------------- the Nitro key
+
+    /// <summary>
+    /// True when this machine has a Nitro key the app can hear. The settings row is bound to this, so a desktop, a
+    /// non-Acer laptop and a Linux install whose user is not in the <c>input</c> group all show nothing rather than a
+    /// switch that cannot do anything.
+    /// </summary>
+    public bool NitroKeyAvailable => _nitroKey?.IsSupported == true;
+
+    /// <summary>
+    /// Bring the window forward when the key is pressed. There is no shortcut to record: the key is a physical button
+    /// with one meaning, so this is a switch and not a key binding.
+    /// </summary>
+    public bool NitroKeyEnabled
+    {
+        get => _settings.NitroKeyEnabled;
+        set
+        {
+            if (_settings.NitroKeyEnabled == value) return;
+            _settings.NitroKeyEnabled = value;
+            Raise();
+            SaveSettings();
         }
     }
 
