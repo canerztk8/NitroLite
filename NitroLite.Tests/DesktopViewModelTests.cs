@@ -526,7 +526,7 @@ public class DesktopViewModelTests
         var resolved = DesktopThemeManager.Resolve(AppTheme.System);
 
         Assert.NotEqual(AppTheme.System, resolved);
-        Assert.Contains(resolved, new[] { AppTheme.Light, AppTheme.Dark });
+        Assert.Contains(resolved, new[] { AppTheme.WarmCream, AppTheme.Dark });
     }
 
     [Fact]

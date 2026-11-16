@@ -72,7 +72,7 @@ public sealed class ThemePalette
     /// <summary>The palette for a concrete theme. <see cref="AppTheme.System"/> is resolved by the caller.</summary>
     public static ThemePalette For(AppTheme theme) => theme switch
     {
-        AppTheme.Light => Light,
+        AppTheme.WarmCream => WarmCream,
         AppTheme.MidnightOled => MidnightOled,
         AppTheme.SlateSteel => SlateSteel,
         AppTheme.AmberConsole => AmberConsole,
@@ -161,25 +161,33 @@ public sealed class ThemePalette
         return Color.FromArgb(from.A, Mix(from.R, to.R), Mix(from.G, to.G), Mix(from.B, to.B));
     }
 
-    /// <summary>The light "recording paper" surface NitroLite shipped with.</summary>
-    public static ThemePalette Light { get; } = new()
+    /// <summary>
+    /// The warm-cream "recording paper" surface NitroLite shipped with, and the palette a fresh install starts in.
+    /// </summary>
+    /// <remarks>
+    /// The card frame is a shade darker than the paper's own rule was: a hairline at the original tone measured 1.20:1
+    /// against the page, under the 1.45:1 floor <c>ThemePaletteTests</c> holds every palette to, so the frame was
+    /// invisible on a bright screen. The accent is the vermilion the WPF window used, lifted a step so it clears 3:1
+    /// on the paper.
+    /// </remarks>
+    public static ThemePalette WarmCream { get; } = new()
     {
-        Page = Color.Parse("#F2EDE3"),
-        Card = Color.Parse("#F8F4EB"),
-        CardHover = Color.Parse("#EDE6D8"),
-        Panel = Color.Parse("#E8E0D2"),
-        Rail = Color.Parse("#EAE3D5"),
-        CardBorder = Color.Parse("#CFC4AF"),
+        Page = Color.Parse("#F5F1E8"),
+        Card = Color.Parse("#FAF8F3"),
+        CardHover = Color.Parse("#F0EBE0"),
+        Panel = Color.Parse("#EFE9DC"),
+        Rail = Color.Parse("#F0EBDF"),
+        CardBorder = Color.Parse("#CCC6BA"),
         CardBorderStrong = Color.Parse("#B8AB93"),
         TextPrimary = Color.Parse("#1B1917"),
         TextSecondary = Color.Parse("#4A4238"),
         TextMuted = Color.Parse("#6E6558"),
-        Accent = Color.Parse("#C0392B"),
-        OnAccent = Color.Parse("#F7F2E8"),
+        Accent = Color.Parse("#D93829"),
+        OnAccent = Color.Parse("#FBF7EF"),
         Success = Color.Parse("#5F6B3E"),
         Warning = Color.Parse("#B45309"),
         Danger = Color.Parse("#9B2C1F"),
-        ChartFill = Color.Parse("#1AC0392B")
+        ChartFill = Color.Parse("#1AD93829")
     };
 
     /// <summary>The same paper after dark: warm graphite, bone ink, a lifted vermilion.</summary>

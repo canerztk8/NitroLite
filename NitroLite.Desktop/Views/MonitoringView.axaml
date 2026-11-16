@@ -1,0 +1,158 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NitroLite.Desktop.ViewModels"
+             xmlns:controls="using:NitroLite.Desktop.Controls"
+             x:Class="NitroLite.Desktop.Views.MonitoringView"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    Page 2: the instrument panel. Every number the backend can read, plus the last minute of each series drawn beside
+    it. Nothing here writes to the hardware, which is why the page has no buttons except the rescan.
+  -->
+  <ScrollViewer>
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="0,0,0,16" Spacing="12">
+
+      <TextBlock Classes="pagetitle" Text="{Binding Labels.MonitoringPageTitle}" />
+
+      <!-- ============================================================ temperatures -->
+
+      <Border Classes="card">
+        <StackPanel Spacing="9">
+          <TextBlock Classes="section" Text="{Binding Labels.Temperatures}" />
+
+          <Grid ColumnDefinitions="*,*,*">
+            <StackPanel Spacing="2" Margin="0,0,12,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.Cpu}" />
+              <TextBlock Classes="figurebig" Text="{Binding CpuTemperatureText}" />
+              <controls:SparklineChart Height="34" Values="{Binding CpuTemperatureHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,12,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.Gpu}" />
+              <TextBlock Classes="figurebig" Text="{Binding GpuTemperatureText}" />
+              <controls:SparklineChart Height="34" Values="{Binding GpuTemperatureHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Spacing="2">
+              <TextBlock Classes="caps" Text="{Binding Labels.Sys}" />
+              <TextBlock Classes="figurebig" Text="{Binding SysTemperatureText}" />
+              <controls:SparklineChart Height="34" Values="{Binding SysTemperatureHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ fan speeds -->
+
+      <Border Classes="card">
+        <StackPanel Spacing="9">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.FanSpeeds}" VerticalAlignment="Center" />
+            <Border Grid.Column="1" Classes="pill">
+              <TextBlock Classes="caps" Text="{Binding FanRpmSourceText}" />
+            </Border>
+          </Grid>
+
+          <Grid ColumnDefinitions="*,*">
+            <StackPanel Spacing="3" Margin="0,0,14,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.Cpu}" />
+              <TextBlock Classes="figurebig" Text="{Binding CpuFanRpmText}" />
+              <ProgressBar Classes="fanbar" Minimum="0" Maximum="100" Value="{Binding CpuFanBarPercent}" />
+              <controls:SparklineChart Height="30" Values="{Binding CpuFanHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Classes="caps" Text="{Binding Labels.Gpu}" />
+              <TextBlock Classes="figurebig" Text="{Binding GpuFanRpmText}" />
+              <ProgressBar Classes="fanbar" Minimum="0" Maximum="100" Value="{Binding GpuFanBarPercent}" />
+              <controls:SparklineChart Height="30" Values="{Binding GpuFanHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ battery and power -->
+
+      <Border Classes="card">
+        <StackPanel Spacing="9">
+          <TextBlock Classes="section" Text="{Binding Labels.BatteryAndPower}" />
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="figurebig" Text="{Binding BatteryPercentText}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Spacing="3" Margin="16,0,16,0" VerticalAlignment="Center">
+              <TextBlock Classes="caps" Text="{Binding Labels.BatteryStatus}" />
+              <TextBlock Classes="rowtitle" Text="{Binding BatteryStateText}" />
+            </StackPanel>
+          </Grid>
+
+          <ProgressBar Classes="fanbar" Minimum="0" Maximum="100" Value="{Binding BatteryBarPercent}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ the minute of history -->
+
+      <Border Classes="card">
+        <StackPanel Spacing="9">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.TelemetryCharts}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="caps" Text="{Binding Labels.Last60Seconds}"
+                       VerticalAlignment="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+            <StackPanel Spacing="2" Margin="0,0,14,10">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Cpu}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding CpuTemperatureText}" />
+              </Grid>
+              <controls:SparklineChart Height="52" Values="{Binding CpuTemperatureHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,0,10">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Gpu}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding GpuTemperatureText}" />
+              </Grid>
+              <controls:SparklineChart Height="52" Values="{Binding GpuTemperatureHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Spacing="2" Margin="0,0,14,0">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Sys}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding SysTemperatureText}" />
+              </Grid>
+              <controls:SparklineChart Height="52" Values="{Binding SysTemperatureHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.FanRpm}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding CpuFanRpmText}" />
+              </Grid>
+              <controls:SparklineChart Height="52" Values="{Binding CpuFanHistory}"
+                                       Stroke="{DynamicResource AccentBrush}"
+                                       Baseline="{DynamicResource CardBorderStrongBrush}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

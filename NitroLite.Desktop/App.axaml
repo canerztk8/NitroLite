@@ -1,16 +1,19 @@
-﻿<Application xmlns="https://github.com/avaloniaui"
+<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="NitroLite.Desktop.App"
-             RequestedThemeVariant="Dark">
+             RequestedThemeVariant="Light">
 
   <!--
-    The design system. Every colour here is a DynamicResource, never a literal: the palette lives in
-    Themes/ThemePalette.cs and DesktopThemeManager swaps it under a live window, so a theme change repaints everything
-    without a restart and without a single control being re-bound by hand.
+    The design system, rebuilt to match the warm-cream WPF window it replaces.
 
-    The vocabulary is deliberately small — one page, one card, one inset panel, one pill, one accent — so a control
-    added later has an obvious class to use instead of inventing a colour. Sizes are in a single scale: 12 for a card
-    corner, 8 for a control, 999 for a pill; 16 for card padding, 12 for the gap inside one, 14 between cards.
+    Every colour here is a DynamicResource, never a literal: the palette lives in Themes/ThemePalette.cs and
+    DesktopThemeManager swaps it under a live window, so a theme change repaints everything without a restart and
+    without a single control being re-bound by hand.
+
+    The vocabulary is the WPF one, translated to Avalonia: a printed caption (10px, uppercase, faint), a recorded
+    figure (monospaced), a section title (15px), a row title (13.5px), a card (8px corner, one hairline, 14/12
+    padding), an inset panel, a segmented pill and a mode tile. Sizes are deliberately few so a control added later
+    has an obvious class to use instead of inventing a colour or a radius.
   -->
   <Application.Styles>
     <FluentTheme />
@@ -20,7 +23,7 @@
     <Style Selector="Window">
       <Setter Property="Background" Value="{DynamicResource PageBrush}" />
       <Setter Property="FontFamily" Value="Inter, Segoe UI, Ubuntu, Noto Sans, sans-serif" />
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontSize" Value="12" />
     </Style>
 
     <Style Selector="UserControl">
@@ -29,76 +32,99 @@
 
     <Style Selector="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
     </Style>
 
     <!-- ============================================================ type scale -->
 
-    <Style Selector="TextBlock.h1">
-      <Setter Property="FontSize" Value="20" />
+    <!-- A printed label: small, uppercase, faint. Field names and captions. -->
+    <Style Selector="TextBlock.caps">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A recorded figure. -->
+    <Style Selector="TextBlock.figure">
+      <Setter Property="FontFamily" Value="Cascadia Mono, JetBrains Mono, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A big recorded figure: the fan RPM readouts. -->
+    <Style Selector="TextBlock.figurebig">
+      <Setter Property="FontFamily" Value="Cascadia Mono, JetBrains Mono, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="22" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="TextBlock.h2">
-      <Setter Property="FontSize" Value="14" />
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="TextBlock.caption">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="TextWrapping" Value="Wrap" />
+    <Style Selector="TextBlock.rowtitle">
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
-    <Style Selector="TextBlock.muted">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-      <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-
-    <Style Selector="TextBlock.label">
+    <Style Selector="TextBlock.body">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <Style Selector="TextBlock.value">
-      <Setter Property="FontSize" Value="26" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.mono">
       <Setter Property="FontFamily" Value="Cascadia Mono, JetBrains Mono, DejaVu Sans Mono, monospace" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="11.5" />
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- The page heading: one per page, above the cards. -->
+    <Style Selector="TextBlock.pagetitle">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
     <!-- ============================================================ containers -->
 
+    <!-- A section is a card on the paper: a ground one tone off the page, one hairline frame, an 8px corner. -->
     <Style Selector="Border.card">
       <Setter Property="Background" Value="{DynamicResource CardBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="12" />
-      <Setter Property="Padding" Value="16" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,12" />
     </Style>
 
-    <!-- An inset inside a card: the thermal-floor note, the udev command box. One step darker than the card it sits on,
-         so the nesting reads without a second border. -->
+    <!-- An inset inside a card: the thermal-floor note, the udev command box. -->
     <Style Selector="Border.panel">
       <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="12" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10" />
     </Style>
 
     <Style Selector="Border.pill">
       <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
       <Setter Property="CornerRadius" Value="999" />
-      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="Padding" Value="9,3" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -106,7 +132,7 @@
     <Style Selector="Border.badge">
       <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
       <Setter Property="CornerRadius" Value="999" />
-      <Setter Property="Padding" Value="9,3" />
+      <Setter Property="Padding" Value="8,2" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -123,7 +149,8 @@
     </Style>
 
     <Style Selector="Border.badge > TextBlock">
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
@@ -133,100 +160,270 @@
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
     </Style>
 
-    <!-- ============================================================ mode cards -->
+    <!-- A reading in the left rail: a figure that is also a shortcut to the page that owns it. -->
+    <Style Selector="Border.sidestat">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="Margin" Value="0,1" />
+    </Style>
+
+    <Style Selector="Border.sidestat:pointerover">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    </Style>
+
+    <!-- ============================================================ the rail -->
 
     <!--
-      A mode is a card, not a combo-box row: the whole card is the button, so choosing a mode is one click and the
-      accent is the confirmation. The selected state is a class binding on IsSelected, which is why the card can be
-      painted without the parent re-rendering the list.
+      A rail entry is a button, not a tab: the marker, the icon and the label are one control, and the live SİSTEM
+      card sits under the list without being a page. The selected state is a class binding on IsSelected, so the
+      marker can be painted without the parent re-rendering the list.
     -->
-    <!-- The card is wrapped in a Button so the click is a command; the button itself is invisible and the Border
-         inside it does all the painting. -->
-    <Style Selector="Button.modecardbutton">
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.nav /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.nav:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.nav:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.navitem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="8,7" />
+      <Setter Property="Margin" Value="0,1" />
+    </Style>
+
+    <Style Selector="Border.navitem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="Border.navitem.selected">
+      <Setter Property="Background" Value="{DynamicResource PageBrush}" />
+    </Style>
+
+    <!-- The 5px ink square that marks the selected page. -->
+    <Style Selector="Rectangle.navmark">
+      <Setter Property="Width" Value="5" />
+      <Setter Property="Height" Value="5" />
+      <Setter Property="Fill" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="Rectangle.navmark.selected">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="Border.navitem PathIcon">
+      <Setter Property="Width" Value="15" />
+      <Setter Property="Height" Value="15" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.navitem.selected PathIcon">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Border.navitem TextBlock.navlabel">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.navitem.selected TextBlock.navlabel">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- ============================================================ mode tiles -->
+
+    <!--
+      A mode is a compact tile, not a full-width row: the name, a two-word label and the AKTİF chip. The active tile
+      is marked by the vermilion frame plus the chip; the fill never changes, so state is built by de-emphasis rather
+      than by a coloured band.
+    -->
+    <Style Selector="Button.modetile">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="VerticalContentAlignment" Value="Stretch" />
-    </Style>
-
-    <Style Selector="Button.modecardbutton:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <Style Selector="Button.modecardbutton:pressed /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <!-- Fluent paints a grey plate behind a disabled button. The card sits on top of it, so any translucency in the
-         card let that grey through and the selected card came out washed out. -->
-    <Style Selector="Button.modecardbutton:disabled /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <Style Selector="Border.modecard">
-      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="Padding" Value="12" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
 
-    <Style Selector="Border.modecard:pointerover">
-      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
+    <Style Selector="Button.modetile /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
 
-    <Style Selector="Border.modecard.selected">
-      <!-- A solid step up from the panel, not a tint of the accent: a translucent accent over a dark panel lands
-           somewhere in the middle greys, and the accent-coloured title on top of it was unreadable. The accent is
-           carried by the border, the icon and the dot instead, which stay legible on every palette. -->
+    <Style Selector="Button.modetile:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.modetile:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.modetile:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.modetile">
+      <Setter Property="Background" Value="{DynamicResource PageBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="11,9" />
+    </Style>
+
+    <Style Selector="Border.modetile:pointerover">
       <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="Border.modetile.selected">
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
       <Setter Property="BorderThickness" Value="2" />
       <!-- One pixel less padding, so the thicker border does not move the text. -->
-      <Setter Property="Padding" Value="11" />
+      <Setter Property="Padding" Value="10,8" />
     </Style>
 
-    <!-- No backend means no card can be pressed. Dimming the text says so without washing the card out: an Opacity on
-         the border blends it with whatever is behind it, which is how the whole row turned grey. -->
-    <Style Selector="Border.modecard:disabled PathIcon">
+    <Style Selector="Border.modetile:disabled PathIcon">
       <Setter Property="Opacity" Value="0.45" />
     </Style>
 
-    <Style Selector="Border.modecard:disabled TextBlock.modetitle">
+    <Style Selector="Border.modetile:disabled TextBlock.modetitle">
       <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
     </Style>
 
-    <Style Selector="Border.modecard PathIcon">
+    <Style Selector="Border.modetile PathIcon">
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="Width" Value="18" />
-      <Setter Property="Height" Value="18" />
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
     </Style>
 
-    <Style Selector="Border.modecard.selected PathIcon">
+    <Style Selector="Border.modetile.selected PathIcon">
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
 
-    <Style Selector="Border.modecard TextBlock.modetitle">
+    <Style Selector="Border.modetile TextBlock.modetitle">
       <Setter Property="FontSize" Value="13" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
-    <Style Selector="Border.modecard.selected TextBlock.modetitle">
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <!-- The dot is the selection marker that does not depend on telling two reds apart. -->
+    <Style Selector="Border.modetile Ellipse.selecteddot">
+      <Setter Property="Width" Value="6" />
+      <Setter Property="Height" Value="6" />
+      <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="IsVisible" Value="False" />
     </Style>
 
-    <!-- The dot is the selection marker that does not depend on telling two blues apart. -->
-    <Style Selector="Border.modecard Ellipse.selecteddot">
-      <Setter Property="Width" Value="7" />
-      <Setter Property="Height" Value="7" />
-      <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="VerticalAlignment" Value="Top" />
-      <Setter Property="HorizontalAlignment" Value="Right" />
+    <Style Selector="Border.modetile.selected Ellipse.selecteddot">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!-- ============================================================ segmented pills -->
+
+    <!--
+      A segmented choice: fan mode, CPU boost. The selected option is the solid vermilion mark, the others stay flat
+      paper. The group is one rounded frame with the pills inside it, so it reads as one control.
+    -->
+    <Style Selector="Border.segmented">
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="2" />
+    </Style>
+
+    <Style Selector="Button.seg">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.seg /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.seg:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.seg.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.seg.selected">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.seg:disabled">
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+
+    <!-- ============================================================ colour swatches -->
+
+    <Style Selector="Button.swatch">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.swatch /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.swatch:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.swatch">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Border.swatch.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
     </Style>
 
     <!-- ============================================================ capability rows -->
@@ -253,12 +450,44 @@
     <!-- ============================================================ buttons -->
 
     <Style Selector="Button">
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="14,8" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="FontSize" Value="11.5" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="MinHeight" Value="28" />
+    </Style>
+
+    <!-- The three window buttons. 28x28 and transparent, so they read as part of the printed header rather than as
+         controls sitting on it; only the close button warms up on hover. -->
+    <Style Selector="Button.caption">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.caption /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.caption.close:pointerover PathIcon">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
     </Style>
 
     <Style Selector="Button.primary">
@@ -299,10 +528,10 @@
     <!-- ============================================================ inputs -->
 
     <Style Selector="TextBox">
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="10,7" />
-      <Setter Property="MinHeight" Value="32" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="FontSize" Value="11.5" />
       <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
@@ -312,24 +541,23 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
 
-    <!-- A read-only field that holds a command or a path: monospaced so a wrapped line stays readable. -->
     <Style Selector="TextBox.mono">
       <Setter Property="FontFamily" Value="Cascadia Mono, JetBrains Mono, DejaVu Sans Mono, monospace" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="11.5" />
     </Style>
 
     <Style Selector="ComboBox">
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="10,6" />
-      <Setter Property="MinHeight" Value="32" />
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="FontSize" Value="11.5" />
       <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
     <Style Selector="CheckBox">
-      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontSize" Value="11.5" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
@@ -339,94 +567,30 @@
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
       <Setter Property="MinWidth" Value="0" />
       <Setter Property="VerticalAlignment" Value="Center" />
+      <!-- The Fluent template prints "On"/"Off" beside the knob in English. The knob already says which way it is,
+           and a Turkish window with an English word in it is worse than no word at all. -->
+      <Setter Property="OnContent" Value="{x:Null}" />
+      <Setter Property="OffContent" Value="{x:Null}" />
     </Style>
 
     <!-- The slider keeps the Fluent template for the same reason, and for one more: the fan-curve sliders are the
          control the whole page exists for, and a hand-written template that got the Track's buttons wrong would make
          them undraggable. What is styled here is the container — the accent, the height and the breathing room. -->
     <Style Selector="Slider">
-      <Setter Property="MinWidth" Value="160" />
-      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="MinWidth" Value="120" />
+      <Setter Property="MinHeight" Value="24" />
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
-      <Setter Property="Margin" Value="0,2" />
+      <Setter Property="Margin" Value="0,1" />
     </Style>
 
-    <!-- ============================================================ left navigation -->
-
-    <!--
-      The tab strip is the navigation rail. The template is header-only — the page itself is presented by the
-      TabControl — so replacing it cannot affect which view is shown; it only decides how the row looks. The accent bar
-      on the left is what marks the selected tab, and it is a Border whose background the :selected style sets.
-    -->
-    <Style Selector="TabControl">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Padding" Value="0" />
-    </Style>
-
-    <Style Selector="TabControl /template/ ItemsPresenter#PART_ItemsPresenter">
-      <Setter Property="Margin" Value="0,10" />
-    </Style>
-
-    <!-- The TabControl's own background paints the rail, and the Fluent template lets it show behind the page as well.
-         This puts the page colour back on the content host, so the rail stops where the navigation stops. -->
-    <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
-      <Setter Property="Background" Value="{DynamicResource PageBrush}" />
-    </Style>
-
-    <Style Selector="TabItem">
-      <Setter Property="FontSize" Value="13" />
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="Padding" Value="12,9" />
-      <Setter Property="MinHeight" Value="38" />
-      <Setter Property="Template">
-        <ControlTemplate>
-          <Border Name="PART_Root"
-                  Background="Transparent"
-                  CornerRadius="8"
-                  Margin="8,2"
-                  Padding="{TemplateBinding Padding}">
-            <Grid ColumnDefinitions="3,*">
-              <Border Name="PART_Accent"
-                      Width="3"
-                      CornerRadius="2"
-                      Background="Transparent"
-                      Margin="0,1" />
-              <ContentPresenter Grid.Column="1"
-                                Margin="11,0,0,0"
-                                Content="{TemplateBinding Header}"
-                                ContentTemplate="{TemplateBinding HeaderTemplate}"
-                                Foreground="{TemplateBinding Foreground}"
-                                FontSize="{TemplateBinding FontSize}"
-                                FontWeight="{TemplateBinding FontWeight}"
-                                VerticalAlignment="Center" />
-            </Grid>
-          </Border>
-        </ControlTemplate>
-      </Setter>
-    </Style>
-
-    <Style Selector="TabItem:pointerover /template/ Border#PART_Root">
-      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
-    </Style>
-
-    <Style Selector="TabItem:selected /template/ Border#PART_Root">
-      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-    </Style>
-
-    <Style Selector="TabItem:selected /template/ Border#PART_Accent">
-      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-    </Style>
-
-    <Style Selector="TabItem:selected">
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-
-    <!-- The nav icons inherit the tab's Foreground, so they follow the selected state without a rule of their own. -->
-    <Style Selector="TabItem PathIcon">
-      <Setter Property="Width" Value="16" />
-      <Setter Property="Height" Value="16" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+    <!-- The fan bars. A 3px rule, not a Fluent progress bar: the fill is a shape, and the default template's
+         animation and rounded caps made two bars of different lengths look like different controls. -->
+    <Style Selector="ProgressBar.fanbar">
+      <Setter Property="Height" Value="3" />
+      <Setter Property="MinHeight" Value="3" />
+      <Setter Property="CornerRadius" Value="1.5" />
+      <Setter Property="Background" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
     </Style>
 
     <!-- ============================================================ scrollbars -->

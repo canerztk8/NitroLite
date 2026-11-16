@@ -1,6 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using NitroLite.Core;
 using NitroLite.Desktop.ViewModels;
@@ -62,6 +64,33 @@ public partial class MainWindow : Window
     /// window, which is what keeps the background work alive.
     /// </summary>
     public bool AllowClose { get; set; }
+
+    /// <summary>
+    /// Drags the window by its header. The window has no system chrome, so this is the only way to move it; a
+    /// double-click toggles the maximised state, which is what every other title bar does.
+    /// </summary>
+    private void OnCaptionPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+
+        if (e.ClickCount == 2)
+        {
+            ToggleMaximized();
+            return;
+        }
+
+        BeginMoveDrag(e);
+    }
+
+    private void OnMinimizeClick(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnMaximizeClick(object? sender, RoutedEventArgs e) => ToggleMaximized();
+
+    /// <summary>Hides to the tray rather than ending the process, so the fan curve keeps running.</summary>
+    private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void ToggleMaximized() =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {

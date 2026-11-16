@@ -40,9 +40,9 @@ public sealed class DesktopThemeManager : IThemeApplier
     /// </summary>
     public static AppTheme Resolve(AppTheme theme) => theme switch
     {
-        AppTheme.System => SystemPrefersDark() ? AppTheme.Dark : AppTheme.Light,
+        AppTheme.System => SystemPrefersDark() ? AppTheme.Dark : AppTheme.WarmCream,
         { } concrete when ThemeCatalog.All.Contains(concrete) => concrete,
-        _ => AppTheme.Light
+        _ => AppTheme.WarmCream
     };
 
     /// <summary>

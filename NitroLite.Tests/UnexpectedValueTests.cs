@@ -149,7 +149,7 @@ public class UnexpectedValueTests : IDisposable
         // default palette is still Light: only a theme *name* the app cannot read falls back to System.
         Assert.True(result.PrimaryCorrupt);
         Assert.Equal(SettingsLoadSource.Defaults, result.Source);
-        Assert.Equal(AppTheme.Light, result.Settings.Theme);
+        Assert.Equal(AppTheme.WarmCream, result.Settings.Theme);
     }
 
     [Fact]

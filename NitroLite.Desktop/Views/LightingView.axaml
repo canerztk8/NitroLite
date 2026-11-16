@@ -2,21 +2,39 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:core="using:NitroLite.Core"
+             xmlns:conv="using:NitroLite.Desktop.Converters"
              x:Class="NitroLite.Desktop.Views.LightingView"
              x:DataType="vm:MainViewModel">
 
+  <!--
+    Page 3: the keyboard. A colour is a click on a swatch rather than a hex string typed into a box, and the four zones
+    are previewed as the strip they are, in the order they sit on the deck.
+  -->
   <ScrollViewer>
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="0,0,0,16" Spacing="12">
+
+      <TextBlock Classes="pagetitle" Text="{Binding Labels.LightingPageTitle}" />
+
+      <!-- ============================================================ the keyboard -->
 
       <Border Classes="card" IsVisible="{Binding LightingAvailable}">
-        <StackPanel Spacing="12">
-          <TextBlock Classes="h2" Text="{Binding Labels.KeyboardLighting}" />
+        <StackPanel Spacing="10">
 
-          <Grid ColumnDefinitions="*,*">
-            <StackPanel Spacing="4" Margin="0,0,12,0">
-              <TextBlock Classes="label" Text="{Binding Labels.Effect}" />
-              <ComboBox ItemsSource="{Binding Effects}"
-                        SelectedItem="{Binding SelectedEffect}"
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.KeyboardLighting}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <Button Classes="primary" Content="{Binding Labels.Apply}"
+                      Command="{Binding ApplyLightingCommand}" />
+              <Button Classes="ghost" Content="{Binding Labels.TurnOff}"
+                      Command="{Binding TurnOffLightingCommand}" />
+            </StackPanel>
+          </Grid>
+
+          <!-- Effect and the three levels, in one row: the whole shape of the animation at a glance. -->
+          <Grid ColumnDefinitions="1.2*,*,*,*">
+            <StackPanel Spacing="3" Margin="0,0,12,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.Effect}" />
+              <ComboBox ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect}"
                         HorizontalAlignment="Stretch">
                 <ComboBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:EffectChoice">
@@ -26,155 +44,198 @@
               </ComboBox>
             </StackPanel>
 
-            <StackPanel Grid.Column="1" Spacing="4">
-              <TextBlock Classes="label" Text="{Binding Labels.PrimaryColor}" />
-              <TextBox Text="{Binding PrimaryColor}" Watermark="#00E5FF" />
+            <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,12,0">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding BrightnessLevel}" />
+              </Grid>
+              <Slider Minimum="1" Maximum="{Binding MaxBrightness}" TickFrequency="1"
+                      IsSnapToTickEnabled="True" Value="{Binding BrightnessLevel}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Spacing="1" Margin="0,0,12,0">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Speed}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding SpeedLevel}" />
+              </Grid>
+              <Slider Minimum="1" Maximum="{Binding MaxSpeed}" TickFrequency="1"
+                      IsSnapToTickEnabled="True" Value="{Binding SpeedLevel}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3" Spacing="1">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Direction}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding DirectionLevel}" />
+              </Grid>
+              <Slider Minimum="0" Maximum="{Binding MaxDirection}" TickFrequency="1"
+                      IsSnapToTickEnabled="True" Value="{Binding DirectionLevel}" />
             </StackPanel>
           </Grid>
 
-          <Grid ColumnDefinitions="*,*,*">
-            <StackPanel Spacing="2" Margin="0,0,12,0">
-              <TextBlock Classes="label" Text="{Binding Labels.Brightness}" />
-              <Slider Minimum="1" Maximum="{Binding MaxBrightness}"
-                      TickFrequency="1" IsSnapToTickEnabled="True"
-                      Value="{Binding BrightnessLevel}" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,12,0">
-              <TextBlock Classes="label" Text="{Binding Labels.Speed}" />
-              <Slider Minimum="1" Maximum="{Binding MaxSpeed}"
-                      TickFrequency="1" IsSnapToTickEnabled="True"
-                      Value="{Binding SpeedLevel}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Spacing="2">
-              <TextBlock Classes="label" Text="{Binding Labels.Direction}" />
-              <Slider Minimum="0" Maximum="{Binding MaxDirection}"
-                      TickFrequency="1" IsSnapToTickEnabled="True"
-                      Value="{Binding DirectionLevel}" />
-            </StackPanel>
-          </Grid>
-
-          <!-- The four zones are one group, so they sit in one inset rather than floating between the sliders and the
-               buttons. -->
+          <!-- The palette writes into whichever target the pills below have selected. -->
           <Border Classes="panel">
             <StackPanel Spacing="8">
-              <TextBlock Classes="label" Text="{Binding Labels.ZoneColors}" />
 
-              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                <StackPanel Spacing="4" Margin="0,0,12,8">
-                  <TextBlock Classes="caption" Text="{Binding Labels.Zone1}" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.ColorPalette}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding ActiveZoneText}"
+                           VerticalAlignment="Center" />
+              </Grid>
+
+              <Border Classes="segmented" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                  <Button Classes="seg" Classes.selected="{Binding IsPrimaryZoneActive}"
+                          Command="{Binding SelectPrimaryZoneCommand}"
+                          Content="{Binding Labels.PrimaryColor}" />
+                  <Button Classes="seg" Classes.selected="{Binding IsZone1Active}"
+                          Command="{Binding SelectZone1Command}" Content="{Binding Labels.Zone1}" />
+                  <Button Classes="seg" Classes.selected="{Binding IsZone2Active}"
+                          Command="{Binding SelectZone2Command}" Content="{Binding Labels.Zone2}" />
+                  <Button Classes="seg" Classes.selected="{Binding IsZone3Active}"
+                          Command="{Binding SelectZone3Command}" Content="{Binding Labels.Zone3}" />
+                  <Button Classes="seg" Classes.selected="{Binding IsZone4Active}"
+                          Command="{Binding SelectZone4Command}" Content="{Binding Labels.Zone4}" />
+                </StackPanel>
+              </Border>
+
+              <ItemsControl ItemsSource="{Binding ColorPalette}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="6" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ColorSwatch">
+                    <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
+                      <Border Classes="swatch" Classes.selected="{Binding IsSelected}"
+                              Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- The exact hex, for a colour the eight swatches do not cover. -->
+              <Grid ColumnDefinitions="*,*,*,*,*">
+                <StackPanel Spacing="3" Margin="0,0,8,0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.PrimaryColor}" />
+                  <TextBox Text="{Binding PrimaryColor}" Watermark="#00E5FF" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="3" Margin="0,0,8,0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.Zone1}" />
                   <TextBox Text="{Binding Zone1}" Watermark="#00E5FF" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="4" Margin="0,0,0,8">
-                  <TextBlock Classes="caption" Text="{Binding Labels.Zone2}" />
+                <StackPanel Grid.Column="2" Spacing="3" Margin="0,0,8,0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.Zone2}" />
                   <TextBox Text="{Binding Zone2}" Watermark="#00E5FF" />
                 </StackPanel>
-                <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,12,0">
-                  <TextBlock Classes="caption" Text="{Binding Labels.Zone3}" />
+                <StackPanel Grid.Column="3" Spacing="3" Margin="0,0,8,0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.Zone3}" />
                   <TextBox Text="{Binding Zone3}" Watermark="#00E5FF" />
                 </StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
-                  <TextBlock Classes="caption" Text="{Binding Labels.Zone4}" />
+                <StackPanel Grid.Column="4" Spacing="3">
+                  <TextBlock Classes="caps" Text="{Binding Labels.Zone4}" />
                   <TextBox Text="{Binding Zone4}" Watermark="#00E5FF" />
                 </StackPanel>
               </Grid>
+
             </StackPanel>
           </Border>
 
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Button Classes="primary"
-                    Content="{Binding Labels.Apply}"
-                    Command="{Binding ApplyLightingCommand}" />
-            <Button Classes="ghost"
-                    Content="{Binding Labels.TurnOff}"
-                    Command="{Binding TurnOffLightingCommand}" />
+          <!-- The deck, left to right, in the colours it is about to be painted. -->
+          <StackPanel Spacing="4">
+            <TextBlock Classes="caps" Text="{Binding Labels.ZonePreview}" />
+            <Grid ColumnDefinitions="*,*,*,*" Height="22">
+              <Border Grid.Column="0" CornerRadius="4,0,0,4" BorderThickness="1"
+                      BorderBrush="{DynamicResource CardBorderStrongBrush}"
+                      Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+              <Border Grid.Column="1" BorderThickness="1,1,0,1"
+                      BorderBrush="{DynamicResource CardBorderStrongBrush}"
+                      Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+              <Border Grid.Column="2" BorderThickness="1,1,0,1"
+                      BorderBrush="{DynamicResource CardBorderStrongBrush}"
+                      Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+              <Border Grid.Column="3" CornerRadius="0,4,4,0" BorderThickness="1,1,1,1"
+                      BorderBrush="{DynamicResource CardBorderStrongBrush}"
+                      Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+            </Grid>
           </StackPanel>
+
         </StackPanel>
       </Border>
 
       <!-- No keyboard node: one compact line instead of a card-shaped empty box. -->
       <Border Classes="card" IsVisible="{Binding !LightingAvailable}">
         <StackPanel Orientation="Horizontal" Spacing="10">
-          <TextBlock Classes="h2" Text="{Binding Labels.KeyboardLighting}" VerticalAlignment="Center" />
-          <Border Classes="badge">
+          <TextBlock Classes="section" Text="{Binding Labels.KeyboardLighting}" VerticalAlignment="Center" />
+          <Border Classes="badge" VerticalAlignment="Center">
             <TextBlock Text="{Binding Labels.NotOnThisMachine}" />
           </Border>
         </StackPanel>
       </Border>
 
-      <!-- Saved profiles. The list is the same one the Windows build keeps in rgb_presets.json, so a user who moves
-           between the two front ends finds their own presets already there. -->
+      <!-- ============================================================ saved profiles -->
+
       <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="{Binding Labels.RgbProfiles}" />
+        <StackPanel Spacing="9">
+          <TextBlock Classes="section" Text="{Binding Labels.RgbProfiles}" />
 
-          <ComboBox ItemsSource="{Binding RgbProfiles}"
-                    SelectedItem="{Binding SelectedRgbProfile}"
-                    HorizontalAlignment="Stretch">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="core:RgbPreset">
-                <TextBlock Text="{Binding DisplayName}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <Button Classes="primary"
-                    Content="{Binding Labels.ApplyProfile}"
-                    Command="{Binding ApplyRgbProfileCommand}" />
-            <Button Classes="danger"
-                    Content="{Binding Labels.DeleteProfile}"
-                    Command="{Binding DeleteRgbProfileCommand}" />
-          </StackPanel>
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <ComboBox ItemsSource="{Binding RgbProfiles}" SelectedItem="{Binding SelectedRgbProfile}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="core:RgbPreset">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Column="1" Classes="primary" Margin="8,0,0,0"
+                    Content="{Binding Labels.ApplyProfile}" Command="{Binding ApplyRgbProfileCommand}" />
+            <Button Grid.Column="2" Classes="danger" Margin="8,0,0,0"
+                    Content="{Binding Labels.DeleteProfile}" Command="{Binding DeleteRgbProfileCommand}" />
+          </Grid>
 
           <Grid ColumnDefinitions="*,Auto">
             <TextBox Text="{Binding NewProfileName}" Watermark="{Binding Labels.ProfileName}" />
-            <Button Grid.Column="1" Classes="ghost" Margin="10,0,0,0"
-                    Content="{Binding Labels.SaveProfile}"
-                    Command="{Binding SaveRgbProfileCommand}" />
+            <Button Grid.Column="1" Classes="ghost" Margin="8,0,0,0"
+                    Content="{Binding Labels.SaveProfile}" Command="{Binding SaveRgbProfileCommand}" />
           </Grid>
 
           <!-- Only drawn when there is something to say. An always-present panel here was an empty dark rectangle
                under the buttons on every launch. -->
-          <TextBlock Classes="caption"
-                     Text="{Binding RgbProfileStatus}"
+          <TextBlock Classes="hint" Text="{Binding RgbProfileStatus}"
                      IsVisible="{Binding HasRgbProfileStatus}" />
-          <TextBlock Classes="caption"
-                     Text="{Binding RgbProfileLoadError}"
+          <TextBlock Classes="hint" Text="{Binding RgbProfileLoadError}"
                      IsVisible="{Binding HasRgbProfileLoadError}" />
         </StackPanel>
       </Border>
 
+      <!-- ============================================================ extras -->
+
       <Border Classes="card" IsVisible="{Binding ShowExtrasCard}">
-        <StackPanel Spacing="12">
-          <TextBlock Classes="h2" Text="{Binding Labels.Extras}" />
+        <StackPanel Spacing="9">
+          <TextBlock Classes="section" Text="{Binding Labels.Extras}" />
 
           <!-- Each row hides itself when the probe did not find the node, so the page never offers a switch that
                would write to a file that is not there. -->
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CoolBoostAvailable}">
-            <TextBlock Classes="label" Text="{Binding Labels.CoolBoost}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.CoolBoost}" VerticalAlignment="Center" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding CoolBoostOn}" />
           </Grid>
 
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding LcdOverdriveAvailable}">
-            <TextBlock Classes="label" Text="{Binding Labels.LcdOverdrive}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.LcdOverdrive}" VerticalAlignment="Center" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding LcdOverdriveOn}" />
           </Grid>
 
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding BacklightTimeoutAvailable}">
-            <TextBlock Classes="label" Text="{Binding Labels.BacklightTimeout}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.BacklightTimeout}" VerticalAlignment="Center" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding BacklightTimeoutOn}" />
           </Grid>
 
-          <!-- The battery charge limit is not here: it has its own card on the dashboard, where a user looks for it,
-               and two switches bound to one firmware state would only be a way to disagree with itself. -->
-
-          <!-- Nothing at all on this machine: one line, not an empty card. The card already says "Ekstralar", so the
-               row carries only the badge. -->
-          <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding NoExtrasAvailable}">
-            <Border Classes="badge">
-              <TextBlock Text="{Binding Labels.NotOnThisMachine}" />
-            </Border>
-          </StackPanel>
+          <!-- Nothing at all on this machine: one line, not an empty card. -->
+          <Border Classes="badge" HorizontalAlignment="Left" IsVisible="{Binding NoExtrasAvailable}">
+            <TextBlock Text="{Binding Labels.NotOnThisMachine}" />
+          </Border>
         </StackPanel>
       </Border>
 

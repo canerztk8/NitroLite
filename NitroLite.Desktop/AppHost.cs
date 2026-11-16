@@ -50,12 +50,13 @@ public sealed class AppHost : IDisposable
         SchoolModeService? schoolMode,
         RgbProfileService rgbProfiles,
         RefreshRateAutomation? refreshRate,
-        Func<(bool OnAc, int? BatteryPercent)>? powerState)
+        Func<(bool OnAc, int? BatteryPercent)>? powerState,
+        ICpuBoostAccess? cpuBoost)
     {
         _hardware = hardware;
         ViewModel = new MainViewModel(
             settings, hardware, platform, settingsPath, gameProfiles, schoolMode, rgbProfiles,
-            DesktopThemeManager.Instance, rescan, autoStart, refreshRate, powerState);
+            DesktopThemeManager.Instance, rescan, autoStart, refreshRate, powerState, cpuBoost);
     }
 
     public MainViewModel ViewModel { get; }
@@ -90,6 +91,7 @@ public sealed class AppHost : IDisposable
         SchoolModeService? schoolMode = null;
         RefreshRateAutomation? refreshRate = null;
         Func<(bool OnAc, int? BatteryPercent)>? powerState = null;
+        ICpuBoostAccess? cpuBoost = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -98,6 +100,10 @@ public sealed class AppHost : IDisposable
             {
                 (hardware, platform, rescan, autoStart, gameProfiles, schoolMode, refreshRate, powerState) =
                     CreateWindows(settings);
+
+                // The same object school mode writes through, so the segmented control and the state machine can never
+                // disagree about which boost mode the scheme is holding.
+                cpuBoost = new CpuPowerService();
             }
             catch (Exception ex)
             {
@@ -126,6 +132,7 @@ public sealed class AppHost : IDisposable
                 // card hides itself. Wiring it anyway keeps the composition root free of a platform branch that would
                 // have to be remembered when a Wayland or XRandR backend is added.
                 refreshRate = new RefreshRateAutomation(new LinuxDisplayRefreshRateService(), settings);
+                cpuBoost = new LinuxCpuBoostAccess(fs);
                 powerState = () =>
                 {
                     var (onAc, percent) = LinuxPowerSupply.Read(fs);
@@ -142,7 +149,7 @@ public sealed class AppHost : IDisposable
 
         return new AppHost(
             settings, hardware, platform, rescan, autoStart, settingsPath, gameProfiles, schoolMode,
-            new RgbProfileService(), refreshRate, powerState);
+            new RgbProfileService(), refreshRate, powerState, cpuBoost);
     }
 
 #if WINDOWS

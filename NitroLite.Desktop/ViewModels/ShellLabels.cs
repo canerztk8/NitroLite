@@ -211,4 +211,103 @@ public sealed class ShellLabels
 
     /// <summary>"Bölge 1" for a zone colour row.</summary>
     public string Zone(int index) => Loc.T($"Bölge {index}");
+
+    // ---------------------------------------------------------------- shell chrome
+    //
+    // The printed captions of the WPF window: small, uppercase, faint. They are catalogue keys like every other label,
+    // so a translated window does not keep a Turkish rail.
+
+    public string NavCaption => Loc.T("GEZİNTİ");
+    public string SystemCaption => Loc.T("SİSTEM");
+    public string BatteryCaption => Loc.T("PİL");
+    public string ModeCaption => Loc.T("MOD");
+    public string ActiveBadge => Loc.T("AKTİF");
+    public string BoostCaption => Loc.T("BOOST");
+    public string FanCaption => Loc.T("FAN");
+    public string GameCaption => Loc.T("OYUN");
+
+    /// <summary>
+    /// The signature under the rail. Deliberately not a catalogue key: it is the author's line, and a translated
+    /// signature would be a different signature. The heart is drawn in the accent colour beside it.
+    /// </summary>
+    public string Minimize => Loc.T("Küçült");
+    public string Maximize => Loc.T("Büyüt");
+    public string HideToTray => Loc.T("Tepsiye gizle");
+
+    public string SignaturePrefix => "Made with love by ·";
+
+    public string SignatureName => "Caner";
+
+    // ---------------------------------------------------------------- the five pages
+
+    public string NavModes => Loc.T("Çalışma Modları");
+    public string NavMonitoring => Loc.T("Donanım İzleme & OSD");
+    public string NavLighting => Loc.T("Klavye Aydınlatması");
+    public string NavBattery => Loc.T("Pil & Termal Sağlık");
+    public string NavTools => Loc.T("Sistem Servisleri & Araçlar");
+
+    // The page headings are longer than the rail labels, exactly as they were in the WPF window: the rail has to fit
+    // five items in 225px, the page has the whole width.
+    public string MonitoringPageTitle => Loc.T("Donanım Telemetrisi ve OSD Göstergesi");
+    public string LightingPageTitle => Loc.T("Klavye RGB Aydınlatma Kontrolü");
+    public string BatteryPageTitle => Loc.T("Pil Şarj Sınırı ve Sağlığı");
+    public string ToolsPageTitle => Loc.T("Sistem Servisleri ve Başlangıç Ayarları");
+
+    // ---------------------------------------------------------------- page 1: modes and fans
+
+    public string Last60Seconds => Loc.T("60 SANİYE");
+    public string RangeCaption => Loc.T("ARALIK");
+    public string NowCaption => Loc.T("ŞİMDİ");
+    public string HideCaption => Loc.T("GİZLE");
+    public string ShowCaption => Loc.T("GÖSTER");
+    public string PowerModes => Loc.T("Güç Modları");
+    public string FanControl => Loc.T("Fan Kontrolü");
+    public string FanSegmentCustom => Loc.T("Özel");
+    public string FanSegmentCurve => Loc.T("Eğri");
+    public string FanProtection => Loc.T("Fan arızasında otomatik koruma (Eco moduna geç)");
+    public string GpuAndCpu => Loc.T("GPU & CPU");
+    public string CpuBoostCaption => Loc.T("CPU BOOST");
+    public string BoostAggressive => Loc.T("Agresif");
+    public string BoostEfficient => Loc.T("Verimli");
+    public string BoostDisabled => Loc.T("Devre Dışı");
+    public string ApplyMode => Loc.T("Modu Uygula");
+    public string GameStatusIdle => Loc.T("Durum: Beklemede (Aktif oyun yok)");
+    public string AutoGameDetect => Loc.T("Otomatik oyun algılamayı etkinleştir");
+    public string QuickGame => Loc.T("Hızlı oyun seçici");
+
+    // The one-line label under a compact mode tile. Shorter than the hint the tall card carried, because the tile is
+    // a quarter of the width.
+    public string ModeShortQuiet => Loc.T("Hafif kullanım");
+    public string ModeShortBalanced => Loc.T("Günlük önerilen");
+    public string ModeShortPerformance => Loc.T("Yüksek oyun gücü");
+    public string ModeShortTurbo => Loc.T("Maksimum performans");
+    public string ModeShortEco => Loc.T("Pil ömrü odaklı");
+
+    // ---------------------------------------------------------------- page 2: monitoring
+
+    public string Temperatures => Loc.T("Sıcaklıklar");
+    public string FanSpeeds => Loc.T("Fan Devirleri");
+    public string BatteryAndPower => Loc.T("Pil ve Güç");
+    public string TelemetryCharts => Loc.T("60 Saniyelik Telemetri");
+    public string WindowsOnly => Loc.T("Yalnızca Windows");
+
+    // ---------------------------------------------------------------- page 3: lighting
+
+    public string ColorPalette => Loc.T("Hazır renkler");
+    public string ZonePreview => Loc.T("4 bölge önizleme");
+
+    // ---------------------------------------------------------------- page 4: battery and thermal
+
+    public string BatteryStatus => Loc.T("Pil durumu");
+    public string FanCurveEditor => Loc.T("Özel fan eğrisi");
+    public string PluggedIn => Loc.T("Prize takılı");
+    public string OnBattery => Loc.T("Pilde");
+    public string Unknown => Loc.T("Bilinmiyor");
+    public string ThermalSafety => Loc.T("Termal güvenlik");
+    public string ThermalSafetyHint => Loc.T("Bu tabanların altına inilmez; sıcaklık yükseldikçe fan hızı en az bu değere çıkar.");
+
+    // ---------------------------------------------------------------- page 5: services and tools
+
+    public string DeviceCapabilities => Loc.T("Cihaz & Yetenek Özeti");
+    public string Appearance => Loc.T("Görünüm");
 }

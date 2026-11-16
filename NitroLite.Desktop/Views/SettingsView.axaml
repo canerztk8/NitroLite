@@ -5,81 +5,217 @@
              x:Class="NitroLite.Desktop.Views.SettingsView"
              x:DataType="vm:MainViewModel">
 
+  <!--
+    Page 5: the services and the tools. Everything that is a switch rather than a reading lives here, plus the device
+    summary and the report a user pastes into an issue.
+  -->
   <ScrollViewer>
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="0,0,0,16" Spacing="12">
 
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="{Binding Labels.Device}" />
+      <TextBlock Classes="pagetitle" Text="{Binding Labels.ToolsPageTitle}" />
 
-          <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto">
-            <!-- A row whose value the probe could not read is dropped rather than drawn as a label with nothing
-                 beside it, which reads as a broken page. -->
-            <TextBlock Grid.Row="0" Classes="caption" Text="{Binding Labels.Model}" Margin="0,0,0,6"
-                       IsVisible="{Binding HasDeviceName}" />
-            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DeviceModel}" Margin="0,0,0,6"
-                       IsVisible="{Binding HasDeviceName}" />
+      <!-- ============================================================ the services -->
 
-            <TextBlock Grid.Row="1" Classes="caption" Text="{Binding Labels.Bios}" Margin="0,0,0,6"
-                       IsVisible="{Binding HasDeviceBios}" />
-            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DeviceBios}" Margin="0,0,0,6"
-                       IsVisible="{Binding HasDeviceBios}" />
-
-            <TextBlock Grid.Row="2" Classes="caption" Text="{Binding Labels.Tier}" Margin="0,0,0,6" />
-            <!-- The probe's own word is "none" or "acer-wmi"; neither belongs in front of a user. -->
-            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TierDisplay}" Margin="0,0,0,6" />
-
-            <TextBlock Grid.Row="3" Classes="caption" Text="{Binding Labels.DataFolder}" />
-            <TextBlock Grid.Row="3" Grid.Column="1" Classes="mono" Text="{Binding DataFolder}" />
-          </Grid>
-        </StackPanel>
-      </Border>
-
-      <!-- Appearance. The theme picker applies on selection rather than behind an Apply button: the whole point of a
-           palette is that you can see it, and a preview that needs confirming is a preview you cannot judge. -->
       <Grid ColumnDefinitions="*,*">
-        <Border Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="h2" Text="{Binding Labels.Theme}" />
-            <ComboBox ItemsSource="{Binding Themes}"
-                      SelectedItem="{Binding SelectedTheme}"
-                      MinWidth="240"
-                      HorizontalAlignment="Left">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:ThemeChoice">
-                  <TextBlock Text="{Binding Label}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Classes="caption" Text="{Binding Labels.ThemeApplied}" />
+
+        <!-- School mode. Only a platform that wired the state machine shows the switch. -->
+        <Border Classes="card" Margin="0,0,6,0" IsVisible="{Binding SchoolModeAvailable}">
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="section" Text="{Binding Labels.SchoolMode}" VerticalAlignment="Center" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding SchoolModeOn}" />
+            </Grid>
+            <TextBlock Classes="hint" Text="{Binding Labels.SchoolModeHint}" TextWrapping="Wrap" />
+            <TextBlock Classes="hint" Text="{Binding SchoolModeDetail}"
+                       IsVisible="{Binding HasSchoolModeDetail}" TextWrapping="Wrap" />
           </StackPanel>
         </Border>
 
-        <Border Grid.Column="1" Classes="card">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="h2" Text="{Binding Labels.Language}" />
-            <ComboBox ItemsSource="{Binding Languages}"
-                      SelectedItem="{Binding SelectedLanguage}"
-                      MinWidth="240"
-                      HorizontalAlignment="Left">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="core:LocLanguage">
-                  <TextBlock Text="{Binding NativeName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Classes="caption" Text="{Binding Labels.LanguageRestartHint}" />
+        <!-- The battery refresh-rate switch. Linux has no backend, so the card hides itself there. -->
+        <Border Grid.Column="1" Classes="card" Margin="6,0,0,0"
+                IsVisible="{Binding AutoRefreshRateAvailable}">
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="section" Text="{Binding Labels.AutoRefreshRate}" VerticalAlignment="Center"
+                         TextWrapping="Wrap" />
+              <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoRefreshRateOnBattery}" />
+            </Grid>
+            <TextBlock Classes="hint" Text="{Binding Labels.AutoRefreshRateHint}" TextWrapping="Wrap" />
+            <TextBlock Classes="hint" Text="{Binding RefreshRateStatus}"
+                       IsVisible="{Binding HasRefreshRateStatus}" TextWrapping="Wrap" />
           </StackPanel>
         </Border>
       </Grid>
 
-      <Border Classes="card">
-        <StackPanel Spacing="10">
+      <!-- The sign-in entry. Only Windows supplies a mechanism, so the card hides itself everywhere else. -->
+      <Border Classes="card" IsVisible="{Binding AutoStartAvailable}">
+        <StackPanel Spacing="6">
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="h2" Text="{Binding Labels.CapabilitySummary}" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Classes="ghost"
-                    Content="{Binding Labels.Rescan}"
+            <TextBlock Classes="section" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoStartOn}" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{Binding Labels.AutoStartHint}" TextWrapping="Wrap" />
+          <TextBlock Classes="hint" Text="{Binding AutoStartStatus}"
+                     IsVisible="{Binding HasAutoStartStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ game profiles -->
+
+      <Border Classes="card" IsVisible="{Binding AutoGameModeAvailable}">
+        <StackPanel Spacing="9">
+
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.GameProfiles}" VerticalAlignment="Center" />
+            <Border Grid.Column="1" Classes="badge" Margin="0,0,12,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding GameStatusText}" />
+            </Border>
+            <ToggleSwitch Grid.Column="2" IsChecked="{Binding AutoGameModeOn}"
+                          ToolTip.Tip="{Binding Labels.AutoGameDetect}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.GameProfilesHint}" TextWrapping="Wrap" />
+
+          <!-- Adding a rule. The process name is what /proc reports, so "cs2" and "Cyberpunk2077.exe" are both valid
+               and a window title never matches anything. -->
+          <Grid ColumnDefinitions="*,*,*,Auto">
+            <StackPanel Spacing="3" Margin="0,0,8,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.NewGameExe}" />
+              <TextBox Text="{Binding NewGameExe}" Watermark="cs2" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="3" Margin="0,0,8,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.NewGameName}" />
+              <TextBox Text="{Binding NewGameName}" Watermark="Counter-Strike 2" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="3" Margin="0,0,8,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.TargetMode}" />
+              <ComboBox ItemsSource="{Binding GameModeChoices}" SelectedItem="{Binding NewGameMode}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ModeChoice">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+            <StackPanel Grid.Column="3" Spacing="3">
+              <TextBlock Classes="caps" Text="{Binding Labels.TargetFanMode}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <ComboBox ItemsSource="{Binding GameFanChoices}" SelectedItem="{Binding NewGameFanMode}"
+                          MinWidth="130">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FanModeChoice">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Classes="primary" Content="{Binding Labels.AddGame}"
+                        Command="{Binding AddGameProfileCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding GameProfileStatus}"
+                     IsVisible="{Binding HasGameProfileStatus}" />
+
+          <!-- The rules themselves: what it is called, what /proc calls it, and what it switches to. -->
+          <ItemsControl ItemsSource="{Binding GameProfiles}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:GameProfileRow">
+                <Border Classes="panel" Margin="0,0,0,6">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                    <StackPanel Spacing="1">
+                      <TextBlock Classes="rowtitle" Text="{Binding DisplayName}" />
+                      <TextBlock Classes="mono" Text="{Binding ExeName}" />
+                    </StackPanel>
+
+                    <Border Grid.Column="1" Classes="badge" Margin="10,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding ModeLabel}" />
+                    </Border>
+
+                    <Border Grid.Column="2" Classes="badge" Margin="8,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding FanLabel}" />
+                    </Border>
+
+                    <Button Grid.Column="3" Classes="danger" Margin="12,0,0,0" VerticalAlignment="Center"
+                            Content="{Binding DeleteLabel}" Command="{Binding DeleteCommand}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.NoGameProfiles}"
+                     IsVisible="{Binding HasNoGameProfiles}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ appearance -->
+
+      <Border Classes="card">
+        <StackPanel Spacing="9">
+          <TextBlock Classes="section" Text="{Binding Labels.Appearance}" />
+
+          <Grid ColumnDefinitions="*,*">
+            <StackPanel Spacing="3" Margin="0,0,12,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.Theme}" />
+              <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ThemeChoice">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" Text="{Binding Labels.ThemeApplied}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="3">
+              <TextBlock Classes="caps" Text="{Binding Labels.Language}" />
+              <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="core:LocLanguage">
+                    <TextBlock Text="{Binding NativeName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" Text="{Binding Labels.LanguageRestartHint}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ the device -->
+
+      <Border Classes="card">
+        <StackPanel Spacing="9">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.DeviceCapabilities}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost" Content="{Binding Labels.Rescan}"
                     Command="{Binding RescanCommand}" />
+          </Grid>
+
+          <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto">
+            <!-- A row whose value the probe could not read is dropped rather than drawn as a label with nothing
+                 beside it, which reads as a broken page. -->
+            <TextBlock Grid.Row="0" Classes="caps" Text="{Binding Labels.Model}" Margin="0,0,0,4"
+                       IsVisible="{Binding HasDeviceName}" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" Text="{Binding DeviceModel}" Margin="0,0,0,4"
+                       IsVisible="{Binding HasDeviceName}" />
+
+            <TextBlock Grid.Row="1" Classes="caps" Text="{Binding Labels.Bios}" Margin="0,0,0,4"
+                       IsVisible="{Binding HasDeviceBios}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" Text="{Binding DeviceBios}" Margin="0,0,0,4"
+                       IsVisible="{Binding HasDeviceBios}" />
+
+            <TextBlock Grid.Row="2" Classes="caps" Text="{Binding Labels.Tier}" Margin="0,0,0,4" />
+            <!-- The probe's own word is "none" or "acer-wmi"; neither belongs in front of a user. -->
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="mono" Text="{Binding TierDisplay}" Margin="0,0,0,4" />
+
+            <TextBlock Grid.Row="3" Classes="caps" Text="{Binding Labels.DataFolder}" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="mono" Text="{Binding DataFolder}" />
           </Grid>
 
           <!-- One row per capability, ticked in the theme's success colour. A block of monospaced text was readable
@@ -93,90 +229,50 @@
                                Classes.ok="{Binding Supported}"
                                Classes.no="{Binding !Supported}"
                                Text="{Binding Glyph}" />
-                    <TextBlock Grid.Column="1" Classes="label" Text="{Binding Label}" />
-                    <TextBlock Grid.Column="2" Classes="muted" Text="{Binding StateText}" />
+                    <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Label}" />
+                    <TextBlock Grid.Column="2" Classes="hint" Text="{Binding StateText}" />
                   </Grid>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <TextBlock Classes="caption"
-                     Text="{Binding Labels.NoBackend}"
+          <TextBlock Classes="hint" Text="{Binding Labels.NoBackend}"
                      IsVisible="{Binding ShowNoBackendBanner}" />
-        </StackPanel>
-      </Border>
-
-      <!-- The sign-in entry. Only Windows supplies a mechanism, so the card hides itself everywhere else rather than
-           offering a switch that cannot work. -->
-      <Border Classes="card" IsVisible="{Binding AutoStartAvailable}">
-        <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="h2" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center"
-                       TextWrapping="Wrap" />
-            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoStartOn}" />
-          </Grid>
-          <TextBlock Classes="caption" Text="{Binding Labels.AutoStartHint}" />
-          <TextBlock Classes="caption" Text="{Binding AutoStartStatus}"
-                     IsVisible="{Binding HasAutoStartStatus}" />
-        </StackPanel>
-      </Border>
-
-      <!-- The battery refresh-rate switch. Only a platform that can actually change the panel rate supplies the
-           automation, so Linux hides the card rather than offering a switch that cannot work. -->
-      <Border Classes="card" IsVisible="{Binding AutoRefreshRateAvailable}">
-        <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="h2" Text="{Binding Labels.AutoRefreshRate}" VerticalAlignment="Center"
-                       TextWrapping="Wrap" />
-            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoRefreshRateOnBattery}" />
-          </Grid>
-          <TextBlock Classes="caption" Text="{Binding Labels.AutoRefreshRateHint}" />
-          <TextBlock Classes="caption" Text="{Binding RefreshRateStatus}"
-                     IsVisible="{Binding HasRefreshRateStatus}" />
-        </StackPanel>
-      </Border>
-
-      <!-- The udev banner only appears when a write actually failed for lack of permission, so a user who already
-           installed the rule never sees it. -->
-      <Border Classes="card" IsVisible="{Binding NeedsUdevRule}">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="h2" Text="{Binding Labels.UdevNeeded}" />
-          <TextBlock Classes="caption" Text="{Binding Labels.UdevInstruction}" />
-          <Border Classes="panel">
-            <TextBox Text="{Binding UdevCommand}"
-                     IsReadOnly="True"
-                     TextWrapping="Wrap"
-                     Classes="mono"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     Padding="0" />
-          </Border>
-          <Button Classes="primary"
-                  Content="{Binding Labels.CopyCommand}"
-                  Command="{Binding CopyUdevCommand}"
-                  HorizontalAlignment="Left" />
         </StackPanel>
       </Border>
 
       <!-- The report is built from model-level facts only: no serial number, no UUID, no user name, no personal path.
            It is meant to be pasted into a public issue, so the hint says so before the user presses the button. -->
       <Border Classes="card" IsVisible="{Binding HardwareReportAvailable}">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="h2" Text="{Binding Labels.HardwareReport}" />
-          <TextBlock Classes="caption" Text="{Binding Labels.HardwareReportHint}" />
-          <Button Classes="primary"
-                  Content="{Binding Labels.CopyReport}"
-                  Command="{Binding CopyHardwareReportCommand}"
-                  HorizontalAlignment="Left" />
+        <StackPanel Spacing="6">
+          <TextBlock Classes="section" Text="{Binding Labels.HardwareReport}" />
+          <TextBlock Classes="hint" Text="{Binding Labels.HardwareReportHint}" TextWrapping="Wrap" />
+          <Button Classes="primary" Content="{Binding Labels.CopyReport}"
+                  Command="{Binding CopyHardwareReportCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
+      <!-- The udev banner only appears when a write actually failed for lack of permission, so a user who already
+           installed the rule never sees it. -->
+      <Border Classes="card" IsVisible="{Binding NeedsUdevRule}">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="section" Text="{Binding Labels.UdevNeeded}" />
+          <TextBlock Classes="hint" Text="{Binding Labels.UdevInstruction}" />
+          <Border Classes="panel">
+            <TextBox Text="{Binding UdevCommand}" IsReadOnly="True" TextWrapping="Wrap" Classes="mono"
+                     Background="Transparent" BorderThickness="0" Padding="0" />
+          </Border>
+          <Button Classes="primary" Content="{Binding Labels.CopyCommand}"
+                  Command="{Binding CopyUdevCommand}" HorizontalAlignment="Left" />
         </StackPanel>
       </Border>
 
       <!-- Hidden when the probe had nothing to report, rather than shown as an empty card. -->
       <Border Classes="card" IsVisible="{Binding HasNotes}">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="h2" Text="{Binding Labels.Notes}" />
-          <TextBlock Classes="caption" Text="{Binding NotesText}" />
+        <StackPanel Spacing="6">
+          <TextBlock Classes="section" Text="{Binding Labels.Notes}" />
+          <TextBlock Classes="hint" Text="{Binding NotesText}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 

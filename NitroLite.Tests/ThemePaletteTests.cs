@@ -207,7 +207,7 @@ public class ThemePaletteTests
     [InlineData(AppTheme.SlateSteel, true)]
     [InlineData(AppTheme.AmberConsole, true)]
     [InlineData(AppTheme.NordFrost, true)]
-    [InlineData(AppTheme.Light, false)]
+    [InlineData(AppTheme.WarmCream, false)]
     public void IsDarkTheme_ClassifiesEveryConcretePalette(AppTheme theme, bool expected)
     {
         Assert.Equal(expected, ThemeCatalog.IsDarkTheme(theme));
@@ -288,14 +288,14 @@ public class ThemePaletteTests
 
     [Theory]
     [InlineData("System", AppTheme.System)]
-    [InlineData("Light", AppTheme.Light)]
+    [InlineData("Light", AppTheme.WarmCream)]
     [InlineData("Dark", AppTheme.Dark)]
     [InlineData("MidnightOled", AppTheme.MidnightOled)]
     [InlineData("SlateSteel", AppTheme.SlateSteel)]
     [InlineData("AmberConsole", AppTheme.AmberConsole)]
     [InlineData("NordFrost", AppTheme.NordFrost)]
     [InlineData("nordfrost", AppTheme.NordFrost)]
-    [InlineData("0", AppTheme.Light)]
+    [InlineData("0", AppTheme.WarmCream)]
     [InlineData("1", AppTheme.Dark)]
     [InlineData("2", AppTheme.System)]
     [InlineData("6", AppTheme.NordFrost)]
@@ -339,7 +339,7 @@ public class ThemePaletteTests
 
     [Theory]
     [InlineData("{\"theme\": 1}", AppTheme.Dark)]
-    [InlineData("{\"theme\": 0}", AppTheme.Light)]
+    [InlineData("{\"theme\": 0}", AppTheme.WarmCream)]
     [InlineData("{\"theme\": 2}", AppTheme.System)]
     [InlineData("{\"theme\": \"Dark\"}", AppTheme.Dark)]
     [InlineData("{\"theme\": \"MidnightOled\"}", AppTheme.MidnightOled)]

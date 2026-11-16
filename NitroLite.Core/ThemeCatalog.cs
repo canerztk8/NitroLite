@@ -17,7 +17,7 @@ public static class ThemeCatalog
     public static IReadOnlyList<AppTheme> All { get; } = new[]
     {
         AppTheme.System,
-        AppTheme.Light,
+        AppTheme.WarmCream,
         AppTheme.Dark,
         AppTheme.MidnightOled,
         AppTheme.SlateSteel,
@@ -60,13 +60,18 @@ public static class ThemeCatalog
         AppTheme.SlateSteel => "Soğuk Antrasit",
         AppTheme.AmberConsole => "Kehribar Konsol",
         AppTheme.NordFrost => "Kuzey Buzulu",
-        _ => "Aydınlık"
+        _ => "Sıcak Krem"
     };
 
     /// <summary>
     /// Reads a stored theme name. Accepts the member name in any casing and the legacy numeric form, so a settings
     /// file written by any version of NitroLite still loads.
     /// </summary>
+    /// <remarks>
+    /// <c>Light</c> is the name the warm-cream palette carried before it was renamed, and a settings file written by
+    /// that build still says so. It is read as <see cref="AppTheme.WarmCream"/> rather than rejected, because a user
+    /// who picked the light palette should not be moved to a different one by an upgrade.
+    /// </remarks>
     public static bool TryParse(string? name, out AppTheme theme)
     {
         theme = AppTheme.System;
@@ -77,6 +82,12 @@ public static class ThemeCatalog
         {
             if (!Enum.IsDefined(typeof(AppTheme), number)) return false;
             theme = (AppTheme)number;
+            return true;
+        }
+
+        if (string.Equals(trimmed, "Light", StringComparison.OrdinalIgnoreCase))
+        {
+            theme = AppTheme.WarmCream;
             return true;
         }
 

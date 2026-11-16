@@ -220,7 +220,7 @@ public class FilesystemUpdaterScenarios : IDisposable
         // restore untouched, otherwise the user loses their configuration to a file that never parsed.
         var backup = Path_("truncated.json");
         var settingsPath = Path_("settings.json");
-        SettingsManager.SaveSettingsAtomic(settingsPath, new AppSettings { Language = "tr", Theme = AppTheme.Light });
+        SettingsManager.SaveSettingsAtomic(settingsPath, new AppSettings { Language = "tr", Theme = AppTheme.WarmCream });
 
         File.WriteAllText(backup, "{\"app\":\"NitroLite\",\"schema\":1,\"settings\":{\"language\":\"de\"",
             new UTF8Encoding(false));
@@ -230,6 +230,6 @@ public class FilesystemUpdaterScenarios : IDisposable
         Assert.False(result.Success);
         var live = SettingsManager.LoadSettings(settingsPath).Settings;
         Assert.Equal("tr", live.Language);
-        Assert.Equal(AppTheme.Light, live.Theme);
+        Assert.Equal(AppTheme.WarmCream, live.Theme);
     }
 }

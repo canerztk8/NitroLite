@@ -1,110 +1,49 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:controls="using:NitroLite.Desktop.Controls"
              x:Class="NitroLite.Desktop.Views.DashboardView"
              x:DataType="vm:MainViewModel">
 
+  <!--
+    Page 1: the control centre. The WPF window's tight, scroll-free arrangement: the 60-second band, the mode tiles,
+    the fan card, the GPU/CPU card and the game card, in that order, with no full-width rows and no Apply buttons.
+  -->
   <ScrollViewer>
-    <!-- Capped and centred: on a 2K window an uncapped card row stretches until the numbers are a screen apart. -->
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="0,0,0,16" Spacing="12">
 
-      <!-- A machine with no Acer nodes still opens a window; this is the sentence that explains it. -->
-      <Border Classes="card" IsVisible="{Binding ShowNoBackendBanner}">
-        <StackPanel Spacing="6">
-          <TextBlock Classes="h2" Text="{Binding Labels.NoBackend}" />
-          <TextBlock Classes="caption" Text="{Binding NoBackendDetail}" />
-        </StackPanel>
-      </Border>
+      <TextBlock Classes="pagetitle" Text="{Binding Labels.NavModes}" />
 
-      <TextBlock Classes="h2" Text="{Binding Labels.ThermalAndFans}" />
+      <!-- ============================================================ the 60-second band -->
 
-      <!-- The three thermals. Each card carries its own last-minute trace, so a reading that is climbing is visible
-           without waiting for the number to change. The SYS card has no trace, so it gets a spacer instead: the three
-           cards have to end on the same line. -->
-      <Grid ColumnDefinitions="*,*,*">
-        <Border Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="caption" Text="{Binding Labels.Cpu}" />
-            <TextBlock Classes="value" Text="{Binding CpuTemperatureText}" />
-            <controls:SparklineChart Height="34"
-                                     Values="{Binding CpuTemperatureHistory}"
-                                     Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}"
-                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
-            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
+      <StackPanel Spacing="4">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <TextBlock Classes="caps" Text="{Binding Labels.Last60Seconds}" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+            <TextBlock Classes="caps" Text="{Binding SparklineRangeText}" VerticalAlignment="Center" />
+            <TextBlock Classes="figure" FontSize="11" Text="{Binding SparklineNowText}"
+                       VerticalAlignment="Center" />
+            <Button Classes="seg" Command="{Binding ToggleSparklineBandCommand}"
+                    Content="{Binding SparklineBandToggleText}" />
           </StackPanel>
-        </Border>
-        <Border Grid.Column="1" Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="caption" Text="{Binding Labels.Gpu}" />
-            <TextBlock Classes="value" Text="{Binding GpuTemperatureText}" />
-            <controls:SparklineChart Height="34"
-                                     Values="{Binding GpuTemperatureHistory}"
-                                     Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}"
-                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
-            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
-          </StackPanel>
-        </Border>
-        <Border Grid.Column="2" Classes="card">
-          <StackPanel Spacing="4">
-            <TextBlock Classes="caption" Text="{Binding Labels.Sys}" />
-            <TextBlock Classes="value" Text="{Binding SysTemperatureText}" />
-            <controls:SparklineChart Height="34"
-                                     Values="{Binding SysTemperatureHistory}"
-                                     Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}"
-                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
-            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
-          </StackPanel>
-        </Border>
-      </Grid>
+        </Grid>
 
-      <Grid ColumnDefinitions="*,*">
-        <Border Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="4">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="caption" Text="{Binding Labels.Cpu}" VerticalAlignment="Center" />
-              <!-- "ölçüldü" vs "tahmini": the difference decides whether the stall watchdog may act, so it is shown
-                   rather than hidden in a log. -->
-              <Border Grid.Column="1" Classes="pill">
-                <TextBlock Classes="caption" Text="{Binding FanRpmSourceText}" />
-              </Border>
-            </Grid>
-            <TextBlock Classes="value" Text="{Binding CpuFanRpmText}" />
-            <controls:SparklineChart Height="34"
-                                     Values="{Binding CpuFanHistory}"
-                                     Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}"
-                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
-            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
-          </StackPanel>
+        <!-- 36px: enough for the trace to keep its shape, thin enough that the cards below stay reachable. The line
+             only, no wash: at this height a filled area reads as a bar chart of one value. -->
+        <Border Height="36" Background="{DynamicResource PanelBrush}"
+                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1" CornerRadius="2"
+                ClipToBounds="True" IsVisible="{Binding SparklineBandVisible}">
+          <controls:SparklineChart Values="{Binding CpuTemperatureHistory}"
+                                   Stroke="{DynamicResource AccentBrush}"
+                                   Baseline="{DynamicResource CardBorderStrongBrush}" />
         </Border>
-        <Border Grid.Column="1" Classes="card">
-          <StackPanel Spacing="4">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="caption" Text="{Binding Labels.Gpu}" VerticalAlignment="Center" />
-              <Border Grid.Column="1" Classes="pill">
-                <TextBlock Classes="caption" Text="{Binding FanRpmSourceText}" />
-              </Border>
-            </Grid>
-            <TextBlock Classes="value" Text="{Binding GpuFanRpmText}" />
-            <controls:SparklineChart Height="34"
-                                     Values="{Binding GpuFanHistory}"
-                                     Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}"
-                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
-            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
-          </StackPanel>
-        </Border>
-      </Grid>
+      </StackPanel>
 
-      <!-- Operating mode. One card per mode the firmware advertises, and the click is the whole gesture: there is no
-           Apply button, so the list can never show one mode while the machine runs another. -->
+      <!-- ============================================================ power modes -->
+
       <Border Classes="card">
-        <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="{Binding Labels.OperatingMode}" />
+        <StackPanel Spacing="9">
+          <TextBlock Classes="section" Text="{Binding Labels.PowerModes}" />
 
           <ItemsControl ItemsSource="{Binding Modes}" IsEnabled="{Binding ModeControlAvailable}">
             <ItemsControl.ItemsPanel>
@@ -114,17 +53,19 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:ModeChoice">
-                <Button Classes="modecardbutton"
-                        Command="{Binding SelectCommand}"
-                        Margin="0,0,8,0">
-                  <Border Classes="modecard" Classes.selected="{Binding IsSelected}">
-                    <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
-                      <PathIcon Grid.Row="0" Grid.Column="0" Data="{Binding Icon}" HorizontalAlignment="Left" />
-                      <Ellipse Grid.Row="0" Grid.Column="1" Classes="selecteddot" IsVisible="{Binding IsSelected}" />
-                      <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="modetitle"
-                                 Text="{Binding Label}" Margin="0,6,0,0" />
-                      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="muted"
-                                 Text="{Binding Description}" Margin="0,6,0,0" />
+                <Button Classes="modetile" Command="{Binding SelectCommand}" Margin="0,0,8,0">
+                  <Border Classes="modetile" Classes.selected="{Binding IsSelected}">
+                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,*,Auto">
+                      <Ellipse Grid.Row="0" Grid.Column="0" Classes="selecteddot" Margin="0,0,6,0" />
+                      <PathIcon Grid.Row="0" Grid.Column="1" Data="{Binding Icon}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Row="0" Grid.Column="2" Classes="modetitle" Text="{Binding Label}"
+                                 Margin="6,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+                      <Border Grid.Row="0" Grid.Column="3" Classes="badge" IsVisible="{Binding IsSelected}"
+                              Margin="6,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ActiveLabel}" />
+                      </Border>
+                      <TextBlock Grid.Row="1" Grid.ColumnSpan="4" Classes="hint"
+                                 Text="{Binding ShortHint}" Margin="0,3,0,0" />
                     </Grid>
                   </Border>
                 </Button>
@@ -134,183 +75,207 @@
         </StackPanel>
       </Border>
 
-      <!-- Fan mode, the same way. The custom-speed sliders only appear for the custom card, because they are the only
-           thing that card means. -->
+      <!-- ============================================================ fan control -->
+
       <Border Classes="card">
         <StackPanel Spacing="10">
-          <TextBlock Classes="h2" Text="{Binding Labels.FanMode}" />
 
-          <ItemsControl ItemsSource="{Binding FanModes}" IsEnabled="{Binding FanControlAvailable}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <UniformGrid Columns="{Binding FanModes.Count}" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:FanModeChoice">
-                <Button Classes="modecardbutton"
-                        Command="{Binding SelectCommand}"
-                        Margin="0,0,8,0">
-                  <Border Classes="modecard" Classes.selected="{Binding IsSelected}">
-                    <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
-                      <PathIcon Grid.Row="0" Grid.Column="0" Data="{Binding Icon}" HorizontalAlignment="Left" />
-                      <Ellipse Grid.Row="0" Grid.Column="1" Classes="selecteddot" IsVisible="{Binding IsSelected}" />
-                      <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Classes="modetitle"
-                                 Text="{Binding Label}" Margin="0,6,0,0" />
-                      <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Classes="muted"
-                                 Text="{Binding Description}" Margin="0,6,0,0" />
-                    </Grid>
-                  </Border>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.FanControl}" VerticalAlignment="Center" />
 
+            <!-- One segmented pill, top right: the whole fan choice in one line. -->
+            <Border Grid.Column="1" Classes="segmented" IsEnabled="{Binding FanControlAvailable}">
+              <ItemsControl ItemsSource="{Binding FanSegments}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FanSegmentChoice">
+                    <Button Classes="seg" Classes.selected="{Binding IsSelected}"
+                            Command="{Binding SelectCommand}" Content="{Binding Label}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+          </Grid>
+
+          <!-- The two big readouts, each with its own fill bar. -->
+          <Grid ColumnDefinitions="*,*">
+            <StackPanel Spacing="3" Margin="0,0,14,0">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Cpu}" />
+                <Border Grid.Column="1" Classes="pill">
+                  <TextBlock Classes="caps" Text="{Binding FanRpmSourceText}" />
+                </Border>
+              </Grid>
+              <TextBlock Classes="figurebig" Text="{Binding CpuFanRpmText}" />
+              <ProgressBar Classes="fanbar" Minimum="0" Maximum="100" Value="{Binding CpuFanBarPercent}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="3">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.Gpu}" />
+                <Border Grid.Column="1" Classes="pill">
+                  <TextBlock Classes="caps" Text="{Binding FanRpmSourceText}" />
+                </Border>
+              </Grid>
+              <TextBlock Classes="figurebig" Text="{Binding GpuFanRpmText}" />
+              <ProgressBar Classes="fanbar" Minimum="0" Maximum="100" Value="{Binding GpuFanBarPercent}" />
+            </StackPanel>
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="hint" Text="{Binding Labels.FanProtection}" VerticalAlignment="Center" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding FanProtectionOn}" />
+          </Grid>
+
+          <!-- The manual speeds only mean something in Özel. -->
           <Border Classes="panel" IsVisible="{Binding CustomFanVisible}">
             <StackPanel Spacing="2">
-              <TextBlock Classes="label" Text="{Binding Labels.CustomFanSpeed}" />
+              <TextBlock Classes="caps" Text="{Binding Labels.CustomFanSpeed}" Margin="0,0,0,4" />
               <Grid ColumnDefinitions="*,48">
-                <TextBlock Classes="caption" Text="{Binding Labels.CpuFanPercent}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CustomCpuPercentText}"
-                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock Classes="hint" Text="{Binding Labels.CpuFanPercent}" />
+                <TextBlock Grid.Column="1" Classes="figure" Text="{Binding CustomCpuPercentText}"
+                           HorizontalAlignment="Right" />
               </Grid>
               <Slider Minimum="30" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
                       Value="{Binding CustomCpuPercent}" />
               <Grid ColumnDefinitions="*,48">
-                <TextBlock Classes="caption" Text="{Binding Labels.GpuFanPercent}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CustomGpuPercentText}"
-                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock Classes="hint" Text="{Binding Labels.GpuFanPercent}" />
+                <TextBlock Grid.Column="1" Classes="figure" Text="{Binding CustomGpuPercentText}"
+                           HorizontalAlignment="Right" />
               </Grid>
               <Slider Minimum="30" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
                       Value="{Binding CustomGpuPercent}" />
             </StackPanel>
           </Border>
-        </StackPanel>
-      </Border>
 
-      <Grid ColumnDefinitions="*,*">
-        <Border Classes="card" Margin="0,0,10,0" IsVisible="{Binding MuxAvailable}">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="h2" Text="{Binding Labels.MuxSwitch}" />
-            <ComboBox ItemsSource="{Binding GpuModes}"
-                      SelectedItem="{Binding SelectedGpuMode}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:GpuModeChoice">
-                  <TextBlock Text="{Binding Label}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Classes="caption" Text="{Binding Labels.MuxHint}" />
-            <Button Classes="primary"
-                    Content="{Binding Labels.Apply}"
-                    Command="{Binding ApplyGpuModeCommand}"
-                    HorizontalAlignment="Left" />
-          </StackPanel>
-        </Border>
+          <!-- The curve opens right under the card when Eğri is the chosen pill. -->
+          <Border Classes="panel" IsVisible="{Binding CurveEditorVisible}">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="caps" Text="{Binding Labels.FanCurve}" />
+                <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding CurvePreview}" />
+              </Grid>
 
-        <Border Grid.Column="1" Grid.ColumnSpan="{Binding SchoolModeColumnSpan}" Classes="card" IsVisible="{Binding SchoolModeAvailable}">
-          <StackPanel Spacing="8">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="h2" Text="{Binding Labels.SchoolMode}" VerticalAlignment="Center" />
-              <ToggleSwitch Grid.Column="1" IsChecked="{Binding SchoolModeOn}" />
-            </Grid>
-            <TextBlock Classes="caption" Text="{Binding Labels.SchoolModeHint}" />
-            <TextBlock Classes="caption" Text="{Binding SchoolModeDetail}" />
-          </StackPanel>
-        </Border>
-      </Grid>
+              <Grid ColumnDefinitions="*,*">
+                <controls:FanCurvePreview Height="150"
+                                          Points="{Binding CurvePoints}"
+                                          CurrentTemperature="{Binding CurrentTemperature}"
+                                          SurfaceBrush="{DynamicResource CardBrush}"
+                                          BandBrush="{DynamicResource DangerSoftBrush}"
+                                          CurveBrush="{DynamicResource AccentBrush}"
+                                          MarkerBrush="{DynamicResource WarningBrush}"
+                                          GridBrush="{DynamicResource CardBorderBrush}"
+                                          TextBrush="{DynamicResource TextMutedBrush}"
+                                          FloorBrush="{DynamicResource DangerBrush}" />
 
-      <!-- The 80 % charge limit. Shown only when the backend found the interface: on Windows that is the Acer service
-           or WMID_GUID5, on Linux charge_control_end_threshold. One card, one switch, both platforms. -->
-      <Border Classes="card" IsVisible="{Binding BatteryLimitAvailable}">
-        <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="h2" Text="{Binding Labels.BatteryLimit}" VerticalAlignment="Center" />
-            <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
-          </Grid>
-          <TextBlock Classes="caption" Text="{Binding Labels.BatteryLimitHint}" />
-        </StackPanel>
-      </Border>
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="1">
+                  <ItemsControl ItemsSource="{Binding CurveAnchors}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:CurveAnchorViewModel">
+                        <DockPanel Margin="0,1">
+                          <TextBlock DockPanel.Dock="Left" Width="46" Classes="hint" Text="{Binding Label}" />
+                          <TextBlock DockPanel.Dock="Right" Width="40" Classes="figure" FontSize="11"
+                                     TextAlignment="Right" Text="{Binding EffectiveText}" />
+                          <Slider Minimum="30" Maximum="100" Margin="8,0,8,0" MinWidth="50"
+                                  TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding Percent}" />
+                        </DockPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Grid>
 
-      <!-- Automatic game switching. The card is only shown when the composition root wired a process scanner, so a
-           build without one does not offer a switch that can never fire. -->
-      <Border Classes="card" IsVisible="{Binding AutoGameModeAvailable}">
-        <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="h2" Text="{Binding Labels.GameMode}" VerticalAlignment="Center" />
-            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoGameModeOn}" />
-          </Grid>
-          <TextBlock Classes="caption" Text="{Binding Labels.AutoGameModeHint}" />
-          <Border Classes="pill" HorizontalAlignment="Left">
-            <TextBlock Classes="caption" Text="{Binding GameStatusText}" />
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Classes="primary" Content="{Binding Labels.ApplyCurve}"
+                        Command="{Binding ApplyCurveCommand}" />
+              </StackPanel>
+            </StackPanel>
           </Border>
         </StackPanel>
       </Border>
+
+      <!-- ============================================================ GPU and CPU -->
 
       <Border Classes="card">
         <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="{Binding Labels.GpuAndCpu}" />
+
+          <!-- CPU boost: three pills, one click each. -->
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="h2" Text="{Binding Labels.FanCurve}" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CurvePreview}" VerticalAlignment="Center" />
-          </Grid>
-
-          <!-- Even split: the drawing and the six sliders are equally important, and the old 2:3 left the sliders
-               squeezed against the card edge. -->
-          <Grid ColumnDefinitions="*,*">
-            <controls:FanCurvePreview Height="210"
-                                      Points="{Binding CurvePoints}"
-                                      CurrentTemperature="{Binding CurrentTemperature}"
-                                      SurfaceBrush="{DynamicResource PanelBrush}"
-                                      BandBrush="{DynamicResource DangerSoftBrush}"
-                                      CurveBrush="{DynamicResource AccentBrush}"
-                                      MarkerBrush="{DynamicResource WarningBrush}"
-                                      GridBrush="{DynamicResource CardBorderBrush}"
-                                      TextBrush="{DynamicResource TextMutedBrush}"
-                                      FloorBrush="{DynamicResource DangerBrush}" />
-
-            <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="2">
-              <ItemsControl ItemsSource="{Binding CurveAnchors}">
+            <TextBlock Classes="caps" Text="{Binding Labels.CpuBoostCaption}" VerticalAlignment="Center" />
+            <Border Grid.Column="1" Classes="segmented" IsEnabled="{Binding CpuBoostAvailable}">
+              <ItemsControl ItemsSource="{Binding CpuBoostChoices}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:CurveAnchorViewModel">
-                    <!-- Docked rather than a four-column Grid: the fixed columns of a Grid overflow the card once the
-                         window is near its minimum width, and the slider's thumb is centred on the track's start, so
-                         it hangs half outside the control. Docking gives the label an exact width and the slider the
-                         rest, and the margin keeps the thumb off the label at every width. -->
-                    <DockPanel Margin="0,2">
-                      <TextBlock DockPanel.Dock="Left" Width="52"
-                                 Text="{Binding Label}" VerticalAlignment="Center" />
-                      <TextBlock DockPanel.Dock="Right" Width="120" Classes="caption"
-                                 Text="{Binding SafetyText}" VerticalAlignment="Center" Margin="12,0,0,0" />
-                      <TextBlock DockPanel.Dock="Right" Width="44" TextAlignment="Right"
-                                 Text="{Binding EffectiveText}" VerticalAlignment="Center" />
-                      <Slider Minimum="30" Maximum="100"
-                              Margin="10,0,10,0"
-                              MinWidth="60"
-                              TickFrequency="1" IsSnapToTickEnabled="True"
-                              Value="{Binding Percent}" />
-                    </DockPanel>
+                  <DataTemplate x:DataType="vm:CpuBoostChoice">
+                    <Button Classes="seg" Classes.selected="{Binding IsSelected}"
+                            Command="{Binding SelectCommand}" Content="{Binding Label}" />
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
+            </Border>
+          </Grid>
+
+          <!-- MUX switch: a compact picker and one Apply, because the write needs a reboot to take effect. -->
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding MuxAvailable}">
+            <TextBlock Classes="caps" Text="{Binding Labels.MuxSwitch}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <ComboBox ItemsSource="{Binding GpuModes}" SelectedItem="{Binding SelectedGpuMode}"
+                        MinWidth="170">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:GpuModeChoice">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Classes="primary" Content="{Binding Labels.ApplyMode}"
+                      Command="{Binding ApplyGpuModeCommand}" />
             </StackPanel>
           </Grid>
 
-          <Border Classes="panel">
-            <StackPanel Spacing="2">
-              <TextBlock Classes="caption" Text="{Binding Labels.ThermalFloors}" />
-              <TextBlock Classes="caption" Text="{Binding ThermalFloorSummary}" />
-            </StackPanel>
-          </Border>
+          <TextBlock Classes="hint" Text="{Binding Labels.MuxHint}" IsVisible="{Binding MuxAvailable}" />
+        </StackPanel>
+      </Border>
 
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <CheckBox IsChecked="{Binding CurveEnabled}"
-                      Content="{Binding Labels.EnableCurve}"
-                      VerticalAlignment="Center" />
-            <Button Classes="primary"
-                    Content="{Binding Labels.ApplyCurve}"
-                    Command="{Binding ApplyCurveCommand}" />
-          </StackPanel>
+      <!-- ============================================================ game profiles -->
+
+      <Border Classes="card" IsVisible="{Binding AutoGameModeAvailable}">
+        <StackPanel Spacing="10">
+
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Classes="section" Text="{Binding Labels.GameProfiles}" VerticalAlignment="Center" />
+            <Border Grid.Column="1" Classes="badge" Margin="0,0,12,0">
+              <TextBlock Text="{Binding GameStatusText}" />
+            </Border>
+            <ToggleSwitch Grid.Column="2" IsChecked="{Binding AutoGameModeOn}"
+                          ToolTip.Tip="{Binding Labels.AutoGameDetect}" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <ComboBox ItemsSource="{Binding GameProfiles}" SelectedItem="{Binding SelectedGameProfile}"
+                      HorizontalAlignment="Stretch" ToolTip.Tip="{Binding Labels.QuickGame}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:GameProfileRow">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Grid.Column="1" Classes="ghost" Margin="8,0,0,0"
+                    Content="{Binding Labels.AddGame}" Command="{Binding AddGameProfileCommand}" />
+            <Button Grid.Column="2" Classes="danger" Margin="8,0,0,0"
+                    Content="{Binding Labels.DeleteProfile}"
+                    Command="{Binding SelectedGameProfile.DeleteCommand}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.AutoGameModeHint}" />
         </StackPanel>
       </Border>
 

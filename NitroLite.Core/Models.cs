@@ -42,8 +42,10 @@ public enum DcPowerProfilePreference
 /// </remarks>
 public enum AppTheme
 {
-    /// <summary>The light "recording paper" surface NitroLite shipped with.</summary>
-    Light = 0,
+    /// <summary>
+    /// The warm-cream "recording paper" surface NitroLite shipped with, and the palette a fresh install starts in.
+    /// </summary>
+    WarmCream = 0,
     Dark = 1,
 
     /// <summary>
@@ -323,6 +325,13 @@ public class AppSettings
     [JsonPropertyName("auto_refresh_rate_switching")]
     public bool AutoRefreshRateSwitching { get; set; } = true;
 
+    /// <summary>
+    /// Drop to Eco when a fan stops reporting. Off by default: a tachometer that reads zero on a machine whose fans are
+    /// simply below the sensor's floor would otherwise put the machine into Eco on every idle minute.
+    /// </summary>
+    [JsonPropertyName("fan_failure_protection")]
+    public bool FanFailureProtection { get; set; } = false;
+
     [JsonPropertyName("default_atk_mouse_profile")]
     public int DefaultAtkMouseProfile { get; set; } = 1;
 
@@ -367,7 +376,7 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("theme")]
     [JsonConverter(typeof(AppThemeJsonConverter))]
-    public AppTheme Theme { get; set; } = AppTheme.Light;
+    public AppTheme Theme { get; set; } = AppTheme.WarmCream;
 
     /// <summary>
     /// The live temperature strip on the modes page, hidden by the user. Persisted because it is a layout choice, not

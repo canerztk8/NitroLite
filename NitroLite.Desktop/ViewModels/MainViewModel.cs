@@ -35,6 +35,12 @@ public sealed class ModeChoice : ObservableObject
     public string Description { get; }
 
     /// <summary>
+    /// The two-word label the compact tile carries. The tall card had room for the full sentence; a quarter-width tile
+    /// does not, and a clipped sentence reads worse than a short one.
+    /// </summary>
+    public string ShortHint { get; init; } = "";
+
+    /// <summary>
     /// Path data for the card's icon, in Avalonia's geometry mini-language. A string rather than a
     /// <c>Geometry</c> so this file stays free of Avalonia types; the view binds it to <c>PathIcon.Data</c>, which
     /// converts it.
@@ -42,6 +48,13 @@ public sealed class ModeChoice : ObservableObject
     public string Icon { get; }
 
     public RelayCommand SelectCommand { get; }
+
+    /// <summary>
+    /// The word the AKTİF chip carries. It lives on the card rather than being reached for through the parent's
+    /// labels, because a compiled binding inside an item template cannot see the page's view model without a
+    /// parent-relative path, and that path is the kind of thing that silently renders nothing.
+    /// </summary>
+    public string ActiveLabel { get; init; } = "";
 
     public bool IsSelected
     {
@@ -85,9 +98,143 @@ public sealed class FanModeChoice : ObservableObject
     public override string ToString() => Label;
 }
 
-/// <summary>One row of the capability list: a name and whether this machine has it.</summary>
-public sealed record CapabilityRow(string Label, bool Supported)
+/// <summary>
+/// One entry in the left rail. The rail is a list of these rather than a <c>TabControl</c> so the selected marker, the
+/// icon and the label are one control the view can paint, and so the live <c>SİSTEM</c> card can sit under the list
+/// without being a tab.
+/// </summary>
+public sealed class NavTab : ObservableObject
 {
+    private bool _isSelected;
+
+    public NavTab(string key, string label, string icon, Action<NavTab>? select = null)
+    {
+        Key = key;
+        Label = label;
+        Icon = icon;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    /// <summary>A stable identifier the view model switches on; never shown.</summary>
+    public string Key { get; }
+
+    public string Label { get; }
+
+    /// <summary>Path data for the rail icon, in Avalonia's geometry mini-language.</summary>
+    public string Icon { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>Which of the four fan choices a segment stands for.</summary>
+public enum FanSegmentKind
+{
+    Auto = 0,
+    Max = 1,
+    Custom = 2,
+    Curve = 3
+}
+
+/// <summary>
+/// One pill in the fan-mode segmented control. <see cref="FanSegmentKind.Curve"/> is not a <see cref="FanMode"/>: the
+/// firmware has no curve mode, the app draws the curve and writes the resulting speed, so it is a separate choice that
+/// turns <c>CurveEnabled</c> on instead of writing a mode.
+/// </summary>
+public sealed class FanSegmentChoice : ObservableObject
+{
+    private bool _isSelected;
+
+    public FanSegmentChoice(FanSegmentKind kind, string label, Action<FanSegmentChoice>? select = null)
+    {
+        Kind = kind;
+        Label = label;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    public FanSegmentKind Kind { get; }
+
+    public string Label { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>One pill in the CPU-boost segmented control.</summary>
+public sealed class CpuBoostChoice : ObservableObject
+{
+    private bool _isSelected;
+
+    public CpuBoostChoice(CpuBoostMode mode, string label, Action<CpuBoostChoice>? select = null)
+    {
+        Mode = mode;
+        Label = label;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    public CpuBoostMode Mode { get; }
+
+    public string Label { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// One swatch in the ready-made colour palette. Clicking it writes the hex into the zone or the primary colour, so a
+/// user never has to type <c>#112233</c> to pick a colour.
+/// </summary>
+public sealed class ColorSwatch : ObservableObject
+{
+    private bool _isSelected;
+
+    public ColorSwatch(string hex, string name, Action<ColorSwatch>? select = null)
+    {
+        Hex = hex;
+        Name = name;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    /// <summary>The <c>#RRGGBB</c> the backend takes.</summary>
+    public string Hex { get; }
+
+    /// <summary>The swatch's accessible name, so the palette is not eight unlabelled squares.</summary>
+    public string Name { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
+    public override string ToString() => Name;
+}
+
+/// <summary>One row of the capability list: a name and whether this machine has it.</summary>
+public sealed record CapabilityRow(string Label, bool Supported){
     /// <summary>The tick or cross the row is drawn with.</summary>
     public string Glyph => Supported ? "✓" : "✕";
 
@@ -237,6 +384,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// <summary>Where the AC/battery state comes from, or null when the caller did not supply one.</summary>
     private readonly Func<(bool OnAc, int? BatteryPercent)>? _powerState;
 
+    /// <summary>
+    /// The processor's boost control, or null when the caller did not wire one. Null disables the CPU BOOST pills
+    /// rather than offering three buttons that write nowhere.
+    /// </summary>
+    private readonly ICpuBoostAccess? _cpuBoost;
+
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
@@ -326,11 +479,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _rgbProfileStatus = "";
     private bool _gameActive;
     private string _gameStatus = "";
+    private string _activeGameName = "";
+    private GameProfileRow? _selectedGameProfile;
     private string _newGameExe = "";
     private string _newGameName = "";
     private ModeChoice? _newGameMode;
     private FanModeChoice? _newGameFanMode;
     private string _gameProfileStatus = "";
+
+    // The shell: which of the five pages is showing, and whether the 60-second band is drawn.
+    private NavTab? _selectedTab;
+    private bool _sparklineBandVisible = true;
+
+    // The fan segmented control and the CPU-boost segmented control.
+    private FanSegmentChoice? _selectedFanSegment;
+    private CpuBoostChoice? _selectedCpuBoost;
+    private bool _fanProtectionOn;
+
+    // The colour palette writes into whichever target the lighting page has focused.
+    private ColorSwatch? _selectedSwatch;
+    private int _activeZone;
+
+    // The header's battery figure, refreshed on the telemetry tick.
+    private int? _batteryPercent;
+    private bool? _onAcPower;
 
     /// <summary>
     /// <paramref name="gameProfiles"/>, <paramref name="schoolMode"/>, <paramref name="rgbProfiles"/> and
@@ -350,7 +522,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IRescannableBackend? rescan = null,
         IAutoStartService? autoStart = null,
         RefreshRateAutomation? refreshRate = null,
-        Func<(bool OnAc, int? BatteryPercent)>? powerState = null)
+        Func<(bool OnAc, int? BatteryPercent)>? powerState = null,
+        ICpuBoostAccess? cpuBoost = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -365,7 +538,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _schoolMode = schoolMode;
         _rgbProfiles = rgbProfiles ?? new RgbProfileService();
         _themeApplier = themeApplier;
+        _cpuBoost = cpuBoost;
         _schoolModeOn = settings.SchoolModeEnabled;
+        _fanProtectionOn = settings.FanFailureProtection;
 
         _curveEvaluator = new FanCurveEvaluator(settings.BuildFanCurve());
 
@@ -374,6 +549,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BuildThemeChoices();
         BuildGameProfileRows();
         RefreshRgbProfiles();
+        BuildNavTabs();
+        BuildFanSegments();
+        BuildCpuBoostChoices();
+        BuildColorPalette();
 
         // The stored palette goes on before the window exists, so the first frame is already the right colour rather
         // than flashing the default and repainting.
@@ -422,6 +601,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // The rows carry translated names, so they are rebuilt rather than re-raised.
             BuildCapabilityRows();
             BuildGameProfileRows();
+            BuildNavTabs();
+            BuildFanSegments();
+            BuildCpuBoostChoices();
+            BuildColorPalette();
+            Raise(nameof(SparklineBandToggleText));
+            Raise(nameof(SparklineRangeText));
+            Raise(nameof(SparklineNowText));
+            Raise(nameof(SystemGameText));
+            Raise(nameof(ActiveZoneText));
+            Raise(nameof(ModeBadgeText));
         }
     }
 
@@ -465,6 +654,466 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public string NoBackendDetail => _hardware == null ? Labels.NoBackendDetail : Labels.NoAcerNodes;
 
+    // ---------------------------------------------------------------- the shell
+
+    /// <summary>The five pages of the rail, in the order the WPF window listed them.</summary>
+    public ObservableCollection<NavTab> NavTabs { get; } = new();
+
+    /// <summary>
+    /// The page on show. Setting it moves the rail marker and swaps the body; nothing is written to the settings file,
+    /// because which page a user was reading is not a preference worth persisting.
+    /// </summary>
+    public NavTab? SelectedTab
+    {
+        get => _selectedTab;
+        set
+        {
+            if (!Set(ref _selectedTab, value)) return;
+            foreach (var tab in NavTabs) tab.IsSelected = ReferenceEquals(tab, value);
+            Raise(nameof(IsModesPage));
+            Raise(nameof(IsMonitoringPage));
+            Raise(nameof(IsLightingPage));
+            Raise(nameof(IsBatteryPage));
+            Raise(nameof(IsToolsPage));
+        }
+    }
+
+    public bool IsModesPage => SelectedTab?.Key == NavModesKey;
+    public bool IsMonitoringPage => SelectedTab?.Key == NavMonitoringKey;
+    public bool IsLightingPage => SelectedTab?.Key == NavLightingKey;
+    public bool IsBatteryPage => SelectedTab?.Key == NavBatteryKey;
+    public bool IsToolsPage => SelectedTab?.Key == NavToolsKey;
+
+    public const string NavModesKey = "modes";
+    public const string NavMonitoringKey = "monitoring";
+    public const string NavLightingKey = "lighting";
+    public const string NavBatteryKey = "battery";
+    public const string NavToolsKey = "tools";
+
+    /// <summary>Moves the rail to <paramref name="key"/>. An unknown key is ignored rather than clearing the page.</summary>
+    public void SelectTab(string key)
+    {
+        var tab = NavTabs.FirstOrDefault(t => t.Key == key);
+        if (tab != null) SelectedTab = tab;
+    }
+
+    private void BuildNavTabs()
+    {
+        var previous = SelectedTab?.Key ?? NavModesKey;
+        NavTabs.Clear();
+        NavTabs.Add(new NavTab(NavModesKey, Labels.NavModes, NavIconModes, SelectNavTab));
+        NavTabs.Add(new NavTab(NavMonitoringKey, Labels.NavMonitoring, NavIconMonitoring, SelectNavTab));
+        NavTabs.Add(new NavTab(NavLightingKey, Labels.NavLighting, NavIconLighting, SelectNavTab));
+        NavTabs.Add(new NavTab(NavBatteryKey, Labels.NavBattery, NavIconBattery, SelectNavTab));
+        NavTabs.Add(new NavTab(NavToolsKey, Labels.NavTools, NavIconTools, SelectNavTab));
+        SelectedTab = NavTabs.FirstOrDefault(t => t.Key == previous) ?? NavTabs[0];
+    }
+
+    private void SelectNavTab(NavTab tab) => SelectedTab = tab;
+
+    // 24×24 path data for the rail. A monitor for the monitoring page, a keyboard for the lighting page, a battery for
+    // the battery page and a wrench for the tools page; the mode ladder keeps the bars it already had.
+    private const string NavIconModes =
+        "M4,20 H8 V10 H4 Z M10,20 H14 V4 H10 Z M16,20 H20 V13 H16 Z";
+
+    private const string NavIconMonitoring =
+        "M2,4 H22 V16 H2 Z M4,6 H20 V14 H4 Z M8,19 H16 V21 H8 Z M11,16 H13 V19 H11 Z";
+
+    private const string NavIconLighting =
+        "M2,7 H22 V17 H2 Z M4,9 H7 V11 H4 Z M9,9 H12 V11 H9 Z M14,9 H17 V11 H14 Z M19,9 H20 V11 H19 Z " +
+        "M4,13 H7 V15 H4 Z M9,13 H12 V15 H9 Z M14,13 H17 V15 H14 Z M19,13 H20 V15 H19 Z";
+
+    private const string NavIconBattery =
+        "M2,7 H19 V17 H2 Z M21,10 H23 V14 H21 Z M4,9 H16 V15 H4 Z";
+
+    private const string NavIconTools =
+        "M14,2 A5,5 0 1,0 19,9 L22,12 L20,14 L17,11 A5,5 0 0,0 14,2 Z M2,20 L9,13 L11,15 L4,22 Z";
+
+    /// <summary>
+    /// The 60-second band at the top of the modes page. Hiding it is a view preference, not a setting: it is one click
+    /// to bring back and it does not survive a restart, which is what a "get this out of my way" control should do.
+    /// </summary>
+    public bool SparklineBandVisible
+    {
+        get => _sparklineBandVisible;
+        set
+        {
+            if (!Set(ref _sparklineBandVisible, value)) return;
+            Raise(nameof(SparklineBandToggleText));
+        }
+    }
+
+    public string SparklineBandToggleText => SparklineBandVisible ? Labels.HideCaption : Labels.ShowCaption;
+
+    public RelayCommand ToggleSparklineBandCommand { get; private set; } = null!;
+
+    /// <summary>"ARALIK 41–78 °C" over the last minute of CPU temperature.</summary>
+    public string SparklineRangeText
+    {
+        get
+        {
+            var values = _cpuTemperatureHistory.Snapshot();
+            if (values.Count == 0) return $"{Labels.RangeCaption} —";
+            return $"{Labels.RangeCaption} {values.Min():F0}–{values.Max():F0} °C";
+        }
+    }
+
+    /// <summary>"ŞİMDİ 62 °C".</summary>
+    public string SparklineNowText => $"{Labels.NowCaption} {CpuTemperature} °C";
+
+    // ---------------------------------------------------------------- the live system box
+
+    /// <summary>CPU temperature as the rail prints it.</summary>
+    public string SystemCpuText => CpuTemperatureText;
+
+    public string SystemGpuText => GpuTemperatureText;
+
+    public string SystemFanText => CpuFanRpmText;
+
+    /// <summary>The boost mode in words, or an em dash when this platform has no boost control.</summary>
+    /// <remarks>
+    /// The pills always hold a selection so the segmented control has something to paint, which means the label alone
+    /// cannot tell a real reading from the default. The rail asks the capability instead, or a machine with no boost
+    /// node would claim to be running aggressive boost.
+    /// </remarks>
+    public string SystemBoostText => CpuBoostAvailable ? _selectedCpuBoost?.Label ?? "—" : "—";
+
+    /// <summary>
+    /// The game the profile service switched to, or an em dash. The rail row is one line wide, so it carries the name
+    /// rather than the sentence the toast and the game card use.
+    /// </summary>
+    public string SystemGameText => string.IsNullOrWhiteSpace(_activeGameName) ? "—" : _activeGameName;
+
+    /// <summary>The version badge beside the wordmark, read from the assembly rather than typed twice.</summary>
+    public string VersionText { get; } = ReadVersion();
+
+    private static string ReadVersion()
+    {
+        var raw = typeof(MainViewModel).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+
+        if (string.IsNullOrWhiteSpace(raw)) return "v0.0.0";
+
+        // "1.2.5-f" and "1.2.5+abc123" both mean 1.2.5 to a user.
+        var cut = raw.IndexOfAny(new[] { '-', '+' });
+        return "v" + (cut > 0 ? raw[..cut] : raw);
+    }
+
+    /// <summary>The battery percentage in the header, or null when this platform cannot report one.</summary>
+    public int? BatteryPercent
+    {
+        get => _batteryPercent;
+        private set
+        {
+            if (!Set(ref _batteryPercent, value)) return;
+            Raise(nameof(BatteryPercentText));
+            Raise(nameof(BatteryBarPercent));
+        }
+    }
+
+    public string BatteryPercentText => BatteryPercent is { } percent ? $"%{percent}" : "%—";
+
+    /// <summary>True on the charger, false on battery, null when this platform cannot say.</summary>
+    public bool? OnAcPower
+    {
+        get => _onAcPower;
+        private set
+        {
+            if (!Set(ref _onAcPower, value)) return;
+            Raise(nameof(BatteryStateText));
+        }
+    }
+
+    /// <summary>The battery figure as a 0–100 fill, for the bar under it.</summary>
+    public double BatteryBarPercent => Math.Clamp(BatteryPercent ?? 0, 0, 100);
+
+    /// <summary>The one-line power state under the battery figure on the health page.</summary>
+    public string BatteryStateText => OnAcPower switch
+    {
+        true => Labels.PluggedIn,
+        false => Labels.OnBattery,
+        _ => Labels.Unknown
+    };
+
+    /// <summary>The active mode in the header, uppercased so it reads as a printed stamp.</summary>
+    public string ModeBadgeText => (SelectedMode?.Label ?? "—").ToUpperInvariant();
+
+    // ---------------------------------------------------------------- fan segments
+
+    /// <summary>The four pills of the fan segmented control.</summary>
+    public ObservableCollection<FanSegmentChoice> FanSegments { get; } = new();
+
+    /// <summary>
+    /// The chosen fan pill. <see cref="FanSegmentKind.Curve"/> is not a firmware mode: it turns the drawn curve on and
+    /// leaves the mode alone, which is why it is a segment of its own rather than a fourth <see cref="FanMode"/>.
+    /// </summary>
+    public FanSegmentChoice? SelectedFanSegment
+    {
+        get => _selectedFanSegment;
+        set
+        {
+            if (!Set(ref _selectedFanSegment, value) || value == null) return;
+            foreach (var segment in FanSegments) segment.IsSelected = ReferenceEquals(segment, value);
+            ApplyFanSegment(value.Kind);
+        }
+    }
+
+    private void BuildFanSegments()
+    {
+        FanSegments.Clear();
+        FanSegments.Add(new FanSegmentChoice(FanSegmentKind.Auto, Labels.Auto, SelectFanSegment));
+        FanSegments.Add(new FanSegmentChoice(FanSegmentKind.Max, Labels.Max, SelectFanSegment));
+        FanSegments.Add(new FanSegmentChoice(FanSegmentKind.Custom, Labels.FanSegmentCustom, SelectFanSegment));
+        FanSegments.Add(new FanSegmentChoice(FanSegmentKind.Curve, Labels.FanSegmentCurve, SelectFanSegment));
+        SyncFanSegment();
+    }
+
+    private void SelectFanSegment(FanSegmentChoice segment) => SelectedFanSegment = segment;
+
+    /// <summary>Paints the pill that matches the state the machine is actually in.</summary>
+    private void SyncFanSegment()
+    {
+        var kind = CurveEnabled
+            ? FanSegmentKind.Curve
+            : SelectedFanMode?.Mode switch
+            {
+                FanMode.Max => FanSegmentKind.Max,
+                FanMode.Custom => FanSegmentKind.Custom,
+                _ => FanSegmentKind.Auto
+            };
+
+        var match = FanSegments.FirstOrDefault(s => s.Kind == kind);
+        if (match == null) return;
+
+        _selectedFanSegment = match;
+        foreach (var segment in FanSegments) segment.IsSelected = ReferenceEquals(segment, match);
+        Raise(nameof(SelectedFanSegment));
+        Raise(nameof(CurveEditorVisible));
+    }
+
+    private void ApplyFanSegment(FanSegmentKind kind)
+    {
+        if (kind == FanSegmentKind.Curve)
+        {
+            CurveEnabled = true;
+            return;
+        }
+
+        // Leaving the curve has to turn it off, or the curve keeps writing over the mode that was just chosen.
+        if (CurveEnabled) CurveEnabled = false;
+
+        var mode = kind switch
+        {
+            FanSegmentKind.Max => FanMode.Max,
+            FanSegmentKind.Custom => FanMode.Custom,
+            _ => FanMode.Auto
+        };
+
+        var card = FanModes.FirstOrDefault(f => f.Mode == mode);
+        if (card != null) SelectedFanMode = card;
+    }
+
+    /// <summary>True when the Eğri pill is the chosen one, which is what opens the curve editor under the card.</summary>
+    public bool CurveEditorVisible => SelectedFanSegment?.Kind == FanSegmentKind.Curve;
+
+    /// <summary>
+    /// Drop to Eco when a fan stops reporting. Persisted, because a machine whose fan has failed is a machine that
+    /// needs the protection on the next boot too.
+    /// </summary>
+    public bool FanProtectionOn
+    {
+        get => _fanProtectionOn;
+        set
+        {
+            if (!Set(ref _fanProtectionOn, value)) return;
+            _settings.FanFailureProtection = value;
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// The fan bars. A tachometer reading has no natural ceiling, so the bar is scaled against a display ceiling rather
+    /// than pretending to be a percentage of the fan's maximum: it is a shape, not a measurement.
+    /// </summary>
+    public double CpuFanBarPercent => Math.Clamp(CpuFanRpm * 100.0 / FanBarCeilingRpm, 0, 100);
+
+    public double GpuFanBarPercent => Math.Clamp(GpuFanRpm * 100.0 / FanBarCeilingRpm, 0, 100);
+
+    /// <summary>The top of the fan bar's scale. Above the highest reading a Nitro 16 reports.</summary>
+    public const int FanBarCeilingRpm = 6000;
+
+    // ---------------------------------------------------------------- CPU boost
+
+    /// <summary>The three boost pills: aggressive, efficient, off.</summary>
+    public ObservableCollection<CpuBoostChoice> CpuBoostChoices { get; } = new();
+
+    public CpuBoostChoice? SelectedCpuBoost
+    {
+        get => _selectedCpuBoost;
+        set
+        {
+            if (!Set(ref _selectedCpuBoost, value) || value == null) return;
+            foreach (var choice in CpuBoostChoices) choice.IsSelected = ReferenceEquals(choice, value);
+            Raise(nameof(SystemBoostText));
+            _ = WriteCpuBoostAsync(value.Mode);
+        }
+    }
+
+    /// <summary>False when the caller wired no boost control, which disables the pills instead of hiding them.</summary>
+    public bool CpuBoostAvailable => _cpuBoost?.IsSupported == true;
+
+    private void BuildCpuBoostChoices()
+    {
+        CpuBoostChoices.Clear();
+        CpuBoostChoices.Add(new CpuBoostChoice(CpuBoostMode.Aggressive, Labels.BoostAggressive, SelectCpuBoost));
+        CpuBoostChoices.Add(new CpuBoostChoice(CpuBoostMode.Efficient, Labels.BoostEfficient, SelectCpuBoost));
+        CpuBoostChoices.Add(new CpuBoostChoice(CpuBoostMode.Disabled, Labels.BoostDisabled, SelectCpuBoost));
+
+        var current = ReadCpuBoost();
+        var match = CpuBoostChoices.FirstOrDefault(c => c.Mode == current) ?? CpuBoostChoices[0];
+        _selectedCpuBoost = match;
+        foreach (var choice in CpuBoostChoices) choice.IsSelected = ReferenceEquals(choice, match);
+    }
+
+    private void SelectCpuBoost(CpuBoostChoice choice) => SelectedCpuBoost = choice;
+
+    private CpuBoostMode ReadCpuBoost()
+    {
+        if (_cpuBoost == null || !_cpuBoost.IsSupported) return CpuBoostMode.Aggressive;
+        try
+        {
+            var onAc = _powerState?.Invoke().OnAc ?? true;
+            return _cpuBoost.QueryBoostModeExact(onAc) ?? CpuBoostMode.Aggressive;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("CPU boost modu okunamadı", ex.Message);
+            return CpuBoostMode.Aggressive;
+        }
+    }
+
+    private async Task WriteCpuBoostAsync(CpuBoostMode mode)
+    {
+        if (_cpuBoost == null || !_cpuBoost.IsSupported) return;
+        try
+        {
+            bool ok = await _cpuBoost.SetBoostModeAsync(mode).ConfigureAwait(true);
+            Status = ok ? Labels.Applied : Labels.WriteFailed;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("CPU boost modu yazılamadı", ex.Message);
+            Status = Labels.WriteFailed;
+        }
+    }
+
+    // ---------------------------------------------------------------- the colour palette
+
+    /// <summary>The ready-made swatches, so a colour is a click rather than a hex string.</summary>
+    public ObservableCollection<ColorSwatch> ColorPalette { get; } = new();
+
+    /// <summary>
+    /// Which target the next swatch click writes to: 0 is the primary colour, 1–4 are the keyboard zones. The lighting
+    /// page sets it when a zone row is focused.
+    /// </summary>
+    public int ActiveZone
+    {
+        get => _activeZone;
+        set
+        {
+            if (!Set(ref _activeZone, value)) return;
+            Raise(nameof(ActiveZoneText));
+            Raise(nameof(IsPrimaryZoneActive));
+            Raise(nameof(IsZone1Active));
+            Raise(nameof(IsZone2Active));
+            Raise(nameof(IsZone3Active));
+            Raise(nameof(IsZone4Active));
+            SyncSwatchSelection();
+        }
+    }
+
+    public string ActiveZoneText => ActiveZone == 0 ? Labels.PrimaryColor : Labels.Zone(ActiveZone);
+
+    // One flag per target, so the five pills can each paint themselves without a converter that would have to know
+    // which pill it was asked about.
+    public bool IsPrimaryZoneActive => ActiveZone == 0;
+    public bool IsZone1Active => ActiveZone == 1;
+    public bool IsZone2Active => ActiveZone == 2;
+    public bool IsZone3Active => ActiveZone == 3;
+    public bool IsZone4Active => ActiveZone == 4;
+
+    public ColorSwatch? SelectedSwatch
+    {
+        get => _selectedSwatch;
+        private set => Set(ref _selectedSwatch, value);
+    }
+
+    public RelayCommand SelectPrimaryZoneCommand { get; private set; } = null!;
+    public RelayCommand SelectZone1Command { get; private set; } = null!;
+    public RelayCommand SelectZone2Command { get; private set; } = null!;
+    public RelayCommand SelectZone3Command { get; private set; } = null!;
+    public RelayCommand SelectZone4Command { get; private set; } = null!;
+
+    private void BuildColorPalette()
+    {
+        ColorPalette.Clear();
+        // Eight swatches, chosen to be distinguishable on both the cream and the dark palettes and to cover the effects
+        // the firmware ships: a warm red, an amber, a green, a cyan, a blue, a violet, a magenta and white.
+        AddSwatch("#D93829", Loc.T("Mercan kırmızısı"));
+        AddSwatch("#F59E0B", Loc.T("Kehribar"));
+        AddSwatch("#5F6B3E", Loc.T("Zeytin yeşili"));
+        AddSwatch("#22D3EE", Loc.T("Buz mavisi"));
+        AddSwatch("#3B82F6", Loc.T("Gök mavisi"));
+        AddSwatch("#8B5CF6", Loc.T("Menekşe"));
+        AddSwatch("#EC4899", Loc.T("Macenta"));
+        AddSwatch("#F8FAFC", Loc.T("Beyaz"));
+
+        SelectPrimaryZoneCommand = new RelayCommand(() => ActiveZone = 0);
+        SelectZone1Command = new RelayCommand(() => ActiveZone = 1);
+        SelectZone2Command = new RelayCommand(() => ActiveZone = 2);
+        SelectZone3Command = new RelayCommand(() => ActiveZone = 3);
+        SelectZone4Command = new RelayCommand(() => ActiveZone = 4);
+        ToggleSparklineBandCommand = new RelayCommand(() => SparklineBandVisible = !SparklineBandVisible);
+        SyncSwatchSelection();
+    }
+
+    private void AddSwatch(string hex, string name) =>
+        ColorPalette.Add(new ColorSwatch(hex, name, SelectSwatch));
+
+    private void SelectSwatch(ColorSwatch swatch)
+    {
+        SelectedSwatch = swatch;
+        switch (ActiveZone)
+        {
+            case 0: PrimaryColor = swatch.Hex; break;
+            case 1: Zone1 = swatch.Hex; break;
+            case 2: Zone2 = swatch.Hex; break;
+            case 3: Zone3 = swatch.Hex; break;
+            case 4: Zone4 = swatch.Hex; break;
+        }
+        SyncSwatchSelection();
+    }
+
+    /// <summary>Marks the swatch that matches the colour the active target already holds.</summary>
+    private void SyncSwatchSelection()
+    {
+        var current = ActiveZone switch
+        {
+            1 => Zone1,
+            2 => Zone2,
+            3 => Zone3,
+            4 => Zone4,
+            _ => PrimaryColor
+        };
+
+        foreach (var swatch in ColorPalette)
+        {
+            swatch.IsSelected = string.Equals(swatch.Hex, current, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     // ---------------------------------------------------------------- telemetry
 
     public int CpuTemperature
@@ -476,6 +1125,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(CpuTemperatureText));
             Raise(nameof(CurrentTemperature));
             Raise(nameof(CurvePreview));
+            Raise(nameof(SystemCpuText));
+            Raise(nameof(SparklineNowText));
         }
     }
 
@@ -484,7 +1135,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _gpuTemperature;
         private set
         {
-            if (Set(ref _gpuTemperature, value)) Raise(nameof(GpuTemperatureText));
+            if (!Set(ref _gpuTemperature, value)) return;
+            Raise(nameof(GpuTemperatureText));
+            Raise(nameof(SystemGpuText));
         }
     }
 
@@ -502,7 +1155,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _cpuFanRpm;
         private set
         {
-            if (Set(ref _cpuFanRpm, value)) Raise(nameof(CpuFanRpmText));
+            if (!Set(ref _cpuFanRpm, value)) return;
+            Raise(nameof(CpuFanRpmText));
+            Raise(nameof(SystemFanText));
+            Raise(nameof(CpuFanBarPercent));
         }
     }
 
@@ -511,7 +1167,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get => _gpuFanRpm;
         private set
         {
-            if (Set(ref _gpuFanRpm, value)) Raise(nameof(GpuFanRpmText));
+            if (!Set(ref _gpuFanRpm, value)) return;
+            Raise(nameof(GpuFanRpmText));
+            Raise(nameof(GpuFanBarPercent));
         }
     }
 
@@ -574,6 +1232,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(SysTemperatureHistory));
         Raise(nameof(CpuFanHistory));
         Raise(nameof(GpuFanHistory));
+        Raise(nameof(SparklineRangeText));
     }
 
     // ---------------------------------------------------------------- operating mode
@@ -590,6 +1249,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _selectedMode, value)) return;
             SyncModeSelection();
+            Raise(nameof(ModeBadgeText));
             if (!_suppressWrite) _ = ApplyModeAsync(value?.Mode);
         }
     }
@@ -613,6 +1273,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _selectedFanMode, value)) return;
             SyncFanSelection();
+            SyncFanSegment();
             Raise(nameof(CustomFanVisible));
             if (!_suppressWrite) _ = ApplyFanModeAsync();
         }
@@ -675,6 +1336,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // Re-arming has to forget what was applied, or the first evaluation after a re-arm would decide the fans
             // are already at the right speed and never write.
             _curveEvaluator.Reset();
+            SyncFanSegment();
             Status = value ? Labels.CurveEnabled : Labels.CurveDisabled;
             if (!value) _ = ApplyFanModeAsync();
         }
@@ -949,8 +1611,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string SchoolModeDetail
     {
         get => _schoolModeDetail;
-        private set => Set(ref _schoolModeDetail, value);
+        private set
+        {
+            if (!Set(ref _schoolModeDetail, value)) return;
+            Raise(nameof(HasSchoolModeDetail));
+        }
     }
+
+    /// <summary>False until the switch has been used once, so the page does not carry an empty status line.</summary>
+    public bool HasSchoolModeDetail => !string.IsNullOrWhiteSpace(SchoolModeDetail);
 
     // ---------------------------------------------------------------- RGB profiles
 
@@ -1033,6 +1702,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>The fan modes a new rule can target.</summary>
     public ObservableCollection<FanModeChoice> GameFanChoices { get; } = new();
+
+    /// <summary>The game the quick selector on the modes page has highlighted.</summary>
+    public GameProfileRow? SelectedGameProfile
+    {
+        get => _selectedGameProfile;
+        set => Set(ref _selectedGameProfile, value);
+    }
 
     public string NewGameExe
     {
@@ -1445,6 +2121,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // The refresh-rate policy is transition-driven, so after the first call this is a boolean comparison. It
             // runs on every tick because a replug is not something to notice two seconds late.
             ApplyRefreshRate(force: false);
+
+            // The header's battery figure comes from the same reader the policy uses, so the two can never disagree
+            // about whether the charger is plugged in.
+            if (_powerState != null)
+            {
+                try
+                {
+                    var (onAc, percent) = _powerState();
+                    OnAcPower = onAc;
+                    BatteryPercent = percent;
+                }
+                catch (Exception ex) { AppLog.Warn("Pil yüzdesi okunamadı", ex.Message); }
+            }
         }
         catch (Exception ex)
         {
@@ -1846,6 +2535,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             GameActive = true;
             _gameStatus = Labels.GameStarted(started.DisplayName);
+            _activeGameName = started.DisplayName;
+            Raise(nameof(SystemGameText));
 
             // The service already wrote the mode and the fan; the controls follow so the window does not show the
             // user's old selection while the machine is in the game's.
@@ -1866,6 +2557,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             GameActive = false;
             _gameStatus = Labels.GameEnded(ended.DisplayName);
+            _activeGameName = "";
+            Raise(nameof(SystemGameText));
 
             var snapshot = result.Snapshot;
             if (snapshot != null)
@@ -2113,7 +2806,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Modes.Clear();
         foreach (var mode in wanted)
         {
-            Modes.Add(new ModeChoice(mode, ModeLabel(mode), ModeHint(mode), ModeIcon(mode), SelectMode));
+            Modes.Add(new ModeChoice(mode, ModeLabel(mode), ModeHint(mode), ModeIcon(mode), SelectMode)
+            {
+                ShortHint = ModeShortHint(mode),
+                ActiveLabel = Labels.ActiveBadge
+            });
         }
 
         SelectedMode = Modes.FirstOrDefault(m => m.Mode == previous) ?? Modes.FirstOrDefault();
@@ -2143,6 +2840,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OperatingMode.Turbo => Loc.T("Turbo"),
         OperatingMode.Eco => Loc.T("Eco"),
         _ => mode.ToString()
+    };
+
+    /// <summary>The two-word label the compact tile carries.</summary>
+    private static string ModeShortHint(OperatingMode mode) => mode switch
+    {
+        OperatingMode.Quiet => Loc.T("Hafif kullanım"),
+        OperatingMode.Default => Loc.T("Günlük önerilen"),
+        OperatingMode.Extreme => Loc.T("Yüksek oyun gücü"),
+        OperatingMode.Turbo => Loc.T("Maksimum performans"),
+        OperatingMode.Eco => Loc.T("Pil ömrü odaklı"),
+        _ => ""
     };
 
     /// <summary>The one line under a mode's title. Says what the mode costs, not what it is called.</summary>
