@@ -15,6 +15,12 @@ namespace NitroLite.Windows;
 /// comes from the driver and the firmware rather than from the service.
 /// </para>
 /// <para>
+/// The class name is per model, so it is discovered rather than assumed. Older machines register
+/// <c>AcerGamingEvent</c>; the AN16-41 registers <c>AcerGenericEvent</c>, the generic ACPI-WMI event class, and no
+/// gaming class at all. The preferred names are tried first and the namespace is then scanned for Acer/APGE event
+/// classes, so a name nobody has seen yet still gets a subscription.
+/// </para>
+/// <para>
 /// The second route is raw input. Some models map the same button to <c>VK_LAUNCH_APP1</c> or
 /// <c>VK_LAUNCH_APP2</c>, and a few expose it as a vendor or consumer HID collection. A message-only window
 /// (<c>HWND_MESSAGE</c>) registered with <c>RIDEV_INPUTSINK</c> receives those reports without ever taking focus, so
@@ -23,19 +29,20 @@ namespace NitroLite.Windows;
 /// <para>
 /// Both routes can report one physical press, which is what <see cref="NitroKeyDebounceGuard"/> is for. Neither route
 /// may throw into the caller: a machine without the key, a driver that refuses the subscription and a device that
-/// disappears mid-read all end the same way, with <see cref="IsSupported"/> false and nothing else changed.
+/// disappears mid-read all end the same way, with nothing else changed.
 /// </para>
 /// </remarks>
 public sealed class WindowsNitroKeyListener : INitroKeyListener
 {
     /// <summary>
-    /// The <c>EventType</c> values the embedded controller reports for the Nitro key.
+    /// The event codes the embedded controller reports for the Nitro key.
     /// </summary>
     /// <remarks>
     /// A set rather than a single value because the code is per model, and a set rather than "any event" because the
     /// same class also carries the fan-mode and lighting keys: opening the window for those would be a bug the user
-    /// could not turn off. Every code that arrives is logged, so a machine that reports something else here is a
-    /// one-line correction rather than a mystery.
+    /// could not turn off. The code is read from <c>EventType</c> on the gaming class and from the first byte of
+    /// <c>EventDetail</c> on the generic one. Every code that arrives is logged, so a machine that reports something
+    /// else here is a one-line correction rather than a mystery.
     /// </remarks>
     public static readonly IReadOnlySet<uint> NitroKeyEventCodes = new HashSet<uint> { 0x04 };
 
@@ -48,13 +55,46 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     /// </summary>
     public static readonly ushort[] NitroKeyUsages = { 0x0194, 0x0195 };
 
-    /// <summary>The WMI classes that carry the Acer hotkey event, most specific first.</summary>
-    private static readonly string[] EventClassNames = { "AcerGamingEvent", "AcerWmiEvent" };
+    /// <summary>
+    /// How many unmatched reports are logged before the log goes quiet. Enough to identify a device, few enough that a
+    /// chatty collection cannot fill the file.
+    /// </summary>
+    private const int MaxLoggedReports = 12;
+
+    /// <summary>
+    /// The event classes tried first, before the namespace is scanned.
+    /// </summary>
+    /// <remarks>
+    /// <c>AcerGenericEvent</c> is the ACPI-WMI generic event class the AN16-41 exposes; the other names are what older
+    /// Nitro and Predator models register. The list is a head start, not the whole answer: the namespace is scanned
+    /// afterwards so a model whose class is not named here is still found.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> PreferredEventClassNames =
+        new[] { "AcerGamingEvent", "AcerWmiEvent", "AcerGenericEvent", "AcerEvent" };
+
+    /// <summary>
+    /// Name fragments that mark a <c>root\WMI</c> class as Acer's, used by the namespace scan.
+    /// </summary>
+    private static readonly string[] EventClassFragments = { "Acer", "APGE" };
+
+    /// <summary>
+    /// <c>InstanceName</c> fragments that identify the Acer gaming engine's ACPI device. The generic event class is
+    /// shared with every other ACPI-WMI device on the machine, so the instance is what tells them apart.
+    /// </summary>
+    private static readonly string[] AcerInstanceFragments = { "PNP0C14", "APGE", "ACER" };
+
+    /// <summary>
+    /// The <c>root\WMI</c> classes that exist only on an Acer machine. Their presence is what makes the settings row
+    /// appear on a model whose event class is not one of the names above.
+    /// </summary>
+    private static readonly string[] AcerIdentityClassNames =
+        { "AcerGenericEvent", "AcerGamingFunction", "AcerGenericMethod", "AcerBiosConfigurationTool" };
 
     private readonly NitroKeyDebounceGuard _debounce;
     private readonly object _gate = new();
+    private readonly List<ManagementEventWatcher> _watchers = new();
+    private readonly List<string> _eventClassNames = new();
 
-    private ManagementEventWatcher? _watcher;
     private RawInputWindow? _rawInput;
     private bool _probed;
     private bool _started;
@@ -63,31 +103,69 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     /// <summary>How many distinct HID reports have been logged, so a live run can be diagnosed without a flood.</summary>
     private int _loggedReports;
 
+    /// <summary>How many unmatched keyboard reports have been logged, for the same reason.</summary>
+    private int _loggedKeys;
+
     public WindowsNitroKeyListener(NitroKeyDebounceGuard? debounce = null) =>
         _debounce = debounce ?? new NitroKeyDebounceGuard();
 
     public event EventHandler? NitroKeyPressed;
 
     /// <summary>
-    /// True when the Acer hotkey event class is registered on this machine. Raw input alone is not evidence: every
-    /// Windows machine accepts a keyboard registration, so treating that as support would put the settings row in front
-    /// of users whose laptop has no such button.
+    /// True when this machine is an Acer with a Nitro key the app can hear.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Two independent answers count as support: an Acer event class in <c>root\WMI</c>, or Acer hardware identity —
+    /// an Acer-only WMI class, or an Acer/Predator model string. The second one is what the AN16-41 needs: it
+    /// registers <c>AcerGenericEvent</c> and no <c>AcerGamingEvent</c>, so a check that only looked for the gaming
+    /// class hid the settings row on a machine that does have the button.
+    /// </para>
+    /// <para>
+    /// Raw input on its own is still not evidence. Every Windows machine accepts a keyboard registration, so treating
+    /// that as support would put the row in front of users whose laptop has no such button.
+    /// </para>
+    /// <para>
     /// Asking is what runs the probe, because the settings row has to decide whether to exist before the listener is
     /// started. The probe is a metadata query, not a subscription: it answers "is the class there" without listening.
+    /// </para>
     /// </remarks>
     public bool IsSupported
     {
         get
         {
             EnsureProbed();
-            return EventClassName != null;
+            return IsSupportedFor(_eventClassNames.Count > 0, AcerHardwarePresent);
         }
     }
 
-    /// <summary>The WMI class that answered, for the log and the hardware report.</summary>
-    public string? EventClassName { get; private set; }
+    /// <summary>The support rule, as a pure function so it can be asserted without a WMI namespace.</summary>
+    public static bool IsSupportedFor(bool eventClassFound, bool acerHardwarePresent) =>
+        eventClassFound || acerHardwarePresent;
+
+    /// <summary>
+    /// True when the machine identifies itself as an Acer. The model string is the fallback for a machine whose WMI
+    /// classes are all missing but whose SMBIOS still says who built it.
+    /// </summary>
+    public static bool LooksLikeAcer(string? machineModel) =>
+        machineModel != null &&
+        (machineModel.Contains("acer", StringComparison.OrdinalIgnoreCase) ||
+         machineModel.Contains("predator", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The Acer event classes that answered, for the log and the hardware report.</summary>
+    public IReadOnlyList<string> EventClassNames
+    {
+        get
+        {
+            EnsureProbed();
+            return _eventClassNames;
+        }
+    }
+
+    /// <summary>
+    /// True when the machine identifies as Acer hardware, whether or not an event class was found. Set by the probe.
+    /// </summary>
+    public bool AcerHardwarePresent { get; private set; }
 
     public void Start()
     {
@@ -111,23 +189,21 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             _started = false;
         }
 
-        try
+        foreach (var watcher in _watchers)
         {
-            if (_watcher != null)
+            try
             {
-                _watcher.EventArrived -= OnWmiEvent;
-                _watcher.Stop();
-                _watcher.Dispose();
+                watcher.EventArrived -= OnWmiEvent;
+                watcher.Stop();
+                watcher.Dispose();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Acer WMI olay izleyicisi kapatılamadı", ex.Message);
             }
         }
-        catch (Exception ex)
-        {
-            AppLog.Warn("Acer WMI olay izleyicisi kapatılamadı", ex.Message);
-        }
-        finally
-        {
-            _watcher = null;
-        }
+
+        _watchers.Clear();
 
         _rawInput?.Dispose();
         _rawInput = null;
@@ -136,9 +212,14 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     // ------------------------------------------------------------------ the WMI route
 
     /// <summary>
-    /// Finds the Acer event class once. A metadata query is the only way to ask about an event class: it has no
-    /// instances to enumerate, so <c>SELECT * FROM AcerGamingEvent</c> would wait for an event rather than answer.
+    /// Finds the Acer event classes once, and decides whether the machine is an Acer at all.
     /// </summary>
+    /// <remarks>
+    /// A metadata query is the only way to ask about an event class: it has no instances to enumerate, so
+    /// <c>SELECT * FROM AcerGamingEvent</c> would wait for an event rather than answer. The preferred names are tried
+    /// first, then the whole namespace is scanned for Acer/APGE event classes, because the class name is per model and
+    /// the AN16-41 registers <c>AcerGenericEvent</c> rather than the gaming class older machines use.
+    /// </remarks>
     private void EnsureProbed()
     {
         lock (_gate)
@@ -151,16 +232,31 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 var scope = new ManagementScope(@"\\.\root\WMI");
                 scope.Connect();
 
-                foreach (var className in EventClassNames)
+                foreach (var className in PreferredEventClassNames)
                 {
-                    if (!ClassExists(scope, className)) continue;
-
-                    EventClassName = className;
-                    AppLog.Info("Nitro tuşu WMI olay sınıfı bulundu", $"sınıf='{className}'");
-                    return;
+                    if (ClassExists(scope, className)) AddEventClass(className);
                 }
 
-                AppLog.Info("Nitro tuşu WMI üzerinden bulunamadı", "Acer olay sınıfı kayıtlı değil.");
+                foreach (var className in ScanEventClasses(scope))
+                {
+                    AddEventClass(className);
+                }
+
+                if (_eventClassNames.Count > 0)
+                {
+                    AppLog.Info("Nitro tuşu WMI olay sınıfı bulundu", $"sınıf='{string.Join("', '", _eventClassNames)}'");
+                }
+                else
+                {
+                    AppLog.Info("Nitro tuşu WMI üzerinden bulunamadı", "Acer olay sınıfı kayıtlı değil.");
+                }
+
+                AcerHardwarePresent = DetectAcerHardware(scope);
+                if (AcerHardwarePresent)
+                {
+                    AppLog.Info("Acer donanımı algılandı",
+                        $"model='{WindowsMachineModel.Read() ?? "bilinmiyor"}' olay sınıfı={_eventClassNames.Count}");
+                }
             }
             catch (Exception ex)
             {
@@ -168,6 +264,12 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 AppLog.Info("Acer WMI olay sınıfı sorgulanamadı", ex.Message);
             }
         }
+    }
+
+    private void AddEventClass(string className)
+    {
+        if (_eventClassNames.Contains(className, StringComparer.OrdinalIgnoreCase)) return;
+        _eventClassNames.Add(className);
     }
 
     private static bool ClassExists(ManagementScope scope, string className)
@@ -178,47 +280,118 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         return results.Count > 0;
     }
 
-    private void StartWmi()
+    /// <summary>
+    /// Every Acer/APGE class in <c>root\WMI</c> that is an event class. The derivation chain is what separates an
+    /// event class from a method class such as <c>AcerGamingFunction</c>, which cannot be subscribed to.
+    /// </summary>
+    private static IEnumerable<string> ScanEventClasses(ManagementScope scope)
     {
-        string? className = EventClassName;
-        if (className == null) return;
+        var found = new List<string>();
 
         try
         {
-            var scope = new ManagementScope(@"\\.\root\WMI");
-            scope.Connect();
+            using var searcher = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT * FROM meta_class"));
+            using var results = searcher.Get();
 
-            var watcher = new ManagementEventWatcher(scope, new WqlEventQuery($"SELECT * FROM {className}"));
-            watcher.EventArrived += OnWmiEvent;
-            watcher.Start();
+            foreach (ManagementClass item in results)
+            {
+                using (item)
+                {
+                    var name = item["__CLASS"]?.ToString();
+                    if (string.IsNullOrEmpty(name)) continue;
+                    if (!EventClassFragments.Any(f => name.Contains(f, StringComparison.OrdinalIgnoreCase))) continue;
+                    if (!IsEventClass(item)) continue;
 
-            _watcher = watcher;
-            AppLog.Info("Nitro tuşu WMI olay izleyicisi bağlandı", $"sınıf='{className}'");
+                    found.Add(name);
+                }
+            }
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı", $"{className}: {ex.Message}");
+            AppLog.Info("Acer WMI olay sınıfları taranamadı", ex.Message);
+        }
+
+        return found;
+    }
+
+    private static bool IsEventClass(ManagementClass item)
+    {
+        if (item["__DERIVATION"] is not string[] chain) return false;
+
+        return chain.Any(link =>
+            link.Equals("__ExtrinsicEvent", StringComparison.OrdinalIgnoreCase) ||
+            link.Equals("WMIEvent", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>True when the machine is an Acer: an Acer-only WMI class, or an Acer/Predator model string.</summary>
+    private static bool DetectAcerHardware(ManagementScope scope)
+    {
+        foreach (var className in AcerIdentityClassNames)
+        {
+            if (ClassExists(scope, className)) return true;
+        }
+
+        return LooksLikeAcer(WindowsMachineModel.Read());
+    }
+
+    /// <summary>
+    /// True when an event from a shared ACPI class belongs to the Acer device. An instance name that matches nothing
+    /// is kept rather than dropped: the name is per firmware revision, and dropping an unrecognised one would silence
+    /// the key on exactly the machines this fallback exists for.
+    /// </summary>
+    private static bool IsAcerInstance(string instanceName) =>
+        instanceName.Length == 0 ||
+        AcerInstanceFragments.Any(f => instanceName.Contains(f, StringComparison.OrdinalIgnoreCase));
+
+    private void StartWmi()
+    {
+        if (_eventClassNames.Count == 0) return;
+
+        foreach (var className in _eventClassNames)
+        {
+            try
+            {
+                var scope = new ManagementScope(@"\\.\root\WMI");
+                scope.Connect();
+
+                var watcher = new ManagementEventWatcher(scope, new WqlEventQuery($"SELECT * FROM {className}"));
+                watcher.EventArrived += OnWmiEvent;
+                watcher.Start();
+
+                _watchers.Add(watcher);
+                AppLog.Info("Nitro tuşu WMI olay izleyicisi bağlandı", $"sınıf='{className}'");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı", $"{className}: {ex.Message}");
+            }
         }
     }
 
     private void OnWmiEvent(object sender, EventArrivedEventArgs e)
     {
+        var className = (sender as ManagementEventWatcher)?.Query?.QueryString ?? "?";
+        var instanceName = ReadString(e.NewEvent, "InstanceName");
         uint code = ReadEventCode(e.NewEvent);
 
-        if (!NitroKeyEventCodes.Contains(code))
+        if (NitroKeyEventCodes.Contains(code) && IsAcerInstance(instanceName))
         {
-            // Logged rather than ignored: the code is per model, and this line is what turns "the key does nothing"
-            // into a one-line fix.
-            AppLog.Info("Acer WMI olayı (Nitro tuşu değil)", $"kod=0x{code:X2}");
+            Raise($"WMI {className}");
             return;
         }
 
-        Raise();
+        // Logged rather than ignored: the code is per model, and this line is what turns "the key does nothing" into a
+        // one-line fix. The instance name is included because the generic ACPI event class is shared with every other
+        // ACPI-WMI device on the machine.
+        AppLog.Info("Acer WMI olayı (Nitro tuşu değil)",
+            $"sınıf='{className}' örnek='{instanceName}' kod=0x{code:X2} " +
+            $"veri={Convert.ToHexString(ReadEventBytes(e.NewEvent))}");
     }
 
     /// <summary>
-    /// The event's numeric payload. The property is <c>EventType</c> on both classes; the alternatives are read
-    /// because a driver update has renamed it before.
+    /// The event's numeric payload. <c>EventType</c> is the property on the gaming class; <c>EventDetail</c> is the
+    /// ACPI byte array the generic class carries, and its first byte is the event code. The alternatives are read
+    /// because a driver update has renamed the property before.
     /// </summary>
     private static uint ReadEventCode(ManagementBaseObject? ev)
     {
@@ -237,7 +410,33 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             }
         }
 
-        return uint.MaxValue;
+        var detail = ReadEventBytes(ev);
+        return detail.Length > 0 ? detail[0] : uint.MaxValue;
+    }
+
+    /// <summary>The ACPI payload of a generic Acer event, or an empty array when the class does not carry one.</summary>
+    private static byte[] ReadEventBytes(ManagementBaseObject? ev)
+    {
+        try
+        {
+            return ev?.Properties["EventDetail"]?.Value as byte[] ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static string ReadString(ManagementBaseObject? ev, string property)
+    {
+        try
+        {
+            return ev?.Properties[property]?.Value?.ToString() ?? "";
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     // ------------------------------------------------------------------ the raw-input route
@@ -261,7 +460,20 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     {
         if (report.IsKeyboard)
         {
-            if (NitroKeyVirtualKeys.Contains(report.VirtualKey)) Raise();
+            if (NitroKeyVirtualKeys.Contains(report.VirtualKey))
+            {
+                Raise($"ham giriş VK=0x{report.VirtualKey:X2}");
+                return;
+            }
+
+            // Logged so a model whose button arrives as an OEM scan code can be identified without guessing at it.
+            if (_loggedKeys < MaxLoggedReports)
+            {
+                _loggedKeys++;
+                AppLog.Info("Acer klavye raporu",
+                    $"vk=0x{report.VirtualKey:X2} tarama=0x{report.MakeCode:X2} bayrak=0x{report.Flags:X2}");
+            }
+
             return;
         }
 
@@ -274,22 +486,31 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             ushort usage = (ushort)(report.Payload[i] | (report.Payload[i + 1] << 8));
             if (Array.IndexOf(NitroKeyUsages, usage) < 0) continue;
 
-            Raise();
+            Raise($"ham giriş kullanım=0x{usage:X4}");
             return;
         }
 
         // Logged once per distinct report so a machine whose button arrives as a vendor report can be identified
-        // without guessing at the layout.
-        if (_loggedReports < 8)
+        // without guessing at the layout. The usage page comes from the device, not from the report.
+        if (_loggedReports < MaxLoggedReports)
         {
             _loggedReports++;
-            AppLog.Info("Acer HID raporu", $"sayfa=0x{report.UsagePage:X4} veri={Convert.ToHexString(report.Payload)}");
+            AppLog.Info("Acer HID raporu",
+                $"sayfa=0x{report.UsagePage:X4} kullanım=0x{report.Usage:X4} veri={Convert.ToHexString(report.Payload)}");
         }
     }
 
-    private void Raise()
+    /// <summary>
+    /// Accepts one press: debounces it, logs it and raises the event. Internal so a test can drive the whole path
+    /// without a device.
+    /// </summary>
+    internal void Raise(string source)
     {
         if (!_debounce.ShouldAccept()) return;
+
+        // Logged on every accepted press. Without this line the only evidence that the key works is the window
+        // moving, which is exactly what a user reporting "it does nothing" cannot show.
+        AppLog.Info("Nitro tuşu algılandı", source);
 
         try
         {
@@ -313,7 +534,14 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     // ================================================================== the message-only window
 
     /// <summary>One raw-input report, flattened out of the <c>RAWINPUT</c> union.</summary>
-    internal readonly record struct RawInputReport(bool IsKeyboard, ushort VirtualKey, ushort UsagePage, byte[] Payload);
+    internal readonly record struct RawInputReport(
+        bool IsKeyboard,
+        ushort VirtualKey,
+        ushort MakeCode,
+        ushort Flags,
+        ushort UsagePage,
+        ushort Usage,
+        byte[] Payload);
 
     /// <summary>
     /// A hidden window whose only job is to receive <c>WM_INPUT</c>.
@@ -340,6 +568,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         private const uint RimTypeKeyboard = 1;
         private const uint RimTypeHid = 2;
         private const uint RidevInputSink = 0x00000100;
+        private const uint RidiDeviceInfo = 0x2000000B;
 
         private static readonly IntPtr HwndMessage = new(-3);
 
@@ -444,7 +673,10 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 new RawInputDevice { usUsagePage = 0x01, usUsage = 0x06, dwFlags = RidevInputSink, hwndTarget = _hwnd },
                 new RawInputDevice { usUsagePage = 0x0C, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd },
                 new RawInputDevice { usUsagePage = 0xFF00, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd },
-                new RawInputDevice { usUsagePage = 0xFF01, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd }
+                new RawInputDevice { usUsagePage = 0xFF01, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd },
+                new RawInputDevice { usUsagePage = 0xFF02, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd },
+                new RawInputDevice { usUsagePage = 0xFFA0, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd },
+                new RawInputDevice { usUsagePage = 0xFFBC, usUsage = 0x01, dwFlags = RidevInputSink, hwndTarget = _hwnd }
             };
 
             foreach (var device in devices)
@@ -507,7 +739,8 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                     // Only the press, not the release: one press must be one event.
                     if (keyboard.Message != WmKeyDown) return;
 
-                    _onReport(new RawInputReport(true, keyboard.VKey, 0, []));
+                    _onReport(new RawInputReport(
+                        true, keyboard.VKey, keyboard.MakeCode, keyboard.Flags, 0x01, 0x06, []));
                     return;
                 }
 
@@ -525,12 +758,29 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 var bytes = new byte[length];
                 Marshal.Copy(buffer + dataStart, bytes, 0, length);
 
-                _onReport(new RawInputReport(false, 0, 0, bytes));
+                var (usagePage, usage) = ReadDeviceUsage(header.hDevice);
+
+                _onReport(new RawInputReport(false, 0, 0, 0, usagePage, usage, bytes));
             }
             finally
             {
                 Marshal.FreeHGlobal(buffer);
             }
+        }
+
+        /// <summary>
+        /// The usage page and usage of the device that sent a report. <c>RAWHID</c> does not carry them, and without
+        /// them the log line cannot say which collection the button arrived on.
+        /// </summary>
+        private static (ushort Page, ushort Usage) ReadDeviceUsage(IntPtr device)
+        {
+            var info = new RawDeviceInfo { cbSize = (uint)Marshal.SizeOf<RawDeviceInfo>() };
+            uint size = info.cbSize;
+
+            if (!GetRawInputDeviceInfo(device, RidiDeviceInfo, ref info, ref size)) return (0, 0);
+            if (info.dwType != RimTypeHid) return (0, 0);
+
+            return (info.usUsagePage, info.usUsage);
         }
 
         public void Dispose()
@@ -600,6 +850,22 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             public uint ExtraInformation;
         }
 
+        /// <summary>
+        /// <c>RID_DEVICE_INFO</c>, flattened. The union is sixteen bytes for every device type, so the HID members sit
+        /// at the same offset as the mouse and keyboard ones and one struct covers all three.
+        /// </summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RawDeviceInfo
+        {
+            public uint cbSize;
+            public uint dwType;
+            public uint dwVendorId;
+            public uint dwProductId;
+            public uint dwVersionNumber;
+            public ushort usUsagePage;
+            public ushort usUsage;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         private struct Msg
         {
@@ -650,6 +916,9 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetRawInputData(IntPtr rawInput, uint command, IntPtr data, ref uint size, uint headerSize);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool GetRawInputDeviceInfo(IntPtr device, uint command, ref RawDeviceInfo data, ref uint size);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandle(string? moduleName);

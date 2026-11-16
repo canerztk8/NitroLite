@@ -367,4 +367,68 @@ public class NitroKeyTests
         Assert.NotEmpty(WindowsNitroKeyListener.NitroKeyEventCodes);
         Assert.DoesNotContain(0u, WindowsNitroKeyListener.NitroKeyEventCodes);
     }
+
+    [Fact]
+    public void WindowsNitroKeyListener_SupportsAcerHardwareWithoutTheGamingEventClass()
+    {
+        // The AN16-41 registers AcerGenericEvent and no AcerGamingEvent. A support check that only looked for the
+        // gaming class hid the settings row on a machine that does have the button.
+        Assert.True(WindowsNitroKeyListener.IsSupportedFor(eventClassFound: false, acerHardwarePresent: true));
+        Assert.True(WindowsNitroKeyListener.IsSupportedFor(eventClassFound: true, acerHardwarePresent: false));
+        Assert.False(WindowsNitroKeyListener.IsSupportedFor(eventClassFound: false, acerHardwarePresent: false));
+    }
+
+    [Fact]
+    public void WindowsNitroKeyListener_RecognisesAcerMachineModels()
+    {
+        Assert.True(WindowsNitroKeyListener.LooksLikeAcer("Acer AN16-41"));
+        Assert.True(WindowsNitroKeyListener.LooksLikeAcer("Acer Predator Helios Neo 16"));
+        Assert.False(WindowsNitroKeyListener.LooksLikeAcer("Dell Inc. XPS 15 9530"));
+        Assert.False(WindowsNitroKeyListener.LooksLikeAcer(null));
+    }
+
+    [Fact]
+    public void WindowsNitroKeyListener_ScansTheGenericAcerEventClass()
+    {
+        // The generic ACPI-WMI class is the one the AN16-41 exposes, so it has to be on the preferred list: the probe
+        // then finds it without depending on the namespace scan.
+        Assert.Contains("AcerGenericEvent", WindowsNitroKeyListener.PreferredEventClassNames);
+    }
+
+    [Fact]
+    public void WindowsNitroKeyListener_LogsAnAcceptedPress()
+    {
+        // Without this line the only evidence that the key works is the window moving, which is exactly what a user
+        // reporting "it does nothing" cannot show.
+        using var listener = new WindowsNitroKeyListener();
+        int presses = 0;
+        listener.NitroKeyPressed += (_, _) => presses++;
+
+        listener.Raise("test");
+
+        Assert.Equal(1, presses);
+        Assert.Contains("Nitro tuşu algılandı", File.ReadAllText(AppLog.LogFilePath));
+    }
+
+    [Fact]
+    public void WindowsNitroKeyListener_CollapsesADoubleReport()
+    {
+        // One physical press reaches both routes. Two activations in the same 400 ms are invisible; two mode changes
+        // would not be.
+        long now = 0;
+        using var listener = new WindowsNitroKeyListener(new NitroKeyDebounceGuard(clock: () => now));
+        int presses = 0;
+        listener.NitroKeyPressed += (_, _) => presses++;
+
+        listener.Raise("wmi");
+        listener.Raise("raw input");
+
+        Assert.Equal(1, presses);
+
+        now += Stopwatch.Frequency;
+
+        listener.Raise("wmi");
+
+        Assert.Equal(2, presses);
+    }
 }
