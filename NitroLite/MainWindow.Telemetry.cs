@@ -68,7 +68,13 @@ public partial class MainWindow
 
         if (!serviceAvailable)
         {
-            ShowToast(Loc.T("Acer servisine (AcerAgentService) ulaşılamıyor; yalnızca Windows ve NVIDIA'dan okunabilen veriler gösteriliyor."), false);
+            // "Retry" rather than "start the service": starting a Windows service needs elevation, and a button that
+            // raises a UAC prompt from a toast is a worse surprise than one that simply asks the service again.
+            ShowToast(
+                Loc.T("Acer servisine (AcerAgentService) ulaşılamıyor; yalnızca Windows ve NVIDIA'dan okunabilen veriler gösteriliyor."),
+                false,
+                actionLabel: Loc.T("Yeniden dene"),
+                action: () => _ = PollTelemetryAsync());
         }
         else if (previous == false)
         {

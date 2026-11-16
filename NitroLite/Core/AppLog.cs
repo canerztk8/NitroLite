@@ -30,6 +30,12 @@ public static class AppLog
         }
     }
 
+    /// <summary>
+    /// Where the log is being written. Exposed so the diagnostics export attaches the same file the app appends to,
+    /// instead of rebuilding the path and drifting from it.
+    /// </summary>
+    public static string LogFilePath => LogFile;
+
     public static void Info(string title, string? details = null) => Write("INFO", title, details);
     public static void Warn(string title, string? details = null) => Write("WARN", title, details);
     public static void Error(string title, string? details = null) => Write("ERROR", title, details);

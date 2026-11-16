@@ -442,7 +442,13 @@ public partial class MainWindow
         }
         else if (zoneColorsApplied == false && !_isExiting)
         {
-            ShowToast(Loc.T("Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor. Ayarlar > Doğrudan WMI arka ucu > Kontrolü başlat."), false);
+            // The message names the switch, so the banner carries the button that presses it: the user has just picked
+            // four colours and the only thing standing between them and the keyboard is one elevation prompt.
+            ShowToast(
+                Loc.T("Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor."),
+                false,
+                actionLabel: Loc.T("Kontrolü başlat"),
+                action: () => BtnStartDirectWmi_Click(this, new RoutedEventArgs()));
         }
         else if (ok && zoneColorsApplied == null && _agentClient.LastLightingPartialFailure && !_isExiting)
         {

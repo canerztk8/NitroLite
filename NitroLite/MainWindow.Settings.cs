@@ -366,6 +366,7 @@ public partial class MainWindow
             {
                 _capabilitySnapshot = cached;
                 UpdateCapabilitySummary(cached);
+                ApplyCapabilityVisibility();
                 return;
             }
 
@@ -374,10 +375,18 @@ public partial class MainWindow
             SaveSettings();
             _capabilitySnapshot = snapshot;
             UpdateCapabilitySummary(snapshot);
+            ApplyCapabilityVisibility();
         }
         catch (Exception ex)
         {
             AppLog.Warn("Donanım yetenekleri önbelleğe alınamadı", ex.ToString());
+        }
+        finally
+        {
+            // The walkthrough lists what the probe found, so it waits for the probe. On a first run with no cache this
+            // is the first moment the list can be filled in; on every later run the flag is already set and this is a
+            // single bool check.
+            MaybeShowOnboarding();
         }
     }
 
@@ -407,6 +416,7 @@ public partial class MainWindow
             _capabilitySnapshot = snapshot;
 
             UpdateCapabilitySummary(snapshot);
+            ApplyCapabilityVisibility();
             ShowToast(Loc.T($"Donanım yetenekleri yeniden tarandı: {snapshot.ProfileId}"), true);
         }
         catch (Exception ex)
@@ -450,13 +460,21 @@ public partial class MainWindow
             }
             else
             {
-                ShowToast(Loc.T("Doğrudan WMI başlatılamadı"), false);
+                ShowToast(
+                    Loc.T("Doğrudan WMI başlatılamadı"),
+                    false,
+                    actionLabel: Loc.T("Yeniden dene"),
+                    action: () => BtnStartDirectWmi_Click(this, new RoutedEventArgs()));
             }
         }
         catch (Exception ex)
         {
             AppLog.Warn("Doğrudan WMI başlatılamadı", ex.ToString());
-            ShowToast(Loc.T($"Doğrudan WMI başlatılamadı: {ex.Message}"), false);
+            ShowToast(
+                Loc.T($"Doğrudan WMI başlatılamadı: {ex.Message}"),
+                false,
+                actionLabel: Loc.T("Yeniden dene"),
+                action: () => BtnStartDirectWmi_Click(this, new RoutedEventArgs()));
         }
         finally
         {
@@ -538,6 +556,54 @@ public partial class MainWindow
     }
 
     private void LinkAuthor_Click(object sender, RoutedEventArgs e) => OpenUrl("https://github.com/canerztk8");
+
+    /// <summary>
+    /// Packs the log, the hardware report, the capability snapshot and the settings into one zip and opens the folder.
+    /// This is the answer to "it does not work": one file to attach, instead of walking the user through four separate
+    /// exports and hoping they pick the right one.
+    /// </summary>
+    private void BtnCreateDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        if (BtnCreateDiagnostics == null) return;
+        BtnCreateDiagnostics.IsEnabled = false;
+        try
+        {
+            var capabilities = new DeviceCapabilities
+            {
+                Keyboard = _keyboardCapability,
+                OperatingModes = _supportedModes,
+                GpuModeCapability = _supportedGpuCapability,
+                FanMode = _currentFanModeValue
+            };
+
+            var path = DiagnosticsBundle.Create(
+                AppPaths.DataDirectory,
+                _capabilitySnapshot,
+                capabilities,
+                AppSettingsConfigFile,
+                AppLog.LogFilePath);
+
+            if (TxtDiagnosticsNote != null)
+                TxtDiagnosticsNote.Text = Loc.T($"Son paket: {Path.GetFileName(path)}");
+
+            ShowToast(Loc.T($"Teşhis paketi oluşturuldu: {Path.GetFileName(path)}"), true);
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = AppPaths.DataDirectory,
+                UseShellExecute = true
+            })?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Teşhis paketi oluşturulamadı", ex.ToString());
+            ShowToast(Loc.T($"Teşhis paketi oluşturulamadı: {ex.Message}"), false);
+        }
+        finally
+        {
+            BtnCreateDiagnostics.IsEnabled = true;
+        }
+    }
 
     /// <summary>
     /// Writes settings, game profiles and RGB presets into one file the user picks. The live settings object is used,

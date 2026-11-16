@@ -363,6 +363,13 @@ public class AppSettings
     public bool ElevatedAutoStartOffered { get; set; }
 
     /// <summary>
+    /// True once the first-run walkthrough has been finished or skipped. Skipping counts: the user has answered the
+    /// question, and showing the walkthrough again on the next launch would be nagging rather than helping.
+    /// </summary>
+    [JsonPropertyName("onboarding_completed")]
+    public bool OnboardingCompleted { get; set; }
+
+    /// <summary>
     /// The last capability probe result, keyed by model code and BIOS version. Null means "not probed yet", which is
     /// the state a fresh install is in. A BIOS update changes the key, so a stale answer is never reused.
     /// </summary>

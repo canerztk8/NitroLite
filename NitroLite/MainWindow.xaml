@@ -1505,10 +1505,10 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Border Height="1" Background="{DynamicResource Rule}" Margin="0,10,0,10" />
+                                        <Border x:Name="SepMuxSwitch" Height="1" Background="{DynamicResource Rule}" Margin="0,10,0,10" />
 
                                         <!-- MUX SWITCH -->
-                                        <Grid>
+                                        <Grid x:Name="RowMuxSwitch">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
@@ -2847,6 +2847,26 @@
 
                                         <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />
 
+                                        <!-- One file for a bug report: the log, the hardware report, the capability
+                                             snapshot and the settings, zipped together. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Teşhis paketi" Style="{StaticResource RowTitle}" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Günlük, donanım raporu, yetenek özeti ve ayarları tek bir zip dosyasında toplar. Hata bildirirken bu dosyayı ekleyin." />
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtDiagnosticsNote" Text="" Style="{StaticResource SectionHint}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button x:Name="BtnCreateDiagnostics" Grid.Column="1" Content="Paketi oluştur" Click="BtnCreateDiagnostics_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                        </Grid>
+
+                                        <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />
+
                                         <!-- Capability probe: the cached answer is dropped and the machine is asked
                                              again. Useful after a BIOS update or when a control looks wrong. -->
                                         <Grid>
@@ -2924,8 +2944,54 @@
                     <!-- Wrapped, not clipped: a one-line banner ran off the edge of the window and the second half of
                          every long message was simply not there. -->
                     <TextBlock x:Name="TxtToastMessage" Text="İşlem tamamlandı." Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="640" />
+                    <!-- A failure that names its own repair: the banner carries the button that runs it, so the user
+                         does not have to find the switch the message is talking about. Hidden unless ShowToast was
+                         given both a label and a handler. -->
+                    <Button x:Name="BtnToastAction" Content="" Click="BtnToastAction_Click" Visibility="Collapsed" Margin="12,0,0,0" VerticalAlignment="Center" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1" Padding="10,3" Cursor="Hand" FontSize="11" FontWeight="SemiBold" />
                 </StackPanel>
             </Border>
+
+            <!-- FIRST-RUN ONBOARDING. Sits above everything and is collapsed for every run after the first, so it
+                 costs one Visibility check at startup and nothing else. -->
+            <Grid x:Name="OnboardingOverlay" Grid.Row="0" Grid.RowSpan="2" Visibility="Collapsed" Background="#B0000000">
+                <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1" CornerRadius="6" MaxWidth="560" Padding="28,24" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtOnboardingStep" Text="1 / 3" Foreground="{DynamicResource InkFaint}" FontSize="10" FontWeight="Bold" />
+                        <TextBlock x:Name="TxtOnboardingTitle" Text="Donanımınız" Foreground="{DynamicResource TextPrimary}" FontSize="18" FontWeight="SemiBold" Margin="0,6,0,10" TextWrapping="Wrap" />
+
+                        <!-- Step 1: what the probe found. -->
+                        <StackPanel x:Name="PanelOnboardingHardware">
+                            <TextBlock Text="Bu bilgisayarda NitroLite'ın doğrudan yönetebildiği yetenekler:" Foreground="{DynamicResource TextSecondary}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                            <StackPanel x:Name="PanelOnboardingCapabilities" />
+                        </StackPanel>
+
+                        <!-- Step 2: the recommended starting point. -->
+                        <StackPanel x:Name="PanelOnboardingProfile" Visibility="Collapsed">
+                            <TextBlock Text="Önerilen başlangıç: Dengeli mod ve otomatik fan uygulanır. Pil koruma sınırı bu cihazda destekleniyorsa %80 olarak açılır." Foreground="{DynamicResource TextSecondary}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                            <TextBlock x:Name="TxtOnboardingProfileNote" Text="" Foreground="{DynamicResource InkFaint}" FontSize="11" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <!-- Step 3: the elevated auto-start offer. -->
+                        <StackPanel x:Name="PanelOnboardingStartup" Visibility="Collapsed">
+                            <TextBlock Text="Acer servisleri kapalıyken fan ve mod kontrolü yönetici yetkisi ister. Windows Görev Zamanlayıcı ile uygulama her açılışta yetkili başlar ve her oturumda UAC penceresi çıkmaz." Foreground="{DynamicResource TextSecondary}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
+                            <CheckBox x:Name="ChkOnboardingElevated" Style="{StaticResource ToggleSwitch}" Content="Yönetici yetkisiyle otomatik başlat" Checked="ChkOnboardingElevated_Changed" Unchecked="ChkOnboardingElevated_Changed" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock x:Name="TxtOnboardingStartupNote" Text="" Foreground="{DynamicResource InkFaint}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        </StackPanel>
+
+                        <Grid Margin="0,20,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="BtnOnboardingSkip" Grid.Column="0" Content="Atla" Click="BtnOnboardingSkip_Click" Background="Transparent" Foreground="{DynamicResource TextSecondary}" BorderBrush="Transparent" BorderThickness="0" Padding="4,6" Cursor="Hand" FontSize="11" />
+                            <Button x:Name="BtnOnboardingBack" Grid.Column="2" Content="Geri" Click="BtnOnboardingBack_Click" Visibility="Collapsed" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Rule}" BorderThickness="1" Padding="14,6" Cursor="Hand" FontSize="11" Margin="0,0,8,0" />
+                            <Button x:Name="BtnOnboardingNext" Grid.Column="3" Content="İleri" Click="BtnOnboardingNext_Click" Background="{DynamicResource PanelBg}" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource BorderDark}" BorderThickness="1" FontWeight="SemiBold" Padding="16,6" Cursor="Hand" FontSize="11" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Grid>
     </Border>
 </Window>

@@ -524,6 +524,10 @@ public partial class MainWindow : Window
             var fadeOut = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(400));
             ToastBanner.BeginAnimation(UIElement.OpacityProperty, fadeOut);
         }
+
+        // The banner is transparent but still laid out, so it must stop taking clicks the moment it fades: an
+        // invisible button over the bottom of the page would swallow the click that was meant for the page.
+        DismissToastAction();
     }
 
     private void SetupEvents()
@@ -1052,24 +1056,44 @@ public partial class MainWindow : Window
     /// sentence that explains why something failed: the reader gets through half of it and the banner is gone. The
     /// duration follows the length at a comfortable reading pace, with a floor for short messages and a ceiling so a
     /// long one cannot sit on the screen.
+    /// <para>
+    /// A toast that carries a button gets extra time on top: the reader has to finish the sentence, decide, and move
+    /// the pointer to the button, and a banner that vanishes mid-reach is worse than no button at all.
+    /// </para>
     /// </summary>
-    internal static TimeSpan ToastDurationFor(string? message)
+    internal static TimeSpan ToastDurationFor(string? message, bool hasAction = false)
     {
         const int floorSeconds = 3;
         const int ceilingSeconds = 10;
         const int charactersPerSecond = 22;
+        const int actionSeconds = 5;
+        const int actionCeilingSeconds = 15;
 
         int length = message?.Length ?? 0;
         int seconds = floorSeconds + (length / charactersPerSecond);
+        if (hasAction)
+            return TimeSpan.FromSeconds(Math.Clamp(seconds + actionSeconds, floorSeconds + actionSeconds, actionCeilingSeconds));
+
         return TimeSpan.FromSeconds(Math.Clamp(seconds, floorSeconds, ceilingSeconds));
     }
 
-    public void ShowToast(string message, bool isSuccess = true, bool trayBalloon = true)
+    /// <summary>The action the visible toast button will run, or null when the banner carries no button.</summary>
+    private Action? _toastAction;
+
+    /// <summary>
+    /// Shows the banner. <paramref name="actionLabel"/> and <paramref name="action"/> turn it into a fixable error:
+    /// the banner grows a button that runs the repair and dismisses itself. Both must be supplied together; a label
+    /// without a handler would draw a button that does nothing.
+    /// </summary>
+    public void ShowToast(string message, bool isSuccess = true, bool trayBalloon = true,
+        string? actionLabel = null, Action? action = null)
     {
         ToastHandler?.Invoke(message, isSuccess);
         if (Dispatcher.HasShutdownStarted) return;
 
-        Action action = () =>
+        bool hasAction = !string.IsNullOrWhiteSpace(actionLabel) && action != null;
+
+        Action apply = () =>
         {
             if (Dispatcher.HasShutdownStarted || ToastBanner == null || TxtToastIcon == null || TxtToastMessage == null) return;
 
@@ -1097,8 +1121,19 @@ public partial class MainWindow : Window
             ToastBanner.BorderBrush = TryFindResource(isSuccess ? "AccentGreen" : "AccentRed") as SolidColorBrush ?? (isSuccess ? System.Windows.Media.Brushes.Green : System.Windows.Media.Brushes.Firebrick);
             TxtToastMessage.Text = message;
 
+            _toastAction = hasAction ? action : null;
+            if (BtnToastAction != null)
+            {
+                BtnToastAction.Content = hasAction ? actionLabel : null;
+                BtnToastAction.Visibility = hasAction ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            // Only an actionable banner takes the pointer; otherwise it stays click-through so it never blocks the
+            // page underneath it.
+            ToastBanner.IsHitTestVisible = hasAction;
+
             _toastTimer?.Stop();
-            if (_toastTimer != null) _toastTimer.Interval = ToastDurationFor(message);
+            if (_toastTimer != null) _toastTimer.Interval = ToastDurationFor(message, hasAction);
 
             var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200));
             ToastBanner.BeginAnimation(UIElement.OpacityProperty, fadeIn);
@@ -1108,12 +1143,51 @@ public partial class MainWindow : Window
 
         if (Dispatcher.CheckAccess())
         {
-            action();
+            apply();
         }
         else
         {
-            Dispatcher.BeginInvoke(action);
+            Dispatcher.BeginInvoke(apply);
         }
+    }
+
+    /// <summary>
+    /// Runs the repair the banner offered, then takes the banner down. The action is cleared first so a double click
+    /// cannot run it twice, and the handler is wrapped because a repair that throws must not take the window with it.
+    /// </summary>
+    private void BtnToastAction_Click(object sender, RoutedEventArgs e)
+    {
+        var action = _toastAction;
+        DismissToastAction();
+        _toastTimer?.Stop();
+
+        if (ToastBanner != null)
+        {
+            var fadeOut = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(200));
+            ToastBanner.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+        }
+
+        if (action == null) return;
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            App.WriteLog("Toast eylemi başarısız", ex.Message);
+        }
+    }
+
+    /// <summary>Clears the banner's action and makes it click-through again.</summary>
+    private void DismissToastAction()
+    {
+        _toastAction = null;
+        if (BtnToastAction != null)
+        {
+            BtnToastAction.Visibility = Visibility.Collapsed;
+            BtnToastAction.Content = null;
+        }
+        if (ToastBanner != null) ToastBanner.IsHitTestVisible = false;
     }
 
     private HardwareInfo? _hardwareInfo;
@@ -1865,7 +1939,9 @@ public partial class MainWindow : Window
 
             ShowToast(result.Outcome == ElevatedStartupOutcome.Cancelled
                 ? Loc.T("Yönetici görevi kaldırılamadı; iki başlangıç kaydı aynı anda etkin olamaz")
-                : Loc.T("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı)."), false);
+                : Loc.T("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı)."), false,
+                actionLabel: Loc.T("Yeniden dene"),
+                action: () => ChkAutoStart_Changed(this, new RoutedEventArgs()));
             await RefreshElevatedAutoStartAsync();
             return;
         }

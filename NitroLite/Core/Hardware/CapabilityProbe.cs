@@ -83,6 +83,14 @@ public sealed record CapabilitySnapshot
 
     /// <summary>True only when the capability was positively confirmed. An unknown answer is not a yes.</summary>
     public bool IsSupported(string capability) => Find(capability)?.IsSupported == true;
+
+    /// <summary>
+    /// True only when the hardware positively said the capability is absent. This is the only answer that may hide a
+    /// control: <see cref="HardwareProbeOutcome.AccessDenied"/> and <see cref="HardwareProbeOutcome.Unknown"/> mean the
+    /// probe never got to ask, and hiding on those would remove a working feature from an unelevated session.
+    /// </summary>
+    public bool IsUnsupported(string capability) =>
+        Find(capability)?.Outcome == HardwareProbeOutcome.Unsupported;
 }
 
 /// <summary>
