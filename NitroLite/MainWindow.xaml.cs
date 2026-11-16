@@ -316,7 +316,10 @@ public partial class MainWindow : Window
         _memoryService = new MemoryCleanerService();
         _storageService = new StorageHealthService();
         _wearHistory = wearHistory ?? new BatteryWearHistory();
-        _schoolModeScheme = schoolModeScheme;
+        // School mode lives in NitroLite.Core and can no longer build a power-scheme reader itself, so the
+        // Windows composition root is what supplies one. A test harness that passes nothing still gets the
+        // real reader; the tests that care inject their own in-memory scheme.
+        _schoolModeScheme = schoolModeScheme ?? new WindowsPowerSchemeAccess();
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         _screenBrightnessService = screenBrightnessService ?? (isTestHarness ? new TestScreenBrightnessService() : new ScreenBrightnessService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }

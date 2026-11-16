@@ -111,12 +111,6 @@ public static class AppPaths
         }
     }
 
-    /// <summary>Full path of a tool in System32, so a same-named exe in the working directory or PATH is never run.</summary>
-    public static string SystemTool(string exeName) => Path.Combine(Environment.SystemDirectory, exeName);
-
-    public static string WindowsPowerShell =>
-        Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-
     /// <summary>A temp file name that cannot be guessed in advance (for files written by elevated processes).</summary>
     public static string UniqueTempFile(string prefix, string extension) =>
         Path.Combine(Path.GetTempPath(), $"{prefix}_{Guid.NewGuid():N}{extension}");

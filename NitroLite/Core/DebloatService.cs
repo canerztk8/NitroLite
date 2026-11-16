@@ -443,7 +443,7 @@ public class DebloatService
 
                 using var p = Process.Start(new ProcessStartInfo
                 {
-                    FileName = AppPaths.SystemTool("sc.exe"),
+                    FileName = WindowsPaths.SystemTool("sc.exe"),
                     Arguments = $"query \"{name}\"",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
@@ -532,7 +532,7 @@ public class DebloatService
         {
             using var xmlProcess = Process.Start(new ProcessStartInfo
             {
-                FileName = AppPaths.SystemTool("schtasks.exe"),
+                FileName = WindowsPaths.SystemTool("schtasks.exe"),
                 Arguments = $"/query /tn \"{taskName}\" /xml",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -551,7 +551,7 @@ public class DebloatService
         {
             using var p = Process.Start(new ProcessStartInfo
             {
-                FileName = AppPaths.SystemTool("schtasks.exe"),
+                FileName = WindowsPaths.SystemTool("schtasks.exe"),
                 Arguments = $"/query /tn \"{taskName}\" /fo csv",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -918,7 +918,7 @@ public class DebloatService
 
                 var psi = new ProcessStartInfo
                 {
-                    FileName = AppPaths.WindowsPowerShell,
+                    FileName = WindowsPaths.WindowsPowerShell,
                     Arguments = $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}",
                     UseShellExecute = true,
                     Verb = "runas",

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -280,7 +280,7 @@ public class ThemeDictionaryTests
     [Fact]
     public void EveryPaletteLabelIsTranslated()
     {
-        var path = Path.Combine(RepoRoot(), "NitroLite", "Lang", "en.json");
+        var path = Path.Combine(RepoRoot(), "NitroLite.Core", "Lang", "en.json");
         var english = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path, Encoding.UTF8));
         Assert.NotNull(english);
 

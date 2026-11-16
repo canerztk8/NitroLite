@@ -219,7 +219,7 @@ public class SystemToolsServiceTests : IDisposable
 
             var psi = new ProcessStartInfo
             {
-                FileName = AppPaths.WindowsPowerShell,
+                FileName = WindowsPaths.WindowsPowerShell,
                 Arguments = $"-NoProfile -NonInteractive -Command \"$null = [ScriptBlock]::Create((Get-Content -Raw -LiteralPath '{path}'))\"",
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,

@@ -57,8 +57,8 @@ public class AppPathsTests
     [Fact]
     public void SystemTools_ResolveToSystem32()
     {
-        Assert.Equal(Path.Combine(Environment.SystemDirectory, "powercfg.exe"), AppPaths.SystemTool("powercfg.exe"));
-        Assert.EndsWith(@"WindowsPowerShell\v1.0\powershell.exe", AppPaths.WindowsPowerShell, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Path.Combine(Environment.SystemDirectory, "powercfg.exe"), WindowsPaths.SystemTool("powercfg.exe"));
+        Assert.EndsWith(@"WindowsPowerShell\v1.0\powershell.exe", WindowsPaths.WindowsPowerShell, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

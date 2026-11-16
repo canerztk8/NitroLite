@@ -536,6 +536,13 @@ dotnet build -c Release NitroLite/NitroLite.csproj
 The executable is `NitroLite/bin/Release/net10.0-windows/NitroLite.exe` (this build needs the
 [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)).
 
+The solution has two projects. `NitroLite.Core` targets plain `net10.0` and holds everything that is not Windows:
+the hardware contract, the thermal and school-mode rules, the model table (`Hardware/Profiles/profiles.json`) and
+the eight language catalogues (`Lang/*.json`). `NitroLite` is the WPF front end and the Windows backends (WMI, the
+Acer service socket, the registry, the elevated worker). It builds on its own with
+`dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, and it references no Windows-only assembly — which
+is what a future Linux front end would load.
+
 **To produce the downloadable package:**
 
 ```powershell

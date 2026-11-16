@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0, not net10.0-windows: this assembly is the part of NitroLite that a Linux build can load
+         unchanged. Nothing here may reference WPF, WinForms, the registry, System.Management or a P/Invoke, and
+         the build fails the day one of them creeps in because the target framework no longer offers them. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NitroLite.Core</RootNamespace>
+    <AssemblyName>NitroLite.Core</AssemblyName>
+    <Version>1.2.5-f</Version>
+    <Authors>NitroLite Team</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- One catalogue per language, embedded so the single-file package needs no loose files. Loc.LoadCatalog
+         finds them by the ".Lang.<code>.json" suffix in this assembly. Turkish has no file: the source text is
+         the key. Both the Windows and the future Linux front end read these same catalogues. -->
+    <EmbeddedResource Include="Lang\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The model table: sensor layouts, fan plausibility ceilings and known-broken WMI methods per Acer model.
+         Embedded and read-only; a user override lives in the data folder as profiles.user.json and is validated
+         as strictly as this one. ProfileCatalog finds it by the ".profiles.json" suffix. -->
+    <EmbeddedResource Include="Hardware\Profiles\profiles.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Loc.Lookup and Loc.Format are internal, and both the WPF layer (LocXaml) and the test suite call them. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NitroLite</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NitroLite.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

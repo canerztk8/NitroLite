@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Text.Json;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 using Xunit;
 
 namespace NitroLite.Tests;
@@ -71,7 +72,7 @@ public class SchoolModeServiceTests
 
         public Harness()
         {
-            Service = new SchoolModeService(Agent, Cpu, Display, Brightness, Settings, Scheme)
+            Service = new SchoolModeService(new AgentHardwareController(Agent, new CareCenterClient()), Cpu, Display, Brightness, Settings, Scheme)
             {
                 // Inside the isolated data folder, which TestDataIsolation sweeps: a bare %TEMP% path left one
                 // file behind per harness and nothing ever removed them.

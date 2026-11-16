@@ -661,7 +661,7 @@ public partial class MainWindow
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
-                        FileName = AppPaths.SystemTool("shutdown.exe"),
+                        FileName = WindowsPaths.SystemTool("shutdown.exe"),
                         Arguments = "/r /t 5 /c \"NitroLite: GPU modu degisikligi\"",
                         UseShellExecute = false,
                         CreateNoWindow = true

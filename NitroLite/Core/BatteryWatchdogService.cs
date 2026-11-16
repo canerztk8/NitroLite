@@ -421,7 +421,7 @@ public class BatteryWatchdogService : IDisposable
         {
             var psi = new ProcessStartInfo
             {
-                FileName = AppPaths.SystemTool("powercfg.exe"),
+                FileName = WindowsPaths.SystemTool("powercfg.exe"),
                 Arguments = $"/batteryreport /xml /output \"{tempXml}\"",
                 CreateNoWindow = true,
                 UseShellExecute = false

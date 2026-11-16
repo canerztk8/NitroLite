@@ -1,4 +1,5 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite.Tests.Scenarios;
 
@@ -193,7 +194,7 @@ internal sealed class ScenarioRig
     /// the wrong reason.
     /// </summary>
     public SchoolModeService BuildSchoolMode(string? backupPath = null) =>
-        new(Agent, Cpu, Display, Brightness, Settings, Scheme)
+        new(new AgentHardwareController(Agent, new CareCenterClient()), Cpu, Display, Brightness, Settings, Scheme)
         {
             BackupPath = backupPath ?? AppPaths.GetDataFile($"scenario_school_{Guid.NewGuid():N}.json"),
             GetCurrentOperatingMode = () => Agent.CurrentMode,

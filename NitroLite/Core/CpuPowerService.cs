@@ -4,15 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace NitroLite.Core;
 
-public enum CpuBoostMode
-{
-    Disabled = 0,    // Windows PerfBoostMode 0: no boost, stays at base clock (~3.8 GHz on the 7840HS)
-    Enabled = 1,     // Windows default boost
-    Aggressive = 2,  // Windows PerfBoostMode 2: boost as high as the CPU allows
-    Efficient = 4    // Windows PerfBoostMode 4 "Efficient Aggressive": boost on, efficiency-biased; no fixed frequency cap
-}
-
-public class CpuPowerService : IDisposable
+public class CpuPowerService : ICpuBoostAccess, IDisposable
 {
     private const string SubProcessorGuid = "54533251-82be-4824-96c1-47b60b740d00";
     private const string PerfBoostModeGuid = "be337238-0d82-4146-a960-4f3749d470c7";
@@ -233,7 +225,7 @@ public class CpuPowerService : IDisposable
                     ? ProcessInfoFactory($"/qh SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}")
                     : new ProcessStartInfo
                     {
-                        FileName = AppPaths.SystemTool("powercfg.exe"),
+                        FileName = WindowsPaths.SystemTool("powercfg.exe"),
                         Arguments = $"/qh SCHEME_CURRENT {SubProcessorGuid} {PerfBoostModeGuid}",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
@@ -614,7 +606,7 @@ public class CpuPowerService : IDisposable
                 ? ProcessInfoFactory(args)
                 : new ProcessStartInfo
                 {
-                    FileName = AppPaths.SystemTool("powercfg.exe"),
+                    FileName = WindowsPaths.SystemTool("powercfg.exe"),
                     Arguments = args,
                     UseShellExecute = false,
                     CreateNoWindow = true

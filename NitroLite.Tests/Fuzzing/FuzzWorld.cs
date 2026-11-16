@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 using NitroLite.Tests.Scenarios;
 
 namespace NitroLite.Tests.Fuzzing;
@@ -92,7 +93,7 @@ internal sealed class FuzzWorld : IDisposable
             settings: Settings, isTestHarness: true);
         Window.PowerStateProvider = () => (IsAc, BatteryPercent);
 
-        School = new SchoolModeService(Agent, Cpu, Display, Brightness, Settings, Scheme)
+        School = new SchoolModeService(new AgentHardwareController(Agent, new CareCenterClient()), Cpu, Display, Brightness, Settings, Scheme)
         {
             BackupPath = AppPaths.GetDataFile($"fuzz_school_{seed}_{Guid.NewGuid():N}.json"),
             GetCurrentOperatingMode = () => Agent.CurrentMode,

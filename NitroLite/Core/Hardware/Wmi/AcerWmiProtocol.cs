@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
@@ -300,20 +300,23 @@ public static class AcerWmiProtocol
 
     // ---------------------------------------------------------------- sensors (method 5)
 
+    // The canonical values live in NitroLite.Core (AcerSensorIds) because the model table is keyed by them and
+    // has to be readable on a platform with no WMI. These aliases keep every existing call site compiling.
+
     /// <summary>Sensor id for the CPU temperature in <c>GetGamingSysInfo</c>.</summary>
-    public const byte SensorCpuTemperature = 0x01;
+    public const byte SensorCpuTemperature = AcerSensorIds.CpuTemperature;
 
     /// <summary>Sensor id for the CPU fan tachometer.</summary>
-    public const byte SensorCpuFanSpeed = 0x02;
+    public const byte SensorCpuFanSpeed = AcerSensorIds.CpuFanSpeed;
 
     /// <summary>Sensor id for the board / system temperature.</summary>
-    public const byte SensorSystemTemperature = 0x03;
+    public const byte SensorSystemTemperature = AcerSensorIds.SystemTemperature;
 
     /// <summary>Sensor id for the GPU fan tachometer.</summary>
-    public const byte SensorGpuFanSpeed = 0x06;
+    public const byte SensorGpuFanSpeed = AcerSensorIds.GpuFanSpeed;
 
     /// <summary>Sensor id for the GPU temperature.</summary>
-    public const byte SensorGpuTemperature = 0x0A;
+    public const byte SensorGpuTemperature = AcerSensorIds.GpuTemperature;
 
     /// <summary>The command nibble in the low byte of a <c>GetGamingSysInfo</c> input: "read one sensor".</summary>
     public const uint SysInfoCommandReadSensor = 0x0001;

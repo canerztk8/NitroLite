@@ -18,11 +18,11 @@ namespace NitroLite.Core.Hardware;
 /// </summary>
 public sealed record SensorLayout
 {
-    public int CpuTempSensor { get; init; } = AcerWmiProtocol.SensorCpuTemperature;
-    public int CpuFanRpmSensor { get; init; } = AcerWmiProtocol.SensorCpuFanSpeed;
-    public int Sys1TempSensor { get; init; } = AcerWmiProtocol.SensorSystemTemperature;
-    public int GpuFanRpmSensor { get; init; } = AcerWmiProtocol.SensorGpuFanSpeed;
-    public int GpuTempSensor { get; init; } = AcerWmiProtocol.SensorGpuTemperature;
+    public int CpuTempSensor { get; init; } = AcerSensorIds.CpuTemperature;
+    public int CpuFanRpmSensor { get; init; } = AcerSensorIds.CpuFanSpeed;
+    public int Sys1TempSensor { get; init; } = AcerSensorIds.SystemTemperature;
+    public int GpuFanRpmSensor { get; init; } = AcerSensorIds.GpuFanSpeed;
+    public int GpuTempSensor { get; init; } = AcerSensorIds.GpuTemperature;
 
     /// <summary>True only when the ids were confirmed against a real read-back on this model.</summary>
     public bool Verified { get; init; }

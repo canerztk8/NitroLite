@@ -14,16 +14,6 @@ public interface IPowerSchemeAccess
     bool TryWriteDc(Guid subGroup, Guid setting, uint value);
 }
 
-/// <summary>The real power scheme, through powrprof.dll.</summary>
-public sealed class WindowsPowerSchemeAccess : IPowerSchemeAccess
-{
-    public bool TryReadDc(Guid subGroup, Guid setting, out uint value) =>
-        CpuPowerService.TryReadDcValue(subGroup, setting, out value);
-
-    public bool TryWriteDc(Guid subGroup, Guid setting, uint value) =>
-        CpuPowerService.TryWriteDcValue(subGroup, setting, value);
-}
-
 public sealed class SchoolModePowerBackup
 {
     public string SubGroup { get; set; } = string.Empty;
@@ -122,31 +112,28 @@ public sealed class SchoolModeService
     };
 
     private readonly IHardwareController _hardware;
-    private readonly CpuPowerService _cpuPowerService;
+    private readonly ICpuBoostAccess _cpuBoost;
     private readonly IDisplayRefreshRateService _displayService;
     private readonly IScreenBrightnessService _brightnessService;
     private readonly AppSettings _settings;
     private readonly IPowerSchemeAccess _scheme;
 
     public SchoolModeService(
-        AcerAgentClient agentClient,
-        CpuPowerService cpuPowerService,
+        IHardwareController hardware,
+        ICpuBoostAccess cpuBoost,
         IDisplayRefreshRateService displayService,
         IScreenBrightnessService brightnessService,
         AppSettings settings,
-        IPowerSchemeAccess? powerScheme = null,
-        IHardwareController? hardware = null)
+        IPowerSchemeAccess? powerScheme = null)
     {
-        // The agent is still the first parameter so every existing call site keeps compiling, but nothing below
-        // touches it directly: the service talks to the hardware through the controller, which is what lets school
-        // mode run on the direct-WMI backend on a machine with no Acer software at all.
-        _hardware = hardware ?? new AgentHardwareController(
-            agentClient ?? throw new ArgumentNullException(nameof(agentClient)), new CareCenterClient());
-        _cpuPowerService = cpuPowerService ?? throw new ArgumentNullException(nameof(cpuPowerService));
+        // Every dependency is an interface owned by this assembly, which is what lets the same state machine run on
+        // the Acer service socket, on direct WMI, or on Linux sysfs without a line changing here.
+        _hardware = hardware ?? throw new ArgumentNullException(nameof(hardware));
+        _cpuBoost = cpuBoost ?? throw new ArgumentNullException(nameof(cpuBoost));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
         _brightnessService = brightnessService ?? throw new ArgumentNullException(nameof(brightnessService));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _scheme = powerScheme ?? new WindowsPowerSchemeAccess();
+        _scheme = powerScheme ?? throw new ArgumentNullException(nameof(powerScheme));
     }
 
     /// <summary>Where the undo record lives. Null disables persistence (unit tests).</summary>
@@ -310,7 +297,7 @@ public sealed class SchoolModeService
 
             if (backup.DcBoost.HasValue)
             {
-                if (await _cpuPowerService.SetBoostModeAsync(backup.DcBoost.Value, targetAc: false, targetDc: true))
+                if (await _cpuBoost.SetBoostModeAsync(backup.DcBoost.Value, targetAc: false, targetDc: true))
                     outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
                 else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
             }
@@ -411,7 +398,7 @@ public sealed class SchoolModeService
             outcome.Warnings.Add(Loc.T($"Okul modu: mevcut değeri okunamayan ayarlar değiştirilmedi: {string.Join(", ", powerSkipped)}"));
         }
 
-        if (await _cpuPowerService.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true))
+        if (await _cpuBoost.SetBoostModeAsync(CpuBoostMode.Disabled, targetAc: false, targetDc: true))
             outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
         else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
 
@@ -450,7 +437,7 @@ public sealed class SchoolModeService
 
     private CpuBoostMode? TryQueryDcBoost()
     {
-        try { return _cpuPowerService.QueryBoostModeExact(false); }
+        try { return _cpuBoost.QueryBoostModeExact(false); }
         catch { return null; }
     }
 

@@ -340,11 +340,11 @@ public sealed class ProfileCatalog
 
         var layout = new SensorLayout
         {
-            CpuTempSensor = ReadInt(node, "cpuTempSensor") ?? AcerWmiProtocol.SensorCpuTemperature,
-            CpuFanRpmSensor = ReadInt(node, "cpuFanRpmSensor") ?? AcerWmiProtocol.SensorCpuFanSpeed,
-            Sys1TempSensor = ReadInt(node, "sys1TempSensor") ?? AcerWmiProtocol.SensorSystemTemperature,
-            GpuFanRpmSensor = ReadInt(node, "gpuFanRpmSensor") ?? AcerWmiProtocol.SensorGpuFanSpeed,
-            GpuTempSensor = ReadInt(node, "gpuTempSensor") ?? AcerWmiProtocol.SensorGpuTemperature,
+            CpuTempSensor = ReadInt(node, "cpuTempSensor") ?? AcerSensorIds.CpuTemperature,
+            CpuFanRpmSensor = ReadInt(node, "cpuFanRpmSensor") ?? AcerSensorIds.CpuFanSpeed,
+            Sys1TempSensor = ReadInt(node, "sys1TempSensor") ?? AcerSensorIds.SystemTemperature,
+            GpuFanRpmSensor = ReadInt(node, "gpuFanRpmSensor") ?? AcerSensorIds.GpuFanSpeed,
+            GpuTempSensor = ReadInt(node, "gpuTempSensor") ?? AcerSensorIds.GpuTemperature,
             Verified = ReadBool(node, "verified") ?? false,
             Supported = ReadBool(node, "supported") ?? true
         };

@@ -8,16 +8,6 @@ using NitroLite.Core.Hardware;
 
 namespace NitroLite.Core;
 
-public class LightingConfig
-{
-    public string Effect { get; set; } = "WAVE";
-    public int Brightness { get; set; } = 5;
-    public int Speed { get; set; } = 3;
-    public int Direction { get; set; } = 1;
-    public string Color { get; set; } = "#00E5FF";
-    public List<string> LEDs { get; set; } = new() { "#00E5FF", "#00E5FF", "#00E5FF", "#00E5FF" };
-}
-
 /// <summary>
 /// Client for the Acer Agent Service (AASSvc / AcerAgentService.exe) loopback protocol on 127.0.0.1:46933.
 ///

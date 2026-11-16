@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
@@ -25,7 +25,7 @@ public class LocalizationSourceCoverageTests
 
     private static HashSet<string> EnglishKeys()
     {
-        var path = Path.Combine(RepoRoot(), "NitroLite", "Lang", "en.json");
+        var path = Path.Combine(RepoRoot(), "NitroLite.Core", "Lang", "en.json");
         var json = File.ReadAllText(path, Encoding.UTF8);
         var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
         Assert.NotNull(map);
@@ -127,10 +127,14 @@ public class LocalizationSourceCoverageTests
     public void EveryLiteralKeyUsedInCodeExistsInTheEnglishCatalogue()
     {
         var keys = EnglishKeys();
-        var root = Path.Combine(RepoRoot(), "NitroLite");
         var missing = new List<string>();
 
-        foreach (var file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+        // Both projects: the platform-independent half of the source strings moved to NitroLite.Core, and a scan
+        // that only looked at NitroLite would stop seeing them and let a missing key through.
+        var files = new[] { "NitroLite", "NitroLite.Core" }
+            .SelectMany(project => Directory.GetFiles(Path.Combine(RepoRoot(), project), "*.cs", SearchOption.AllDirectories));
+
+        foreach (var file in files)
         {
             if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
                 || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))

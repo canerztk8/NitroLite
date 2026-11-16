@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.IO;
 using System.Resources;
 using NitroLite.Core;
@@ -62,7 +62,9 @@ public class ThemePreviewAssetTests
     [MemberData(nameof(ConcretePalettes))]
     public void EveryPalette_PreviewIsEmbeddedUnderThePackUriTheCardAsksFor(AppTheme theme)
     {
-        using var stream = typeof(AppTheme).Assembly.GetManifestResourceStream("NitroLite.g.resources");
+        // The previews are WPF Resource items, so they stay in the WPF assembly even though AppTheme itself moved
+        // to NitroLite.Core. Asking the enum's assembly would look in the wrong place and find nothing.
+        using var stream = typeof(MainWindow).Assembly.GetManifestResourceStream("NitroLite.g.resources");
         Assert.NotNull(stream);
 
         using var reader = new ResourceReader(stream!);

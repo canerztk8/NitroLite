@@ -139,8 +139,8 @@ public class HalStep5Tests
         var hardware = new RecordingController();
         var settings = new AppSettings();
         var service = new SchoolModeService(
-            agent, new MockCpuPowerService(), new NoopDisplay(), new NoopBrightness(), settings,
-            new NoopScheme(), hardware)
+            hardware, new MockCpuPowerService(), new NoopDisplay(), new NoopBrightness(), settings,
+            new NoopScheme())
         {
             BackupPath = null,
             GetCurrentOperatingMode = () => OperatingMode.Default,
@@ -168,8 +168,8 @@ public class HalStep5Tests
             var hardware = new RecordingController { Mode = OperatingMode.Extreme, Fan = FanMode.Max };
             var settings = new AppSettings();
             var service = new SchoolModeService(
-                agent, new MockCpuPowerService(), new NoopDisplay(), new NoopBrightness(), settings,
-                new NoopScheme(), hardware)
+                hardware, new MockCpuPowerService(), new NoopDisplay(), new NoopBrightness(), settings,
+                new NoopScheme())
             {
                 BackupPath = backupPath,
                 GetCurrentOperatingMode = () => OperatingMode.Extreme,
@@ -194,23 +194,16 @@ public class HalStep5Tests
     }
 
     [Fact]
-    public async Task SchoolMode_WithoutAController_StillWrapsTheAgentSoNothingBreaks()
+    public void SchoolMode_WithoutAController_IsRejectedInsteadOfSilentlyDoingNothing()
     {
-        // The optional parameter is what keeps the ~20 existing call sites compiling; it must still work.
-        var agent = new MockAcerAgentClient();
-        var service = new SchoolModeService(
-            agent, new MockCpuPowerService(), new NoopDisplay(), new NoopBrightness(), new AppSettings(),
-            new NoopScheme())
-        {
-            BackupPath = null,
-            GetCurrentOperatingMode = () => OperatingMode.Default,
-            GetCurrentFanMode = () => FanMode.Auto
-        };
+        // The controller used to be an optional last parameter that fell back to wrapping the agent. Now that the
+        // state machine lives in NitroLite.Core it has no way to build a backend, so a missing one has to fail
+        // loudly at construction: a school mode that quietly changes nothing is worse than one that refuses.
+        var ex = Assert.Throws<ArgumentNullException>(() => new SchoolModeService(
+            null!, new MockCpuPowerService(), new NoopDisplay(), new NoopBrightness(), new AppSettings(),
+            new NoopScheme()));
 
-        var outcome = await service.EnableAsync();
-
-        Assert.True(outcome.Success);
-        Assert.Contains(OperatingMode.Eco, agent.ModeChangeHistory);
+        Assert.Equal("hardware", ex.ParamName);
     }
 
     // ------------------------------------------------------------------ 2. power automation over the controller

@@ -475,7 +475,7 @@ public partial class App : System.Windows.Application
         try
         {
             using var client = new AcerAgentClient();
-            var task = Task.Run(() => DeviceCapabilities.ProbeAsync(client));
+            var task = Task.Run(() => DeviceCapabilityProbe.ProbeAsync(client));
             return task.Wait(TimeSpan.FromSeconds(8)) ? task.Result : null;
         }
         catch

@@ -26,17 +26,4 @@ public sealed record DeviceCapabilities
 
     /// <summary>Whether the service reports a controllable backlight, from LIGHTING_CAPABILITY.</summary>
     public bool? LightingCapability { get; init; }
-
-    /// <summary>
-    /// Asks the service everything the report needs. Each query is independent and swallows its own failure, so a
-    /// machine that answers three of five still produces a useful report.
-    /// </summary>
-    public static async Task<DeviceCapabilities> ProbeAsync(AcerAgentClient client) => new()
-    {
-        Keyboard = await client.GetKeyboardCapabilityAsync(),
-        OperatingModes = await client.GetOperatingModesAsync(),
-        GpuModeCapability = await client.GetGpuModeCapabilityAsync(),
-        FanMode = await client.GetFanModeAsync(),
-        LightingCapability = await client.GetLightingCapabilityAsync()
-    };
 }

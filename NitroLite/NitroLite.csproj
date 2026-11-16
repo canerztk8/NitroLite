@@ -21,16 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- One catalogue per language, embedded so the single-file package needs no loose files. Loc.LoadCatalog
-         finds them by the ".Lang.<code>.json" suffix. Turkish has no file: the source text is the key. -->
-    <EmbeddedResource Include="Lang\*.json" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- The model table: sensor layouts, fan plausibility ceilings and known-broken WMI methods per Acer model.
-         Embedded and read-only; a user override lives in the data folder as profiles.user.json and is validated
-         as strictly as this one. ProfileCatalog finds it by the ".profiles.json" suffix. -->
-    <EmbeddedResource Include="Core\Hardware\Profiles\profiles.json" />
+    <!-- Everything platform-independent: the hardware contract, the thermal and school-mode rules, the model table
+         and the language catalogues. It targets plain net10.0 so a Linux front end can load the same assembly. -->
+    <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

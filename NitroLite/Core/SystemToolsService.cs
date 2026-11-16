@@ -513,7 +513,7 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
         {
             var psi = new ProcessStartInfo
             {
-                FileName = AppPaths.WindowsPowerShell,
+                FileName = WindowsPaths.WindowsPowerShell,
                 Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
                 UseShellExecute = true,
                 Verb = "runas",
