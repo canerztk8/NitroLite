@@ -492,10 +492,14 @@ public class CapabilityProbeTests
     public void HardwareReportCarriesTheCapabilityProbeSection()
     {
         var text = HardwareReport.BuildText();
+
+        // Only the parts that do not depend on the machine this runs on. The report is built from a live probe, so
+        // asserting on the WMI signature list would pass on an Acer laptop and fail on a CI runner that has no
+        // AcerGamingFunction class at all — the section is written either way, its contents are not.
         Assert.Contains("CAPABILITY PROBE", text);
         Assert.Contains("Cache key", text);
+        Assert.Contains("Profile", text);
         Assert.Contains(CapabilitySnapshot.MuxSwitch, text);
-        Assert.Contains("Signatures", text);
     }
 
     [Fact]
