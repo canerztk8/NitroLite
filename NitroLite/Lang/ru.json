@@ -267,6 +267,7 @@
  "Bölge 2 (Orta Sol)": "Зона 2 (центр слева)",
  "Bölge 3 (Orta Sağ)": "Зона 3 (центр справа)",
  "Bölge 4 (Sayısal)": "Зона 4 (цифровой блок)",
+ "Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor. Ayarlar > Doğrudan WMI arka ucu > Kontrolü başlat.": "Цвет по зонам требует прямого пути WMI; служба Acer не может удержать четыре разных цвета. Настройки > Прямой бэкенд WMI > Запустить управление.",
  "Bölge rengi ayarlanamadı": "Не удалось задать цвет зоны",
  "Bölge rengi ayarlanamadı: {0}": "Не удалось задать цвет зоны: {0}",
  "Büyüt": "Развернуть",

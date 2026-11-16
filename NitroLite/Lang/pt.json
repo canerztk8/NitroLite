@@ -267,6 +267,7 @@
  "Bölge 2 (Orta Sol)": "Zona 2 (Centro Esquerda)",
  "Bölge 3 (Orta Sağ)": "Zona 3 (Centro Direita)",
  "Bölge 4 (Sayısal)": "Zona 4 (Teclado Numérico)",
+ "Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor. Ayarlar > Doğrudan WMI arka ucu > Kontrolü başlat.": "A cor por zona precisa do caminho WMI direto; o serviço da Acer não consegue manter quatro cores separadas. Configurações > Backend WMI direto > Iniciar controle.",
  "Bölge rengi ayarlanamadı": "Não foi possível definir a cor da zona",
  "Bölge rengi ayarlanamadı: {0}": "Não foi possível definir a cor da zona: {0}",
  "Büyüt": "Maximizar",

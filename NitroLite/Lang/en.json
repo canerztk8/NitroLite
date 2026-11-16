@@ -267,6 +267,7 @@
  "Bölge 2 (Orta Sol)": "Zone 2 (Centre Left)",
  "Bölge 3 (Orta Sağ)": "Zone 3 (Centre Right)",
  "Bölge 4 (Sayısal)": "Zone 4 (Numpad)",
+ "Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor. Ayarlar > Doğrudan WMI arka ucu > Kontrolü başlat.": "Zone-by-zone colour needs the direct WMI path; the Acer service cannot hold four separate colours. Settings > Direct WMI backend > Start control.",
  "Bölge rengi ayarlanamadı": "The zone colour could not be set",
  "Bölge rengi ayarlanamadı: {0}": "The zone colour could not be set: {0}",
  "Büyüt": "Maximize",

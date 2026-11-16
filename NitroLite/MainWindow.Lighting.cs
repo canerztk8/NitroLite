@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using NitroLite.Core;
 using NitroLite.Core.Hardware.OpenRgb;
+using NitroLite.Core.Hardware.Wmi;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfButton = System.Windows.Controls.Button;
 using WpfPoint = System.Windows.Point;
@@ -62,6 +63,12 @@ public partial class MainWindow
             ? new[] { 500, 2000, 5000, 10000, 18000 }
             : new[] { 250, 1500 };
 
+        // Nothing here was asked for by the user, so it must not raise an elevation prompt: a saved four-zone
+        // configuration is re-applied through the helper only when one is already running.
+        var hybrid = _hardware as HybridHardwareController;
+        bool previousElevation = hybrid?.AllowElevationForLighting ?? false;
+        if (hybrid != null) hybrid.AllowElevationForLighting = false;
+
         try
         {
             foreach (var delay in delays)
@@ -80,8 +87,8 @@ public partial class MainWindow
                                            SelectedPresetTurnsLightingOff();
 
                         bool success = shouldBeOff
-                            ? await _agentClient.TurnOffLightingAsync()
-                            : await _agentClient.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
+                            ? await _hardware.TurnOffLightingAsync()
+                            : await _hardware.SetLightingAsync(_lighting.Effect, _lighting.Brightness, _lighting.Speed, _lighting.Direction, _lighting.Color, _lighting.LEDs.ToArray());
 
                         if (success)
                         {
@@ -104,6 +111,10 @@ public partial class MainWindow
         catch (OperationCanceledException)
         {
             // Gracefully canceled when user changed lighting or window reopened
+        }
+        finally
+        {
+            if (hybrid != null) hybrid.AllowElevationForLighting = previousElevation;
         }
     }
 
@@ -409,7 +420,7 @@ public partial class MainWindow
         cfg.Brightness == 0 || string.Equals(cfg.Effect, "OFF", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Sends the current <see cref="_lighting"/> to AASSvc and reports a failure to the user.
+    /// Sends the current <see cref="_lighting"/> to the hardware controller and reports a failure to the user.
     /// Cancels any pending debounced slider apply, since this call already carries the latest state.
     /// </summary>
     private async Task<bool> ApplyLightingToDeviceAsync(string failurePrefix)
@@ -417,13 +428,23 @@ public partial class MainWindow
         _lightingApplyTimer?.Stop();
         var cfg = _lighting;
         bool ok = IsLightingOff(cfg)
-            ? await _agentClient.TurnOffLightingAsync()
-            : await _agentClient.SetLightingAsync(cfg.Effect, cfg.Brightness, cfg.Speed, cfg.Direction, cfg.Color, cfg.LEDs.ToArray());
+            ? await _hardware.TurnOffLightingAsync()
+            : await _hardware.SetLightingAsync(cfg.Effect, cfg.Brightness, cfg.Speed, cfg.Direction, cfg.Color, cfg.LEDs.ToArray());
+
+        // Four different zone colours only reach the keyboard through the firmware. When that path is not available
+        // the service lights a single colour and still answers success, so the refusal has to be named here or the
+        // user is left looking at a keyboard that ignored three of their four choices.
+        bool? zoneColorsApplied = (_hardware as HybridHardwareController)?.LastZoneColorsApplied;
+
         if (!ok && !_isExiting)
         {
             ShowToast(Loc.T($"{failurePrefix}: klavye komutu reddedildi veya Acer servisine ulaşılamadı. Ayar kaydedilmedi."), false);
         }
-        else if (ok && _agentClient.LastLightingPartialFailure && !_isExiting)
+        else if (zoneColorsApplied == false && !_isExiting)
+        {
+            ShowToast(Loc.T("Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor. Ayarlar > Doğrudan WMI arka ucu > Kontrolü başlat."), false);
+        }
+        else if (ok && zoneColorsApplied == null && _agentClient.LastLightingPartialFailure && !_isExiting)
         {
             ShowToast(Loc.T("Işık komutunu iki hedeften (genel / klavye) yalnızca biri kabul etti; ayar kısmen uygulanmış olabilir."), false);
         }

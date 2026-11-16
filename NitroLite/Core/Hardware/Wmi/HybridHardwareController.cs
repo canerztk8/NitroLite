@@ -28,10 +28,10 @@ public sealed record ReconciliationResult(bool Switched, bool Reapplied, string?
 /// the socket, so "the port accepts a connection" is not evidence that anything is listening.
 /// </para>
 /// <para>
-/// Keyboard lighting follows the same rule. The service path supports effects, speed, direction and brightness; the
-/// direct-WMI path writes a static colour per zone and nothing else. Routing lighting to the service whenever it
-/// answers keeps the richer feature set where it works, and still gives a machine with no Acer software a colour
-/// control instead of a dead one.
+/// Keyboard lighting is the one exception, and only for four different zone colours. The service path supports
+/// effects, speed, direction and brightness; the direct-WMI path writes a static colour per zone and nothing else.
+/// A single colour therefore stays on the service, which has the richer feature set, while four different colours
+/// go to WMI, which is the only path that can hold them — see <see cref="SetLightingAsync"/>.
 /// </para>
 /// <para>
 /// A handover in the other direction needs care. While the app was on WMI it wrote the EC directly; if the user then
@@ -310,17 +310,101 @@ public sealed class HybridHardwareController : IHardwareController
         await (await ResolveAsync().ConfigureAwait(false))
             .SetFanModeAsync(mode, cpuPercent, gpuPercent).ConfigureAwait(false);
 
-    // Keyboard lighting follows the same arbitration as everything else: the service when it answers, direct WMI
-    // when it does not. The WMI path writes colour only — no effects, no brightness — so a machine that still has
-    // Acer's software keeps the full feature set, and a machine without it gets a working colour control instead of
-    // a dead one. The 30-second backlight timeout has no WMI equivalent and stays on the service path.
+    // Keyboard lighting: the service when it answers, direct WMI when it does not — except for four different zone
+    // colours, which only the firmware can hold. The WMI path writes colour only (no effects, no brightness), so a
+    // single colour keeps the full feature set on the service. The 30-second backlight timeout has no WMI
+    // equivalent and stays on the service path.
 
     public async Task<LightingConfig?> GetLightingConfigAsync() =>
         await (await ResolveAsync().ConfigureAwait(false)).GetLightingConfigAsync().ConfigureAwait(false);
 
-    public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors) =>
-        await (await ResolveAsync().ConfigureAwait(false))
+    /// <summary>
+    /// True when the last lighting write carried more than one zone colour and the firmware applied them; false when
+    /// such a write was asked for but the direct-WMI path was not available; null when no zone colours were involved.
+    /// The window uses it to explain a keyboard that came out in one colour.
+    /// </summary>
+    public bool? LastZoneColorsApplied { get; private set; }
+
+    /// <summary>
+    /// True when a lighting write may start the elevated helper. The window clears it around the automatic
+    /// re-assertions — boot, resume, an adapter change — so opening the app never raises a prompt, and leaves it set
+    /// for the writes the user asked for.
+    /// </summary>
+    public bool AllowElevationForLighting { get; set; } = true;
+
+    /// <summary>
+    /// Writes the keyboard lighting, sending four different zone colours to the firmware rather than to the service.
+    /// <para>
+    /// The service cannot hold four steady colours. Its own capability report for this keyboard lists <c>DIRECT</c>
+    /// as the only four-colour mode and <c>STATIC</c> as one colour, and a measured run on an AN16-41 showed what
+    /// that means in practice: <c>STATIC</c> with four colours lights one of them (the keyboard sub-device answers
+    /// <c>4</c>, a rejection) and <c>DIRECT</c> with four colours animates them instead of holding them. The
+    /// firmware's <c>SetGamingRgbKb</c> takes one colour plus a zone mask and holds it, so a request that carries
+    /// more than one colour goes to WMI even when the service is healthy.
+    /// </para>
+    /// <para>
+    /// Brightness, speed and the effect still come from the service, and they are written first: the zone colours
+    /// have to be the last thing the keyboard is told, or the service's single-colour write would paint over them.
+    /// </para>
+    /// </summary>
+    public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors)
+    {
+        LastZoneColorsApplied = null;
+
+        if (WantsZoneColors(zoneColors) && _useDirectWmi())
+        {
+            // A helper that is already running is used without asking; starting one is only allowed for a write the
+            // user asked for, so the boot re-assertion cannot raise a prompt.
+            var wmi = _wmi is { IsAvailable: true } ? _wmi : (AllowElevationForLighting ? EnsureWmi() : null);
+            if (wmi != null && await wmi.EnsureConnectedAsync().ConfigureAwait(false))
+            {
+                await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, null).ConfigureAwait(false);
+                bool applied = await wmi
+                    .SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+                    .ConfigureAwait(false);
+
+                LastZoneColorsApplied = applied;
+                if (applied)
+                {
+                    AppLog.Info("Klavye bölge renkleri", "Dört bölge doğrudan WMI üzerinden yazıldı.");
+                }
+                else
+                {
+                    AppLog.Warn("Klavye bölge renkleri", "WMI yazımı uygulanmadı; servis yoluna dönülüyor.");
+                }
+
+                return applied;
+            }
+
+            LastZoneColorsApplied = false;
+            AppLog.Warn("Klavye bölge renkleri", "Doğrudan WMI yolu yok; servis tek renk uygulayacak.");
+        }
+
+        return await (await ResolveAsync().ConfigureAwait(false))
             .SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors).ConfigureAwait(false);
+    }
+
+    /// <summary>True when the request carries at least two different zone colours, which is what the service cannot do.</summary>
+    private static bool WantsZoneColors(string[]? zoneColors)
+    {
+        if (zoneColors == null) return false;
+
+        string? first = null;
+        foreach (var color in zoneColors)
+        {
+            if (string.IsNullOrWhiteSpace(color)) continue;
+            var trimmed = color.Trim();
+            if (first == null)
+            {
+                first = trimmed;
+                continue;
+            }
+
+            if (!string.Equals(first, trimmed, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+
+        return false;
+    }
 
     public async Task<bool> TurnOffLightingAsync() =>
         await (await ResolveAsync().ConfigureAwait(false)).TurnOffLightingAsync().ConfigureAwait(false);

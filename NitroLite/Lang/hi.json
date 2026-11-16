@@ -267,6 +267,7 @@
  "Bölge 2 (Orta Sol)": "ज़ोन 2 (मध्य बाएँ)",
  "Bölge 3 (Orta Sağ)": "ज़ोन 3 (मध्य दाएँ)",
  "Bölge 4 (Sayısal)": "ज़ोन 4 (नंबर पैड)",
+ "Bölge bölge renk için doğrudan WMI yolu gerekiyor; Acer servisi dört ayrı rengi tutamıyor. Ayarlar > Doğrudan WMI arka ucu > Kontrolü başlat.": "ज़ोन-दर-ज़ोन रंग के लिए सीधा WMI पथ आवश्यक है; Acer सेवा चार अलग रंग नहीं रख सकती। सेटिंग्स > सीधा WMI बैकएंड > नियंत्रण प्रारंभ करें।",
  "Bölge rengi ayarlanamadı": "ज़ोन का रंग सेट नहीं हो सका",
  "Bölge rengi ayarlanamadı: {0}": "ज़ोन का रंग सेट नहीं हो सका: {0}",
  "Büyüt": "बड़ा करें",

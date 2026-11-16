@@ -435,6 +435,133 @@ public class WmiControllerTests
     }
 
     [Fact]
+    public async Task Hybrid_FourZoneColors_GoToWmiEvenWhenTheServiceIsHealthy()
+    {
+        var agent = new RecordingController("AASSvc");
+        var wmi = new RecordingController("WMI");
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => wmi,
+            useDirectWmi: () => true,
+            serviceHealthy: () => Task.FromResult(true));
+
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
+
+        // The service advertises DIRECT as its only four-colour mode and animates it, so the firmware gets the
+        // colours. The service still carries brightness and the effect, and it is written first so the zone colours
+        // are the last thing the keyboard hears.
+        Assert.Equal(1, wmi.SetLightingCalls);
+        Assert.Equal(zones, wmi.LastZoneColors);
+        Assert.Equal(1, agent.SetLightingCalls);
+        Assert.Null(agent.LastZoneColors);
+        Assert.True(hybrid.LastZoneColorsApplied);
+    }
+
+    [Fact]
+    public async Task Hybrid_OneZoneColor_StaysOnTheService()
+    {
+        var agent = new RecordingController("AASSvc");
+        var wmi = new RecordingController("WMI");
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => wmi,
+            useDirectWmi: () => true,
+            serviceHealthy: () => Task.FromResult(true));
+
+        var zones = new[] { "#FF0000", "#FF0000", "#FF0000", "#FF0000" };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
+
+        Assert.Equal(0, wmi.SetLightingCalls);
+        Assert.Equal(1, agent.SetLightingCalls);
+        Assert.Null(hybrid.LastZoneColorsApplied);
+    }
+
+    [Fact]
+    public async Task Hybrid_FourZoneColors_WithoutWmi_FallBackToTheServiceAndSaySo()
+    {
+        var agent = new RecordingController("AASSvc");
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => null,
+            useDirectWmi: () => true,
+            serviceHealthy: () => Task.FromResult(true));
+
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
+
+        // The service answers success while lighting one colour, so the caller has to be told the zones were lost.
+        Assert.Equal(1, agent.SetLightingCalls);
+        Assert.Equal(zones, agent.LastZoneColors);
+        Assert.False(hybrid.LastZoneColorsApplied);
+    }
+
+    [Fact]
+    public async Task Hybrid_FourZoneColors_WhenTheUserPinnedTheService_StayOnTheService()
+    {
+        var agent = new RecordingController("AASSvc");
+        var wmi = new RecordingController("WMI");
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => wmi,
+            useDirectWmi: () => false,
+            serviceHealthy: () => Task.FromResult(true));
+
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
+
+        Assert.Equal(0, wmi.SetLightingCalls);
+        Assert.Equal(1, agent.SetLightingCalls);
+        Assert.Null(hybrid.LastZoneColorsApplied);
+    }
+
+    [Fact]
+    public async Task Hybrid_FourZoneColors_DoNotStartTheHelperWhenElevationIsNotAllowed()
+    {
+        var agent = new RecordingController("AASSvc");
+        var wmi = new RecordingController("WMI");
+        int factoryCalls = 0;
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => { factoryCalls++; return wmi; },
+            useDirectWmi: () => true,
+            serviceHealthy: () => Task.FromResult(true));
+
+        // The boot re-assertion runs with this cleared, so a saved four-zone configuration cannot raise a prompt
+        // when the app opens.
+        hybrid.AllowElevationForLighting = false;
+
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
+
+        Assert.Equal(0, factoryCalls);
+        Assert.Equal(0, wmi.SetLightingCalls);
+        Assert.Equal(1, agent.SetLightingCalls);
+        Assert.False(hybrid.LastZoneColorsApplied);
+    }
+
+    [Fact]
+    public async Task Hybrid_FourZoneColors_UseAnAlreadyRunningHelperWithoutAsking()
+    {
+        var agent = new RecordingController("AASSvc");
+        var wmi = new RecordingController("WMI");
+        using var hybrid = new HybridHardwareController(
+            agent,
+            wmiFactory: () => wmi,
+            useDirectWmi: () => true,
+            serviceHealthy: () => Task.FromResult(true));
+
+        Assert.True(await hybrid.StartDirectWmiAsync());
+        hybrid.AllowElevationForLighting = false;
+
+        var zones = new[] { "#FF0000", "#00FF00", "#0000FF", "#FFFFFF" };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
+
+        Assert.Equal(1, wmi.SetLightingCalls);
+        Assert.True(hybrid.LastZoneColorsApplied);
+    }
+
+    [Fact]
     public async Task Hybrid_FactoryThatThrows_LeavesTheAgentInPlace()
     {
         var agent = new RecordingController("AASSvc");
@@ -550,6 +677,7 @@ public class WmiControllerTests
         public int SetFanModeCalls { get; private set; }
         public int SetOperatingModeCalls { get; private set; }
         public int SetLightingCalls { get; private set; }
+        public string[]? LastZoneColors { get; private set; }
         public int TurnOffLightingCalls { get; private set; }
         public int SetBacklightTimeoutCalls { get; private set; }
 
@@ -587,6 +715,7 @@ public class WmiControllerTests
         public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors)
         {
             SetLightingCalls++;
+            LastZoneColors = zoneColors;
             return Task.FromResult(true);
         }
 
