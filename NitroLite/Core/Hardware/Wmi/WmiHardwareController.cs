@@ -108,8 +108,34 @@ public sealed class WmiHardwareController : IHardwareController
             MuxSwitch = ReadBool(data, "muxSwitch"),
             BatteryChargeLimit = ReadBool(data, "batteryLimit"),
             KeyboardLighting = ReadBool(data, "keyboardLighting"),
-            BacklightTimeout = false
+            BacklightTimeout = ReadBool(data, "backlightTimeout"),
+            CoolBoost = ReadBool(data, "coolBoost"),
+            LcdOverdrive = ReadBool(data, "lcdOverdrive"),
+            WinKeyLock = ReadBool(data, "winKeyLock"),
+            SupportedOperatingModes = ReadModes(data)
         };
+    }
+
+    /// <summary>
+    /// The operating modes the worker reported, in the order the firmware listed them. An empty list means the
+    /// firmware did not answer, which the UI reads as "keep showing every mode" rather than "hide them all".
+    /// </summary>
+    private static IReadOnlyList<OperatingMode> ReadModes(JsonObject data)
+    {
+        if (data["supportedModes"] is not JsonArray array) return Array.Empty<OperatingMode>();
+
+        var modes = new List<OperatingMode>(array.Count);
+        foreach (var node in array)
+        {
+            if (node is JsonValue value &&
+                value.TryGetValue<string>(out var text) &&
+                Enum.TryParse<OperatingMode>(text, ignoreCase: true, out var mode))
+            {
+                modes.Add(mode);
+            }
+        }
+
+        return modes;
     }
 
     // ---------------------------------------------------------------- telemetry
@@ -200,6 +226,10 @@ public sealed class WmiHardwareController : IHardwareController
 
     public async Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {
+        // A model whose firmware drives the mode through EC MMIO accepts the WMI write and ignores it. Reporting
+        // not-supported is honest; the caller falls back to the Windows power plan, which does work there.
+        if (Snapshot?.EcMmioProfile == true) return false;
+
         var result = await ApplyAsync(
             ReadBackPolicy.OperatingMode,
             write: async () => (await SendAsync(WmiWorkerCommand.SetOperatingMode,
@@ -494,9 +524,71 @@ public sealed class WmiHardwareController : IHardwareController
     private static int PackRgb((byte Red, byte Green, byte Blue) color) =>
         (color.Red << 16) | (color.Green << 8) | color.Blue;
 
-    public Task<bool?> GetBacklightTimeoutAsync() => Task.FromResult<bool?>(null);
+    public async Task<bool?> GetBacklightTimeoutAsync()
+    {
+        var response = await SendAsync(WmiWorkerCommand.GetBacklightTimeout).ConfigureAwait(false);
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
+        return ReadNullableBool(data, "enabled");
+    }
 
-    public Task<bool> SetBacklightTimeoutAsync(bool enable30s) => Task.FromResult(false);
+    public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
+    {
+        var response = await SendAsync(WmiWorkerCommand.SetBacklightTimeout, new JsonObject
+        {
+            ["enabled"] = enable30s
+        }).ConfigureAwait(false);
+
+        return response is { Ok: true };
+    }
+
+    // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
+
+    public async Task<bool?> GetCoolBoostAsync()
+    {
+        var response = await SendAsync(WmiWorkerCommand.GetCoolBoost).ConfigureAwait(false);
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
+        return ReadNullableBool(data, "coolBoost");
+    }
+
+    public async Task<bool> SetCoolBoostAsync(bool on)
+    {
+        var response = await SendAsync(WmiWorkerCommand.SetCoolBoost, new JsonObject { ["on"] = on })
+            .ConfigureAwait(false);
+        if (response is not { Ok: true }) return false;
+
+        // CoolBoost has a getter, so the write is confirmed rather than assumed.
+        var observed = await GetCoolBoostAsync().ConfigureAwait(false);
+        return observed == on;
+    }
+
+    public async Task<bool?> GetLcdOverdriveAsync()
+    {
+        var response = await SendAsync(WmiWorkerCommand.GetLcdOverdrive).ConfigureAwait(false);
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
+        return ReadNullableBool(data, "lcdOverdrive");
+    }
+
+    public async Task<bool> SetLcdOverdriveAsync(bool on)
+    {
+        var response = await SendAsync(WmiWorkerCommand.SetLcdOverdrive, new JsonObject { ["on"] = on })
+            .ConfigureAwait(false);
+        if (response is not { Ok: true }) return false;
+
+        var observed = await GetLcdOverdriveAsync().ConfigureAwait(false);
+        return observed == on;
+    }
+
+    /// <summary>
+    /// Writes the Windows-key lock. The answer is the firmware's status byte, not a read-back: the firmware has no
+    /// getter for this setting, so a true result means "accepted", and the UI says so rather than claiming the state
+    /// was confirmed.
+    /// </summary>
+    public async Task<bool> SetWinKeyLockAsync(bool enabled)
+    {
+        var response = await SendAsync(WmiWorkerCommand.SetWinKeyLock, new JsonObject { ["enabled"] = enabled })
+            .ConfigureAwait(false);
+        return response is { Ok: true };
+    }
 
     // ---------------------------------------------------------------- battery charge limit
 

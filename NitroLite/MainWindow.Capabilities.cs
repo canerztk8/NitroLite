@@ -50,6 +50,10 @@ public partial class MainWindow
         if (RowMuxSwitch != null) RowMuxSwitch.Visibility = muxVisibility;
         if (SepMuxSwitch != null) SepMuxSwitch.Visibility = muxVisibility;
 
+        // CoolBoost, LCD overdrive and the Windows-key lock are answered by the backend rather than by the probe, so
+        // they are filled in from here: this is the one funnel both the cached and the freshly probed path go through.
+        _ = RefreshExtraSwitchesAsync();
+
         EnsureVisiblePageSelected();
     }
 

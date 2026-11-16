@@ -165,4 +165,34 @@ public interface IWmiExecutor : IDisposable
     /// </para>
     /// </summary>
     WmiOperationResult SetKeyboardLighting(KeyboardLightingRequest request);
+
+    /// <summary>
+    /// Reads CoolBoost from <c>APGeAction.GetFunction(0x207)</c>. Reports not-supported when the class is absent,
+    /// which is the case on every model whose firmware has no CoolBoost step.
+    /// </summary>
+    WmiOperationResult GetCoolBoost();
+
+    /// <summary>Writes CoolBoost through <c>APGeAction.SetFunction</c>.</summary>
+    WmiOperationResult SetCoolBoost(bool on);
+
+    /// <summary>
+    /// Reads the LCD overdrive state from <c>GetGamingProfile(0)</c>. Reports not-supported when the answer is
+    /// neither of the two values a supported panel returns.
+    /// </summary>
+    WmiOperationResult GetLcdOverdrive();
+
+    /// <summary>Writes LCD overdrive through <c>SetGamingProfile</c>.</summary>
+    WmiOperationResult SetLcdOverdrive(bool on);
+
+    /// <summary>
+    /// Writes the Windows-key lock through <c>SetGamingProfile</c>. There is no getter for this one, so the answer
+    /// says <c>verified: false</c> rather than pretending a read-back happened.
+    /// </summary>
+    WmiOperationResult SetWinKeyLock(bool enabled);
+
+    /// <summary>Reads the 30-second keyboard backlight timeout from <c>APGeAction.GetFunction</c>.</summary>
+    WmiOperationResult GetBacklightTimeout();
+
+    /// <summary>Writes the 30-second keyboard backlight timeout through <c>APGeAction.SetFunction</c>.</summary>
+    WmiOperationResult SetBacklightTimeout(bool enabled);
 }

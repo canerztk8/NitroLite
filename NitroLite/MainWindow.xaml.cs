@@ -1802,6 +1802,12 @@ public partial class MainWindow : Window
                 RenderTelemetryChart();
             }
 
+            if (NavRgb.IsChecked == true)
+            {
+                // The extra switches live on this page, and the backend may have come up since the window opened.
+                await RefreshExtraSwitchesAsync();
+            }
+
             if (NavDebloat.IsChecked == true)
             {
                 // NitroSense may have been opened or closed, or services changed outside NitroLite, since the last look.

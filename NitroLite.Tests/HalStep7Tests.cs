@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Wmi;
@@ -897,6 +897,20 @@ public class HalStep7Tests
             LastWrite = request;
             return WmiOperationResult.Success(new JsonObject { ["effect"] = request.Effect });
         }
+
+        public WmiOperationResult GetCoolBoost() => WmiOperationResult.NotSupported("APGeAction is not registered");
+
+        public WmiOperationResult SetCoolBoost(bool on) => WmiOperationResult.NotSupported("APGeAction is not registered");
+
+        public WmiOperationResult GetLcdOverdrive() => WmiOperationResult.NotSupported("panel has no overdrive");
+
+        public WmiOperationResult SetLcdOverdrive(bool on) => WmiOperationResult.NotSupported("panel has no overdrive");
+
+        public WmiOperationResult SetWinKeyLock(bool enabled) => WmiOperationResult.Success();
+
+        public WmiOperationResult GetBacklightTimeout() => WmiOperationResult.NotSupported("APGeAction is not registered");
+
+        public WmiOperationResult SetBacklightTimeout(bool enabled) => WmiOperationResult.NotSupported("APGeAction is not registered");
 
         public void Dispose() { }
     }

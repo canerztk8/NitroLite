@@ -417,6 +417,12 @@ public partial class MainWindow
 
             UpdateCapabilitySummary(snapshot);
             ApplyCapabilityVisibility();
+
+            // A rescan is the user asking the hardware again, so the extra switches are re-probed too instead of
+            // keeping the answer from the previous backend.
+            _extraSwitchesLoaded = false;
+            await RefreshExtraSwitchesAsync(force: true);
+
             ShowToast(Loc.T($"Donanım yetenekleri yeniden tarandı: {snapshot.ProfileId}"), true);
         }
         catch (Exception ex)

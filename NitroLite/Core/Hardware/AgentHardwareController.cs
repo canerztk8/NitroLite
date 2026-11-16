@@ -143,6 +143,24 @@ public sealed class AgentHardwareController : IHardwareController
         WriteAsync(() => _careCenter.SetBatteryChargeModeAsync(mode));
 
     /// <summary>
+    /// The service socket has no CoolBoost command, so this backend cannot answer. Null rather than false: the
+    /// hybrid controller reads null as "ask the other backend" and false as "the hardware said no".
+    /// </summary>
+    public Task<bool?> GetCoolBoostAsync() => Task.FromResult<bool?>(null);
+
+    /// <summary>No CoolBoost command exists on the service socket.</summary>
+    public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(false);
+
+    /// <summary>No LCD overdrive command exists on the service socket.</summary>
+    public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(null);
+
+    /// <summary>No LCD overdrive command exists on the service socket.</summary>
+    public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
+
+    /// <summary>No Windows-key lock command exists on the service socket.</summary>
+    public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
+
+    /// <summary>
     /// Runs one write behind the gate. The gate is released in a <c>finally</c>, so a write that throws does not
     /// wedge every later write for the rest of the session.
     /// </summary>

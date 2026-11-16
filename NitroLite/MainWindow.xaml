@@ -2239,6 +2239,36 @@
                                         </StackPanel>
                                     </Grid>
                                 </Border>
+
+                                <!-- Extra hardware switches. The card stays collapsed unless the machine answered
+                                     that it has at least one of them, so a Nitro V 15 never shows a CoolBoost
+                                     switch its firmware cannot honour. -->
+                                <Border Style="{StaticResource CardBorder}" x:Name="CardExtraSwitches" Visibility="Collapsed">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                            <TextBlock Text="&#xE7E8;" Style="{StaticResource CardIcon}" Foreground="{DynamicResource AccentCyan}" />
+                                            <TextBlock Text="Ek Donanım Anahtarları" Style="{StaticResource SectionTitle}" />
+                                        </StackPanel>
+
+                                        <CheckBox Style="{StaticResource ToggleSwitch}" x:Name="ChkCoolBoost"
+                                                  Content="CoolBoost (fan devrini yükseltir)"
+                                                  Checked="ChkCoolBoost_Changed" Unchecked="ChkCoolBoost_Changed"
+                                                  Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,6" />
+
+                                        <CheckBox Style="{StaticResource ToggleSwitch}" x:Name="ChkLcdOverdrive"
+                                                  Content="LCD Overdrive (panel tepki süresini kısaltır)"
+                                                  Checked="ChkLcdOverdrive_Changed" Unchecked="ChkLcdOverdrive_Changed"
+                                                  Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,6" />
+
+                                        <CheckBox Style="{StaticResource ToggleSwitch}" x:Name="ChkWinKeyLock"
+                                                  Content="Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)"
+                                                  Checked="ChkWinKeyLock_Changed" Unchecked="ChkWinKeyLock_Changed"
+                                                  Foreground="{DynamicResource TextSecondary}" />
+
+                                        <TextBlock x:Name="TxtExtraSwitchesNote" Text="" Visibility="Collapsed"
+                                                   Foreground="{DynamicResource TextMuted}" FontSize="10" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

@@ -53,7 +53,28 @@ public enum WmiWorkerCommand
     /// Replaces the single-colour write that used to live at this value; the number is kept so the wire format does
     /// not change for a rename.
     /// </summary>
-    SetKeyboardLighting = 10
+    SetKeyboardLighting = 10,
+
+    /// <summary>CoolBoost state, from <c>APGeAction.GetFunction(0x207)</c>.</summary>
+    GetCoolBoost = 11,
+
+    /// <summary>CoolBoost on or off, through <c>APGeAction.SetFunction</c>.</summary>
+    SetCoolBoost = 12,
+
+    /// <summary>LCD overdrive state, from <c>GetGamingProfile(0)</c>.</summary>
+    GetLcdOverdrive = 13,
+
+    /// <summary>LCD overdrive on or off, through <c>SetGamingProfile</c>.</summary>
+    SetLcdOverdrive = 14,
+
+    /// <summary>Windows-key lock, through <c>SetGamingProfile</c>. Write-only: the firmware has no getter.</summary>
+    SetWinKeyLock = 15,
+
+    /// <summary>The 30-second keyboard backlight timeout, from <c>APGeAction.GetFunction</c>.</summary>
+    GetBacklightTimeout = 16,
+
+    /// <summary>The 30-second keyboard backlight timeout, through <c>APGeAction.SetFunction</c>.</summary>
+    SetBacklightTimeout = 17
 }
 
 /// <summary>

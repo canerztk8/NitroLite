@@ -247,6 +247,12 @@ public class HardwareCapabilityCache
     public string Key { get; set; } = "";
     public DateTime CapturedUtc { get; set; }
     public List<CachedCapability> Capabilities { get; set; } = new();
+
+    /// <summary>
+    /// The <c>GetGamingMiscSetting(0x09) == 3</c> answer, when an elevated session managed to read it. Null means
+    /// nobody asked, which is not the same as "the machine said no".
+    /// </summary>
+    public bool? WmiMuxSignal { get; set; }
 }
 
 public class AppSettings

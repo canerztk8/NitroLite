@@ -49,7 +49,13 @@ public sealed class ProfileCatalog
     };
 
     private static readonly Regex IdPattern = new(@"^[a-z0-9][a-z0-9-]{0,63}$", RegexOptions.Compiled);
-    private static readonly Regex ModelCodePattern = new(@"^[A-Z0-9]{2,6}(-[A-Z0-9]{2,4})*$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Acer model codes: two to eight alphanumerics, then one or more dash-separated suffixes. The first segment is
+    /// eight rather than six because real codes reach that length — <c>PHIN16S-71</c> is seven — and a pattern that
+    /// rejected a genuine code would drop the profile for that machine without saying why.
+    /// </summary>
+    private static readonly Regex ModelCodePattern = new(@"^[A-Z0-9]{2,8}(-[A-Z0-9]{2,4})*$", RegexOptions.Compiled);
 
     private readonly List<ModelProfile> _profiles;
     private readonly List<string> _rejections;
@@ -202,7 +208,7 @@ public sealed class ProfileCatalog
 
         var unknown = node.Select(p => p.Key)
             .Where(k => k is not ("id" or "match" or "sensors" or "maxFanRpm" or "muxSwitch" or "fourZoneKeyboard"
-                or "nitroHidKeyboard" or "unsupportedMethods" or "notes"))
+                or "nitroHidKeyboard" or "ecMmioProfile" or "kbZoneArm" or "unsupportedMethods" or "notes"))
             .ToList();
         if (unknown.Count > 0)
         {
@@ -312,6 +318,8 @@ public sealed class ProfileCatalog
             MuxSwitch = ReadBool(node, "muxSwitch"),
             FourZoneKeyboard = ReadBool(node, "fourZoneKeyboard"),
             NitroHidKeyboard = ReadBool(node, "nitroHidKeyboard") ?? false,
+            EcMmioProfile = ReadBool(node, "ecMmioProfile") ?? false,
+            KbZoneArm = ReadBool(node, "kbZoneArm") ?? false,
             UnsupportedMethods = unsupported,
             Notes = ReadString(node, "notes"),
             Source = isUserFile ? "user" : "embedded"

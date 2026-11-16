@@ -1062,5 +1062,13 @@
   "yetki gerekiyor": "अनुमति आवश्यक",
   "yanıt vermedi": "उत्तर नहीं दिया",
   "okunamadı": "पढ़ा नहीं जा सका",
-  "bilinmiyor": "अज्ञात"
+  "bilinmiyor": "अज्ञात",
+  "Ek Donanım Anahtarları": "अतिरिक्त हार्डवेयर स्विच",
+  "CoolBoost (fan devrini yükseltir)": "CoolBoost (पंखे की गति बढ़ाता है)",
+  "LCD Overdrive (panel tepki süresini kısaltır)": "LCD Overdrive (पैनल का प्रतिक्रिया समय घटाता है)",
+  "Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)": "Windows कुंजी लॉक करें (खेल के दौरान डेस्कटॉप पर जाने से रोकता है)",
+  "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Windows कुंजी लॉक की स्थिति पढ़ी नहीं जा सकती; स्विच केवल इस सत्र पर लागू होता है।",
+  "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost बदला नहीं जा सका: फ़र्मवेयर ने आदेश अस्वीकार कर दिया।",
+  "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD Overdrive बदला नहीं जा सका: पैनल यह सेटिंग समर्थित नहीं करता।",
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Windows कुंजी लॉक बदला नहीं जा सका: फ़र्मवेयर ने आदेश अस्वीकार कर दिया।"
 }

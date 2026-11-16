@@ -273,6 +273,47 @@ public sealed class WmiWorkerServer : IDisposable
                     }));
                 }
 
+                case WmiWorkerCommand.GetCoolBoost:
+                    return WmiWorkerResponse.FromResult(_executor.GetCoolBoost());
+
+                case WmiWorkerCommand.SetCoolBoost:
+                {
+                    if (!TryReadBool(request.Args, "on", out var on))
+                        return Invalid("on is missing or not a boolean");
+
+                    return WmiWorkerResponse.FromResult(_executor.SetCoolBoost(on));
+                }
+
+                case WmiWorkerCommand.GetLcdOverdrive:
+                    return WmiWorkerResponse.FromResult(_executor.GetLcdOverdrive());
+
+                case WmiWorkerCommand.SetLcdOverdrive:
+                {
+                    if (!TryReadBool(request.Args, "on", out var on))
+                        return Invalid("on is missing or not a boolean");
+
+                    return WmiWorkerResponse.FromResult(_executor.SetLcdOverdrive(on));
+                }
+
+                case WmiWorkerCommand.SetWinKeyLock:
+                {
+                    if (!TryReadBool(request.Args, "enabled", out var enabled))
+                        return Invalid("enabled is missing or not a boolean");
+
+                    return WmiWorkerResponse.FromResult(_executor.SetWinKeyLock(enabled));
+                }
+
+                case WmiWorkerCommand.GetBacklightTimeout:
+                    return WmiWorkerResponse.FromResult(_executor.GetBacklightTimeout());
+
+                case WmiWorkerCommand.SetBacklightTimeout:
+                {
+                    if (!TryReadBool(request.Args, "enabled", out var enabled))
+                        return Invalid("enabled is missing or not a boolean");
+
+                    return WmiWorkerResponse.FromResult(_executor.SetBacklightTimeout(enabled));
+                }
+
                 default:
                     return Invalid($"unknown command {(int)request.Command}");
             }
@@ -286,6 +327,26 @@ public sealed class WmiWorkerServer : IDisposable
 
     private static WmiWorkerResponse Invalid(string error) =>
         WmiWorkerResponse.Failure(WmiOperationResult.CodeInvalidArgument, error);
+
+    /// <summary>
+    /// Reads a boolean argument. A JSON string is refused rather than coerced: <c>"false"</c> is a truthy string in
+    /// most languages, and a worker that guessed would write the opposite of what the caller meant.
+    /// </summary>
+    private static bool TryReadBool(JsonObject? args, string name, out bool value)
+    {
+        value = false;
+        if (args?[name] is not JsonValue node) return false;
+
+        try
+        {
+            value = node.GetValue<bool>();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     private static bool TryReadInt(JsonObject? args, string name, out int value)
     {

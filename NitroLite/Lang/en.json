@@ -1062,5 +1062,13 @@
   "yetki gerekiyor": "needs permission",
   "yanıt vermedi": "did not answer",
   "okunamadı": "could not be read",
-  "bilinmiyor": "unknown"
+  "bilinmiyor": "unknown",
+  "Ek Donanım Anahtarları": "Extra hardware switches",
+  "CoolBoost (fan devrini yükseltir)": "CoolBoost (raises fan speed)",
+  "LCD Overdrive (panel tepki süresini kısaltır)": "LCD Overdrive (shortens panel response time)",
+  "Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)": "Lock the Windows key (stops the desktop from opening mid-game)",
+  "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "The Windows-key lock state cannot be read back; the switch only applies to this session.",
+  "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost could not be changed: the firmware refused the command.",
+  "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD Overdrive could not be changed: the panel does not support this setting.",
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "The Windows-key lock could not be changed: the firmware refused the command."
 }

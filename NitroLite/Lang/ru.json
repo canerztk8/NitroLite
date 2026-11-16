@@ -1062,5 +1062,13 @@
   "yetki gerekiyor": "требуются права",
   "yanıt vermedi": "не ответил",
   "okunamadı": "не удалось прочитать",
-  "bilinmiyor": "неизвестно"
+  "bilinmiyor": "неизвестно",
+  "Ek Donanım Anahtarları": "Дополнительные аппаратные переключатели",
+  "CoolBoost (fan devrini yükseltir)": "CoolBoost (повышает скорость вентилятора)",
+  "LCD Overdrive (panel tepki süresini kısaltır)": "LCD Overdrive (сокращает время отклика матрицы)",
+  "Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)": "Заблокировать клавишу Windows (не даёт свернуть игру на рабочий стол)",
+  "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Состояние блокировки клавиши Windows не читается; переключатель действует только в этом сеансе.",
+  "CoolBoost değiştirilemedi: firmware komutu reddetti.": "Не удалось изменить CoolBoost: прошивка отклонила команду.",
+  "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "Не удалось изменить LCD Overdrive: матрица не поддерживает эту настройку.",
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Не удалось изменить блокировку клавиши Windows: прошивка отклонила команду."
 }

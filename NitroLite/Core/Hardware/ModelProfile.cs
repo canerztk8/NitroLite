@@ -107,6 +107,21 @@ public sealed record ModelProfile
     public bool NitroHidKeyboard { get; init; }
 
     /// <summary>
+    /// True when this model's firmware drives the operating mode through EC MMIO rather than through
+    /// <c>SetGamingMiscSetting(0x0B)</c>. Writing the WMI selector on such a machine is accepted and then ignored, so
+    /// the mode write reports not-supported instead of claiming a change that never happened. The Windows power plan
+    /// and CPU boost path still works, which is what the UI falls back to.
+    /// </summary>
+    public bool EcMmioProfile { get; init; }
+
+    /// <summary>
+    /// True when this model's keyboard LED zones stay disabled until <c>SetGamingLED</c> arms them. The arm step runs
+    /// on every model anyway and a refusal is tolerated, so this flag only decides whether a refusal is worth
+    /// logging as a warning.
+    /// </summary>
+    public bool KbZoneArm { get; init; }
+
+    /// <summary>
     /// WMI methods known to fail on this model. Empty for every profile shipped today: no report has proven a
     /// method broken on a specific model yet, and guessing would disable a working feature. The mechanism exists so
     /// the first such report is a one-line data change instead of a code change.

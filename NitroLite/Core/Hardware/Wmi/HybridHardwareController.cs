@@ -430,9 +430,75 @@ public sealed class HybridHardwareController : IHardwareController
     public async Task<bool> TurnOffLightingAsync() =>
         await (await ResolveAsync().ConfigureAwait(false)).TurnOffLightingAsync().ConfigureAwait(false);
 
-    public Task<bool?> GetBacklightTimeoutAsync() => _agent.GetBacklightTimeoutAsync();
+    /// <summary>
+    /// The backlight timeout lives on <c>APGeAction</c>, which only the WMI backend can reach. The service socket has
+    /// no such command, so this goes straight to WMI when the direct backend is enabled and falls back to the agent
+    /// (which answers null) otherwise.
+    /// </summary>
+    public async Task<bool?> GetBacklightTimeoutAsync()
+    {
+        var (reached, value) = await TryWmiAsync(w => w.GetBacklightTimeoutAsync()).ConfigureAwait(false);
+        return reached ? value : await _agent.GetBacklightTimeoutAsync().ConfigureAwait(false);
+    }
 
-    public Task<bool> SetBacklightTimeoutAsync(bool enable30s) => _agent.SetBacklightTimeoutAsync(enable30s);
+    public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
+    {
+        var (reached, applied) = await TryWmiAsync(w => w.SetBacklightTimeoutAsync(enable30s)).ConfigureAwait(false);
+        return reached ? applied : await _agent.SetBacklightTimeoutAsync(enable30s).ConfigureAwait(false);
+    }
+
+    public async Task<bool?> GetCoolBoostAsync()
+    {
+        var (reached, value) = await TryWmiAsync(w => w.GetCoolBoostAsync()).ConfigureAwait(false);
+        return reached ? value : await _agent.GetCoolBoostAsync().ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetCoolBoostAsync(bool on)
+    {
+        var (reached, applied) = await TryWmiAsync(w => w.SetCoolBoostAsync(on)).ConfigureAwait(false);
+        return reached ? applied : await _agent.SetCoolBoostAsync(on).ConfigureAwait(false);
+    }
+
+    public async Task<bool?> GetLcdOverdriveAsync()
+    {
+        var (reached, value) = await TryWmiAsync(w => w.GetLcdOverdriveAsync()).ConfigureAwait(false);
+        return reached ? value : await _agent.GetLcdOverdriveAsync().ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetLcdOverdriveAsync(bool on)
+    {
+        var (reached, applied) = await TryWmiAsync(w => w.SetLcdOverdriveAsync(on)).ConfigureAwait(false);
+        return reached ? applied : await _agent.SetLcdOverdriveAsync(on).ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetWinKeyLockAsync(bool enabled)
+    {
+        var (reached, applied) = await TryWmiAsync(w => w.SetWinKeyLockAsync(enabled)).ConfigureAwait(false);
+        return reached ? applied : await _agent.SetWinKeyLockAsync(enabled).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs one call against the WMI backend and reports whether that backend was reachable at all, so the caller can
+    /// tell "the hardware said no" from "there was nothing to ask". A helper that is already running is used without
+    /// asking; starting one is only allowed for a write the user asked for, so a boot-time read cannot raise a prompt.
+    /// </summary>
+    private async Task<(bool Reached, T Value)> TryWmiAsync<T>(Func<IHardwareController, Task<T>> call)
+    {
+        if (!_useDirectWmi()) return (false, default!);
+
+        var wmi = _wmi is { IsAvailable: true } ? _wmi : (AllowElevationForLighting ? EnsureWmi() : null);
+        if (wmi == null) return (false, default!);
+        if (!await wmi.EnsureConnectedAsync().ConfigureAwait(false)) return (false, default!);
+
+        try
+        {
+            return (true, await call(wmi).ConfigureAwait(false));
+        }
+        catch
+        {
+            return (false, default!);
+        }
+    }
 
     public async Task<BatteryChargeMode?> GetBatteryChargeModeAsync() => await (await ResolveAsync().ConfigureAwait(false))
         .GetBatteryChargeModeAsync().ConfigureAwait(false);

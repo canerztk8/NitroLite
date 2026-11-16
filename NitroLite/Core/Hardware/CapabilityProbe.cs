@@ -70,6 +70,22 @@ public sealed record CapabilitySnapshot
     /// </summary>
     public bool NitroHidKeyboard { get; init; }
 
+    /// <summary>
+    /// The <c>GetGamingMiscSetting(0x09) == 3</c> answer, when an elevated session read it. Null means nobody asked,
+    /// which is not the same as "the machine said no": the registry value still decides in that case.
+    /// </summary>
+    public bool? WmiMuxSignal { get; init; }
+
+    /// <summary>
+    /// True when the matched profile says this model drives its operating mode through EC MMIO, so a
+    /// <c>SetGamingMiscSetting(0x0B)</c> write is accepted and ignored. The mode write reports not-supported and the
+    /// UI falls back to the Windows power plan.
+    /// </summary>
+    public bool EcMmioProfile { get; init; }
+
+    /// <summary>True when the matched profile says this model's LED zones need the <c>SetGamingLED</c> arm step.</summary>
+    public bool KbZoneArm { get; init; }
+
     public IReadOnlyList<HardwareProbeResult> Capabilities { get; init; } = Array.Empty<HardwareProbeResult>();
 
     /// <summary>The WMI schema answer, kept so the hardware report does not have to probe twice.</summary>
@@ -133,13 +149,22 @@ public static class CapabilityProbe
 
     /// <summary>Layer 1 and 2 with the schema answer supplied, so tests never touch WMI or the registry.</summary>
     public static CapabilitySnapshot Probe(DeviceIdentity identity, ProfileCatalog catalog, SchemaProbeResult schema)
+        => Probe(identity, catalog, schema, wmiMuxSignal: null);
+
+    /// <summary>
+    /// Layer 1 and 2, with the elevated <c>GetGamingMiscSetting(0x09)</c> answer supplied when a worker has already
+    /// read it. The signal can only ever add MUX support, never remove it: a machine whose registry advertises the
+    /// switch keeps it even when the WMI selector answers something this build does not recognise.
+    /// </summary>
+    public static CapabilitySnapshot Probe(
+        DeviceIdentity identity, ProfileCatalog catalog, SchemaProbeResult schema, bool? wmiMuxSignal)
     {
         var profile = catalog.Match(identity);
         var capabilities = new List<HardwareProbeResult>
         {
             DescribeGamingFunction(schema.Wmi),
             DescribeBatteryChargeLimit(schema),
-            DescribeMuxSwitch(schema.Registry),
+            DescribeMuxSwitch(schema.Registry, wmiMuxSignal),
             DescribeKeyboardZones(schema.Registry),
             DescribeFlag(CapabilitySnapshot.GpuOverclock, schema.Registry.GpuOverclockSupport, "GPU_OC_Support"),
             DescribeFlag(CapabilitySnapshot.PanelOverdrive, schema.Registry.LcdOverdriveSupport, "LCD_Overdrive_support"),
@@ -156,6 +181,9 @@ public static class CapabilityProbe
             MaxCpuFanRpm = profile.MaxCpuFanRpm,
             MaxGpuFanRpm = profile.MaxGpuFanRpm,
             NitroHidKeyboard = profile.NitroHidKeyboard,
+            EcMmioProfile = profile.EcMmioProfile,
+            KbZoneArm = profile.KbZoneArm,
+            WmiMuxSignal = wmiMuxSignal,
             Capabilities = capabilities,
             Wmi = schema.Wmi,
             Registry = schema.Registry,
@@ -211,6 +239,9 @@ public static class CapabilityProbe
             MaxCpuFanRpm = profile.MaxCpuFanRpm,
             MaxGpuFanRpm = profile.MaxGpuFanRpm,
             NitroHidKeyboard = profile.NitroHidKeyboard,
+            EcMmioProfile = profile.EcMmioProfile,
+            KbZoneArm = profile.KbZoneArm,
+            WmiMuxSignal = cache.WmiMuxSignal,
             Capabilities = capabilities,
             Rejections = catalog.Rejections,
             FromCache = true,
@@ -225,6 +256,7 @@ public static class CapabilityProbe
         {
             Key = snapshot.CacheKey,
             CapturedUtc = snapshot.CapturedUtc,
+            WmiMuxSignal = snapshot.WmiMuxSignal,
             Capabilities = snapshot.Capabilities
                 .Select(c => new CachedCapability
                 {
@@ -273,10 +305,21 @@ public static class CapabilityProbe
             $"WMID_GUID5 not registered ({schema.AcerClassGuids.Count} Acer classes)");
     }
 
-    private static HardwareProbeResult DescribeMuxSwitch(AcerRegistrySnapshot registry)
+    private static HardwareProbeResult DescribeMuxSwitch(AcerRegistrySnapshot registry, bool? wmiMuxSignal)
     {
+        // The WMI selector is the stronger signal: it is the firmware answering about itself, where the registry is
+        // the Acer agent's opinion. It can only add support, never remove it, because a selector this build does not
+        // recognise is not evidence that the switch is gone.
+        if (wmiMuxSignal == true)
+            return HardwareProbeResult.Supported(CapabilitySnapshot.MuxSwitch, "GetGamingMiscSetting(0x09)=3");
+
         if (registry.DgpuModeCapability is not int mask)
-            return HardwareProbeResult.Unknown(CapabilitySnapshot.MuxSwitch, "dgpu_mode_capability not readable");
+        {
+            return wmiMuxSignal == false
+                ? HardwareProbeResult.Unsupported(CapabilitySnapshot.MuxSwitch,
+                    "GetGamingMiscSetting(0x09) is not 3 and dgpu_mode_capability is not readable")
+                : HardwareProbeResult.Unknown(CapabilitySnapshot.MuxSwitch, "dgpu_mode_capability not readable");
+        }
 
         if (mask <= 0) return HardwareProbeResult.Unsupported(CapabilitySnapshot.MuxSwitch, "dgpu_mode_capability=0");
 

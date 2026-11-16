@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using NitroLite.Core;
@@ -537,8 +537,10 @@ public class WmiControllerTests
         Assert.Equal(1, wmi.TurnOffLightingCalls);
         Assert.Equal(0, agent.SetLightingCalls);
 
-        // The 30-second backlight timeout has no WMI equivalent, so it stays on the agent.
-        Assert.Equal(1, agent.SetBacklightTimeoutCalls);
+        // The 30-second backlight timeout lives on APGeAction, which only the WMI backend can reach, so it goes
+        // there rather than to a service that has no such command.
+        Assert.Equal(1, wmi.SetBacklightTimeoutCalls);
+        Assert.Equal(0, agent.SetBacklightTimeoutCalls);
     }
 
     [Fact]
@@ -861,6 +863,16 @@ public class WmiControllerTests
             Task.FromResult<BatteryChargeMode?>(BatteryChargeMode.Optimized80);
 
         public Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode) => Task.FromResult(true);
+
+        public Task<bool?> GetCoolBoostAsync() => Task.FromResult<bool?>(null);
+
+        public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(false);
+
+        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(null);
+
+        public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
+
+        public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
 
         public void Dispose() { }
     }

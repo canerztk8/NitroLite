@@ -23,6 +23,16 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     private const string WmiNamespace = @"root\WMI";
     private const string GamingClass = "AcerGamingFunction";
 
+    /// <summary>The class that carries CoolBoost and the backlight timeout. Absent on most models.</summary>
+    private const string ApgeClass = "APGeAction";
+
+    /// <summary>
+    /// The hotkey index the backlight-timeout calls are addressed to. The reference implementation takes it from the
+    /// caller; NitroLite has one backlight-off hotkey, so it is a constant here rather than a setting nobody can
+    /// change.
+    /// </summary>
+    private const int BacklightHotkey = 0;
+
     /// <summary>WMID_GUID5, the battery charge limit interface. Not registered on an AN16-41.</summary>
     public const string BatteryGuid = "79772EC5-04B1-4BFD-843C-61E7F77B6CC9";
 
@@ -37,7 +47,9 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     private readonly object _gate = new();
     private ManagementObject? _gaming;
     private ManagementObject? _battery;
+    private ManagementObject? _apge;
     private bool _batteryLookupDone;
+    private bool _apgeLookupDone;
     private bool _disposed;
 
     public bool IsAvailable
@@ -79,16 +91,50 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             // the fan methods but no SetGamingRgbKb must not be offered a lighting control that cannot work.
             bool keyboardLighting = methodNames.Contains("SetGamingRgbKb");
 
+            // The mode bitmask and the WMI MUX signal are read here rather than in the window: both need elevation,
+            // and both are cheap once the instance is already open.
+            var supportedModes = new JsonArray();
+            bool wmiMux = false;
+            if (gaming != null)
+            {
+                try
+                {
+                    var mask = InvokeGetter(gaming, "GetGamingMiscSetting", AcerWmiProtocol.MiscIndexSupportedModes);
+                    if (mask.HasValue)
+                    {
+                        foreach (var mode in AcerWmiProtocol.DecodeSupportedModes(mask.Value))
+                            supportedModes.Add(mode.ToString());
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    var support = InvokeGetter(gaming, "GetGamingMiscSetting", AcerWmiProtocol.MiscIndexGpuModeSupport);
+                    if (support.HasValue) wmiMux = AcerWmiProtocol.DecodeGpuModeSupport(support.Value);
+                }
+                catch { }
+            }
+
+            var apge = EnsureApge();
+
             return WmiOperationResult.Success(new JsonObject
             {
                 ["gamingClass"] = gaming != null,
                 ["batteryClass"] = battery != null,
+                ["apgeClass"] = apge != null,
                 ["methods"] = methods,
                 ["fanControl"] = gaming != null,
                 ["operatingMode"] = gaming != null,
-                ["muxSwitch"] = registry.DgpuModeCapability is > 0,
+                ["muxSwitch"] = registry.DgpuModeCapability is > 0 || wmiMux,
+                ["wmiMuxSwitch"] = wmiMux,
                 ["batteryLimit"] = battery != null,
                 ["keyboardLighting"] = keyboardLighting,
+                ["coolBoost"] = apge != null,
+                ["backlightTimeout"] = apge != null,
+                ["lcdOverdrive"] = registry.LcdOverdriveSupport is > 0,
+                ["winKeyLock"] = gaming != null,
+                ["supportedModes"] = supportedModes,
                 ["dgpuModeCapability"] = registry.DgpuModeCapability,
                 ["keyboardArea"] = registry.KeyboardArea
             });
@@ -565,6 +611,238 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
     }
 
+    // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
+
+    /// <summary>
+    /// Reads CoolBoost from <c>APGeAction.GetFunction(0x207)</c>.
+    /// <para>
+    /// Measured on an AN16-41: the class is registered, the call answers <c>0x0000000000000000</c>, and the decode
+    /// reads that as "off" because the low byte is zero and bits 15:8 are zero. A firmware that does not understand
+    /// the selector answers a non-zero low byte, which is reported as not-supported rather than as "off".
+    /// </para>
+    /// </summary>
+    public WmiOperationResult GetCoolBoost()
+    {
+        lock (_gate)
+        {
+            var apge = EnsureApge();
+            if (apge == null) return WmiOperationResult.NotSupported("APGeAction is not registered");
+
+            try
+            {
+                var answer = InvokeApgeGetter(apge, "GetFunction", AcerWmiProtocol.ApgeCoolBoostGet);
+                if (!answer.HasValue) return WmiOperationResult.WmiFailed("GetFunction returned no value");
+
+                var on = AcerWmiProtocol.DecodeCoolBoost(answer.Value);
+                if (on == null)
+                    return WmiOperationResult.NotSupported(
+                        $"CoolBoost selector answered 0x{answer.Value:X16}");
+
+                return WmiOperationResult.Success(new JsonObject
+                {
+                    ["coolBoost"] = on.Value,
+                    ["raw"] = answer.Value
+                });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>Writes CoolBoost through <c>APGeAction.SetFunction</c>.</summary>
+    public WmiOperationResult SetCoolBoost(bool on)
+    {
+        lock (_gate)
+        {
+            var apge = EnsureApge();
+            if (apge == null) return WmiOperationResult.NotSupported("APGeAction is not registered");
+
+            try
+            {
+                var status = InvokeApgeSetter(apge, "SetFunction", AcerWmiProtocol.EncodeCoolBoost(on));
+                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetFunction returned no status");
+                if (status.Value != AcerWmiProtocol.StatusOk)
+                    return WmiOperationResult.StatusError($"SetFunction status 0x{status.Value:X2}");
+
+                return WmiOperationResult.Success(new JsonObject { ["coolBoost"] = on });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>Reads the LCD overdrive state from <c>GetGamingProfile(0)</c>.</summary>
+    public WmiOperationResult GetLcdOverdrive()
+    {
+        lock (_gate)
+        {
+            var gaming = EnsureGaming();
+            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
+
+            try
+            {
+                var answer = InvokeGetter(gaming, "GetGamingProfile", 0);
+                if (!answer.HasValue) return WmiOperationResult.WmiFailed("GetGamingProfile returned no value");
+
+                var on = AcerWmiProtocol.DecodeLcdOverdrive(answer.Value);
+                if (on == null)
+                    return WmiOperationResult.NotSupported(
+                        $"panel does not report overdrive (GetGamingProfile(0) = 0x{answer.Value:X16})");
+
+                return WmiOperationResult.Success(new JsonObject
+                {
+                    ["lcdOverdrive"] = on.Value,
+                    ["raw"] = answer.Value
+                });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>Writes LCD overdrive through <c>SetGamingProfile</c>.</summary>
+    public WmiOperationResult SetLcdOverdrive(bool on)
+    {
+        lock (_gate)
+        {
+            var gaming = EnsureGaming();
+            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
+
+            try
+            {
+                var status = InvokeSetter(gaming, "SetGamingProfile", AcerWmiProtocol.EncodeLcdOverdrive(on));
+                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetGamingProfile returned no status");
+                if (status.Value != AcerWmiProtocol.StatusOk)
+                    return WmiOperationResult.StatusError($"SetGamingProfile status 0x{status.Value:X2}");
+
+                return WmiOperationResult.Success(new JsonObject { ["lcdOverdrive"] = on });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the Windows-key lock. Reported as unverified because the firmware has no getter for it: the answer
+    /// carries <c>verified: false</c> so the caller does not claim a read-back that never happened.
+    /// </summary>
+    public WmiOperationResult SetWinKeyLock(bool enabled)
+    {
+        lock (_gate)
+        {
+            var gaming = EnsureGaming();
+            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
+
+            try
+            {
+                var status = InvokeSetter(gaming, "SetGamingProfile", AcerWmiProtocol.EncodeWinKeyLock(enabled));
+                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetGamingProfile returned no status");
+                if (status.Value != AcerWmiProtocol.StatusOk)
+                    return WmiOperationResult.StatusError($"SetGamingProfile status 0x{status.Value:X2}");
+
+                return WmiOperationResult.Success(new JsonObject
+                {
+                    ["winKeyLock"] = enabled,
+                    ["verified"] = false
+                });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>Reads the 30-second keyboard backlight timeout from <c>APGeAction.GetFunction</c>.</summary>
+    public WmiOperationResult GetBacklightTimeout()
+    {
+        lock (_gate)
+        {
+            var apge = EnsureApge();
+            if (apge == null) return WmiOperationResult.NotSupported("APGeAction is not registered");
+
+            try
+            {
+                var answer = InvokeApgeGetter(
+                    apge, "GetFunction", AcerWmiProtocol.EncodeBacklightTimeoutGet(BacklightHotkey));
+                if (!answer.HasValue) return WmiOperationResult.WmiFailed("GetFunction returned no value");
+
+                var decoded = AcerWmiProtocol.DecodeBacklightTimeout(answer.Value);
+                if (decoded == null)
+                    return WmiOperationResult.NotSupported(
+                        $"backlight selector answered 0x{answer.Value:X16}");
+
+                return WmiOperationResult.Success(new JsonObject
+                {
+                    ["enabled"] = decoded.Value.Enabled,
+                    ["brightness"] = decoded.Value.BrightnessPercent,
+                    ["raw"] = answer.Value
+                });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the 30-second keyboard backlight timeout. The brightness the firmware stores alongside it is read
+    /// first so the write does not reset the user's level; when the read fails the current level is left at 100.
+    /// </summary>
+    public WmiOperationResult SetBacklightTimeout(bool enabled)
+    {
+        lock (_gate)
+        {
+            var apge = EnsureApge();
+            if (apge == null) return WmiOperationResult.NotSupported("APGeAction is not registered");
+
+            try
+            {
+                int brightness = 100;
+                try
+                {
+                    var current = InvokeApgeGetter(
+                        apge, "GetFunction", AcerWmiProtocol.EncodeBacklightTimeoutGet(BacklightHotkey));
+                    if (current.HasValue &&
+                        AcerWmiProtocol.DecodeBacklightTimeout(current.Value) is { } decoded)
+                    {
+                        brightness = decoded.BrightnessPercent;
+                    }
+                }
+                catch
+                {
+                    // A failed read is not a reason to refuse the write; the level simply stays at the default.
+                }
+
+                var status = InvokeApgeSetter(
+                    apge, "SetFunction",
+                    AcerWmiProtocol.EncodeBacklightTimeoutSet(BacklightHotkey, brightness, enabled));
+                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetFunction returned no status");
+                if (status.Value != AcerWmiProtocol.StatusOk)
+                    return WmiOperationResult.StatusError($"SetFunction status 0x{status.Value:X2}");
+
+                return WmiOperationResult.Success(new JsonObject
+                {
+                    ["enabled"] = enabled,
+                    ["brightness"] = brightness
+                });
+            }
+            catch (Exception ex)
+            {
+                return WmiOperationResult.WmiFailed(Describe(ex));
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- WMI plumbing
 
     /// <summary>
@@ -656,9 +934,66 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         return _battery;
     }
 
-    private static ulong? InvokeGetter(ManagementObject instance, string method, uint input)
+    /// <summary>
+    /// The <c>APGeAction</c> instance, cached. A separate class from <c>AcerGamingFunction</c> with a different
+    /// parameter naming convention — <c>uiInput</c>/<c>uiOutput</c> rather than <c>gmInput</c>/<c>gmOutput</c> — so it
+    /// gets its own invokers rather than a shared one with a name switch.
+    /// <para>
+    /// Absent on every model whose firmware has no CoolBoost step, which is why a miss is remembered: the lookup
+    /// costs an enumeration and the answer cannot change while the worker is running.
+    /// </para>
+    /// </summary>
+    private ManagementObject? EnsureApge()
+    {
+        if (_apge != null) return _apge;
+        if (_apgeLookupDone) return null;
+        _apgeLookupDone = true;
+
+        try
+        {
+            var scope = new ManagementScope(WmiNamespace);
+            scope.Connect();
+            using var cls = new ManagementClass(scope, new ManagementPath(ApgeClass), null);
+            using var instances = cls.GetInstances();
+            foreach (ManagementObject instance in instances)
+            {
+                if (_apge == null)
+                {
+                    _apge = instance;
+                    continue;
+                }
+
+                instance.Dispose();
+            }
+        }
+        catch
+        {
+            _apge = null;
+        }
+
+        return _apge;
+    }
+
+    private static ulong? InvokeApgeGetter(ManagementObject instance, string method, ulong input)
     {
         using var inParams = instance.GetMethodParameters(method);
+        inParams["uiInput"] = input;
+        using var outParams = instance.InvokeMethod(method, inParams, null);
+        var raw = outParams?["uiOutput"];
+        return raw == null ? null : Convert.ToUInt64(raw, CultureInfo.InvariantCulture);
+    }
+
+    private static uint? InvokeApgeSetter(ManagementObject instance, string method, ulong input)
+    {
+        using var inParams = instance.GetMethodParameters(method);
+        inParams["uiInput"] = input;
+        using var outParams = instance.InvokeMethod(method, inParams, null);
+        var raw = outParams?["uiOutput"];
+        return raw == null ? null : Convert.ToUInt32(raw, CultureInfo.InvariantCulture);
+    }
+
+    private static ulong? InvokeGetter(ManagementObject instance, string method, uint input)
+    {        using var inParams = instance.GetMethodParameters(method);
         inParams["gmInput"] = input;
         using var outParams = instance.InvokeMethod(method, inParams, null);
         var raw = outParams?["gmOutput"];
@@ -872,8 +1207,10 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             _disposed = true;
             try { _gaming?.Dispose(); } catch { }
             try { _battery?.Dispose(); } catch { }
+            try { _apge?.Dispose(); } catch { }
             _gaming = null;
             _battery = null;
+            _apge = null;
         }
     }
 }

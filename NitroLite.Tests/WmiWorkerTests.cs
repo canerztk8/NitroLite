@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Text.Json.Nodes;
@@ -719,6 +719,20 @@ public class WmiWorkerTests
             LastKeyboardWrite = request;
             return WmiOperationResult.Success(new JsonObject { ["effect"] = request.Effect });
         }
+
+        public WmiOperationResult GetCoolBoost() => WmiOperationResult.NotSupported("APGeAction is not registered");
+
+        public WmiOperationResult SetCoolBoost(bool on) => WmiOperationResult.NotSupported("APGeAction is not registered");
+
+        public WmiOperationResult GetLcdOverdrive() => WmiOperationResult.NotSupported("panel has no overdrive");
+
+        public WmiOperationResult SetLcdOverdrive(bool on) => WmiOperationResult.NotSupported("panel has no overdrive");
+
+        public WmiOperationResult SetWinKeyLock(bool enabled) => WmiOperationResult.Success();
+
+        public WmiOperationResult GetBacklightTimeout() => WmiOperationResult.NotSupported("APGeAction is not registered");
+
+        public WmiOperationResult SetBacklightTimeout(bool enabled) => WmiOperationResult.NotSupported("APGeAction is not registered");
 
         public void Dispose() { }
     }

@@ -1062,5 +1062,13 @@
   "yetki gerekiyor": "Berechtigung nötig",
   "yanıt vermedi": "keine Antwort",
   "okunamadı": "nicht lesbar",
-  "bilinmiyor": "unbekannt"
+  "bilinmiyor": "unbekannt",
+  "Ek Donanım Anahtarları": "Zusätzliche Hardware-Schalter",
+  "CoolBoost (fan devrini yükseltir)": "CoolBoost (erhöht die Lüfterdrehzahl)",
+  "LCD Overdrive (panel tepki süresini kısaltır)": "LCD-Overdrive (verkürzt die Reaktionszeit des Panels)",
+  "Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)": "Windows-Taste sperren (verhindert den Sprung zum Desktop im Spiel)",
+  "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Der Zustand der Windows-Tastensperre lässt sich nicht auslesen; der Schalter gilt nur für diese Sitzung.",
+  "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost konnte nicht geändert werden: die Firmware hat den Befehl abgelehnt.",
+  "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD-Overdrive konnte nicht geändert werden: das Panel unterstützt diese Einstellung nicht.",
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Die Windows-Tastensperre konnte nicht geändert werden: die Firmware hat den Befehl abgelehnt."
 }

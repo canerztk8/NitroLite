@@ -34,6 +34,24 @@ public sealed record HardwareCapabilities
     /// <summary>The keyboard backlight timeout can be written.</summary>
     public bool BacklightTimeout { get; init; }
 
+    /// <summary>
+    /// CoolBoost can be read and written. Only the models whose firmware registers <c>APGeAction</c> have it, so the
+    /// UI hides the switch everywhere else rather than offering one that answers not-supported.
+    /// </summary>
+    public bool CoolBoost { get; init; }
+
+    /// <summary>The panel supports LCD overdrive and the firmware reports its state.</summary>
+    public bool LcdOverdrive { get; init; }
+
+    /// <summary>The Windows-key lock can be written. There is no getter, so the state is never read back.</summary>
+    public bool WinKeyLock { get; init; }
+
+    /// <summary>
+    /// The operating modes this machine's firmware advertises, from <c>GetGamingMiscSetting(0x0A)</c>. Empty means
+    /// the firmware did not answer, which is not evidence that no mode works: the UI keeps its full set in that case.
+    /// </summary>
+    public IReadOnlyList<OperatingMode> SupportedOperatingModes { get; init; } = Array.Empty<OperatingMode>();
+
     /// <summary>Nothing is known yet: the backend has not been asked.</summary>
     public static HardwareCapabilities Unknown { get; } = new();
 }
@@ -117,4 +135,22 @@ public interface IHardwareController : IDisposable
 
     /// <summary>Writes the battery charge mode. False when the firmware refused.</summary>
     Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode);
+
+    /// <summary>CoolBoost state, or null when this machine has no <c>APGeAction</c> class.</summary>
+    Task<bool?> GetCoolBoostAsync();
+
+    /// <summary>Writes CoolBoost. False when the machine has no CoolBoost or the firmware refused.</summary>
+    Task<bool> SetCoolBoostAsync(bool on);
+
+    /// <summary>LCD overdrive state, or null when the panel does not support it.</summary>
+    Task<bool?> GetLcdOverdriveAsync();
+
+    /// <summary>Writes LCD overdrive. False when the panel does not support it or the firmware refused.</summary>
+    Task<bool> SetLcdOverdriveAsync(bool on);
+
+    /// <summary>
+    /// Writes the Windows-key lock. There is no getter, so a true answer means the firmware accepted the write, not
+    /// that the state was read back.
+    /// </summary>
+    Task<bool> SetWinKeyLockAsync(bool enabled);
 }

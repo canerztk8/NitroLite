@@ -1062,5 +1062,13 @@
   "yetki gerekiyor": "perlu izin",
   "yanıt vermedi": "tidak menjawab",
   "okunamadı": "tidak dapat dibaca",
-  "bilinmiyor": "tidak diketahui"
+  "bilinmiyor": "tidak diketahui",
+  "Ek Donanım Anahtarları": "Sakelar perangkat keras tambahan",
+  "CoolBoost (fan devrini yükseltir)": "CoolBoost (menaikkan kecepatan kipas)",
+  "LCD Overdrive (panel tepki süresini kısaltır)": "LCD Overdrive (memperpendek waktu respons panel)",
+  "Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)": "Kunci tombol Windows (mencegah kembali ke desktop saat bermain)",
+  "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Status kunci tombol Windows tidak dapat dibaca; sakelar hanya berlaku untuk sesi ini.",
+  "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost tidak dapat diubah: firmware menolak perintahnya.",
+  "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD Overdrive tidak dapat diubah: panel tidak mendukung pengaturan ini.",
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Kunci tombol Windows tidak dapat diubah: firmware menolak perintahnya."
 }

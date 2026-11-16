@@ -1062,5 +1062,13 @@
   "yetki gerekiyor": "requer permissão",
   "yanıt vermedi": "não respondeu",
   "okunamadı": "não foi possível ler",
-  "bilinmiyor": "desconhecido"
+  "bilinmiyor": "desconhecido",
+  "Ek Donanım Anahtarları": "Interruptores de hardware adicionais",
+  "CoolBoost (fan devrini yükseltir)": "CoolBoost (aumenta a velocidade da ventoinha)",
+  "LCD Overdrive (panel tepki süresini kısaltır)": "LCD Overdrive (reduz o tempo de resposta do painel)",
+  "Windows tuşunu kilitle (oyun sırasında masaüstüne dönmeyi önler)": "Bloquear a tecla Windows (evita voltar à área de trabalho durante o jogo)",
+  "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "O estado do bloqueio da tecla Windows não pode ser lido; o interruptor aplica-se apenas a esta sessão.",
+  "CoolBoost değiştirilemedi: firmware komutu reddetti.": "Não foi possível alterar o CoolBoost: o firmware recusou o comando.",
+  "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "Não foi possível alterar o LCD Overdrive: o painel não suporta esta definição.",
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Não foi possível alterar o bloqueio da tecla Windows: o firmware recusou o comando."
 }

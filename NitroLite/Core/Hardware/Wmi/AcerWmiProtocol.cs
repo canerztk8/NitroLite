@@ -1,3 +1,5 @@
+using NitroLite.Core;
+
 namespace NitroLite.Core.Hardware.Wmi;
 
 /// <summary>
@@ -66,6 +68,91 @@ public static class AcerWmiProtocol
 
     /// <summary>Misc index for the platform (power) profile.</summary>
     public const byte MiscIndexPlatformProfile = 0x0B;
+
+    /// <summary>
+    /// Misc index for the WMI MUX capability signal. The reference driver reads it as
+    /// <c>CommonFunction.Get_GPUMode_Support</c> and treats <c>((output &gt;&gt; 8) &amp; 0xFF) == 3</c> as "this machine
+    /// can switch the GPU mode over WMI".
+    /// </summary>
+    public const byte MiscIndexGpuModeSupport = 0x09;
+
+    /// <summary>
+    /// Misc index for the bitmask of operating modes the firmware accepts. Measured on an AN16-41:
+    /// <c>GetGamingMiscSetting(0x0A)</c> answered <c>0x7300</c>, so the mask is <c>0x73</c>.
+    /// </summary>
+    public const byte MiscIndexSupportedModes = 0x0A;
+
+    /// <summary>The value <see cref="MiscIndexGpuModeSupport"/> answers when the MUX is switchable over WMI.</summary>
+    public const int GpuModeSupportSwitchable = 3;
+
+    // ---------------------------------------------------------------- operating-mode bitmask (misc 0x0A)
+
+    /// <summary>Mode bit for Quiet / Silent.</summary>
+    public const int ModeBitQuiet = 0x01;
+
+    /// <summary>Mode bit for Balanced / Default.</summary>
+    public const int ModeBitBalanced = 0x02;
+
+    /// <summary>Mode bit for Performance / Extreme.</summary>
+    public const int ModeBitPerformance = 0x10;
+
+    /// <summary>Mode bit for Turbo. Absent on the models whose firmware has no Turbo step.</summary>
+    public const int ModeBitTurbo = 0x20;
+
+    /// <summary>Mode bit for Eco.</summary>
+    public const int ModeBitEco = 0x40;
+
+    /// <summary>
+    /// Every bit this build knows how to name. Bits outside it are ignored rather than guessed at: a firmware that
+    /// sets an unknown bit is not evidence of a mode the app can offer.
+    /// </summary>
+    public const int KnownModeBits = ModeBitQuiet | ModeBitBalanced | ModeBitPerformance | ModeBitTurbo | ModeBitEco;
+
+    // ---------------------------------------------------------------- APGeAction (CoolBoost, backlight timeout)
+
+    /// <summary>GUID of the <c>APGeAction</c> class, which carries CoolBoost and the backlight timeout.</summary>
+    public const string ApgeActionGuid = "61EF69EA-865C-4BC3-A502-A0DEBA0CB531";
+
+    /// <summary>Selector for the CoolBoost getter in <c>APGeAction.GetFunction</c>.</summary>
+    public const uint ApgeCoolBoostGet = 0x207;
+
+    /// <summary>Selector for the backlight-timeout getter in <c>APGeAction.GetFunction</c>.</summary>
+    public const uint ApgeBacklightGetBase = 0x01;
+
+    /// <summary>Selector for the backlight-timeout setter in <c>APGeAction.SetFunction</c>.</summary>
+    public const uint ApgeBacklightSetBase = 0x02;
+
+    /// <summary>Selector for the CoolBoost setter in <c>APGeAction.SetFunction</c>.</summary>
+    public const uint ApgeCoolBoostSetBase = 0x07;
+
+    /// <summary>Bit that marks a backlight-timeout call as the keyboard-backlight variant.</summary>
+    public const ulong ApgeBacklightFlag = 0x80000UL;
+
+    /// <summary>The idle delay the firmware applies when the backlight timeout is on, in seconds.</summary>
+    public const int BacklightTimeoutSeconds = 30;
+
+    // ---------------------------------------------------------------- gaming profile (methods 1 / 3)
+
+    /// <summary>
+    /// <c>GetGamingProfile(0)</c> answer when LCD overdrive is off but the panel supports it. Measured on an
+    /// AN16-41: <c>0x0000000001000000</c>.
+    /// </summary>
+    public const ulong GamingProfileOverdriveOff = 0x1000000UL;
+
+    /// <summary>The same answer with overdrive on: <c>0x1000000</c> plus bit 48.</summary>
+    public const ulong GamingProfileOverdriveOn = 0x1000001000000UL;
+
+    /// <summary>Selector for the Windows-key lock in <c>SetGamingProfile</c>.</summary>
+    public const ulong GamingProfileWinKeyLock = 0x02UL;
+
+    /// <summary>Bit that carries the Windows-key lock state in the <c>SetGamingProfile</c> input.</summary>
+    public const ulong GamingProfileWinKeyLockBit = 1UL << 24;
+
+    /// <summary>Selector for LCD overdrive in <c>SetGamingProfile</c>.</summary>
+    public const ulong GamingProfileOverdrive = 0x10UL;
+
+    /// <summary>Bit that carries the LCD overdrive state in the <c>SetGamingProfile</c> input.</summary>
+    public const ulong GamingProfileOverdriveBit = 1UL << 48;
 
     // ---------------------------------------------------------------- keyboard RGB (Get / SetGamingRgbKb)
 
@@ -434,6 +521,112 @@ public static class AcerWmiProtocol
         return new KbBacklightState(
             bytes[0], bytes[1], bytes[2], bytes[4], bytes[5], bytes[6], bytes[7], bytes.Count);
     }
+
+    // ---------------------------------------------------------------- operating-mode bitmask
+
+    /// <summary>
+    /// The operating modes a <c>GetGamingMiscSetting(0x0A)</c> answer advertises, in the order the UI shows them.
+    /// <para>
+    /// An empty list means the firmware did not answer or answered zero, which is not evidence that no mode works:
+    /// the caller keeps its existing set rather than hiding every mode button. Bits outside
+    /// <see cref="KnownModeBits"/> are ignored, so a firmware that sets an unknown bit cannot conjure a mode.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<OperatingMode> DecodeSupportedModes(ulong answer)
+    {
+        var mask = (int)((answer >> 8) & 0xFF);
+        if (mask == 0) return Array.Empty<OperatingMode>();
+
+        var modes = new List<OperatingMode>(5);
+        if ((mask & ModeBitQuiet) != 0) modes.Add(OperatingMode.Quiet);
+        if ((mask & ModeBitBalanced) != 0) modes.Add(OperatingMode.Default);
+        if ((mask & ModeBitPerformance) != 0) modes.Add(OperatingMode.Extreme);
+        if ((mask & ModeBitTurbo) != 0) modes.Add(OperatingMode.Turbo);
+        if ((mask & ModeBitEco) != 0) modes.Add(OperatingMode.Eco);
+        return modes;
+    }
+
+    /// <summary>True when the <c>GetGamingMiscSetting(0x09)</c> answer says the MUX is switchable over WMI.</summary>
+    public static bool DecodeGpuModeSupport(ulong answer) =>
+        (int)((answer >> 8) & 0xFF) == GpuModeSupportSwitchable;
+
+    // ---------------------------------------------------------------- APGeAction
+
+    /// <summary>
+    /// <c>APGeAction.SetFunction</c> input for CoolBoost: <c>7 | (on ? 1 &lt;&lt; 16 : 0)</c>.
+    /// </summary>
+    public static ulong EncodeCoolBoost(bool on) => ApgeCoolBoostSetBase | (on ? 1UL << 16 : 0UL);
+
+    /// <summary>
+    /// The CoolBoost state in a <c>GetFunction(0x207)</c> answer, or null when the firmware answered a status byte
+    /// this build does not recognise. A non-zero low byte is the firmware's "I did not understand the selector".
+    /// </summary>
+    public static bool? DecodeCoolBoost(ulong answer)
+    {
+        if ((answer & 0xFF) != 0) return null;
+        return ((answer >> 8) & 0xFF) == 1;
+    }
+
+    /// <summary><c>APGeAction.GetFunction</c> input for the backlight-timeout state.</summary>
+    public static ulong EncodeBacklightTimeoutGet(int hotkeyNumber) =>
+        ApgeBacklightGetBase | ((ulong)(hotkeyNumber & 0xFF) << 8) | ApgeBacklightFlag;
+
+    /// <summary>
+    /// <c>APGeAction.SetFunction</c> input for the backlight timeout:
+    /// <c>2 | (hotkey &lt;&lt; 8) | 0x80000 | (brightness &lt;&lt; 32) | (enabled ? 30 &lt;&lt; 40 : 0)</c>.
+    /// </summary>
+    public static ulong EncodeBacklightTimeoutSet(int hotkeyNumber, int brightnessPercent, bool enabled)
+    {
+        var value = ApgeBacklightSetBase
+                    | ((ulong)(hotkeyNumber & 0xFF) << 8)
+                    | ApgeBacklightFlag
+                    | ((ulong)(Math.Clamp(brightnessPercent, 0, 100) & 0xFF) << 32);
+
+        if (enabled) value |= (ulong)BacklightTimeoutSeconds << 40;
+        return value;
+    }
+
+    /// <summary>
+    /// The backlight-timeout state in a <c>GetFunction</c> answer: the brightness percentage and whether the
+    /// 30-second timeout is on. Null when the low byte is a status this build does not recognise.
+    /// </summary>
+    public static (int BrightnessPercent, bool Enabled)? DecodeBacklightTimeout(ulong answer)
+    {
+        if ((answer & 0xFF) != 0) return null;
+        var brightness = (int)((answer >> 32) & 0xFF);
+        var enabled = (int)((answer >> 40) & 0xFF) == BacklightTimeoutSeconds;
+        return (brightness, enabled);
+    }
+
+    // ---------------------------------------------------------------- gaming profile
+
+    /// <summary>
+    /// The LCD overdrive state in a <c>GetGamingProfile(0)</c> answer: true when on, false when off, null when the
+    /// panel does not support it. The firmware answers exactly two values for a supported panel, so anything else is
+    /// "no overdrive here" rather than a guess.
+    /// </summary>
+    public static bool? DecodeLcdOverdrive(ulong answer) => answer switch
+    {
+        GamingProfileOverdriveOn => true,
+        GamingProfileOverdriveOff => false,
+        _ => null
+    };
+
+    /// <summary><c>SetGamingProfile</c> input for LCD overdrive: <c>0x10 | (on ? 1 &lt;&lt; 48 : 0)</c>.</summary>
+    public static ulong EncodeLcdOverdrive(bool on) =>
+        GamingProfileOverdrive | (on ? GamingProfileOverdriveBit : 0UL);
+
+    /// <summary>
+    /// <c>SetGamingProfile</c> input for the Windows-key lock: <c>2 | (enabled ? 1 &lt;&lt; 24 : 0)</c>.
+    /// <para>
+    /// There is no getter for this one. <c>GetGamingProfile</c> with a non-zero selector echoes the selector back
+    /// rather than the state, and <c>GetGamingProfile(0)</c> answers the LCD-overdrive word, whose bit 24 means
+    /// "overdrive is supported" — not "the Windows key is locked". The write is therefore reported as unverified
+    /// rather than read back.
+    /// </para>
+    /// </summary>
+    public static ulong EncodeWinKeyLock(bool enabled) =>
+        GamingProfileWinKeyLock | (enabled ? GamingProfileWinKeyLockBit : 0UL);
 
     // ---------------------------------------------------------------- byte arrays
 

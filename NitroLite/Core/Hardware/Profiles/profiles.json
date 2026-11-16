@@ -4,8 +4,12 @@
     {
       "id": "nitro-16-an16-41",
       "match": {
-        "modelCodes": [ "AN16-41" ],
-        "familyPatterns": [ "Nitro 16" ]
+        "modelCodes": [
+          "AN16-41"
+        ],
+        "familyPatterns": [
+          "Nitro 16"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -16,7 +20,10 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 6200, "gpu": 6000 },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
@@ -25,8 +32,12 @@
     {
       "id": "nitro-17-an17-42",
       "match": {
-        "modelCodes": [ "AN17-42" ],
-        "familyPatterns": [ "Nitro 17" ]
+        "modelCodes": [
+          "AN17-42"
+        ],
+        "familyPatterns": [
+          "Nitro 17"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -37,17 +48,28 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 6200, "gpu": 6000 },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Same platform family as the AN16-41 with a larger chassis. The sensor ids are the firmware-wide enum, not a measurement on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Same platform family as the AN16-41 with a larger chassis. The sensor ids are the firmware-wide enum, not a measurement on this model; a sensor that answers a non-zero status is discarded at runtime. unverified: no community report has confirmed this record yet."
     },
     {
       "id": "nitro-5-an515",
       "match": {
-        "modelCodes": [ "AN515-54", "AN515-55", "AN515-56", "AN515-57", "AN515-58" ],
-        "familyPatterns": [ "Nitro 5" ]
+        "modelCodes": [
+          "AN515-54",
+          "AN515-55",
+          "AN515-56",
+          "AN515-57",
+          "AN515-58"
+        ],
+        "familyPatterns": [
+          "Nitro 5"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -58,17 +80,24 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 5800, "gpu": 5600 },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. Sensor ids are the firmware-wide enum and are not measured on this model."
+      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. Sensor ids are the firmware-wide enum and are not measured on this model. unverified: no community report has confirmed this record yet."
     },
     {
       "id": "nitro-v-15-anv15-51",
       "match": {
-        "modelCodes": [ "ANV15-51" ],
-        "familyPatterns": [ "Nitro V 15" ]
+        "modelCodes": [
+          "ANV15-51"
+        ],
+        "familyPatterns": [
+          "Nitro V 15"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -79,7 +108,10 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 5600, "gpu": 5400 },
+      "maxFanRpm": {
+        "cpu": 5600,
+        "gpu": 5400
+      },
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
@@ -88,8 +120,12 @@
     {
       "id": "nitro-v-16-anv16-41",
       "match": {
-        "modelCodes": [ "ANV16-41" ],
-        "familyPatterns": [ "Nitro V 16" ]
+        "modelCodes": [
+          "ANV16-41"
+        ],
+        "familyPatterns": [
+          "Nitro V 16"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -100,7 +136,10 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 6000, "gpu": 5800 },
+      "maxFanRpm": {
+        "cpu": 6000,
+        "gpu": 5800
+      },
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
@@ -109,8 +148,12 @@
     {
       "id": "nitro-v-16-anv16s-41",
       "match": {
-        "modelCodes": [ "ANV16S-41" ],
-        "familyPatterns": [ "Nitro V 16 S" ]
+        "modelCodes": [
+          "ANV16S-41"
+        ],
+        "familyPatterns": [
+          "Nitro V 16 S"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -121,7 +164,10 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 6000, "gpu": 5800 },
+      "maxFanRpm": {
+        "cpu": 6000,
+        "gpu": 5800
+      },
       "muxSwitch": false,
       "fourZoneKeyboard": true,
       "nitroHidKeyboard": true,
@@ -131,8 +177,12 @@
     {
       "id": "predator-helios-16-phn16-71",
       "match": {
-        "modelCodes": [ "PHN16-71" ],
-        "familyPatterns": [ "Predator Helios 16" ]
+        "modelCodes": [
+          "PHN16-71"
+        ],
+        "familyPatterns": [
+          "Predator Helios 16"
+        ]
       },
       "sensors": {
         "supported": true,
@@ -143,15 +193,25 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 6800, "gpu": 6600 },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
       "notes": "Predator fan ceilings are higher than the Nitro line; the plausibility bound has to allow for it. Sensor ids are the firmware-wide enum and are not measured on this model."
     },
     {
-      "id": "acer-gaming-default",
-      "match": { "anyAcer": true },
+      "id": "nitro-16-an16-42",
+      "match": {
+        "modelCodes": [
+          "AN16-42"
+        ],
+        "familyPatterns": [
+          "Nitro 16"
+        ]
+      },
       "sensors": {
         "supported": true,
         "verified": false,
@@ -161,7 +221,651 @@
         "gpuFanRpmSensor": 6,
         "gpuTempSensor": 10
       },
-      "maxFanRpm": { "cpu": 7000, "gpu": 7000 },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Same platform as the AN16-41 with a later board revision. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-16-an16-43",
+      "match": {
+        "modelCodes": [
+          "AN16-43"
+        ],
+        "familyPatterns": [
+          "Nitro 16"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Same platform as the AN16-41. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-17-an17-51",
+      "match": {
+        "modelCodes": [
+          "AN17-51"
+        ],
+        "familyPatterns": [
+          "Nitro 17"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "17-inch Nitro with the four-zone keyboard. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-5-an515-44",
+      "match": {
+        "modelCodes": [
+          "AN515-44"
+        ],
+        "familyPatterns": [
+          "Nitro 5"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5600,
+        "gpu": 5400
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Nine-byte GetGamingKBBacklight answer, unlike the fifteen-byte one on the AN16-41; the decoder reads the common eight-byte prefix either way. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-5-an515-45",
+      "match": {
+        "modelCodes": [
+          "AN515-45"
+        ],
+        "familyPatterns": [
+          "Nitro 5"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Four-zone keyboard on most SKUs; the keyboard capability answer decides, not this file. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-5-an517-41",
+      "match": {
+        "modelCodes": [
+          "AN517-41"
+        ],
+        "familyPatterns": [
+          "Nitro 5"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "17-inch Nitro 5. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-5-an517-54",
+      "match": {
+        "modelCodes": [
+          "AN517-54"
+        ],
+        "familyPatterns": [
+          "Nitro 5"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "17-inch Nitro 5. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-v-15-anv15-41",
+      "match": {
+        "modelCodes": [
+          "ANV15-41"
+        ],
+        "familyPatterns": [
+          "Nitro V 15"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5600,
+        "gpu": 5400
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": false,
+      "unsupportedMethods": [],
+      "notes": "Aspire-derived board with no MUX switch. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-v-15-anv15-52",
+      "match": {
+        "modelCodes": [
+          "ANV15-52"
+        ],
+        "familyPatterns": [
+          "Nitro V 15"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5600,
+        "gpu": 5400
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": false,
+      "ecMmioProfile": true,
+      "unsupportedMethods": [],
+      "notes": "This chassis drives its operating mode through EC MMIO, so a SetGamingMiscSetting(0x0B) write is accepted and ignored. The mode write reports not-supported and the Windows power plan carries the setting instead. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "nitro-v-16-anv16-71",
+      "match": {
+        "modelCodes": [
+          "ANV16-71"
+        ],
+        "familyPatterns": [
+          "Nitro V 16"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6000,
+        "gpu": 5800
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Four-zone keyboard. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-300-ph315-52",
+      "match": {
+        "modelCodes": [
+          "PH315-52"
+        ],
+        "familyPatterns": [
+          "Predator Helios 300"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6400,
+        "gpu": 6200
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator fan ceilings are higher than the Nitro line. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-300-ph315-53",
+      "match": {
+        "modelCodes": [
+          "PH315-53"
+        ],
+        "familyPatterns": [
+          "Predator Helios 300"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6400,
+        "gpu": 6200
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "kbZoneArm": true,
+      "unsupportedMethods": [],
+      "notes": "This is one of the models whose LED zones stay disabled until SetGamingLED arms them, which is what the kbZoneArm flag records. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-300-ph315-54",
+      "match": {
+        "modelCodes": [
+          "PH315-54"
+        ],
+        "familyPatterns": [
+          "Predator Helios 300"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6400,
+        "gpu": 6200
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Helios 300. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-16-ph16-72",
+      "match": {
+        "modelCodes": [
+          "PH16-72"
+        ],
+        "familyPatterns": [
+          "Predator Helios 16"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Helios 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-18-ph18-71",
+      "match": {
+        "modelCodes": [
+          "PH18-71"
+        ],
+        "familyPatterns": [
+          "Predator Helios 18"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "18-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-18-ph18-73",
+      "match": {
+        "modelCodes": [
+          "PH18-73"
+        ],
+        "familyPatterns": [
+          "Predator Helios 18"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "18-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-neo-16-phn16-72",
+      "match": {
+        "modelCodes": [
+          "PHN16-72"
+        ],
+        "familyPatterns": [
+          "Predator Helios Neo 16"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Helios Neo 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-neo-16-phn16-73",
+      "match": {
+        "modelCodes": [
+          "PHN16-73"
+        ],
+        "familyPatterns": [
+          "Predator Helios Neo 16"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Helios Neo 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-neo-16-phn16s-71",
+      "match": {
+        "modelCodes": [
+          "PHN16S-71"
+        ],
+        "familyPatterns": [
+          "Predator Helios Neo 16 S"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Helios Neo 16 S. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-triton-phin16-71",
+      "match": {
+        "modelCodes": [
+          "PHIN16-71"
+        ],
+        "familyPatterns": [
+          "Predator Triton"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6600,
+        "gpu": 6400
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Triton. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-triton-phin16s-71",
+      "match": {
+        "modelCodes": [
+          "PHIN16S-71"
+        ],
+        "familyPatterns": [
+          "Predator Triton"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6600,
+        "gpu": 6400
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Triton. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-helios-neo-14-phn14-51",
+      "match": {
+        "modelCodes": [
+          "PHN14-51"
+        ],
+        "familyPatterns": [
+          "Predator Helios Neo 14"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6400,
+        "gpu": 6200
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "14-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "predator-triton-ptx17-71",
+      "match": {
+        "modelCodes": [
+          "PTX17-71"
+        ],
+        "familyPatterns": [
+          "Predator Triton"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6600,
+        "gpu": 6400
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Predator Triton 17. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+    },
+    {
+      "id": "acer-gaming-default",
+      "match": {
+        "anyAcer": true
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 7000,
+        "gpu": 7000
+      },
       "unsupportedMethods": [],
       "notes": "Fallback for any Acer machine the table does not name. Deliberately permissive: a wrong ceiling only widens the plausibility bound, it never enables a feature. The sensor ids are the firmware-wide enum, and every reading is gated on the status byte, so a machine that does not answer the call reports no temperature instead of a wrong one."
     }
