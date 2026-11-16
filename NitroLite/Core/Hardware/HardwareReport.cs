@@ -159,11 +159,11 @@ public static class HardwareReport
         AppendField(sb, "Cache key", probe.CacheKey);
         AppendField(sb, "Sensors", string.Join(" ", new[]
         {
-            $"cpu={probe.Sensors.CpuTempByte}",
-            $"gpu={probe.Sensors.GpuTempByte}",
-            $"sys1={probe.Sensors.Sys1TempByte}",
-            $"rpm={probe.Sensors.CpuFanRpmWord}/{probe.Sensors.GpuFanRpmWord}",
-            $"scale={probe.Sensors.RpmScale}",
+            $"cpu={probe.Sensors.CpuTempSensor}",
+            $"gpu={probe.Sensors.GpuTempSensor}",
+            $"sys1={probe.Sensors.Sys1TempSensor}",
+            $"rpm={probe.Sensors.CpuFanRpmSensor}/{probe.Sensors.GpuFanRpmSensor}",
+            probe.Sensors.Supported ? "(supported)" : "(unsupported)",
             probe.Sensors.Verified ? "(verified)" : "(unverified)"
         }));
         AppendField(sb, "Fan ceiling", $"CPU {probe.MaxCpuFanRpm} / GPU {probe.MaxGpuFanRpm} RPM");
@@ -265,12 +265,12 @@ public static class HardwareReport
             ["cacheKey"] = probe.CacheKey,
             ["sensors"] = new JsonObject
             {
-                ["cpuTempByte"] = probe.Sensors.CpuTempByte,
-                ["gpuTempByte"] = probe.Sensors.GpuTempByte,
-                ["sys1TempByte"] = probe.Sensors.Sys1TempByte,
-                ["cpuFanRpmWord"] = probe.Sensors.CpuFanRpmWord,
-                ["gpuFanRpmWord"] = probe.Sensors.GpuFanRpmWord,
-                ["rpmScale"] = probe.Sensors.RpmScale,
+                ["cpuTempSensor"] = probe.Sensors.CpuTempSensor,
+                ["gpuTempSensor"] = probe.Sensors.GpuTempSensor,
+                ["sys1TempSensor"] = probe.Sensors.Sys1TempSensor,
+                ["cpuFanRpmSensor"] = probe.Sensors.CpuFanRpmSensor,
+                ["gpuFanRpmSensor"] = probe.Sensors.GpuFanRpmSensor,
+                ["supported"] = probe.Sensors.Supported,
                 ["verified"] = probe.Sensors.Verified
             },
             ["maxCpuFanRpm"] = probe.MaxCpuFanRpm,

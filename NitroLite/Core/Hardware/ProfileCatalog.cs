@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using NitroLite.Core.Hardware.Wmi;
 
 namespace NitroLite.Core.Hardware;
 
@@ -319,8 +320,8 @@ public sealed class ProfileCatalog
     private static SensorLayout? ParseSensors(JsonObject node, string fileName, List<string> rejections)
     {
         var unknown = node.Select(p => p.Key)
-            .Where(k => k is not ("cpuTempByte" or "gpuTempByte" or "sys1TempByte" or "cpuFanRpmWord"
-                or "gpuFanRpmWord" or "rpmScale" or "verified" or "supported"))
+            .Where(k => k is not ("cpuTempSensor" or "cpuFanRpmSensor" or "sys1TempSensor" or "gpuFanRpmSensor"
+                or "gpuTempSensor" or "verified" or "supported"))
             .ToList();
         if (unknown.Count > 0)
         {
@@ -330,12 +331,11 @@ public sealed class ProfileCatalog
 
         var layout = new SensorLayout
         {
-            CpuTempByte = ReadInt(node, "cpuTempByte") ?? 0,
-            GpuTempByte = ReadInt(node, "gpuTempByte") ?? 1,
-            Sys1TempByte = ReadInt(node, "sys1TempByte") ?? 2,
-            CpuFanRpmWord = ReadInt(node, "cpuFanRpmWord") ?? 2,
-            GpuFanRpmWord = ReadInt(node, "gpuFanRpmWord") ?? 3,
-            RpmScale = ReadInt(node, "rpmScale") ?? 100,
+            CpuTempSensor = ReadInt(node, "cpuTempSensor") ?? AcerWmiProtocol.SensorCpuTemperature,
+            CpuFanRpmSensor = ReadInt(node, "cpuFanRpmSensor") ?? AcerWmiProtocol.SensorCpuFanSpeed,
+            Sys1TempSensor = ReadInt(node, "sys1TempSensor") ?? AcerWmiProtocol.SensorSystemTemperature,
+            GpuFanRpmSensor = ReadInt(node, "gpuFanRpmSensor") ?? AcerWmiProtocol.SensorGpuFanSpeed,
+            GpuTempSensor = ReadInt(node, "gpuTempSensor") ?? AcerWmiProtocol.SensorGpuTemperature,
             Verified = ReadBool(node, "verified") ?? false,
             Supported = ReadBool(node, "supported") ?? true
         };

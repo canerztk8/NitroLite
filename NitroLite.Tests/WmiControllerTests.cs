@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Wmi;
@@ -339,6 +340,129 @@ public class WmiControllerTests
         Assert.Equal(2400, WmiHardwareController.DeriveRpm(50, 4800));
         Assert.Equal(0, WmiHardwareController.DeriveRpm(50, 0));
         Assert.Equal(4800, WmiHardwareController.DeriveRpm(100, 4800));
+    }
+
+    // ---------------------------------------------------------------- live sensor telemetry
+
+    /// <summary>The five answers an AN16-41 gave, in the shape the worker reports them.</summary>
+    private static JsonObject MeasuredTelemetry() => new()
+    {
+        ["sensors"] = new JsonObject
+        {
+            ["cpuTemp"] = Sensor(1, 63),
+            ["cpuFanRpm"] = Sensor(2, 2436),
+            ["sys1Temp"] = Sensor(3, 55),
+            ["gpuFanRpm"] = Sensor(6, 2409),
+            ["gpuTemp"] = Sensor(10, 57)
+        },
+        ["cpuFanPercent"] = 34,
+        ["gpuFanPercent"] = 34
+    };
+
+    private static JsonObject Sensor(int id, int value) => new()
+    {
+        ["sensor"] = id,
+        ["status"] = 0,
+        ["value"] = value
+    };
+
+    private static SensorLayout MeasuredLayout() => new()
+    {
+        Supported = true,
+        Verified = true
+    };
+
+    [Fact]
+    public void WmiTelemetry_RealSensors_AreDecodedAndMarkedMeasured()
+    {
+        var data = WmiHardwareController.BuildMonitorData(MeasuredTelemetry(), MeasuredLayout(), 6200, 6000);
+
+        Assert.Equal(63, data.CpuTemperature);
+        Assert.Equal(57, data.GpuTemperature);
+        Assert.Equal(55, data.SysTemperature);
+        Assert.Equal(2436, data.CpuFanSpeed);
+        Assert.Equal(2409, data.GpuFanSpeed);
+
+        // Real tachometer readings, so the stall watchdog is allowed to judge this sample.
+        Assert.True(data.IsFanRpmMeasured);
+    }
+
+    [Fact]
+    public void WmiTelemetry_RealRpm_FeedsTheStallWatchdog()
+    {
+        // The whole point of the measured flag: a hot die with a stopped fan has to be caught on the WMI path too.
+        var hot = MeasuredTelemetry();
+        hot["sensors"]!["cpuTemp"] = Sensor(1, 92);
+        hot["sensors"]!["gpuTemp"] = Sensor(10, 90);
+        hot["sensors"]!["cpuFanRpm"] = Sensor(2, 0);
+        hot["sensors"]!["gpuFanRpm"] = Sensor(6, 0);
+
+        var data = WmiHardwareController.BuildMonitorData(hot, MeasuredLayout(), 6200, 6000);
+        Assert.True(data.IsFanRpmMeasured);
+
+        var watchdog = new FanStallWatchdog();
+        var start = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+
+        Assert.Null(watchdog.Observe(
+            data.CpuTemperature, data.GpuTemperature, data.CpuFanSpeed, data.GpuFanSpeed, start));
+
+        var verdict = watchdog.Observe(
+            data.CpuTemperature, data.GpuTemperature, data.CpuFanSpeed, data.GpuFanSpeed, start.AddSeconds(11));
+
+        Assert.NotNull(verdict);
+        Assert.Equal(FanStallTarget.Both, verdict!.Target);
+    }
+
+    [Fact]
+    public void WmiTelemetry_NonZeroStatus_IsDiscardedAndFallsBackToDerivedRpm()
+    {
+        // A firmware that does not know the id answers a status code and a zero. Publishing that zero would show a
+        // fan at 0 RPM that is physically spinning, and would let the watchdog fire on a healthy machine.
+        var answer = MeasuredTelemetry();
+        answer["sensors"]!["cpuFanRpm"] = new JsonObject { ["sensor"] = 2, ["status"] = 1, ["value"] = 0 };
+        answer["sensors"]!["gpuFanRpm"] = new JsonObject { ["sensor"] = 6, ["status"] = 1, ["value"] = 0 };
+
+        var data = WmiHardwareController.BuildMonitorData(answer, MeasuredLayout(), 6200, 6000);
+
+        Assert.False(data.IsFanRpmMeasured);
+        Assert.Equal(WmiHardwareController.DeriveRpm(34, 6200), data.CpuFanSpeed);
+        Assert.Equal(WmiHardwareController.DeriveRpm(34, 6000), data.GpuFanSpeed);
+    }
+
+    [Fact]
+    public void WmiTelemetry_OneTachometerMissing_StaysInStandby()
+    {
+        // Half a measurement is not a measurement: the watchdog judges both fans together, so a real CPU reading
+        // next to a derived GPU one would compare a measurement against a guess.
+        var answer = MeasuredTelemetry();
+        ((JsonObject)answer["sensors"]!).Remove("gpuFanRpm");
+
+        var data = WmiHardwareController.BuildMonitorData(answer, MeasuredLayout(), 6200, 6000);
+
+        Assert.False(data.IsFanRpmMeasured);
+        Assert.Equal(WmiHardwareController.DeriveRpm(34, 6200), data.CpuFanSpeed);
+    }
+
+    [Fact]
+    public void WmiTelemetry_UnsupportedLayout_ReportsNoTemperatures()
+    {
+        // A machine the table does not name has no confirmed sensor ids. Reporting 0 is the honest answer: the UI
+        // renders it as "-- °C" instead of a number that is not a temperature.
+        var data = WmiHardwareController.BuildMonitorData(MeasuredTelemetry(), SensorLayout.Default, 6200, 6000);
+
+        Assert.Equal(0, data.CpuTemperature);
+        Assert.Equal(0, data.GpuTemperature);
+        Assert.Equal(0, data.SysTemperature);
+        Assert.False(data.IsFanRpmMeasured);
+    }
+
+    [Fact]
+    public void WmiTelemetry_NoSensorsObject_DoesNotThrow()
+    {
+        var data = WmiHardwareController.BuildMonitorData(new JsonObject(), MeasuredLayout(), 6200, 6000);
+
+        Assert.Equal(0, data.CpuTemperature);
+        Assert.False(data.IsFanRpmMeasured);
     }
 
     // ---------------------------------------------------------------- HybridHardwareController

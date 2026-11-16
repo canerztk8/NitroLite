@@ -97,7 +97,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
     // ---------------------------------------------------------------- reads
 
-    public WmiOperationResult ReadTelemetry()
+    public WmiOperationResult ReadTelemetry(SensorQuery query)
     {
         lock (_gate)
         {
@@ -106,16 +106,17 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
             try
             {
-                var data = new JsonObject();
-
-                var sysInfo = InvokeGetter(gaming, "GetGamingSysInfo", 0);
-                if (sysInfo.HasValue)
+                var data = new JsonObject
                 {
-                    data["sysInfoRaw"] = sysInfo.Value;
-                    var bytes = new JsonArray();
-                    foreach (var b in AcerWmiProtocol.ToBytes(sysInfo.Value)) bytes.Add(b);
-                    data["sysInfoBytes"] = bytes;
-                }
+                    ["sensors"] = new JsonObject
+                    {
+                        ["cpuTemp"] = ReadSensor(gaming, query.CpuTemp),
+                        ["cpuFanRpm"] = ReadSensor(gaming, query.CpuFanRpm),
+                        ["sys1Temp"] = ReadSensor(gaming, query.Sys1Temp),
+                        ["gpuFanRpm"] = ReadSensor(gaming, query.GpuFanRpm),
+                        ["gpuTemp"] = ReadSensor(gaming, query.GpuTemp)
+                    }
+                };
 
                 AppendFanSpeed(data, gaming, "cpu", AcerWmiProtocol.FanIdCpu);
                 AppendFanSpeed(data, gaming, "gpu", AcerWmiProtocol.FanIdGpu);
@@ -128,14 +129,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     if (decoded.HasValue) data["operatingMode"] = decoded.Value.ToString();
                 }
 
-                var behavior = InvokeGetter(gaming, "GetGamingFanBehavior", 0);
-                if (behavior.HasValue)
-                {
-                    var (bitmap, cpu, gpu) = AcerWmiProtocol.DecodeFanBehavior(behavior.Value);
-                    data["fanBehaviorBitmap"] = bitmap;
-                    data["cpuFanMode"] = cpu.ToString();
-                    data["gpuFanMode"] = gpu.ToString();
-                }
+                AppendFanBehavior(data, gaming);
 
                 return WmiOperationResult.Success(data);
             }
@@ -165,11 +159,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     if (decoded.HasValue) data["operatingMode"] = decoded.Value.ToString();
                 }
 
-                var behavior = InvokeGetter(gaming, "GetGamingFanBehavior", 0);
+                var behavior = InvokeGetter(gaming, "GetGamingFanBehavior", AcerWmiProtocol.FanBitmapBoth);
                 if (behavior.HasValue)
                 {
-                    var (bitmap, cpu, gpu) = AcerWmiProtocol.DecodeFanBehavior(behavior.Value);
-                    data["fanBehaviorBitmap"] = bitmap;
+                    var (status, cpu, gpu) = AcerWmiProtocol.DecodeFanBehavior(behavior.Value);
+                    data["fanBehaviorStatus"] = status;
                     data["cpuFanMode"] = cpu.ToString();
                     data["gpuFanMode"] = gpu.ToString();
                 }
@@ -614,6 +608,45 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
 
         return (bytes, status);
+    }
+
+    /// <summary>
+    /// One <c>GetGamingSysInfo</c> call for one sensor id. The answer carries a status byte in bits 7:0 and the
+    /// reading in bits 23:8; the reading is only published when the status says the answer is valid, because a
+    /// firmware that does not know the id answers a status code and a zero.
+    /// </summary>
+    private static JsonObject? ReadSensor(ManagementObject gaming, byte sensorId)
+    {
+        var answer = InvokeGetter(gaming, "GetGamingSysInfo", AcerWmiProtocol.EncodeSysInfoQuery(sensorId));
+        if (!answer.HasValue) return null;
+
+        var status = AcerWmiProtocol.DecodeStatus(answer.Value);
+        var node = new JsonObject
+        {
+            ["sensor"] = sensorId,
+            ["status"] = status,
+            ["raw"] = answer.Value
+        };
+
+        if (status == AcerWmiProtocol.StatusOk)
+            node["value"] = AcerWmiProtocol.DecodeSysInfoValue(answer.Value);
+
+        return node;
+    }
+
+    /// <summary>
+    /// Reads both fan behaviours in one call. The bitmap has to name both fans: the getter only fills in the fields
+    /// whose bit was set, so asking with <c>0x00</c> answers status <c>0x02</c> and no modes at all.
+    /// </summary>
+    private static void AppendFanBehavior(JsonObject data, ManagementObject gaming)
+    {
+        var behavior = InvokeGetter(gaming, "GetGamingFanBehavior", AcerWmiProtocol.FanBitmapBoth);
+        if (!behavior.HasValue) return;
+
+        var (status, cpu, gpu) = AcerWmiProtocol.DecodeFanBehavior(behavior.Value);
+        data["fanBehaviorStatus"] = status;
+        data["cpuFanMode"] = cpu.ToString();
+        data["gpuFanMode"] = gpu.ToString();
     }
 
     /// <summary>

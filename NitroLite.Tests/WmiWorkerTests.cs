@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Text.Json.Nodes;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Wmi;
 using Xunit;
 
@@ -44,16 +45,66 @@ public class WmiWorkerTests
     }
 
     [Fact]
-    public void EncodeFanBehavior_RoundTripsThroughTheDecoder()
+    public void FanBitmapGpu_IsBit3()
     {
-        var encoded = AcerWmiProtocol.EncodeFanBehavior(
-            AcerWmiProtocol.FanBitmapBoth, FanMode.Max, FanMode.Auto);
+        // BIT(3), not BIT(2). Measured on an AN16-41: GetGamingFanBehavior(0x08) answered 0x00004000 with the GPU
+        // mode in bits 15:14, while 0x04 selected nothing.
+        Assert.Equal(0x08, AcerWmiProtocol.FanBitmapGpu);
+        Assert.Equal(0x01, AcerWmiProtocol.FanBitmapCpu);
+        Assert.Equal(0x09, AcerWmiProtocol.FanBitmapBoth);
+        Assert.Equal(AcerWmiProtocol.FanBitmapCpu | AcerWmiProtocol.FanBitmapGpu, AcerWmiProtocol.FanBitmapBoth);
+    }
 
-        var (bitmap, cpu, gpu) = AcerWmiProtocol.DecodeFanBehavior(encoded);
+    [Fact]
+    public void DecodeFanBehavior_RealAnswers_UseTheGetterBitPositions()
+    {
+        // Measured on an AN16-41. The getter answers the CPU mode in bits 9:8 and the GPU mode in bits 15:14, which
+        // is not where the setter puts them (17:16 and 23:22).
+        var cpuOnly = AcerWmiProtocol.DecodeFanBehavior(0x00000100);
+        Assert.Equal(AcerWmiProtocol.StatusOk, cpuOnly.Status);
+        Assert.Equal(FanMode.Auto, cpuOnly.Cpu);
 
-        Assert.Equal(AcerWmiProtocol.FanBitmapBoth, bitmap);
-        Assert.Equal(FanMode.Max, cpu);
-        Assert.Equal(FanMode.Auto, gpu);
+        var gpuOnly = AcerWmiProtocol.DecodeFanBehavior(0x00004000);
+        Assert.Equal(FanMode.Auto, gpuOnly.Gpu);
+
+        var both = AcerWmiProtocol.DecodeFanBehavior(0x00004100);
+        Assert.Equal(AcerWmiProtocol.StatusOk, both.Status);
+        Assert.Equal(FanMode.Auto, both.Cpu);
+        Assert.Equal(FanMode.Auto, both.Gpu);
+    }
+
+    [Fact]
+    public void DecodeFanBehavior_ReadsTurboAndCustom()
+    {
+        // Turbo is 2 and Custom is 3, in the same two fields: bits 9:8 for the CPU fan, bits 15:14 for the GPU fan.
+        var turbo = AcerWmiProtocol.DecodeFanBehavior(0x00008200);
+        Assert.Equal(FanMode.Max, turbo.Cpu);
+        Assert.Equal(FanMode.Max, turbo.Gpu);
+
+        var custom = AcerWmiProtocol.DecodeFanBehavior(0x0000C300);
+        Assert.Equal(FanMode.Custom, custom.Cpu);
+        Assert.Equal(FanMode.Custom, custom.Gpu);
+    }
+
+    [Fact]
+    public void DecodeFanBehavior_ZeroBitmapAnswer_IsAStatusError()
+    {
+        // GetGamingFanBehavior(0x00) answered 0x00000002: status 2, no fields. The low byte is the status, not a
+        // bitmap, so a caller must not read it as one.
+        var answer = AcerWmiProtocol.DecodeFanBehavior(0x00000002);
+
+        Assert.Equal(0x02, answer.Status);
+        Assert.NotEqual(AcerWmiProtocol.StatusOk, answer.Status);
+    }
+
+    [Fact]
+    public void EncodeFanBehavior_SetterLayout_IsUnchanged()
+    {
+        // The setter keeps the CPU mode in bits 17:16 and the GPU mode in bits 23:22. Only the getter is asymmetric.
+        Assert.Equal(0x00410009UL, AcerWmiProtocol.EncodeFanBehavior(
+            AcerWmiProtocol.FanBitmapBoth, FanMode.Auto, FanMode.Auto));
+        Assert.Equal(0x00820009UL, AcerWmiProtocol.EncodeFanBehavior(
+            AcerWmiProtocol.FanBitmapBoth, FanMode.Max, FanMode.Max));
     }
 
     [Fact]
@@ -63,16 +114,30 @@ public class WmiWorkerTests
     }
 
     [Fact]
-    public void EncodeMuxMode_Optimus_Is0x0102()
+    public void EncodeMuxMode_Discrete_Is0x0102()
     {
-        // The firmware numbers the GPU modes from one, so Optimus (0) is written as 1: (1 << 8) | 0x02.
-        Assert.Equal(0x0102UL, AcerWmiProtocol.EncodeMuxMode(GpuOperatingMode.Optimus));
+        // The firmware numbers the GPU modes from one and 1 is discrete only. Measured on an AN16-41 sitting in
+        // hybrid mode, where GetGamingMiscSetting(0x02) answered 0x0202.
+        Assert.Equal(0x0102UL, AcerWmiProtocol.EncodeMuxMode(GpuOperatingMode.DiscreteGpu));
     }
 
     [Fact]
-    public void EncodeMuxMode_Discrete_Is0x0202()
+    public void EncodeMuxMode_Optimus_Is0x0202()
     {
-        Assert.Equal(0x0202UL, AcerWmiProtocol.EncodeMuxMode(GpuOperatingMode.DiscreteGpu));
+        Assert.Equal(0x0202UL, AcerWmiProtocol.EncodeMuxMode(GpuOperatingMode.Optimus));
+    }
+
+    [Fact]
+    public void EncodeMuxMode_Automatic_Is0x0302()
+    {
+        Assert.Equal(0x0302UL, AcerWmiProtocol.EncodeMuxMode(GpuOperatingMode.Automatic));
+    }
+
+    [Fact]
+    public void EncodeMuxMode_UnknownMode_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            AcerWmiProtocol.EncodeMuxMode((GpuOperatingMode)99));
     }
 
     [Fact]
@@ -102,19 +167,85 @@ public class WmiWorkerTests
     [Fact]
     public void DecodeMuxMode_ReadsBothSwitchableModes()
     {
-        Assert.Equal(GpuOperatingMode.Optimus, AcerWmiProtocol.DecodeMuxMode(0x0102));
-        Assert.Equal(GpuOperatingMode.DiscreteGpu, AcerWmiProtocol.DecodeMuxMode(0x0202));
+        // 1 is discrete only and 2 is hybrid / Optimus. The earlier decoder had these the other way round.
+        Assert.Equal(GpuOperatingMode.DiscreteGpu, AcerWmiProtocol.DecodeMuxMode(0x0102));
+        Assert.Equal(GpuOperatingMode.Optimus, AcerWmiProtocol.DecodeMuxMode(0x0202));
+        Assert.Equal(GpuOperatingMode.Automatic, AcerWmiProtocol.DecodeMuxMode(0x0302));
+        Assert.Null(AcerWmiProtocol.DecodeMuxMode(0x0002));
+        Assert.Null(AcerWmiProtocol.DecodeMuxMode(0x0402));
     }
 
     [Fact]
-    public void ToBytes_IsLittleEndian()
+    public void DecodeMuxMode_RealHybridAnswer_IsOptimus()
     {
-        var bytes = AcerWmiProtocol.ToBytes(0x00C30009);
+        // GetGamingMiscSetting(0x02) on an AN16-41 in hybrid mode answered 0x00000200.
+        Assert.Equal(GpuOperatingMode.Optimus, AcerWmiProtocol.DecodeMuxMode(0x00000200));
+    }
 
-        Assert.Equal(0x09, bytes[0]);
-        Assert.Equal(0x00, bytes[1]);
-        Assert.Equal(0xC3, bytes[2]);
-        Assert.Equal(0x00, bytes[3]);
+    // ---------------------------------------------------------------- sensors
+
+    [Fact]
+    public void EncodeSysInfoQuery_NamesOneSensor()
+    {
+        // 1 | (sensor << 8). Measured on an AN16-41: 0x0101 answered 0x00003F00 (63 C) and 0x0201 answered
+        // 0x00098400 (2436 RPM).
+        Assert.Equal(0x0101U, AcerWmiProtocol.EncodeSysInfoQuery(AcerWmiProtocol.SensorCpuTemperature));
+        Assert.Equal(0x0201U, AcerWmiProtocol.EncodeSysInfoQuery(AcerWmiProtocol.SensorCpuFanSpeed));
+        Assert.Equal(0x0301U, AcerWmiProtocol.EncodeSysInfoQuery(AcerWmiProtocol.SensorSystemTemperature));
+        Assert.Equal(0x0601U, AcerWmiProtocol.EncodeSysInfoQuery(AcerWmiProtocol.SensorGpuFanSpeed));
+        Assert.Equal(0x0A01U, AcerWmiProtocol.EncodeSysInfoQuery(AcerWmiProtocol.SensorGpuTemperature));
+    }
+
+    [Fact]
+    public void DecodeSysInfoValue_RealAnswers()
+    {
+        // The five answers the AN16-41 gave, next to what the Acer service reported at the same moment.
+        Assert.Equal(63, AcerWmiProtocol.DecodeSysInfoValue(0x00003F00));
+        Assert.Equal(2436, AcerWmiProtocol.DecodeSysInfoValue(0x00098400));
+        Assert.Equal(55, AcerWmiProtocol.DecodeSysInfoValue(0x00003700));
+        Assert.Equal(2409, AcerWmiProtocol.DecodeSysInfoValue(0x00096900));
+        Assert.Equal(57, AcerWmiProtocol.DecodeSysInfoValue(0x00003900));
+    }
+
+    [Fact]
+    public void DecodeSysInfoValue_IgnoresTheStatusByte()
+    {
+        // A status-1 answer carries no reading; the decoder still reports the field, and the caller gates on status.
+        Assert.Equal(0, AcerWmiProtocol.DecodeSysInfoValue(0x00000001));
+        Assert.Equal(0x01, AcerWmiProtocol.DecodeStatus(0x00000001));
+    }
+
+    [Fact]
+    public void SensorQuery_Default_IsTheFirmwareEnum()
+    {
+        var query = SensorQuery.Default;
+
+        Assert.Equal(1, query.CpuTemp);
+        Assert.Equal(2, query.CpuFanRpm);
+        Assert.Equal(3, query.Sys1Temp);
+        Assert.Equal(6, query.GpuFanRpm);
+        Assert.Equal(10, query.GpuTemp);
+    }
+
+    [Fact]
+    public void SensorQuery_FromLayout_CarriesTheProfileIds()
+    {
+        var layout = new SensorLayout
+        {
+            CpuTempSensor = 11,
+            CpuFanRpmSensor = 12,
+            Sys1TempSensor = 13,
+            GpuFanRpmSensor = 14,
+            GpuTempSensor = 15
+        };
+
+        var query = SensorQuery.FromLayout(layout);
+
+        Assert.Equal(11, query.CpuTemp);
+        Assert.Equal(12, query.CpuFanRpm);
+        Assert.Equal(13, query.Sys1Temp);
+        Assert.Equal(14, query.GpuFanRpm);
+        Assert.Equal(15, query.GpuTemp);
     }
 
     // ---------------------------------------------------------------- worker-side validation
@@ -507,11 +638,17 @@ public class WmiWorkerTests
             ["batteryClass"] = BatterySupported
         });
 
-        public WmiOperationResult ReadTelemetry() => WmiOperationResult.Success(new JsonObject
+        public SensorQuery? LastSensorQuery { get; private set; }
+
+        public WmiOperationResult ReadTelemetry(SensorQuery query)
         {
-            ["cpuFanPercent"] = 34,
-            ["gpuFanPercent"] = 34
-        });
+            LastSensorQuery = query;
+            return WmiOperationResult.Success(new JsonObject
+            {
+                ["cpuFanPercent"] = 34,
+                ["gpuFanPercent"] = 34
+            });
+        }
 
         public WmiOperationResult ReadDeviceState() => WmiOperationResult.Success(new JsonObject
         {

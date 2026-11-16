@@ -115,40 +115,75 @@ public sealed class WmiHardwareController : IHardwareController
     // ---------------------------------------------------------------- telemetry
 
     /// <summary>
-    /// One sample from <c>GetGamingSysInfo</c>. Temperatures come straight out of the raw bytes at the offsets the
-    /// matched profile declares — but only when the profile says the machine actually carries live sensors there.
+    /// One sample: five <c>GetGamingSysInfo</c> calls, one per sensor id the matched profile names, plus both fan
+    /// percentages and the active mode.
     /// <para>
-    /// On an AN16-41 it does not. <c>GetGamingSysInfo</c> answers the same bytes across runs minutes apart while the
-    /// CPU temperature moves and the fan speed changes, so those bytes are static configuration, not a sensor page.
-    /// Decoding them would print a plausible-looking number that is not a temperature, which is worse than printing
-    /// nothing: the UI renders 0 as "-- °C".
+    /// The readings are real. Measured on an AN16-41 against the Acer service at the same moment: sensor 1 answered
+    /// 63 °C (service: 63), sensor 2 answered 2436 RPM (service: 2444), sensor 3 answered 55 °C (service: 55),
+    /// sensor 6 answered 2409 RPM (service: 2422) and sensor 10 answered 57 °C (service: 57). The small RPM gap is
+    /// the two reads landing a few milliseconds apart, not a decode error.
     /// </para>
     /// <para>
-    /// Fan speeds are always derived from the percentage the firmware reports, never measured, so
-    /// <see cref="MonitorData.IsFanRpmMeasured"/> stays false and the stall watchdog keeps its hands off them.
+    /// <see cref="MonitorData.IsFanRpmMeasured"/> is true only when <em>both</em> tachometers answered with status
+    /// zero. The stall watchdog judges the two fans together, so a sample with one real reading and one derived one
+    /// would compare a measurement against a guess; a half-measured sample therefore falls back to the derived
+    /// speeds for both and leaves the watchdog in standby.
     /// </para>
     /// </summary>
     public async Task<MonitorData?> GetMonitorDataAsync()
     {
-        var response = await SendAsync(WmiWorkerCommand.ReadTelemetry).ConfigureAwait(false);
-        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
-
         var snapshot = Snapshot;
         var layout = snapshot?.Sensors ?? SensorLayout.Default;
-        var bytes = ReadBytes(data["sysInfoBytes"]);
+
+        var response = await SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
+        {
+            ["cpuTempSensor"] = layout.CpuTempSensor,
+            ["cpuFanRpmSensor"] = layout.CpuFanRpmSensor,
+            ["sys1TempSensor"] = layout.Sys1TempSensor,
+            ["gpuFanRpmSensor"] = layout.GpuFanRpmSensor,
+            ["gpuTempSensor"] = layout.GpuTempSensor
+        }).ConfigureAwait(false);
+
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
+
+        return BuildMonitorData(data, layout, snapshot?.MaxCpuFanRpm ?? 0, snapshot?.MaxGpuFanRpm ?? 0);
+    }
+
+    /// <summary>
+    /// Turns one <c>ReadTelemetry</c> answer into a sample. Pure, so the mapping from a firmware answer to a
+    /// <see cref="MonitorData"/> can be pinned without a pipe or a worker.
+    /// </summary>
+    public static MonitorData BuildMonitorData(JsonObject data, SensorLayout layout, int maxCpuFanRpm, int maxGpuFanRpm)
+    {
+        var sensors = data["sensors"] as JsonObject;
+
+        int? cpuRpm = layout.Supported ? ReadSensorValue(sensors, "cpuFanRpm") : null;
+        int? gpuRpm = layout.Supported ? ReadSensorValue(sensors, "gpuFanRpm") : null;
+        bool measured = cpuRpm.HasValue && gpuRpm.HasValue;
 
         return new MonitorData
         {
-            CpuTemperature = layout.Supported ? AcerWmiProtocol.ByteAt(bytes, layout.CpuTempByte) ?? 0 : 0,
-            GpuTemperature = layout.Supported ? AcerWmiProtocol.ByteAt(bytes, layout.GpuTempByte) ?? 0 : 0,
-            SysTemperature = layout.Supported ? AcerWmiProtocol.ByteAt(bytes, layout.Sys1TempByte) ?? 0 : 0,
-            CpuFanSpeed = DeriveRpm(ReadInt(data, "cpuFanPercent") ?? 0, snapshot?.MaxCpuFanRpm ?? 0),
-            GpuFanSpeed = DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, snapshot?.MaxGpuFanRpm ?? 0),
+            CpuTemperature = layout.Supported ? ReadSensorValue(sensors, "cpuTemp") ?? 0 : 0,
+            GpuTemperature = layout.Supported ? ReadSensorValue(sensors, "gpuTemp") ?? 0 : 0,
+            SysTemperature = layout.Supported ? ReadSensorValue(sensors, "sys1Temp") ?? 0 : 0,
 
-            // The fan speeds above are the requested percentage restated as RPM, not a tachometer reading. The
-            // watchdog must not judge them: a fan that has stopped still reports the percentage the EC was given.
-            IsFanRpmMeasured = false
+            CpuFanSpeed = measured ? cpuRpm!.Value : DeriveRpm(ReadInt(data, "cpuFanPercent") ?? 0, maxCpuFanRpm),
+            GpuFanSpeed = measured ? gpuRpm!.Value : DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, maxGpuFanRpm),
+
+            IsFanRpmMeasured = measured
         };
+    }
+
+    /// <summary>
+    /// One sensor's reading, or null when the firmware answered a non-zero status or no value at all. The status
+    /// byte is the gate: a firmware that does not know the id answers a code and a zero, and publishing that zero
+    /// would show a fan at 0 RPM that is physically spinning.
+    /// </summary>
+    private static int? ReadSensorValue(JsonObject? sensors, string key)
+    {
+        if (sensors?[key] is not JsonObject node) return null;
+        if (ReadInt(node, "status") != AcerWmiProtocol.StatusOk) return null;
+        return ReadInt(node, "value");
     }
 
     /// <summary>Turns a fan percentage into an approximate RPM using the model's ceiling. 0 when the ceiling is unknown.</summary>
@@ -550,20 +585,6 @@ public sealed class WmiHardwareController : IHardwareController
 
     private static string DescribeRaw(JsonObject data) =>
         TryReadUlong(data, "muxRaw", out var raw) ? $"0x{raw:X4}" : "(okunamadı)";
-
-    private static IReadOnlyList<byte>? ReadBytes(JsonNode? node)
-    {
-        if (node is not JsonArray array) return null;
-
-        var bytes = new List<byte>(array.Count);
-        foreach (var item in array)
-        {
-            try { bytes.Add((byte)item!.GetValue<int>()); }
-            catch { return null; }
-        }
-
-        return bytes;
-    }
 
     public void Dispose()
     {

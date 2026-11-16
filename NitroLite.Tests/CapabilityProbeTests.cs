@@ -51,10 +51,12 @@ public class CapabilityProbeTests
     [Fact]
     public void EmbeddedSensorLayoutIsMarkedUnverified()
     {
-        // The offsets are a hypothesis until an elevated read-back confirms them. Shipping them as verified would
-        // make the report claim a measurement nobody took.
+        // The ids are the firmware-wide enum, but only the reference machine has been measured. Shipping the rest as
+        // verified would make the report claim a measurement nobody took.
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
-        Assert.All(catalog.Profiles, p => Assert.False(p.Sensors.Verified));
+        Assert.All(
+            catalog.Profiles.Where(p => p.Id != "nitro-16-an16-41"),
+            p => Assert.False(p.Sensors.Verified));
     }
 
     // ---------------------------------------------------------------- SMBIOS matching
@@ -196,13 +198,13 @@ public class CapabilityProbeTests
     }
 
     [Fact]
-    public void UserProfileWithAnOutOfRangeSensorOffsetIsRejected()
+    public void UserProfileWithAnOutOfRangeSensorIdIsRejected()
     {
         const string user = """
         {
           "schemaVersion": 1,
           "profiles": [
-            { "id": "shifted", "match": { "modelCodes": [ "AN16-41" ] }, "sensors": { "cpuTempByte": 42 } }
+            { "id": "shifted", "match": { "modelCodes": [ "AN16-41" ] }, "sensors": { "cpuTempSensor": 999 } }
           ]
         }
         """;
@@ -239,7 +241,7 @@ public class CapabilityProbeTests
             {
               "id": "an16-41-tuned",
               "match": { "modelCodes": [ "AN16-41" ], "familyPatterns": [ "Nitro 16" ] },
-              "sensors": { "cpuTempByte": 0, "gpuTempByte": 1, "sys1TempByte": 2, "cpuFanRpmWord": 2, "gpuFanRpmWord": 3, "rpmScale": 100, "verified": true },
+              "sensors": { "cpuTempSensor": 1, "cpuFanRpmSensor": 2, "sys1TempSensor": 3, "gpuFanRpmSensor": 6, "gpuTempSensor": 10, "verified": true },
               "maxFanRpm": { "cpu": 6200, "gpu": 6000 },
               "muxSwitch": true,
               "fourZoneKeyboard": true,

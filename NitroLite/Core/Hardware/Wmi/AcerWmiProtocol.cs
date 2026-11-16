@@ -38,16 +38,26 @@ public static class AcerWmiProtocol
     /// <summary>Fan bitmap bit for the CPU fan.</summary>
     public const byte FanBitmapCpu = 0x01;
 
-    /// <summary>Fan bitmap bit for the GPU fan.</summary>
-    public const byte FanBitmapGpu = 0x04;
+    /// <summary>
+    /// Fan bitmap bit for the GPU fan: <c>BIT(3)</c>, not <c>BIT(2)</c>.
+    /// <para>
+    /// Measured on an AN16-41: <c>GetGamingFanBehavior(0x08)</c> answered <c>0x00004000</c>, with the GPU mode in
+    /// bits 15:14, while <c>0x04</c> selected nothing. The Linux <c>acer-wmi</c> driver defines the same bit as
+    /// <c>ACER_GAMING_FAN_BEHAVIOR_GPU</c>.
+    /// </para>
+    /// </summary>
+    public const byte FanBitmapGpu = 0x08;
 
     /// <summary>
-    /// Fan bitmap for "both fans" in the behaviour call. Deliberately a separate constant rather than
-    /// <c>FanBitmapCpu | FanBitmapGpu</c>: the reference encoding for both fans is <c>0x09</c>, which is not the OR
-    /// of the two single-fan bits. Computing it would send <c>0x05</c> and address a different set of fans, so the
-    /// value is written down instead of derived.
+    /// Fan bitmap for "both fans" in the behaviour call: <c>FanBitmapCpu | FanBitmapGpu</c> = <c>0x09</c>.
+    /// <para>
+    /// The getter only fills in the fields whose bitmap bit was set, so a read that wants both modes has to ask for
+    /// both. Measured on an AN16-41: <c>0x01</c> answered <c>0x00000100</c> (CPU only), <c>0x08</c> answered
+    /// <c>0x00004000</c> (GPU only), <c>0x09</c> answered <c>0x00004100</c> (both), and <c>0x00</c> answered status
+    /// <c>0x02</c> with no fields at all.
+    /// </para>
     /// </summary>
-    public const byte FanBitmapBoth = 0x09;
+    public const byte FanBitmapBoth = FanBitmapCpu | FanBitmapGpu;
 
     // ---------------------------------------------------------------- misc settings (methods 22 / 23)
 
@@ -116,11 +126,24 @@ public static class AcerWmiProtocol
     public static ulong EncodeFanBehavior(byte fanBitmap, FanMode cpu, FanMode gpu) =>
         fanBitmap | ((ulong)FanBehaviorValue(cpu) << 16) | ((ulong)FanBehaviorValue(gpu) << 22);
 
-    /// <summary>Splits a <c>GetGamingFanBehavior</c> answer back into its three fields.</summary>
-    public static (byte Bitmap, FanMode Cpu, FanMode Gpu) DecodeFanBehavior(ulong output) =>
+    /// <summary>
+    /// Splits a <c>GetGamingFanBehavior</c> answer into its status byte and the two fan modes.
+    /// <para>
+    /// The getter does not use the setter's bit positions. <c>SetGamingFanBehavior</c> takes the CPU mode in bits
+    /// 17:16 and the GPU mode in bits 23:22, but <c>GetGamingFanBehavior</c> answers the CPU mode in bits 9:8 and
+    /// the GPU mode in bits 15:14. Measured on an AN16-41: <c>GetGamingFanBehavior(0x09)</c> returned
+    /// <c>0x00004100</c>, which is Auto/Auto under this layout and 0/0 under the setter's.
+    /// </para>
+    /// <para>
+    /// The low byte is the status, not the bitmap: the getter does not echo the bitmap it was asked about. A field
+    /// whose bitmap bit was not set reads back as 0 and is reported as <see cref="FanMode.Auto"/>, so a caller that
+    /// wants both modes must ask with <see cref="FanBitmapBoth"/>.
+    /// </para>
+    /// </summary>
+    public static (byte Status, FanMode Cpu, FanMode Gpu) DecodeFanBehavior(ulong output) =>
         ((byte)(output & 0xFF),
-         FanModeFromBehavior((byte)((output >> 16) & 0x3F)) ?? FanMode.Auto,
-         FanModeFromBehavior((byte)((output >> 22) & 0x3F)) ?? FanMode.Auto);
+         FanModeFromBehavior((byte)((output >> 8) & 0x03)) ?? FanMode.Auto,
+         FanModeFromBehavior((byte)((output >> 14) & 0x03)) ?? FanMode.Auto);
 
     /// <summary>Maps the app's fan mode onto the firmware's behaviour value.</summary>
     public static byte FanBehaviorValue(FanMode mode) => mode switch
@@ -139,6 +162,38 @@ public static class AcerWmiProtocol
         _ => null
     };
 
+    // ---------------------------------------------------------------- sensors (method 5)
+
+    /// <summary>Sensor id for the CPU temperature in <c>GetGamingSysInfo</c>.</summary>
+    public const byte SensorCpuTemperature = 0x01;
+
+    /// <summary>Sensor id for the CPU fan tachometer.</summary>
+    public const byte SensorCpuFanSpeed = 0x02;
+
+    /// <summary>Sensor id for the board / system temperature.</summary>
+    public const byte SensorSystemTemperature = 0x03;
+
+    /// <summary>Sensor id for the GPU fan tachometer.</summary>
+    public const byte SensorGpuFanSpeed = 0x06;
+
+    /// <summary>Sensor id for the GPU temperature.</summary>
+    public const byte SensorGpuTemperature = 0x0A;
+
+    /// <summary>The command nibble in the low byte of a <c>GetGamingSysInfo</c> input: "read one sensor".</summary>
+    public const uint SysInfoCommandReadSensor = 0x0001;
+
+    /// <summary>
+    /// <c>1 | (sensorId &lt;&lt; 8)</c>. The sensor id is not a byte offset into a packed page: each call names one
+    /// sensor and answers one value. Measured on an AN16-41, where <c>0x0101</c> answered <c>0x00003F00</c>
+    /// (63 °C) and <c>0x0201</c> answered <c>0x00098400</c> (2436 RPM), both matching the Acer service's own
+    /// telemetry at the same moment.
+    /// </summary>
+    public static uint EncodeSysInfoQuery(byte sensorId) =>
+        SysInfoCommandReadSensor | ((uint)sensorId << 8);
+
+    /// <summary>The reading out of a <c>GetGamingSysInfo</c> answer: <c>(output &gt;&gt; 8) &amp; 0xFFFF</c>.</summary>
+    public static int DecodeSysInfoValue(ulong output) => (int)((output >> 8) & 0xFFFF);
+
     // ---------------------------------------------------------------- operating mode
 
     /// <summary><c>(mode &lt;&lt; 8) | 0x0B</c>. Performance (Extreme) is <c>0x040B</c>.</summary>
@@ -155,27 +210,38 @@ public static class AcerWmiProtocol
     // ---------------------------------------------------------------- MUX
 
     /// <summary>
-    /// <c>((mode + 1) &lt;&lt; 8) | 0x02</c>. The firmware numbers the GPU modes from one, so Optimus (0) is written as
-    /// 1 and comes out as <c>0x0102</c>; discrete is <c>0x0202</c>.
+    /// <c>(firmwareMode &lt;&lt; 8) | 0x02</c>, where the firmware numbers the GPU modes from one: 1 is discrete only
+    /// (<c>0x0102</c>), 2 is hybrid / Optimus (<c>0x0202</c>), 3 is the firmware's own automatic choice
+    /// (<c>0x0302</c>).
     /// <para>
-    /// The migration brief listed <c>0x0202</c> as the Optimus value and <c>0x0302</c> as the discrete one, which is
-    /// what the same formula produces if the already-one-based mode number is passed in. The formula is the part
-    /// that is self-consistent with <see cref="DecodeMuxMode"/> and with the capability bitmask, so it is the part
-    /// that is implemented here. PR 4 settles it empirically: reading <c>GetGamingMiscSetting(0x02)</c> on a machine
-    /// sitting in hybrid mode returns either <c>0x0102</c> or <c>0x0202</c>, and the read-back check will refuse to
-    /// write if the encoder disagrees with what the firmware reports.
+    /// The polarity is measured, not inferred. <c>GetGamingMiscSetting(0x02)</c> on an AN16-41 sitting in hybrid
+    /// mode answers <c>0x0202</c>, and the Linux <c>acer-wmi</c> driver's <c>ACER_WMID_GPU_MODE_HYBRID</c> is 2.
+    /// The earlier encoder derived the value from the app's own enum index (<c>mode + 1</c>), which put Optimus at
+    /// 1 and discrete at 2 — exactly backwards, so a MUX write would have selected the opposite mode.
     /// </para>
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The mode is not one of the three the firmware knows.</exception>
     public static ulong EncodeMuxMode(GpuOperatingMode mode) =>
-        ((ulong)((byte)mode + 1) << 8) | MiscIndexMux;
+        ((ulong)MuxModeValue(mode) << 8) | MiscIndexMux;
+
+    /// <summary>The firmware's one-based number for a GPU mode.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The mode is not one of the three the firmware knows.</exception>
+    public static byte MuxModeValue(GpuOperatingMode mode) => mode switch
+    {
+        GpuOperatingMode.DiscreteGpu => 1,
+        GpuOperatingMode.Optimus => 2,
+        GpuOperatingMode.Automatic => 3,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "unknown GPU mode")
+    };
 
     /// <summary>The GPU mode out of a <c>GetGamingMiscSetting(0x02)</c> answer. Null when the value is out of range.</summary>
-    public static GpuOperatingMode? DecodeMuxMode(ulong output)
+    public static GpuOperatingMode? DecodeMuxMode(ulong output) => (byte)((output >> 8) & 0xFF) switch
     {
-        int raw = (int)((output >> 8) & 0xFF) - 1;
-        if (raw < 0 || raw > (int)GpuOperatingMode.Automatic) return null;
-        return (GpuOperatingMode)raw;
-    }
+        1 => GpuOperatingMode.DiscreteGpu,
+        2 => GpuOperatingMode.Optimus,
+        3 => GpuOperatingMode.Automatic,
+        _ => null
+    };
 
     // ---------------------------------------------------------------- keyboard RGB
 
@@ -234,29 +300,12 @@ public static class AcerWmiProtocol
     public static int BrightnessPercentToLevel(int percent) =>
         (int)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * MaxBrightnessLevel);
 
-    // ---------------------------------------------------------------- raw dump
+    // ---------------------------------------------------------------- byte arrays
 
     /// <summary>
-    /// The 64-bit answer as eight bytes, little-endian. The sensor layout in <c>profiles.json</c> is expressed as
-    /// byte offsets into this array, so PR 4 can confirm the offsets against a real read instead of trusting them.
+    /// Reads one byte out of a byte-array answer. <c>GetGamingKBBacklight</c> is the only getter that answers an
+    /// array rather than an integer, and its fields are addressed by offset.
     /// </summary>
-    public static byte[] ToBytes(ulong value)
-    {
-        var bytes = new byte[8];
-        for (int i = 0; i < 8; i++) bytes[i] = (byte)((value >> (8 * i)) & 0xFF);
-        return bytes;
-    }
-
-    /// <summary>Reads one byte out of a raw dump. Returns null when the offset is outside the array.</summary>
     public static byte? ByteAt(IReadOnlyList<byte>? bytes, int offset) =>
         bytes == null || offset < 0 || offset >= bytes.Count ? null : bytes[offset];
-
-    /// <summary>Reads a 16-bit little-endian word out of a raw dump. Null when the word does not fit.</summary>
-    public static int? WordAt(IReadOnlyList<byte>? bytes, int wordIndex)
-    {
-        if (bytes == null || wordIndex < 0) return null;
-        int offset = wordIndex * 2;
-        if (offset + 1 >= bytes.Count) return null;
-        return bytes[offset] | (bytes[offset + 1] << 8);
-    }
 }

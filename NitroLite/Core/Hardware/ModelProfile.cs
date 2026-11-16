@@ -1,62 +1,56 @@
+using NitroLite.Core.Hardware.Wmi;
+
 namespace NitroLite.Core.Hardware;
 
 /// <summary>
-/// Where each sensor sits inside the 64-bit answer of <c>GetGamingSysInfo</c> (WMID_Gaming method 5).
+/// Which firmware sensor id answers each reading, for <c>GetGamingSysInfo</c> (WMID_Gaming method 5).
 /// <para>
-/// The <c>*Byte</c> members are byte offsets into that value; the <c>*Word</c> members are 16-bit word indices.
-/// They overlap on purpose — a packed structure can carry a byte field and a word field at the same position — so
-/// an overlap is not a bug in the table.
+/// <c>GetGamingSysInfo</c> is not a packed page. Each call names one sensor in the high byte of the input
+/// (<c>1 | (sensor &lt;&lt; 8)</c>) and answers one value in bits 23:8 with a status byte in bits 7:0. The ids below
+/// are the firmware's own enum, the same one the Linux <c>acer-wmi</c> driver defines as
+/// <c>acer_wmi_predator_v4_sensor_id</c>, so they are the same on every model that answers the call at all.
 /// </para>
 /// <para>
-/// <see cref="Verified"/> is false for every layout shipped today. The packing below is the one NitroSense appears
-/// to use, but it has not been read back from hardware: the class is dynamic and instance access needs elevation,
-/// which the read-only probe does not have. Nothing decodes a sensor through this table yet, and nothing
-/// safety-critical ever will — the thermal floors live in C# and are not configurable.
+/// The ids are still per-profile data rather than constants: a model whose firmware numbers its sensors differently
+/// is then a one-line data change, and a profile that has not been measured can leave <see cref="Supported"/> false
+/// instead of decoding a number that is not a temperature.
 /// </para>
 /// </summary>
 public sealed record SensorLayout
 {
-    public int CpuTempByte { get; init; }
-    public int GpuTempByte { get; init; } = 1;
-    public int Sys1TempByte { get; init; } = 2;
-    public int CpuFanRpmWord { get; init; } = 2;
-    public int GpuFanRpmWord { get; init; } = 3;
+    public int CpuTempSensor { get; init; } = AcerWmiProtocol.SensorCpuTemperature;
+    public int CpuFanRpmSensor { get; init; } = AcerWmiProtocol.SensorCpuFanSpeed;
+    public int Sys1TempSensor { get; init; } = AcerWmiProtocol.SensorSystemTemperature;
+    public int GpuFanRpmSensor { get; init; } = AcerWmiProtocol.SensorGpuFanSpeed;
+    public int GpuTempSensor { get; init; } = AcerWmiProtocol.SensorGpuTemperature;
 
-    /// <summary>Divisor that turns the raw word into RPM. 100 on every model seen so far.</summary>
-    public int RpmScale { get; init; } = 100;
-
-    /// <summary>True only when the offsets were confirmed against a real read-back on this model.</summary>
+    /// <summary>True only when the ids were confirmed against a real read-back on this model.</summary>
     public bool Verified { get; init; }
 
     /// <summary>
-    /// False when <c>GetGamingSysInfo</c> carries no live sensor data on this model, so the offsets above describe
-    /// nothing and must not be decoded.
-    /// <para>
-    /// An AN16-41 answers the same bytes across runs minutes apart while the CPU temperature moves and the fan speed
-    /// changes: that is static configuration, not a sensor page. Decoding it would print a plausible-looking number
-    /// that is not a temperature. The UI renders 0 as "-- °C", which is the honest answer.
-    /// </para>
+    /// False when this model's firmware does not answer per-sensor queries, so the ids above describe nothing and
+    /// must not be decoded. The status byte is the runtime gate either way: a sensor that answers non-zero is
+    /// discarded even on a supported profile, and the UI renders the missing reading as "-- °C".
     /// </summary>
     public bool Supported { get; init; } = true;
 
     /// <summary>
-    /// The layout used when nothing better is known. <see cref="Supported"/> is false because no shipped offset has
-    /// ever been confirmed against hardware; a profile that has real offsets sets it back to true.
+    /// The layout used when nothing better is known. <see cref="Supported"/> is false because no shipped id has been
+    /// confirmed on a machine the table does not name; a profile that has been measured sets it back to true.
     /// </summary>
     public static SensorLayout Default { get; } = new() { Supported = false, Verified = false };
 
     /// <summary>
-    /// A layout is usable when every offset lands inside the 64-bit answer and the scale cannot divide by zero.
-    /// A file that fails this is rejected rather than clamped: a silently shifted offset would report the GPU
-    /// temperature as the CPU temperature, which is worse than reporting nothing.
+    /// A layout is usable when every id fits the byte the firmware reads it from. A file that fails this is rejected
+    /// rather than clamped: a silently shifted id would report the GPU temperature as the CPU temperature, which is
+    /// worse than reporting nothing.
     /// </summary>
     public bool IsValid =>
-        CpuTempByte is >= 0 and <= 7 &&
-        GpuTempByte is >= 0 and <= 7 &&
-        Sys1TempByte is >= 0 and <= 7 &&
-        CpuFanRpmWord is >= 0 and <= 3 &&
-        GpuFanRpmWord is >= 0 and <= 3 &&
-        RpmScale is >= 1 and <= 1000;
+        CpuTempSensor is >= 0 and <= 255 &&
+        CpuFanRpmSensor is >= 0 and <= 255 &&
+        Sys1TempSensor is >= 0 and <= 255 &&
+        GpuFanRpmSensor is >= 0 and <= 255 &&
+        GpuTempSensor is >= 0 and <= 255;
 }
 
 /// <summary>

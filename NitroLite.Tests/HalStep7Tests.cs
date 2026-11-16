@@ -336,8 +336,8 @@ public class HalStep7Tests
     [Fact]
     public void DefaultSensorLayout_IsNotSupported()
     {
-        // No shipped offset has ever been confirmed against hardware, and on an AN16-41 the bytes are static
-        // configuration rather than a sensor page. Decoding them would print a number that is not a temperature.
+        // No sensor id has been confirmed on a machine the table does not name. Decoding one anyway would print a
+        // number that is not a temperature.
         Assert.False(SensorLayout.Default.Supported);
         Assert.False(SensorLayout.Default.Verified);
     }
@@ -352,12 +352,25 @@ public class HalStep7Tests
     }
 
     [Fact]
-    public void EmbeddedProfiles_ClaimNoLiveSensors()
+    public void EmbeddedProfiles_DeclareTheFirmwareSensorIds()
     {
+        // The ids are the firmware-wide enum, so every shipped profile carries them. Only the reference machine has
+        // been measured, so only it is marked verified.
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
 
-        Assert.All(catalog.Profiles, p => Assert.False(p.Sensors.Supported));
-        Assert.All(catalog.Profiles, p => Assert.False(p.Sensors.Verified));
+        Assert.All(catalog.Profiles, p => Assert.True(p.Sensors.Supported));
+        Assert.All(catalog.Profiles, p => Assert.Equal(1, p.Sensors.CpuTempSensor));
+        Assert.All(catalog.Profiles, p => Assert.Equal(2, p.Sensors.CpuFanRpmSensor));
+        Assert.All(catalog.Profiles, p => Assert.Equal(3, p.Sensors.Sys1TempSensor));
+        Assert.All(catalog.Profiles, p => Assert.Equal(6, p.Sensors.GpuFanRpmSensor));
+        Assert.All(catalog.Profiles, p => Assert.Equal(10, p.Sensors.GpuTempSensor));
+
+        var reference = catalog.Profiles.Single(p => p.Id == "nitro-16-an16-41");
+        Assert.True(reference.Sensors.Verified);
+
+        Assert.All(
+            catalog.Profiles.Where(p => p.Id != "nitro-16-an16-41"),
+            p => Assert.False(p.Sensors.Verified));
     }
 
     [Fact]
@@ -370,7 +383,7 @@ public class HalStep7Tests
             {
               "id": "my-nitro",
               "match": { "modelCodes": [ "AN16-41" ] },
-              "sensors": { "supported": true, "verified": true, "cpuTempByte": 3, "gpuTempByte": 4, "sys1TempByte": 5 },
+              "sensors": { "supported": true, "verified": true, "cpuTempSensor": 11, "gpuTempSensor": 12, "sys1TempSensor": 13 },
               "maxFanRpm": { "cpu": 6200, "gpu": 6000 }
             }
           ]
@@ -383,7 +396,9 @@ public class HalStep7Tests
         var profile = catalog.Profiles.Single(p => p.Id == "my-nitro");
         Assert.True(profile.Sensors.Supported);
         Assert.True(profile.Sensors.Verified);
-        Assert.Equal(3, profile.Sensors.CpuTempByte);
+        Assert.Equal(11, profile.Sensors.CpuTempSensor);
+        Assert.Equal(12, profile.Sensors.GpuTempSensor);
+        Assert.Equal(13, profile.Sensors.Sys1TempSensor);
     }
 
     [Fact]
@@ -396,7 +411,31 @@ public class HalStep7Tests
             {
               "id": "my-nitro",
               "match": { "modelCodes": [ "AN16-41" ] },
-              "sensors": { "supported": true, "cpuTempByte": 3, "bogusField": 1 }
+              "sensors": { "supported": true, "cpuTempSensor": 3, "bogusField": 1 }
+            }
+          ]
+        }
+        """;
+
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), user, out var rejections);
+
+        Assert.NotEmpty(rejections);
+        Assert.DoesNotContain(catalog.Profiles, p => p.Id == "my-nitro");
+    }
+
+    [Fact]
+    public void UserProfile_RejectsTheRetiredByteOffsetSchema()
+    {
+        // The old schema described byte offsets into a packed page that GetGamingSysInfo does not return. A file
+        // still carrying it is refused rather than silently reinterpreted as sensor ids.
+        const string user = """
+        {
+          "schemaVersion": 1,
+          "profiles": [
+            {
+              "id": "my-nitro",
+              "match": { "modelCodes": [ "AN16-41" ] },
+              "sensors": { "supported": true, "cpuTempByte": 3, "gpuTempByte": 4 }
             }
           ]
         }
@@ -430,7 +469,7 @@ public class HalStep7Tests
             ["keyboardLighting"] = true
         });
 
-        public WmiOperationResult ReadTelemetry() => WmiOperationResult.Success(new JsonObject());
+        public WmiOperationResult ReadTelemetry(SensorQuery query) => WmiOperationResult.Success(new JsonObject());
 
         public WmiOperationResult ReadDeviceState() => WmiOperationResult.Success(new JsonObject());
 

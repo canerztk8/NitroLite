@@ -52,6 +52,36 @@ public sealed record WmiOperationResult
 }
 
 /// <summary>
+/// Which firmware sensor id answers each reading. The ids come from the matched model profile, so a machine whose
+/// firmware numbers its sensors differently is a data change rather than a code change.
+/// <para>
+/// They travel to the worker as part of the <c>ReadTelemetry</c> command and are validated there like any other
+/// argument: the worker never trusts the caller, even for a read.
+/// </para>
+/// </summary>
+public sealed record SensorQuery
+{
+    public byte CpuTemp { get; init; } = AcerWmiProtocol.SensorCpuTemperature;
+    public byte CpuFanRpm { get; init; } = AcerWmiProtocol.SensorCpuFanSpeed;
+    public byte Sys1Temp { get; init; } = AcerWmiProtocol.SensorSystemTemperature;
+    public byte GpuFanRpm { get; init; } = AcerWmiProtocol.SensorGpuFanSpeed;
+    public byte GpuTemp { get; init; } = AcerWmiProtocol.SensorGpuTemperature;
+
+    /// <summary>The firmware-wide enum, used when no profile has been matched.</summary>
+    public static SensorQuery Default { get; } = new();
+
+    /// <summary>Projects a profile's layout onto the ids the worker is asked about.</summary>
+    public static SensorQuery FromLayout(SensorLayout layout) => new()
+    {
+        CpuTemp = (byte)layout.CpuTempSensor,
+        CpuFanRpm = (byte)layout.CpuFanRpmSensor,
+        Sys1Temp = (byte)layout.Sys1TempSensor,
+        GpuFanRpm = (byte)layout.GpuFanRpmSensor,
+        GpuTemp = (byte)layout.GpuTempSensor
+    };
+}
+
+/// <summary>
 /// What the elevated worker can do to the hardware. Every member is a typed operation, never a generic
 /// "invoke this method with this payload": the worker is the one process holding an elevated token, so the set of
 /// things it can be asked to do has to be a closed list that a reviewer can read in one screen.
@@ -68,10 +98,11 @@ public interface IWmiExecutor : IDisposable
     WmiOperationResult GetCapabilities();
 
     /// <summary>
-    /// Sensor read: <c>GetGamingSysInfo</c> plus both fan speeds, the active mode and the fan behaviour. The raw
-    /// eight bytes are included so the sensor offsets in <c>profiles.json</c> can be confirmed against a real read.
+    /// Sensor read: one <c>GetGamingSysInfo</c> call per id in <paramref name="query"/>, plus both fan speeds, the
+    /// active mode and the fan behaviour. Each sensor is reported with its own status byte so the caller can tell a
+    /// real reading from a firmware that answered nothing.
     /// </summary>
-    WmiOperationResult ReadTelemetry();
+    WmiOperationResult ReadTelemetry(SensorQuery query);
 
     /// <summary>Everything the window needs to draw its controls: mode, fan modes and speeds, MUX, battery limit.</summary>
     WmiOperationResult ReadDeviceState();

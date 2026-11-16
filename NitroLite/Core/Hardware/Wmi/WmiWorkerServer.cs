@@ -161,7 +161,21 @@ public sealed class WmiWorkerServer : IDisposable
                     return WmiWorkerResponse.FromResult(_executor.GetCapabilities());
 
                 case WmiWorkerCommand.ReadTelemetry:
-                    return WmiWorkerResponse.FromResult(_executor.ReadTelemetry());
+                {
+                    // The sensor ids are the caller's, so they are checked here like any other argument. A missing
+                    // id falls back to the firmware-wide enum rather than failing the read: an older caller that
+                    // sends no ids still gets a sample.
+                    var query = new SensorQuery
+                    {
+                        CpuTemp = ReadSensorId(request.Args, "cpuTempSensor", AcerWmiProtocol.SensorCpuTemperature),
+                        CpuFanRpm = ReadSensorId(request.Args, "cpuFanRpmSensor", AcerWmiProtocol.SensorCpuFanSpeed),
+                        Sys1Temp = ReadSensorId(request.Args, "sys1TempSensor", AcerWmiProtocol.SensorSystemTemperature),
+                        GpuFanRpm = ReadSensorId(request.Args, "gpuFanRpmSensor", AcerWmiProtocol.SensorGpuFanSpeed),
+                        GpuTemp = ReadSensorId(request.Args, "gpuTempSensor", AcerWmiProtocol.SensorGpuTemperature)
+                    };
+
+                    return WmiWorkerResponse.FromResult(_executor.ReadTelemetry(query));
+                }
 
                 case WmiWorkerCommand.ReadDeviceState:
                     return WmiWorkerResponse.FromResult(_executor.ReadDeviceState());
@@ -277,6 +291,14 @@ public sealed class WmiWorkerServer : IDisposable
             return false;
         }
     }
+
+    /// <summary>
+    /// One sensor id out of the request, clamped to the byte the firmware reads it from. An id that is missing or
+    /// out of range falls back to <paramref name="fallback"/> instead of reaching WMI: the worker is the process
+    /// holding the elevated token, so a value it cannot vouch for does not get through.
+    /// </summary>
+    private static byte ReadSensorId(JsonObject? args, string name, byte fallback) =>
+        TryReadInt(args, name, out var value) && value is >= 0 and <= 255 ? (byte)value : fallback;
 
     private static async Task<bool> TryReplyAsync(Stream pipe, WmiWorkerResponse response, CancellationToken cancellationToken)
     {

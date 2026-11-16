@@ -7,12 +7,20 @@
         "modelCodes": [ "AN16-41" ],
         "familyPatterns": [ "Nitro 16" ]
       },
-      "sensors": { "supported": false },
+      "sensors": {
+        "supported": true,
+        "verified": true,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 6200, "gpu": 6000 },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Reference machine. AcerGamingFunction is registered as a dynamic class; instance access needs elevation. GetGamingSysInfo returns static configuration here, not a sensor page: the same bytes came back across runs minutes apart while the CPU temperature moved and the fan speed changed, so no temperature is decoded from it. Keyboard colour is written through SetGamingRgbKb with a non-zero zone mask; SetGamingKBBacklight rejects every payload tried."
+      "notes": "Reference machine. AcerGamingFunction is registered as a dynamic class; instance access needs elevation. Sensor ids measured against the Acer service at the same moment: GetGamingSysInfo(0x0101)=63 C, (0x0201)=2436 RPM, (0x0301)=55 C, (0x0601)=2409 RPM, (0x0A01)=57 C, matching CPU_TEMPERATURE 63, CPU_FANSPEED 2444, SYS1_TEMPERATURE 55, GPU1_FANSPEED 2422 and GPU1_TEMPERATURE 57. Keyboard colour is written through SetGamingRgbKb with a non-zero zone mask; SetGamingKBBacklight rejects every payload tried."
     },
     {
       "id": "nitro-17-an17-42",
@@ -20,11 +28,20 @@
         "modelCodes": [ "AN17-42" ],
         "familyPatterns": [ "Nitro 17" ]
       },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 6200, "gpu": 6000 },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Same platform family as the AN16-41 with a larger chassis."
+      "notes": "Same platform family as the AN16-41 with a larger chassis. The sensor ids are the firmware-wide enum, not a measurement on this model; a sensor that answers a non-zero status is discarded at runtime."
     },
     {
       "id": "nitro-5-an515",
@@ -32,11 +49,20 @@
         "modelCodes": [ "AN515-54", "AN515-55", "AN515-56", "AN515-57", "AN515-58" ],
         "familyPatterns": [ "Nitro 5" ]
       },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 5800, "gpu": 5600 },
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file."
+      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. Sensor ids are the firmware-wide enum and are not measured on this model."
     },
     {
       "id": "nitro-v-15-anv15-51",
@@ -44,11 +70,20 @@
         "modelCodes": [ "ANV15-51" ],
         "familyPatterns": [ "Nitro V 15" ]
       },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 5600, "gpu": 5400 },
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Aspire-derived board. WMI fan and mode control is present; the MUX switch is not."
+      "notes": "Aspire-derived board. WMI fan and mode control is present; the MUX switch is not. Sensor ids are the firmware-wide enum and are not measured on this model."
     },
     {
       "id": "nitro-v-16-anv16-41",
@@ -56,11 +91,20 @@
         "modelCodes": [ "ANV16-41" ],
         "familyPatterns": [ "Nitro V 16" ]
       },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 6000, "gpu": 5800 },
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Nitro V chassis with a 16-inch panel."
+      "notes": "Nitro V chassis with a 16-inch panel. Sensor ids are the firmware-wide enum and are not measured on this model."
     },
     {
       "id": "predator-helios-16-phn16-71",
@@ -68,19 +112,36 @@
         "modelCodes": [ "PHN16-71" ],
         "familyPatterns": [ "Predator Helios 16" ]
       },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 6800, "gpu": 6600 },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Predator fan ceilings are higher than the Nitro line; the plausibility bound has to allow for it."
+      "notes": "Predator fan ceilings are higher than the Nitro line; the plausibility bound has to allow for it. Sensor ids are the firmware-wide enum and are not measured on this model."
     },
     {
       "id": "acer-gaming-default",
       "match": { "anyAcer": true },
-      "sensors": { "supported": false },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
       "maxFanRpm": { "cpu": 7000, "gpu": 7000 },
       "unsupportedMethods": [],
-      "notes": "Fallback for any Acer machine the table does not name. Deliberately permissive: a wrong ceiling only widens the plausibility bound, it never enables a feature. No sensor offsets are claimed because none have been confirmed on a machine this table does not name."
+      "notes": "Fallback for any Acer machine the table does not name. Deliberately permissive: a wrong ceiling only widens the plausibility bound, it never enables a feature. The sensor ids are the firmware-wide enum, and every reading is gated on the status byte, so a machine that does not answer the call reports no temperature instead of a wrong one."
     }
   ]
 }
