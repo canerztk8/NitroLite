@@ -160,6 +160,51 @@ public sealed class ShellLabels
     /// <summary>"Oyun kapandı; önceki ayarlara dönüldü: Counter-Strike 2".</summary>
     public string GameEnded(string name) => Loc.T($"Oyun kapandı; önceki ayarlara dönüldü: {name}");
 
+    // ---------------------------------------------------------------- game library
+
+    public string ScanGames => Loc.T("Yüklü Oyunları Tara");
+    public string ScanningGames => Loc.T("Taranıyor…");
+    public string AddGameFromFile => Loc.T("Oyun Ekle (.exe)");
+    public string GamesScanned(int count) => Loc.T($"{count} yeni oyun profili eklendi.");
+    public string NoNewGames => Loc.T("Yeni yüklü oyun tespit edilmedi.");
+    public string GameScanFailed => Loc.T("Oyun kitaplığı taranamadı.");
+    public string GameScanUnavailable => Loc.T("Bu platformda oyun kitaplığı taraması yok.");
+    public string GameToConfigure => Loc.T("Yapılandırılacak Oyun");
+    public string GameExePath => Loc.T("Çalıştırılabilir dosya");
+    public string GameTargets => Loc.T("Oyun hedefleri");
+    public string GameCpuBoost => Loc.T("CPU Boost Davranışı");
+    public string GameFanProfile => Loc.T("Fan Profili");
+    public string GameOwnCurve => Loc.T("Bu oyun için özel fan eğrisi");
+    public string CopyDesktopCurve => Loc.T("Masaüstü eğrisini kopyala");
+    public string GameCurveCopied(string name) => Loc.T($"Masaüstü eğrisi kopyalandı: {name}");
+    public string DeleteProfileTitle => Loc.T("Profili sil");
+    public string DeleteProfileConfirm(string name) => Loc.T($"'{name}' profili silinsin mi? Bu işlem geri alınamaz.");
+    public string GameSessionRecovered => Loc.T("Yarım kalan oyun oturumu geri alındı; önceki mod ve fan ayarları geri yüklendi.");
+
+    // ---------------------------------------------------------------- mouse
+
+    public string MouseCaption => Loc.T("FARE");
+    public string MouseProfiles => Loc.T("Fare profili");
+    public string MouseProfilesHint => Loc.T("ATK farenin kendi belleğindeki yapılandırmalar. Değiştirme seçilirse dokunulmaz.");
+    public string MousePassive => Loc.T("Değiştirme (Pasif)");
+    public string MousePassiveApplied => Loc.T("Fare profili değiştirilmedi.");
+    public string MouseProfileApplied(int profile) => Loc.T($"Fare profili uygulandı: Config {profile}");
+    public string MouseProfileFailed => Loc.T("Fare profili uygulanamadı; cihaz yanıt vermedi.");
+    public string DefaultMouseProfile => Loc.T("Varsayılan Fare Profili");
+
+    // ---------------------------------------------------------------- fan curve presets
+
+    public string CurvePresets => Loc.T("ŞABLON");
+
+    // ---------------------------------------------------------------- MUX and desktop restore
+
+    public string GpuPendingDiscrete => Loc.T("Harici GPU seçildi. Değişiklik yeniden başlatmadan sonra etkin olur.");
+    public string GpuPendingHybrid => Loc.T("Hibrit mod seçildi. Değişiklik yeniden başlatmadan sonra etkin olur.");
+    public string GpuPendingBadge => Loc.T("YENİDEN BAŞLAT");
+    public string DesktopRestoreDone => Loc.T("Masaüstü ayarları yeniden uygulandı.");
+    public string DesktopRestoreFailed => Loc.T("Masaüstü ayarları hâlâ uygulanamıyor.");
+    public string TrayRetryDesktop => Loc.T("Masaüstü ayarlarını yeniden dene");
+
     // ---------------------------------------------------------------- RGB profiles
     public string RgbProfiles => Loc.T("RGB profilleri");
     public string ProfileName => Loc.T("Profil adı");
@@ -181,6 +226,7 @@ public sealed class ShellLabels
     public string TrayShow => Loc.T("Pencereyi Göster");
     public string TrayCleanExit => Loc.T("Temiz Çıkış");
     public string TrayQuickMode => Loc.T("Hızlı mod");
+    public string TrayCpuBoost => Loc.T("CPU Boost");
     public string MinimizedToTray => Loc.T("Arka planda çalışıyor. Kapatmak için sistem tepsisinden Temiz Çıkış'ı kullanın.");
     public string CleanExitDone => Loc.T("Fanlar otomatiğe alındı; çıkılıyor.");
     public string CleanExitPartial => Loc.T("Fanlar otomatiğe alınamadı; yine de çıkılıyor.");
@@ -237,6 +283,23 @@ public sealed class ShellLabels
     public string SignaturePrefix => "Made with love by ·";
 
     public string SignatureName => "Caner";
+
+    public string SignatureLinkHint => Loc.T("Projeyi GitHub'da aç");
+
+    // ---------------------------------------------------------------- Phase 1 additions
+
+    /// <summary>The caption over the ready-made curve shapes.</summary>
+    public string CurvePresetsCaption => Loc.T("ŞABLON");
+
+    /// <summary>The chip that says a MUX write needs a restart before it means anything.</summary>
+    public string RebootRequired => Loc.T("YENİDEN BAŞLAT");
+
+    /// <summary>The per-game target captions, which the WPF card printed above each picker.</summary>
+    public string WorkingMode => Loc.T("Çalışma Modu");
+
+    public string FanProfile => Loc.T("Fan Profili");
+
+    public string GameFanCurve => Loc.T("Bu oyun için özel fan eğrisi");
 
     // ---------------------------------------------------------------- the five pages
 

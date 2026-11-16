@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:NitroLite.Desktop.ViewModels"
         xmlns:views="using:NitroLite.Desktop.Views"
+        xmlns:conv="using:NitroLite.Desktop.Converters"
         x:Class="NitroLite.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="{Binding Labels.AppTitle}"
@@ -15,12 +16,13 @@
         Background="{DynamicResource PageBrush}">
 
   <!--
-    The shell, measured against the WPF window it replaces: a 44px printed header, a 215px rail, and the page inset
+    The shell, measured against the WPF window it replaces: a 44px printed header, a resizable rail, and the page inset
     26/20. The window is 1060x730 and refuses to go smaller, because that is the size at which the five pages were
     laid out and every card still fits without a scrollbar.
 
     The rail is a list of buttons rather than a TabControl so the marker, the glyph and the label are one control, and
-    so the live SİSTEM card can sit under the list without being a page of its own.
+    so the live SİSTEM card can sit under the list without being a page of its own. Its width is a bound column
+    definition, which is what lets the splitter write the new width straight into the settings file.
   -->
   <Border Background="{DynamicResource PageBrush}"
           BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
@@ -98,7 +100,13 @@
 
       <!-- ============================================================ rail + page -->
 
-      <Grid Grid.Row="1" ColumnDefinitions="215,*">
+      <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+          <!-- Two-way: the splitter writes the new width, the converter clamps it, the view model persists it. -->
+          <ColumnDefinition Width="{Binding SidebarWidth, Mode=TwoWay, Converter={x:Static conv:DoubleToGridLengthConverter.Instance}}" />
+          <ColumnDefinition Width="4" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Background="{DynamicResource RailBrush}"
                 BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,1,0"
@@ -130,48 +138,96 @@
             </StackPanel>
 
             <!-- The live readout: a small card on the rail, so the figures read as one block rather than as loose
-                 lines under the navigation. It stays put whichever page is showing. -->
+                 lines under the navigation. It stays put whichever page is showing, and every row is a shortcut to
+                 the page or the quick menu that owns it. -->
             <Border Grid.Row="2" Background="{DynamicResource CardBrush}"
                     BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                     CornerRadius="6" Padding="6,7,6,4" Margin="0,0,0,10">
               <StackPanel>
                 <TextBlock Text="{Binding Labels.SystemCaption}" Classes="caps" Margin="4,0,0,6" />
 
-                <Border Classes="sidestat">
+                <Button Classes="sidestat" Click="OnSideStatClick" Tag="monitoring"
+                        ToolTip.Tip="{Binding Labels.NavMonitoring}">
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Labels.Cpu}" Classes="caps" />
                     <TextBlock Grid.Column="1" Text="{Binding SystemCpuText}" Classes="figure"
                                HorizontalAlignment="Right" />
                   </Grid>
-                </Border>
+                </Button>
 
-                <Border Classes="sidestat">
+                <Button Classes="sidestat" Click="OnSideStatClick" Tag="monitoring"
+                        ToolTip.Tip="{Binding Labels.NavMonitoring}">
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Labels.Gpu}" Classes="caps" />
                     <TextBlock Grid.Column="1" Text="{Binding SystemGpuText}" Classes="figure"
                                HorizontalAlignment="Right" />
                   </Grid>
-                </Border>
+                </Button>
 
-                <Border Classes="sidestat">
+                <Button Classes="sidestat" Click="OnSideStatClick" Tag="monitoring"
+                        ToolTip.Tip="{Binding Labels.NavMonitoring}">
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Labels.FanCaption}" Classes="caps" />
                     <TextBlock Grid.Column="1" Text="{Binding SystemFanText}" Classes="figure"
                                HorizontalAlignment="Right" />
                   </Grid>
-                </Border>
+                </Button>
 
-                <Border Classes="sidestat">
+                <!-- BOOST opens the same three pills the GPU & CPU card carries, so the mode can be changed from any
+                     page without a trip to the modes tab. -->
+                <Button Classes="sidestat" ToolTip.Tip="{Binding Labels.TrayCpuBoost}">
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Labels.BoostCaption}" Classes="caps" />
                     <TextBlock Grid.Column="1" Text="{Binding SystemBoostText}" FontSize="11"
                                FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
                   </Grid>
-                </Border>
+                  <Button.Flyout>
+                    <Flyout Placement="RightEdgeAlignedTop">
+                      <ItemsControl ItemsSource="{Binding CpuBoostChoices}" MinWidth="140">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:CpuBoostChoice">
+                            <Button Classes="nav" Command="{Binding SelectCommand}">
+                              <Border Classes="navitem" Classes.selected="{Binding IsSelected}">
+                                <TextBlock Classes="navlabel" Text="{Binding Label}" />
+                              </Border>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
+
+                <!-- The mouse row only exists on a machine whose mouse answered. A row that offered four
+                     configurations on a laptop with no ATK mouse would be four buttons that write nowhere. -->
+                <Button Classes="sidestat" IsVisible="{Binding ShowSystemMouseRow}"
+                        ToolTip.Tip="{Binding Labels.MouseProfiles}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Labels.MouseCaption}" Classes="caps" />
+                    <TextBlock Grid.Column="1" Text="{Binding SystemMouseText}" FontSize="11"
+                               FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                  </Grid>
+                  <Button.Flyout>
+                    <Flyout Placement="RightEdgeAlignedTop">
+                      <ItemsControl ItemsSource="{Binding MouseProfileOptions}" MinWidth="160">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:MouseProfileOption">
+                            <Button Classes="nav" Command="{Binding SelectCommand}">
+                              <Border Classes="navitem" Classes.selected="{Binding IsSelected}">
+                                <TextBlock Classes="navlabel" Text="{Binding Label}" />
+                              </Border>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
 
                 <!-- The active game, or the sentence that says there is none. Trimmed rather than wrapped: a long
                      process name must not push the rail's own layout around. -->
-                <Border Classes="sidestat">
+                <Button Classes="sidestat" Click="OnSideStatClick" Tag="modes"
+                        ToolTip.Tip="{Binding Labels.GameProfiles}">
                   <Grid ColumnDefinitions="Auto,*">
                     <TextBlock Text="{Binding Labels.GameCaption}" Classes="caps" />
                     <TextBlock Grid.Column="1" Text="{Binding SystemGameText}" FontSize="11"
@@ -179,25 +235,33 @@
                                HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
                                Margin="6,0,0,0" VerticalAlignment="Center" />
                   </Grid>
-                </Border>
+                </Button>
               </StackPanel>
             </Border>
 
-            <!-- The signature sits at the very bottom of the rail, under the readout. -->
+            <!-- The signature sits at the very bottom of the rail, under the readout. The name is a link to the
+                 project, which is what the WPF window's signature did. -->
             <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center"
                         Margin="10,0,10,10">
               <TextBlock Text="&#x2665;" FontSize="10" Foreground="{DynamicResource AccentBrush}"
                          VerticalAlignment="Center" />
               <TextBlock Text="{Binding Labels.SignaturePrefix}" FontSize="10"
                          Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Labels.SignatureName}" FontSize="10"
-                         Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+              <Button Classes="link" Click="OnSignatureClick" ToolTip.Tip="{Binding Labels.SignatureLinkHint}">
+                <TextBlock Text="{Binding Labels.SignatureName}" FontSize="10"
+                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+              </Button>
             </StackPanel>
           </Grid>
         </Border>
 
+        <!-- The rail's resize handle. Four pixels wide and transparent: the cursor is the affordance, as in the WPF
+             window, and a visible bar between the rail and the page would read as a second border. -->
+        <GridSplitter Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                      Background="Transparent" />
+
         <!-- The page. Only this column scrolls, so the rail and the header stay put. -->
-        <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="26,20,26,0">
+        <Grid Grid.Column="2" RowDefinitions="Auto,*" Margin="26,20,26,0">
 
           <!-- Standing note while the backend is unreachable. The toast alone is gone after three seconds, and a
                window whose every hardware control silently does nothing reads as broken. -->
@@ -222,17 +286,23 @@
             <views:BatteryView IsVisible="{Binding IsBatteryPage}" />
             <views:SettingsView IsVisible="{Binding IsToolsPage}" />
 
-            <!-- The last thing that happened, printed at the foot of the page the way the WPF window did it. -->
+            <!-- The last thing that happened, printed at the foot of the page the way the WPF window did it. The
+                 action button is optional: a message that can be acted on carries one, a plain confirmation does
+                 not. -->
             <Border IsVisible="{Binding HasStatus}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,24" MaxWidth="720" Padding="16,9"
                     Background="{DynamicResource CardBrush}"
                     BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
-                    CornerRadius="4" IsHitTestVisible="False">
+                    CornerRadius="4">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#x25CF;" FontSize="13" FontWeight="Bold" Margin="0,0,8,0"
                            Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Status}" FontSize="12" FontWeight="SemiBold" MaxWidth="640"
+                <TextBlock Text="{Binding Status}" FontSize="12" FontWeight="SemiBold" MaxWidth="560"
                            TextWrapping="Wrap" VerticalAlignment="Center" />
+                <Button Classes="primary" IsVisible="{Binding HasToastAction}"
+                        Content="{Binding ToastActionLabel}" Padding="12,5" FontSize="11"
+                        Margin="12,0,0,0" VerticalAlignment="Center"
+                        Command="{Binding ToastActionCommand}" />
               </StackPanel>
             </Border>
           </Grid>

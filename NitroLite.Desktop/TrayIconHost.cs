@@ -22,6 +22,11 @@ namespace NitroLite.Desktop;
 /// Performance applies here too.
 /// </para>
 /// <para>
+/// A mode the firmware does not advertise is hidden rather than disabled, and a mode the battery rule forbids is
+/// disabled with the reason in its tooltip. Offering a click that can only be refused is worse than not offering it,
+/// but hiding a mode the machine is currently in would leave the menu with no marked row.
+/// </para>
+/// <para>
 /// "Temiz Çıkış" is deliberately not "Çıkış": it hands the fans back to the firmware before the process ends. A
 /// machine left with a fixed fan speed written by a program that is no longer running is the one failure mode a tray
 /// menu can cause, and it is worth a slower exit to avoid it.
@@ -32,8 +37,11 @@ public sealed class TrayIconHost : IDisposable
     private readonly MainViewModel _viewModel;
     private readonly NativeMenu _menu;
     private readonly Dictionary<OperatingMode, NativeMenuItem> _modeItems = new();
+    private readonly Dictionary<CpuBoostMode, NativeMenuItem> _boostItems = new();
     private readonly NativeMenuItem _showItem;
+    private readonly NativeMenuItem _retryItem;
     private readonly NativeMenuItem _quickModeItem;
+    private readonly NativeMenuItem _boostItem;
     private readonly NativeMenuItem _exitItem;
     private bool _disposed;
 
@@ -51,6 +59,16 @@ public sealed class TrayIconHost : IDisposable
         _showItem.Click += (_, _) => showWindow();
         _menu.Add(_showItem);
 
+        // Only meaningful while a desktop restore is pending: the app wrote a mode the firmware refused, and the user
+        // can ask it to try again without opening the window.
+        _retryItem = new NativeMenuItem(_viewModel.Labels.TrayRetryDesktop)
+        {
+            IsEnabled = false,
+            IsVisible = false
+        };
+        _retryItem.Click += async (_, _) => await _viewModel.RetryDesktopRestoreAsync().ConfigureAwait(true);
+        _menu.Add(_retryItem);
+
         _menu.Add(new NativeMenuItemSeparator());
 
         _quickModeItem = new NativeMenuItem(_viewModel.Labels.TrayQuickMode) { Menu = new NativeMenu() };
@@ -66,6 +84,20 @@ public sealed class TrayIconHost : IDisposable
             _modeItems[mode] = item;
         }
         _menu.Add(_quickModeItem);
+
+        _boostItem = new NativeMenuItem(_viewModel.Labels.TrayCpuBoost) { Menu = new NativeMenu() };
+        foreach (var mode in TrayMenuPolicy.BoostModes)
+        {
+            var item = new NativeMenuItem(ModePolicy.BoostDisplayName(mode))
+            {
+                ToggleType = NativeMenuItemToggleType.Radio
+            };
+            item.Click += async (_, _) => await _viewModel.ApplyCpuBoostFromTrayAsync(mode).ConfigureAwait(true);
+
+            _boostItem.Menu!.Add(item);
+            _boostItems[mode] = item;
+        }
+        _menu.Add(_boostItem);
 
         _menu.Add(new NativeMenuItemSeparator());
 
@@ -98,11 +130,43 @@ public sealed class TrayIconHost : IDisposable
     /// <summary>The quick-mode rows, in the order they appear.</summary>
     public IReadOnlyDictionary<OperatingMode, NativeMenuItem> ModeItems => _modeItems;
 
-    /// <summary>Marks the mode the machine is actually in. Called when the menu opens.</summary>
+    /// <summary>The CPU-boost rows, in the order they appear.</summary>
+    public IReadOnlyDictionary<CpuBoostMode, NativeMenuItem> BoostItems => _boostItems;
+
+    /// <summary>The "try the desktop settings again" row.</summary>
+    public NativeMenuItem RetryItem => _retryItem;
+
+    /// <summary>
+    /// Marks the mode the machine is actually in, hides the modes the firmware does not advertise, and disables the
+    /// ones the battery rule forbids. Called when the menu opens.
+    /// </summary>
     public void SyncCheckedState()
     {
         var active = _viewModel.SelectedMode?.Mode;
-        foreach (var (mode, item) in _modeItems) item.IsChecked = mode == active;
+
+        foreach (var (mode, item) in _modeItems)
+        {
+            item.IsChecked = mode == active;
+
+            // A mode the machine is in stays visible even when its group is hidden: a menu with no marked row would
+            // leave the user guessing which mode the machine is running.
+            item.IsVisible = TrayMenuPolicy.ShowMode(_viewModel.IsModeSupported(mode), mode, active);
+
+            var allowed = _viewModel.IsModeAllowed(mode);
+            item.IsEnabled = TrayMenuPolicy.EnableMode(allowed);
+            item.ToolTip = TrayMenuPolicy.ModeToolTip(allowed);
+        }
+
+        var boostAvailable = _viewModel.CpuBoostAvailable;
+        _boostItem.IsVisible = TrayMenuPolicy.ShowBoost(boostAvailable);
+        _boostItem.IsEnabled = TrayMenuPolicy.ShowBoost(boostAvailable);
+
+        var currentBoost = _viewModel.SelectedCpuBoost?.Mode;
+        foreach (var (mode, item) in _boostItems) item.IsChecked = mode == currentBoost;
+
+        var pending = _viewModel.HasPendingDesktopRestore;
+        _retryItem.IsVisible = TrayMenuPolicy.ShowRetry(pending);
+        _retryItem.IsEnabled = TrayMenuPolicy.EnableRetry(pending, _viewModel.GameActive);
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -116,11 +180,14 @@ public sealed class TrayIconHost : IDisposable
     {
         var labels = _viewModel.Labels;
         _showItem.Header = labels.TrayShow;
+        _retryItem.Header = labels.TrayRetryDesktop;
         _quickModeItem.Header = labels.TrayQuickMode;
+        _boostItem.Header = labels.TrayCpuBoost;
         _exitItem.Header = labels.TrayCleanExit;
         Icon.ToolTipText = labels.AppTitle;
 
         foreach (var (mode, item) in _modeItems) item.Header = _viewModel.QuickModeLabel(mode);
+        foreach (var (mode, item) in _boostItems) item.Header = ModePolicy.BoostDisplayName(mode);
     }
 
     /// <summary>

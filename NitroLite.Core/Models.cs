@@ -342,6 +342,14 @@ public class AppSettings
     public bool AutoGameModeEnabled { get; set; } = true;
 
     /// <summary>
+    /// The game session that was in effect when the app last wrote the settings file. A session that is still marked
+    /// active on the next launch means the process died while a game was running, and the mode and fan the game
+    /// overrode have to be put back.
+    /// </summary>
+    [JsonPropertyName("game_session_recovery")]
+    public GameSessionRecoveryState? GameSessionRecovery { get; set; }
+
+    /// <summary>
     /// The game rules automatic switching matches against: one entry per title, keyed by executable name.
     /// </summary>
     /// <remarks>

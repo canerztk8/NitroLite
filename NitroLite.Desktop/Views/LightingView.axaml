@@ -198,11 +198,6 @@
             </StackPanel>
           </Grid>
 
-          <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
-                      IsVisible="{Binding BacklightTimeoutAvailable}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center" />
-            <TextBlock Classes="hint" Text="{Binding Labels.BacklightTimeout}" Margin="8,0,0,0" />
-          </StackPanel>
         </StackPanel>
       </Border>
 
@@ -220,9 +215,16 @@
             <TextBlock Classes="hint" Text="{Binding Labels.CoolBoost}" Margin="8,0,0,0" />
           </StackPanel>
 
-          <StackPanel Orientation="Horizontal" IsVisible="{Binding LcdOverdriveAvailable}">
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding LcdOverdriveAvailable}">
             <ToggleButton Classes="toggle" IsChecked="{Binding LcdOverdriveOn}" VerticalAlignment="Center" />
             <TextBlock Classes="hint" Text="{Binding Labels.LcdOverdrive}" Margin="8,0,0,0" />
+          </StackPanel>
+
+          <!-- The backlight timeout is an optional hardware switch too, so it lives with the others. Keeping it in
+               the effects card left this card titled but empty on a machine whose only extra is the timeout. -->
+          <StackPanel Orientation="Horizontal" IsVisible="{Binding BacklightTimeoutAvailable}">
+            <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center" />
+            <TextBlock Classes="hint" Text="{Binding Labels.BacklightTimeout}" Margin="8,0,0,0" />
           </StackPanel>
 
           <!-- Nothing to switch: one line instead of an empty grey box. -->

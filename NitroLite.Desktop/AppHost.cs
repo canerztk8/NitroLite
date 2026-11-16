@@ -15,6 +15,28 @@ using NitroLite.Linux.Sysfs;
 namespace NitroLite.Desktop;
 
 /// <summary>
+/// Everything the platform supplies, built once and shared by the window and the one-shot commands.
+/// </summary>
+/// <remarks>
+/// A record rather than a tuple because the list is long enough that positional access stopped being readable, and
+/// because the headless commands need the same pieces the window does without a view model or a theme applier.
+/// </remarks>
+public sealed record PlatformServices(
+    AppSettings Settings,
+    string SettingsPath,
+    IHardwareController? Hardware,
+    IPlatformSnapshot? Platform,
+    IRescannableBackend? Rescan,
+    IAutoStartService? AutoStart,
+    GameProfileService? GameProfiles,
+    SchoolModeService? SchoolMode,
+    RefreshRateAutomation? RefreshRate,
+    Func<(bool OnAc, int? BatteryPercent)>? PowerState,
+    ICpuBoostAccess? CpuBoost,
+    IGameLibraryScanner? GameLibrary,
+    IMouseProfileService? MouseProfiles);
+
+/// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
 /// </summary>
 /// <remarks>
@@ -27,8 +49,9 @@ namespace NitroLite.Desktop;
 /// </para>
 /// <para>
 /// It is also the only place that decides which platform services exist. Game detection gets the platform's process
-/// scanner, school mode gets the platform's brightness and boost backends, and both get the same settings object the
-/// rest of the app uses — so a capability the probe found and a capability the service writes can never disagree.
+/// scanner, school mode gets the platform's brightness and boost backends, the Game Profiles page gets the platform's
+/// library scanner, and all of them get the same settings object the rest of the app uses — so a capability the probe
+/// found and a capability the service writes can never disagree.
 /// </para>
 /// <para>
 /// Nothing here writes to the hardware. The probe only reads, and the controller is created with the settings object
@@ -39,30 +62,38 @@ public sealed class AppHost : IDisposable
 {
     private readonly IHardwareController? _hardware;
 
-    private AppHost(
-        AppSettings settings,
-        IHardwareController? hardware,
-        IPlatformSnapshot? platform,
-        IRescannableBackend? rescan,
-        IAutoStartService? autoStart,
-        string settingsPath,
-        GameProfileService? gameProfiles,
-        SchoolModeService? schoolMode,
-        RgbProfileService rgbProfiles,
-        RefreshRateAutomation? refreshRate,
-        Func<(bool OnAc, int? BatteryPercent)>? powerState,
-        ICpuBoostAccess? cpuBoost)
+    private AppHost(PlatformServices services, IDialogService? dialogs)
     {
-        _hardware = hardware;
+        _hardware = services.Hardware;
         ViewModel = new MainViewModel(
-            settings, hardware, platform, settingsPath, gameProfiles, schoolMode, rgbProfiles,
-            DesktopThemeManager.Instance, rescan, autoStart, refreshRate, powerState, cpuBoost);
+            services.Settings,
+            services.Hardware,
+            services.Platform,
+            services.SettingsPath,
+            services.GameProfiles,
+            services.SchoolMode,
+            new RgbProfileService(),
+            DesktopThemeManager.Instance,
+            services.Rescan,
+            services.AutoStart,
+            services.RefreshRate,
+            services.PowerState,
+            services.CpuBoost,
+            services.GameLibrary,
+            services.MouseProfiles,
+            dialogs);
     }
 
     public MainViewModel ViewModel { get; }
 
     /// <summary>Builds everything. Never throws: a machine with no Acer support gets a window that explains it.</summary>
-    public static AppHost Create()
+    public static AppHost Create(IDialogService? dialogs = null) => new(CreateServices(), dialogs);
+
+    /// <summary>
+    /// Builds the platform half only. Used by the window and by the one-shot commands, so a <c>--cli</c> run talks to
+    /// exactly the backend the window would.
+    /// </summary>
+    public static PlatformServices CreateServices()
     {
         var settingsPath = AppPaths.GetDataFile("settings.json");
         var backupPath = settingsPath + ".bak";
@@ -92,6 +123,8 @@ public sealed class AppHost : IDisposable
         RefreshRateAutomation? refreshRate = null;
         Func<(bool OnAc, int? BatteryPercent)>? powerState = null;
         ICpuBoostAccess? cpuBoost = null;
+        IGameLibraryScanner? gameLibrary = null;
+        IMouseProfileService? mouseProfiles = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -104,6 +137,10 @@ public sealed class AppHost : IDisposable
                 // The same object school mode writes through, so the segmented control and the state machine can never
                 // disagree about which boost mode the scheme is holding.
                 cpuBoost = new CpuPowerService();
+
+                // The library scan reads the Steam registry and the Epic manifests; the mouse is a USB HID device.
+                gameLibrary = new WindowsGameLibraryScanner();
+                mouseProfiles = new AtkMouseProfileService();
             }
             catch (Exception ex)
             {
@@ -138,6 +175,11 @@ public sealed class AppHost : IDisposable
                     var (onAc, percent) = LinuxPowerSupply.Read(fs);
                     return (onAc ?? true, percent);
                 };
+
+                // The Steam roots under the home directory. The mouse protocol is a vendor HID report with no Linux
+                // backend yet, so the row stays hidden rather than offering four buttons that write nowhere.
+                gameLibrary = new LinuxGameLibraryScanner();
+                mouseProfiles = new NullMouseProfileService();
             }
             catch (Exception ex)
             {
@@ -147,9 +189,9 @@ public sealed class AppHost : IDisposable
         }
 #endif
 
-        return new AppHost(
-            settings, hardware, platform, rescan, autoStart, settingsPath, gameProfiles, schoolMode,
-            new RgbProfileService(), refreshRate, powerState, cpuBoost);
+        return new PlatformServices(
+            settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
+            refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles);
     }
 
 #if WINDOWS

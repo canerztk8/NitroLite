@@ -98,6 +98,40 @@ public sealed class FanModeChoice : ObservableObject
 }
 
 /// <summary>
+/// One entry in the mouse-profile picker: "leave it alone", then the device's own four configurations.
+/// </summary>
+/// <remarks>
+/// A class with its own command for the same reason <see cref="ModeChoice"/> is one: the FARE row's quick menu is an
+/// item template, and a compiled binding inside a template cannot reach the page's view model.
+/// </remarks>
+public sealed class MouseProfileOption : ObservableObject
+{
+    private bool _isSelected;
+
+    public MouseProfileOption(int index, string label, Action<MouseProfileOption>? select = null)
+    {
+        Index = index;
+        Label = label;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    /// <summary>0 for "leave it alone", 1 to 4 for the mouse's own configurations.</summary>
+    public int Index { get; }
+
+    public string Label { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
 /// One entry in the left rail. The rail is a list of these rather than a <c>TabControl</c> so the selected marker, the
 /// icon and the label are one control the view can paint, and so the live <c>SİSTEM</c> card can sit under the list
 /// without being a tab.
@@ -249,6 +283,7 @@ public sealed class GameProfileRow : ObservableObject
     {
         ExeName = profile.ExeName;
         DisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.ExeName : profile.DisplayName;
+        ExePath = profile.InstallPath;
         ModeLabel = modeLabel;
         FanLabel = fanLabel;
         DeleteLabel = deleteLabel;
@@ -258,6 +293,14 @@ public sealed class GameProfileRow : ObservableObject
     public string ExeName { get; }
 
     public string DisplayName { get; }
+
+    /// <summary>
+    /// Where the executable was found, or empty for a rule added by hand. Shown under the picker so a user can see
+    /// which copy of a game the rule points at when two installs share an executable name.
+    /// </summary>
+    public string ExePath { get; }
+
+    public bool HasExePath => !string.IsNullOrWhiteSpace(ExePath);
 
     /// <summary>The operating mode this game switches to, already translated.</summary>
     public string ModeLabel { get; }
@@ -289,6 +332,43 @@ public sealed record GpuModeChoice(GpuOperatingMode Mode, string Label)
 /// </summary>
 public sealed record ThemeChoice(AppTheme Theme, string Label)
 {
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// One ready-made fan curve, as the ŞABLON row offers it.
+/// </summary>
+/// <remarks>
+/// A class with its own command rather than a record, for the same reason <see cref="ModeChoice"/> is: a compiled
+/// binding inside an item template cannot reach the page's view model, so the click has to be carried on the item.
+/// </remarks>
+public sealed class CurvePresetChoice : ObservableObject
+{
+    private bool _isSelected;
+
+    public CurvePresetChoice(string id, string label, IReadOnlyList<FanCurvePoint> points, Action<CurvePresetChoice>? select = null)
+    {
+        Id = id;
+        Label = label;
+        Points = points;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    public string Id { get; }
+
+    public string Label { get; }
+
+    public IReadOnlyList<FanCurvePoint> Points { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    /// <summary>True when the anchors currently match this shape, which is what paints the button as chosen.</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
     public override string ToString() => Label;
 }
 
@@ -400,6 +480,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private readonly RgbProfileService _rgbProfiles;
 
+    /// <summary>
+    /// The installed-game library, or null when the caller did not wire one. Null disables the scan button rather than
+    /// offering a click that finds nothing.
+    /// </summary>
+    private readonly IGameLibraryScanner? _gameLibrary;
+
+    /// <summary>
+    /// The mouse's onboard profiles, or null when the caller did not wire one. Null hides the FARE row and the mouse
+    /// card, which is what a platform with no such device should do.
+    /// </summary>
+    private readonly IMouseProfileService? _mouseProfiles;
+
+    /// <summary>
+    /// The file picker and the confirmation, or null when the caller did not wire them (a test that does not need
+    /// them). Null makes the two commands that need a dialog report that they cannot run.
+    /// </summary>
+    private readonly IDialogService? _dialogs;
+
     /// <summary>The palette applier, or null when the caller did not wire one (a test that does not need it).</summary>
     private readonly IThemeApplier? _themeApplier;
 
@@ -486,6 +584,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private FanModeChoice? _newGameFanMode;
     private string _gameProfileStatus = "";
 
+    // The Game Profiles page: the library scan, the per-game targets, and the mouse.
+    private string _gameScanStatus = "";
+    private bool _gameScanRunning;
+    private ModeChoice? _selectedGameMode;
+    private CpuBoostChoice? _selectedGameCpuBoost;
+    private FanModeChoice? _selectedGameFanMode;
+    private MouseProfileOption? _selectedGameMouseProfile;
+    private bool _gameFanCurveEnabled;
+    private MouseProfileOption? _selectedMouseProfile;
+    private string _mouseProfileStatus = "";
+
+    // The fan-curve presets and the pending MUX mode.
+    private CurvePresetChoice? _selectedCurvePreset;
+    private GpuOperatingMode? _pendingGpuMode;
+
+    // The rail width and the toast's optional action.
+    private double _sidebarWidth;
+    private string _toastActionLabel = "";
+
     // The shell: which of the five pages is showing, and whether the 60-second band is drawn.
     private NavTab? _selectedTab;
     private bool _sparklineBandVisible = true;
@@ -522,7 +639,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IAutoStartService? autoStart = null,
         RefreshRateAutomation? refreshRate = null,
         Func<(bool OnAc, int? BatteryPercent)>? powerState = null,
-        ICpuBoostAccess? cpuBoost = null)
+        ICpuBoostAccess? cpuBoost = null,
+        IGameLibraryScanner? gameLibrary = null,
+        IMouseProfileService? mouseProfiles = null,
+        IDialogService? dialogs = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -538,15 +658,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _rgbProfiles = rgbProfiles ?? new RgbProfileService();
         _themeApplier = themeApplier;
         _cpuBoost = cpuBoost;
+        _gameLibrary = gameLibrary;
+        _mouseProfiles = mouseProfiles;
+        _dialogs = dialogs;
         _schoolModeOn = settings.SchoolModeEnabled;
         _fanProtectionOn = settings.FanFailureProtection;
+        _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);
+        _selectedMouseProfile = null;
 
         _curveEvaluator = new FanCurveEvaluator(settings.BuildFanCurve());
+
+        // A settings file written by an older build can carry a profile for a helper or a duplicate of a title that is
+        // already listed. Cleaning it here is the one place it is safe: the scan filters its own candidates, so running
+        // this afterwards would delete a profile the user added by hand.
+        if (GameLibraryRules.SanitizeProfiles(settings.GameProfiles) > 0)
+        {
+            AppLog.Info("Oyun profilleri temizlendi", "Yardımcı veya yinelenen kayıtlar kaldırıldı.");
+        }
 
         BuildCurveAnchors();
         BuildChoices();
         BuildThemeChoices();
         BuildGameProfileRows();
+        BuildCurvePresets();
+        BuildMouseProfileChoices();
+        BuildGameTargetChoices();
         RefreshRgbProfiles();
         BuildNavTabs();
         BuildFanSegments();
@@ -582,6 +718,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SaveRgbProfileCommand = new RelayCommand(SaveRgbProfile);
         DeleteRgbProfileCommand = new RelayCommand(DeleteRgbProfile);
         CopyHardwareReportCommand = new RelayCommand(CopyHardwareReport);
+        ScanGamesCommand = new AsyncCommand(ScanGamesAsync);
+        AddGameFromFileCommand = new AsyncCommand(AddGameFromFileAsync);
+        DeleteSelectedGameCommand = new AsyncCommand(DeleteSelectedGameAsync);
+        ApplyDefaultMouseProfileCommand = new AsyncCommand(ApplyDefaultMouseProfileAsync);
+        CopyDesktopCurveCommand = new RelayCommand(CopyDesktopCurveToGame);
+        ToastActionCommand = new RelayCommand(RunToastAction);
     }
 
     // ---------------------------------------------------------------- labels and status
@@ -833,6 +975,48 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _onAcPower, value)) return;
             Raise(nameof(BatteryStateText));
+
+            // Eco is a battery mode and Turbo/Performance are charger modes, so plugging the charger in changes which
+            // cards exist. Rebuilding here is what makes the rule live rather than a decision taken at launch.
+            RefreshModeVisibility();
+        }
+    }
+
+    /// <summary>
+    /// Reads the charger state and the battery figure from the platform. Called before the mode list is built and on
+    /// every telemetry tick, so the header and the mode cards can never disagree about whether the charger is in.
+    /// </summary>
+    private void ReadPowerState()
+    {
+        if (_powerState == null) return;
+
+        try
+        {
+            var (onAc, percent) = _powerState();
+            OnAcPower = onAc;
+            BatteryPercent = percent;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Pil yüzdesi okunamadı", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Re-filters the mode cards without writing the mode back. The machine is already in the mode it is in, and a
+    /// rebuild that applied it would fight the firmware every time the charger was plugged in.
+    /// </summary>
+    private void RefreshModeVisibility()
+    {
+        bool previous = _suppressWrite;
+        _suppressWrite = true;
+        try
+        {
+            BuildModeChoices();
+        }
+        finally
+        {
+            _suppressWrite = previous;
         }
     }
 
@@ -985,6 +1169,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var match = CpuBoostChoices.FirstOrDefault(c => c.Mode == current) ?? CpuBoostChoices[0];
         _selectedCpuBoost = match;
         foreach (var choice in CpuBoostChoices) choice.IsSelected = ReferenceEquals(choice, match);
+
+        // The rebuild replaced every instance, so the game form's target now points at an item the combo no longer
+        // holds and would render blank. Re-resolve it against the new list.
+        SyncGameTargets();
     }
 
     private void SelectCpuBoost(CpuBoostChoice choice) => SelectedCpuBoost = choice;
@@ -1718,7 +1906,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public GameProfileRow? SelectedGameProfile
     {
         get => _selectedGameProfile;
-        set => Set(ref _selectedGameProfile, value);
+        set
+        {
+            if (!Set(ref _selectedGameProfile, value)) return;
+            SyncGameTargets();
+        }
     }
 
     public string NewGameExe
@@ -1789,8 +1981,33 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (SelectedGameProfile == null || !GameProfiles.Contains(SelectedGameProfile))
             SelectedGameProfile = GameProfiles.FirstOrDefault();
 
+        // The per-game controls follow the selection, so the card never shows one game's mode beside another's name.
+        SyncGameTargets();
+
         Raise(nameof(HasGameProfiles));
         Raise(nameof(HasNoGameProfiles));
+    }
+
+    /// <summary>
+    /// The per-game target lists. They are copies of the mode, boost and fan lists rather than the same objects: a
+    /// card in the game form picks a target, it does not apply one, so it must not share the selection state the
+    /// machine's own controls paint.
+    /// </summary>
+    private void BuildGameTargetChoices()
+    {
+        GameModeChoices.Clear();
+        foreach (var card in Modes)
+        {
+            GameModeChoices.Add(new ModeChoice(card.Mode, card.Label, card.Description, card.Icon));
+        }
+
+        GameFanChoices.Clear();
+        foreach (var card in FanModes)
+        {
+            GameFanChoices.Add(new FanModeChoice(card.Mode, card.Label, card.Description, card.Icon));
+        }
+
+        SyncGameTargets();
     }
 
     private void AddGameProfile()
@@ -1845,6 +2062,711 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         FanMode.Custom => Loc.T("Özel eğri"),
         _ => mode.ToString()
     };
+
+    // ---------------------------------------------------------------- game library
+
+    /// <summary>True when this platform can scan for installed games.</summary>
+    public bool GameScanAvailable => _gameLibrary != null;
+
+    /// <summary>True while a scan is running, which disables the button and swaps its caption.</summary>
+    public bool GameScanRunning
+    {
+        get => _gameScanRunning;
+        private set
+        {
+            if (!Set(ref _gameScanRunning, value)) return;
+            Raise(nameof(GameScanButtonText));
+        }
+    }
+
+    /// <summary>The scan button's caption: "Yüklü Oyunları Tara", or "Taranıyor…" while it runs.</summary>
+    public string GameScanButtonText => GameScanRunning ? Labels.ScanningGames : Labels.ScanGames;
+
+    /// <summary>What the last scan found, or why it found nothing.</summary>
+    public string GameScanStatus
+    {
+        get => _gameScanStatus;
+        private set
+        {
+            if (!Set(ref _gameScanStatus, value)) return;
+            Raise(nameof(HasGameScanStatus));
+        }
+    }
+
+    public bool HasGameScanStatus => !string.IsNullOrWhiteSpace(_gameScanStatus);
+
+    public AsyncCommand ScanGamesCommand { get; }
+
+    /// <summary>Opens the file picker and adds the chosen executable as a game rule.</summary>
+    public AsyncCommand AddGameFromFileCommand { get; }
+
+    /// <summary>Deletes the selected rule after a confirmation.</summary>
+    public AsyncCommand DeleteSelectedGameCommand { get; }
+
+    /// <summary>
+    /// Scans the installed libraries and adds a rule for every game that does not have one yet.
+    /// </summary>
+    /// <remarks>
+    /// The scan does not run <see cref="GameLibraryRules.SanitizeProfiles"/> afterwards: the candidates are already
+    /// filtered, and a sanitise pass would delete a rule the user added by hand for a game whose name happens to
+    /// contain "server" or "console".
+    /// </remarks>
+    public async Task ScanGamesAsync()
+    {
+        if (_gameLibrary == null || GameScanRunning) return;
+
+        GameScanRunning = true;
+        GameScanStatus = "";
+
+        try
+        {
+            var found = await Task.Run(() => _gameLibrary.ScanInstalledGames()).ConfigureAwait(true);
+
+            int added = 0;
+            foreach (var game in found)
+            {
+                if (string.IsNullOrWhiteSpace(game.ExeName)) continue;
+
+                bool exists = _settings.GameProfiles.Any(p => p != null &&
+                    (p.ExeName.Equals(game.ExeName, StringComparison.OrdinalIgnoreCase) ||
+                     p.DisplayName.Equals(game.DisplayName, StringComparison.OrdinalIgnoreCase)));
+                if (exists) continue;
+
+                _settings.GameProfiles.Add(new GameProfile
+                {
+                    ExeName = game.ExeName,
+                    DisplayName = game.DisplayName,
+                    TargetMode = OperatingMode.Turbo,
+                    TargetCpuBoost = _gameLibrary.DetermineOptimalCpuBoost(game.ExeName),
+                    TargetFanMode = FanMode.Auto,
+                    InstallPath = game.InstallPath,
+                    AutoApply = true
+                });
+                added++;
+            }
+
+            if (added > 0)
+            {
+                SaveSettings();
+                BuildGameProfileRows();
+            }
+
+            GameScanStatus = added > 0 ? Labels.GamesScanned(added) : Labels.NoNewGames;
+            Status = GameScanStatus;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Oyun kitaplığı taranamadı", ex.ToString());
+            GameScanStatus = Labels.GameScanFailed;
+        }
+        finally
+        {
+            GameScanRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Asks for an executable and adds it as a rule. The file is validated first, so a system binary or a launcher
+    /// stub is refused with the reason rather than becoming a rule that pins the machine to Turbo.
+    /// </summary>
+    public async Task AddGameFromFileAsync()
+    {
+        if (_gameLibrary == null || _dialogs == null)
+        {
+            GameProfileStatus = Labels.GameScanUnavailable;
+            return;
+        }
+
+        var path = await _dialogs.PickExecutableAsync(DefaultGamePickerDirectory()).ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        var error = _gameLibrary.ValidateCustomExecutable(path);
+        if (error != null)
+        {
+            GameProfileStatus = error;
+            Status = error;
+            return;
+        }
+
+        var exeName = Path.GetFileNameWithoutExtension(path);
+        var existing = _settings.GameProfiles.FirstOrDefault(p =>
+            p != null && p.ExeName.Equals(exeName, StringComparison.OrdinalIgnoreCase));
+
+        if (existing != null)
+        {
+            // The rule is kept as the user configured it; only the path is refreshed, because the game may have moved.
+            existing.InstallPath = path;
+            SaveSettings();
+            BuildGameProfileRows();
+            GameProfileStatus = Labels.GameAlreadyDefined;
+            return;
+        }
+
+        var profile = new GameProfile
+        {
+            ExeName = exeName,
+            DisplayName = exeName.Replace('_', ' ').Replace('-', ' '),
+            TargetMode = OperatingMode.Turbo,
+            TargetCpuBoost = _gameLibrary.DetermineOptimalCpuBoost(exeName),
+            TargetFanMode = FanMode.Auto,
+            InstallPath = path,
+            AutoApply = true
+        };
+
+        _settings.GameProfiles.Add(profile);
+        SaveSettings();
+        BuildGameProfileRows();
+        SelectedGameProfile = GameProfiles.FirstOrDefault(r =>
+            r.ExeName.Equals(exeName, StringComparison.OrdinalIgnoreCase)) ?? SelectedGameProfile;
+
+        GameProfileStatus = Labels.GameAdded(profile.DisplayName);
+        Status = GameProfileStatus;
+    }
+
+    /// <summary>
+    /// Deletes the selected rule. A confirmation is required because the rule carries the mode, the boost and the fan
+    /// curve the user configured for that game, and there is no undo.
+    /// </summary>
+    public async Task DeleteSelectedGameAsync()
+    {
+        if (SelectedGameProfile is not GameProfileRow row) return;
+
+        if (_dialogs != null)
+        {
+            bool confirmed = await _dialogs
+                .ConfirmAsync(Labels.DeleteProfileTitle, Labels.DeleteProfileConfirm(row.DisplayName))
+                .ConfigureAwait(true);
+            if (!confirmed) return;
+        }
+
+        DeleteGameProfile(row);
+    }
+
+    /// <summary>Where the picker opens: the Steam library when there is one, so the common case is one click.</summary>
+    private static string? DefaultGamePickerDirectory()
+    {
+        foreach (var candidate in new[]
+                 {
+                     @"C:\Program Files (x86)\Steam\steamapps\common",
+                     @"C:\Program Files\Steam\steamapps\common"
+                 })
+        {
+            if (Directory.Exists(candidate)) return candidate;
+        }
+
+        return null;
+    }
+
+    // ---------------------------------------------------------------- per-game targets
+
+    /// <summary>The mode the selected game switches to.</summary>
+    public ModeChoice? SelectedGameMode
+    {
+        get => _selectedGameMode;
+        set
+        {
+            // The combo pushes null while it initialises; that must not clear the target the user configured.
+            if (value == null) return;
+            if (!Set(ref _selectedGameMode, value)) return;
+            if (SelectedGameProfile is not GameProfileRow row) return;
+            if (FindProfile(row) is not GameProfile profile) return;
+
+            profile.TargetMode = value.Mode;
+            SaveSettings();
+            BuildGameProfileRows();
+        }
+    }
+
+    /// <summary>The boost behaviour the selected game switches to.</summary>
+    public CpuBoostChoice? SelectedGameCpuBoost
+    {
+        get => _selectedGameCpuBoost;
+        set
+        {
+            if (value == null) return;
+            if (!Set(ref _selectedGameCpuBoost, value)) return;
+            if (SelectedGameProfile is not GameProfileRow row) return;
+            if (FindProfile(row) is not GameProfile profile) return;
+
+            profile.TargetCpuBoost = value.Mode;
+            SaveSettings();
+        }
+    }
+
+    /// <summary>The fan behaviour the selected game switches to.</summary>
+    public FanModeChoice? SelectedGameFanMode
+    {
+        get => _selectedGameFanMode;
+        set
+        {
+            if (value == null) return;
+            if (!Set(ref _selectedGameFanMode, value)) return;
+            if (SelectedGameProfile is not GameProfileRow row) return;
+            if (FindProfile(row) is not GameProfile profile) return;
+
+            profile.TargetFanMode = value.Mode;
+            SaveSettings();
+            BuildGameProfileRows();
+        }
+    }
+
+    /// <summary>The mouse profile the selected game switches to. 0 means "leave it alone".</summary>
+    public MouseProfileOption? SelectedGameMouseProfile
+    {
+        get => _selectedGameMouseProfile;
+        set
+        {
+            if (value == null) return;
+            if (!Set(ref _selectedGameMouseProfile, value)) return;
+            if (SelectedGameProfile is not GameProfileRow row) return;
+            if (FindProfile(row) is not GameProfile profile) return;
+
+            profile.TargetAtkMouseProfile = value.Index;
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// True when the selected game runs its own fan curve for the length of its session instead of a fixed fan mode.
+    /// </summary>
+    public bool GameFanCurveEnabled
+    {
+        get => _gameFanCurveEnabled;
+        set
+        {
+            if (!Set(ref _gameFanCurveEnabled, value)) return;
+            if (SelectedGameProfile is not GameProfileRow row) return;
+            if (FindProfile(row) is not GameProfile profile) return;
+
+            profile.TargetFanCurveEnabled = value;
+            SaveSettings();
+            BuildGameProfileRows();
+        }
+    }
+
+    /// <summary>Copies the desktop curve onto the selected game, so a game curve starts from a shape the user knows.</summary>
+    public RelayCommand CopyDesktopCurveCommand { get; }
+
+    private void CopyDesktopCurveToGame()
+    {
+        if (SelectedGameProfile is not GameProfileRow row) return;
+        if (FindProfile(row) is not GameProfile profile) return;
+
+        profile.TargetFanCurvePoints = FanCurve.Sanitize(_settings.FanCurvePoints);
+        profile.TargetFanCurveEnabled = true;
+        SaveSettings();
+        BuildGameProfileRows();
+        GameProfileStatus = Labels.GameCurveCopied(row.DisplayName);
+    }
+
+    /// <summary>The rule behind a row, matched on the executable name the row carries.</summary>
+    private GameProfile? FindProfile(GameProfileRow row) =>
+        _settings.GameProfiles.FirstOrDefault(p =>
+            p != null && p.ExeName.Equals(row.ExeName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Fills the per-game controls from the selected rule.</summary>
+    private void SyncGameTargets()
+    {
+        var profile = SelectedGameProfile is GameProfileRow row ? FindProfile(row) : null;
+
+        bool previous = _suppressWrite;
+        _suppressWrite = true;
+        try
+        {
+            _selectedGameMode = profile == null
+                ? null
+                : GameModeChoices.FirstOrDefault(m => m.Mode == profile.TargetMode);
+            _selectedGameCpuBoost = profile == null
+                ? null
+                : CpuBoostChoices.FirstOrDefault(c => c.Mode == profile.TargetCpuBoost);
+            _newGameFanMode = profile == null
+                ? _newGameFanMode
+                : GameFanChoices.FirstOrDefault(f => f.Mode == profile.TargetFanMode) ?? _newGameFanMode;
+            _selectedGameFanMode = profile == null
+                ? null
+                : GameFanChoices.FirstOrDefault(f => f.Mode == profile.TargetFanMode);
+            _selectedGameMouseProfile = profile == null
+                ? null
+                : MouseProfileOptions.FirstOrDefault(m => m.Index == profile.TargetAtkMouseProfile);
+            _gameFanCurveEnabled = profile?.TargetFanCurveEnabled ?? false;
+        }
+        finally
+        {
+            _suppressWrite = previous;
+        }
+
+        Raise(nameof(SelectedGameMode));
+        Raise(nameof(SelectedGameCpuBoost));
+        Raise(nameof(SelectedGameFanMode));
+        Raise(nameof(SelectedGameMouseProfile));
+        Raise(nameof(GameFanCurveEnabled));
+    }
+
+    // ---------------------------------------------------------------- mouse profiles
+
+    /// <summary>The five mouse choices: leave it alone, then the device's own four configurations.</summary>
+    public ObservableCollection<MouseProfileOption> MouseProfileOptions { get; } = new();
+
+    /// <summary>True when a supported mouse answered, which is what shows the FARE row and the mouse card.</summary>
+    public bool MouseProfileAvailable => _mouseProfiles?.IsSupported == true;
+
+    /// <summary>The profile the mouse is in, or 0 when it has not said.</summary>
+    public int CurrentMouseProfile => _mouseProfiles?.CurrentProfile ?? 0;
+
+    /// <summary>The default profile applied at launch and by the card's Uygula button.</summary>
+    public MouseProfileOption? SelectedMouseProfile
+    {
+        get => _selectedMouseProfile;
+        set
+        {
+            if (!Set(ref _selectedMouseProfile, value) || value == null) return;
+            foreach (var option in MouseProfileOptions) option.IsSelected = ReferenceEquals(option, value);
+            _settings.DefaultAtkMouseProfile = value.Index;
+            SaveSettings();
+        }
+    }
+
+    /// <summary>What the last mouse write did, or why it could not.</summary>
+    public string MouseProfileStatus
+    {
+        get => _mouseProfileStatus;
+        private set
+        {
+            if (!Set(ref _mouseProfileStatus, value)) return;
+            Raise(nameof(HasMouseProfileStatus));
+        }
+    }
+
+    public bool HasMouseProfileStatus => !string.IsNullOrWhiteSpace(_mouseProfileStatus);
+
+    /// <summary>The FARE row's figure: the active configuration, or an em dash when the mouse has not answered.</summary>
+    public string SystemMouseText
+    {
+        get
+        {
+            if (!MouseProfileAvailable) return "—";
+            var current = CurrentMouseProfile;
+            return current <= 0 ? "—" : $"Config {current}";
+        }
+    }
+
+    /// <summary>True when the rail draws the FARE row at all.</summary>
+    public bool ShowSystemMouseRow => MouseProfileAvailable;
+
+    public AsyncCommand ApplyDefaultMouseProfileCommand { get; }
+
+    private void BuildMouseProfileChoices()
+    {
+        MouseProfileOptions.Clear();
+        MouseProfileOptions.Add(new MouseProfileOption(0, Labels.MousePassive, SelectMouseProfile));
+        for (int i = 1; i <= 4; i++) MouseProfileOptions.Add(new MouseProfileOption(i, $"Config {i}", SelectMouseProfile));
+
+        _selectedMouseProfile = MouseProfileOptions.FirstOrDefault(m => m.Index == _settings.DefaultAtkMouseProfile)
+                                ?? MouseProfileOptions[0];
+        foreach (var option in MouseProfileOptions) option.IsSelected = ReferenceEquals(option, _selectedMouseProfile);
+    }
+
+    /// <summary>A click in the FARE quick menu: the choice is stored and applied in one step.</summary>
+    private void SelectMouseProfile(MouseProfileOption option)
+    {
+        SelectedMouseProfile = option;
+        _ = ApplyDefaultMouseProfileAsync();
+    }
+
+    /// <summary>Applies the chosen default profile to the mouse and reports what happened.</summary>
+    private async Task ApplyDefaultMouseProfileAsync()
+    {
+        if (_mouseProfiles == null || SelectedMouseProfile is not MouseProfileOption choice) return;
+
+        if (choice.Index <= 0)
+        {
+            MouseProfileStatus = Labels.MousePassiveApplied;
+            return;
+        }
+
+        bool ok = await _mouseProfiles.ApplyProfileAsync(choice.Index).ConfigureAwait(true);
+        MouseProfileStatus = ok ? Labels.MouseProfileApplied(choice.Index) : Labels.MouseProfileFailed;
+        Status = MouseProfileStatus;
+        Raise(nameof(SystemMouseText));
+        Raise(nameof(CurrentMouseProfile));
+    }
+
+    /// <summary>Asks the mouse which profile it is in, so the rail shows the real one rather than the stored default.</summary>
+    private async Task RefreshMouseProfileAsync()
+    {
+        if (_mouseProfiles == null) return;
+
+        try
+        {
+            var current = await _mouseProfiles.QueryCurrentProfileAsync().ConfigureAwait(true);
+            if (current is int profile && profile > 0)
+            {
+                MouseProfileStatus = Labels.MouseProfileApplied(profile);
+            }
+
+            Raise(nameof(MouseProfileAvailable));
+            Raise(nameof(ShowSystemMouseRow));
+            Raise(nameof(SystemMouseText));
+            Raise(nameof(CurrentMouseProfile));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fare profili okunamadı", ex.Message);
+        }
+    }
+
+    // ---------------------------------------------------------------- fan curve presets
+
+    /// <summary>The three ready-made shapes offered above the curve editor.</summary>
+    public ObservableCollection<CurvePresetChoice> CurvePresets { get; } = new();
+
+    /// <summary>
+    /// The preset the current anchors are, or null when the curve is the user's own. Setting it writes the shape into
+    /// the anchors; the preset id is never stored, because the shape is the state.
+    /// </summary>
+    public CurvePresetChoice? SelectedCurvePreset
+    {
+        get => _selectedCurvePreset;
+        set
+        {
+            if (!Set(ref _selectedCurvePreset, value) || value == null) return;
+            ApplyPresetPoints(value);
+        }
+    }
+
+    private void BuildCurvePresets()
+    {
+        CurvePresets.Clear();
+        foreach (var preset in FanCurvePresets.All)
+        {
+            CurvePresets.Add(new CurvePresetChoice(
+                preset.Id, Loc.T(preset.NameKey), preset.ToPoints(), ApplyCurvePreset));
+        }
+
+        SyncCurvePreset();
+    }
+
+    /// <summary>Paints the preset the anchors currently match, or clears the selection when they are the user's own.</summary>
+    private void SyncCurvePreset()
+    {
+        var match = FanCurvePresets.Match(CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
+        var choice = match == null ? null : CurvePresets.FirstOrDefault(p => p.Id == match.Id);
+
+        _selectedCurvePreset = choice;
+        foreach (var preset in CurvePresets) preset.IsSelected = ReferenceEquals(preset, choice);
+        Raise(nameof(SelectedCurvePreset));
+    }
+
+    private void ApplyCurvePreset(CurvePresetChoice preset) => ApplyPresetPoints(preset);
+
+    /// <summary>Writes a preset's six values into the anchors, which is exactly what moving the sliders does.</summary>
+    private void ApplyPresetPoints(CurvePresetChoice preset)
+    {
+        foreach (var point in preset.Points)
+        {
+            var anchor = CurveAnchors.FirstOrDefault(a => a.TemperatureC == point.TemperatureC);
+            if (anchor != null) anchor.Percent = point.Percent;
+        }
+
+        _selectedCurvePreset = preset;
+        foreach (var choice in CurvePresets) choice.IsSelected = ReferenceEquals(choice, preset);
+        Raise(nameof(SelectedCurvePreset));
+        Raise(nameof(CurvePreview));
+        Raise(nameof(CurvePoints));
+    }
+
+    // ---------------------------------------------------------------- pending MUX mode
+
+    /// <summary>
+    /// The GPU mode that was written but needs a restart to take effect, or null when nothing is pending.
+    /// </summary>
+    public GpuOperatingMode? PendingGpuMode
+    {
+        get => _pendingGpuMode;
+        private set
+        {
+            if (!Set(ref _pendingGpuMode, value)) return;
+            Raise(nameof(ShowPendingGpuModeBadge));
+            Raise(nameof(GpuModeNote));
+            Raise(nameof(HasGpuModeNote));
+        }
+    }
+
+    /// <summary>True when the card shows the "restart to apply" badge.</summary>
+    public bool ShowPendingGpuModeBadge => _pendingGpuMode != null;
+
+    /// <summary>The sentence under the MUX row: the reboot warning, or nothing when no switch is pending.</summary>
+    public string GpuModeNote => _pendingGpuMode switch
+    {
+        GpuOperatingMode.DiscreteGpu => Labels.GpuPendingDiscrete,
+        GpuOperatingMode.Optimus => Labels.GpuPendingHybrid,
+        _ => ""
+    };
+
+    public bool HasGpuModeNote => !string.IsNullOrWhiteSpace(GpuModeNote);
+
+    // ---------------------------------------------------------------- desktop restore
+
+    /// <summary>
+    /// True when the app wrote a mode the firmware refused and the user can ask it to try again. The tray offers the
+    /// same retry, so a machine that came back from a suspend in the wrong mode can be fixed without the window.
+    /// </summary>
+    public bool HasPendingDesktopRestore => _pendingDesktopRestore;
+
+    private bool _pendingDesktopRestore;
+
+    /// <summary>Retries the write that failed. Clears the flag when it succeeds.</summary>
+    public async Task RetryDesktopRestoreAsync()
+    {
+        if (_hardware == null || SelectedMode is not ModeChoice card) return;
+
+        bool ok = await _hardware.SetOperatingModeAsync(card.Mode).ConfigureAwait(true);
+        _pendingDesktopRestore = !ok;
+        Raise(nameof(HasPendingDesktopRestore));
+
+        Status = ok ? Labels.DesktopRestoreDone : Labels.DesktopRestoreFailed;
+    }
+
+    // ---------------------------------------------------------------- rail width
+
+    /// <summary>
+    /// The rail's width in device-independent pixels. Persisted because it is a layout choice: someone who widened the
+    /// rail to read a long translated label wants it wide next time too.
+    /// </summary>
+    public double SidebarWidth
+    {
+        get => _sidebarWidth;
+        set
+        {
+            var clamped = AppSettings.ClampSidebarWidth(value);
+            if (!Set(ref _sidebarWidth, clamped)) return;
+
+            _settings.SidebarWidth = clamped;
+            SaveSettings();
+        }
+    }
+
+    // ---------------------------------------------------------------- window placement
+
+    /// <summary>The stored window placement, so the window can put itself back where it was.</summary>
+    public (double? Left, double? Top, double? Width, double? Height, bool Maximized) ReadWindowPlacement() =>
+        (_settings.WindowLeft, _settings.WindowTop, _settings.WindowWidth, _settings.WindowHeight,
+            _settings.WindowMaximized);
+
+    /// <summary>Writes the window placement to the settings file. Called when the window hides or closes.</summary>
+    public void SaveWindowPlacement(double left, double top, double width, double height, bool maximized)
+    {
+        _settings.WindowLeft = left;
+        _settings.WindowTop = top;
+        _settings.WindowWidth = width;
+        _settings.WindowHeight = height;
+        _settings.WindowMaximized = maximized;
+        SaveSettings();
+    }
+
+    // ---------------------------------------------------------------- toast action
+
+    /// <summary>The optional button on the toast, or empty when the message needs no action.</summary>
+    public string ToastActionLabel
+    {
+        get => _toastActionLabel;
+        private set
+        {
+            if (!Set(ref _toastActionLabel, value)) return;
+            Raise(nameof(HasToastAction));
+        }
+    }
+
+    public bool HasToastAction => !string.IsNullOrWhiteSpace(_toastActionLabel);
+
+    public RelayCommand ToastActionCommand { get; }
+
+    private Action? _toastAction;
+
+    /// <summary>Attaches an action to the message that is about to be shown.</summary>
+    private void SetToastAction(string label, Action action)
+    {
+        _toastAction = action;
+        ToastActionLabel = label;
+    }
+
+    private void RunToastAction()
+    {
+        var action = _toastAction;
+        _toastAction = null;
+        ToastActionLabel = "";
+        action?.Invoke();
+    }
+
+    /// <summary>
+    /// Puts back the state a crashed game session overrode.
+    /// </summary>
+    /// <remarks>
+    /// The record is written before the game's profile is applied and cleared when the session ends, so a record that
+    /// is still there on the next launch is the only evidence that the process died mid-session. Restoring it is what
+    /// stops a machine from booting into Turbo with no game running and no explanation.
+    /// </remarks>
+    private async Task RecoverGameSessionAsync()
+    {
+        var recovery = _settings.GameSessionRecovery;
+        if (recovery is not { IsActive: true }) return;
+
+        try
+        {
+            if (_hardware != null)
+            {
+                if (recovery.RestoreMode) await _hardware.SetOperatingModeAsync(recovery.SavedMode).ConfigureAwait(true);
+                if (recovery.RestoreFan) await _hardware.SetFanModeAsync(recovery.SavedFan).ConfigureAwait(true);
+            }
+
+            if (recovery.RestoreMode) _settings.LastOperatingMode = recovery.SavedMode;
+
+            if (recovery.SavedMouseProfile > 0 && _mouseProfiles != null)
+            {
+                await _mouseProfiles.ApplyProfileAsync(recovery.SavedMouseProfile).ConfigureAwait(true);
+            }
+
+            Status = Labels.GameSessionRecovered;
+            AppLog.Info("Yarım kalan oyun oturumu geri alındı", $"{recovery.SavedMode} · {recovery.SavedFan}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Oyun oturumu geri alınamadı", ex.Message);
+        }
+        finally
+        {
+            _settings.GameSessionRecovery = null;
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// Records the state a game session is about to override, so a crash mid-session can be undone on the next launch.
+    /// </summary>
+    private void BeginGameSessionRecovery(GameProfile profile)
+    {
+        _settings.GameSessionRecovery = new GameSessionRecoveryState
+        {
+            IsActive = true,
+            RestoreMode = true,
+            RestoreFan = true,
+            SavedMode = _settings.LastOperatingMode ?? OperatingMode.Default,
+            SavedFan = SelectedFanMode?.Mode ?? FanMode.Auto,
+            SavedMouseProfile = _mouseProfiles?.CurrentProfile ?? 0,
+            Timestamp = DateTime.UtcNow
+        };
+
+        SaveSettings();
+    }
+
+    /// <summary>Clears the recovery record once the session ended cleanly.</summary>
+    private void EndGameSessionRecovery()
+    {
+        if (_settings.GameSessionRecovery == null) return;
+
+        _settings.GameSessionRecovery = null;
+        SaveSettings();
+    }
 
     // ---------------------------------------------------------------- hardware report
 
@@ -2025,6 +2947,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task InitializeAsync()
     {
+        // The mode cards are filtered by the power source, so the source has to be read before the list is built: a
+        // window opened on battery would otherwise offer Turbo and hide Eco until the first telemetry tick.
+        ReadPowerState();
+        RefreshModeVisibility();
+
         // School mode's undo record is checked before anything else: a run that died between writing the record and
         // saving the setting leaves the machine at 60 % processor and a dim screen with nothing in the UI to say so.
         if (_schoolMode != null)
@@ -2047,6 +2974,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         // Read before the hardware guard: the sign-in entry is a Windows task, not a hardware capability, and a
         // machine with no Acer nodes still has one.
         await RefreshAutoStartAsync().ConfigureAwait(true);
+
+        // A game session that is still marked active means the process died while a game was running. The mode and
+        // fan the game overrode have to be put back, or the machine boots into Turbo with nothing on screen to say why.
+        await RecoverGameSessionAsync().ConfigureAwait(true);
+
+        // The mouse answers on its own schedule, so the rail's FARE row is filled in after the first read rather than
+        // blocking the window on a USB control transfer.
+        await RefreshMouseProfileAsync().ConfigureAwait(true);
 
         if (_hardware == null) return;
 
@@ -2140,16 +3075,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             // The header's battery figure comes from the same reader the policy uses, so the two can never disagree
             // about whether the charger is plugged in.
-            if (_powerState != null)
-            {
-                try
-                {
-                    var (onAc, percent) = _powerState();
-                    OnAcPower = onAc;
-                    BatteryPercent = percent;
-                }
-                catch (Exception ex) { AppLog.Warn("Pil yüzdesi okunamadı", ex.Message); }
-            }
+            ReadPowerState();
         }
         catch (Exception ex)
         {
@@ -2381,6 +3307,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (_hardware == null || SelectedGpuMode is not GpuModeChoice choice) return;
 
         await RunWriteAsync(() => _hardware.SetGpuModeAsync(choice.Mode), Labels.GpuMode).ConfigureAwait(true);
+
+        // A MUX switch is a firmware setting that only takes effect on the next boot, so the card has to say so
+        // rather than leaving the user to wonder why the GPU did not change.
+        PendingGpuMode = choice.Mode;
     }
 
     /// <summary>
@@ -2554,6 +3484,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _activeGameName = started.DisplayName;
             Raise(nameof(SystemGameText));
 
+            // The record is written before the controls follow, so a crash between here and the game's exit still
+            // leaves enough behind to undo the override on the next launch.
+            BeginGameSessionRecovery(started);
+
             // The service already wrote the mode and the fan; the controls follow so the window does not show the
             // user's old selection while the machine is in the game's.
             SyncControls(() =>
@@ -2575,6 +3509,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _gameStatus = Labels.GameEnded(ended.DisplayName);
             _activeGameName = "";
             Raise(nameof(SystemGameText));
+
+            // The session ended cleanly, so there is nothing left to recover on the next launch.
+            EndGameSessionRecovery();
 
             var snapshot = result.Snapshot;
             if (snapshot != null)
@@ -2647,6 +3584,45 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == mode) ?? SelectedMode);
         await ApplyModeAsync(mode).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Applies a boost mode from the tray. The same path the pills use, so the tray and the card can never disagree
+    /// about which boost mode the machine is holding.
+    /// </summary>
+    public async Task ApplyCpuBoostFromTrayAsync(CpuBoostMode mode)
+    {
+        if (_cpuBoost == null || !_cpuBoost.IsSupported) return;
+
+        SyncControls(() => SelectedCpuBoost = CpuBoostChoices.FirstOrDefault(c => c.Mode == mode) ?? SelectedCpuBoost);
+        await WriteCpuBoostAsync(mode).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Re-applies the stored keyboard lighting. Called when the window comes back from the tray, because the firmware
+    /// drops the lighting on some machines after a suspend and a keyboard that stayed dark reads as a broken app.
+    /// </summary>
+    public async Task ReassertKeyboardLightingAsync()
+    {
+        if (_hardware == null) return;
+
+        var last = _settings.LastActiveLighting ?? _settings.KeyboardLighting;
+        if (last == null) return;
+
+        try
+        {
+            await _hardware.SetLightingAsync(
+                last.Effect,
+                last.Brightness,
+                last.Speed,
+                last.Direction,
+                last.Color,
+                last.LEDs.ToArray()).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Klavye aydınlatması yeniden uygulanamadı", ex.Message);
+        }
     }
 
     /// <summary>
@@ -2818,10 +3794,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ? supported
             : new[] { OperatingMode.Quiet, OperatingMode.Default, OperatingMode.Extreme, OperatingMode.Turbo, OperatingMode.Eco };
 
+        // Eco is a battery choice and Turbo/Performance are an AC choice, so each group appears only where it can be
+        // used. The active mode always stays visible even when its group is hidden: a list with no marked card would
+        // leave the user guessing which mode the machine is running.
+        //
+        // The rule only applies when the platform can say which source is in use. An unknown source is not evidence
+        // that Eco is unavailable, and hiding a working card is worse than showing one that turns out to be a no-op.
+        var active = SelectedMode?.Mode ?? _settings.LastOperatingMode ?? OperatingMode.Default;
+        var (showHighPower, showEco) = OnAcPower is bool onAc
+            ? ModePolicy.VisibleModeGroups(onAc, active)
+            : (true, true);
+
         var previous = SelectedMode?.Mode;
         Modes.Clear();
         foreach (var mode in wanted)
         {
+            if (mode == OperatingMode.Eco && !showEco && mode != active) continue;
+            if (ModePolicy.IsHighPowerMode(mode) && !showHighPower && mode != active) continue;
+
             Modes.Add(new ModeChoice(mode, ModeLabel(mode), ModeHint(mode), ModeIcon(mode), SelectMode)
             {
                 ShortHint = ModeShortHint(mode),
@@ -2841,7 +3831,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         NewGameMode = GameModeChoices.FirstOrDefault(m => m.Mode == previousTarget) ?? GameModeChoices.FirstOrDefault();
+
+        // Same reason as the boost list: the game form's target must be re-resolved against the rebuilt instances.
+        SyncGameTargets();
     }
+
+    /// <summary>True when the firmware advertises <paramref name="mode"/>. An empty list means "not known", not "no".</summary>
+    public bool IsModeSupported(OperatingMode mode) =>
+        ModePolicy.IsModeSupported(_capabilities.SupportedOperatingModes, mode);
+
+    /// <summary>True when the battery rule allows <paramref name="mode"/> right now.</summary>
+    public bool IsModeAllowed(OperatingMode mode) =>
+        ModePolicy.IsModeAllowed(mode, OnAcPower ?? true, BatteryPercent);
 
     /// <summary>A card click. Goes through the setter so the write, the settings file and the accent all follow.</summary>
     private void SelectMode(ModeChoice card) => SelectedMode = card;
@@ -2920,6 +3921,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         Raise(nameof(CurvePreview));
         Raise(nameof(CurvePoints));
+
+        // Moving one anchor makes the curve the user's own, so the preset button stops claiming it. Without this the
+        // ŞABLON row would keep a shape highlighted that the anchors no longer are.
+        SyncCurvePreset();
     }
 
     private FanCurve CurrentCurve() =>

@@ -8,13 +8,25 @@ using NitroLite.Core.Hardware.Wmi;
 namespace NitroLite.Desktop;
 
 /// <summary>
-/// The entry point. Kept to the two lines Avalonia needs so the composition root stays in <see cref="AppHost"/>,
-/// where it can be read without knowing anything about the UI framework.
+/// The entry point. Kept to the decisions Avalonia needs before it starts so the composition root stays in
+/// <see cref="AppHost"/>, where it can be read without knowing anything about the UI framework.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The order of the checks below is the whole design. The WMI helper is decided first, because it is a second process
+/// of this same executable and the single-instance guard would classify it as a duplicate. The one-shot commands come
+/// next, because they must run while the window is already open. Only then does the guard run, and only then does
+/// Avalonia start.
+/// </para>
+/// <para>
+/// A second launch does not open a second window: it signals the running one and exits, which is what a user who
+/// double-clicked the shortcut twice expects.
+/// </para>
+/// </remarks>
 internal static class Program
 {
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
 #if WINDOWS
         // The elevated WMI helper is a second process of this same executable, started with Verb = "runas". It is
@@ -23,12 +35,41 @@ internal static class Program
         var mode = StartupMode.Parse(args);
         if (mode.IsWmiWorker)
         {
-            Environment.Exit(WmiWorkerHost.Run(mode));
-            return;
+            return WmiWorkerHost.Run(mode);
         }
 #endif
 
+        // The one-shot commands. Each of these talks to the hardware and exits without a window, so a script or a
+        // shortcut can repair a machine without a user in front of it.
+        if (CliTaskRunner.IsCliTask(args))
+        {
+            return RunCliTask(CliTaskRunner.ParseCommand(args));
+        }
+
+        if (args.Any(a => string.Equals(a, "--hardware-report", StringComparison.OrdinalIgnoreCase)))
+        {
+            return RunHardwareReport();
+        }
+
+        if (CliCommands.IsHardwareCommand(args))
+        {
+            return RunHardwareCommand(args);
+        }
+
+        // One NitroLite per desktop. A second launch brings the first one forward instead of opening a second window
+        // with a second telemetry loop and a second fan curve writing to the same fans.
+        using var guard = SingleInstanceGuard.Acquire();
+        if (!guard.IsFirstInstance)
+        {
+            SingleInstanceGuard.SignalExistingInstance();
+            return 0;
+        }
+
+        guard.Listen();
+        App.SingleInstance = guard;
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
     }
 
     /// <summary>Also used by the Avalonia designer, which is why it is public and parameterless.</summary>
@@ -37,4 +78,102 @@ internal static class Program
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();
+
+    /// <summary>
+    /// Runs one <c>--cli</c> command against the same backend the window would use, and returns its exit code.
+    /// </summary>
+    private static int RunCliTask(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            Console.Error.WriteLine($"--cli: {string.Join(", ", CliTaskRunner.Commands)}");
+            return 2;
+        }
+
+        try
+        {
+            var services = AppHost.CreateServices();
+            return CliTaskRunner.RunAsync(command, services.Hardware, services.Settings, services.AutoStart)
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("CLI komutu çalıştırılamadı", $"{command}: {ex}");
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// Prints the privacy-safe hardware report to standard output. The same text the settings page copies, so a bug
+    /// report and a support ticket carry the same facts.
+    /// </summary>
+    private static int RunHardwareReport()
+    {
+        try
+        {
+            var services = AppHost.CreateServices();
+            var report = services.Platform?.BuildHardwareReport();
+            if (string.IsNullOrWhiteSpace(report))
+            {
+                Console.Error.WriteLine(Loc.T("Donanım raporu bu makinede oluşturulamadı."));
+                return 1;
+            }
+
+            Console.Out.Write(report);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Donanım raporu yazdırılamadı", ex.ToString());
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// Runs <c>--mode</c>, <c>--fan</c> or <c>--profile</c>. These do not need the single-instance guard: a running
+    /// NitroLite sees the change on its next poll as an external change, the same path a change made in NitroSense
+    /// takes.
+    /// </summary>
+    private static int RunHardwareCommand(string[] args)
+    {
+        if (!CliCommands.TryParse(args, out var command, out var error))
+        {
+            Console.Error.WriteLine(error);
+            return 2;
+        }
+
+        try
+        {
+            var services = AppHost.CreateServices();
+            var hardware = services.Hardware;
+            if (hardware == null)
+            {
+                Console.Error.WriteLine(Loc.T("Donanım arka ucu yok."));
+                return 1;
+            }
+
+            hardware.EnsureConnectedAsync().GetAwaiter().GetResult();
+
+            bool ok = true;
+            if (command.Mode is OperatingMode mode)
+                ok &= hardware.SetOperatingModeAsync(mode).GetAwaiter().GetResult();
+
+            if (command.Fan is FanMode fan)
+            {
+                ok &= command.FanPercent is int percent
+                    ? hardware.SetFanModeAsync(fan, percent, percent).GetAwaiter().GetResult()
+                    : hardware.SetFanModeAsync(fan).GetAwaiter().GetResult();
+            }
+
+            if (command.MouseProfile is int profile && services.MouseProfiles != null)
+                ok &= services.MouseProfiles.ApplyProfileAsync(profile).GetAwaiter().GetResult();
+
+            return ok ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Donanım komutu çalıştırılamadı", ex.ToString());
+            return 1;
+        }
+    }
 }

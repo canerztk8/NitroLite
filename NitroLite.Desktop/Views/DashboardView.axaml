@@ -169,6 +169,25 @@
           <StackPanel Grid.Row="3" Margin="0,16,0,0" IsVisible="{Binding CurveEditorVisible}">
             <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,0,0,12" />
 
+            <!-- The ready-made shapes sit above the editor, as in the WPF card: a user who wants a sane curve
+                 should not have to drag five anchors to get one. -->
+            <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+              <TextBlock Classes="caps" Text="{Binding Labels.CurvePresetsCaption}" VerticalAlignment="Center" />
+              <ItemsControl Grid.Column="1" ItemsSource="{Binding CurvePresets}" Margin="10,0,0,0">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CurvePresetChoice">
+                    <Button Classes="segitem" Classes.selected="{Binding IsSelected}"
+                            Command="{Binding SelectCommand}" Content="{Binding Label}" Margin="0,0,6,0" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Grid>
+
             <Grid ColumnDefinitions="Auto,*,Auto">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Classes="caps" Text="{Binding Labels.FanCurve}" />
@@ -289,6 +308,18 @@
                       Command="{Binding ApplyGpuModeCommand}" />
             </StackPanel>
           </Grid>
+
+          <!-- A MUX write only takes effect after a reboot, so the card says so and keeps saying so until the
+               machine has restarted. A silent write would look like a switch that does nothing. -->
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsVisible="{Binding HasGpuModeNote}">
+            <Border Classes="badge" Background="{DynamicResource AccentSoftBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}" Margin="0,0,8,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.RebootRequired}"
+                         Foreground="{DynamicResource AccentBrush}" />
+            </Border>
+            <TextBlock Classes="hint" Text="{Binding GpuModeNote}" VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+          </StackPanel>
         </StackPanel>
       </Border>
 
@@ -297,7 +328,7 @@
       <Border Classes="card" IsVisible="{Binding AutoGameModeAvailable}">
         <StackPanel>
 
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,6">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal">
               <TextBlock Classes="cardicon" Text="&#xE7FC;" Foreground="{DynamicResource TextPrimaryBrush}" />
               <TextBlock Classes="section" Text="{Binding Labels.GameProfiles}" />
@@ -310,9 +341,37 @@
                        VerticalAlignment="Center" />
           </Grid>
 
-          <Grid ColumnDefinitions="320,*">
+          <!-- The default mouse profile: the configuration the mouse is put into at launch, before any game rule
+               has had a chance to override it. Hidden entirely on a machine with no ATK mouse. -->
+          <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding MouseProfileAvailable}" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Classes="caps" Text="{Binding Labels.DefaultMouseProfile}" />
+              <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.MouseProfilesHint}">
+                <TextBlock Text="?" />
+              </Border>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+              <ComboBox ItemsSource="{Binding MouseProfileOptions}" SelectedItem="{Binding SelectedMouseProfile}"
+                        MinWidth="150">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MouseProfileOption">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Classes="primary" Content="{Binding Labels.ApplyMode}" Margin="6,0,0,0"
+                      Command="{Binding ApplyDefaultMouseProfileCommand}" />
+            </StackPanel>
+          </Grid>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,0,0,10"
+                  IsVisible="{Binding MouseProfileAvailable}" />
+
+          <!-- Which rule the controls below are editing. The executable path is printed under the picker so two
+               installs that share an executable name can be told apart. -->
+          <Grid ColumnDefinitions="320,*" Margin="0,0,0,8">
             <StackPanel Grid.Column="0" Margin="0,0,16,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.QuickGame}" Margin="0,0,0,4" />
+              <TextBlock Classes="caps" Text="{Binding Labels.GameToConfigure}" Margin="0,0,0,4" />
               <ComboBox ItemsSource="{Binding GameProfiles}" SelectedItem="{Binding SelectedGameProfile}"
                         HorizontalAlignment="Stretch">
                 <ComboBox.ItemTemplate>
@@ -321,19 +380,102 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
+              <TextBlock Classes="hint" Text="{Binding SelectedGameProfile.ExePath}" Margin="0,4,0,0"
+                         IsVisible="{Binding SelectedGameProfile.HasExePath}"
+                         TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
                         VerticalAlignment="Bottom">
-              <Button Classes="primary" Content="{Binding Labels.AddGame}" Padding="12,7" FontSize="11"
-                      Margin="0,0,6,0" Command="{Binding AddGameProfileCommand}" />
+              <Button Classes="primary" Content="{Binding GameScanButtonText}" Padding="12,7" FontSize="11"
+                      Margin="0,0,6,0" Command="{Binding ScanGamesCommand}"
+                      IsVisible="{Binding GameScanAvailable}" />
+              <Button Classes="primary" Content="{Binding Labels.AddGameFromFile}" Padding="12,7" FontSize="11"
+                      Margin="0,0,6,0" Command="{Binding AddGameFromFileCommand}"
+                      IsVisible="{Binding GameScanAvailable}" />
               <Button Classes="primary" Content="{Binding Labels.DeleteProfile}" Padding="12,7" FontSize="11"
                       Foreground="{DynamicResource DangerBrush}"
-                      Command="{Binding SelectedGameProfile.DeleteCommand}" />
+                      Command="{Binding DeleteSelectedGameCommand}" />
             </StackPanel>
           </Grid>
 
-          <TextBlock Classes="hint" Text="{Binding Labels.AutoGameModeHint}" Margin="0,6,0,0" />
+          <!-- What the last scan or delete did. A scan that finds nothing has to say so, or the button reads as
+               broken. -->
+          <TextBlock Classes="hint" Text="{Binding GameScanStatus}" Margin="0,0,0,8"
+                     IsVisible="{Binding HasGameScanStatus}" TextWrapping="Wrap" />
+
+          <!-- The per-game targets. Each is one click, and each writes straight into the rule. -->
+          <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                  BorderThickness="1" CornerRadius="2" Padding="10,8"
+                  IsVisible="{Binding SelectedGameProfile, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel>
+
+              <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                <StackPanel Grid.Row="0" Grid.Column="0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.WorkingMode}" Margin="0,0,0,4" />
+                  <ComboBox ItemsSource="{Binding GameModeChoices}" SelectedItem="{Binding SelectedGameMode}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ModeChoice">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Grid.Row="0" Grid.Column="2">
+                  <TextBlock Classes="caps" Text="{Binding Labels.GameCpuBoost}" Margin="0,0,0,4" />
+                  <ComboBox ItemsSource="{Binding CpuBoostChoices}" SelectedItem="{Binding SelectedGameCpuBoost}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:CpuBoostChoice">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.FanProfile}" Margin="0,0,0,4" />
+                  <ComboBox ItemsSource="{Binding GameFanChoices}" SelectedItem="{Binding SelectedGameFanMode}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:FanModeChoice">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,8,0,0"
+                            IsVisible="{Binding MouseProfileAvailable}">
+                  <TextBlock Classes="caps" Text="{Binding Labels.MouseProfiles}" Margin="0,0,0,4" />
+                  <ComboBox ItemsSource="{Binding MouseProfileOptions}"
+                            SelectedItem="{Binding SelectedGameMouseProfile}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MouseProfileOption">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Grid>
+
+              <!-- A game can run its own curve for the length of its session. The editor is the desktop one, so a
+                   user who has tuned the machine already does not have to tune it twice. -->
+              <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <ToggleButton Classes="toggle" IsChecked="{Binding GameFanCurveEnabled}"
+                              VerticalAlignment="Center" />
+                <TextBlock Classes="hint" Text="{Binding Labels.GameFanCurve}" Margin="8,0,0,0"
+                           VerticalAlignment="Center" />
+                <Button Classes="primary" Content="{Binding Labels.CopyDesktopCurve}" Padding="10,4"
+                        FontSize="11" Margin="12,0,0,0" Command="{Binding CopyDesktopCurveCommand}"
+                        IsVisible="{Binding GameFanCurveEnabled}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.AutoGameModeHint}" Margin="0,8,0,0" />
         </StackPanel>
       </Border>
     </StackPanel>

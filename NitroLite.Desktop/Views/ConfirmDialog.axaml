@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NitroLite.Desktop.Views.ConfirmDialog"
+        Width="420"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        Background="Transparent">
+
+  <!--
+    The confirmation the WPF window got from MessageBox, drawn in the app's own palette instead of the system one. A
+    system dialog on a warm-cream window reads as a different program, and it cannot be themed at all.
+
+    The window is transparent and the card inside it carries the border, so the corner radius is real rather than a
+    rectangle with a rounded picture on it.
+  -->
+  <Border Background="{DynamicResource CardBrush}"
+          BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
+          CornerRadius="8" Padding="20,18,20,16" Margin="12">
+    <StackPanel>
+
+      <TextBlock x:Name="TitleText" FontSize="13.5" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+
+      <TextBlock x:Name="MessageText" FontSize="11.5" Margin="0,8,0,0"
+                 Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+        <Button x:Name="CancelButton" Classes="primary" Padding="16,7" FontSize="11"
+                Margin="0,0,8,0" Click="OnCancelClick" />
+        <Button x:Name="ConfirmButton" Classes="primary" Padding="16,7" FontSize="11"
+                Foreground="{DynamicResource DangerBrush}" Click="OnConfirmClick" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>
