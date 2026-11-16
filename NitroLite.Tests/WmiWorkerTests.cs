@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Text.Json.Nodes;
 using NitroLite.Core;
 using NitroLite.Core.Hardware.Wmi;
@@ -224,6 +225,24 @@ public class WmiWorkerTests
 
         Assert.True(response.Ok);
         Assert.Equal(1, session.Executor.PingCalls);
+    }
+
+    [Fact]
+    public async Task WorkerPipe_IsConnectableFromTheSameProcess()
+    {
+        // The worker is elevated and the window is not, so the pipe has to carry a Medium mandatory label: a plain
+        // CurrentUserOnly pipe is created High and refuses the very process that spawned the worker. This pins that
+        // the factory still produces a pipe both ends can use, whichever branch it took.
+        var pipeName = NewPipeName();
+        using var server = WorkerPipe.Create(pipeName);
+
+        var accept = server.WaitForConnectionAsync();
+        using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await client.ConnectAsync(5000);
+        await accept.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(server.IsConnected);
+        Assert.True(client.IsConnected);
     }
 
     [Fact]

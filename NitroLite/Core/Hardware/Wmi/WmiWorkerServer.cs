@@ -8,11 +8,13 @@ namespace NitroLite.Core.Hardware.Wmi;
 /// The worker's end of the pipe: accepts exactly one client, proves it knows the nonce, then serves typed commands
 /// until the client goes away.
 /// <para>
-/// The pipe is created with <see cref="PipeOptions.CurrentUserOnly"/>, so the operating system refuses a connection
-/// from any other account before a single byte is read. That is the outer wall. The nonce is the inner one, and it
-/// covers the case the ACL cannot: another process running as the same user — a script, a game overlay, anything
-/// that enumerates pipe names — connecting first and driving the elevated worker. Without the nonce that process
-/// would inherit administrator hardware control for free.
+/// The pipe is created by <see cref="WorkerPipe"/>, which locks the DACL to the current user and lowers the
+/// mandatory integrity label to Medium. The label matters as much as the ACL: an elevated process creates High
+/// objects, and a High pipe refuses the medium-integrity window that started the worker no matter what its DACL
+/// says. The operating system then refuses a connection from any other account before a single byte is read. That
+/// is the outer wall. The nonce is the inner one, and it covers the case the ACL cannot: another process running as
+/// the same user — a script, a game overlay, anything that enumerates pipe names — connecting first and driving the
+/// elevated worker. Without the nonce that process would inherit administrator hardware control for free.
 /// </para>
 /// <para>
 /// One client for the life of the process is intentional. The worker exists to serve the window that started it; a
@@ -46,12 +48,7 @@ public sealed class WmiWorkerServer : IDisposable
     /// </returns>
     public async Task<bool> RunAsync(TimeSpan acceptTimeout, CancellationToken cancellationToken = default)
     {
-        using var pipe = new NamedPipeServerStream(
-            _pipeName,
-            PipeDirection.InOut,
-            maxNumberOfServerInstances: 1,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        using var pipe = WorkerPipe.Create(_pipeName);
 
         using var acceptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         acceptCts.CancelAfter(acceptTimeout);
