@@ -1,4 +1,4 @@
-# Packaging
+﻿# Packaging
 
 Manifests for the package managers that can install NitroLite without a browser download. Both exist for the same
 reason: a file that arrives through a package manager does not carry the **Mark of the Web**, so Windows does not
@@ -40,7 +40,7 @@ terminal. Nothing is persisted: settings live in `%LOCALAPPDATA%\NitroLite`, out
 requires, so the folder can be copied in unchanged:
 
 ```
-packaging/winget/manifests/c/canerztk8/NitroLite/1.2.5/
+packaging/winget/manifests/c/canerztk8/NitroLite/1.2.5-f/
 ├── canerztk8.NitroLite.yaml              # version
 ├── canerztk8.NitroLite.installer.yaml    # URL and SHA-256
 └── canerztk8.NitroLite.locale.en-US.yaml # description, licence, links
@@ -58,8 +58,8 @@ To submit a new version:
 3. Validate and try it locally:
 
    ```powershell
-   winget validate --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.5
-   winget install --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.5
+   winget validate --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.5-f
+   winget install --manifest .\packaging\winget\manifests\c\canerztk8\NitroLite\1.2.5-f
    ```
 
 4. Open the pull request against `microsoft/winget-pkgs`.

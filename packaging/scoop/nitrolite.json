@@ -1,18 +1,18 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "1.2.5",
+  "version": "1.2.5-f",
   "description": "Lightweight open-source replacement for NitroSense on Acer Nitro laptops",
   "homepage": "https://github.com/canerztk8/NitroLite",
   "license": "MIT",
   "notes": [
-    "NitroLite needs the Acer services that ship with NitroSense (AcerAgentService). The NitroSense window does not have to be open.",
+    "NitroLite uses the Acer services that ship with NitroSense when they are installed, and the firmware's own WMI class when they are not. The NitroSense window does not have to be open.",
     "Settings, game profiles and the log live in %LOCALAPPDATA%\\NitroLite, so uninstalling keeps them.",
     "If you used Windows & system optimisation, run 'NitroLite.exe --uninstall-cleanup --yes' before removing the app."
   ],
   "architecture": {
     "64bit": {
-      "url": "https://github.com/canerztk8/NitroLite/releases/download/v1.2.5/NitroLite-v1.2.5-win-x64.zip",
-      "hash": "6d31e857cfe3d4cf84ac0d1c0e1c87e98a186b100ee42647a08830a50d0981c1"
+      "url": "https://github.com/canerztk8/NitroLite/releases/download/v1.2.5-f/NitroLite-v1.2.5-f-win-x64.zip",
+      "hash": "7966efad20357933291810a2ffd6fb1be86664fc9101564582a44d980b9f60a8"
     }
   },
   "extract_dir": "NitroLite",

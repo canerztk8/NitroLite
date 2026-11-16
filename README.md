@@ -2,19 +2,20 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-1623-10B981)](#-tests)
+[![Tests](https://img.shields.io/badge/Tests-1826-10B981)](#-tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/screenshots/modes.png" alt="NitroLite: operating modes, fan control, CPU boost and the MUX switch" width="100%">
+  <img src="docs/screenshots/en-dark-NavModes.jpg" alt="NitroLite: operating modes, fan control, CPU boost and the MUX switch" width="100%">
 </p>
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
-**Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It speaks the same protocols as the Acer services NitroSense
-uses (`AcerAgentService`, Acer Care Center) and does not ship an Electron shell.
+**Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It does not ship an Electron shell, and it no longer needs
+Acer's software to be installed: when `AcerAgentService` is missing it talks to the firmware's own WMI class
+instead. See [Without Acer's software](#without-acers-software).
 
-It is not tied to the machine it was written on: at startup it reads the model, the CPU vendor and what the Acer
-service says the hardware can do, then shows only the controls this laptop actually has. See
+It is not tied to the machine it was written on: at startup it reads the model, the CPU vendor and what the
+firmware says the hardware can do, then shows only the controls this laptop actually has. See
 [Compatibility](#compatibility).
 
 **Measured footprint** (AN16-41, in the tray, Release build): about 74 MB working set and roughly 0.6 % of one core
@@ -25,13 +26,17 @@ at idle. Telemetry is read every 3 seconds while minimised.
 ## Screenshots
 
 <p align="center">
-  <a href="docs/screenshots/monitoring.png"><img src="docs/screenshots/monitoring.png" alt="Hardware telemetry and OSD" width="49%"></a>
-  <a href="docs/screenshots/rgb.png"><img src="docs/screenshots/rgb.png" alt="Keyboard backlight" width="49%"></a>
+  <a href="docs/screenshots/en-dark-NavMonitoring.jpg"><img src="docs/screenshots/en-dark-NavMonitoring.jpg" alt="Hardware telemetry, the OSD and the history graph" width="49%"></a>
+  <a href="docs/screenshots/en-dark-NavRgb.jpg"><img src="docs/screenshots/en-dark-NavRgb.jpg" alt="Keyboard backlight, zones and effects" width="49%"></a>
 </p>
 <p align="center">
-  <a href="docs/screenshots/battery.png"><img src="docs/screenshots/battery.png" alt="Battery health and thermal matrix" width="49%"></a>
-  <a href="docs/screenshots/services.png"><img src="docs/screenshots/services.png" alt="Services and repair tools" width="49%"></a>
+  <a href="docs/screenshots/en-dark-NavBattery.jpg"><img src="docs/screenshots/en-dark-NavBattery.jpg" alt="Battery health, charge limit and the thermal matrix" width="49%"></a>
+  <a href="docs/screenshots/en-dark-NavDebloat.jpg"><img src="docs/screenshots/en-dark-NavDebloat.jpg" alt="Services, repair tools and startup behaviour" width="49%"></a>
 </p>
+
+All five pages, in English and in the dark theme, are in [`docs/screenshots`](docs/screenshots). They are captured
+by `scripts/screenshot.ps1` against a throwaway data folder, so they show a fresh install rather than the author's
+settings.
 
 ---
 
@@ -39,7 +44,8 @@ at idle. Telemetry is read every 3 seconds while minimised.
 
 ### 1. Operating modes and fan
 - **Five power modes:** Quiet, Balanced, Performance, Turbo and Eco. Commands go through `AcerAgentService` (AASSvc,
-  `127.0.0.1:46933`) using the same protocol as NitroSense.
+  `127.0.0.1:46933`) using the same protocol as NitroSense, or — when that service is not installed — straight to
+  the firmware's `AcerGamingFunction` WMI class. See [Without Acer's software](#without-acers-software).
 - **Fan:** automatic curve, maximum speed, a fixed custom speed (CPU and GPU fan separately, 30–100 %), or a
   **software fan curve** you draw yourself.
 - **Software fan curve:** six points from 40 °C to 90 °C, each mapping a temperature to a fan speed. NitroLite reads
@@ -79,7 +85,8 @@ at idle. Telemetry is read every 3 seconds while minimised.
 
 ### 6. Battery
 - **80 % charge limit:** set through Acer Care Center (`AcerCCAgent`, `wss://localhost:4343`) the same way NitroSense
-  does, then read back to confirm. Without Care Center installed this option does nothing.
+  does, or through the firmware's `WMID_GUID5` class on machines that expose it, then read back to confirm. On a
+  laptop with neither, the option is disabled and says why.
 - **Telemetry:** live charge/discharge power, estimated time remaining, full-charge capacity and wear level. Values
   Windows does not report are labelled "(estimated)".
 - **Wear trend:** NitroLite keeps a history of the wear level it measured and draws it as a line under the battery
@@ -119,6 +126,8 @@ at idle. Telemetry is read every 3 seconds while minimised.
   the controls it can actually use instead of a four-zone picker that does nothing.
 - Static, breathing, wave, neon, slide, zoom, meteor and sparkle effects, plus your own saved profiles.
 - The setting is reapplied after sleep and at sign-in. The 30-second idle timeout is read from the device.
+- If an **OpenRGB SDK server** is listening on `127.0.0.1:6742`, the page says so. NitroLite only reports it: it
+  does not drive the keyboard through OpenRGB, because two programs writing the same HID device fight over it.
 
 ### 9. Health page
 - Battery, SSD and thermal cards. Disk temperatures without SMART access, and thermal paste/fan bearing estimates,
@@ -157,9 +166,73 @@ Every Acer and Windows maintenance task runs from the **System Services & Tools*
   percentage from 30 to 100 (which means custom at that speed). `--profile` takes an ATK mouse config from 1 to 4.
   Exit codes: `0` applied, `1` the hardware refused, `2` timed out, `3` the command line was wrong.
 
-### If the Acer service is not running
-When AASSvc does not answer, NitroLite keeps showing what Windows and the NVIDIA driver can report (CPU usage, RAM,
-GPU). Only the sensors that live in the service are marked "No service".
+---
+
+## Without Acer's software
+
+NitroLite used to be a front end for Acer's services: no `AcerAgentService`, no fan control. That is no longer
+true. The hardware layer sits behind one interface with two backends, and the app chooses per call:
+
+| Backend | Talks to | Needs | Chosen when |
+|---|---|---|---|
+| `AgentHardwareController` | `AcerAgentService` on `127.0.0.1:46933`, Acer Care Center on `wss://localhost:4343` | nothing beyond NitroSense being installed | the service answers its `VERSION` handshake |
+| `WmiHardwareController` | `root\WMI` → `AcerGamingFunction`, `WMID_GUID5` | one elevation prompt per session | the service is absent, or running but frozen |
+
+The service wins whenever it answers, because it is the vendor's own path: it knows the model, it owns the EC
+registers and it needs no elevation. Direct WMI is the fallback for a machine with no Acer software at all. A
+service that is running but wedged still holds its socket, so "the port accepts a connection" is not treated as
+evidence that anything is listening — only a `VERSION` reply is.
+
+**What still needs the service:** keyboard lighting and the 30-second backlight timeout. The WMI class exposes no
+lighting method on the models tested, so those two controls stay with the service rather than being routed to a
+backend that would answer "no".
+
+**What works without it:** operating modes, fan mode and fan speed, the MUX switch, the 80 % charge limit (on
+firmware that exposes `WMID_GUID5`), telemetry, the OSD, game profiles, school mode, CPU boost, screen refresh rate
+and the battery cards.
+
+### The elevation prompt
+
+`AcerGamingFunction` is a `dynamic` WMI class: reading it and writing it both need an elevated token. The window
+itself stays `asInvoker` — it never asks for administrator rights at launch. Instead:
+
+1. Everything Windows and NVIDIA can answer keeps working unelevated.
+2. The first hardware **write** starts `NitroLite.exe --wmi-worker` with `Verb = "runas"`. That is one prompt per
+   session. Declining it is remembered: the app keeps running in read-only mode and does not ask again.
+3. The helper is a child process, not a service. A Job Object and a parent-process watchdog tie it to the window, so
+   it dies with the app even if the app crashes.
+4. The pipe it listens on is `CurrentUserOnly`, the first packet must carry a one-time 32-byte nonce, and the
+   command set is a fixed list of typed operations — never a general "invoke this WMI method" call. The worker
+   re-checks every bound itself (`30–100 %` fan speed, valid enum values) before touching the hardware.
+
+If you would rather not see that prompt at all, **Settings → Start automatically with administrator rights (Task
+Scheduler)** registers a logon task with `RunLevel HighestAvailable`. It is off by default and costs one prompt to
+turn on and one to turn off; after that the helper inherits the elevated token and no prompt appears. Turning it on
+removes the standard `HKCU\…\Run` entry, so Windows never starts NitroLite twice.
+
+### Writes are verified, not assumed
+
+Every WMI write is followed by a read-back of the same value. If three attempts do not stick — a BIOS that accepts
+the call and ignores it — that capability is switched off for the rest of the session and the app says so. Only
+three consecutive sessions of failure disable it permanently, so one busy EC after a sleep/wake cycle cannot kill a
+working feature. **Settings → Rescan hardware capabilities** clears the counters and probes again.
+
+### Capability probing
+
+Nothing about the hardware is hardcoded to one SKU. At startup NitroLite asks three questions in order:
+
+1. **Schema and registry** — does `root\WMI` expose `AcerGamingFunction`, which methods does it declare, does
+   `WMID_GUID5` exist, what does `dgpu_mode_capability` say. All read-only and unelevated.
+2. **Model profile** — SMBIOS product and board are matched against an embedded, read-only `profiles.json` that
+   carries sensor byte offsets, reference RPM ceilings and known-broken method signatures for the Nitro 5/16/17,
+   Nitro V 15/16 and Predator families.
+3. **Cache** — the result is stored under `SMBIOS product + BIOS version`, so a BIOS update invalidates it
+   automatically.
+
+A `profiles.user.json` in the data folder can add a model without a new release. It is validated strictly: unknown
+fields, out-of-range RPM ceilings and malformed JSON are rejected and logged, and the default profile is used
+instead. The thermal floors (`85 / 90 / 95 °C`), the `30–100 %` PWM bounds and the school-mode rules are compiled
+into the app and cannot be relaxed by any profile file.
 
 ---
 
@@ -171,16 +244,16 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 | What | Where the answer comes from | When the answer is missing |
 |---|---|---|
 | Model, family, BIOS, CPU vendor | SMBIOS (`Win32_ComputerSystem`, `Win32_BaseBoard`, `Win32_BIOS`) | the device block says SMBIOS did not answer |
-| Operating modes | `SUPPORT_OPERATING_MODE_CAPABILITY` | every mode stays visible, because a failed query is not evidence a mode is absent |
+| Operating modes | `SUPPORT_OPERATING_MODE_CAPABILITY`, or the WMI method list | every mode stays visible, because a failed query is not evidence a mode is absent |
 | Keyboard zones and effects | `GET_CONNECTED_DEVICE` | the four-zone layout stays, for the same reason |
-| GPU mode (MUX) | `SUPPORT_GPU_MODE_CAPABILITY` | mode switching is disabled with a note, never guessed |
-| 80 % charge limit | Acer Care Center (`AcerCCAgent`) | the checkbox is disabled and says why |
-| Fan curve | the Acer service's own fixed-speed command | the curve turns itself off and says so |
-| The Acer service itself | `AASSvc` on `127.0.0.1:46933` | a standing note at the top of the window names the missing service, and everything Windows and NVIDIA can measure keeps working |
+| GPU mode (MUX) | `SUPPORT_GPU_MODE_CAPABILITY`, or `dgpu_mode_capability` in the registry | mode switching is disabled with a note, never guessed |
+| 80 % charge limit | Acer Care Center (`AcerCCAgent`), or `WMID_GUID5` | the checkbox is disabled and says why |
+| Fan curve | the Acer service's own fixed-speed command, or `SetGamingFanSpeed` | the curve turns itself off and says so |
+| The Acer service itself | `AASSvc` on `127.0.0.1:46933` | the direct-WMI backend takes over; if that is unavailable too, a standing note names the missing service and everything Windows and NVIDIA can measure keeps working |
 
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
-already uses, and CPU boost through the Windows power plan. Nothing here loads `WinRing0` or any other driver, so
-Vanguard, FACEIT and EAC have nothing to object to.
+already uses, or through the firmware's own WMI class, and CPU boost through the Windows power plan. Nothing here
+loads `WinRing0` or any other driver, so Vanguard, FACEIT and EAC have nothing to object to.
 
 ### If your model is not covered
 
@@ -222,7 +295,7 @@ temperature of the ground and the hue of the accent move. System default follows
 launch. The OSD is dark in every case. Like the language, the theme applies after a quick restart.
 
 <p align="center">
-  <img src="docs/screenshots/modes-dark.png" alt="NitroLite in the dark theme" width="100%">
+  <img src="docs/screenshots/en-dark-NavModes.jpg" alt="NitroLite in the dark theme" width="100%">
 </p>
 
 ## Updating
@@ -292,16 +365,37 @@ NitroLite
 │   ├── Loc.cs / LocXaml.cs         # Translation catalogues and the {loc:T} markup extension
 │   ├── ThemeManager.cs             # Palette loading; ThemeCatalog marks which ones are dark
 │   ├── UpdateService.cs            # GitHub release check, digest verification, executable swap
+│   ├── ElevatedStartupService.cs   # Optional Task Scheduler entry, XML-based, with the Run entry excluded
+│   ├── ProcessRunner.cs            # One external command, with a declined UAC prompt as a result not an exception
+│   ├── StartupMode.cs              # Command line parsing, including the --wmi-worker helper
+│   ├── FanStallWatchdog.cs         # A fan that stops turning while the CPU is hot
 │   ├── AppPaths.cs                 # Data folder and system tool paths
 │   ├── TelemetryFormatter.cs       # Value formatting and "(estimated)" labels
-│   └── Hardware/                   # Model identity and capability probing
+│   └── Hardware/                   # The hardware layer: one contract, two backends
+│       ├── IHardwareController.cs  # Telemetry, fan, mode, MUX, battery limit, lighting
+│       ├── AgentHardwareController.cs  # Backend 1: AASSvc and Care Center, unchanged behaviour
 │       ├── DeviceIdentity.cs       # Model code, family, BIOS and CPU vendor parsing
 │       ├── SmbiosProbe.cs          # Read-only SMBIOS queries that never throw
 │       ├── HardwareDetector.cs     # Cached identity, retried when SMBIOS was silent
+│       ├── CapabilityProbe.cs      # Schema + profile + cache, in that order
+│       ├── ProfileCatalog.cs       # Embedded profiles.json and the validated profiles.user.json
+│       ├── ModelProfile.cs         # Sensor offsets, RPM ceilings, known-broken methods
 │       ├── AcerWmiProbe.cs         # AcerGamingFunction presence and method list
 │       ├── KeyboardCapability.cs   # Zones and effects from GET_CONNECTED_DEVICE
 │       ├── DeviceCapabilities.cs   # Everything the service reports, in one record
-│       └── HardwareReport.cs       # The text and JSON report users attach to issues
+│       ├── HardwareReport.cs       # The text and JSON report users attach to issues
+│       ├── OpenRgb/                # OpenRGB SDK client: detects a server on 127.0.0.1:6742
+│       └── Wmi/                    # Backend 2: the firmware's own WMI class
+│           ├── HybridHardwareController.cs  # Picks a backend per call, reconciles on handover
+│           ├── WmiHardwareController.cs     # IHardwareController over the worker pipe
+│           ├── AcerWmiExecutor.cs           # The byte-level protocol, in the elevated process
+│           ├── AcerWmiProtocol.cs           # Method ids and the (value << 8) | status encoding
+│           ├── ReadBackPolicy.cs            # Verify every write; 3 sessions before giving up
+│           ├── WmiWorkerLauncher.cs         # Starts the helper, once per session
+│           ├── WmiWorkerServer.cs           # CurrentUserOnly pipe, nonce handshake, typed commands
+│           ├── WmiWorkerClient.cs           # The parent side of that pipe
+│           ├── WmiWorkerValidation.cs       # Bounds the worker re-checks before touching hardware
+│           └── JobObjectGuard.cs            # Ties the helper's lifetime to the window
 ├── Lang/                           # en, tr, de, es, ru, pt, hi, id
 ├── Themes/                         # Light, Dark, MidnightOled, SlateSteel, AmberConsole, NordFrost
 ├── OsdOverlayWindow.xaml           # OSD window
@@ -329,7 +423,7 @@ new version once the manifest is bumped, which `scripts/publish-release.ps1` doe
 
 ### Manual download
 
-1. Download `NitroLite-v1.2.5-win-x64.zip` from the
+1. Download `NitroLite-v1.2.5-f-win-x64.zip` from the
    **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page.
 2. Extract it to a **permanent folder**, for example `C:\Users\<you>\Programs\NitroLite`. Do not leave it in
    Downloads: "run at Windows startup" remembers where the exe lives.
@@ -346,11 +440,11 @@ choose **Exit**.
 One line, in PowerShell, in the folder you downloaded to:
 
 ```powershell
-Get-FileHash .\NitroLite-v1.2.5-win-x64.zip -Algorithm SHA256 | Format-List
+Get-FileHash .\NitroLite-v1.2.5-f-win-x64.zip -Algorithm SHA256 | Format-List
 ```
 
 `Hash` must equal the digest printed on the release page. The same value is attached to the release as
-`NitroLite-v1.2.5-win-x64.zip.sha256`, in `sha256sum` format, so `sha256sum -c` works too. The updater inside the app
+`NitroLite-v1.2.5-f-win-x64.zip.sha256`, in `sha256sum` format, so `sha256sum -c` works too. The updater inside the app
 performs this comparison itself and refuses to swap the executable on a mismatch.
 
 ### Why SmartScreen warns
@@ -367,7 +461,7 @@ The prompt is about **provenance, not detection**. It does not mean Microsoft fo
 - You can confirm the file is unsigned rather than tampered with:
 
   ```powershell
-  Get-AuthenticodeSignature .\NitroLite-v1.2.5-win-x64.zip | Format-List Status, StatusMessage
+  Get-AuthenticodeSignature .\NitroLite-v1.2.5-f-win-x64.zip | Format-List Status, StatusMessage
   ```
 
   `Status` reads `NotSigned`. That is expected, and it is the same answer you get for any unsigned open-source
@@ -382,16 +476,21 @@ The digest only proves the download matches the release; it says nothing about w
 
 ### Requirements
 - **Windows 11** (Windows 10 x64 also works), 64-bit.
-- **Acer services:** `AcerAgentService` (mode, fan, RGB, telemetry) and optionally Acer Care Center (80 % charge
-  limit). They ship with NitroSense. The NitroSense UI does not need to be open, but it must not be uninstalled.
+- **Acer services are optional.** With `AcerAgentService` installed (it ships with NitroSense) NitroLite uses it and
+  never asks for elevation. Without it, the direct-WMI backend takes over and asks once per session. Acer Care
+  Center is only needed for the 80 % charge limit on machines whose firmware has no `WMID_GUID5`.
 - **Tested hardware:** Acer Nitro 16 AN16-41. On other Nitro / Predator models some features may stay locked,
-  depending on what the service supports.
+  depending on what the firmware exposes. See [Compatibility](#compatibility).
 
 ### When does it ask for administrator rights?
 NitroLite runs as a normal user. Windows asks for confirmation (UAC) only for:
+- **The direct-WMI backend**, once per session, and only when Acer's service is not answering. Declining it leaves
+  the app running in read-only mode. Turning on **Start automatically with administrator rights** removes the
+  prompt entirely.
 - **Standby memory purge:** WinMemoryCleaner needs administrator rights to release the standby list, so Windows
   asks each time you press the button. The tool itself ships with NitroLite; nothing to install.
 - **Disabling / restoring Acer background services.**
+- **Turning the elevated auto-start task on or off**, once in each direction.
 
 ### Uninstall
 1. On the System Services page, turn off **"Run at Windows startup"**. If you disabled services, press
@@ -454,8 +553,8 @@ the same script on the runner and does not commit its output back.
 **To cut a release:** bump `<Version>` in `NitroLite/NitroLite.csproj`, commit, then push a matching tag.
 
 ```powershell
-git tag v1.2.4
-git push origin v1.2.4
+git tag v1.2.5-f
+git push origin v1.2.5-f
 ```
 
 [`.github/workflows/release.yml`](.github/workflows/release.yml) takes it from there: it fails if the tag and the
@@ -467,15 +566,15 @@ manifests.
 
 ## Tests
 
-1623 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+1826 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
 - The tests use their own temporary data folder (`NITROLITE_DATA_DIR`) and never touch your real settings.
-- Two tests that change the real system (changing a connected mouse's profile, power plan changes) are skipped by
-  default. To run them:
+- Three tests that change the real system (changing a connected mouse's profile, power plan changes) are skipped
+  by default. To run them:
 
 ```powershell
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
