@@ -12,7 +12,7 @@
       <Border Classes="card" IsVisible="{Binding HasNoBackend}">
         <StackPanel Spacing="6">
           <TextBlock Classes="h2" Text="{Binding Labels.NoBackend}" />
-          <TextBlock Classes="caption" Text="{Binding Labels.NoBackendDetail}" />
+          <TextBlock Classes="caption" Text="{Binding NoBackendDetail}" />
         </StackPanel>
       </Border>
 

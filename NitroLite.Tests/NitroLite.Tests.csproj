@@ -13,6 +13,10 @@
     <ProjectReference Include="..\NitroLite\NitroLite.csproj" />
     <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
     <ProjectReference Include="..\NitroLite.Linux\NitroLite.Linux.csproj" />
+    <!-- The cross-platform view model. It holds no Avalonia types, so a test can construct it and drive it against an
+         in-memory /sys tree with no display attached; this reference is what makes that possible without adding an
+         Avalonia package to this project. -->
+    <ProjectReference Include="..\NitroLite.Desktop\NitroLite.Desktop.csproj" />
   </ItemGroup>
 
   <ItemGroup>

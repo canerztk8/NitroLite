@@ -1,0 +1,6 @@
+# Linux packaging files are executed or parsed on Linux. A CRLF checkout gives bash a "bad interpreter" and udev a
+# rule with a stray carriage return at the end of every line, so these are pinned to LF on every platform.
+packaging/linux/*.sh      text eol=lf
+packaging/linux/*.desktop text eol=lf
+packaging/linux/*.rules   text eol=lf
+packaging/linux/*.svg     text eol=lf

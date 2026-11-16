@@ -132,6 +132,19 @@ jobs:
           scoop install https://raw.githubusercontent.com/canerztk8/NitroLite/main/packaging/scoop/nitrolite.json
           $fence
 
+          ## Linux (experimental)
+
+          ${tick}NitroLite-v$version-linux-x64.tar.gz${tick} is built on ubuntu-latest from the same tag. It needs the
+          in-kernel ${tick}acer-wmi${tick} module, and ${tick}Linuwu-Sense${tick} for the keyboard lighting and the extra
+          switches. Extract it and run ${tick}./install.sh${tick}; the installer offers to add the udev rule that lets
+          the app write to the Acer attributes without root.
+
+          $fence
+          tar -xzf NitroLite-v$version-linux-x64.tar.gz
+          cd NitroLite-linux-x64
+          ./install.sh
+          $fence
+
           ## Verify the download
 
           $fencePs
@@ -189,3 +202,93 @@ jobs:
           | SHA-256 | ${{ steps.package.outputs.sha256 }} |
           | Release | https://github.com/${{ github.repository }}/releases/tag/v$version |
           "@ >> $env:GITHUB_STEP_SUMMARY
+
+  # The Linux build runs after the Windows one has created the release, and attaches its archive to it. Ordering it
+  # this way means the release notes and the Windows zip are already published when the Linux job starts, so a Linux
+  # failure leaves a usable release behind instead of an empty tag.
+  linux-package:
+    name: Linux package
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: |
+            NitroLite.Core/NitroLite.Core.csproj
+            NitroLite.Linux/NitroLite.Linux.csproj
+            NitroLite.Desktop/NitroLite.Desktop.csproj
+
+      - name: Read the version from the project file
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' NitroLite/NitroLite.csproj | head -1)
+          if [ -z "$version" ]; then echo "::error::Version not found in NitroLite.csproj"; exit 1; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "NitroLite.csproj says $version, the tag says $TAG"
+
+      - name: Publish the self-contained single-file build
+        run: >
+          dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj
+          -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true
+          -o staging/NitroLite-linux-x64 --nologo
+
+      - name: Assemble and verify the tarball
+        id: package
+        run: |
+          set -euo pipefail
+          APP=staging/NitroLite-linux-x64
+          VERSION='${{ steps.version.outputs.version }}'
+
+          # share/ rather than the top level: "nitrolite.desktop" and "NitroLite.Desktop" are the same name on a
+          # case-insensitive file system, and one of them is the executable.
+          mkdir -p "$APP/share"
+          install -m 755 packaging/linux/install.sh   "$APP/install.sh"
+          install -m 755 packaging/linux/uninstall.sh "$APP/uninstall.sh"
+          install -m 644 packaging/linux/nitrolite.desktop  "$APP/share/nitrolite.desktop"
+          install -m 644 packaging/linux/nitrolite.svg      "$APP/share/nitrolite.svg"
+          install -m 644 packaging/linux/99-nitrolite.rules "$APP/share/99-nitrolite.rules"
+          rm -f "$APP"/*.pdb
+
+          mkdir -p artifacts
+          TARBALL="artifacts/NitroLite-v$VERSION-linux-x64.tar.gz"
+          tar -czf "$TARBALL" -C staging NitroLite-linux-x64
+          ( cd artifacts && sha256sum "$(basename "$TARBALL")" > "$(basename "$TARBALL").sha256" )
+
+          # A broken script or a missing binary is a broken download, so both are checked before anything is uploaded.
+          bash -n "$APP/install.sh"
+          bash -n "$APP/uninstall.sh"
+          tar -tzf "$TARBALL" | grep -qx NitroLite-linux-x64/NitroLite.Desktop
+          tar -tzf "$TARBALL" | grep -qx NitroLite-linux-x64/libSkiaSharp.so
+
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(cut -d' ' -f1 "$TARBALL.sha256")" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the Linux package to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" \
+            "${{ steps.package.outputs.tarball }}" \
+            "${{ steps.package.outputs.tarball }}.sha256" \
+            --clobber
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### NitroLite Linux package"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Tag | $TAG |"
+            echo "| Archive | $(basename "${{ steps.package.outputs.tarball }}") |"
+            echo "| SHA-256 | ${{ steps.package.outputs.sha256 }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

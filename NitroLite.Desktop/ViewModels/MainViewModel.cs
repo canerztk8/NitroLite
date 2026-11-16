@@ -99,7 +99,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
 
-    private bool _suppressWrite;
+    /// <summary>
+    /// True while the view model is filling its controls from the hardware. It starts true because the constructor
+    /// populates the mode and fan-mode lists, and a selection change there is not a user action: without this the
+    /// window would write "Auto" over the fan mode the machine was already in, on every launch, before it had read
+    /// anything. <see cref="InitializeAsync"/> clears it once the first read is done.
+    /// </summary>
+    private bool _suppressWrite = true;
     private bool _refreshing;
     private bool _disposed;
 
@@ -159,7 +165,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _udevCommand = rulePath == null ? "" : UdevGuide.InstallCommand(rulePath);
         }
 
-        _status = hardware == null ? _labels.NoBackend : _labels.Ready;
+        // The pill is short on purpose; the banner carries the sentence that explains it.
+        _status = HasNoBackend ? _labels.NoBackend : _labels.Ready;
 
         ApplyModeCommand = new AsyncCommand(() => ApplyModeAsync(_selectedMode?.Mode));
         ApplyFanModeCommand = new AsyncCommand(ApplyFanModeAsync);
@@ -199,9 +206,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => Set(ref _isReady, value);
     }
 
-    public bool HasBackend => _hardware != null;
+    /// <summary>
+    /// True when there is a backend and it found something to talk to. A Linux machine with no <c>acer-wmi</c> node
+    /// still gets a controller object, so "the object exists" is not the same question as "the hardware is there".
+    /// </summary>
+    public bool HasBackend => _hardware != null && _hardware.IsAvailable;
 
-    public bool HasNoBackend => _hardware == null;
+    public bool HasNoBackend => !HasBackend;
+
+    /// <summary>
+    /// The second line of the banner. Two different machines reach this state — a Windows build with no backend at
+    /// all, and a Linux machine whose kernel has no Acer module — and they need different sentences.
+    /// </summary>
+    public string NoBackendDetail => _hardware == null ? Labels.NoBackendDetail : Labels.NoAcerNodes;
 
     // ---------------------------------------------------------------- telemetry
 
@@ -598,6 +615,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(CapabilitySummaryText));
 
             await ReadStateAsync().ConfigureAwait(true);
+
+            // A Linux machine whose kernel exposes no Acer node is not an error and not a crash: the window stays
+            // usable, the banner explains it, and every control that needs hardware stays hidden.
+            if (!_hardware.IsAvailable)
+            {
+                IsReady = false;
+                Status = Labels.NoAcerNodes;
+                Raise(nameof(HasBackend));
+                Raise(nameof(HasNoBackend));
+                Raise(nameof(NoBackendDetail));
+                return;
+            }
+
             IsReady = true;
             Status = Labels.Ready;
         }
@@ -605,6 +635,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             AppLog.Error("Linux arayüzü başlatılamadı", ex.ToString());
             Status = Labels.NoAcerNodes;
+        }
+        finally
+        {
+            // Whatever happened above, the controls must work from now on: a failed initial read is not a reason to
+            // leave the window read-only for the rest of the session.
+            _suppressWrite = false;
         }
     }
 

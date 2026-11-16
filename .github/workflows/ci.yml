@@ -1,0 +1,148 @@
+name: CI
+
+# Every push and every pull request. The Windows job is the gate that has always existed; the Linux job is what
+# keeps the cross-platform half honest, because a change that only compiles on Windows is a change that breaks the
+# Linux build silently until someone tries it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build and tests
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: |
+            NitroLite/NitroLite.csproj
+            NitroLite.Core/NitroLite.Core.csproj
+            NitroLite.Linux/NitroLite.Linux.csproj
+            NitroLite.Desktop/NitroLite.Desktop.csproj
+            NitroLite.Tests/NitroLite.Tests.csproj
+
+      - name: Build
+        run: dotnet build NitroLite.sln -c Release --nologo
+
+      - name: Test
+        run: dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build --nologo
+
+  linux:
+    name: Linux build and package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: |
+            NitroLite.Core/NitroLite.Core.csproj
+            NitroLite.Linux/NitroLite.Linux.csproj
+            NitroLite.Desktop/NitroLite.Desktop.csproj
+
+      # The solution file cannot be built here: NitroLite (WPF) and NitroLite.Tests target net10.0-windows. These
+      # three projects are the ones that have to compile on Linux, so they are built one by one and a failure in any
+      # of them fails the job.
+      - name: Build NitroLite.Core
+        run: dotnet build NitroLite.Core/NitroLite.Core.csproj -c Release --nologo
+
+      - name: Build NitroLite.Linux
+        run: dotnet build NitroLite.Linux/NitroLite.Linux.csproj -c Release --nologo
+
+      - name: Build NitroLite.Desktop
+        run: dotnet build NitroLite.Desktop/NitroLite.Desktop.csproj -c Release --nologo
+
+      - name: Publish the self-contained single-file build
+        run: >
+          dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj
+          -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true
+          -o staging/NitroLite-linux-x64 --nologo
+
+      - name: Assemble the tarball
+        run: |
+          set -euo pipefail
+          APP=staging/NitroLite-linux-x64
+
+          # The launcher, the icon and the udev rule go in share/ rather than next to the binary: "nitrolite.desktop"
+          # and "NitroLite.Desktop" are the same name on a case-insensitive file system, and one of them is the
+          # executable.
+          mkdir -p "$APP/share"
+          install -m 755 packaging/linux/install.sh   "$APP/install.sh"
+          install -m 755 packaging/linux/uninstall.sh "$APP/uninstall.sh"
+          install -m 644 packaging/linux/nitrolite.desktop "$APP/share/nitrolite.desktop"
+          install -m 644 packaging/linux/nitrolite.svg     "$APP/share/nitrolite.svg"
+          install -m 644 packaging/linux/99-nitrolite.rules "$APP/share/99-nitrolite.rules"
+
+          # Debug symbols are not shipped: they double the archive and help nobody who is not debugging a crash.
+          rm -f "$APP"/*.pdb
+
+          mkdir -p artifacts
+          tar -czf artifacts/NitroLite-linux-x64.tar.gz -C staging NitroLite-linux-x64
+          sha256sum artifacts/NitroLite-linux-x64.tar.gz > artifacts/NitroLite-linux-x64.tar.gz.sha256
+
+      - name: Verify the tarball
+        run: |
+          set -euo pipefail
+          TARBALL=artifacts/NitroLite-linux-x64.tar.gz
+          test -s "$TARBALL" || { echo "::error::the tarball was not produced"; exit 1; }
+
+          # The archive is only useful if it carries the executable, the native libraries SkiaSharp and HarfBuzz are
+          # dlopen'd from, and the installer. Listing it and grepping is the cheapest way to prove that.
+          tar -tzf "$TARBALL" > listing.txt
+          cat listing.txt
+          for member in \
+            NitroLite-linux-x64/NitroLite.Desktop \
+            NitroLite-linux-x64/libSkiaSharp.so \
+            NitroLite-linux-x64/install.sh \
+            NitroLite-linux-x64/uninstall.sh \
+            NitroLite-linux-x64/share/nitrolite.desktop \
+            NitroLite-linux-x64/share/99-nitrolite.rules
+          do
+            grep -qx "$member" listing.txt || { echo "::error::$member is missing from the tarball"; exit 1; }
+          done
+
+          # The scripts are executed by bash on the user's machine, so a syntax error here is a broken install there.
+          bash -n staging/NitroLite-linux-x64/install.sh
+          bash -n staging/NitroLite-linux-x64/uninstall.sh
+
+          # The desktop entry has to be parseable, and desktop-file-validate is the tool that decides that.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq desktop-file-utils
+          desktop-file-validate staging/NitroLite-linux-x64/share/nitrolite.desktop
+
+          echo "### Linux package" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Archive | NitroLite-linux-x64.tar.gz |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Size | $(du -h "$TARBALL" | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SHA-256 | $(cut -d' ' -f1 artifacts/NitroLite-linux-x64.tar.gz.sha256) |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the Linux package
+        uses: actions/upload-artifact@v7
+        with:
+          name: NitroLite-linux-x64
+          path: |
+            artifacts/NitroLite-linux-x64.tar.gz
+            artifacts/NitroLite-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30

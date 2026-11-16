@@ -65,7 +65,12 @@ public sealed class InMemorySysfsFileSystem : ISysfsFileSystem
 
     public bool DirectoryExists(string path) => _directories.Contains(Normalize(path));
 
-    public string? ReadAllText(string path) => _files.TryGetValue(Normalize(path), out var value) ? value : null;
+    /// <summary>
+    /// The file's contents, trimmed the way <see cref="RealSysfsFileSystem"/> trims them. The fake has to match the
+    /// real reader here: a test that passes because the fake kept a trailing newline would fail on a laptop.
+    /// </summary>
+    public string? ReadAllText(string path) =>
+        _files.TryGetValue(Normalize(path), out var value) ? value.Trim() : null;
 
     public SysfsWriteResult WriteAllText(string path, string value)
     {

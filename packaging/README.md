@@ -80,3 +80,22 @@ For a signature that SmartScreen actually trusts, the project needs a certificat
 still has to earn reputation; an EV one does not) or a free open-source signing service such as
 [SignPath.io](https://signpath.io). Both require a public CI build that produces the artifact, which is what the
 workflow above provides.
+
+## Linux
+
+`packaging/linux/` is not a package-manager manifest: it is the tarball's payload. The `ubuntu-latest` job in
+[`ci.yml`](../.github/workflows/ci.yml) publishes `NitroLite.Desktop` for `linux-x64`, drops these files beside it
+and produces `NitroLite-linux-x64.tar.gz`; the release workflow attaches the same archive to the tag.
+
+| File | Purpose |
+|---|---|
+| `install.sh` | Installs to `~/.local/share/nitrolite` (or `/opt/nitrolite` with `--system`), creates the `nitrolite` command and the menu entry, and offers to install the udev rule. |
+| `uninstall.sh` | Removes what `install.sh` created. `--purge` also deletes the settings folder. |
+| `nitrolite.desktop` | The freedesktop launcher. `install.sh` rewrites `Exec` and `TryExec` to the absolute path it installed to. |
+| `nitrolite.svg` | The menu icon. |
+| `99-nitrolite.rules` | The udev rule that grants the seat's user write access to the Acer attributes. |
+
+The launcher, the icon and the rule are placed in a `share/` subdirectory of the archive rather than next to the
+binary, because `nitrolite.desktop` and `NitroLite.Desktop` are the same file name on a case-insensitive file
+system and one of them is the executable. `install.sh` looks in `share/` first and falls back to its own directory,
+so it also works when run from a checkout of this folder.

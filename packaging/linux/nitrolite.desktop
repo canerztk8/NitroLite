@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=NitroLite
+GenericName=Laptop Hardware Control
+Comment=Fan, power mode and keyboard lighting control for Acer Nitro and Predator laptops
+Comment[tr]=Acer Nitro ve Predator dizüstü bilgisayarlar için fan, güç modu ve klavye aydınlatma denetimi
+# install.sh rewrites Exec and TryExec to the absolute path it installed to, so the entry works even when
+# ~/.local/bin is not on PATH. The values here are the ones that make sense for a manual copy.
+Exec=nitrolite
+TryExec=nitrolite
+Icon=nitrolite
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+Keywords=acer;nitro;predator;fan;cooling;temperature;rgb;keyboard;battery;
+Keywords[tr]=acer;nitro;predator;fan;soğutma;sıcaklık;rgb;klavye;pil;
+StartupNotify=true
+# Matches the WM_CLASS Avalonia sets from the assembly name, so the window is grouped with this launcher
+# instead of showing up as a second, unnamed application in the dock.
+StartupWMClass=NitroLite.Desktop
