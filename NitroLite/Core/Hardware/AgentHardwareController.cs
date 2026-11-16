@@ -97,7 +97,16 @@ public sealed class AgentHardwareController : IHardwareController
         catch { return null; }
     }
 
-    public Task<MonitorData?> GetMonitorDataAsync() => _agent.GetMonitorDataAsync();
+    /// <summary>
+    /// The service's own sample. Its fan speeds are tachometer readings, so the flag is set here rather than left to
+    /// the caller: the fan-stall watchdog is allowed to judge this sample and nothing else.
+    /// </summary>
+    public async Task<MonitorData?> GetMonitorDataAsync()
+    {
+        var data = await _agent.GetMonitorDataAsync().ConfigureAwait(false);
+        if (data != null) data.IsFanRpmMeasured = true;
+        return data;
+    }
 
     public Task<OperatingMode?> GetOperatingModeAsync() => _agent.TryGetOperatingModeAsync();
 

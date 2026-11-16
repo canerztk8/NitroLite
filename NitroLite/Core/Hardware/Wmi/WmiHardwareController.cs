@@ -133,7 +133,11 @@ public sealed class WmiHardwareController : IHardwareController
             GpuTemperature = AcerWmiProtocol.ByteAt(bytes, layout.GpuTempByte) ?? 0,
             SysTemperature = AcerWmiProtocol.ByteAt(bytes, layout.Sys1TempByte) ?? 0,
             CpuFanSpeed = DeriveRpm(ReadInt(data, "cpuFanPercent") ?? 0, snapshot?.MaxCpuFanRpm ?? 0),
-            GpuFanSpeed = DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, snapshot?.MaxGpuFanRpm ?? 0)
+            GpuFanSpeed = DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, snapshot?.MaxGpuFanRpm ?? 0),
+
+            // The fan speeds above are the requested percentage restated as RPM, not a tachometer reading. The
+            // watchdog must not judge them: a fan that has stopped still reports the percentage the EC was given.
+            IsFanRpmMeasured = false
         };
     }
 

@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite.Core;
 
@@ -120,7 +121,7 @@ public sealed class SchoolModeService
         new SchoolModePowerSetting(SubUsb, UsbSelectiveSuspend, 1, "USB güç tasarrufu")
     };
 
-    private readonly AcerAgentClient _agentClient;
+    private readonly IHardwareController _hardware;
     private readonly CpuPowerService _cpuPowerService;
     private readonly IDisplayRefreshRateService _displayService;
     private readonly IScreenBrightnessService _brightnessService;
@@ -133,9 +134,14 @@ public sealed class SchoolModeService
         IDisplayRefreshRateService displayService,
         IScreenBrightnessService brightnessService,
         AppSettings settings,
-        IPowerSchemeAccess? powerScheme = null)
+        IPowerSchemeAccess? powerScheme = null,
+        IHardwareController? hardware = null)
     {
-        _agentClient = agentClient ?? throw new ArgumentNullException(nameof(agentClient));
+        // The agent is still the first parameter so every existing call site keeps compiling, but nothing below
+        // touches it directly: the service talks to the hardware through the controller, which is what lets school
+        // mode run on the direct-WMI backend on a machine with no Acer software at all.
+        _hardware = hardware ?? new AgentHardwareController(
+            agentClient ?? throw new ArgumentNullException(nameof(agentClient)), new CareCenterClient());
         _cpuPowerService = cpuPowerService ?? throw new ArgumentNullException(nameof(cpuPowerService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
         _brightnessService = brightnessService ?? throw new ArgumentNullException(nameof(brightnessService));
@@ -309,10 +315,10 @@ public sealed class SchoolModeService
                 else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
             }
 
-            if (await _agentClient.SetOperatingModeAsync(backup.Mode)) outcome.Applied.Add(Loc.T("Çalışma modu"));
+            if (await _hardware.SetOperatingModeAsync(backup.Mode)) outcome.Applied.Add(Loc.T("Çalışma modu"));
             else outcome.Failed.Add(Loc.T("Çalışma modu"));
 
-            if (await _agentClient.SetFanModeAsync(backup.Fan)) outcome.Applied.Add(Loc.T("Fan"));
+            if (await _hardware.SetFanModeAsync(backup.Fan)) outcome.Applied.Add(Loc.T("Fan"));
             else outcome.Failed.Add(Loc.T("Fan"));
 
             if (backup.RefreshRate is int rate && rate > 0)
@@ -410,19 +416,19 @@ public sealed class SchoolModeService
         else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
 
         var targetMode = TargetOperatingMode;
-        bool modeOk = await _agentClient.SetOperatingModeAsync(targetMode);
+        bool modeOk = await _hardware.SetOperatingModeAsync(targetMode);
         if (!modeOk && targetMode != OperatingMode.Quiet)
         {
             // A model that lists Eco but refuses it (some firmware only allows it on battery) still gets the next
             // lowest mode rather than no mode change at all.
             targetMode = OperatingMode.Quiet;
-            modeOk = await _agentClient.SetOperatingModeAsync(OperatingMode.Quiet);
+            modeOk = await _hardware.SetOperatingModeAsync(OperatingMode.Quiet);
         }
         if (modeOk)
             outcome.Applied.Add(Loc.T(targetMode == OperatingMode.Eco ? "Çalışma modu (Eco)" : "Çalışma modu (Sessiz)"));
         else outcome.Failed.Add(Loc.T("Çalışma modu"));
 
-        if (await _agentClient.SetFanModeAsync(FanMode.Auto)) outcome.Applied.Add(Loc.T("Fan (Otomatik)"));
+        if (await _hardware.SetFanModeAsync(FanMode.Auto)) outcome.Applied.Add(Loc.T("Fan (Otomatik)"));
         else outcome.Failed.Add(Loc.T("Fan (Otomatik)"));
 
         int currentRate = _displayService.GetCurrentRefreshRate();

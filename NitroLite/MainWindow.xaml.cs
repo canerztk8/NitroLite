@@ -334,7 +334,7 @@ public partial class MainWindow : Window
             DispatcherRunner = async action => await action();
             _gameService.GameStarted += OnGameStarted;
             _gameService.GameEnded += OnGameEnded;
-            _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: false, transitionLock: _gameProfileTransitionLock);
+            _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: false, transitionLock: _gameProfileTransitionLock, hardware: _hardware);
             _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
             _powerAutomationService.GetCurrentCpuBoost = () => _isGameSessionActive ? _savedCpuBoostBeforeGame : _cpuPowerService.CurrentMode;
             _powerAutomationService.GetCurrentFanMode = () => _isGameSessionActive ? _savedFanModeBeforeGame : _currentFanMode;
@@ -354,13 +354,42 @@ public partial class MainWindow : Window
         var agentController = new AgentHardwareController(agent, _careCenterClient);
         if (!allowDirectWmi) return agentController;
 
-        return new HybridHardwareController(
+        var hybrid = new HybridHardwareController(
             agentController,
             wmiFactory: () => new WmiHardwareController(
                 new WmiWorkerLauncher(),
                 new ReadBackPolicy(_appSettings),
                 () => _capabilitySnapshot),
             useDirectWmi: () => _appSettings.UseDirectWmiBackend);
+
+        // What NitroLite wants the hardware to be doing, for the handover back to AASSvc. Read lazily: school mode
+        // and the fan curve are created after this controller, and a captured value would be a stale one.
+        hybrid.TargetProvider = BuildHardwareTarget;
+        return hybrid;
+    }
+
+    /// <summary>
+    /// NitroLite's active hardware target, in the order the rest of the window applies it: school mode owns the fans
+    /// while it is on, a die at or above the first safety band overrides the fan mode with the floor speed, and
+    /// otherwise the user's own mode and fan choice stand.
+    /// </summary>
+    private HardwareTarget? BuildHardwareTarget()
+    {
+        if (_schoolModeService is { IsEnabled: true })
+        {
+            return new HardwareTarget(_schoolModeService.TargetOperatingMode, FanMode.Auto, "Okul modu");
+        }
+
+        // The last reading the telemetry loop kept, which is the hottest die and is stored even while the curve is
+        // off. A machine that is hot right now must not be handed back to the service at an idle fan speed.
+        int hottest = _fanCurveLastTemperatureC;
+        if (hottest >= FanCurve.SafetyTemperatureC)
+        {
+            int floor = FanCurve.SafetyFloorAt(hottest);
+            return new HardwareTarget(_currentMode, FanMode.Custom, "Termal güvenlik tabanı", floor, floor);
+        }
+
+        return new HardwareTarget(_currentMode, _currentFanMode, "Kullanıcı hedefi");
     }
 
     /// <summary>Shows the version from the project file (Version in NitroLite.csproj) instead of a hard-coded label.</summary>
@@ -507,7 +536,7 @@ public partial class MainWindow : Window
         _agentClient.ServiceEventReceived += OnAgentServiceEvent;
 
         // AC/DC Power & Display Automation
-        _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: true, transitionLock: _gameProfileTransitionLock);
+        _powerAutomationService = new PowerAutomationService(_agentClient, _cpuPowerService, _displayService, _appSettings, attachSystemEvents: true, transitionLock: _gameProfileTransitionLock, hardware: _hardware);
         _powerAutomationService.EcoStateFilePath = DcEcoStateFile;
         _powerAutomationService.GetCurrentOperatingMode = () => _isGameSessionActive ? _savedModeBeforeGame : _currentMode;
         _powerAutomationService.GetCurrentCpuBoost = () => _isGameSessionActive ? _savedCpuBoostBeforeGame : _cpuPowerService.CurrentMode;
@@ -718,6 +747,10 @@ public partial class MainWindow : Window
             // 2.0b Ask the agent whether this model has controllable lighting at all. Only an explicit "no"
             // disables the controls; an unanswered query leaves the tab exactly as it was.
             _ = RefreshLightingCapabilityAsync();
+
+            // 2.0c An OpenRGB SDK server on 127.0.0.1:6742 is the third lighting path: it needs neither Acer's
+            // service nor a per-chassis HID layout, so it is worth naming on the tab when one is running.
+            _ = RefreshOpenRgbStatusAsync();
 
             // 2.1 Staged Background Reassertion for Cold Boot / Windows Logon
             _ = ReassertKeyboardLightingAsync(isBoot: true);
@@ -1199,11 +1232,14 @@ public partial class MainWindow : Window
     private int _fanCurveLastPercent;
 
     /// <summary>
-    /// Watches for a fan that has stopped while its die is hot. Fed only by a real AASSvc sample: the fallback
-    /// path reports 0 RPM because nothing measured the fans, and judging that would fire on every machine without
-    /// the service.
+    /// Watches for a fan that has stopped while its die is hot. Fed on every backend, but it only judges a sample
+    /// whose fan speeds are real tachometer readings: the fallback path reports 0 RPM because nothing measured the
+    /// fans, and the direct-WMI path reports the requested percentage restated as RPM.
     /// </summary>
     private readonly FanStallWatchdog _fanStallWatchdog = new();
+
+    /// <summary>True while the watchdog is in standby, so the reason is logged once per transition and not per poll.</summary>
+    private bool _fanStallStandbyLogged;
 
     /// <summary>
     /// True once neither temperature sensor has answered for <see cref="FanCurveDeadSensorPollThreshold"/> polls in

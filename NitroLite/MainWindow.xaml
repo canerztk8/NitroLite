@@ -2032,6 +2032,11 @@
                                     <TextBlock x:Name="TxtLightingUnsupported" TextWrapping="Wrap" Foreground="{DynamicResource AccentRed}" FontSize="11" />
                                 </Border>
 
+                                <!-- OpenRGB SDK (127.0.0.1:6742): the third lighting path, and the only one that needs
+                                     neither Acer's service nor a per-chassis HID packet layout. Hidden until a server
+                                     actually answers, so a machine without OpenRGB sees nothing. -->
+                                <TextBlock x:Name="TxtOpenRgbStatus" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{DynamicResource InkFaint}" FontSize="11.5" Margin="0,0,0,16" />
+
                                 <!-- 4 Zones Visual Preview -->
                                 <Border x:Name="CardZonePreview" Style="{StaticResource CardBorder}" Margin="0,0,0,16">
                                     <StackPanel>

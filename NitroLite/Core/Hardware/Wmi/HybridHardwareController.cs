@@ -1,4 +1,22 @@
-namespace NitroLite.Core.Hardware.Wmi;
+﻿namespace NitroLite.Core.Hardware.Wmi;
+
+/// <summary>
+/// What NitroLite currently wants the hardware to be doing, and why. Supplied by the window, which is the only place
+/// that knows whether school mode holds the fans or a thermal floor is in force.
+/// </summary>
+public sealed record HardwareTarget(
+    OperatingMode? Mode,
+    FanMode? Fan,
+    string Reason,
+    int CpuPercent = -1,
+    int GpuPercent = -1);
+
+/// <summary>The outcome of one WMI-to-service handover.</summary>
+public sealed record ReconciliationResult(bool Switched, bool Reapplied, string? Detail)
+{
+    /// <summary>No handover happened, so there was nothing to reconcile.</summary>
+    public static readonly ReconciliationResult None = new(false, false, null);
+}
 
 /// <summary>
 /// Picks a backend per call: the Acer service when it is healthy, direct WMI when it is not.
@@ -13,6 +31,13 @@ namespace NitroLite.Core.Hardware.Wmi;
 /// Keyboard lighting and the backlight timeout always go to the service. The direct-WMI backend does not implement
 /// them, and routing them to a backend that would answer "no" would turn a working control into a dead one.
 /// </para>
+/// <para>
+/// A handover in the other direction needs care. While the app was on WMI it wrote the EC directly; if the user then
+/// installs or starts Acer's software, the service comes up with its own idea of the fan mode and the power mode, and
+/// the two writers drift apart silently. <see cref="ReconcileAsync"/> closes that gap: on the first call that finds
+/// the service healthy again, it reads what the service sees and re-applies NitroLite's target over the socket when
+/// the two disagree.
+/// </para>
 /// </summary>
 public sealed class HybridHardwareController : IHardwareController
 {
@@ -24,6 +49,9 @@ public sealed class HybridHardwareController : IHardwareController
     private IHardwareController? _wmi;
     private bool _wmiCreated;
     private bool _disposed;
+
+    /// <summary>Set when a call moves the app off WMI, so the next <see cref="ReconcileAsync"/> knows to act.</summary>
+    private bool _pendingReconciliation;
 
     /// <summary>
     /// <paramref name="wmiFactory"/> returns the direct-WMI backend, or null when this build or this session must not
@@ -50,6 +78,15 @@ public sealed class HybridHardwareController : IHardwareController
 
     private bool _activeIsWmi;
 
+    /// <summary>
+    /// Supplies NitroLite's active target for <see cref="ReconcileAsync"/>. Null means "no opinion", and then the
+    /// handover only logs that it happened.
+    /// </summary>
+    public Func<HardwareTarget?>? TargetProvider { get; set; }
+
+    /// <summary>True when a handover from WMI to the service is waiting to be reconciled.</summary>
+    public bool ReconciliationPending => _pendingReconciliation;
+
     /// <summary>The service backend, always present.</summary>
     public IHardwareController Agent => _agent;
 
@@ -65,6 +102,15 @@ public sealed class HybridHardwareController : IHardwareController
     public bool IsAvailable => _agent.IsAvailable || (_wmi?.IsAvailable ?? false);
 
     /// <summary>
+    /// Records which backend is active and notices the one transition that needs work: leaving WMI for the service.
+    /// </summary>
+    private void SetActive(bool isWmi)
+    {
+        if (_activeIsWmi && !isWmi) _pendingReconciliation = true;
+        _activeIsWmi = isWmi;
+    }
+
+    /// <summary>
     /// Chooses the backend for this call. The service is asked first and only a failed handshake moves the call to
     /// WMI, so a healthy machine never pays for the fallback.
     /// </summary>
@@ -72,25 +118,81 @@ public sealed class HybridHardwareController : IHardwareController
     {
         if (!_useDirectWmi())
         {
-            _activeIsWmi = false;
+            SetActive(false);
             return _agent;
         }
 
         if (await _serviceHealthy().ConfigureAwait(false))
         {
-            _activeIsWmi = false;
+            SetActive(false);
             return _agent;
         }
 
         var wmi = EnsureWmi();
         if (wmi == null)
         {
-            _activeIsWmi = false;
+            SetActive(false);
             return _agent;
         }
 
-        _activeIsWmi = true;
+        SetActive(true);
         return wmi;
+    }
+
+    /// <summary>
+    /// Re-applies NitroLite's target over the socket after a handover from WMI. Returns
+    /// <see cref="ReconciliationResult.None"/> when no handover is pending, so it is safe to call on every poll.
+    /// <para>
+    /// The target is read, not guessed: school mode's lock and the thermal floors live in the window, and a
+    /// reconciliation that invented its own idea of the right fan mode would be a third writer rather than a fix.
+    /// A target that already matches what the service reports is left alone — writing it again would be a no-op that
+    /// still costs an EC round trip.
+    /// </para>
+    /// </summary>
+    public async Task<ReconciliationResult> ReconcileAsync()
+    {
+        // Resolving first is what notices the handover: the service may have come up since the last call.
+        await ResolveAsync().ConfigureAwait(false);
+        if (!_pendingReconciliation) return ReconciliationResult.None;
+        _pendingReconciliation = false;
+
+        var target = TargetProvider?.Invoke();
+        if (target == null)
+        {
+            AppLog.Info("Donanım yolu değişti", "AASSvc yeniden kullanılabilir; uzlaştırılacak hedef yok.");
+            return new ReconciliationResult(true, false, null);
+        }
+
+        var applied = new List<string>();
+
+        if (target.Mode is { } mode)
+        {
+            var current = await _agent.GetOperatingModeAsync().ConfigureAwait(false);
+            if (current != mode)
+            {
+                bool ok = await _agent.SetOperatingModeAsync(mode).ConfigureAwait(false);
+                if (ok) applied.Add($"mod={mode}");
+                else AppLog.Warn("Uzlaştırma: çalışma modu yazılamadı", $"{current} -> {mode}");
+            }
+        }
+
+        if (target.Fan is { } fan)
+        {
+            var current = await _agent.GetFanModeAsync().ConfigureAwait(false);
+            if (current != fan)
+            {
+                bool ok = await _agent.SetFanModeAsync(fan, target.CpuPercent, target.GpuPercent).ConfigureAwait(false);
+                if (ok) applied.Add($"fan={fan}");
+                else AppLog.Warn("Uzlaştırma: fan modu yazılamadı", $"{current} -> {fan}");
+            }
+        }
+
+        string detail = applied.Count > 0
+            ? $"{target.Reason}: {string.Join(", ", applied)}"
+            : $"{target.Reason}: zaten uyumlu";
+
+        AppLog.Info("Donanım yolu değişti", $"WMI -> AASSvc, {detail}");
+        return new ReconciliationResult(true, applied.Count > 0, detail);
     }
 
     /// <summary>
@@ -125,7 +227,7 @@ public sealed class HybridHardwareController : IHardwareController
         if (wmi == null) return false;
 
         var connected = await wmi.EnsureConnectedAsync().ConfigureAwait(false);
-        _activeIsWmi = connected;
+        SetActive(connected);
         return connected;
     }
 
@@ -137,6 +239,22 @@ public sealed class HybridHardwareController : IHardwareController
 
     public async Task<MonitorData?> GetMonitorDataAsync() => await (await ResolveAsync().ConfigureAwait(false))
         .GetMonitorDataAsync().ConfigureAwait(false);
+
+    /// <summary>
+    /// The telemetry poll's own entry point. It differs from <see cref="GetMonitorDataAsync"/> in one way: it never
+    /// starts the direct-WMI backend, so opening the window on a machine with no Acer service does not raise an
+    /// elevation prompt. The WMI path is used only once it is already connected — the user started it from the
+    /// settings page, or a write needed it — and the service is still not answering.
+    /// </summary>
+    public async Task<MonitorData?> GetTelemetryAsync()
+    {
+        if (_wmi is { IsAvailable: true } && !await _serviceHealthy().ConfigureAwait(false))
+        {
+            return await _wmi.GetMonitorDataAsync().ConfigureAwait(false);
+        }
+
+        return await _agent.GetMonitorDataAsync().ConfigureAwait(false);
+    }
 
     public async Task<OperatingMode?> GetOperatingModeAsync() => await (await ResolveAsync().ConfigureAwait(false))
         .GetOperatingModeAsync().ConfigureAwait(false);

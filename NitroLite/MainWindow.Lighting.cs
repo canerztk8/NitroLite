@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using NitroLite.Core;
+using NitroLite.Core.Hardware.OpenRgb;
 using WpfBrush = System.Windows.Media.Brush;
 using WpfButton = System.Windows.Controls.Button;
 using WpfPoint = System.Windows.Point;
@@ -360,6 +361,40 @@ public partial class MainWindow
                 TxtLightingUnsupported.Text = Loc.T("Acer servisi bu modelde denetlenebilir klavye aydınlatması bildirmedi. "
                     + "Aşağıdaki denetimler etkisiz kalabilir; RGB servisini onarmayı deneyebilirsiniz.");
         });
+    }
+
+    /// <summary>
+    /// Looks for an OpenRGB SDK server on <c>127.0.0.1:6742</c> and says so on the RGB tab when one answers.
+    /// <para>
+    /// OpenRGB is the third lighting path: it needs neither Acer's service nor a per-chassis HID packet layout, so on
+    /// a machine where the service reports no controllable lighting it may still be the one that works. Nothing is
+    /// installed and nothing is started — a machine without OpenRGB simply keeps the line hidden.
+    /// </para>
+    /// </summary>
+    private async Task RefreshOpenRgbStatusAsync()
+    {
+        if (TxtOpenRgbStatus == null) return;
+
+        string? text = null;
+        try
+        {
+            using var client = new OpenRgbClient();
+            if (await client.ConnectAsync(TimeSpan.FromMilliseconds(600)))
+            {
+                int? count = await client.GetControllerCountAsync();
+                text = count is > 0
+                    ? Loc.T($"OpenRGB SDK etkin (127.0.0.1:6742): {count} cihaz. Klavye renkleri OpenRGB üzerinden de yönetilebilir.")
+                    : Loc.T("OpenRGB SDK etkin (127.0.0.1:6742) ancak cihaz bildirmiyor.");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("OpenRGB durumu okunamadı", ex.Message);
+        }
+
+        if (Dispatcher.HasShutdownStarted) return;
+        TxtOpenRgbStatus.Text = text ?? string.Empty;
+        TxtOpenRgbStatus.Visibility = text == null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SetLightingSlidersSilently(Action update)

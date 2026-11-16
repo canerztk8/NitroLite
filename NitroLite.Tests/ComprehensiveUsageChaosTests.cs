@@ -200,9 +200,12 @@ public class ComprehensiveUsageChaosTests
                     for (int i = 0; i < 3; i++) { TemperatureC = 0; await CurveStepAsync(); }
                     break;
                 case ChaosEvent.FanStall:
+                    // A real AASSvc sample: the watchdog only judges tachometer readings, so the flag is part of
+                    // what makes this a stall rather than a derived number.
                     await Window.CheckFanStallAsync(new MonitorData
                     {
-                        CpuTemperature = 92, GpuTemperature = 90, CpuFanSpeed = 0, GpuFanSpeed = 0
+                        CpuTemperature = 92, GpuTemperature = 90, CpuFanSpeed = 0, GpuFanSpeed = 0,
+                        IsFanRpmMeasured = true
                     });
                     break;
 

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Timers;
 using Microsoft.Win32;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite.Core;
 
@@ -60,7 +61,7 @@ public class PowerAutomationService : IDisposable
     [DllImport("kernel32.dll")]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
-    private readonly AcerAgentClient _agentClient;
+    private readonly IHardwareController _hardware;
     private readonly CpuPowerService _cpuPowerService;
     private readonly IDisplayRefreshRateService _displayService;
     private readonly AppSettings _settings;
@@ -328,9 +329,14 @@ public class PowerAutomationService : IDisposable
         IDisplayRefreshRateService displayService,
         AppSettings settings,
         bool attachSystemEvents = true,
-        SemaphoreSlim? transitionLock = null)
+        SemaphoreSlim? transitionLock = null,
+        IHardwareController? hardware = null)
     {
-        _agentClient = agentClient ?? throw new ArgumentNullException(nameof(agentClient));
+        // The agent stays the first parameter so every existing call site keeps compiling, but the AC/DC transitions
+        // below go through the controller: on a machine with no Acer software they have to reach the direct-WMI
+        // backend, and a service that only knows the socket would silently do nothing there.
+        _hardware = hardware ?? new AgentHardwareController(
+            agentClient ?? throw new ArgumentNullException(nameof(agentClient)), new CareCenterClient());
         _cpuPowerService = cpuPowerService ?? throw new ArgumentNullException(nameof(cpuPowerService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -459,7 +465,7 @@ public class PowerAutomationService : IDisposable
                     bool modeOk = false;
                     try
                     {
-                        modeOk = await _agentClient.SetOperatingModeAsync(OperatingMode.Quiet);
+                        modeOk = await _hardware.SetOperatingModeAsync(OperatingMode.Quiet);
                     }
                     catch { modeOk = false; }
 
@@ -474,7 +480,7 @@ public class PowerAutomationService : IDisposable
                     bool fanOk = false;
                     try
                     {
-                        fanOk = await _agentClient.SetFanModeAsync(FanMode.Auto);
+                        fanOk = await _hardware.SetFanModeAsync(FanMode.Auto);
                     }
                     catch { fanOk = false; }
 
@@ -571,7 +577,7 @@ public class PowerAutomationService : IDisposable
                     {
                         try
                         {
-                            modeOk = await _agentClient.SetOperatingModeAsync(targetMode);
+                            modeOk = await _hardware.SetOperatingModeAsync(targetMode);
                         }
                         catch { modeOk = false; }
                         SetPendingRestore(mode: !modeOk);
@@ -598,7 +604,7 @@ public class PowerAutomationService : IDisposable
                     {
                         try
                         {
-                            fanOk = await _agentClient.SetFanModeAsync(targetFan);
+                            fanOk = await _hardware.SetFanModeAsync(targetFan);
                         }
                         catch { fanOk = false; }
                         SetPendingRestore(fan: !fanOk);
@@ -686,7 +692,7 @@ public class PowerAutomationService : IDisposable
             if (_pendingAcModeRestore)
             {
                 bool ok = false;
-                try { ok = await _agentClient.SetOperatingModeAsync(targetMode); } catch { ok = false; }
+                try { ok = await _hardware.SetOperatingModeAsync(targetMode); } catch { ok = false; }
                 if (ok)
                 {
                     SetPendingRestore(mode: false);
@@ -710,7 +716,7 @@ public class PowerAutomationService : IDisposable
             if (_pendingAcFanRestore)
             {
                 bool ok = false;
-                try { ok = await _agentClient.SetFanModeAsync(targetFan); } catch { ok = false; }
+                try { ok = await _hardware.SetFanModeAsync(targetFan); } catch { ok = false; }
                 if (ok)
                 {
                     SetPendingRestore(fan: false);
@@ -805,11 +811,11 @@ public class PowerAutomationService : IDisposable
         try
         {
             bool modeOk = false, boostOk = false, fanOk = false;
-            try { modeOk = await _agentClient.SetOperatingModeAsync(_savedOperatingModeBeforeDc); }
+            try { modeOk = await _hardware.SetOperatingModeAsync(_savedOperatingModeBeforeDc); }
             catch (Exception ex) { AppLog.Warn("Çıkışta çalışma modu geri alınamadı", ex.Message); }
             try { boostOk = await RestoreBoostAfterEcoAsync(false, _savedCpuBoostBeforeDc); }
             catch (Exception ex) { AppLog.Warn("Çıkışta CPU boost geri alınamadı", ex.Message); }
-            try { fanOk = await _agentClient.SetFanModeAsync(_savedFanModeBeforeDc); }
+            try { fanOk = await _hardware.SetFanModeAsync(_savedFanModeBeforeDc); }
             catch (Exception ex) { AppLog.Warn("Çıkışta fan modu geri alınamadı", ex.Message); }
 
             RestorePanelRefreshRateAfterEco();

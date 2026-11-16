@@ -118,6 +118,19 @@ public class MonitorData
     [JsonIgnore]
     public bool GpuMetricsAvailable { get; set; }
 
+    /// <summary>
+    /// True when <see cref="CpuFanSpeed"/> and <see cref="GpuFanSpeed"/> are tachometer readings the hardware
+    /// actually reported. False means they were derived from a fan percentage and a model ceiling, or that nothing
+    /// measured the fans at all.
+    /// <para>
+    /// The distinction decides whether the fan-stall watchdog may judge a sample. A derived number is a restatement
+    /// of what the app asked for, not a measurement of what the fan is doing: a fan that has failed still reads
+    /// "34 %" because the register says 34 %, so judging it would either hide a real stall or invent one.
+    /// </para>
+    /// </summary>
+    [JsonIgnore]
+    public bool IsFanRpmMeasured { get; set; }
+
     public DateTime Timestamp { get; set; } = DateTime.Now;
 }
 

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using NitroLite.Core;
+using NitroLite.Core.Hardware.Wmi;
 using WpfPoint = System.Windows.Point;
 
 namespace NitroLite;
@@ -124,7 +125,20 @@ public partial class MainWindow
 
         try
         {
-            var data = await _agentClient.GetMonitorDataAsync();
+            // Through the hardware layer, so a machine running on the direct-WMI backend still gets its sensors.
+            // The hybrid's telemetry entry point never starts that backend on its own: an elevation prompt on
+            // startup is exactly what the asInvoker design avoids.
+            var data = _hardware is HybridHardwareController hybrid
+                ? await hybrid.GetTelemetryAsync()
+                : await _hardware.GetMonitorDataAsync();
+
+            // A handover from WMI back to AASSvc leaves the service with its own idea of the fan and power mode.
+            // Reconciling here is free when nothing is pending: it is one flag check.
+            if (_hardware is HybridHardwareController reconciling)
+            {
+                try { await reconciling.ReconcileAsync(); }
+                catch (Exception ex) { AppLog.Warn("Donanım uzlaştırması başarısız", ex.Message); }
+            }
 
             // AASSvc unavailable: fall back to what Windows/NVML can measure (CPU load, RAM, GPU via NVML).
             // Sensors only the Acer service provides (CPU temperature, fans, board temperature) are shown as
@@ -164,9 +178,10 @@ public partial class MainWindow
                 UpdateFanCurveStatusText();
             }
 
-            // A fan that is not turning while its die is hot is a hardware fault, not a preference. Judged only on
-            // a real AASSvc sample: the fallback path reports 0 RPM because nothing measured the fans.
-            if (!isFallback) await CheckFanStallAsync(data);
+            // A fan that is not turning while its die is hot is a hardware fault, not a preference. Judged on every
+            // backend: the watchdog itself decides whether this sample carries a real tachometer reading, because
+            // only it knows the difference between a measurement and a percentage restated as RPM.
+            await CheckFanStallAsync(data);
 
             bool isWindowVisible = IsVisible && WindowState != WindowState.Minimized;
             bool isGpuSleeping = data.GpuTemperature <= 0;

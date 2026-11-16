@@ -175,6 +175,8 @@
  "Maksimum performans": "Rendimiento máximo",
  "Model, BIOS, Acer servisleri ve WMI durumunu dosyaya yazar. Hata bildirirken ekleyin; seri numarası ve kullanıcı adı içermez.": "Escribe el modelo, la BIOS, los servicios de Acer y el estado de WMI en un archivo. Adjúntalo al informar de un fallo; no contiene número de serie ni nombre de usuario.",
  "NVMe · S.M.A.R.T. OK": "NVMe · S.M.A.R.T. OK",
+ "OpenRGB SDK etkin (127.0.0.1:6742) ancak cihaz bildirmiyor.": "SDK de OpenRGB activo (127.0.0.1:6742) pero no informa de ningún dispositivo.",
+ "OpenRGB SDK etkin (127.0.0.1:6742): {0} cihaz. Klavye renkleri OpenRGB üzerinden de yönetilebilir.": "SDK de OpenRGB activo (127.0.0.1:6742): {0} dispositivo(s). Los colores del teclado también se pueden gestionar desde OpenRGB.",
  "Otomatik başlatmada pencere gösterilmez, tepside çalışır. Elle açtığınızda pencere görünür.": "Al iniciar automáticamente no se muestra ninguna ventana; se ejecuta en la bandeja. Si lo abres tú, la ventana es visible.",
  "Oyun Profilleri": "Perfiles de juego",
  "Oyun kapanınca dönülecek profil.": "Perfil al que se vuelve al cerrar el juego.",

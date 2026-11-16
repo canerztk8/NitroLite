@@ -519,11 +519,34 @@ public partial class MainWindow
     /// The user is told, and the machine drops to the lowest power mode so it stops adding heat on its own.
     /// </summary>
     /// <remarks>
-    /// Only called with a real AASSvc sample. The fallback path reports 0 RPM because nothing measured the fans,
-    /// and judging that would fire on every machine whose service is not running.
+    /// Called on every telemetry path, but it only judges a sample whose fan speeds are real tachometer readings
+    /// (<see cref="MonitorData.IsFanRpmMeasured"/>). The fallback path reports 0 RPM because nothing measured the
+    /// fans, and the direct-WMI path reports the requested percentage restated as RPM — judging either would fire on
+    /// every machine without the service, or stay silent through a genuine stall. In those cases the watchdog is
+    /// held in standby and the reason is logged once, so a diagnostic log explains why no alert ever came.
     /// </remarks>
     internal async Task CheckFanStallAsync(MonitorData data)
     {
+        if (!data.IsFanRpmMeasured)
+        {
+            // Standby, not a verdict. The timers are cleared so a stall that was being tracked on a measured sample
+            // cannot be confirmed later by a derived one that happens to arrive after the backend switched.
+            _fanStallWatchdog.Reset();
+            if (!_fanStallStandbyLogged)
+            {
+                _fanStallStandbyLogged = true;
+                AppLog.Info("Fan arızası koruması beklemede",
+                    "Bu arka uç gerçek takometre RPM değeri bildirmiyor; fan durma denetimi yapılmıyor.");
+            }
+            return;
+        }
+
+        if (_fanStallStandbyLogged)
+        {
+            _fanStallStandbyLogged = false;
+            AppLog.Info("Fan arızası koruması etkin", "Gerçek takometre RPM değeri okunuyor.");
+        }
+
         var verdict = _fanStallWatchdog.Observe(
             data.CpuTemperature, data.GpuTemperature, data.CpuFanSpeed, data.GpuFanSpeed, DateTime.UtcNow);
         if (verdict == null) return;
