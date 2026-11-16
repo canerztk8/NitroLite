@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
@@ -7,16 +7,123 @@ using NitroLite.Linux;
 
 namespace NitroLite.Desktop.ViewModels;
 
-/// <summary>One entry in the operating-mode selector.</summary>
-public sealed record ModeChoice(OperatingMode Mode, string Label)
+/// <summary>
+/// One card in the operating-mode picker.
+/// </summary>
+/// <remarks>
+/// A card rather than a combo-box row: clicking it applies the mode, so there is no separate Apply button and no state
+/// in which the list shows one mode while the machine runs another. <see cref="IsSelected"/> is what the view paints
+/// with the accent colour, and it is owned here rather than derived from the parent so a card can repaint on its own.
+/// </remarks>
+public sealed class ModeChoice : ObservableObject
 {
+    private bool _isSelected;
+
+    public ModeChoice(OperatingMode mode, string label, string description, string icon, Action<ModeChoice>? select = null)
+    {
+        Mode = mode;
+        Label = label;
+        Description = description;
+        Icon = icon;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    public OperatingMode Mode { get; }
+
+    public string Label { get; }
+
+    /// <summary>One line under the title: what this mode does to the machine.</summary>
+    public string Description { get; }
+
+    /// <summary>
+    /// Path data for the card's icon, in Avalonia's geometry mini-language. A string rather than a
+    /// <c>Geometry</c> so this file stays free of Avalonia types; the view binds it to <c>PathIcon.Data</c>, which
+    /// converts it.
+    /// </summary>
+    public string Icon { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
     public override string ToString() => Label;
 }
 
-/// <summary>One entry in the fan-mode selector.</summary>
-public sealed record FanModeChoice(FanMode Mode, string Label)
+/// <summary>One card in the fan-mode picker. Same contract as <see cref="ModeChoice"/>.</summary>
+public sealed class FanModeChoice : ObservableObject
 {
+    private bool _isSelected;
+
+    public FanModeChoice(FanMode mode, string label, string description, string icon, Action<FanModeChoice>? select = null)
+    {
+        Mode = mode;
+        Label = label;
+        Description = description;
+        Icon = icon;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    public FanMode Mode { get; }
+
+    public string Label { get; }
+
+    public string Description { get; }
+
+    public string Icon { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
     public override string ToString() => Label;
+}
+
+/// <summary>One row of the capability list: a name and whether this machine has it.</summary>
+public sealed record CapabilityRow(string Label, bool Supported)
+{
+    /// <summary>The tick or cross the row is drawn with.</summary>
+    public string Glyph => Supported ? "✓" : "✕";
+
+    /// <summary>"Destekleniyor" / "Desteklenmiyor", so the row says it in words as well as in a symbol.</summary>
+    public string StateText => Supported ? Loc.T("Destekleniyor") : Loc.T("Desteklenmiyor");
+}
+
+/// <summary>One configured game rule, as the Game Profiles page lists it.</summary>
+public sealed class GameProfileRow : ObservableObject
+{
+    public GameProfileRow(
+        GameProfile profile, string modeLabel, string fanLabel, string deleteLabel, Action<GameProfileRow> delete)
+    {
+        ExeName = profile.ExeName;
+        DisplayName = string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.ExeName : profile.DisplayName;
+        ModeLabel = modeLabel;
+        FanLabel = fanLabel;
+        DeleteLabel = deleteLabel;
+        DeleteCommand = new RelayCommand(() => delete(this));
+    }
+
+    public string ExeName { get; }
+
+    public string DisplayName { get; }
+
+    /// <summary>The operating mode this game switches to, already translated.</summary>
+    public string ModeLabel { get; }
+
+    /// <summary>The fan mode this game switches to, already translated.</summary>
+    public string FanLabel { get; }
+
+    /// <summary>The delete button's caption, carried on the row so the template needs no parent lookup.</summary>
+    public string DeleteLabel { get; }
+
+    public RelayCommand DeleteCommand { get; }
 }
 
 /// <summary>One entry in the effect selector. <see cref="Id"/> is what the backend expects.</summary>
@@ -128,6 +235,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private readonly SparklineHistory _cpuTemperatureHistory = new();
     private readonly SparklineHistory _gpuTemperatureHistory = new();
+    private readonly SparklineHistory _sysTemperatureHistory = new();
     private readonly SparklineHistory _cpuFanHistory = new();
     private readonly SparklineHistory _gpuFanHistory = new();
 
@@ -192,6 +300,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _rgbProfileStatus = "";
     private bool _gameActive;
     private string _gameStatus = "";
+    private string _newGameExe = "";
+    private string _newGameName = "";
+    private ModeChoice? _newGameMode;
+    private FanModeChoice? _newGameFanMode;
+    private string _gameProfileStatus = "";
 
     /// <summary>
     /// <paramref name="gameProfiles"/>, <paramref name="schoolMode"/>, <paramref name="rgbProfiles"/> and
@@ -224,6 +337,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BuildCurveAnchors();
         BuildChoices();
         BuildThemeChoices();
+        BuildGameProfileRows();
         RefreshRgbProfiles();
 
         // The stored palette goes on before the window exists, so the first frame is already the right colour rather
@@ -241,8 +355,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         // The pill is short on purpose; the banner carries the sentence that explains it.
         _status = HasNoBackend ? _labels.NoBackend : _labels.Ready;
 
-        ApplyModeCommand = new AsyncCommand(() => ApplyModeAsync(_selectedMode?.Mode));
         ApplyFanModeCommand = new AsyncCommand(ApplyFanModeAsync);
+        AddGameProfileCommand = new RelayCommand(AddGameProfile);
         ApplyCurveCommand = new AsyncCommand(ApplyCurveAsync);
         ApplyLightingCommand = new AsyncCommand(ApplyLightingAsync);
         TurnOffLightingCommand = new AsyncCommand(TurnOffLightingAsync);
@@ -267,6 +381,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             foreach (var anchor in CurveAnchors) anchor.Labels = value;
             Raise(nameof(CurvePreview));
             Raise(nameof(CapabilitySummaryText));
+            Raise(nameof(TierDisplay));
+            // The rows carry translated names, so they are rebuilt rather than re-raised.
+            BuildCapabilityRows();
+            BuildGameProfileRows();
         }
     }
 
@@ -383,6 +501,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<double> GpuTemperatureHistory => _gpuTemperatureHistory.Snapshot();
 
+    public IReadOnlyList<double> SysTemperatureHistory => _sysTemperatureHistory.Snapshot();
+
     public IReadOnlyList<double> CpuFanHistory => _cpuFanHistory.Snapshot();
 
     public IReadOnlyList<double> GpuFanHistory => _gpuFanHistory.Snapshot();
@@ -396,11 +516,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (data.CpuTemperature > 0) _cpuTemperatureHistory.Add(data.CpuTemperature);
         if (data.GpuTemperature > 0) _gpuTemperatureHistory.Add(data.GpuTemperature);
+        if (data.SysTemperature > 0) _sysTemperatureHistory.Add(data.SysTemperature);
         _cpuFanHistory.Add(data.CpuFanSpeed);
         _gpuFanHistory.Add(data.GpuFanSpeed);
 
         Raise(nameof(CpuTemperatureHistory));
         Raise(nameof(GpuTemperatureHistory));
+        Raise(nameof(SysTemperatureHistory));
         Raise(nameof(CpuFanHistory));
         Raise(nameof(GpuFanHistory));
     }
@@ -409,14 +531,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<ModeChoice> Modes { get; } = new();
 
+    /// <summary>
+    /// The mode in effect. Assigning it applies the mode: the cards are the control, so a click is the whole gesture.
+    /// </summary>
     public ModeChoice? SelectedMode
     {
         get => _selectedMode;
         set
         {
             if (!Set(ref _selectedMode, value)) return;
+            SyncModeSelection();
             if (!_suppressWrite) _ = ApplyModeAsync(value?.Mode);
         }
+    }
+
+    /// <summary>Paints the accent on exactly one card. Called whenever the selection moves, including from a game.</summary>
+    private void SyncModeSelection()
+    {
+        foreach (var card in Modes) card.IsSelected = card.Mode == _selectedMode?.Mode;
     }
 
     public bool ModeControlAvailable => _capabilities.OperatingModeControl;
@@ -431,9 +563,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _selectedFanMode, value)) return;
+            SyncFanSelection();
             Raise(nameof(CustomFanVisible));
             if (!_suppressWrite) _ = ApplyFanModeAsync();
         }
+    }
+
+    private void SyncFanSelection()
+    {
+        foreach (var card in FanModes) card.IsSelected = card.Mode == _selectedFanMode?.Mode;
     }
 
     /// <summary>The custom-speed sliders only mean something in <see cref="FanMode.Custom"/>.</summary>
@@ -691,11 +829,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public string RgbProfileStatus
     {
         get => _rgbProfileStatus;
-        private set => Set(ref _rgbProfileStatus, value);
+        private set
+        {
+            if (!Set(ref _rgbProfileStatus, value)) return;
+            Raise(nameof(HasRgbProfileStatus));
+        }
     }
+
+    /// <summary>False until something has happened, so the page does not draw an empty status line.</summary>
+    public bool HasRgbProfileStatus => !string.IsNullOrWhiteSpace(_rgbProfileStatus);
 
     /// <summary>Set when the presets file existed but could not be read, so the page can say so.</summary>
     public string? RgbProfileLoadError => _rgbProfiles.LoadError;
+
+    public bool HasRgbProfileLoadError => !string.IsNullOrWhiteSpace(RgbProfileLoadError);
 
     // ---------------------------------------------------------------- game detection
 
@@ -730,6 +877,138 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (!value) _ = PollGameAsync();
         }
     }
+
+    // ---------------------------------------------------------------- game profiles page
+
+    /// <summary>The configured game rules, as the Game Profiles page lists them.</summary>
+    public ObservableCollection<GameProfileRow> GameProfiles { get; } = new();
+
+    /// <summary>The modes a new rule can target. Same list the dashboard offers, so a rule cannot name a mode the
+    /// firmware refuses.</summary>
+    public ObservableCollection<ModeChoice> GameModeChoices { get; } = new();
+
+    /// <summary>The fan modes a new rule can target.</summary>
+    public ObservableCollection<FanModeChoice> GameFanChoices { get; } = new();
+
+    public string NewGameExe
+    {
+        get => _newGameExe;
+        set => Set(ref _newGameExe, value);
+    }
+
+    public string NewGameName
+    {
+        get => _newGameName;
+        set => Set(ref _newGameName, value);
+    }
+
+    public ModeChoice? NewGameMode
+    {
+        get => _newGameMode;
+        set => Set(ref _newGameMode, value);
+    }
+
+    public FanModeChoice? NewGameFanMode
+    {
+        get => _newGameFanMode;
+        set => Set(ref _newGameFanMode, value);
+    }
+
+    /// <summary>The last thing the page did: added, deleted, or why it refused.</summary>
+    public string GameProfileStatus
+    {
+        get => _gameProfileStatus;
+        private set
+        {
+            if (!Set(ref _gameProfileStatus, value)) return;
+            Raise(nameof(HasGameProfileStatus));
+        }
+    }
+
+    /// <summary>False until the page has done something, so it does not draw an empty status line.</summary>
+    public bool HasGameProfileStatus => !string.IsNullOrWhiteSpace(_gameProfileStatus);
+
+    /// <summary>True when there is at least one rule, so the empty-state line and the list never both show.</summary>
+    public bool HasGameProfiles => GameProfiles.Count > 0;
+
+    public bool HasNoGameProfiles => !HasGameProfiles;
+
+    public RelayCommand AddGameProfileCommand { get; }
+
+    /// <summary>
+    /// Rebuilds the list from the settings file. The service reads <c>AppSettings.GameProfiles</c> on every poll, so
+    /// adding or removing a rule here is enough for detection to pick it up on the next tick.
+    /// </summary>
+    private void BuildGameProfileRows()
+    {
+        GameProfiles.Clear();
+        foreach (var profile in _settings.GameProfiles)
+        {
+            if (profile == null || string.IsNullOrWhiteSpace(profile.ExeName)) continue;
+            GameProfiles.Add(new GameProfileRow(
+                profile,
+                ModeLabel(profile.TargetMode),
+                profile.TargetFanCurveEnabled ? Labels.CustomCurve : FanModeLabel(profile.TargetFanMode),
+                Labels.DeleteProfile,
+                DeleteGameProfile));
+        }
+
+        Raise(nameof(HasGameProfiles));
+        Raise(nameof(HasNoGameProfiles));
+    }
+
+    private void AddGameProfile()
+    {
+        var exe = (NewGameExe ?? "").Trim();
+        if (exe.Length == 0)
+        {
+            GameProfileStatus = Labels.GameExeRequired;
+            return;
+        }
+
+        if (_settings.GameProfiles.Any(p => p != null && p.ExeName.Equals(exe, StringComparison.OrdinalIgnoreCase)))
+        {
+            GameProfileStatus = Labels.GameAlreadyDefined;
+            return;
+        }
+
+        var profile = new GameProfile
+        {
+            ExeName = exe,
+            DisplayName = string.IsNullOrWhiteSpace(NewGameName) ? exe : NewGameName.Trim(),
+            TargetMode = NewGameMode?.Mode ?? OperatingMode.Default,
+            TargetFanMode = NewGameFanMode?.Mode ?? FanMode.Auto,
+            AutoApply = true
+        };
+
+        _settings.GameProfiles.Add(profile);
+        SaveSettings();
+        BuildGameProfileRows();
+
+        NewGameExe = "";
+        NewGameName = "";
+        GameProfileStatus = Labels.GameAdded(profile.DisplayName);
+    }
+
+    private void DeleteGameProfile(GameProfileRow row)
+    {
+        var profile = _settings.GameProfiles
+            .FirstOrDefault(p => p != null && p.ExeName.Equals(row.ExeName, StringComparison.OrdinalIgnoreCase));
+        if (profile == null) return;
+
+        _settings.GameProfiles.Remove(profile);
+        SaveSettings();
+        BuildGameProfileRows();
+        GameProfileStatus = Labels.GameDeleted(row.DisplayName);
+    }
+
+    private static string FanModeLabel(FanMode mode) => mode switch
+    {
+        FanMode.Auto => Loc.T("Otomatik"),
+        FanMode.Max => Loc.T("Maksimum"),
+        FanMode.Custom => Loc.T("Özel eğri"),
+        _ => mode.ToString()
+    };
 
     // ---------------------------------------------------------------- hardware report
 
@@ -806,13 +1085,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ? $"{_linux.Identity.Model} ({code})"
         : _linux?.Identity.Model ?? "";
 
+    /// <summary>
+    /// False when the probe could not name the machine. The header hides the badge rather than showing an empty pill,
+    /// which is what a machine with no DMI answer would otherwise get.
+    /// </summary>
+    public bool HasDeviceName => !string.IsNullOrWhiteSpace(DeviceModel);
+
     public string DeviceBios => _linux?.Identity.BiosVersion ?? "";
 
+    /// <summary>The raw tier the probe reported: "acer-wmi", "linuwu-sense", "both" or "none".</summary>
     public string TierText => _linux?.Tier ?? "none";
+
+    /// <summary>
+    /// The same value in the user's language. "none" is a diagnostic string, not something to show a user, so the
+    /// settings page binds this instead.
+    /// </summary>
+    public string TierDisplay => TierText switch
+    {
+        "acer-wmi" => Labels.TierAcerWmi,
+        "linuwu-sense" => Labels.TierLinuwuSense,
+        "both" => Labels.TierBoth,
+        _ => Labels.TierNone
+    };
 
     public string DataFolder => AppPaths.DataDirectory;
 
     public IReadOnlyList<string> Notes => _linux?.Notes ?? Array.Empty<string>();
+
+    /// <summary>True when the probe had something to say. The Notes card is hidden rather than shown empty.</summary>
+    public bool HasNotes => Notes.Count > 0;
 
     /// <summary>The probe notes as one block, so the page needs no item template for a list of strings.</summary>
     public string NotesText => string.Join(Environment.NewLine, Notes);
@@ -836,27 +1137,33 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (_hardware == null) return Labels.NoBackend;
 
-            var parts = new List<string>
-            {
-                Row(Labels.CapFanControl, _capabilities.FanControl),
-                Row(Labels.CapOperatingMode, _capabilities.OperatingModeControl),
-                Row(Labels.CapMux, _capabilities.MuxSwitch),
-                Row(Labels.CapBatteryLimit, _capabilities.BatteryChargeLimit),
-                Row(Labels.CapKeyboard, _capabilities.KeyboardLighting),
-                Row(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout),
-                Row(Labels.CapCoolBoost, _capabilities.CoolBoost),
-                Row(Labels.CapLcdOverdrive, _capabilities.LcdOverdrive)
-            };
-
-            return string.Join(Environment.NewLine, parts);
+            return string.Join(Environment.NewLine, CapabilityRows.Select(r => $"{r.Glyph}  {r.Label}"));
         }
     }
 
-    private static string Row(string label, bool supported) => $"{(supported ? "✓" : "✕")}  {label}";
+    /// <summary>
+    /// The same list as <see cref="CapabilitySummaryText"/>, one row per capability, so the settings page can draw a
+    /// tick or a cross in the theme's own colours instead of parsing a block of text.
+    /// </summary>
+    public ObservableCollection<CapabilityRow> CapabilityRows { get; } = new();
+
+    private void BuildCapabilityRows()
+    {
+        CapabilityRows.Clear();
+        if (_hardware == null) return;
+
+        CapabilityRows.Add(new CapabilityRow(Labels.CapFanControl, _capabilities.FanControl));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapOperatingMode, _capabilities.OperatingModeControl));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapMux, _capabilities.MuxSwitch));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapBatteryLimit, _capabilities.BatteryChargeLimit));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapKeyboard, _capabilities.KeyboardLighting));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapCoolBoost, _capabilities.CoolBoost));
+        CapabilityRows.Add(new CapabilityRow(Labels.CapLcdOverdrive, _capabilities.LcdOverdrive));
+    }
 
     // ---------------------------------------------------------------- commands
 
-    public AsyncCommand ApplyModeCommand { get; }
     public AsyncCommand ApplyFanModeCommand { get; }
     public AsyncCommand ApplyCurveCommand { get; }
     public AsyncCommand ApplyLightingCommand { get; }
@@ -914,6 +1221,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(MuxAvailable));
             Raise(nameof(SchoolModeColumnSpan));
             Raise(nameof(CapabilitySummaryText));
+            Raise(nameof(TierDisplay));
+            Raise(nameof(HasNotes));
+            BuildCapabilityRows();
 
             await ReadStateAsync().ConfigureAwait(true);
 
@@ -1501,6 +1811,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(MuxAvailable));
         Raise(nameof(SchoolModeColumnSpan));
         Raise(nameof(HardwareReportText));
+        Raise(nameof(TierDisplay));
+        Raise(nameof(HasNotes));
+        BuildCapabilityRows();
 
         await ReadStateAsync().ConfigureAwait(true);
         Status = Labels.Ready;
@@ -1520,10 +1833,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SelectedEffect = Effects[0];
 
         FanModes.Clear();
-        FanModes.Add(new FanModeChoice(FanMode.Auto, Labels.Auto));
-        FanModes.Add(new FanModeChoice(FanMode.Max, Labels.Max));
-        FanModes.Add(new FanModeChoice(FanMode.Custom, Labels.CustomCurve));
+        FanModes.Add(new FanModeChoice(FanMode.Auto, Labels.Auto, Labels.FanAutoHint, FanIconAuto, SelectFanMode));
+        FanModes.Add(new FanModeChoice(FanMode.Max, Labels.Max, Labels.FanMaxHint, FanIconMax, SelectFanMode));
+        FanModes.Add(new FanModeChoice(FanMode.Custom, Labels.CustomCurve, Labels.FanCustomHint, FanIconCustom, SelectFanMode));
         SelectedFanMode = FanModes[0];
+
+        // The same three cards, without the click handler: the Game Profiles form picks a target, it does not apply one.
+        GameFanChoices.Clear();
+        foreach (var card in FanModes)
+        {
+            GameFanChoices.Add(new FanModeChoice(card.Mode, card.Label, card.Description, card.Icon));
+        }
+
+        NewGameFanMode = GameFanChoices[0];
 
         // Automatic is not offered: it is a firmware decision (Advanced Optimus), and the backend refuses to write it.
         GpuModes.Clear();
@@ -1547,10 +1869,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var previous = SelectedMode?.Mode;
         Modes.Clear();
-        foreach (var mode in wanted) Modes.Add(new ModeChoice(mode, ModeLabel(mode)));
+        foreach (var mode in wanted)
+        {
+            Modes.Add(new ModeChoice(mode, ModeLabel(mode), ModeHint(mode), ModeIcon(mode), SelectMode));
+        }
 
         SelectedMode = Modes.FirstOrDefault(m => m.Mode == previous) ?? Modes.FirstOrDefault();
+        SyncModeSelection();
+
+        // The Game Profiles form offers the same modes. Its own selection is kept across a rescan.
+        var previousTarget = NewGameMode?.Mode ?? OperatingMode.Turbo;
+        GameModeChoices.Clear();
+        foreach (var card in Modes)
+        {
+            GameModeChoices.Add(new ModeChoice(card.Mode, card.Label, card.Description, card.Icon));
+        }
+
+        NewGameMode = GameModeChoices.FirstOrDefault(m => m.Mode == previousTarget) ?? GameModeChoices.FirstOrDefault();
     }
+
+    /// <summary>A card click. Goes through the setter so the write, the settings file and the accent all follow.</summary>
+    private void SelectMode(ModeChoice card) => SelectedMode = card;
+
+    private void SelectFanMode(FanModeChoice card) => SelectedFanMode = card;
 
     private static string ModeLabel(OperatingMode mode) => mode switch
     {
@@ -1561,6 +1902,39 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OperatingMode.Eco => Loc.T("Eco"),
         _ => mode.ToString()
     };
+
+    /// <summary>The one line under a mode's title. Says what the mode costs, not what it is called.</summary>
+    private static string ModeHint(OperatingMode mode) => mode switch
+    {
+        OperatingMode.Quiet => Loc.T("Fanlar en sessiz seviyede; sıcaklık biraz yükselir."),
+        OperatingMode.Default => Loc.T("Sessizlik ile performans arasında dengeli çalışır."),
+        OperatingMode.Extreme => Loc.T("Fanlar erken hızlanır; uzun oyunlarda daha serin kalır."),
+        OperatingMode.Turbo => Loc.T("En yüksek güç ve fan hızı; en gürültülü seçenek."),
+        OperatingMode.Eco => Loc.T("Güç sınırlanır; pil ömrü uzar, performans düşer."),
+        _ => ""
+    };
+
+    // 24×24 path data. Bars for the power ladder, a leaf for Eco: the shape says the same thing as the hint.
+    private const string ModeIconQuiet = "M4,16 H8 V20 H4 Z";
+    private const string ModeIconBalanced = "M4,12 H8 V20 H4 Z M10,16 H14 V20 H10 Z";
+    private const string ModeIconPerformance = "M4,8 H8 V20 H4 Z M10,12 H14 V20 H10 Z M16,16 H20 V20 H16 Z";
+    private const string ModeIconTurbo = "M2,4 H6 V20 H2 Z M8,8 H12 V20 H8 Z M14,12 H18 V20 H14 Z M20,16 H24 V20 H20 Z";
+    private const string ModeIconEco = "M20,4 C10,4 4,10 4,20 C14,20 20,14 20,4 Z";
+
+    private static string ModeIcon(OperatingMode mode) => mode switch
+    {
+        OperatingMode.Quiet => ModeIconQuiet,
+        OperatingMode.Default => ModeIconBalanced,
+        OperatingMode.Extreme => ModeIconPerformance,
+        OperatingMode.Turbo => ModeIconTurbo,
+        OperatingMode.Eco => ModeIconEco,
+        _ => ModeIconBalanced
+    };
+
+    // A ring for automatic, an arrow for maximum, two sliders for the custom curve.
+    private const string FanIconAuto = "M12,2 A10,10 0 1,1 11.99,2 Z M12,7 A5,5 0 1,1 11.99,7 Z";
+    private const string FanIconMax = "M12,2 L20,12 H15 V22 H9 V12 H4 Z";
+    private const string FanIconCustom = "M2,5 H22 V8 H2 Z M2,16 H22 V19 H2 Z M7,3 H10 V10 H7 Z M14,14 H17 V21 H14 Z";
 
     private void BuildCurveAnchors()
     {

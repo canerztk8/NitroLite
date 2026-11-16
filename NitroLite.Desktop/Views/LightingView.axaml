@@ -6,7 +6,7 @@
              x:DataType="vm:MainViewModel">
 
   <ScrollViewer>
-    <StackPanel Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
 
       <Border Classes="card" IsVisible="{Binding LightingAvailable}">
         <StackPanel Spacing="12">
@@ -91,10 +91,13 @@
         </StackPanel>
       </Border>
 
+      <!-- No keyboard node: one compact line instead of a card-shaped empty box. -->
       <Border Classes="card" IsVisible="{Binding !LightingAvailable}">
-        <StackPanel Spacing="6">
-          <TextBlock Classes="h2" Text="{Binding Labels.KeyboardLighting}" />
-          <TextBlock Classes="caption" Text="{Binding Labels.NotOnThisMachine}" />
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Classes="h2" Text="{Binding Labels.KeyboardLighting}" VerticalAlignment="Center" />
+          <Border Classes="badge">
+            <TextBlock Text="{Binding Labels.NotOnThisMachine}" />
+          </Border>
         </StackPanel>
       </Border>
 
@@ -130,12 +133,14 @@
                     Command="{Binding SaveRgbProfileCommand}" />
           </Grid>
 
-          <Border Classes="panel">
-            <StackPanel Spacing="2">
-              <TextBlock Classes="caption" Text="{Binding RgbProfileStatus}" />
-              <TextBlock Classes="caption" Text="{Binding RgbProfileLoadError}" />
-            </StackPanel>
-          </Border>
+          <!-- Only drawn when there is something to say. An always-present panel here was an empty dark rectangle
+               under the buttons on every launch. -->
+          <TextBlock Classes="caption"
+                     Text="{Binding RgbProfileStatus}"
+                     IsVisible="{Binding HasRgbProfileStatus}" />
+          <TextBlock Classes="caption"
+                     Text="{Binding RgbProfileLoadError}"
+                     IsVisible="{Binding HasRgbProfileLoadError}" />
         </StackPanel>
       </Border>
 
@@ -165,9 +170,13 @@
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
           </Grid>
 
-          <TextBlock Classes="caption"
-                     Text="{Binding Labels.NotOnThisMachine}"
-                     IsVisible="{Binding NoExtrasAvailable}" />
+          <!-- Nothing at all on this machine: one line, not an empty card. -->
+          <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding NoExtrasAvailable}">
+            <TextBlock Classes="label" Text="{Binding Labels.Extras}" />
+            <Border Classes="badge">
+              <TextBlock Text="{Binding Labels.NotOnThisMachine}" />
+            </Border>
+          </StackPanel>
         </StackPanel>
       </Border>
 

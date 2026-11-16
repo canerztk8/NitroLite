@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Desktop.ViewModels;
 
@@ -43,6 +43,11 @@ public sealed class ShellLabels
     public string Max => Loc.T("Maksimum");
     public string CustomCurve => Loc.T("Özel eğri");
     public string CustomFanSpeed => Loc.T("Özel fan hızı");
+
+    // The one line under each fan card's title.
+    public string FanAutoHint => Loc.T("Firmware sıcaklığa göre kendi hızını seçer.");
+    public string FanMaxHint => Loc.T("Fanlar sürekli en yüksek devirde döner.");
+    public string FanCustomHint => Loc.T("Hızı aşağıdaki eğri belirler; eğriyi sen çizersin.");
     public string CpuFanPercent => Loc.T("CPU fan yüzdesi");
     public string GpuFanPercent => Loc.T("GPU fan yüzdesi");
     public string FanCurve => Loc.T("FAN EĞRİSİ");
@@ -77,6 +82,10 @@ public sealed class ShellLabels
     public string Model => Loc.T("Model");
     public string Bios => Loc.T("BIOS");
     public string Tier => Loc.T("Katman");
+    public string TierNone => Loc.T("Yok / Desteklenmiyor");
+    public string TierAcerWmi => Loc.T("acer-wmi (çekirdek modülü)");
+    public string TierLinuwuSense => Loc.T("Linuwu-Sense (topluluk modülü)");
+    public string TierBoth => Loc.T("acer-wmi + Linuwu-Sense");
     public string CapabilitySummary => Loc.T("Yetenek özeti");
     public string Language => Loc.T("Dil");
     public string DataFolder => Loc.T("Veri klasörü");
@@ -114,6 +123,20 @@ public sealed class ShellLabels
     public string GameIdle => Loc.T("Oyun yok; kullanıcı ayarları geçerli.");
     public string AutoGameMode => Loc.T("Otomatik oyun modu");
     public string AutoGameModeHint => Loc.T("Tanımlı bir oyun açıldığında moda ve fan eğrisine geçer, kapandığında geri döner.");
+
+    // ---------------------------------------------------------------- game profiles page
+    public string GameProfiles => Loc.T("Oyun Profilleri");
+    public string GameProfilesHint => Loc.T("Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.");
+    public string NewGameExe => Loc.T("Süreç adı");
+    public string NewGameName => Loc.T("Görünen ad (isteğe bağlı)");
+    public string AddGame => Loc.T("Oyun ekle");
+    public string TargetMode => Loc.T("Hedef mod");
+    public string TargetFanMode => Loc.T("Hedef fan modu");
+    public string NoGameProfiles => Loc.T("Henüz tanımlı oyun yok.");
+    public string GameExeRequired => Loc.T("Süreç adı gerekli.");
+    public string GameAlreadyDefined => Loc.T("Bu süreç için zaten bir kural var.");
+    public string GameAdded(string name) => Loc.T($"Oyun eklendi: {name}");
+    public string GameDeleted(string name) => Loc.T($"Oyun silindi: {name}");
 
     /// <summary>"Oyun profili uygulandı: Counter-Strike 2".</summary>
     public string GameStarted(string name) => Loc.T($"Oyun profili uygulandı: {name}");

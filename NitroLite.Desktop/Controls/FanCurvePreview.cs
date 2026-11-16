@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -61,7 +61,10 @@ public sealed class FanCurvePreview : Control
         var height = Bounds.Height;
         if (width <= 1 || height <= 1) return;
 
-        var plot = new Rect(0, 0, width, height);
+        // The bottom strip belongs to the temperature axis, so the plot stops above it and every Y is measured
+        // against the plot height rather than the control's.
+        double plotHeight = Math.Max(1, height - AxisHeight);
+        var plot = new Rect(0, 0, width, plotHeight);
         context.FillRectangle(Background, plot, 8);
 
         // The safety bands, drawn first so the curve sits on top of them.
@@ -69,9 +72,9 @@ public sealed class FanCurvePreview : Control
         {
             double x = XFor(bandTemperature, width);
             double right = bandTemperature >= FanCurve.SafetyFloor[^1].TemperatureC ? width : XFor(bandTemperature + 5, width);
-            context.FillRectangle(BandBrush, new Rect(x, 0, Math.Max(1, right - x), height));
+            context.FillRectangle(BandBrush, new Rect(x, 0, Math.Max(1, right - x), plotHeight));
 
-            double y = YFor(bandPercent, height);
+            double y = YFor(bandPercent, plotHeight);
             context.DrawLine(new Pen(FloorBrush, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(x, y), new Point(right, y));
         }
 
@@ -79,14 +82,14 @@ public sealed class FanCurvePreview : Control
         var gridPen = new Pen(GridBrush, 1);
         for (int percent = 20; percent < 100; percent += 20)
         {
-            double y = YFor(percent, height);
+            double y = YFor(percent, plotHeight);
             context.DrawLine(gridPen, new Point(0, y), new Point(width, y));
         }
 
         for (int temperature = 40; temperature <= 90; temperature += 10)
         {
             double x = XFor(temperature, width);
-            context.DrawLine(gridPen, new Point(x, 0), new Point(x, height));
+            context.DrawLine(gridPen, new Point(x, 0), new Point(x, plotHeight));
         }
 
         var points = Points;
@@ -100,7 +103,7 @@ public sealed class FanCurvePreview : Control
             bool started = false;
             for (double temperature = FanCurve.MinTemperatureC; temperature <= FanCurve.MaxTemperatureC; temperature += 1)
             {
-                var point = new Point(XFor(temperature, width), YFor(curve.PercentAt(temperature), height));
+                var point = new Point(XFor(temperature, width), YFor(curve.PercentAt(temperature), plotHeight));
                 if (!started)
                 {
                     sink.BeginFigure(point, false);
@@ -120,20 +123,43 @@ public sealed class FanCurvePreview : Control
         // The anchors, so the sliders and the drawing are visibly the same six numbers.
         foreach (var anchor in points)
         {
-            var centre = new Point(XFor(anchor.TemperatureC, width), YFor(anchor.Percent, height));
+            var centre = new Point(XFor(anchor.TemperatureC, width), YFor(anchor.Percent, plotHeight));
             context.DrawEllipse(CurveBrush, null, centre, 3.5, 3.5);
         }
 
         if (CurrentTemperature > 0)
         {
             double x = XFor(CurrentTemperature, width);
-            context.DrawLine(new Pen(MarkerBrush, 1.5), new Point(x, 0), new Point(x, height));
+            context.DrawLine(new Pen(MarkerBrush, 1.5), new Point(x, 0), new Point(x, plotHeight));
             DrawLabel(context, $"{CurrentTemperature:0} °C", new Point(Math.Min(x + 4, width - 44), 4));
         }
 
         DrawLabel(context, "100 %", new Point(4, 2));
-        DrawLabel(context, "30 %", new Point(4, height - 16));
+        DrawLabel(context, "30 %", new Point(4, plotHeight - 16));
+
+        // The temperature axis. Without it the vertical grid lines are decoration; with it a user can read which
+        // anchor the marker is near. The first and last labels are nudged inwards so they are not clipped.
+        for (int temperature = 40; temperature <= 90; temperature += 10)
+        {
+            string text = $"{temperature} °C";
+            double textWidth = Measure(text);
+            double x = Math.Clamp(XFor(temperature, width) - textWidth / 2, 0, Math.Max(0, width - textWidth));
+            DrawLabel(context, text, new Point(x, plotHeight + 3));
+        }
     }
+
+    /// <summary>The strip at the bottom reserved for the temperature labels.</summary>
+    private const double AxisHeight = 16;
+
+    private static double Measure(string text) => Format(text).Width;
+
+    private static FormattedText Format(string text) => new(
+        text,
+        CultureInfo.InvariantCulture,
+        FlowDirection.LeftToRight,
+        Typeface.Default,
+        10,
+        TextBrush);
 
     private static double XFor(double temperatureC, double width)
     {
@@ -149,15 +175,6 @@ public sealed class FanCurvePreview : Control
         return height - Math.Clamp(ratio, 0, 1) * height;
     }
 
-    private static void DrawLabel(DrawingContext context, string text, Point origin)
-    {
-        var formatted = new FormattedText(
-            text,
-            CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight,
-            Typeface.Default,
-            10,
-            TextBrush);
-        context.DrawText(formatted, origin);
-    }
+    private static void DrawLabel(DrawingContext context, string text, Point origin) =>
+        context.DrawText(Format(text), origin);
 }

@@ -85,6 +85,13 @@ public sealed class ThemePalette
     /// The brushes, keyed by the names the views use. Every key is a <c>SolidColorBrush</c>: no gradients, no effects,
     /// no transparency layers, so the window stays as cheap to render as it is to read.
     /// </summary>
+    /// <remarks>
+    /// The <c>Slider*</c> keys are Fluent's own resource names. The Fluent slider template resolves them with
+    /// <c>DynamicResource</c>, so overriding them here is what makes the thumb and the filled part of the track follow
+    /// the palette instead of staying the default blue — verified against Avalonia 11.3.23 by reading the thumb's
+    /// background back out of a live visual tree. Every state is covered, because a thumb that turns blue on hover is
+    /// worse than one that never changed.
+    /// </remarks>
     public ResourceDictionary ToResources()
     {
         var resources = new ResourceDictionary
@@ -109,7 +116,21 @@ public sealed class ThemePalette
             ["WarningSoftBrush"] = Brush(WarningSoft),
             ["DangerBrush"] = Brush(Danger),
             ["DangerSoftBrush"] = Brush(DangerSoft),
-            ["ChartFillBrush"] = Brush(ChartFill)
+            ["ChartFillBrush"] = Brush(ChartFill),
+
+            // The slider, in every state Fluent asks about.
+            ["SliderThumbBackground"] = Brush(Accent),
+            ["SliderThumbBackgroundPointerOver"] = Brush(AccentHover),
+            ["SliderThumbBackgroundPressed"] = Brush(Accent),
+            ["SliderThumbBackgroundDisabled"] = Brush(TextMuted),
+            ["SliderTrackValueFill"] = Brush(Accent),
+            ["SliderTrackValueFillPointerOver"] = Brush(AccentHover),
+            ["SliderTrackValueFillPressed"] = Brush(Accent),
+            ["SliderTrackValueFillDisabled"] = Brush(TextMuted),
+            ["SliderTrackFill"] = Brush(CardBorderStrong),
+            ["SliderTrackFillPointerOver"] = Brush(CardBorderStrong),
+            ["SliderTrackFillPressed"] = Brush(CardBorderStrong),
+            ["SliderTrackFillDisabled"] = Brush(CardBorder)
         };
 
         return resources;

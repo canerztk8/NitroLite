@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 
@@ -44,10 +44,14 @@ public sealed class SparklineChart : Control
     public static readonly StyledProperty<double> StrokeThicknessProperty =
         AvaloniaProperty.Register<SparklineChart, double>(nameof(StrokeThickness), 1.6);
 
+    public static readonly StyledProperty<IBrush?> BaselineProperty =
+        AvaloniaProperty.Register<SparklineChart, IBrush?>(nameof(Baseline));
+
     static SparklineChart()
     {
         AffectsRender<SparklineChart>(
-            ValuesProperty, StrokeProperty, FillProperty, MinimumProperty, MaximumProperty, StrokeThicknessProperty);
+            ValuesProperty, StrokeProperty, FillProperty, MinimumProperty, MaximumProperty, StrokeThicknessProperty,
+            BaselineProperty);
     }
 
     /// <summary>The samples to draw, oldest first. Fewer than two draws nothing.</summary>
@@ -91,6 +95,17 @@ public sealed class SparklineChart : Control
         set => SetValue(StrokeThicknessProperty, value);
     }
 
+    /// <summary>
+    /// The faint line drawn while there is not yet a series to draw. Without it the card's chart area is an empty
+    /// rectangle for the first second after the window opens, which reads as a broken control rather than a chart
+    /// waiting for its second sample.
+    /// </summary>
+    public IBrush? Baseline
+    {
+        get => GetValue(BaselineProperty);
+        set => SetValue(BaselineProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         double width = Bounds.Width;
@@ -98,7 +113,11 @@ public sealed class SparklineChart : Control
         if (width <= 1 || height <= 1) return;
 
         var values = Values;
-        if (values == null || values.Count < 2) return;
+        if (values == null || values.Count < 2)
+        {
+            DrawBaseline(context, width, height);
+            return;
+        }
 
         var (low, high) = Range(values);
         if (high - low < 0.0001) return;
@@ -139,6 +158,20 @@ public sealed class SparklineChart : Control
         }
 
         context.DrawGeometry(null, new Pen(Stroke ?? Brushes.White, StrokeThickness), line);
+    }
+
+    /// <summary>
+    /// The placeholder line: a dashed rule across the middle of the control, in the palette's border colour. It is
+    /// drawn at half height rather than at the bottom so it reads as "the chart is here", not as a zero reading.
+    /// </summary>
+    private void DrawBaseline(DrawingContext context, double width, double height)
+    {
+        var brush = Baseline;
+        if (brush == null) return;
+
+        double y = Math.Round(height / 2) + 0.5;
+        var pen = new Pen(brush, 1, new DashStyle(new double[] { 3, 3 }, 0));
+        context.DrawLine(pen, new Point(0, y), new Point(width, y));
     }
 
     /// <summary>

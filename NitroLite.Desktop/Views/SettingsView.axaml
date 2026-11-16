@@ -6,7 +6,7 @@
              x:DataType="vm:MainViewModel">
 
   <ScrollViewer>
-    <StackPanel Margin="18" Spacing="14">
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
 
       <Border Classes="card">
         <StackPanel Spacing="10">
@@ -20,7 +20,8 @@
             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DeviceBios}" Margin="0,0,0,6" />
 
             <TextBlock Grid.Row="2" Classes="caption" Text="{Binding Labels.Tier}" Margin="0,0,0,6" />
-            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TierText}" Margin="0,0,0,6" />
+            <!-- The probe's own word is "none" or "acer-wmi"; neither belongs in front of a user. -->
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TierDisplay}" Margin="0,0,0,6" />
 
             <TextBlock Grid.Row="3" Classes="caption" Text="{Binding Labels.DataFolder}" />
             <TextBlock Grid.Row="3" Grid.Column="1" Classes="mono" Text="{Binding DataFolder}" />
@@ -74,9 +75,29 @@
                     Content="{Binding Labels.Rescan}"
                     Command="{Binding RescanCommand}" />
           </Grid>
-          <Border Classes="panel">
-            <TextBlock Classes="mono" Text="{Binding CapabilitySummaryText}" />
-          </Border>
+
+          <!-- One row per capability, ticked in the theme's success colour. A block of monospaced text was readable
+               but impossible to scan. -->
+          <ItemsControl ItemsSource="{Binding CapabilityRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CapabilityRow">
+                <Border Classes="caprow">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Classes="capglyph"
+                               Classes.ok="{Binding Supported}"
+                               Classes.no="{Binding !Supported}"
+                               Text="{Binding Glyph}" />
+                    <TextBlock Grid.Column="1" Classes="label" Text="{Binding Label}" />
+                    <TextBlock Grid.Column="2" Classes="muted" Text="{Binding StateText}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="caption"
+                     Text="{Binding Labels.NoBackend}"
+                     IsVisible="{Binding HasNoBackend}" />
         </StackPanel>
       </Border>
 
@@ -115,7 +136,8 @@
         </StackPanel>
       </Border>
 
-      <Border Classes="card">
+      <!-- Hidden when the probe had nothing to report, rather than shown as an empty card. -->
+      <Border Classes="card" IsVisible="{Binding HasNotes}">
         <StackPanel Spacing="8">
           <TextBlock Classes="h2" Text="{Binding Labels.Notes}" />
           <TextBlock Classes="caption" Text="{Binding NotesText}" />

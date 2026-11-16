@@ -19,7 +19,8 @@
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <TextBlock Classes="h1" Text="{Binding Labels.AppTitle}" />
-          <Border Classes="pill">
+          <!-- Hidden rather than shown empty: a machine whose DMI did not answer has no name to put in the pill. -->
+          <Border Classes="pill" IsVisible="{Binding HasDeviceName}">
             <TextBlock Classes="caption" Text="{Binding DeviceModel}" />
           </Border>
         </StackPanel>
@@ -33,18 +34,46 @@
     </Border>
 
     <!-- The tab strip is the navigation rail: the TabControl's background is the rail colour, and the content host is
-         repainted to the page colour in App.axaml so the rail ends where the navigation ends. -->
+         repainted to the page colour in App.axaml so the rail ends where the navigation ends. Each header is an icon
+         plus its label; the icon inherits the tab's Foreground, so it turns accent-coloured when the tab is selected. -->
     <TabControl Grid.Row="1"
                 TabStripPlacement="Left"
                 Background="{DynamicResource RailBrush}"
                 Padding="0">
-      <TabItem Header="{Binding Labels.Dashboard}">
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Data="M3,3 H10 V10 H3 Z M14,3 H21 V10 H14 Z M3,14 H10 V21 H3 Z M14,14 H21 V21 H14 Z" />
+            <TextBlock Text="{Binding Labels.Dashboard}" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
         <views:DashboardView />
       </TabItem>
-      <TabItem Header="{Binding Labels.Lighting}">
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Data="M2,6 H22 V18 H2 Z M4,8 H7 V10 H4 Z M9,8 H12 V10 H9 Z M14,8 H17 V10 H14 Z M19,8 H20 V10 H19 Z M4,12 H7 V14 H4 Z M9,12 H12 V14 H9 Z M14,12 H17 V14 H14 Z M19,12 H20 V14 H19 Z M6,15 H18 V17 H6 Z" />
+            <TextBlock Text="{Binding Labels.Lighting}" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
         <views:LightingView />
       </TabItem>
-      <TabItem Header="{Binding Labels.Settings}">
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Data="M9,3 H15 V9 H21 V15 H15 V21 H9 V15 H3 V9 H9 Z" />
+            <TextBlock Text="{Binding Labels.GameProfiles}" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
+        <views:GameProfilesView />
+      </TabItem>
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon Data="M12,4 A8,8 0 1,1 11.99,4 Z M12,8 A4,4 0 1,1 11.99,8 Z M10,0 H14 V4 H10 Z M10,20 H14 V24 H10 Z M0,10 H4 V14 H0 Z M20,10 H24 V14 H20 Z" />
+            <TextBlock Text="{Binding Labels.Settings}" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
         <views:SettingsView />
       </TabItem>
     </TabControl>

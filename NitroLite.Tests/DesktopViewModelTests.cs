@@ -136,6 +136,22 @@ public class DesktopViewModelTests
         public void Apply(AppTheme theme) => Applied.Add(theme);
     }
 
+    /// <summary>
+    /// Waits for a condition the view model reaches on a fire-and-forget task. A card click cannot be awaited from a
+    /// test, so the assertion polls instead of sleeping for a fixed time.
+    /// </summary>
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 5000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition()) return;
+            await Task.Delay(10);
+        }
+
+        Assert.True(condition(), "the condition did not become true within " + timeoutMs + " ms");
+    }
+
     // ---------------------------------------------------------------- 1. telemetry
 
     [Fact]
@@ -664,5 +680,317 @@ public class DesktopViewModelTests
         Assert.Equal(0, vm.CpuTemperature);
         Assert.Empty(vm.CpuTemperatureHistory);
         Assert.Single(vm.CpuFanHistory);
+    }
+
+    // ---------------------------------------------------------------- 9. the single-click mode and fan cards
+
+    [Fact]
+    public async Task ModeCards_AClickAppliesTheModeWithoutAnApplyButton()
+    {
+        var fs = Nitro16();
+        var settings = new AppSettings();
+
+        var (vm, controller) = Create(fs, settings);
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        // The card is the control: there is no separate Apply button left to press.
+        vm.Modes.Single(m => m.Mode == OperatingMode.Turbo).SelectCommand.Execute(null);
+
+        Assert.Equal(OperatingMode.Turbo, vm.SelectedMode?.Mode);
+
+        // The settings field is written after the node, so waiting on it also guarantees the write has landed.
+        await WaitForAsync(() => settings.LastOperatingMode == OperatingMode.Turbo);
+        Assert.Equal("performance", fs.ReadAllText(LinuxPaths.PlatformProfile));
+    }
+
+    [Fact]
+    public async Task ModeCards_ExactlyOneCardCarriesTheAccent()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        Assert.Single(vm.Modes, m => m.IsSelected);
+
+        vm.Modes.Single(m => m.Mode == OperatingMode.Quiet).SelectCommand.Execute(null);
+
+        // The accent moves rather than spreading: two highlighted cards would leave the user guessing which is live.
+        Assert.Single(vm.Modes, m => m.IsSelected);
+        Assert.True(vm.Modes.Single(m => m.Mode == OperatingMode.Quiet).IsSelected);
+    }
+
+    [Fact]
+    public async Task ModeCards_AreListedButDisabledWhenThereIsNoBackend()
+    {
+        var (vm, controller) = Create(new InMemorySysfsFileSystem());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        // The cards stay on screen so the page keeps its shape; the view binds IsEnabled to these two flags.
+        Assert.False(vm.ModeControlAvailable);
+        Assert.False(vm.FanControlAvailable);
+        Assert.Equal(5, vm.Modes.Count);
+        Assert.Equal(3, vm.FanModes.Count);
+    }
+
+    [Fact]
+    public async Task FanCards_AClickAppliesTheFanModeWithoutAnApplyButton()
+    {
+        var fs = Nitro16();
+
+        var (vm, controller) = Create(fs);
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        vm.FanModes.Single(f => f.Mode == FanMode.Max).SelectCommand.Execute(null);
+
+        Assert.Equal(FanMode.Max, vm.SelectedFanMode?.Mode);
+        await WaitForAsync(() => fs.ReadAllText(Sense("fan_speed")) == "100,100");
+    }
+
+    [Fact]
+    public async Task FanCards_ExactlyOneCardCarriesTheAccent()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        Assert.Single(vm.FanModes, f => f.IsSelected);
+
+        vm.FanModes.Single(f => f.Mode == FanMode.Custom).SelectCommand.Execute(null);
+
+        Assert.Single(vm.FanModes, f => f.IsSelected);
+        Assert.True(vm.CustomFanVisible);
+    }
+
+    // ---------------------------------------------------------------- 10. the containers that hide themselves
+
+    [Fact]
+    public async Task EmptyContainers_TheDevicePillHidesItselfWhenTheProbeFoundNoName()
+    {
+        var (named, namedController) = Create(Nitro16());
+        using var _ = named;
+        using var __ = namedController;
+
+        await named.InitializeAsync();
+        Assert.True(named.HasDeviceName);
+
+        var (anonymous, anonymousController) = Create(new InMemorySysfsFileSystem());
+        using var ___ = anonymous;
+        using var ____ = anonymousController;
+
+        await anonymous.InitializeAsync();
+
+        // No DMI answer means no name, and an empty pill in the header is worse than no pill at all.
+        Assert.True(string.IsNullOrWhiteSpace(anonymous.DeviceModel));
+        Assert.False(anonymous.HasDeviceName);
+    }
+
+    [Fact]
+    public async Task EmptyContainers_TheNotesCardOnlyShowsWhenTheProbeHadSomethingToSay()
+    {
+        var (healthy, healthyController) = Create(Nitro16());
+        using var _ = healthy;
+        using var __ = healthyController;
+
+        await healthy.InitializeAsync();
+
+        // Every node answered, so there is nothing to warn about and the card stays out of the layout.
+        Assert.Empty(healthy.Notes);
+        Assert.False(healthy.HasNotes);
+
+        var (bare, bareController) = Create(new InMemorySysfsFileSystem());
+        using var ___ = bare;
+        using var ____ = bareController;
+
+        await bare.InitializeAsync();
+
+        Assert.NotEmpty(bare.Notes);
+        Assert.True(bare.HasNotes);
+    }
+
+    // ---------------------------------------------------------------- 11. the capability list
+
+    [Fact]
+    public async Task CapabilityList_IsStructuredRowsRatherThanABlockOfText()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        Assert.NotEmpty(vm.CapabilityRows);
+        Assert.All(vm.CapabilityRows, row => Assert.False(string.IsNullOrWhiteSpace(row.Label)));
+        Assert.All(vm.CapabilityRows, row => Assert.Contains(row.Glyph, new[] { "✓", "✕" }));
+
+        var fan = vm.CapabilityRows.Single(r => r.Label == vm.Labels.CapFanControl);
+        Assert.True(fan.Supported);
+        Assert.Equal("✓", fan.Glyph);
+        Assert.Equal(Loc.T("Destekleniyor"), fan.StateText);
+    }
+
+    [Fact]
+    public async Task CapabilityList_TheTierIsTranslatedInsteadOfShowingTheRawDiagnostic()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        // TierText stays the raw diagnostic the probe reported; the page binds TierDisplay.
+        Assert.Equal("both", vm.TierText);
+        Assert.Equal(vm.Labels.TierBoth, vm.TierDisplay);
+        Assert.NotEqual(vm.TierText, vm.TierDisplay);
+
+        var (bare, bareController) = Create(new InMemorySysfsFileSystem());
+        using var ___ = bare;
+        using var ____ = bareController;
+
+        await bare.InitializeAsync();
+
+        Assert.Equal("none", bare.TierText);
+        Assert.Equal(bare.Labels.TierNone, bare.TierDisplay);
+        Assert.DoesNotContain("none", bare.TierDisplay);
+    }
+
+    // ---------------------------------------------------------------- 12. the game profiles page
+
+    [Fact]
+    public async Task GameProfiles_AddingARuleStoresItAndListsIt()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "nitrolite-games-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(folder, "settings.json");
+        var settings = new AppSettings { GameProfiles = new List<GameProfile>() };
+
+        var (vm, controller) = Create(Nitro16(), settings, settingsPath: path);
+        using var _ = vm;
+        using var __ = controller;
+
+        try
+        {
+            await vm.InitializeAsync();
+            Assert.True(vm.HasNoGameProfiles);
+
+            vm.NewGameExe = "cs2";
+            vm.NewGameName = "Counter-Strike 2";
+            vm.NewGameMode = vm.GameModeChoices.Single(m => m.Mode == OperatingMode.Turbo);
+            vm.NewGameFanMode = vm.GameFanChoices.Single(f => f.Mode == FanMode.Max);
+            vm.AddGameProfileCommand.Execute(null);
+
+            var row = Assert.Single(vm.GameProfiles);
+            Assert.Equal("cs2", row.ExeName);
+            Assert.Equal("Counter-Strike 2", row.DisplayName);
+            Assert.Equal(vm.Labels.Max, row.FanLabel);
+            Assert.Equal(vm.Labels.DeleteProfile, row.DeleteLabel);
+            Assert.True(vm.HasGameProfiles);
+            Assert.False(vm.HasNoGameProfiles);
+            Assert.Equal(vm.Labels.GameAdded("Counter-Strike 2"), vm.GameProfileStatus);
+            Assert.True(vm.HasGameProfileStatus);
+
+            // The service reads the settings object on every poll, so the rule has to be there, not only on screen.
+            var stored = Assert.Single(settings.GameProfiles);
+            Assert.Equal("cs2", stored.ExeName);
+            Assert.Equal(OperatingMode.Turbo, stored.TargetMode);
+            Assert.Equal(FanMode.Max, stored.TargetFanMode);
+            Assert.True(stored.AutoApply);
+
+            // And it survives a restart because it reached the file.
+            Assert.Contains("cs2", File.ReadAllText(path));
+
+            // The form is cleared so the next rule does not inherit the last one's name.
+            Assert.Equal("", vm.NewGameExe);
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GameProfiles_RefusesAnEmptyNameAndADuplicate()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "nitrolite-games-" + Guid.NewGuid().ToString("N"));
+        var settings = new AppSettings { GameProfiles = new List<GameProfile>() };
+
+        var (vm, controller) = Create(Nitro16(), settings, settingsPath: Path.Combine(folder, "settings.json"));
+        using var _ = vm;
+        using var __ = controller;
+
+        try
+        {
+            await vm.InitializeAsync();
+
+            vm.AddGameProfileCommand.Execute(null);
+            Assert.Equal(vm.Labels.GameExeRequired, vm.GameProfileStatus);
+            Assert.Empty(vm.GameProfiles);
+
+            vm.NewGameExe = "cs2";
+            vm.AddGameProfileCommand.Execute(null);
+            Assert.Single(vm.GameProfiles);
+
+            // Case-insensitive: a user typing the same title twice should not end up with two rules for it.
+            vm.NewGameExe = "CS2";
+            vm.AddGameProfileCommand.Execute(null);
+
+            Assert.Equal(vm.Labels.GameAlreadyDefined, vm.GameProfileStatus);
+            Assert.Single(vm.GameProfiles);
+            Assert.Single(settings.GameProfiles);
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GameProfiles_DeletingARowRemovesItFromTheSettingsFile()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "nitrolite-games-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(folder, "settings.json");
+        var settings = new AppSettings
+        {
+            GameProfiles = new List<GameProfile>
+            {
+                new() { ExeName = "cs2", DisplayName = "Counter-Strike 2", TargetMode = OperatingMode.Turbo },
+                new() { ExeName = "dota2", DisplayName = "Dota 2", TargetMode = OperatingMode.Default }
+            }
+        };
+
+        var (vm, controller) = Create(Nitro16(), settings, settingsPath: path);
+        using var _ = vm;
+        using var __ = controller;
+
+        try
+        {
+            await vm.InitializeAsync();
+            Assert.Equal(2, vm.GameProfiles.Count);
+
+            vm.GameProfiles.Single(r => r.ExeName == "cs2").DeleteCommand.Execute(null);
+
+            var remaining = Assert.Single(vm.GameProfiles);
+            Assert.Equal("dota2", remaining.ExeName);
+            Assert.Equal(vm.Labels.GameDeleted("Counter-Strike 2"), vm.GameProfileStatus);
+
+            // Gone from the object the service polls and from the file the next launch reads.
+            Assert.Equal("dota2", Assert.Single(settings.GameProfiles).ExeName);
+            Assert.DoesNotContain("cs2", File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
     }
 }

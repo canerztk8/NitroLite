@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:controls="using:NitroLite.Desktop.Controls"
@@ -6,7 +6,8 @@
              x:DataType="vm:MainViewModel">
 
   <ScrollViewer>
-    <StackPanel Margin="18" Spacing="14">
+    <!-- Capped and centred: on a 2K window an uncapped card row stretches until the numbers are a screen apart. -->
+    <StackPanel MaxWidth="1120" HorizontalAlignment="Center" Margin="18" Spacing="14">
 
       <!-- A machine with no Acer nodes still opens a window; this is the sentence that explains it. -->
       <Border Classes="card" IsVisible="{Binding HasNoBackend}">
@@ -19,7 +20,8 @@
       <TextBlock Classes="h2" Text="{Binding Labels.ThermalAndFans}" />
 
       <!-- The three thermals. Each card carries its own last-minute trace, so a reading that is climbing is visible
-           without waiting for the number to change. -->
+           without waiting for the number to change. The SYS card has no trace, so it gets a spacer instead: the three
+           cards have to end on the same line. -->
       <Grid ColumnDefinitions="*,*,*">
         <Border Classes="card" Margin="0,0,10,0">
           <StackPanel Spacing="4">
@@ -28,7 +30,8 @@
             <controls:SparklineChart Height="34"
                                      Values="{Binding CpuTemperatureHistory}"
                                      Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}" />
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
             <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
@@ -39,7 +42,8 @@
             <controls:SparklineChart Height="34"
                                      Values="{Binding GpuTemperatureHistory}"
                                      Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}" />
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
             <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
@@ -47,6 +51,12 @@
           <StackPanel Spacing="4">
             <TextBlock Classes="caption" Text="{Binding Labels.Sys}" />
             <TextBlock Classes="value" Text="{Binding SysTemperatureText}" />
+            <controls:SparklineChart Height="34"
+                                     Values="{Binding SysTemperatureHistory}"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
+            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
       </Grid>
@@ -66,7 +76,8 @@
             <controls:SparklineChart Height="34"
                                      Values="{Binding CpuFanHistory}"
                                      Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}" />
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
             <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
@@ -82,49 +93,76 @@
             <controls:SparklineChart Height="34"
                                      Values="{Binding GpuFanHistory}"
                                      Stroke="{DynamicResource AccentBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}" />
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
             <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
       </Grid>
 
-      <Grid ColumnDefinitions="*,*">
-        <Border Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="h2" Text="{Binding Labels.OperatingMode}" />
-            <ComboBox ItemsSource="{Binding Modes}"
-                      SelectedItem="{Binding SelectedMode}"
-                      IsEnabled="{Binding ModeControlAvailable}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:ModeChoice">
-                  <TextBlock Text="{Binding Label}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <Button Classes="primary"
-                    Content="{Binding Labels.Apply}"
-                    Command="{Binding ApplyModeCommand}"
-                    HorizontalAlignment="Left" />
-          </StackPanel>
-        </Border>
+      <!-- Operating mode. One card per mode the firmware advertises, and the click is the whole gesture: there is no
+           Apply button, so the list can never show one mode while the machine runs another. -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="{Binding Labels.OperatingMode}" />
 
-        <Border Grid.Column="1" Classes="card">
-          <StackPanel Spacing="8">
-            <TextBlock Classes="h2" Text="{Binding Labels.FanMode}" />
-            <ComboBox ItemsSource="{Binding FanModes}"
-                      SelectedItem="{Binding SelectedFanMode}"
-                      IsEnabled="{Binding FanControlAvailable}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:FanModeChoice">
-                  <TextBlock Text="{Binding Label}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
+          <ItemsControl ItemsSource="{Binding Modes}" IsEnabled="{Binding ModeControlAvailable}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="{Binding Modes.Count}" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ModeChoice">
+                <Button Classes="modecardbutton"
+                        Command="{Binding SelectCommand}"
+                        Margin="0,0,8,0">
+                  <Border Classes="modecard" Classes.selected="{Binding IsSelected}">
+                    <StackPanel Spacing="6">
+                      <PathIcon Data="{Binding Icon}" HorizontalAlignment="Left" />
+                      <TextBlock Classes="modetitle" Text="{Binding Label}" />
+                      <TextBlock Classes="muted" Text="{Binding Description}" />
+                    </StackPanel>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
 
-            <StackPanel Spacing="2" IsVisible="{Binding CustomFanVisible}">
-              <TextBlock Classes="caption" Text="{Binding Labels.CustomFanSpeed}" />
+      <!-- Fan mode, the same way. The custom-speed sliders only appear for the custom card, because they are the only
+           thing that card means. -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="{Binding Labels.FanMode}" />
+
+          <ItemsControl ItemsSource="{Binding FanModes}" IsEnabled="{Binding FanControlAvailable}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="{Binding FanModes.Count}" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:FanModeChoice">
+                <Button Classes="modecardbutton"
+                        Command="{Binding SelectCommand}"
+                        Margin="0,0,8,0">
+                  <Border Classes="modecard" Classes.selected="{Binding IsSelected}">
+                    <StackPanel Spacing="6">
+                      <PathIcon Data="{Binding Icon}" HorizontalAlignment="Left" />
+                      <TextBlock Classes="modetitle" Text="{Binding Label}" />
+                      <TextBlock Classes="muted" Text="{Binding Description}" />
+                    </StackPanel>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Border Classes="panel" IsVisible="{Binding CustomFanVisible}">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="label" Text="{Binding Labels.CustomFanSpeed}" />
               <Grid ColumnDefinitions="*,48">
                 <TextBlock Classes="caption" Text="{Binding Labels.CpuFanPercent}" VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CustomCpuPercentText}"
@@ -140,14 +178,9 @@
               <Slider Minimum="30" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
                       Value="{Binding CustomGpuPercent}" />
             </StackPanel>
-
-            <Button Classes="primary"
-                    Content="{Binding Labels.Apply}"
-                    Command="{Binding ApplyFanModeCommand}"
-                    HorizontalAlignment="Left" />
-          </StackPanel>
-        </Border>
-      </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
 
       <Grid ColumnDefinitions="*,*">
         <Border Classes="card" Margin="0,0,10,0" IsVisible="{Binding MuxAvailable}">
@@ -204,7 +237,9 @@
             <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CurvePreview}" VerticalAlignment="Center" />
           </Grid>
 
-          <Grid ColumnDefinitions="2*,3*">
+          <!-- Even split: the drawing and the six sliders are equally important, and the old 2:3 left the sliders
+               squeezed against the card edge. -->
+          <Grid ColumnDefinitions="*,*">
             <controls:FanCurvePreview Height="210"
                                       Points="{Binding CurvePoints}"
                                       CurrentTemperature="{Binding CurrentTemperature}" />
