@@ -1047,6 +1047,23 @@ public partial class MainWindow : Window
 
     private CancellationTokenSource? _modeReassertCts;
 
+    /// <summary>
+    /// How long a toast stays up. A fixed three seconds is enough for "Ayarlar kaydedildi" and not enough for a
+    /// sentence that explains why something failed: the reader gets through half of it and the banner is gone. The
+    /// duration follows the length at a comfortable reading pace, with a floor for short messages and a ceiling so a
+    /// long one cannot sit on the screen.
+    /// </summary>
+    internal static TimeSpan ToastDurationFor(string? message)
+    {
+        const int floorSeconds = 3;
+        const int ceilingSeconds = 10;
+        const int charactersPerSecond = 22;
+
+        int length = message?.Length ?? 0;
+        int seconds = floorSeconds + (length / charactersPerSecond);
+        return TimeSpan.FromSeconds(Math.Clamp(seconds, floorSeconds, ceilingSeconds));
+    }
+
     public void ShowToast(string message, bool isSuccess = true, bool trayBalloon = true)
     {
         ToastHandler?.Invoke(message, isSuccess);
@@ -1067,7 +1084,8 @@ public partial class MainWindow : Window
                 if (isSuccess && _appSettings.SchoolModeEnabled) return;
                 try
                 {
-                    _notifyIcon.ShowBalloonTip(isSuccess ? 2500 : 4000, Loc.T("NitroLite"), message,
+                    // The balloon follows the same rule as the banner: a long explanation needs longer on screen.
+                    _notifyIcon.ShowBalloonTip((int)ToastDurationFor(message).TotalMilliseconds, Loc.T("NitroLite"), message,
                         isSuccess ? System.Windows.Forms.ToolTipIcon.Info : System.Windows.Forms.ToolTipIcon.Warning);
                 }
                 catch { }
@@ -1080,6 +1098,7 @@ public partial class MainWindow : Window
             TxtToastMessage.Text = message;
 
             _toastTimer?.Stop();
+            if (_toastTimer != null) _toastTimer.Interval = ToastDurationFor(message);
 
             var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200));
             ToastBanner.BeginAnimation(UIElement.OpacityProperty, fadeIn);

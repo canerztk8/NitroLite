@@ -2918,10 +2918,12 @@
             </Grid>
 
             <!-- MINIMALIST NON-BLOCKING TOAST NOTIFICATION BANNER -->
-            <Border x:Name="ToastBanner" Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1" CornerRadius="4" Padding="16,9" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24" Opacity="0" IsHitTestVisible="False">
+            <Border x:Name="ToastBanner" Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1" CornerRadius="4" Padding="16,9" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24" Opacity="0" IsHitTestVisible="False" MaxWidth="720">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock x:Name="TxtToastIcon" Text="●" Foreground="{DynamicResource AccentGreen}" FontWeight="Bold" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center" />
-                    <TextBlock x:Name="TxtToastMessage" Text="İşlem tamamlandı." Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                    <!-- Wrapped, not clipped: a one-line banner ran off the edge of the window and the second half of
+                         every long message was simply not there. -->
+                    <TextBlock x:Name="TxtToastMessage" Text="İşlem tamamlandı." Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="640" />
                 </StackPanel>
             </Border>
         </Grid>

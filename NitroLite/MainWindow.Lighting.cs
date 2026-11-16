@@ -755,6 +755,14 @@ public partial class MainWindow
             if (!await ApplyLightingToDeviceAsync(Loc.T("Bölge rengi ayarlanamadı"))) return;
             _appSettings.IsBacklightOff = false;
             PersistLightingState();
+
+            // The feature just worked, so this is the one moment the user can judge whether it is worth never being
+            // asked for elevation again. Only a write the firmware actually applied counts: a fallback to the service
+            // lights one colour, and offering to remove a prompt for something that did not happen would be a lie.
+            if ((_hardware as HybridHardwareController)?.LastZoneColorsApplied == true)
+            {
+                await OfferElevatedAutoStartAsync();
+            }
         }
         catch (Exception ex)
         {

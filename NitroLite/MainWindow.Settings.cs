@@ -838,6 +838,68 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Offers the Task Scheduler entry once, right after the first four-zone colour write that needed elevation.
+    /// <para>
+    /// The prompt belongs here and not at launch. Turning the entry on costs a UAC prompt of its own, so asking
+    /// before the user has seen the feature work is asking them to pay for something they have no reason to want
+    /// yet. Asking after it is a trade they can judge: one more prompt now, or one at the start of every session.
+    /// </para>
+    /// </summary>
+    private async Task OfferElevatedAutoStartAsync()
+    {
+        if (_appSettings.ElevatedAutoStartOffered) return;
+
+        // Asked of the task scheduler rather than of the toggle: the settings tab may never have been opened, so the
+        // checkbox can still be null while the task is registered.
+        try
+        {
+            if (await _elevatedStartup.IsEnabledAsync()) return;
+        }
+        catch
+        {
+            return;
+        }
+
+        // Recorded before the prompt, not after: a user who closes the window instead of answering must not be asked
+        // again on the next zone click.
+        _appSettings.ElevatedAutoStartOffered = true;
+        SaveSettings();
+
+        var answer = System.Windows.MessageBox.Show(
+            this,
+            Loc.T("Bölge bölge renk artık çalışıyor. Her oturumda yeniden izin vermemek için yönetici yetkisiyle otomatik başlatmayı açayım mı? Bir kez daha izin istenir, sonra bir daha sorulmaz."),
+            Loc.T("Yönetici yetkisiyle otomatik başlat"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (answer != MessageBoxResult.Yes) return;
+
+        if (DebloatService.IsTemporaryLocation(Environment.ProcessPath))
+        {
+            ShowToast(Loc.T("NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın."), false);
+            return;
+        }
+
+        var result = await _elevatedStartup.EnableAsync(_appSettings.StartMinimized);
+        switch (result.Outcome)
+        {
+            case ElevatedStartupOutcome.Applied:
+                ShowToast(Loc.T("Yönetici yetkisiyle otomatik başlatma etkin"));
+                break;
+
+            case ElevatedStartupOutcome.Cancelled:
+                ShowToast(Loc.T("Yönetici izni verilmedi; yönetici yetkisiyle otomatik başlatma değiştirilmedi"), false);
+                break;
+
+            default:
+                ShowToast(Loc.T("Görev Zamanlayıcı ayarı değiştirilemedi"), false);
+                break;
+        }
+
+        await RefreshElevatedAutoStartAsync();
+    }
+
+    /// <summary>
     /// Opens the direct-WMI backend at launch when the process is already elevated. A task launched with
     /// <c>HighestAvailable</c> gives the process an elevated token, so the helper inherits it and no prompt appears;
     /// waiting for the user to press a button would be ceremony for a decision they already made.

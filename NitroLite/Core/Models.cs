@@ -355,6 +355,14 @@ public class AppSettings
     public bool UseDirectWmiBackend { get; set; } = true;
 
     /// <summary>
+    /// True once the window has offered the Task Scheduler entry after a four-zone colour write. The offer is made
+    /// at the moment the user has just seen the feature work, and only once: a prompt that returns every session is
+    /// the thing the setting exists to remove.
+    /// </summary>
+    [JsonPropertyName("elevated_auto_start_offered")]
+    public bool ElevatedAutoStartOffered { get; set; }
+
+    /// <summary>
     /// The last capability probe result, keyed by model code and BIOS version. Null means "not probed yet", which is
     /// the state a fresh install is in. A BIOS update changes the key, so a stale answer is never reused.
     /// </summary>
