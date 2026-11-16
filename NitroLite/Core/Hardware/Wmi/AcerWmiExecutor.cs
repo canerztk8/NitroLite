@@ -380,9 +380,13 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     // ---------------------------------------------------------------- keyboard backlight
 
     /// <summary>
-    /// Reads the keyboard backlight. <c>GetGamingKBBacklight(0x01)</c> answers a 15-byte structure whose byte 2 is
+    /// Reads the keyboard backlight. <c>GetGamingKBBacklight(0x01)</c> answers a byte structure whose byte 2 is
     /// brightness (0..100) and bytes 5..7 are the colour; <c>GetGamingRgbKb(0x01)</c> answers the same colour packed
     /// into a 64-bit integer. Both are reported because the packed form is what a write is compared against.
+    /// <para>
+    /// The structure is 15 bytes on an AN16-41 and 9 on an AN515-44. Both start with the same eight, so the decoder
+    /// reads the common prefix and reports the length instead of assuming one.
+    /// </para>
     /// </summary>
     public WmiOperationResult GetKeyboardBacklight()
     {
@@ -402,10 +406,19 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     foreach (var b in structure.Value.Bytes) bytes.Add(b);
                     data["rawBytes"] = bytes;
                     data["status"] = structure.Value.Status;
-                    data["brightness"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 2) ?? 0;
-                    data["red"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 5) ?? 0;
-                    data["green"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 6) ?? 0;
-                    data["blue"] = AcerWmiProtocol.ByteAt(structure.Value.Bytes, 7) ?? 0;
+                    data["length"] = structure.Value.Bytes.Length;
+
+                    var decoded = AcerWmiProtocol.DecodeKbBacklight(structure.Value.Bytes);
+                    if (decoded.HasValue)
+                    {
+                        data["mode"] = decoded.Value.Mode;
+                        data["speed"] = decoded.Value.Speed;
+                        data["brightness"] = decoded.Value.Brightness;
+                        data["direction"] = decoded.Value.Direction;
+                        data["red"] = decoded.Value.Red;
+                        data["green"] = decoded.Value.Green;
+                        data["blue"] = decoded.Value.Blue;
+                    }
                 }
 
                 var packed = InvokeGetter(gaming, "GetGamingRgbKb", 1);
@@ -432,23 +445,44 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     }
 
     /// <summary>
-    /// Writes one colour to the zones in <paramref name="zoneMask"/> through <c>SetGamingRgbKb</c>.
+    /// Writes the keyboard lighting through the full four-zone sequence.
     /// <para>
-    /// <c>SetGamingKBBacklight</c> is deliberately not used. It is declared with a 16-byte input while its getter
-    /// returns 15, and on an AN16-41 every payload tried — 15 bytes, 16 bytes, three different tail bytes — answered
-    /// <c>gmOutput = 0x01</c> and changed nothing. <c>SetGamingRgbKb</c> is the method that actually applies a colour.
+    /// The order is not cosmetic. Some four-zone models keep the LED zones disabled until the gaming system info has
+    /// been polled and all four zones are switched on through <c>SetGamingLED</c>; per-zone colours written before
+    /// that are stored by the EC and never displayed. The trailing <c>SetGamingKBBacklight</c> is what commits them:
+    /// the static lock for a held colour, the animated payload for an effect.
+    /// </para>
+    /// <para>
+    /// The per-zone colours are scaled by the brightness before they are packed. The firmware does not apply the
+    /// brightness byte to a per-zone colour, so an unscaled 50 % write comes out at full brightness.
+    /// </para>
+    /// <para>
+    /// The commit step is tolerated: some firmware revisions apply the zone colours and still answer a non-zero
+    /// status to <c>SetGamingKBBacklight</c>. When the four colour writes succeeded, that answer is reported in
+    /// <c>commitStatus</c> and the write is still a success — failing it would throw away colours the keyboard is
+    /// already showing.
     /// </para>
     /// </summary>
-    public WmiOperationResult SetKeyboardBacklight(int zoneMask, int red, int green, int blue)
+    public WmiOperationResult SetKeyboardLighting(KeyboardLightingRequest request)
     {
-        if (!WmiWorkerValidation.IsValidLedZoneMask(zoneMask))
-            return WmiOperationResult.InvalidArgument($"zone mask {zoneMask} is not a 1..15 zone bitmask");
-        if (!WmiWorkerValidation.IsValidColorChannel(red))
-            return WmiOperationResult.InvalidArgument($"red {red} is outside 0..255");
-        if (!WmiWorkerValidation.IsValidColorChannel(green))
-            return WmiOperationResult.InvalidArgument($"green {green} is outside 0..255");
-        if (!WmiWorkerValidation.IsValidColorChannel(blue))
-            return WmiOperationResult.InvalidArgument($"blue {blue} is outside 0..255");
+        if (request == null) return WmiOperationResult.InvalidArgument("lighting request is missing");
+
+        if (!WmiWorkerValidation.IsValidBrightnessPercent(request.Brightness))
+            return WmiOperationResult.InvalidArgument($"brightness {request.Brightness} is outside 0..100");
+
+        if (request.Zones == null || request.Zones.Count != AcerWmiProtocol.LedZoneCount)
+            return WmiOperationResult.InvalidArgument(
+                $"zones must carry exactly {AcerWmiProtocol.LedZoneCount} colours");
+
+        foreach (var packed in request.Zones)
+        {
+            if (!WmiWorkerValidation.IsValidPackedColor(packed))
+                return WmiOperationResult.InvalidArgument($"colour 0x{packed:X6} is outside 0x000000..0xFFFFFF");
+        }
+
+        var mode = AcerWmiProtocol.KbModeFor(request.Effect);
+        if (mode == null)
+            return WmiOperationResult.InvalidArgument($"effect '{request.Effect}' has no firmware mode");
 
         lock (_gate)
         {
@@ -457,19 +491,71 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
             try
             {
-                var input = AcerWmiProtocol.EncodeRgbKb((byte)red, (byte)green, (byte)blue, (byte)zoneMask);
-                var status = InvokeSetter(gaming, "SetGamingRgbKb", input);
-                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetGamingRgbKb returned no status");
-                if (status.Value != AcerWmiProtocol.StatusOk)
-                    return WmiOperationResult.StatusError($"SetGamingRgbKb status 0x{status.Value:X2}");
+                // 1. Poll the gaming system info. The zones stay disabled on some models until this has run.
+                InvokeGetter(gaming, "GetGamingSysInfo", 0);
+
+                // 2. Switch all four zones on. Only the models whose zones start disabled need this, and the ones
+                //    that do not need it reject the call outright: an AN16-41 answers WBEM_E_INVALID_PARAMETER and
+                //    its LED getters all report status 0x02. A refusal here is therefore not a failure of the write,
+                //    so it is logged and the zone colours are sent anyway.
+                string? armError = null;
+                try
+                {
+                    var arm = InvokeArraySetter(gaming, "SetGamingLED",
+                        AcerWmiProtocol.ToLittleEndianBytes(AcerWmiProtocol.LedArmValue));
+                    if (arm.HasValue && arm.Value != AcerWmiProtocol.StatusOk)
+                        armError = $"SetGamingLED status 0x{arm.Value:X2}";
+                }
+                catch (Exception ex)
+                {
+                    armError = Describe(ex);
+                }
+
+                // 3. One brightness-scaled colour per zone.
+                var scaled = new (byte Red, byte Green, byte Blue)[AcerWmiProtocol.LedZoneCount];
+                var reported = new JsonArray();
+                for (int i = 0; i < scaled.Length; i++)
+                {
+                    int packed = request.Zones[i];
+                    scaled[i] = AcerWmiProtocol.ScaleColor(
+                        (byte)((packed >> 16) & 0xFF),
+                        (byte)((packed >> 8) & 0xFF),
+                        (byte)(packed & 0xFF),
+                        request.Brightness);
+
+                    var mask = (byte)(AcerWmiProtocol.LedZone1 << i);
+                    var status = InvokeSetter(gaming, "SetGamingRgbKb",
+                        AcerWmiProtocol.EncodeRgbKb(scaled[i].Red, scaled[i].Green, scaled[i].Blue, mask));
+                    if (!status.HasValue)
+                        return WmiOperationResult.WmiFailed($"SetGamingRgbKb (zone {i + 1}) returned no status");
+                    if (status.Value != AcerWmiProtocol.StatusOk)
+                        return WmiOperationResult.StatusError(
+                            $"SetGamingRgbKb (zone {i + 1}) status 0x{status.Value:X2}");
+
+                    reported.Add(AcerWmiProtocol.FormatHexColor(scaled[i].Red, scaled[i].Green, scaled[i].Blue));
+                }
+
+                // 4. Commit. The static lock carries no colour; an effect carries the first zone's colour.
+                var payload = mode.Value == AcerWmiProtocol.KbModeStatic
+                    ? AcerWmiProtocol.EncodeKbStaticLock(request.Brightness)
+                    : AcerWmiProtocol.EncodeKbEffect(
+                        mode.Value, request.Speed, request.Brightness, request.Direction,
+                        scaled[0].Red, scaled[0].Green, scaled[0].Blue);
+
+                var commit = InvokeArraySetter(gaming, "SetGamingKBBacklight", payload);
+                int commitStatus = commit.HasValue ? (int)commit.Value : -1;
 
                 return WmiOperationResult.Success(new JsonObject
                 {
-                    ["input"] = input,
-                    ["zoneMask"] = zoneMask,
-                    ["red"] = red,
-                    ["green"] = green,
-                    ["blue"] = blue
+                    ["effect"] = request.Effect,
+                    ["mode"] = mode.Value,
+                    ["brightness"] = request.Brightness,
+                    ["speed"] = request.Speed,
+                    ["direction"] = request.Direction,
+                    ["zones"] = reported,
+                    ["armError"] = armError,
+                    ["commitStatus"] = commitStatus,
+                    ["commitApplied"] = commitStatus == AcerWmiProtocol.StatusOk
                 });
             }
             catch (Exception ex)
@@ -583,6 +669,19 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     {
         using var inParams = instance.GetMethodParameters(method);
         inParams["gmInput"] = input;
+        using var outParams = instance.InvokeMethod(method, inParams, null);
+        var raw = outParams?["gmOutput"];
+        return raw == null ? null : Convert.ToUInt32(raw, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// A setter whose input is a byte array rather than an integer. <c>SetGamingLED</c> and
+    /// <c>SetGamingKBBacklight</c> are the two, and both answer their status in <c>gmOutput</c>.
+    /// </summary>
+    private static uint? InvokeArraySetter(ManagementObject instance, string method, byte[] payload)
+    {
+        using var inParams = instance.GetMethodParameters(method);
+        inParams["gmInput"] = payload;
         using var outParams = instance.InvokeMethod(method, inParams, null);
         var raw = outParams?["gmOutput"];
         return raw == null ? null : Convert.ToUInt32(raw, CultureInfo.InvariantCulture);

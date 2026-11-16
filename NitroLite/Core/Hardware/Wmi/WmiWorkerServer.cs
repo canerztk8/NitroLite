@@ -238,25 +238,39 @@ public sealed class WmiWorkerServer : IDisposable
                 case WmiWorkerCommand.GetKeyboardBacklight:
                     return WmiWorkerResponse.FromResult(_executor.GetKeyboardBacklight());
 
-                case WmiWorkerCommand.SetKeyboardBacklight:
+                case WmiWorkerCommand.SetKeyboardLighting:
                 {
-                    if (!TryReadInt(request.Args, "zoneMask", out var zoneMask) ||
-                        !WmiWorkerValidation.IsValidLedZoneMask(zoneMask))
-                        return Invalid($"zoneMask {zoneMask} is not a 1..15 zone bitmask");
+                    if (!TryReadString(request.Args, "effect", out var effect))
+                        return Invalid("effect is missing");
 
-                    if (!TryReadInt(request.Args, "red", out var red) ||
-                        !WmiWorkerValidation.IsValidColorChannel(red))
-                        return Invalid($"red {red} is outside 0..255");
+                    // The worker refuses an effect it cannot encode rather than letting the executor fall back to a
+                    // mode the user did not ask for.
+                    if (AcerWmiProtocol.KbModeFor(effect) == null)
+                        return Invalid($"effect '{effect}' has no firmware mode");
 
-                    if (!TryReadInt(request.Args, "green", out var green) ||
-                        !WmiWorkerValidation.IsValidColorChannel(green))
-                        return Invalid($"green {green} is outside 0..255");
+                    if (!TryReadInt(request.Args, "brightness", out var brightness) ||
+                        !WmiWorkerValidation.IsValidBrightnessPercent(brightness))
+                        return Invalid($"brightness {brightness} is outside 0..100");
 
-                    if (!TryReadInt(request.Args, "blue", out var blue) ||
-                        !WmiWorkerValidation.IsValidColorChannel(blue))
-                        return Invalid($"blue {blue} is outside 0..255");
+                    if (!TryReadInt(request.Args, "speed", out var speed) ||
+                        !WmiWorkerValidation.IsValidEffectSpeed(speed))
+                        return Invalid($"speed {speed} is outside 1..{AcerWmiProtocol.MaxEffectSpeed}");
 
-                    return WmiWorkerResponse.FromResult(_executor.SetKeyboardBacklight(zoneMask, red, green, blue));
+                    if (!TryReadInt(request.Args, "direction", out var direction) ||
+                        !WmiWorkerValidation.IsValidEffectDirection(direction))
+                        return Invalid($"direction {direction} is outside 1..{AcerWmiProtocol.MaxEffectDirection}");
+
+                    if (!TryReadZones(request.Args, out var zones))
+                        return Invalid($"zones must be {AcerWmiProtocol.LedZoneCount} packed 0xRRGGBB colours");
+
+                    return WmiWorkerResponse.FromResult(_executor.SetKeyboardLighting(new KeyboardLightingRequest
+                    {
+                        Effect = effect,
+                        Brightness = brightness,
+                        Speed = speed,
+                        Direction = direction,
+                        Zones = zones
+                    }));
                 }
 
                 default:
@@ -299,6 +313,52 @@ public sealed class WmiWorkerServer : IDisposable
     /// </summary>
     private static byte ReadSensorId(JsonObject? args, string name, byte fallback) =>
         TryReadInt(args, name, out var value) && value is >= 0 and <= 255 ? (byte)value : fallback;
+
+    private static bool TryReadString(JsonObject? args, string name, out string value)
+    {
+        value = "";
+        var node = args?[name];
+        if (node == null) return false;
+
+        try
+        {
+            value = node.GetValue<string>() ?? "";
+            return value.Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The four packed zone colours. Exactly four are required: a shorter list would leave a zone on whatever colour
+    /// the last write left it, which is a state the caller did not ask for.
+    /// </summary>
+    private static bool TryReadZones(JsonObject? args, out IReadOnlyList<int> zones)
+    {
+        zones = Array.Empty<int>();
+        if (args?["zones"] is not JsonArray array) return false;
+        if (array.Count != AcerWmiProtocol.LedZoneCount) return false;
+
+        var parsed = new int[array.Count];
+        for (int i = 0; i < array.Count; i++)
+        {
+            try
+            {
+                parsed[i] = array[i]!.GetValue<int>();
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (!WmiWorkerValidation.IsValidPackedColor(parsed[i])) return false;
+        }
+
+        zones = parsed;
+        return true;
+    }
 
     private static async Task<bool> TryReplyAsync(Stream pipe, WmiWorkerResponse response, CancellationToken cancellationToken)
     {

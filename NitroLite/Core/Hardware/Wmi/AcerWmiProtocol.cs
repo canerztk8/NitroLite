@@ -90,6 +90,55 @@ public static class AcerWmiProtocol
     /// <summary>Highest brightness level the app's lighting model uses (0..9).</summary>
     public const int MaxBrightnessLevel = 9;
 
+    // ---------------------------------------------------------------- keyboard backlight (methods 20 / 21)
+
+    /// <summary>Effect mode byte for a held colour.</summary>
+    public const byte KbModeStatic = 0;
+
+    /// <summary>Effect mode byte for breathing.</summary>
+    public const byte KbModeBreathing = 1;
+
+    /// <summary>Effect mode byte for the neon colour cycle.</summary>
+    public const byte KbModeNeon = 2;
+
+    /// <summary>Effect mode byte for the wave.</summary>
+    public const byte KbModeWave = 3;
+
+    /// <summary>Effect mode byte for the colour shift.</summary>
+    public const byte KbModeShifting = 4;
+
+    /// <summary>Effect mode byte for the zoom.</summary>
+    public const byte KbModeZoom = 5;
+
+    /// <summary>
+    /// Byte 3 of an animated payload when the effect is the wave; every other effect leaves it zero. The firmware
+    /// reads it as "this is a directional wave" and ignores the direction byte without it.
+    /// </summary>
+    public const byte KbWaveFlag = 0x08;
+
+    /// <summary>Length of the <c>SetGamingKBBacklight</c> payload.</summary>
+    public const int KbBacklightPayloadLength = 16;
+
+    /// <summary>
+    /// Shortest <c>GetGamingKBBacklight</c> answer that carries the fields this app reads. The getter answers 15
+    /// bytes on an AN16-41 and 9 on an AN515-44; both start with the same eight, so the decoder reads the common
+    /// prefix and reports the length rather than assuming one.
+    /// </summary>
+    public const int KbBacklightMinimumReadLength = 8;
+
+    /// <summary>Highest effect speed the firmware accepts (1..9).</summary>
+    public const int MaxEffectSpeed = 9;
+
+    /// <summary>Highest effect direction the firmware accepts (1 right, 2 left, 3 up, 4 down).</summary>
+    public const int MaxEffectDirection = 4;
+
+    /// <summary>
+    /// The value <c>SetGamingLED</c> takes to switch the four LED zones on: <c>BIT(3)</c> for "on" and
+    /// <c>GENMASK_ULL(43, 40)</c> for "all four zones". The method's input is a byte array, so this goes out as
+    /// eight little-endian bytes rather than an integer.
+    /// </summary>
+    public const ulong LedArmValue = 0x08UL | (0xFUL << 40);
+
     /// <summary>Status byte the firmware returns when it accepted the call.</summary>
     public const byte StatusOk = 0x00;
 
@@ -300,6 +349,92 @@ public static class AcerWmiProtocol
     public static int BrightnessPercentToLevel(int percent) =>
         (int)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * MaxBrightnessLevel);
 
+    // ---------------------------------------------------------------- keyboard backlight payloads
+
+    /// <summary>The firmware's effect mode for an app effect name, or null when the firmware has no such mode.</summary>
+    public static byte? KbModeFor(string? effect) => (effect ?? "").Trim().ToUpperInvariant() switch
+    {
+        "STATIC" or "DIRECT" => KbModeStatic,
+        "BREATHING" => KbModeBreathing,
+        "NEON" => KbModeNeon,
+        "WAVE" => KbModeWave,
+        "SHIFTING" => KbModeShifting,
+        "ZOOM" => KbModeZoom,
+        _ => null
+    };
+
+    /// <summary>
+    /// The 16-byte payload that locks the keyboard into a held colour: mode 0, no speed, no direction, no colour,
+    /// brightness in byte 2 and a single <c>0x01</c> in byte 9.
+    /// <para>
+    /// This is the last step of the four-zone sequence, not a colour write. The per-zone colours are already in the
+    /// EC by the time it runs; without it the zones stay disabled on the models that need the sequence and the
+    /// colours are stored but never displayed.
+    /// </para>
+    /// </summary>
+    public static byte[] EncodeKbStaticLock(int brightnessPercent)
+    {
+        var payload = new byte[KbBacklightPayloadLength];
+        payload[2] = (byte)Math.Clamp(brightnessPercent, 0, 100);
+        payload[9] = 0x01;
+        return payload;
+    }
+
+    /// <summary>
+    /// The 16-byte payload for an animated effect:
+    /// <c>[mode, speed, brightness, waveFlag, direction, r, g, b, 3, 1, 0…]</c>.
+    /// </summary>
+    public static byte[] EncodeKbEffect(
+        byte mode, int speed, int brightnessPercent, int direction, byte red, byte green, byte blue)
+    {
+        var payload = new byte[KbBacklightPayloadLength];
+        payload[0] = mode;
+        payload[1] = (byte)Math.Clamp(speed, 1, MaxEffectSpeed);
+        payload[2] = (byte)Math.Clamp(brightnessPercent, 0, 100);
+        payload[3] = mode == KbModeWave ? KbWaveFlag : (byte)0x00;
+        payload[4] = (byte)Math.Clamp(direction, 1, MaxEffectDirection);
+        payload[5] = red;
+        payload[6] = green;
+        payload[7] = blue;
+        payload[8] = 0x03;
+        payload[9] = 0x01;
+        return payload;
+    }
+
+    /// <summary>
+    /// <c>(channel * brightness) / 100</c> per channel.
+    /// <para>
+    /// The firmware does not apply the brightness byte to a per-zone colour, so the caller has to scale the colour
+    /// itself: a 50 % setting sent unscaled comes out at full brightness. Measured against the reference driver,
+    /// which scales the same way before every per-zone write.
+    /// </para>
+    /// </summary>
+    public static (byte Red, byte Green, byte Blue) ScaleColor(byte red, byte green, byte blue, int brightnessPercent)
+    {
+        int scale = Math.Clamp(brightnessPercent, 0, 100);
+        return ((byte)(red * scale / 100), (byte)(green * scale / 100), (byte)(blue * scale / 100));
+    }
+
+    /// <summary>An eight-byte little-endian array, the shape <c>SetGamingLED</c> takes.</summary>
+    public static byte[] ToLittleEndianBytes(ulong value)
+    {
+        var bytes = new byte[8];
+        for (int i = 0; i < 8; i++) bytes[i] = (byte)((value >> (8 * i)) & 0xFF);
+        return bytes;
+    }
+
+    /// <summary>
+    /// The fields of a <c>GetGamingKBBacklight</c> answer. Null when the answer is shorter than the eight bytes the
+    /// fields live in, so a firmware that answers something else is reported as unreadable rather than decoded.
+    /// </summary>
+    public static KbBacklightState? DecodeKbBacklight(IReadOnlyList<byte>? bytes)
+    {
+        if (bytes == null || bytes.Count < KbBacklightMinimumReadLength) return null;
+
+        return new KbBacklightState(
+            bytes[0], bytes[1], bytes[2], bytes[4], bytes[5], bytes[6], bytes[7], bytes.Count);
+    }
+
     // ---------------------------------------------------------------- byte arrays
 
     /// <summary>
@@ -309,3 +444,11 @@ public static class AcerWmiProtocol
     public static byte? ByteAt(IReadOnlyList<byte>? bytes, int offset) =>
         bytes == null || offset < 0 || offset >= bytes.Count ? null : bytes[offset];
 }
+
+/// <summary>
+/// One <c>GetGamingKBBacklight</c> answer, decoded. <see cref="Length"/> is carried because the getter answers 15
+/// bytes on an AN16-41 and 9 on an AN515-44; the fields are the same eight-byte prefix either way, and reporting the
+/// length lets a diagnostic say which firmware answered.
+/// </summary>
+public readonly record struct KbBacklightState(
+    byte Mode, int Speed, int Brightness, int Direction, byte Red, byte Green, byte Blue, int Length);

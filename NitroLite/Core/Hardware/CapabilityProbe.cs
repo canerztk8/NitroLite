@@ -63,6 +63,13 @@ public sealed record CapabilitySnapshot
     public int MaxCpuFanRpm { get; init; }
     public int MaxGpuFanRpm { get; init; }
 
+    /// <summary>
+    /// True when the matched profile says this model's keyboard is driven over USB HID and the WMI RGB methods are
+    /// silently ignored. The lighting path reads it to fall through to the service or OpenRGB instead of reporting a
+    /// write the firmware accepted and discarded.
+    /// </summary>
+    public bool NitroHidKeyboard { get; init; }
+
     public IReadOnlyList<HardwareProbeResult> Capabilities { get; init; } = Array.Empty<HardwareProbeResult>();
 
     /// <summary>The WMI schema answer, kept so the hardware report does not have to probe twice.</summary>
@@ -148,6 +155,7 @@ public static class CapabilityProbe
             Sensors = profile.Sensors,
             MaxCpuFanRpm = profile.MaxCpuFanRpm,
             MaxGpuFanRpm = profile.MaxGpuFanRpm,
+            NitroHidKeyboard = profile.NitroHidKeyboard,
             Capabilities = capabilities,
             Wmi = schema.Wmi,
             Registry = schema.Registry,
@@ -202,6 +210,7 @@ public static class CapabilityProbe
             Sensors = profile.Sensors,
             MaxCpuFanRpm = profile.MaxCpuFanRpm,
             MaxGpuFanRpm = profile.MaxGpuFanRpm,
+            NitroHidKeyboard = profile.NitroHidKeyboard,
             Capabilities = capabilities,
             Rejections = catalog.Rejections,
             FromCache = true,

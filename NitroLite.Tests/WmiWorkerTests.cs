@@ -697,8 +697,8 @@ public class WmiWorkerTests
         }
 
         public int GetKeyboardBacklightCalls { get; private set; }
-        public int SetKeyboardBacklightCalls { get; private set; }
-        public (int Mask, int Red, int Green, int Blue) LastKeyboardWrite { get; private set; }
+        public int SetKeyboardLightingCalls { get; private set; }
+        public KeyboardLightingRequest? LastKeyboardWrite { get; private set; }
 
         public WmiOperationResult GetKeyboardBacklight()
         {
@@ -713,11 +713,11 @@ public class WmiWorkerTests
             });
         }
 
-        public WmiOperationResult SetKeyboardBacklight(int zoneMask, int red, int green, int blue)
+        public WmiOperationResult SetKeyboardLighting(KeyboardLightingRequest request)
         {
-            SetKeyboardBacklightCalls++;
-            LastKeyboardWrite = (zoneMask, red, green, blue);
-            return WmiOperationResult.Success(new JsonObject { ["zoneMask"] = zoneMask });
+            SetKeyboardLightingCalls++;
+            LastKeyboardWrite = request;
+            return WmiOperationResult.Success(new JsonObject { ["effect"] = request.Effect });
         }
 
         public void Dispose() { }

@@ -341,6 +341,7 @@ public sealed class WmiHardwareController : IHardwareController
         var green = (byte)(ReadInt(data, "green") ?? 0);
         var blue = (byte)(ReadInt(data, "blue") ?? 0);
         var percent = ReadInt(data, "brightness") ?? 0;
+        var mode = ReadInt(data, "mode") ?? AcerWmiProtocol.KbModeStatic;
 
         var color = AcerWmiProtocol.FormatHexColor(red, green, blue);
         var level = AcerWmiProtocol.BrightnessPercentToLevel(percent);
@@ -348,55 +349,87 @@ public sealed class WmiHardwareController : IHardwareController
 
         return new LightingConfig
         {
-            Effect = isOff ? "OFF" : "STATIC",
+            Effect = isOff ? "OFF" : EffectNameFor(mode),
             Brightness = isOff ? 0 : Math.Max(level, 1),
-            Speed = 3,
-            Direction = 1,
+            Speed = Math.Clamp(ReadInt(data, "speed") ?? 3, 1, AcerWmiProtocol.MaxEffectSpeed),
+            Direction = Math.Clamp(ReadInt(data, "direction") ?? 1, 1, AcerWmiProtocol.MaxEffectDirection),
             Color = color,
             LEDs = new List<string> { color, color, color, color }
         };
     }
 
+    /// <summary>The app's effect name for a firmware mode byte.</summary>
+    public static string EffectNameFor(int mode) => mode switch
+    {
+        AcerWmiProtocol.KbModeBreathing => "BREATHING",
+        AcerWmiProtocol.KbModeNeon => "NEON",
+        AcerWmiProtocol.KbModeWave => "WAVE",
+        AcerWmiProtocol.KbModeShifting => "SHIFTING",
+        AcerWmiProtocol.KbModeZoom => "ZOOM",
+        _ => "STATIC"
+    };
+
     /// <summary>
-    /// Writes the keyboard colour, one zone at a time.
+    /// Writes the keyboard lighting through the full four-zone sequence, with the effect, its speed, brightness and
+    /// direction carried in the same command.
     /// <para>
-    /// The firmware takes one colour per call plus a zone mask, so four different zone colours are four writes. A
-    /// mask of zero is rejected by the EC, which is why the four-zone picker never worked through the service path:
-    /// the colour was sent with no zone to put it in.
+    /// The firmware takes one colour per call plus a zone mask, so four different zone colours are four writes, and
+    /// the executor runs them behind the arm and the commit. A mask of zero is rejected by the EC, which is why the
+    /// four-zone picker never worked through the service path: the colour was sent with no zone to put it in.
     /// </para>
     /// <para>
-    /// Effects (wave, breathing, ripple) are an animation the Acer service runs; the firmware only stores a static
-    /// colour. A caller asking for one gets that colour held steady rather than a control that does nothing.
-    /// Brightness is not writable on this path — see <see cref="LightingState"/> — so a level of zero means "black"
-    /// and any other level means "on".
+    /// Brightness is applied by scaling the colour, not by the brightness byte: the firmware does not apply that byte
+    /// to a per-zone colour. The read-back therefore compares the scaled colour, which is what the EC stores.
     /// </para>
     /// </summary>
     public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors)
     {
+        // A model whose WMI RGB path is silently ignored has to fall through to the service or OpenRGB rather than
+        // report a write that changed nothing.
+        if (Snapshot?.NitroHidKeyboard == true) return false;
+
         var requested = (effect ?? "STATIC").Trim().ToUpperInvariant();
         var isOff = requested == "OFF" || brightness <= 0;
+        var percent = isOff ? 0 : AcerWmiProtocol.BrightnessLevelToPercent(brightness);
 
-        var zones = new (byte Red, byte Green, byte Blue)[AcerWmiProtocol.LedZoneCount];
-        if (!isOff)
+        var zones = new int[AcerWmiProtocol.LedZoneCount];
+        for (int i = 0; i < zones.Length; i++)
         {
-            for (int i = 0; i < zones.Length; i++)
-            {
-                var source = zoneColors != null && i < zoneColors.Length ? zoneColors[i] : primaryColor;
-                if (!AcerWmiProtocol.TryParseHexColor(source, out var red, out var green, out var blue) &&
-                    !AcerWmiProtocol.TryParseHexColor(primaryColor, out red, out green, out blue))
-                {
-                    red = green = blue = 0;
-                }
+            if (isOff) continue;
 
-                zones[i] = (red, green, blue);
+            var source = zoneColors != null && i < zoneColors.Length ? zoneColors[i] : primaryColor;
+            if (!AcerWmiProtocol.TryParseHexColor(source, out var red, out var green, out var blue) &&
+                !AcerWmiProtocol.TryParseHexColor(primaryColor, out red, out green, out blue))
+            {
+                red = green = blue = 0;
             }
+
+            zones[i] = (red << 16) | (green << 8) | blue;
         }
 
-        var target = new LightingState(PackRgb(zones[0]));
+        var request = new KeyboardLightingRequest
+        {
+            Effect = isOff ? "STATIC" : requested,
+            Brightness = percent,
+            Speed = Math.Clamp(speed, 1, AcerWmiProtocol.MaxEffectSpeed),
+            Direction = Math.Clamp(direction, 1, AcerWmiProtocol.MaxEffectDirection),
+            Zones = zones
+        };
+
+        if (isOff)
+        {
+            // Turning the lights off is not verified by colour: a firmware that keeps the last colour in its getter
+            // would fail the read-back and disable the capability for a write that worked.
+            return await WriteLightingAsync(request).ConfigureAwait(false);
+        }
+
+        var scaled = AcerWmiProtocol.ScaleColor(
+            (byte)((zones[0] >> 16) & 0xFF), (byte)((zones[0] >> 8) & 0xFF), (byte)(zones[0] & 0xFF), percent);
+        var target = new LightingState(PackRgb(scaled));
 
         var result = await ApplyAsync(
             ReadBackPolicy.KeyboardLighting,
-            write: async () => await WriteZonesAsync(zones).ConfigureAwait(false),
+            write: async () => await WriteLightingAsync(request).ConfigureAwait(false),
             readBack: ReadLightingStateAsync,
             matches: observed => observed.Rgb == target.Rgb).ConfigureAwait(false);
 
@@ -407,23 +440,33 @@ public sealed class WmiHardwareController : IHardwareController
         SetLightingAsync("OFF", 0, 1, 1, "#000000", new[] { "#000000", "#000000", "#000000", "#000000" });
 
     /// <summary>
-    /// Sends one write per zone. Zones that share a colour are still written separately: the mask is what selects
-    /// them, and a combined mask would overwrite a neighbour that was set a moment ago.
+    /// Sends one lighting command. The executor runs the whole sequence — poll, arm, four colours, commit — so this
+    /// is a single round trip rather than five.
+    /// <para>
+    /// A non-zero commit status is logged but not treated as a failure: some firmware revisions apply the zone
+    /// colours and still answer non-zero to <c>SetGamingKBBacklight</c>, and the keyboard is already showing them.
+    /// </para>
     /// </summary>
-    private async Task<bool> WriteZonesAsync((byte Red, byte Green, byte Blue)[] zones)
+    private async Task<bool> WriteLightingAsync(KeyboardLightingRequest request)
     {
-        for (int i = 0; i < zones.Length; i++)
-        {
-            var mask = (byte)(AcerWmiProtocol.LedZone1 << i);
-            var response = await SendAsync(WmiWorkerCommand.SetKeyboardBacklight, new JsonObject
-            {
-                ["zoneMask"] = mask,
-                ["red"] = zones[i].Red,
-                ["green"] = zones[i].Green,
-                ["blue"] = zones[i].Blue
-            }).ConfigureAwait(false);
+        var zones = new JsonArray();
+        foreach (var packed in request.Zones) zones.Add(packed);
 
-            if (response is not { Ok: true }) return false;
+        var response = await SendAsync(WmiWorkerCommand.SetKeyboardLighting, new JsonObject
+        {
+            ["effect"] = request.Effect,
+            ["brightness"] = request.Brightness,
+            ["speed"] = request.Speed,
+            ["direction"] = request.Direction,
+            ["zones"] = zones
+        }).ConfigureAwait(false);
+
+        if (response is not { Ok: true }) return false;
+
+        if (response.Data is JsonObject data && ReadNullableBool(data, "commitApplied") == false)
+        {
+            AppLog.Warn("Klavye statik kilidi uygulanmadı",
+                $"SetGamingKBBacklight durumu {ReadInt(data, "commitStatus")}; bölge renkleri yine de yazıldı.");
         }
 
         return true;
@@ -559,6 +602,20 @@ public sealed class WmiHardwareController : IHardwareController
     {
         try { return data[key]?.GetValue<bool>() == true; }
         catch { return false; }
+    }
+
+    /// <summary>A boolean that is absent when the worker did not report it, so "missing" is not read as "false".</summary>
+    private static bool? ReadNullableBool(JsonObject data, string key)
+    {
+        try
+        {
+            var node = data[key];
+            return node == null ? null : node.GetValue<bool>();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static int? ReadInt(JsonObject data, string key)

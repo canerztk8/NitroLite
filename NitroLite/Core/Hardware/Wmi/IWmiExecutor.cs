@@ -82,6 +82,32 @@ public sealed record SensorQuery
 }
 
 /// <summary>
+/// One keyboard lighting write: an effect, its parameters, and one colour per zone.
+/// <para>
+/// Colours are packed <c>0xRRGGBB</c> integers rather than strings so the worker validates a number instead of
+/// parsing text. <see cref="Brightness"/> is the firmware's 0..100 percentage, not the app's 0..9 level: the scaling
+/// of the per-zone colours happens in the executor, where the firmware's behaviour is known.
+/// </para>
+/// </summary>
+public sealed record KeyboardLightingRequest
+{
+    /// <summary>App effect name: STATIC, BREATHING, NEON, WAVE, SHIFTING or ZOOM.</summary>
+    public string Effect { get; init; } = "STATIC";
+
+    /// <summary>0..100. The firmware does not apply this to a per-zone colour, so the executor scales the colour.</summary>
+    public int Brightness { get; init; } = 100;
+
+    /// <summary>1..9. Ignored by the static lock.</summary>
+    public int Speed { get; init; } = 3;
+
+    /// <summary>1 right, 2 left, 3 up, 4 down. Ignored by the static lock.</summary>
+    public int Direction { get; init; } = 1;
+
+    /// <summary>Exactly four packed <c>0xRRGGBB</c> colours, zone 1 first.</summary>
+    public IReadOnlyList<int> Zones { get; init; } = new[] { 0, 0, 0, 0 };
+}
+
+/// <summary>
 /// What the elevated worker can do to the hardware. Every member is a typed operation, never a generic
 /// "invoke this method with this payload": the worker is the one process holding an elevated token, so the set of
 /// things it can be asked to do has to be a closed list that a reviewer can read in one screen.
@@ -123,15 +149,20 @@ public interface IWmiExecutor : IDisposable
     WmiOperationResult SetBatteryLimit(BatteryChargeMode mode);
 
     /// <summary>
-    /// Reads the keyboard backlight: brightness, the colour the firmware reports, and the raw 15-byte structure from
+    /// Reads the keyboard backlight: brightness, the colour the firmware reports, and the raw structure from
     /// <c>GetGamingKBBacklight</c>. The raw bytes are included because the getter only ever reflects zone 1, so a
     /// caller comparing a four-zone write needs to see what the firmware actually stored.
     /// </summary>
     WmiOperationResult GetKeyboardBacklight();
 
     /// <summary>
-    /// Writes one colour to the zones named by <paramref name="zoneMask"/>. The mask must be non-zero: the firmware
-    /// rejects a write with no zone selected, which is why the four-zone picker never worked before.
+    /// Writes the keyboard lighting: the four-zone sequence for a held colour, or the animated payload for an effect.
+    /// <para>
+    /// The sequence is <c>GetGamingSysInfo(0)</c> → <c>SetGamingLED</c> (arm all four zones) → four
+    /// <c>SetGamingRgbKb</c> writes with brightness-scaled colours → <c>SetGamingKBBacklight</c> (the static lock or
+    /// the effect). Skipping the arm leaves the zones disabled on the models that need it, and skipping the commit
+    /// leaves the colours stored but never displayed.
+    /// </para>
     /// </summary>
-    WmiOperationResult SetKeyboardBacklight(int zoneMask, int red, int green, int blue);
+    WmiOperationResult SetKeyboardLighting(KeyboardLightingRequest request);
 }

@@ -93,4 +93,16 @@ public static class WmiWorkerValidation
 
     /// <summary>True when the value fits in one colour channel.</summary>
     public static bool IsValidColorChannel(int value) => value is >= 0 and <= 255;
+
+    /// <summary>True when the value is a brightness percentage the firmware accepts.</summary>
+    public static bool IsValidBrightnessPercent(int value) => value is >= 0 and <= 100;
+
+    /// <summary>True when the value is a packed <c>0xRRGGBB</c> colour.</summary>
+    public static bool IsValidPackedColor(int value) => value is >= 0 and <= 0xFFFFFF;
+
+    /// <summary>True when the value is an effect speed the firmware accepts (1..9).</summary>
+    public static bool IsValidEffectSpeed(int value) => value is >= 1 and <= AcerWmiProtocol.MaxEffectSpeed;
+
+    /// <summary>True when the value is an effect direction the firmware accepts (1..4).</summary>
+    public static bool IsValidEffectDirection(int value) => value is >= 1 and <= AcerWmiProtocol.MaxEffectDirection;
 }

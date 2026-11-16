@@ -107,6 +107,28 @@
       "notes": "Nitro V chassis with a 16-inch panel. Sensor ids are the firmware-wide enum and are not measured on this model."
     },
     {
+      "id": "nitro-v-16-anv16s-41",
+      "match": {
+        "modelCodes": [ "ANV16S-41" ],
+        "familyPatterns": [ "Nitro V 16 S" ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": { "cpu": 6000, "gpu": 5800 },
+      "muxSwitch": false,
+      "fourZoneKeyboard": true,
+      "nitroHidKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Keyboard is driven over USB HID on this model: the WMI RGB methods answer success and change nothing, so the lighting path falls through to the Acer service or OpenRGB. Sensor ids are the firmware-wide enum and are not measured on this model."
+    },
+    {
       "id": "predator-helios-16-phn16-71",
       "match": {
         "modelCodes": [ "PHN16-71" ],

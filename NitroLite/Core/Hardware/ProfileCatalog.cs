@@ -202,7 +202,7 @@ public sealed class ProfileCatalog
 
         var unknown = node.Select(p => p.Key)
             .Where(k => k is not ("id" or "match" or "sensors" or "maxFanRpm" or "muxSwitch" or "fourZoneKeyboard"
-                or "unsupportedMethods" or "notes"))
+                or "nitroHidKeyboard" or "unsupportedMethods" or "notes"))
             .ToList();
         if (unknown.Count > 0)
         {
@@ -311,6 +311,7 @@ public sealed class ProfileCatalog
             MaxGpuFanRpm = maxGpu,
             MuxSwitch = ReadBool(node, "muxSwitch"),
             FourZoneKeyboard = ReadBool(node, "fourZoneKeyboard"),
+            NitroHidKeyboard = ReadBool(node, "nitroHidKeyboard") ?? false,
             UnsupportedMethods = unsupported,
             Notes = ReadString(node, "notes"),
             Source = isUserFile ? "user" : "embedded"

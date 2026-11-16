@@ -99,6 +99,14 @@ public sealed record ModelProfile
     public bool? FourZoneKeyboard { get; init; }
 
     /// <summary>
+    /// True when this model's keyboard is driven over USB HID and the WMI RGB methods are silently ignored. The
+    /// firmware accepts <c>SetGamingRgbKb</c> and answers success, then changes nothing, so a caller that trusts the
+    /// status byte reports a write that never happened. The lighting path checks this flag and falls through to the
+    /// Acer service or OpenRGB instead.
+    /// </summary>
+    public bool NitroHidKeyboard { get; init; }
+
+    /// <summary>
     /// WMI methods known to fail on this model. Empty for every profile shipped today: no report has proven a
     /// method broken on a specific model yet, and guessing would disable a working feature. The mechanism exists so
     /// the first such report is a one-line data change instead of a code change.

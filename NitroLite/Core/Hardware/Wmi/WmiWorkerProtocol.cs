@@ -45,11 +45,15 @@ public enum WmiWorkerCommand
     /// <summary>Battery charge limit, when WMID_GUID5 exists.</summary>
     SetBatteryLimit = 8,
 
-    /// <summary>Keyboard backlight state: brightness, colour and the raw 15-byte structure.</summary>
+    /// <summary>Keyboard backlight state: brightness, colour and the raw structure.</summary>
     GetKeyboardBacklight = 9,
 
-    /// <summary>One colour written to the zones named by a non-zero mask.</summary>
-    SetKeyboardBacklight = 10
+    /// <summary>
+    /// The full keyboard lighting write: four zone colours plus an effect, its speed, brightness and direction.
+    /// Replaces the single-colour write that used to live at this value; the number is kept so the wire format does
+    /// not change for a rename.
+    /// </summary>
+    SetKeyboardLighting = 10
 }
 
 /// <summary>
