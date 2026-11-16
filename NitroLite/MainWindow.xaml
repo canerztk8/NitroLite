@@ -2708,6 +2708,23 @@
 
                                         <Separator Background="{DynamicResource BorderDark}" Margin="0,12" />
 
+                                        <!-- Optional elevated auto-start. Off by default: it is the only way to run
+                                             the direct-WMI backend without a UAC prompt every session, and it costs
+                                             exactly one prompt to turn on and one to turn off. -->
+                                        <Grid>
+                                            <StackPanel Margin="0,0,48,0" MaxWidth="760" HorizontalAlignment="Left">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Yönetici yetkisiyle otomatik başlat (Görev Zamanlayıcı)" Style="{StaticResource RowTitle}" />
+                                                    <ContentControl Style="{StaticResource InfoBadge}" Margin="6,0,0,0"
+                                                                    ToolTip="Acer servisleri kaldırıldığında her oturumda UAC onayı vermemek için Windows Görev Zamanlayıcı kullanılır. Açarken ve kapatırken bir kez yönetici onayı istenir; uygulama yine asInvoker olarak açılır." />
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtElevatedAutoStartStatus" Text="" Foreground="{DynamicResource InkFaint}" FontSize="11.5" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <CheckBox Style="{StaticResource ToggleSwitch}" x:Name="ChkElevatedAutoStart" Checked="ChkElevatedAutoStart_Changed" Unchecked="ChkElevatedAutoStart_Changed" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Separator Background="{DynamicResource BorderDark}" Margin="0,12" />
+
                                         <Grid>
                                             <StackPanel Margin="0,0,16,0" MaxWidth="760" HorizontalAlignment="Left">
                                                 <StackPanel Orientation="Horizontal">

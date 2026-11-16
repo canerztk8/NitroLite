@@ -722,4 +722,136 @@ public partial class MainWindow
             ShowToast(Loc.T($"Bağlantı açılamadı: {ex.Message}"), false);
         }
     }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Optional elevated auto-start (Task Scheduler)
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the Task Scheduler wrapper and wires it to the standard Run entry, so the two registrations can never be
+    /// active at the same time. The delegates are read lazily: the debloat service is created before this one, but the
+    /// wiring is what makes the exclusion hold in both directions.
+    /// </summary>
+    private ElevatedStartupService CreateElevatedStartupService()
+    {
+        var service = new ElevatedStartupService();
+        service.RemoveStandardAutoStart = () => _debloatService.SetNitroLiteAutoStart(false);
+        service.SetStandardAutoStart = startMinimized => _debloatService.SetNitroLiteAutoStart(true, startMinimized);
+        service.IsStandardAutoStartEnabled = () => _debloatService.IsNitroLiteAutoStartEnabled();
+        return service;
+    }
+
+    /// <summary>
+    /// Puts the toggle in line with what Windows actually has registered. Asked of the task scheduler, not of the
+    /// settings file: a task the user deleted by hand must show as off.
+    /// </summary>
+    private async Task RefreshElevatedAutoStartAsync()
+    {
+        if (ChkElevatedAutoStart == null) return;
+
+        bool enabled;
+        try { enabled = await _elevatedStartup.IsEnabledAsync(); }
+        catch { enabled = false; }
+
+        if (Dispatcher.HasShutdownStarted) return;
+
+        bool previous = _isInitializingUi;
+        _isInitializingUi = true;
+        try
+        {
+            ChkElevatedAutoStart.IsChecked = enabled;
+            if (TxtElevatedAutoStartStatus != null)
+            {
+                TxtElevatedAutoStartStatus.Text = enabled
+                    ? Loc.T("Görev Zamanlayıcı: etkin. Oturum açılışında yönetici yetkisiyle başlar, UAC sorulmaz.")
+                    : Loc.T("Görev Zamanlayıcı: kapalı. Doğrudan WMI için her oturumda bir kez UAC onayı gerekir.");
+            }
+        }
+        finally { _isInitializingUi = previous; }
+    }
+
+    /// <summary>Puts the toggle back where it was, without the handler treating the change as a click.</summary>
+    private void RevertElevatedAutoStartToggle()
+    {
+        if (ChkElevatedAutoStart == null) return;
+        bool previous = _isInitializingUi;
+        _isInitializingUi = true;
+        try { ChkElevatedAutoStart.IsChecked = ChkElevatedAutoStart.IsChecked != true; }
+        finally { _isInitializingUi = previous; }
+    }
+
+    /// <summary>
+    /// Turns the optional Task Scheduler entry on or off. Both directions cost one UAC prompt, which is the whole
+    /// trade: two prompts ever, instead of one at the start of every session.
+    /// </summary>
+    private async void ChkElevatedAutoStart_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || _isInitializingUi || ChkElevatedAutoStart == null) return;
+        bool enable = ChkElevatedAutoStart.IsChecked == true;
+
+        // A task pointing into a temp folder would start nothing once Windows cleans it up.
+        if (enable && DebloatService.IsTemporaryLocation(Environment.ProcessPath))
+        {
+            RevertElevatedAutoStartToggle();
+            ShowToast(Loc.T("NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın."), false);
+            return;
+        }
+
+        ChkElevatedAutoStart.IsEnabled = false;
+        try
+        {
+            var result = enable
+                ? await _elevatedStartup.EnableAsync(_appSettings.StartMinimized)
+                : await _elevatedStartup.DisableAsync();
+
+            switch (result.Outcome)
+            {
+                case ElevatedStartupOutcome.Applied:
+                    ShowToast(enable
+                        ? Loc.T("Yönetici yetkisiyle otomatik başlatma etkin")
+                        : Loc.T("Yönetici yetkisiyle otomatik başlatma kapatıldı"));
+                    break;
+
+                case ElevatedStartupOutcome.Cancelled:
+                    // Declining is a legitimate answer, not an error: nothing changed and the app keeps working.
+                    RevertElevatedAutoStartToggle();
+                    ShowToast(Loc.T("Yönetici izni verilmedi; yönetici yetkisiyle otomatik başlatma değiştirilmedi"), false);
+                    break;
+
+                default:
+                    RevertElevatedAutoStartToggle();
+                    ShowToast(Loc.T("Görev Zamanlayıcı ayarı değiştirilemedi"), false);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Yönetici yetkisiyle otomatik başlatma değiştirilemedi", ex.ToString());
+            RevertElevatedAutoStartToggle();
+            ShowToast(Loc.T("Görev Zamanlayıcı ayarı değiştirilemedi"), false);
+        }
+        finally
+        {
+            ChkElevatedAutoStart.IsEnabled = true;
+            await RefreshElevatedAutoStartAsync();
+        }
+    }
+
+    /// <summary>
+    /// Opens the direct-WMI backend at launch when the process is already elevated. A task launched with
+    /// <c>HighestAvailable</c> gives the process an elevated token, so the helper inherits it and no prompt appears;
+    /// waiting for the user to press a button would be ceremony for a decision they already made.
+    /// </summary>
+    private async Task AutoStartDirectWmiIfElevatedAsync()
+    {
+        if (_hardware is not HybridHardwareController hybrid) return;
+        try
+        {
+            if (await hybrid.AutoStartDirectWmiAsync()) UpdateDirectWmiStatus(hybrid);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Doğrudan WMI açılışta başlatılamadı", ex.Message);
+        }
+    }
 }

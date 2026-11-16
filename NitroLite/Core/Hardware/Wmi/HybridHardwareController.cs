@@ -84,6 +84,12 @@ public sealed class HybridHardwareController : IHardwareController
     /// </summary>
     public Func<HardwareTarget?>? TargetProvider { get; set; }
 
+    /// <summary>
+    /// True when this process already holds an elevated token. Defaults to the real check; the tests replace it so no
+    /// test can depend on how the test runner was started.
+    /// </summary>
+    public Func<bool> IsElevated { get; set; } = MemoryCleanerService.IsRunningAsAdministrator;
+
     /// <summary>True when a handover from WMI to the service is waiting to be reconciled.</summary>
     public bool ReconciliationPending => _pendingReconciliation;
 
@@ -215,6 +221,30 @@ public sealed class HybridHardwareController : IHardwareController
         }
 
         return _wmi;
+    }
+
+    /// <summary>
+    /// Starts the direct-WMI backend at launch, without waiting for the settings button, when the process is already
+    /// elevated and the Acer service is not answering.
+    /// <para>
+    /// This is the payoff of the optional Task Scheduler entry: a task launched with <c>HighestAvailable</c> gives the
+    /// process an elevated token, the helper inherits it, and no prompt appears. Asking the user to press a button
+    /// first would be ceremony for a decision they already made when they turned the option on.
+    /// </para>
+    /// <para>
+    /// It stays silent in the two cases where it must: the user pinned the app to the service path, or the service is
+    /// healthy and there is nothing to fall back from.
+    /// </para>
+    /// </summary>
+    public async Task<bool> AutoStartDirectWmiAsync()
+    {
+        if (!_useDirectWmi()) return false;
+        if (!IsElevated()) return false;
+        if (await _serviceHealthy().ConfigureAwait(false)) return false;
+
+        bool started = await StartDirectWmiAsync().ConfigureAwait(false);
+        if (started) AppLog.Info("Doğrudan WMI açılışta etkinleştirildi", "Süreç zaten yönetici; UAC sorulmadı.");
+        return started;
     }
 
     /// <summary>

@@ -35,6 +35,12 @@ public partial class MainWindow : Window
 
     private BatteryWatchdogService _batteryService;
     private readonly DebloatService _debloatService;
+
+    /// <summary>
+    /// The optional Task Scheduler entry. Its state is asked of Windows, never of the settings file: a task the user
+    /// deleted from Task Scheduler must show as off.
+    /// </summary>
+    private readonly ElevatedStartupService _elevatedStartup;
     private CpuPowerService _cpuPowerService;
     private GameDetectionService _gameService;
     private readonly RgbProfileService _rgbProfileService;
@@ -247,6 +253,7 @@ public partial class MainWindow : Window
         _hardware = CreateHardwareController(_agentClient, allowDirectWmi: true);
         _batteryService = new();
         _debloatService = new();
+        _elevatedStartup = CreateElevatedStartupService();
         _cpuPowerService = new();
         _gameService = new();
         _rgbProfileService = new();
@@ -303,6 +310,7 @@ public partial class MainWindow : Window
         _atkMouseService = atkMouseService;
         _batteryService = batteryService ?? (isTestHarness ? new BatteryWatchdogService(attachSystemEvents: false) : new BatteryWatchdogService());
         _debloatService = new DebloatService();
+        _elevatedStartup = CreateElevatedStartupService();
         _rgbProfileService = new RgbProfileService();
         _hardwareService = hardwareService ?? (isTestHarness ? new HardwareMonitorService(initNvml: false) : new HardwareMonitorService());
         _memoryService = new MemoryCleanerService();
@@ -893,6 +901,10 @@ public partial class MainWindow : Window
             ChkUseDirectWmiBackend.IsChecked = _appSettings.UseDirectWmiBackend;
         }
         UpdateDirectWmiStatus();
+        // The Task Scheduler toggle is read from Windows, not from the settings file, so a task deleted by hand shows
+        // as off. Both calls are fire-and-forget: neither may hold the window open.
+        _ = RefreshElevatedAutoStartAsync();
+        _ = AutoStartDirectWmiIfElevatedAsync();
         // Fire-and-forget: the capability probe touches WMI and must not hold the window open. It fills the settings
         // row when it comes back, and caches the answer so the next launch is instant.
         _ = InitializeCapabilitySnapshotAsync();
@@ -1800,7 +1812,7 @@ public partial class MainWindow : Window
 
     private bool _serviceOperationBusy;
 
-    private void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
+    private async void ChkAutoStart_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkAutoStart == null) return;
         bool enable = ChkAutoStart.IsChecked == true;
@@ -1816,9 +1828,32 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_debloatService.SetNitroLiteAutoStart(enable, _appSettings.StartMinimized))
+        if (enable)
         {
-            ShowToast(enable ? Loc.T("Windows açılışında otomatik çalıştırma etkin") : Loc.T("Windows açılışında çalıştırma kapatıldı"));
+            // Two registrations would start NitroLite twice at logon. The elevated task is removed first, and if that
+            // cannot be done — the user declined the prompt, or Windows refused — the Run entry is not written at all.
+            var result = await _elevatedStartup.EnableStandardAsync(_appSettings.StartMinimized);
+            if (result.Applied)
+            {
+                ShowToast(Loc.T("Windows açılışında otomatik çalıştırma etkin"));
+                await RefreshElevatedAutoStartAsync();
+                return;
+            }
+
+            _isInitializingUi = true;
+            try { ChkAutoStart.IsChecked = _debloatService.IsNitroLiteAutoStartEnabled(); }
+            finally { _isInitializingUi = false; }
+
+            ShowToast(result.Outcome == ElevatedStartupOutcome.Cancelled
+                ? Loc.T("Yönetici görevi kaldırılamadı; iki başlangıç kaydı aynı anda etkin olamaz")
+                : Loc.T("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı)."), false);
+            await RefreshElevatedAutoStartAsync();
+            return;
+        }
+
+        if (_debloatService.SetNitroLiteAutoStart(false))
+        {
+            ShowToast(Loc.T("Windows açılışında çalıştırma kapatıldı"));
             return;
         }
 
@@ -1829,11 +1864,30 @@ public partial class MainWindow : Window
         ShowToast(Loc.T("Başlangıç ayarı değiştirilemedi (kayıt defterine yazılamadı)."), false);
     }
 
-    private void ChkStartMinimized_Changed(object sender, RoutedEventArgs e)
+    private async void ChkStartMinimized_Changed(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded || _isInitializingUi || ChkStartMinimized == null) return;
         _appSettings.StartMinimized = ChkStartMinimized.IsChecked == true;
         SaveSettings();
+
+        // The flag lives in whichever registration is active. The elevated task carries it in its arguments, so it has
+        // to be re-registered — one UAC prompt, because changing a scheduled task needs elevation.
+        if (await _elevatedStartup.IsEnabledAsync())
+        {
+            var result = await _elevatedStartup.EnableAsync(_appSettings.StartMinimized);
+            if (!result.Applied)
+            {
+                ShowToast(result.Outcome == ElevatedStartupOutcome.Cancelled
+                    ? Loc.T("Yönetici izni verilmedi; Görev Zamanlayıcı görevi güncellenmedi")
+                    : Loc.T("Ayar kaydedildi ama Görev Zamanlayıcı görevi güncellenemedi."), false);
+                return;
+            }
+            ShowToast(_appSettings.StartMinimized
+                ? Loc.T("Windows açılışında pencere gösterilmeden tepside başlayacak")
+                : Loc.T("Windows açılışında pencere açık başlayacak"));
+            return;
+        }
+
         // The flag lives in the Run entry; only rewrite it when autostart is on.
         bool written = !_debloatService.IsNitroLiteAutoStartEnabled()
             || _debloatService.SetNitroLiteAutoStart(true, _appSettings.StartMinimized);

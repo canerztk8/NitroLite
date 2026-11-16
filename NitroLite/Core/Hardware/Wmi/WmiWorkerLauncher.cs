@@ -27,23 +27,33 @@ public sealed class WmiWorkerLauncher : IDisposable
     private readonly string _executablePath;
     private readonly Func<ProcessStartInfo, Process?> _start;
     private readonly Func<string, string, TimeSpan, CancellationToken, Task<WmiWorkerClient>> _connect;
+    private readonly Func<bool> _isElevated;
     private readonly JobObjectGuard? _job;
     private bool _disposed;
 
     /// <summary>
     /// <paramref name="start"/> and <paramref name="connect"/> are injectable so the UAC-cancelled path can be tested
-    /// without a UAC prompt and the pipe path without an elevated process.
+    /// without a UAC prompt and the pipe path without an elevated process. <paramref name="isElevated"/> decides
+    /// whether the helper needs a prompt at all.
     /// </summary>
     public WmiWorkerLauncher(
         string? executablePath = null,
         Func<ProcessStartInfo, Process?>? start = null,
-        Func<string, string, TimeSpan, CancellationToken, Task<WmiWorkerClient>>? connect = null)
+        Func<string, string, TimeSpan, CancellationToken, Task<WmiWorkerClient>>? connect = null,
+        Func<bool>? isElevated = null)
     {
         _executablePath = executablePath ?? Environment.ProcessPath ?? "NitroLite.exe";
         _start = start ?? (psi => Process.Start(psi));
         _connect = connect ?? ((pipe, nonce, timeout, ct) => WmiWorkerClient.ConnectAsync(pipe, nonce, timeout, ct));
+        _isElevated = isElevated ?? MemoryCleanerService.IsRunningAsAdministrator;
         _job = JobObjectGuard.Create();
     }
+
+    /// <summary>
+    /// True when this process already holds an elevated token, so the helper inherits it and no prompt is needed.
+    /// That is the case when NitroLite was started by the optional Task Scheduler entry.
+    /// </summary>
+    public bool IsElevated => _isElevated();
 
     /// <summary>True once the user has declined the prompt. No further attempt is made this session.</summary>
     public bool UserDeclined { get; private set; }
@@ -78,13 +88,20 @@ public sealed class WmiWorkerLauncher : IDisposable
 
         var pipeName = "nitrolite-wmi-" + Guid.NewGuid().ToString("N");
         var nonce = WmiWorkerClient.GenerateNonce();
+        // An already-elevated parent passes its token to the child, so asking for runas would raise a prompt for a
+        // privilege the process already holds. That is the whole point of the optional Task Scheduler entry: the
+        // user answers UAC once, at the moment they turn it on, and never again.
+        bool needsPrompt = !IsElevated;
+
         var startInfo = new ProcessStartInfo(_executablePath, BuildArguments(pipeName, Environment.ProcessId, nonce))
         {
             // runas is what raises the prompt. UseShellExecute has to be true for a verb to be honoured.
-            UseShellExecute = true,
-            Verb = "runas",
-            WindowStyle = ProcessWindowStyle.Hidden
+            UseShellExecute = needsPrompt,
+            WindowStyle = ProcessWindowStyle.Hidden,
+            CreateNoWindow = !needsPrompt
         };
+
+        if (needsPrompt) startInfo.Verb = "runas";
 
         Process? process;
         try
