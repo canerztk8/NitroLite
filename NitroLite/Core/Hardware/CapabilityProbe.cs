@@ -3,9 +3,10 @@
 /// <summary>
 /// Layer 1 of the capability probe: what can be learned without elevation and without the Acer service.
 /// <para>
-/// Three sources, all read-only: the <c>root\WMI</c> schema (which Acer classes exist, what they advertise, whether
+/// Four sources, all read-only: the <c>root\WMI</c> schema (which Acer classes exist, what they advertise, whether
 /// their instances are reachable), the GUID qualifier of each Acer class (which is how the battery charge limit
-/// interface is identified), and the Acer agent's registry key (the MUX bitmask and the keyboard zone count).
+/// interface is identified), the Acer agent's registry key (the MUX bitmask and the keyboard zone count), and the
+/// Acer Care Center agent's service state (the other way the charge limit is provided).
 /// </para>
 /// </summary>
 public sealed record SchemaProbeResult
@@ -18,15 +19,28 @@ public sealed record SchemaProbeResult
 
     public AcerRegistrySnapshot Registry { get; init; } = AcerRegistrySnapshot.Empty;
 
-    /// <summary>Reads all three sources. Never throws; a source that fails simply contributes nothing.</summary>
+    /// <summary>
+    /// True when the Acer Care Center agent is installed and running. The 80 % charge limit is not always a WMI
+    /// interface — an AN16-41 has no <c>WMID_GUID5</c> class and the agent owns the limit instead — so the battery
+    /// answer has to consider both.
+    /// </summary>
+    public bool CareCenterAvailable { get; init; }
+
+    /// <summary>What the Care Center check saw, for the report. Empty when it was never read.</summary>
+    public string CareCenterDetail { get; init; } = "";
+
+    /// <summary>Reads all four sources. Never throws; a source that fails simply contributes nothing.</summary>
     public static SchemaProbeResult Read()
     {
         var wmi = AcerWmiProbe.ReadWithTimeout(TimeSpan.FromSeconds(5));
+        var careCenter = CareCenterProbe.Read();
         return new SchemaProbeResult
         {
             Wmi = wmi,
             AcerClassGuids = AcerWmiProbe.ReadAcerClassGuids(),
-            Registry = AcerRegistrySnapshot.Read()
+            Registry = AcerRegistrySnapshot.Read(),
+            CareCenterAvailable = careCenter.Available,
+            CareCenterDetail = careCenter.Detail
         };
     }
 }
@@ -86,6 +100,18 @@ public sealed record CapabilitySnapshot
     /// <summary>True when the matched profile says this model's LED zones need the <c>SetGamingLED</c> arm step.</summary>
     public bool KbZoneArm { get; init; }
 
+    /// <summary>
+    /// True when <c>WMID_GUID5</c> is registered on this machine, false when the enumeration succeeded and it is not,
+    /// null when the enumeration itself failed or the cache predates this field.
+    /// <para>
+    /// Kept apart from the combined battery capability because the WMI backend can only write through that interface:
+    /// on an AN16-41 the limit is provided by Acer Care Center, so the capability is supported while the class this
+    /// backend writes through does not exist. Only a positive "no" may stop the write; a null answer must not, or a
+    /// machine that does have the class would lose the feature to a cache written by an older build.
+    /// </para>
+    /// </summary>
+    public bool? WmiBatteryChargeLimitPresent { get; init; }
+
     public IReadOnlyList<HardwareProbeResult> Capabilities { get; init; } = Array.Empty<HardwareProbeResult>();
 
     /// <summary>The WMI schema answer, kept so the hardware report does not have to probe twice.</summary>
@@ -144,6 +170,16 @@ public static class CapabilityProbe
     public const string BatteryChargeLimitGuid = "79772EC5-04B1-4BFD-843C-61E7F77B6CC9";
 
     /// <summary>
+    /// Bumped when a capability answer changes meaning, which makes every older cache a miss.
+    /// <para>
+    /// Version 2 added the Acer Care Center source for the battery charge limit. A version 1 cache says "not
+    /// supported" on a machine where the limit works, so without this the user would have to find the rescan button
+    /// to see the fix — or conclude there was nothing to fix.
+    /// </para>
+    /// </summary>
+    public const int CurrentProbeVersion = 2;
+
+    /// <summary>
     /// Runs all three layers. The schema read is the only part that touches the system; the profile match and the
     /// capability assembly are pure, which is what makes them testable.
     /// </summary>
@@ -191,6 +227,7 @@ public static class CapabilityProbe
             EcMmioProfile = profile.EcMmioProfile,
             KbZoneArm = profile.KbZoneArm,
             WmiMuxSignal = wmiMuxSignal,
+            WmiBatteryChargeLimitPresent = HasBatteryChargeLimitClass(schema.AcerClassGuids),
             Capabilities = capabilities,
             Wmi = schema.Wmi,
             AcerClassGuids = schema.AcerClassGuids,
@@ -213,13 +250,14 @@ public static class CapabilityProbe
     }
 
     /// <summary>
-    /// Returns the cached snapshot when it was captured for this exact model and BIOS, otherwise null. A cache with
-    /// no key, or one written by an older build, is a miss rather than a partial answer.
+    /// Returns the cached snapshot when it was captured for this exact model and BIOS by this probe version, otherwise
+    /// null. A cache with no key, or one written by an older build, is a miss rather than a partial answer.
     /// </summary>
     public static CapabilitySnapshot? TryFromCache(AppSettings settings, DeviceIdentity identity, ProfileCatalog catalog)
     {
         var cache = settings.HardwareCapabilityCache;
         if (cache == null || cache.Capabilities.Count == 0) return null;
+        if (cache.ProbeVersion != CurrentProbeVersion) return null;
 
         var key = CacheKey(identity);
         if (!string.Equals(cache.Key, key, StringComparison.Ordinal)) return null;
@@ -250,6 +288,7 @@ public static class CapabilityProbe
             EcMmioProfile = profile.EcMmioProfile,
             KbZoneArm = profile.KbZoneArm,
             WmiMuxSignal = cache.WmiMuxSignal,
+            WmiBatteryChargeLimitPresent = cache.WmiBatteryChargeLimitPresent,
             Capabilities = capabilities,
             Rejections = catalog.Rejections,
             FromCache = true,
@@ -263,8 +302,10 @@ public static class CapabilityProbe
         settings.HardwareCapabilityCache = new HardwareCapabilityCache
         {
             Key = snapshot.CacheKey,
+            ProbeVersion = CurrentProbeVersion,
             CapturedUtc = snapshot.CapturedUtc,
             WmiMuxSignal = snapshot.WmiMuxSignal,
+            WmiBatteryChargeLimitPresent = snapshot.WmiBatteryChargeLimitPresent,
             Capabilities = snapshot.Capabilities
                 .Select(c => new CachedCapability
                 {
@@ -296,14 +337,44 @@ public static class CapabilityProbe
             string.IsNullOrWhiteSpace(wmi.CallError) ? "no method answered" : wmi.CallError);
     }
 
-    private static HardwareProbeResult DescribeBatteryChargeLimit(SchemaProbeResult schema)
+    /// <summary>
+    /// The class registered under <c>WMID_GUID5</c>, or null when no Acer class carries that GUID. The class is found
+    /// by GUID rather than by name because the name has shipped under several spellings.
+    /// </summary>
+    private static string? FindBatteryChargeLimitClass(IReadOnlyDictionary<string, string> guids)
     {
         var wanted = AcerWmiProbe.NormalizeGuid(BatteryChargeLimitGuid);
-        foreach (var (name, guid) in schema.AcerClassGuids)
+        foreach (var (name, guid) in guids)
         {
-            if (AcerWmiProbe.NormalizeGuid(guid) == wanted)
-                return HardwareProbeResult.Supported(CapabilitySnapshot.WmiBatteryChargeLimit, name);
+            if (AcerWmiProbe.NormalizeGuid(guid) == wanted) return name;
         }
+
+        return null;
+    }
+
+    /// <summary>
+    /// True when the WMI battery interface is registered, false when the enumeration succeeded and it is not, null when
+    /// the enumeration itself failed. The three answers matter: only a positive "no" may stop the WMI backend from
+    /// trying, and an empty map is not evidence of absence.
+    /// </summary>
+    private static bool? HasBatteryChargeLimitClass(IReadOnlyDictionary<string, string> guids) =>
+        guids.Count == 0 ? null : FindBatteryChargeLimitClass(guids) != null;
+
+    /// <summary>
+    /// The 80 % charge limit, from whichever interface this machine actually has. <c>WMID_GUID5</c> is the WMI one;
+    /// Acer Care Center is the other, and on an AN16-41 it is the only one. Reporting the second as "not supported"
+    /// hid a working feature from the walkthrough and from the recommended profile.
+    /// </summary>
+    private static HardwareProbeResult DescribeBatteryChargeLimit(SchemaProbeResult schema)
+    {
+        if (FindBatteryChargeLimitClass(schema.AcerClassGuids) is { } name)
+            return HardwareProbeResult.Supported(CapabilitySnapshot.WmiBatteryChargeLimit, name);
+
+        if (schema.CareCenterAvailable)
+            return HardwareProbeResult.Supported(CapabilitySnapshot.WmiBatteryChargeLimit,
+                string.IsNullOrWhiteSpace(schema.CareCenterDetail)
+                    ? $"Acer Care Center ({CareCenterProbe.ServiceName})"
+                    : schema.CareCenterDetail);
 
         // An empty map means the enumeration itself failed, which is not evidence that the interface is missing.
         if (schema.AcerClassGuids.Count == 0)

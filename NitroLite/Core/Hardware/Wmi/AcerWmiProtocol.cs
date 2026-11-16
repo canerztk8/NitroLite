@@ -525,6 +525,27 @@ public static class AcerWmiProtocol
             bytes[0], bytes[1], bytes[2], bytes[4], bytes[5], bytes[6], bytes[7], bytes.Count);
     }
 
+    // ---------------------------------------------------------------- battery charge limit
+
+    /// <summary>
+    /// The four-byte buffer <c>SetBatteryHealthControl</c> takes on <c>WMID_GUID5</c>: the mode in byte 0 and three
+    /// reserved bytes. This is the shape the Linux <c>acer-wmi-battery</c> driver sends and the one the firmware
+    /// documents; the scalar form some builds expose is handled separately by the executor.
+    /// </summary>
+    public static byte[] EncodeBatteryLimit(byte mode) => new byte[] { mode, 0, 0, 0 };
+
+    /// <summary>
+    /// The charge mode out of a <c>WMID_GUID5</c> answer buffer. Null when the buffer is empty or carries a value that
+    /// is not a known mode, so an unexpected answer is reported as unreadable rather than as a mode.
+    /// </summary>
+    public static BatteryChargeMode? DecodeBatteryLimit(IReadOnlyList<byte>? bytes)
+    {
+        if (bytes == null || bytes.Count == 0) return null;
+
+        var mode = (BatteryChargeMode)bytes[0];
+        return Enum.IsDefined(mode) ? mode : null;
+    }
+
     // ---------------------------------------------------------------- operating-mode bitmask
 
     /// <summary>

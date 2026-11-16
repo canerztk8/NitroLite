@@ -40,9 +40,17 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     /// Method names the battery interface has shipped under. The class is identified by GUID, but WMI methods are
     /// addressed by name, so the executor tries the documented names and reports not-supported when none is there —
     /// the same outcome the caller sees on a machine with no class at all.
+    /// <para>
+    /// <c>GetBatteryHealthControl</c> / <c>SetBatteryHealthControl</c> come first because that is the pair the Linux
+    /// <c>acer-wmi-battery</c> driver documents for <c>WMID_GUID5</c>, and it is the pair that takes a four-byte
+    /// buffer rather than a scalar.
+    /// </para>
     /// </summary>
-    private static readonly string[] BatteryGetMethods = { "GetBatteryHealth", "GetBatteryCare", "GetBatteryChargeMode" };
-    private static readonly string[] BatterySetMethods = { "SetBatteryHealth", "SetBatteryCare", "SetBatteryChargeMode" };
+    private static readonly string[] BatteryGetMethods =
+        { "GetBatteryHealthControl", "GetBatteryHealth", "GetBatteryCare", "GetBatteryChargeMode" };
+
+    private static readonly string[] BatterySetMethods =
+        { "SetBatteryHealthControl", "SetBatteryHealth", "SetBatteryCare", "SetBatteryChargeMode" };
 
     private readonly object _gate = new();
     private ManagementObject? _gaming;
@@ -407,16 +415,17 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     return WmiOperationResult.NotSupported("WMID_GUID5 exposes no known charge-limit setter");
 
                 using var inParams = battery.GetMethodParameters(method);
-                SetFirstInput(inParams, (ulong)(byte)mode);
+                SetBatteryInput(inParams, (byte)mode);
                 using var outParams = battery.InvokeMethod(method, inParams, null);
-                var status = ReadStatus(outParams);
-                if (status.HasValue && status.Value != AcerWmiProtocol.StatusOk)
-                    return WmiOperationResult.StatusError($"{method} status 0x{status.Value:X2}");
 
+                // No status check here: WMID_GUID5 answers the mode it now holds, not a status code, so the low byte
+                // of a scalar answer and byte 0 of a buffer answer are the mode itself. Reading that as a status made
+                // every write of "Full" look like a failure. The controller's read-back is the real verification.
                 return WmiOperationResult.Success(new JsonObject
                 {
                     ["method"] = method,
-                    ["batteryLimit"] = mode.ToString()
+                    ["batteryLimit"] = mode.ToString(),
+                    ["readBack"] = ReadBatteryAnswer(outParams)?.ToString()
                 });
             }
             catch (Exception ex)
@@ -1115,18 +1124,65 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             if (method == null) return null;
 
             using var inParams = battery.GetMethodParameters(method);
-            SetFirstInput(inParams, 0);
+            SetBatteryInput(inParams, 0);
             using var outParams = battery.InvokeMethod(method, inParams, null);
-            var raw = ReadFirstOutput(outParams);
-            if (raw == null) return null;
-
-            var mode = (BatteryChargeMode)(byte)(raw.Value & 0xFF);
-            return Enum.IsDefined(mode) ? mode : null;
+            return ReadBatteryAnswer(outParams);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Fills the charge-limit input. <c>WMID_GUID5</c>'s documented interface is a four-byte buffer — the Linux
+    /// <c>acer-wmi-battery</c> driver sends <c>{mode, 0, 0, 0}</c> — while some firmware exposes the same method with a
+    /// scalar parameter. The two are told apart by the parameter's type rather than by the method name, because the
+    /// name has shipped under both shapes.
+    /// </summary>
+    private static void SetBatteryInput(ManagementBaseObject parameters, byte mode)
+    {
+        foreach (PropertyData property in parameters.Properties)
+        {
+            if (property.IsArray)
+            {
+                parameters[property.Name] = AcerWmiProtocol.EncodeBatteryLimit(mode);
+                return;
+            }
+
+            parameters[property.Name] = (ulong)mode;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Reads the charge mode out of a <c>WMID_GUID5</c> answer. The buffer form carries the mode in byte 0; the scalar
+    /// form carries it in the low byte. Neither carries a status code, so this deliberately does not decode one.
+    /// </summary>
+    private static BatteryChargeMode? ReadBatteryAnswer(ManagementBaseObject? parameters)
+    {
+        if (parameters == null) return null;
+
+        foreach (PropertyData property in parameters.Properties)
+        {
+            if (property.IsArray)
+            {
+                return property.Value is byte[] bytes ? AcerWmiProtocol.DecodeBatteryLimit(bytes) : null;
+            }
+
+            try
+            {
+                var raw = Convert.ToUInt64(property.Value, CultureInfo.InvariantCulture);
+                var scalar = (BatteryChargeMode)(byte)(raw & 0xFF);
+                return Enum.IsDefined(scalar) ? scalar : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     private static string? FindMethod(ManagementObject instance, IEnumerable<string> candidates)
@@ -1156,45 +1212,6 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
 
         return names;
-    }
-
-    /// <summary>
-    /// Sets the first in-parameter whatever the firmware named it. The battery interface is not the gaming one, so
-    /// its parameter is not necessarily called <c>gmInput</c>.
-    /// </summary>
-    private static void SetFirstInput(ManagementBaseObject parameters, ulong value)
-    {
-        foreach (PropertyData property in parameters.Properties)
-        {
-            if (property.IsArray) continue;
-            parameters[property.Name] = value;
-            return;
-        }
-    }
-
-    private static ulong? ReadFirstOutput(ManagementBaseObject? parameters)
-    {
-        if (parameters == null) return null;
-        foreach (PropertyData property in parameters.Properties)
-        {
-            if (property.IsArray) continue;
-            try
-            {
-                return Convert.ToUInt64(property.Value, CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    private static byte? ReadStatus(ManagementBaseObject? parameters)
-    {
-        var raw = ReadFirstOutput(parameters);
-        return raw.HasValue ? AcerWmiProtocol.DecodeStatus(raw.Value) : null;
     }
 
     private static string Describe(Exception ex) =>

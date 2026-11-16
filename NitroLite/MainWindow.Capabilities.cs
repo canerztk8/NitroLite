@@ -209,7 +209,7 @@ public partial class MainWindow
 
             var label = new TextBlock
             {
-                Text = $"{Loc.T(CapabilityLabel(capability.Capability))} — {Loc.T(VerdictLabel(capability.Outcome))}",
+                Text = CapabilityRowText(capability),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = TryFindResource("TextSecondary") as Brush
@@ -220,6 +220,31 @@ public partial class MainWindow
             row.Children.Add(label);
             PanelOnboardingCapabilities.Children.Add(row);
         }
+    }
+
+    /// <summary>
+    /// One row's text: the capability, the verdict, and — when the answer came from somewhere the user would not
+    /// guess — where from. The battery limit is the case that matters: on an AN16-41 it is Acer Care Center answering
+    /// rather than a WMI class, and a user who later removes the Acer services should know why the row changed.
+    /// </summary>
+    internal static string CapabilityRowText(HardwareProbeResult capability)
+    {
+        var text = $"{Loc.T(CapabilityLabel(capability.Capability))} — {Loc.T(VerdictLabel(capability.Outcome))}";
+        var source = CapabilitySourceNote(capability);
+        return string.IsNullOrEmpty(source) ? text : $"{text} ({source})";
+    }
+
+    /// <summary>
+    /// Where a supported capability comes from, when that is not the obvious place. Empty for everything except the
+    /// battery limit answered by Acer Care Center, so the row does not grow a suffix nobody needs.
+    /// </summary>
+    internal static string CapabilitySourceNote(HardwareProbeResult capability)
+    {
+        if (!capability.IsSupported) return "";
+        if (capability.Capability != CapabilitySnapshot.WmiBatteryChargeLimit) return "";
+        return capability.Detail.Contains("Care Center", StringComparison.OrdinalIgnoreCase)
+            ? Loc.T("Acer Care Center üzerinden")
+            : "";
     }
 
     /// <summary>Turkish name for a capability key, falling back to the key itself so a new one is never blank.</summary>

@@ -298,7 +298,11 @@ public class WmiControllerTests
     [Fact]
     public async Task WmiController_BatteryLimitKnownUnsupported_DoesNotAskTheWorker()
     {
-        var snapshot = SnapshotWith(CapabilitySnapshot.WmiBatteryChargeLimit, HardwareProbeOutcome.Unsupported);
+        // The probe positively found no WMID_GUID5 class. The combined battery capability is a separate question: on
+        // an AN16-41 it is supported through Acer Care Center, and this backend still must not write through a class
+        // that is not there.
+        var snapshot = SnapshotWith(CapabilitySnapshot.WmiBatteryChargeLimit, HardwareProbeOutcome.Supported)
+            with { WmiBatteryChargeLimitPresent = false };
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
             start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
@@ -311,6 +315,41 @@ public class WmiControllerTests
 
         // The whole point: no elevation was requested for a capability the probe already ruled out.
         Assert.Equal(0, launcher.Attempts);
+    }
+
+    [Fact]
+    public async Task WmiController_BatteryLimitAnsweredByCareCenter_StillRefusesTheWmiWrite()
+    {
+        // The AN16-41 case: the capability is a yes because Acer Care Center owns the limit, and the WMI class the
+        // worker would write through does not exist. A supported capability must not turn into a doomed round trip.
+        var snapshot = SnapshotWith(CapabilitySnapshot.WmiBatteryChargeLimit, HardwareProbeOutcome.Supported)
+            with { WmiBatteryChargeLimitPresent = false };
+        using var launcher = new WmiWorkerLauncher(
+            executablePath: "NitroLite.exe",
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+        using var controller = new WmiHardwareController(
+            launcher, new ReadBackPolicy(new AppSettings(), NoDelay), () => snapshot);
+
+        Assert.True(snapshot.IsSupported(CapabilitySnapshot.WmiBatteryChargeLimit));
+        Assert.True(controller.BatteryLimitKnownUnsupported);
+        Assert.False(await controller.SetBatteryChargeModeAsync(BatteryChargeMode.Optimized80));
+        Assert.Equal(0, launcher.Attempts);
+    }
+
+    [Fact]
+    public async Task WmiController_BatteryLimitUnknown_DoesNotBlockTheWrite()
+    {
+        // A cache written by a build that did not record the field, or a schema enumeration that failed, is not
+        // evidence of absence: the worker is asked and answers for itself.
+        var snapshot = SnapshotWith(CapabilitySnapshot.WmiBatteryChargeLimit, HardwareProbeOutcome.Unknown);
+        using var launcher = new WmiWorkerLauncher(
+            executablePath: "NitroLite.exe",
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+        using var controller = new WmiHardwareController(
+            launcher, new ReadBackPolicy(new AppSettings(), NoDelay), () => snapshot);
+
+        Assert.Null(snapshot.WmiBatteryChargeLimitPresent);
+        Assert.False(controller.BatteryLimitKnownUnsupported);
     }
 
     [Fact]

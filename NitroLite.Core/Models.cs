@@ -249,10 +249,23 @@ public class HardwareCapabilityCache
     public List<CachedCapability> Capabilities { get; set; } = new();
 
     /// <summary>
+    /// The probe version that wrote this cache. Bumped when a capability answer changes meaning, so a cache written by
+    /// an older build is a miss rather than a stale "not supported" the user cannot clear without finding the rescan
+    /// button. Zero means the cache predates the field.
+    /// </summary>
+    public int ProbeVersion { get; set; }
+
+    /// <summary>
     /// The <c>GetGamingMiscSetting(0x09) == 3</c> answer, when an elevated session managed to read it. Null means
     /// nobody asked, which is not the same as "the machine said no".
     /// </summary>
     public bool? WmiMuxSignal { get; set; }
+
+    /// <summary>
+    /// Whether <c>WMID_GUID5</c> was registered when the cache was written. Null on a cache from a build that did not
+    /// record it, which reads as "nobody asked" rather than "the machine said no".
+    /// </summary>
+    public bool? WmiBatteryChargeLimitPresent { get; set; }
 }
 
 public class AppSettings

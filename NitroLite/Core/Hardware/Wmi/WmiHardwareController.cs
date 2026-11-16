@@ -680,9 +680,14 @@ public sealed class WmiHardwareController : IHardwareController
     /// <summary>
     /// True when the probe already established that this machine has no WMID_GUID5. Asking the worker anyway would
     /// cost a round trip to learn what is already known, and on an AN16-41 the answer is always "not registered".
+    /// <para>
+    /// Deliberately reads <see cref="CapabilitySnapshot.WmiBatteryChargeLimitPresent"/> rather than the combined
+    /// battery capability: on an AN16-41 the limit is supported through Acer Care Center, so the capability is a yes
+    /// while the class this backend writes through does not exist. A null answer means nobody asked, which must not
+    /// stop a write on a machine that does have the class.
+    /// </para>
     /// </summary>
-    public bool BatteryLimitKnownUnsupported =>
-        Snapshot?.Find(CapabilitySnapshot.WmiBatteryChargeLimit)?.Outcome == HardwareProbeOutcome.Unsupported;
+    public bool BatteryLimitKnownUnsupported => Snapshot?.WmiBatteryChargeLimitPresent == false;
 
     public async Task<BatteryChargeMode?> GetBatteryChargeModeAsync()
     {
