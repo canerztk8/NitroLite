@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using NitroLite.Core;
+using NitroLite.Desktop.Themes;
 using NitroLite.Desktop.Views;
 
 namespace NitroLite.Desktop;
@@ -13,7 +14,15 @@ public partial class App : Application
     private TrayIconHost? _tray;
     private bool _exiting;
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+
+        // A palette has to exist before the first control is created, or every DynamicResource in the style layer
+        // resolves to nothing and the window opens unstyled. The stored choice replaces this one in the view model's
+        // constructor, which runs before the window is built.
+        DesktopThemeManager.Instance.Apply(AppTheme.Dark);
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

@@ -1169,5 +1169,7 @@
   "Silinemedi": "Could not delete",
   "Tanımlı bir oyun açıldığında moda ve fan eğrisine geçer, kapandığında geri döner.": "Switches to the profile's mode and fan curve when a listed game starts, and back when it closes.",
   "Temiz Çıkış": "Clean exit",
-  "Yarım kalan okul modu geri alındı.": "An interrupted school mode session was rolled back."
+  "Yarım kalan okul modu geri alındı.": "An interrupted school mode session was rolled back.",
+  "Tema seçimi hemen uygulanır.": "The theme applies immediately.",
+  "Son 60 saniye": "Last 60 seconds"
 }

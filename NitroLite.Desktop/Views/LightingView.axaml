@@ -14,7 +14,7 @@
 
           <Grid ColumnDefinitions="*,*">
             <StackPanel Spacing="4" Margin="0,0,12,0">
-              <TextBlock Classes="caption" Text="{Binding Labels.Effect}" />
+              <TextBlock Classes="label" Text="{Binding Labels.Effect}" />
               <ComboBox ItemsSource="{Binding Effects}"
                         SelectedItem="{Binding SelectedEffect}"
                         HorizontalAlignment="Stretch">
@@ -27,52 +27,58 @@
             </StackPanel>
 
             <StackPanel Grid.Column="1" Spacing="4">
-              <TextBlock Classes="caption" Text="{Binding Labels.PrimaryColor}" />
+              <TextBlock Classes="label" Text="{Binding Labels.PrimaryColor}" />
               <TextBox Text="{Binding PrimaryColor}" Watermark="#00E5FF" />
             </StackPanel>
           </Grid>
 
           <Grid ColumnDefinitions="*,*,*">
             <StackPanel Spacing="2" Margin="0,0,12,0">
-              <TextBlock Classes="caption" Text="{Binding Labels.Brightness}" />
+              <TextBlock Classes="label" Text="{Binding Labels.Brightness}" />
               <Slider Minimum="1" Maximum="{Binding MaxBrightness}"
                       TickFrequency="1" IsSnapToTickEnabled="True"
                       Value="{Binding BrightnessLevel}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Spacing="2" Margin="0,0,12,0">
-              <TextBlock Classes="caption" Text="{Binding Labels.Speed}" />
+              <TextBlock Classes="label" Text="{Binding Labels.Speed}" />
               <Slider Minimum="1" Maximum="{Binding MaxSpeed}"
                       TickFrequency="1" IsSnapToTickEnabled="True"
                       Value="{Binding SpeedLevel}" />
             </StackPanel>
             <StackPanel Grid.Column="2" Spacing="2">
-              <TextBlock Classes="caption" Text="{Binding Labels.Direction}" />
+              <TextBlock Classes="label" Text="{Binding Labels.Direction}" />
               <Slider Minimum="0" Maximum="{Binding MaxDirection}"
                       TickFrequency="1" IsSnapToTickEnabled="True"
                       Value="{Binding DirectionLevel}" />
             </StackPanel>
           </Grid>
 
-          <TextBlock Classes="caption" Text="{Binding Labels.ZoneColors}" />
+          <!-- The four zones are one group, so they sit in one inset rather than floating between the sliders and the
+               buttons. -->
+          <Border Classes="panel">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="label" Text="{Binding Labels.ZoneColors}" />
 
-          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-            <StackPanel Spacing="4" Margin="0,0,12,8">
-              <TextBlock Classes="caption" Text="{Binding Labels.Zone1}" />
-              <TextBox Text="{Binding Zone1}" Watermark="#00E5FF" />
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                <StackPanel Spacing="4" Margin="0,0,12,8">
+                  <TextBlock Classes="caption" Text="{Binding Labels.Zone1}" />
+                  <TextBox Text="{Binding Zone1}" Watermark="#00E5FF" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="4" Margin="0,0,0,8">
+                  <TextBlock Classes="caption" Text="{Binding Labels.Zone2}" />
+                  <TextBox Text="{Binding Zone2}" Watermark="#00E5FF" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,12,0">
+                  <TextBlock Classes="caption" Text="{Binding Labels.Zone3}" />
+                  <TextBox Text="{Binding Zone3}" Watermark="#00E5FF" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
+                  <TextBlock Classes="caption" Text="{Binding Labels.Zone4}" />
+                  <TextBox Text="{Binding Zone4}" Watermark="#00E5FF" />
+                </StackPanel>
+              </Grid>
             </StackPanel>
-            <StackPanel Grid.Column="1" Spacing="4" Margin="0,0,0,8">
-              <TextBlock Classes="caption" Text="{Binding Labels.Zone2}" />
-              <TextBox Text="{Binding Zone2}" Watermark="#00E5FF" />
-            </StackPanel>
-            <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,12,0">
-              <TextBlock Classes="caption" Text="{Binding Labels.Zone3}" />
-              <TextBox Text="{Binding Zone3}" Watermark="#00E5FF" />
-            </StackPanel>
-            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
-              <TextBlock Classes="caption" Text="{Binding Labels.Zone4}" />
-              <TextBox Text="{Binding Zone4}" Watermark="#00E5FF" />
-            </StackPanel>
-          </Grid>
+          </Border>
 
           <StackPanel Orientation="Horizontal" Spacing="10">
             <Button Classes="primary"
@@ -112,7 +118,7 @@
             <Button Classes="primary"
                     Content="{Binding Labels.ApplyProfile}"
                     Command="{Binding ApplyRgbProfileCommand}" />
-            <Button Classes="ghost"
+            <Button Classes="danger"
                     Content="{Binding Labels.DeleteProfile}"
                     Command="{Binding DeleteRgbProfileCommand}" />
           </StackPanel>
@@ -124,8 +130,12 @@
                     Command="{Binding SaveRgbProfileCommand}" />
           </Grid>
 
-          <TextBlock Classes="caption" Text="{Binding RgbProfileStatus}" />
-          <TextBlock Classes="caption" Text="{Binding RgbProfileLoadError}" />
+          <Border Classes="panel">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="caption" Text="{Binding RgbProfileStatus}" />
+              <TextBlock Classes="caption" Text="{Binding RgbProfileLoadError}" />
+            </StackPanel>
+          </Border>
         </StackPanel>
       </Border>
 
@@ -136,22 +146,22 @@
           <!-- Each row hides itself when the probe did not find the node, so the page never offers a switch that
                would write to a file that is not there. -->
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CoolBoostAvailable}">
-            <TextBlock Text="{Binding Labels.CoolBoost}" VerticalAlignment="Center" />
+            <TextBlock Classes="label" Text="{Binding Labels.CoolBoost}" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding CoolBoostOn}" />
           </Grid>
 
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding LcdOverdriveAvailable}">
-            <TextBlock Text="{Binding Labels.LcdOverdrive}" VerticalAlignment="Center" />
+            <TextBlock Classes="label" Text="{Binding Labels.LcdOverdrive}" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding LcdOverdriveOn}" />
           </Grid>
 
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding BacklightTimeoutAvailable}">
-            <TextBlock Text="{Binding Labels.BacklightTimeout}" VerticalAlignment="Center" />
+            <TextBlock Classes="label" Text="{Binding Labels.BacklightTimeout}" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding BacklightTimeoutOn}" />
           </Grid>
 
           <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding BatteryLimitAvailable}">
-            <TextBlock Text="{Binding Labels.BatteryLimit}" VerticalAlignment="Center" />
+            <TextBlock Classes="label" Text="{Binding Labels.BatteryLimit}" />
             <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
           </Grid>
 

@@ -1,7 +1,10 @@
 using System.IO;
+using Avalonia.Media;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.OpenRgb;
+using NitroLite.Desktop;
+using NitroLite.Desktop.Themes;
 using NitroLite.Desktop.ViewModels;
 using NitroLite.Linux;
 using NitroLite.Linux.Sysfs;
@@ -98,9 +101,16 @@ public class DesktopViewModelTests
     /// <summary>
     /// A view model wired to a real <see cref="LinuxSysfsHardwareController"/> over <paramref name="fs"/>.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="settingsPath"/> defaults to the real data folder, which is what the window uses. A test that
+    /// asserts on what was written passes a temporary file instead, so it neither reads nor overwrites the settings of
+    /// whoever is running the suite.
+    /// </remarks>
     private static (MainViewModel Vm, LinuxSysfsHardwareController Controller) Create(
         InMemorySysfsFileSystem fs,
-        AppSettings? settings = null)
+        AppSettings? settings = null,
+        IThemeApplier? themeApplier = null,
+        string? settingsPath = null)
     {
         var appSettings = settings ?? new AppSettings();
 
@@ -109,8 +119,21 @@ public class DesktopViewModelTests
         var controller = LinuxSysfsHardwareController.Create(
             appSettings, fs, Catalog(), new OpenRgbClient(port: 1));
 
-        var vm = new MainViewModel(appSettings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"));
+        var vm = new MainViewModel(
+            appSettings,
+            controller,
+            controller.Capabilities,
+            settingsPath ?? AppPaths.GetDataFile("settings.json"),
+            themeApplier: themeApplier);
         return (vm, controller);
+    }
+
+    /// <summary>Records what the view model asked the window to paint, without needing a window.</summary>
+    private sealed class RecordingThemeApplier : IThemeApplier
+    {
+        public List<AppTheme> Applied { get; } = new();
+
+        public void Apply(AppTheme theme) => Applied.Add(theme);
     }
 
     // ---------------------------------------------------------------- 1. telemetry
@@ -390,5 +413,256 @@ public class DesktopViewModelTests
         {
             Loc.SetLanguage(original);
         }
+    }
+
+    // ---------------------------------------------------------------- 7. the theme engine
+
+    [Fact]
+    public void Theme_ConstructorPaintsTheStoredPaletteBeforeTheWindowExists()
+    {
+        var settings = new AppSettings { Theme = AppTheme.NordFrost };
+        var applier = new RecordingThemeApplier();
+
+        var (vm, controller) = Create(Nitro16(), settings, applier);
+        using var _ = vm;
+        using var __ = controller;
+
+        // Exactly one call, at construction: the first frame is already the right colour instead of flashing the
+        // default and repainting a moment later.
+        Assert.Equal(new[] { AppTheme.NordFrost }, applier.Applied);
+        Assert.Equal(AppTheme.NordFrost, vm.SelectedTheme?.Theme);
+    }
+
+    [Fact]
+    public void Theme_PickerOffersEveryPaletteInTheCatalogue()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        Assert.Equal(ThemeCatalog.All, vm.Themes.Select(t => t.Theme).ToArray());
+        Assert.All(vm.Themes, t => Assert.False(string.IsNullOrWhiteSpace(t.Label)));
+    }
+
+    [Fact]
+    public void Theme_PickingAPaletteAppliesItAndWritesItToTheSettingsFile()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "nitrolite-theme-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(folder, "settings.json");
+        var settings = new AppSettings { Theme = AppTheme.Dark };
+        var applier = new RecordingThemeApplier();
+
+        var (vm, controller) = Create(Nitro16(), settings, applier, path);
+        using var _ = vm;
+        using var __ = controller;
+
+        try
+        {
+            vm.SelectedTheme = vm.Themes.Single(t => t.Theme == AppTheme.AmberConsole);
+
+            Assert.Equal(new[] { AppTheme.Dark, AppTheme.AmberConsole }, applier.Applied);
+            Assert.Equal(AppTheme.AmberConsole, settings.Theme);
+            Assert.Equal(vm.Labels.ThemeApplied, vm.Status);
+
+            // The choice survives a restart because it reached the file, not only the object in memory.
+            Assert.Contains("\"AmberConsole\"", File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Theme_ChangingTheLanguageRenamesThePickerWithoutRepainting()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "nitrolite-theme-" + Guid.NewGuid().ToString("N"));
+        var applier = new RecordingThemeApplier();
+
+        var (vm, controller) = Create(Nitro16(), null, applier, Path.Combine(folder, "settings.json"));
+        using var _ = vm;
+        using var __ = controller;
+
+        var before = vm.Themes.Single(t => t.Theme == AppTheme.Dark).Label;
+        var original = Loc.Language;
+        try
+        {
+            vm.SelectedLanguage = Loc.Languages.Single(l => l.Code == "en");
+
+            Assert.Equal("Dark", vm.Themes.Single(t => t.Theme == AppTheme.Dark).Label);
+            Assert.NotEqual(before, vm.Themes.Single(t => t.Theme == AppTheme.Dark).Label);
+
+            // Rebuilding the list is not a user action: the palette is not re-applied and the file is not rewritten.
+            Assert.Single(applier.Applied);
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Theme_ResolveTurnsTheSystemPreferenceIntoAConcretePalette()
+    {
+        // A test host has no Application, so the desktop cannot answer and the fallback is the light palette. What
+        // matters is that "System" never reaches the palette table: it is a preference, not a colour.
+        var resolved = DesktopThemeManager.Resolve(AppTheme.System);
+
+        Assert.NotEqual(AppTheme.System, resolved);
+        Assert.Contains(resolved, new[] { AppTheme.Light, AppTheme.Dark });
+    }
+
+    [Fact]
+    public void Theme_EveryPaletteCarriesEveryBrushTheViewsAskFor()
+    {
+        // These keys are the contract between Themes/ThemePalette.cs and the DynamicResource references in the XAML.
+        // A missing one is not a build error — DynamicResource resolves at runtime — so it is asserted here instead.
+        var expected = new[]
+        {
+            "PageBrush", "CardBrush", "CardHoverBrush", "PanelBrush", "RailBrush",
+            "CardBorderBrush", "CardBorderStrongBrush",
+            "TextPrimaryBrush", "TextSecondaryBrush", "TextMutedBrush",
+            "AccentBrush", "AccentHoverBrush", "AccentSoftBrush", "OnAccentBrush",
+            "SuccessBrush", "SuccessSoftBrush", "WarningBrush", "WarningSoftBrush",
+            "DangerBrush", "DangerSoftBrush", "ChartFillBrush"
+        };
+
+        foreach (var theme in ThemeCatalog.All)
+        {
+            var resources = DesktopThemeManager.BuildResources(theme);
+            foreach (var key in expected)
+            {
+                Assert.True(resources.ContainsKey(key), $"{theme} is missing {key}");
+            }
+        }
+    }
+
+    [Fact]
+    public void Theme_EveryPaletteHasItsOwnPageColour()
+    {
+        // A copy-paste slip in the palette table would leave two themes looking identical, which no build would catch.
+        var pages = ThemeCatalog.All
+            .Where(t => t != AppTheme.System)
+            .Select(t => ((ISolidColorBrush)DesktopThemeManager.BuildResources(t)["PageBrush"]!).Color)
+            .ToArray();
+
+        Assert.Equal(pages.Length, pages.Distinct().Count());
+    }
+
+    // ---------------------------------------------------------------- 8. the sparkline history
+
+    [Fact]
+    public void Sparkline_KeepsTheMostRecentSamplesOldestFirst()
+    {
+        var history = new SparklineHistory(capacity: 3);
+
+        history.Add(1);
+        history.Add(2);
+        history.Add(3);
+        history.Add(4);
+        history.Add(5);
+
+        Assert.Equal(3, history.Capacity);
+        Assert.Equal(3, history.Count);
+        Assert.Equal(new double[] { 3, 4, 5 }, history.Snapshot());
+    }
+
+    [Fact]
+    public void Sparkline_IgnoresASampleThatIsNotANumber()
+    {
+        var history = new SparklineHistory(capacity: 4);
+        history.Add(10);
+
+        history.Add(double.NaN);
+        history.Add(double.PositiveInfinity);
+
+        // A NaN would poison the chart's own range and flatten every real sample against it.
+        Assert.Equal(1, history.Count);
+        Assert.Equal(new double[] { 10 }, history.Snapshot());
+    }
+
+    [Fact]
+    public void Sparkline_SnapshotIsANewArraySoTheChartSeesAChange()
+    {
+        var history = new SparklineHistory();
+        history.Add(42);
+
+        var first = history.Snapshot();
+        var second = history.Snapshot();
+
+        // Avalonia only re-renders when the property value changes, so handing back the same instance would leave the
+        // chart drawing the first sixty samples forever.
+        Assert.NotSame(first, second);
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void Sparkline_EmptyHistoryIsAnEmptyArrayRatherThanNull()
+    {
+        Assert.Empty(new SparklineHistory().Snapshot());
+    }
+
+    [Fact]
+    public void Sparkline_RefusesAWindowTooShortToDraw()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SparklineHistory(capacity: 1));
+    }
+
+    [Fact]
+    public async Task Sparkline_DashboardHistoryGrowsWithEachTelemetryTick()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+        Assert.Empty(vm.CpuTemperatureHistory);
+
+        await vm.RefreshTelemetryAsync();
+        await vm.RefreshTelemetryAsync();
+        await vm.RefreshTelemetryAsync();
+
+        Assert.Equal(new double[] { 63, 63, 63 }, vm.CpuTemperatureHistory);
+        Assert.Equal(new double[] { 57, 57, 57 }, vm.GpuTemperatureHistory);
+        Assert.Equal(new double[] { 2436, 2436, 2436 }, vm.CpuFanHistory);
+        Assert.Equal(new double[] { 2409, 2409, 2409 }, vm.GpuFanHistory);
+    }
+
+    [Fact]
+    public async Task Sparkline_DashboardHistoryStopsAtSixtySamples()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+        for (int i = 0; i < MainViewModel.HistoryLength + 5; i++) await vm.RefreshTelemetryAsync();
+
+        Assert.Equal(60, MainViewModel.HistoryLength);
+        Assert.Equal(60, vm.CpuTemperatureHistory.Count);
+        Assert.Equal(60, vm.CpuFanHistory.Count);
+    }
+
+    [Fact]
+    public async Task Sparkline_ASilentSensorIsNotRecordedButAStoppedFanIs()
+    {
+        var fs = Nitro16();
+        fs.WithoutFile("/sys/class/hwmon/hwmon0/temp1_input");
+        fs.WithoutFile("/sys/class/hwmon/hwmon1/temp1_input");
+        fs.WithoutFile("/sys/class/hwmon/hwmon2/temp1_input");
+
+        var (vm, controller) = Create(fs);
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+        await vm.RefreshTelemetryAsync();
+
+        // Zero degrees means the sensor did not answer, so there is nothing to plot. Zero RPM means the fans are
+        // stopped, which is a real reading and belongs on the chart.
+        Assert.Equal(0, vm.CpuTemperature);
+        Assert.Empty(vm.CpuTemperatureHistory);
+        Assert.Single(vm.CpuFanHistory);
     }
 }

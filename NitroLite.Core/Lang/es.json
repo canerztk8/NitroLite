@@ -1169,5 +1169,7 @@
   "Silinemedi": "No se pudo eliminar",
   "Tanımlı bir oyun açıldığında moda ve fan eğrisine geçer, kapandığında geri döner.": "Cambia al modo y la curva de ventilador del perfil cuando se inicia un juego de la lista, y vuelve al cerrarlo.",
   "Temiz Çıkış": "Salida limpia",
-  "Yarım kalan okul modu geri alındı.": "Se revirtió una sesión de modo escolar interrumpida."
+  "Yarım kalan okul modu geri alındı.": "Se revirtió una sesión de modo escolar interrumpida.",
+  "Tema seçimi hemen uygulanır.": "El tema se aplica de inmediato.",
+  "Son 60 saniye": "Últimos 60 segundos"
 }

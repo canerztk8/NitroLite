@@ -15,26 +15,29 @@
        and the last write result stay visible while the user is deep in the fan curve. -->
   <Grid RowDefinitions="Auto,*,Auto">
 
-    <Border Grid.Row="0"
-            Background="#11161D"
-            BorderBrush="#1E2530"
-            BorderThickness="0,0,0,1"
-            Padding="20,14">
+    <Border Grid.Row="0" Classes="bar" BorderThickness="0,0,0,1" Padding="20,12">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <TextBlock Classes="h1" Text="{Binding Labels.AppTitle}" VerticalAlignment="Center" />
-          <Border Classes="pill" VerticalAlignment="Center">
+          <TextBlock Classes="h1" Text="{Binding Labels.AppTitle}" />
+          <Border Classes="pill">
             <TextBlock Classes="caption" Text="{Binding DeviceModel}" />
           </Border>
         </StackPanel>
 
-        <Border Grid.Column="2" Classes="pill" VerticalAlignment="Center">
-          <TextBlock Classes="caption" Text="{Binding Status}" />
+        <!-- The last write result. It is a badge rather than plain text because "written" and "failed" have to be
+             distinguishable at a glance from across the room. -->
+        <Border Grid.Column="2" Classes="badge">
+          <TextBlock Text="{Binding Status}" />
         </Border>
       </Grid>
     </Border>
 
-    <TabControl Grid.Row="1" TabStripPlacement="Left" Padding="0">
+    <!-- The tab strip is the navigation rail: the TabControl's background is the rail colour, and the content host is
+         repainted to the page colour in App.axaml so the rail ends where the navigation ends. -->
+    <TabControl Grid.Row="1"
+                TabStripPlacement="Left"
+                Background="{DynamicResource RailBrush}"
+                Padding="0">
       <TabItem Header="{Binding Labels.Dashboard}">
         <views:DashboardView />
       </TabItem>
@@ -46,12 +49,8 @@
       </TabItem>
     </TabControl>
 
-    <Border Grid.Row="2"
-            Background="#11161D"
-            BorderBrush="#1E2530"
-            BorderThickness="0,1,0,0"
-            Padding="20,8">
-      <TextBlock Classes="caption" Text="{Binding Status}" />
+    <Border Grid.Row="2" Classes="bar" BorderThickness="0,1,0,0" Padding="20,7">
+      <TextBlock Classes="muted" Text="{Binding Status}" />
     </Border>
   </Grid>
 </Window>

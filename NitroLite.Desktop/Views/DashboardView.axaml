@@ -18,21 +18,33 @@
 
       <TextBlock Classes="h2" Text="{Binding Labels.ThermalAndFans}" />
 
+      <!-- The three thermals. Each card carries its own last-minute trace, so a reading that is climbing is visible
+           without waiting for the number to change. -->
       <Grid ColumnDefinitions="*,*,*">
         <Border Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="2">
+          <StackPanel Spacing="4">
             <TextBlock Classes="caption" Text="{Binding Labels.Cpu}" />
             <TextBlock Classes="value" Text="{Binding CpuTemperatureText}" />
+            <controls:SparklineChart Height="34"
+                                     Values="{Binding CpuTemperatureHistory}"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}" />
+            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
         <Border Grid.Column="1" Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="2">
+          <StackPanel Spacing="4">
             <TextBlock Classes="caption" Text="{Binding Labels.Gpu}" />
             <TextBlock Classes="value" Text="{Binding GpuTemperatureText}" />
+            <controls:SparklineChart Height="34"
+                                     Values="{Binding GpuTemperatureHistory}"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}" />
+            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
         <Border Grid.Column="2" Classes="card">
-          <StackPanel Spacing="2">
+          <StackPanel Spacing="4">
             <TextBlock Classes="caption" Text="{Binding Labels.Sys}" />
             <TextBlock Classes="value" Text="{Binding SysTemperatureText}" />
           </StackPanel>
@@ -41,7 +53,7 @@
 
       <Grid ColumnDefinitions="*,*">
         <Border Classes="card" Margin="0,0,10,0">
-          <StackPanel Spacing="2">
+          <StackPanel Spacing="4">
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="caption" Text="{Binding Labels.Cpu}" VerticalAlignment="Center" />
               <!-- "ölçüldü" vs "tahmini": the difference decides whether the stall watchdog may act, so it is shown
@@ -51,11 +63,15 @@
               </Border>
             </Grid>
             <TextBlock Classes="value" Text="{Binding CpuFanRpmText}" />
-            <TextBlock Classes="caption" Text="{Binding Labels.FanRpm}" />
+            <controls:SparklineChart Height="34"
+                                     Values="{Binding CpuFanHistory}"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}" />
+            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
         <Border Grid.Column="1" Classes="card">
-          <StackPanel Spacing="2">
+          <StackPanel Spacing="4">
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="caption" Text="{Binding Labels.Gpu}" VerticalAlignment="Center" />
               <Border Grid.Column="1" Classes="pill">
@@ -63,7 +79,11 @@
               </Border>
             </Grid>
             <TextBlock Classes="value" Text="{Binding GpuFanRpmText}" />
-            <TextBlock Classes="caption" Text="{Binding Labels.FanRpm}" />
+            <controls:SparklineChart Height="34"
+                                     Values="{Binding GpuFanHistory}"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}" />
+            <TextBlock Classes="muted" Text="{Binding Labels.LastMinute}" />
           </StackPanel>
         </Border>
       </Grid>
@@ -209,7 +229,7 @@
             </StackPanel>
           </Grid>
 
-          <Border Background="#11161D" CornerRadius="8" Padding="10">
+          <Border Classes="panel">
             <StackPanel Spacing="2">
               <TextBlock Classes="caption" Text="{Binding Labels.ThermalFloors}" />
               <TextBlock Classes="caption" Text="{Binding ThermalFloorSummary}" />

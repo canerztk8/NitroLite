@@ -2,6 +2,7 @@ using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Desktop.ViewModels;
+using NitroLite.Desktop.Themes;
 using NitroLite.Linux;
 using NitroLite.Linux.Sysfs;
 
@@ -43,7 +44,7 @@ public sealed class AppHost : IDisposable
     {
         _hardware = hardware;
         ViewModel = new MainViewModel(
-            settings, hardware, linux, settingsPath, gameProfiles, schoolMode, rgbProfiles);
+            settings, hardware, linux, settingsPath, gameProfiles, schoolMode, rgbProfiles, DesktopThemeManager.Instance);
     }
 
     public MainViewModel ViewModel { get; }

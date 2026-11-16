@@ -88,6 +88,11 @@ public sealed class ShellLabels
     public string Copied => Loc.T("Kopyalandı");
     public string LanguageRestartHint => Loc.T("Dil değişikliği hemen uygulanır.");
 
+    // ---------------------------------------------------------------- theme and charts
+    public string Theme => Loc.T("Tema");
+    public string ThemeApplied => Loc.T("Tema seçimi hemen uygulanır.");
+    public string LastMinute => Loc.T("Son 60 saniye");
+
     // ---------------------------------------------------------------- MUX switch
     public string MuxSwitch => Loc.T("MUX Switch");
     public string GpuMode => Loc.T("GPU modu");

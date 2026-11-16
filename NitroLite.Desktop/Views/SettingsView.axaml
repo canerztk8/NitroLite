@@ -12,7 +12,7 @@
         <StackPanel Spacing="10">
           <TextBlock Classes="h2" Text="{Binding Labels.Device}" />
 
-          <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto" >
+          <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto">
             <TextBlock Grid.Row="0" Classes="caption" Text="{Binding Labels.Model}" Margin="0,0,0,6" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DeviceModel}" Margin="0,0,0,6" />
 
@@ -23,10 +23,48 @@
             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TierText}" Margin="0,0,0,6" />
 
             <TextBlock Grid.Row="3" Classes="caption" Text="{Binding Labels.DataFolder}" />
-            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DataFolder}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="mono" Text="{Binding DataFolder}" />
           </Grid>
         </StackPanel>
       </Border>
+
+      <!-- Appearance. The theme picker applies on selection rather than behind an Apply button: the whole point of a
+           palette is that you can see it, and a preview that needs confirming is a preview you cannot judge. -->
+      <Grid ColumnDefinitions="*,*">
+        <Border Classes="card" Margin="0,0,10,0">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="h2" Text="{Binding Labels.Theme}" />
+            <ComboBox ItemsSource="{Binding Themes}"
+                      SelectedItem="{Binding SelectedTheme}"
+                      MinWidth="240"
+                      HorizontalAlignment="Left">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ThemeChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="caption" Text="{Binding Labels.ThemeApplied}" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="1" Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="h2" Text="{Binding Labels.Language}" />
+            <ComboBox ItemsSource="{Binding Languages}"
+                      SelectedItem="{Binding SelectedLanguage}"
+                      MinWidth="240"
+                      HorizontalAlignment="Left">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="core:LocLanguage">
+                  <TextBlock Text="{Binding NativeName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="caption" Text="{Binding Labels.LanguageRestartHint}" />
+          </StackPanel>
+        </Border>
+      </Grid>
 
       <Border Classes="card">
         <StackPanel Spacing="10">
@@ -36,40 +74,31 @@
                     Content="{Binding Labels.Rescan}"
                     Command="{Binding RescanCommand}" />
           </Grid>
-          <TextBlock Text="{Binding CapabilitySummaryText}"
-                     FontFamily="monospace"
-                     TextWrapping="Wrap" />
+          <Border Classes="panel">
+            <TextBlock Classes="mono" Text="{Binding CapabilitySummaryText}" />
+          </Border>
         </StackPanel>
       </Border>
 
       <!-- The udev banner only appears when a write actually failed for lack of permission, so a user who already
            installed the rule never sees it. -->
-      <Border Classes="card" IsVisible="{Binding NeedsUdevRule}" Background="#2A2113" BorderBrush="#4A3A18">
+      <Border Classes="card" IsVisible="{Binding NeedsUdevRule}">
         <StackPanel Spacing="8">
           <TextBlock Classes="h2" Text="{Binding Labels.UdevNeeded}" />
           <TextBlock Classes="caption" Text="{Binding Labels.UdevInstruction}" />
-          <TextBox Text="{Binding UdevCommand}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="monospace" />
+          <Border Classes="panel">
+            <TextBox Text="{Binding UdevCommand}"
+                     IsReadOnly="True"
+                     TextWrapping="Wrap"
+                     Classes="mono"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0" />
+          </Border>
           <Button Classes="primary"
                   Content="{Binding Labels.CopyCommand}"
                   Command="{Binding CopyUdevCommand}"
                   HorizontalAlignment="Left" />
-        </StackPanel>
-      </Border>
-
-      <Border Classes="card">
-        <StackPanel Spacing="8">
-          <TextBlock Classes="h2" Text="{Binding Labels.Language}" />
-          <ComboBox ItemsSource="{Binding Languages}"
-                    SelectedItem="{Binding SelectedLanguage}"
-                    MinWidth="240"
-                    HorizontalAlignment="Left">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="core:LocLanguage">
-                <TextBlock Text="{Binding NativeName}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <TextBlock Classes="caption" Text="{Binding Labels.LanguageRestartHint}" />
         </StackPanel>
       </Border>
 

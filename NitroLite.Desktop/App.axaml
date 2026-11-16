@@ -3,84 +3,312 @@
              x:Class="NitroLite.Desktop.App"
              RequestedThemeVariant="Dark">
 
+  <!--
+    The design system. Every colour here is a DynamicResource, never a literal: the palette lives in
+    Themes/ThemePalette.cs and DesktopThemeManager swaps it under a live window, so a theme change repaints everything
+    without a restart and without a single control being re-bound by hand.
+
+    The vocabulary is deliberately small — one page, one card, one inset panel, one pill, one accent — so a control
+    added later has an obvious class to use instead of inventing a colour. Sizes are in a single scale: 12 for a card
+    corner, 8 for a control, 999 for a pill; 16 for card padding, 12 for the gap inside one, 14 between cards.
+  -->
   <Application.Styles>
     <FluentTheme />
 
-    <!-- The palette. Deliberately small: one accent, three text weights and two surfaces, so a control added later
-         has an obvious colour to use instead of inventing one. -->
+    <!-- ============================================================ surfaces -->
+
     <Style Selector="Window">
-      <Setter Property="Background" Value="#0E1116" />
+      <Setter Property="Background" Value="{DynamicResource PageBrush}" />
       <Setter Property="FontFamily" Value="Inter, Segoe UI, Ubuntu, Noto Sans, sans-serif" />
+      <Setter Property="FontSize" Value="13" />
     </Style>
 
+    <Style Selector="UserControl">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- ============================================================ type scale -->
+
     <Style Selector="TextBlock.h1">
-      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontSize" Value="20" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#F2F5F9" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.h2">
       <Setter Property="FontSize" Value="14" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#F2F5F9" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
     <Style Selector="TextBlock.caption">
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="#8A94A6" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.muted">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="TextBlock.value">
       <Setter Property="FontSize" Value="26" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#F2F5F9" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, JetBrains Mono, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- ============================================================ containers -->
+
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="#161B23" />
-      <Setter Property="BorderBrush" Value="#232A35" />
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="16" />
     </Style>
 
+    <!-- An inset inside a card: the thermal-floor note, the udev command box. One step darker than the card it sits on,
+         so the nesting reads without a second border. -->
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+
     <Style Selector="Border.pill">
-      <Setter Property="Background" Value="#1E2530" />
-      <Setter Property="CornerRadius" Value="20" />
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
       <Setter Property="Padding" Value="10,4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- A status badge. The neutral one is the accent at 14 %, so a badge is visibly "live" without shouting. -->
+    <Style Selector="Border.badge">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="9,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.badge.ok">
+      <Setter Property="Background" Value="{DynamicResource SuccessSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.badge.warn">
+      <Setter Property="Background" Value="{DynamicResource WarningSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.badge.danger">
+      <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.badge > TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- The header and footer bars: the rail colour, with a single rule against the page. -->
+    <Style Selector="Border.bar">
+      <Setter Property="Background" Value="{DynamicResource RailBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    </Style>
+
+    <!-- ============================================================ buttons -->
+
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="MinHeight" Value="32" />
     </Style>
 
     <Style Selector="Button.primary">
-      <Setter Property="Background" Value="#2F81F7" />
-      <Setter Property="Foreground" Value="#FFFFFF" />
-      <Setter Property="Padding" Value="14,8" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
     </Style>
 
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#4A93F8" />
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
     </Style>
 
     <Style Selector="Button.ghost">
-      <Setter Property="Background" Value="#1E2530" />
-      <Setter Property="Foreground" Value="#D7DEE8" />
-      <Setter Property="Padding" Value="12,7" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>
 
     <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#28313E" />
+      <Setter Property="Background" Value="{DynamicResource CardBorderStrongBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+
+    <!-- ============================================================ inputs -->
+
+    <Style Selector="TextBox">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <!-- A read-only field that holds a command or a path: monospaced so a wrapped line stays readable. -->
+    <Style Selector="TextBox.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, JetBrains Mono, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="ComboBox">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="CheckBox">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- The switch keeps the Fluent template: replacing it would mean re-implementing the knob animation and the
+         three-state layout, and the accent is the only part that has to follow the palette. -->
+    <Style Selector="ToggleSwitch">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- The slider keeps the Fluent template for the same reason, and for one more: the fan-curve sliders are the
+         control the whole page exists for, and a hand-written template that got the Track's buttons wrong would make
+         them undraggable. What is styled here is the container — the accent, the height and the breathing room. -->
+    <Style Selector="Slider">
+      <Setter Property="MinWidth" Value="160" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Margin" Value="0,2" />
+    </Style>
+
+    <!-- ============================================================ left navigation -->
+
+    <!--
+      The tab strip is the navigation rail. The template is header-only — the page itself is presented by the
+      TabControl — so replacing it cannot affect which view is shown; it only decides how the row looks. The accent bar
+      on the left is what marks the selected tab, and it is a Border whose background the :selected style sets.
+    -->
+    <Style Selector="TabControl">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="TabControl /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="Margin" Value="0,10" />
+    </Style>
+
+    <!-- The TabControl's own background paints the rail, and the Fluent template lets it show behind the page as well.
+         This puts the page colour back on the content host, so the rail stops where the navigation stops. -->
+    <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
+      <Setter Property="Background" Value="{DynamicResource PageBrush}" />
     </Style>
 
     <Style Selector="TabItem">
       <Setter Property="FontSize" Value="13" />
-      <Setter Property="Padding" Value="14,10" />
-      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="Padding" Value="12,9" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="PART_Root"
+                  Background="Transparent"
+                  CornerRadius="8"
+                  Margin="8,2"
+                  Padding="{TemplateBinding Padding}">
+            <Grid ColumnDefinitions="3,*">
+              <Border Name="PART_Accent"
+                      Width="3"
+                      CornerRadius="2"
+                      Background="Transparent"
+                      Margin="0,1" />
+              <ContentPresenter Grid.Column="1"
+                                Margin="11,0,0,0"
+                                Content="{TemplateBinding Header}"
+                                ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                Foreground="{TemplateBinding Foreground}"
+                                FontSize="{TemplateBinding FontSize}"
+                                FontWeight="{TemplateBinding FontWeight}"
+                                VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
 
-    <Style Selector="Slider">
-      <Setter Property="MinWidth" Value="160" />
+    <Style Selector="TabItem:pointerover /template/ Border#PART_Root">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="TabItem:selected /template/ Border#PART_Root">
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    </Style>
+
+    <Style Selector="TabItem:selected /template/ Border#PART_Accent">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="TabItem:selected">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- ============================================================ scrollbars -->
+
+    <Style Selector="ScrollViewer">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
   </Application.Styles>
 </Application>

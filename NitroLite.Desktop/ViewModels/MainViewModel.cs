@@ -32,6 +32,15 @@ public sealed record GpuModeChoice(GpuOperatingMode Mode, string Label)
 }
 
 /// <summary>
+/// One entry in the theme picker. <see cref="Theme"/> is what the settings file stores; <see cref="Label"/> is the
+/// translated name, so the list is rebuilt when the language changes.
+/// </summary>
+public sealed record ThemeChoice(AppTheme Theme, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>
 /// One anchor of the fan curve. The slider edits <see cref="Percent"/>; <see cref="EffectivePercent"/> is what the
 /// fans will actually get, because the safety floor is applied on top and cannot be edited away.
 /// </summary>
@@ -110,6 +119,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private readonly RgbProfileService _rgbProfiles;
 
+    /// <summary>The palette applier, or null when the caller did not wire one (a test that does not need it).</summary>
+    private readonly IThemeApplier? _themeApplier;
+
+    /// <summary>
+    /// The last minute of telemetry, one ring buffer per series. Kept here rather than in the chart so the samples
+    /// survive a view being re-created by a tab switch, and so a test can assert the history without a display.
+    /// </summary>
+    private readonly SparklineHistory _cpuTemperatureHistory = new();
+    private readonly SparklineHistory _gpuTemperatureHistory = new();
+    private readonly SparklineHistory _cpuFanHistory = new();
+    private readonly SparklineHistory _gpuFanHistory = new();
+
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
 
@@ -159,6 +180,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _batteryLimitOn;
 
     private LocLanguage? _selectedLanguage;
+    private ThemeChoice? _selectedTheme;
     private string _udevCommand = "";
     private bool _needsUdevRule;
 
@@ -172,9 +194,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _gameStatus = "";
 
     /// <summary>
-    /// <paramref name="gameProfiles"/>, <paramref name="schoolMode"/> and <paramref name="rgbProfiles"/> are optional so
-    /// the window can be built without them — a test that only checks telemetry does not need a process scanner — and
-    /// so the composition root stays the only place that decides which platform services exist.
+    /// <paramref name="gameProfiles"/>, <paramref name="schoolMode"/>, <paramref name="rgbProfiles"/> and
+    /// <paramref name="themeApplier"/> are optional so the window can be built without them — a test that only checks
+    /// telemetry does not need a process scanner — and so the composition root stays the only place that decides which
+    /// platform services exist.
     /// </summary>
     public MainViewModel(
         AppSettings settings,
@@ -183,7 +206,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         string settingsPath,
         GameProfileService? gameProfiles = null,
         SchoolModeService? schoolMode = null,
-        RgbProfileService? rgbProfiles = null)
+        RgbProfileService? rgbProfiles = null,
+        IThemeApplier? themeApplier = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -192,13 +216,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _gameProfiles = gameProfiles;
         _schoolMode = schoolMode;
         _rgbProfiles = rgbProfiles ?? new RgbProfileService();
+        _themeApplier = themeApplier;
         _schoolModeOn = settings.SchoolModeEnabled;
 
         _curveEvaluator = new FanCurveEvaluator(settings.BuildFanCurve());
 
         BuildCurveAnchors();
         BuildChoices();
+        BuildThemeChoices();
         RefreshRgbProfiles();
+
+        // The stored palette goes on before the window exists, so the first frame is already the right colour rather
+        // than flashing the default and repainting.
+        _themeApplier?.Apply(_selectedTheme?.Theme ?? settings.Theme);
 
         _selectedLanguage = Loc.Languages.FirstOrDefault(l => l.Code == Loc.Language) ?? Loc.Languages[0];
         _needsUdevRule = linux?.NeedsUdevRule == true;
@@ -342,6 +372,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public string FanRpmSourceText => FanRpmMeasured ? Labels.Measured : Labels.Derived;
+
+    // ---------------------------------------------------------------- sparkline history
+
+    /// <summary>How many samples each chart holds: one minute at the telemetry loop's one-second tick.</summary>
+    public static int HistoryLength => SparklineHistory.DefaultCapacity;
+
+    /// <summary>The last minute of CPU temperature, oldest first. A fresh array each tick, so the chart repaints.</summary>
+    public IReadOnlyList<double> CpuTemperatureHistory => _cpuTemperatureHistory.Snapshot();
+
+    public IReadOnlyList<double> GpuTemperatureHistory => _gpuTemperatureHistory.Snapshot();
+
+    public IReadOnlyList<double> CpuFanHistory => _cpuFanHistory.Snapshot();
+
+    public IReadOnlyList<double> GpuFanHistory => _gpuFanHistory.Snapshot();
+
+    /// <summary>
+    /// Appends one sample per series and tells the charts. A zero temperature is "the sensor did not answer", not
+    /// 0 °C, so it is not recorded: plotting it would draw a cliff to the floor that never happened. A zero fan speed
+    /// is a real reading — the fans can stop — so it is kept.
+    /// </summary>
+    private void RecordHistory(MonitorData data)
+    {
+        if (data.CpuTemperature > 0) _cpuTemperatureHistory.Add(data.CpuTemperature);
+        if (data.GpuTemperature > 0) _gpuTemperatureHistory.Add(data.GpuTemperature);
+        _cpuFanHistory.Add(data.CpuFanSpeed);
+        _gpuFanHistory.Add(data.GpuFanSpeed);
+
+        Raise(nameof(CpuTemperatureHistory));
+        Raise(nameof(GpuTemperatureHistory));
+        Raise(nameof(CpuFanHistory));
+        Raise(nameof(GpuFanHistory));
+    }
 
     // ---------------------------------------------------------------- operating mode
 
@@ -693,8 +755,51 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _settings.Language = value.Code;
             SaveSettings();
             Labels = new ShellLabels();
+            // The theme names are catalogue keys like every other label, so the picker is rebuilt with the window.
+            BuildThemeChoices();
             Status = Labels.LanguageRestartHint;
         }
+    }
+
+    // ---------------------------------------------------------------- theme
+
+    /// <summary>Every palette <see cref="ThemeCatalog"/> ships, in the order the picker offers them.</summary>
+    public ObservableCollection<ThemeChoice> Themes { get; } = new();
+
+    /// <summary>
+    /// The chosen palette. Applying it is immediate — the window repaints from the swapped dictionary — and the choice
+    /// is written to the settings file so the next launch starts in it.
+    /// </summary>
+    public ThemeChoice? SelectedTheme
+    {
+        get => _selectedTheme;
+        set
+        {
+            if (!Set(ref _selectedTheme, value) || value == null) return;
+            _themeApplier?.Apply(value.Theme);
+            _settings.Theme = value.Theme;
+            SaveSettings();
+            Status = Labels.ThemeApplied;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the picker in the current language, keeping the selection. The field is assigned directly rather than
+    /// through the setter: rebuilding the list is not a user action, and going through the setter would write the
+    /// settings file and re-apply the palette on every language change.
+    /// </summary>
+    private void BuildThemeChoices()
+    {
+        var previous = _selectedTheme?.Theme ?? _settings.Theme;
+
+        Themes.Clear();
+        foreach (var theme in ThemeCatalog.All)
+        {
+            Themes.Add(new ThemeChoice(theme, Loc.T(ThemeCatalog.DisplayNameKey(theme))));
+        }
+
+        _selectedTheme = Themes.FirstOrDefault(t => t.Theme == previous) ?? Themes.FirstOrDefault();
+        Raise(nameof(SelectedTheme));
     }
 
     public string DeviceModel => _linux?.Identity.ModelCode is { Length: > 0 } code
@@ -861,6 +966,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             GpuFanRpm = data.GpuFanSpeed;
             FanRpmMeasured = data.IsFanRpmMeasured;
             Raise(nameof(CurvePreview));
+
+            RecordHistory(data);
 
             await StepCurveAsync(data.CpuTemperature).ConfigureAwait(true);
 

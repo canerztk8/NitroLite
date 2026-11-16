@@ -1169,5 +1169,7 @@
   "Silinemedi": "Не удалось удалить",
   "Tanımlı bir oyun açıldığında moda ve fan eğrisine geçer, kapandığında geri döner.": "Переключается на режим и кривую вентиляторов профиля при запуске игры из списка и возвращается обратно при её закрытии.",
   "Temiz Çıkış": "Чистый выход",
-  "Yarım kalan okul modu geri alındı.": "Прерванный сеанс школьного режима отменён."
+  "Yarım kalan okul modu geri alındı.": "Прерванный сеанс школьного режима отменён.",
+  "Tema seçimi hemen uygulanır.": "Тема применяется сразу.",
+  "Son 60 saniye": "Последние 60 секунд"
 }
