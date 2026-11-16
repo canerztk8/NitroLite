@@ -118,13 +118,18 @@ public sealed class SchoolModeService
     private readonly AppSettings _settings;
     private readonly IPowerSchemeAccess _scheme;
 
+    /// <summary>
+    /// <paramref name="powerScheme"/> is required, not optional. It used to default to null and then throw, which let
+    /// a caller that forgot it compile cleanly and fail at startup instead — the exact way the production
+    /// <c>MainWindow</c> constructor lost its scheme. A required parameter makes that a compile error.
+    /// </summary>
     public SchoolModeService(
         IHardwareController hardware,
         ICpuBoostAccess cpuBoost,
         IDisplayRefreshRateService displayService,
         IScreenBrightnessService brightnessService,
         AppSettings settings,
-        IPowerSchemeAccess? powerScheme = null)
+        IPowerSchemeAccess powerScheme)
     {
         // Every dependency is an interface owned by this assembly, which is what lets the same state machine run on
         // the Acer service socket, on direct WMI, or on Linux sysfs without a line changing here.

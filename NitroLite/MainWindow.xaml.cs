@@ -54,10 +54,19 @@ public partial class MainWindow : Window
     private SchoolModeService? _schoolModeService;
 
     /// <summary>
-    /// The power scheme school mode reads and writes. Null means the real one; a scenario hands in an in-memory
-    /// scheme so the round trip can be asserted without launching nine powercfg processes.
+    /// The power scheme school mode reads and writes. Initialised here rather than in a constructor, because the
+    /// production constructor forgot it once: a null reached <see cref="SchoolModeService"/> and the resulting
+    /// <see cref="ArgumentNullException"/> killed startup before the window ever appeared. A field initialiser cannot
+    /// be forgotten by a constructor that is added later, and the field is non-nullable so the compiler enforces it.
     /// </summary>
-    private readonly IPowerSchemeAccess? _schoolModeScheme;
+    private readonly IPowerSchemeAccess _schoolModeScheme = CreatePowerSchemeAccess(null);
+
+    /// <summary>
+    /// The composition root's answer for "which power scheme". Never null: an injected scheme wins, otherwise the
+    /// real one. Extracted from the constructors so the decision can be asserted without building a window.
+    /// </summary>
+    internal static IPowerSchemeAccess CreatePowerSchemeAccess(IPowerSchemeAccess? injected) =>
+        injected ?? new WindowsPowerSchemeAccess();
     private readonly BatteryWearHistory _wearHistory;
     // The vermilion dot on the newest wear reading, created once and moved on every render.
     private System.Windows.Shapes.Ellipse? _wearTrendDot;
@@ -317,9 +326,9 @@ public partial class MainWindow : Window
         _storageService = new StorageHealthService();
         _wearHistory = wearHistory ?? new BatteryWearHistory();
         // School mode lives in NitroLite.Core and can no longer build a power-scheme reader itself, so the
-        // Windows composition root is what supplies one. A test harness that passes nothing still gets the
-        // real reader; the tests that care inject their own in-memory scheme.
-        _schoolModeScheme = schoolModeScheme ?? new WindowsPowerSchemeAccess();
+        // Windows composition root is what supplies one. The field already holds the real reader; a scenario that
+        // injects an in-memory scheme replaces it so the round trip can be asserted without nine powercfg processes.
+        _schoolModeScheme = CreatePowerSchemeAccess(schoolModeScheme);
         _displayService = displayService ?? (isTestHarness ? new TestDisplayRefreshRateServiceStub() : new DisplayRefreshRateService());
         _screenBrightnessService = screenBrightnessService ?? (isTestHarness ? new TestScreenBrightnessService() : new ScreenBrightnessService());
         if (settings != null) { _appSettings = settings; _settingsLoaded = true; }
