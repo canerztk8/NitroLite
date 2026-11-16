@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\NitroLite\NitroLite.csproj" />
     <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
+    <ProjectReference Include="..\NitroLite.Linux\NitroLite.Linux.csproj" />
   </ItemGroup>
 
   <ItemGroup>

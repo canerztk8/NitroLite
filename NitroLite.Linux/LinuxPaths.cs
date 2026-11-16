@@ -1,0 +1,77 @@
+namespace NitroLite.Linux;
+
+/// <summary>
+/// Every path the Linux backend reads or writes, in one place.
+/// </summary>
+/// <remarks>
+/// The two roots are not interchangeable. <c>/sys/devices/platform/acer-wmi</c> is what the in-kernel
+/// <c>acer-wmi</c> module registers, and it is the only one that exists on a stock distribution. The
+/// <c>/sys/module/linuwu_sense/...</c> tree is what the out-of-tree Linuwu-Sense module adds, and it is where the
+/// fan, RGB, battery-limiter and LCD-override attributes live. A machine can have either, both, or neither, so the
+/// probe looks at both and the controller uses whichever answered.
+/// </remarks>
+public static class LinuxPaths
+{
+    /// <summary>SMBIOS strings, exposed by the kernel as plain files. Readable without any privilege.</summary>
+    public const string DmiRoot = "/sys/class/dmi/id";
+
+    /// <summary>The ACPI platform profile the kernel's <c>acer-wmi</c> driver registers.</summary>
+    public const string PlatformProfile = "/sys/firmware/acpi/platform_profile";
+
+    /// <summary>The profiles that file accepts, space separated.</summary>
+    public const string PlatformProfileChoices = "/sys/firmware/acpi/platform_profile_choices";
+
+    /// <summary>One directory per hwmon device, each with a <c>name</c> file.</summary>
+    public const string HwmonRoot = "/sys/class/hwmon";
+
+    /// <summary>One directory per battery and adapter.</summary>
+    public const string PowerSupplyRoot = "/sys/class/power_supply";
+
+    /// <summary>What the in-kernel <c>acer-wmi</c> module registers.</summary>
+    public const string AcpiPlatformRoot = "/sys/devices/platform/acer-wmi";
+
+    /// <summary>What the out-of-tree Linuwu-Sense module registers.</summary>
+    public const string LinuwuModuleRoot = "/sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi";
+
+    /// <summary>Predator machines: every feature except the custom boot logo.</summary>
+    public const string PredatorSense = "predator_sense";
+
+    /// <summary>Nitro machines: the same thermal and fan interface under a different name.</summary>
+    public const string NitroSense = "nitro_sense";
+
+    /// <summary>Four-zone keyboard RGB. Absent on single-colour and per-key keyboards.</summary>
+    public const string FourZoneKeyboard = "four_zoned_kb";
+
+    /// <summary>Read-only turbo hotkey state, on the models that toggle fans instead of profiles.</summary>
+    public const string TurboSense = "turbo_sense";
+
+    /// <summary>Fan speed as <c>cpu,gpu</c> percentages. 0 means auto.</summary>
+    public const string FanSpeed = "fan_speed";
+
+    /// <summary>0 or 1: turn the keyboard backlight off after 30 seconds idle.</summary>
+    public const string BacklightTimeout = "backlight_timeout";
+
+    /// <summary>0 or 1: stop charging at 80 %.</summary>
+    public const string BatteryLimiter = "battery_limiter";
+
+    /// <summary>0 or 1: reduce panel latency at the cost of some contrast.</summary>
+    public const string LcdOverride = "lcd_override";
+
+    /// <summary>0 or 1: run both fans above the firmware curve. Not every module exposes it.</summary>
+    public const string CoolBoost = "cool_boost";
+
+    /// <summary>GPU mode. Not every module exposes it; the probe only enables MUX when it is there.</summary>
+    public const string DgpuMode = "dgpu_mode";
+
+    /// <summary>Four zone colours plus a brightness, comma separated.</summary>
+    public const string PerZoneMode = "per_zone_mode";
+
+    /// <summary>Effect, speed, brightness, direction and one colour, comma separated.</summary>
+    public const string FourZoneMode = "four_zone_mode";
+
+    /// <summary>The standard kernel battery charge limit, 0-100.</summary>
+    public const string ChargeControlEndThreshold = "charge_control_end_threshold";
+
+    /// <summary>Joins a root and a relative attribute name with a single slash.</summary>
+    public static string Combine(string root, string name) => $"{root.TrimEnd('/')}/{name}";
+}

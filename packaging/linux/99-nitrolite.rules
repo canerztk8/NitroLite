@@ -1,0 +1,60 @@
+# NitroLite — Linux sysfs permissions
+#
+# The Acer hardware attributes are owned by root and created 0644, so a normal user can read them but not write them.
+# Without this rule NitroLite starts in read-only mode: telemetry works, and every control answers "permission denied"
+# with the hint that points here.
+#
+# Install:
+#   sudo cp 99-nitrolite.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload
+#   sudo udevadm trigger
+#
+# Then log out and back in. TAG+="uaccess" grants an ACL to the user of the *current seat*, and that ACL is applied
+# when the device is created, so a session that was already open when the rule was installed does not get it.
+#
+# Nothing here grants anything to a user who is not logged in at the machine, and nothing here is world-writable
+# except the one ACPI attribute that udev cannot tag (see the note at the bottom).
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Tier 1: the in-kernel acer-wmi module
+# ---------------------------------------------------------------------------------------------------------------------
+
+# The platform device itself. Its attributes are the fan speed, CoolBoost, LCD overdrive, the backlight timeout and the
+# battery limiter on kernels that expose them, and the Linuwu-Sense tree is a symlink to this same device, so one tag
+# covers both.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", TAG+="uaccess"
+
+# The ACPI platform profile. This one is not a device: it lives under /sys/firmware/acpi/, which udev has no device to
+# tag, so the mode is widened directly when the platform device appears. kernfs supports a mode change on a sysfs
+# attribute, and the write is idempotent, so a second trigger is harmless.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/chmod 0666 /sys/firmware/acpi/platform_profile"
+
+# The laptop's own fans and board sensor. The CPU and GPU die sensors (k10temp, coretemp, amdgpu) are read-only and
+# need no rule.
+SUBSYSTEM=="hwmon", ATTR{name}=="acer", TAG+="uaccess"
+
+# The battery charge limit, which the standard kernel class exposes as charge_control_end_threshold.
+SUBSYSTEM=="power_supply", ATTR{type}=="Battery", TAG+="uaccess"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Tier 2: the out-of-tree Linuwu-Sense module
+# ---------------------------------------------------------------------------------------------------------------------
+
+# The module registers its attributes on the acer-wmi platform device, which the first rule already tags. This rule is
+# kept as a belt-and-braces match for the builds that register a separate device instead.
+SUBSYSTEM=="platform", DRIVERS=="acer-wmi", TAG+="uaccess"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Note on /sys/firmware/acpi/platform_profile
+# ---------------------------------------------------------------------------------------------------------------------
+# If mode switching still reports "permission denied" after installing this rule, the chmod above did not run on your
+# kernel. Two things work instead, and both are a deliberate choice by the user rather than something this file does
+# silently:
+#
+#   1. Use power-profiles-daemon, which owns that attribute through D-Bus and needs no permission at all:
+#        sudo systemctl enable --now power-profiles-daemon
+#
+#   2. Widen it by hand for the current boot:
+#        sudo chmod 0666 /sys/firmware/acpi/platform_profile
+#
+# NitroLite reports which of the two it found, so the settings page says what is missing instead of failing quietly.

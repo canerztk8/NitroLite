@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0, like NitroLite.Core: this assembly is the Linux half of the hardware layer and must not
+         pull in anything Windows. It references NitroLite.Core and nothing else. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NitroLite.Linux</RootNamespace>
+    <AssemblyName>NitroLite.Linux</AssemblyName>
+    <Version>1.2.5-f</Version>
+    <Authors>NitroLite Team</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The in-memory file system is a test double, but it lives here rather than in the test project so the
+         backend's own documentation and any future Linux front end can use it to dry-run a probe. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NitroLite.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>
