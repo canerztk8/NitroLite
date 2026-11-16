@@ -15,7 +15,7 @@
     <StackPanel>
 
       <TextBlock Classes="pagetitle" Text="{Binding Labels.ToolsPageTitle}" />
-      <TextBlock Classes="hint" Text="{Binding Labels.SchoolModeHint}" Margin="0,4,0,14" />
+      <TextBlock Classes="hint" Text="{Binding Labels.ToolsPageSubtitle}" Margin="0,4,0,14" />
 
       <!-- ============================================================ appearance -->
 
@@ -56,6 +56,102 @@
         </StackPanel>
       </Border>
 
+      <!-- ============================================================ Acer background services -->
+
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding ServicesAvailable}">
+        <StackPanel>
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="cardicon" Text="&#xE9F5;" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <TextBlock Classes="section" Text="{Binding Labels.AcerServices}" />
+              <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.AcerServicesHint}">
+                <TextBlock Text="?" />
+              </Border>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+              <Button Classes="primary" Content="{Binding Labels.DisableServices}" Padding="12,7" FontSize="11"
+                      Command="{Binding DisableServicesCommand}" IsEnabled="{Binding !ServicesBusy}" />
+              <Button Classes="primary" Content="{Binding Labels.RestoreServices}" Margin="6,0,0,0"
+                      Padding="12,7" FontSize="11" Command="{Binding RestoreServicesCommand}"
+                      IsEnabled="{Binding !ServicesBusy}" />
+            </StackPanel>
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding AcerServices}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:AcerServiceRow">
+                <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="0,6">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                      <TextBlock Classes="rowtitle" Text="{Binding Label}" />
+                      <TextBlock Classes="mono" Text="{Binding Name}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Classes="hint" Text="{Binding StateText}"
+                               VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.NoAcerServices}" IsVisible="{Binding HasNoAcerServices}" />
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,8" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSense}" VerticalAlignment="Center" />
+              <Border Classes="pill" Margin="8,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding NitroSenseStateText}" />
+              </Border>
+            </StackPanel>
+            <Button Grid.Column="1" Classes="primary" Content="{Binding Labels.KillNitroSense}" Padding="12,7"
+                    FontSize="11" Command="{Binding KillNitroSenseCommand}" IsEnabled="{Binding NitroSenseRunning}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding ServicesStatus}" Margin="0,8,0,0"
+                     IsVisible="{Binding HasServicesStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ repair and optimisation tools -->
+
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding RepairToolsAvailable}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE90F;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.RepairTools}" />
+            <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.RepairToolsHint}">
+              <TextBlock Text="?" />
+            </Border>
+          </StackPanel>
+
+          <WrapPanel>
+            <Button Classes="primary" Content="{Binding Labels.FixLighting}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding FixLightingCommand}" IsEnabled="{Binding !ToolsBusy}" />
+            <Button Classes="primary" Content="{Binding Labels.FixAcerServices}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding FixAcerServicesCommand}" IsEnabled="{Binding !ToolsBusy}" />
+            <Button Classes="primary" Content="{Binding Labels.RestoreMux}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding RestoreMuxCommand}" IsEnabled="{Binding !ToolsBusy}" />
+          </WrapPanel>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,6,0,8" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.WindowsOptimization}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+              <Button Classes="primary" Content="{Binding Labels.Optimize}" Padding="12,7" FontSize="11"
+                      Command="{Binding OptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
+              <Button Classes="primary" Content="{Binding Labels.RestoreOptimize}" Margin="6,0,0,0" Padding="12,7"
+                      FontSize="11" Command="{Binding RestoreOptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
+            </StackPanel>
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding RepairToolsStatus}" Margin="0,8,0,0"
+                     IsVisible="{Binding HasRepairToolsStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ the sign-in entry -->
 
       <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding AutoStartAvailable}">
@@ -73,6 +169,45 @@
           <TextBlock Classes="hint" Text="{Binding Labels.AutoStartHint}" Margin="0,6,0,0" />
           <TextBlock Classes="hint" Text="{Binding AutoStartStatus}" Margin="0,4,0,0"
                      IsVisible="{Binding HasAutoStartStatus}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ startup and integration -->
+
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding RunAtStartupAvailable}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE7E8;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.StartupAndIntegration}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.RunAtStartup}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.RunAtStartupHint}" Margin="10,0,0,0"
+                       VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding RunAtStartupOn}"
+                          VerticalAlignment="Center" />
+          </Grid>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.StartMinimized}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.StartMinimizedHint}" Margin="10,0,0,0"
+                       VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding StartMinimizedOn}"
+                          VerticalAlignment="Center" />
+          </Grid>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.AtkMouseIntegration}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.AtkMouseIntegrationHint}"
+                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AtkMouseIntegrationOn}"
+                          VerticalAlignment="Center" />
+          </Grid>
         </StackPanel>
       </Border>
 
@@ -172,6 +307,61 @@
         </StackPanel>
       </Border>
 
+      <!-- ============================================================ updates, diagnostics and backup -->
+
+      <Border Classes="card" Margin="0,0,0,14">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE895;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.UpdatesAndDiagnostics}" />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding UpdateAvailable}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.AutoUpdateCheck}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="mono" Text="{Binding UpdateVersionText}" Margin="10,0,0,0"
+                         VerticalAlignment="Center" />
+              <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AutoUpdateCheckOn}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <WrapPanel Margin="0,8,0,0">
+              <Button Classes="primary" Content="{Binding Labels.CheckNow}" Margin="0,0,6,6" Padding="12,7"
+                      FontSize="11" Command="{Binding CheckUpdatesCommand}" />
+              <Button Classes="primary" Content="{Binding UpdateNowText}" Margin="0,0,6,6" Padding="12,7"
+                      FontSize="11" Command="{Binding UpdateNowCommand}" IsVisible="{Binding HasPendingUpdate}" />
+              <Button Classes="primary" Content="{Binding Labels.ReleaseNotes}" Margin="0,0,6,6" Padding="12,7"
+                      FontSize="11" Command="{Binding ReleaseNotesCommand}" />
+            </WrapPanel>
+
+            <TextBlock Classes="hint" Text="{Binding UpdateStatus}" IsVisible="{Binding HasUpdateStatus}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
+
+          <WrapPanel>
+            <Button Classes="primary" Content="{Binding Labels.ReportBug}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding ReportBugCommand}" />
+            <Button Classes="primary" Content="{Binding Labels.OpenLogs}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding OpenLogsCommand}" />
+            <Button Classes="primary" Content="{Binding Labels.ExportReport}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding ExportHardwareReportCommand}"
+                    IsVisible="{Binding HardwareReportAvailable}" />
+            <Button Classes="primary" Content="{Binding Labels.CreateBundle}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding CreateDiagnosticsCommand}"
+                    IsVisible="{Binding DiagnosticsAvailable}" />
+            <Button Classes="primary" Content="{Binding Labels.CreateBackup}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding CreateBackupCommand}" />
+            <Button Classes="primary" Content="{Binding Labels.RestoreBackup}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding RestoreBackupCommand}" />
+          </WrapPanel>
+
+          <TextBlock Classes="hint" Text="{Binding DiagnosticsNote}" Margin="0,4,0,0"
+                     IsVisible="{Binding HasDiagnosticsNote}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ the device -->
 
       <Border Classes="card" Margin="0,0,0,14">
@@ -224,6 +414,16 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
+          <!-- The direct-WMI backend is the fallback for a machine whose Acer service is missing or broken. It is
+               offered as a row rather than a card because it is one button and one status line. -->
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0" IsVisible="{Binding DirectWmiAvailable}">
+            <TextBlock Classes="caps" Text="{Binding Labels.DirectWmi}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding DirectWmiStatus}" Margin="10,0,0,0"
+                       VerticalAlignment="Center" TextWrapping="Wrap" />
+            <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.StartCheck}" Padding="12,7"
+                    FontSize="11" Command="{Binding StartDirectWmiCommand}" />
+          </Grid>
+
           <TextBlock Classes="hint" Text="{Binding Labels.NoBackend}" Margin="0,8,0,0"
                      IsVisible="{Binding ShowNoBackendBanner}" />
         </StackPanel>
@@ -257,6 +457,16 @@
           <Button Classes="primary" Content="{Binding Labels.CopyCommand}" Margin="0,8,0,0"
                   HorizontalAlignment="Left" Command="{Binding CopyUdevCommand}" />
         </StackPanel>
+      </Border>
+
+      <!-- The walkthrough is a one-time thing, but a user who skipped it should be able to find it again without
+           deleting the settings file. -->
+      <Border Classes="card" Margin="0,0,0,14">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <TextBlock Classes="section" Text="{Binding Labels.OnboardingSection}" VerticalAlignment="Center" />
+          <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.OnboardingReopen}" Padding="12,7"
+                  FontSize="11" Command="{Binding ReopenOnboardingCommand}" />
+        </Grid>
       </Border>
 
       <!-- Hidden when the probe had nothing to report, rather than shown as an empty card. -->

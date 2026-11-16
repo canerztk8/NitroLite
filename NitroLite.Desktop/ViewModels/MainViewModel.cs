@@ -156,6 +156,14 @@ public sealed class NavTab : ObservableObject
     /// <summary>The Segoe Fluent codepoint the rail draws, in the icon font.</summary>
     public string Icon { get; }
 
+    /// <summary>
+    /// The identifier a UI-automation client addresses this tab by, e.g. <c>NavModes</c>.
+    /// </summary>
+    /// <remarks>
+    /// Derived from <see cref="Key"/> rather than from the label, so a capture script keeps working in every language.
+    /// </remarks>
+    public string AutomationId => "Nav" + char.ToUpperInvariant(Key[0]) + Key[1..];
+
     public RelayCommand SelectCommand { get; }
 
     public bool IsSelected
@@ -493,7 +501,7 @@ public sealed record ChartStats(
 /// queue two writes and leave the status line describing the wrong one.
 /// </para>
 /// </remarks>
-public sealed class MainViewModel : ObservableObject, IDisposable
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly IHardwareController? _hardware;
@@ -770,7 +778,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IHardwareMonitor? monitor = null,
         IMemoryCleaner? memoryCleaner = null,
         IDialogService? dialogs = null,
-        IOpenRgbStatusProvider? openRgb = null)
+        IOpenRgbStatusProvider? openRgb = null,
+        IBatteryHealthService? batteryHealth = null,
+        IStorageHealthService? storageHealth = null,
+        IDebloatService? debloat = null,
+        ISystemToolsService? systemTools = null,
+        IUpdateService? updates = null,
+        IDiagnosticsService? diagnostics = null,
+        IDirectWmiControl? directWmi = null,
+        IRunAtStartupService? runAtStartup = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -792,6 +808,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _memoryCleaner = memoryCleaner;
         _dialogs = dialogs;
         _openRgb = openRgb;
+        _batteryHealth = batteryHealth;
+        _storageHealth = storageHealth;
+        _debloat = debloat;
+        _systemTools = systemTools;
+        _updates = updates;
+        _diagnostics = diagnostics;
+        _directWmi = directWmi;
+        _runAtStartup = runAtStartup;
         _schoolModeOn = settings.SchoolModeEnabled;
         _fanProtectionOn = settings.FanFailureProtection;
         _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);
@@ -840,8 +864,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         // The pill is short on purpose; the banner carries the sentence that explains it.
         // The footer pill makes the same claim as the banner, so it uses the same rule: a backend that has not opened
-        // its transport yet is not a machine without hardware.
-        _status = ShowNoBackendBanner ? _labels.NoBackend : _labels.Ready;
+        // its transport yet is not a machine without hardware. A machine that did find its hardware says nothing at
+        // startup: the WPF window only raised the banner for something that had just happened.
+        _status = ShowNoBackendBanner ? _labels.NoBackend : "";
 
         ApplyFanModeCommand = new AsyncCommand(ApplyFanModeAsync);
         AddGameProfileCommand = new RelayCommand(AddGameProfile);
@@ -867,6 +892,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ToggleOsdCommand = new RelayCommand(() => OsdEnabled = !OsdEnabled);
         CustomColorCommand = new RelayCommand(OpenCustomColor);
         ApplyAllZonesCommand = new RelayCommand(ApplyAllZones);
+        BuildPhase3Commands();
     }
 
     // ---------------------------------------------------------------- labels and status
@@ -3347,8 +3373,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>True when the rail draws the FARE row at all.</summary>
-    public bool ShowSystemMouseRow => MouseProfileAvailable;
+    /// <summary>
+    /// True when the rail draws the FARE row at all. The integration switch is part of the answer, exactly as it was in
+    /// the WPF window: a user who turned the ATK integration off asked for the row to go away, not just for the writes
+    /// to stop.
+    /// </summary>
+    public bool ShowSystemMouseRow => MouseProfileAvailable && _settings.AtkMouseIntegrationEnabled;
 
     public AsyncCommand ApplyDefaultMouseProfileCommand { get; }
 
@@ -3880,7 +3910,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         // blocking the window on a USB control transfer.
         await RefreshMouseProfileAsync().ConfigureAwait(true);
 
-        if (_hardware == null) return;
+        if (_hardware == null)
+        {
+            // No backend is not a reason to leave the battery, the services and the walkthrough unread: a machine whose
+            // Acer nodes are missing still has a battery, and a first run still deserves the walkthrough.
+            await InitializePhase3Async().ConfigureAwait(true);
+            _suppressWrite = false;
+            return;
+        }
 
         try
         {
@@ -3922,7 +3959,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             IsReady = true;
-            Status = Labels.Ready;
         }
         catch (Exception ex)
         {
@@ -3931,6 +3967,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            // The battery, the services and the walkthrough are read after the probe, because the walkthrough's first
+            // step lists what the probe found. This sits in the finally rather than at the end of the try block so it
+            // also runs on the two early returns above: a machine with no Acer nodes still has a battery and still
+            // deserves the walkthrough.
+            await InitializePhase3Async().ConfigureAwait(true);
+
             // Whatever happened above, the controls must work from now on: a failed initial read is not a reason to
             // leave the window read-only for the rest of the session.
             _suppressWrite = false;
@@ -3943,11 +3985,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task RefreshTelemetryAsync()
     {
-        if (_hardware == null || _refreshing || _disposed) return;
+        if (_refreshing || _disposed) return;
 
         _refreshing = true;
         try
         {
+            if (_hardware == null)
+            {
+                // No backend is not a machine with nothing to show: the power source and the battery are read from the
+                // platform, and the header's figures come from them. Returning here would leave the battery card frozen
+                // at whatever the first read found.
+                ReadPowerState();
+                await TickPhase3Async().ConfigureAwait(true);
+                return;
+            }
+
             var data = await _hardware.GetMonitorDataAsync().ConfigureAwait(true);
 
             // A backend that did not answer is not a machine with nothing to show. The platform monitor can still
@@ -4001,6 +4053,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // The header's battery figure comes from the same reader the policy uses, so the two can never disagree
             // about whether the charger is plugged in.
             ReadPowerState();
+
+            // The battery page's slow half: the capacities come from WMI, which is far too expensive for a two-second
+            // tick, so it runs once a minute and whenever the charger state changes.
+            await TickPhase3Async().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -4711,7 +4767,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         BuildCapabilityRows();
 
         await ReadStateAsync().ConfigureAwait(true);
-        Status = Labels.Ready;
     }
 
     // ---------------------------------------------------------------- setup helpers

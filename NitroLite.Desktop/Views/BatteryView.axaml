@@ -16,6 +16,18 @@
 
       <TextBlock Classes="pagetitle" Text="{Binding Labels.BatteryPageTitle}" Margin="0,0,0,14" />
 
+      <!-- The watchdog's warning. Above everything else because it is the only line on this page that says something
+           is wrong right now. -->
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding ShowOverchargeBanner}"
+              Background="{DynamicResource WarningSoftBrush}" BorderBrush="{DynamicResource WarningBrush}">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Classes="icon" Text="&#xE7BA;" FontSize="14"
+                     Foreground="{DynamicResource WarningBrush}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding OverchargeMessage}" Margin="10,0,0,0" TextWrapping="Wrap"
+                     Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ charge state and School Mode -->
 
       <Grid ColumnDefinitions="*,14,Auto" Margin="0,0,0,14">
@@ -25,14 +37,27 @@
             <TextBlock Classes="rowtitle" Text="{Binding Labels.BatteryStatus}" Margin="0,0,0,8" />
 
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="{Binding BatteryPercentText}" FontSize="26" FontWeight="Bold"
+              <TextBlock Text="{Binding BatteryLevelText}" FontSize="26" FontWeight="Bold"
                          Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding BatteryStateText}" FontSize="12" Margin="12,0,0,0"
+              <TextBlock Text="{Binding BatteryFlowStateText}" FontSize="12" Margin="12,0,0,0"
                          Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
             </StackPanel>
 
             <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding BatteryBarPercent}"
                          Margin="0,8,0,0" />
+
+            <!-- Power flow and remaining time, side by side: the two numbers a user checks when the machine is
+                 unplugged. The remaining time hides on the adapter, where the API's estimate is a placeholder. -->
+            <Grid ColumnDefinitions="*,*" Margin="0,12,0,0" IsVisible="{Binding BatteryHealthAvailable}">
+              <StackPanel Grid.Column="0">
+                <TextBlock Classes="caps" Text="{Binding Labels.PowerFlow}" />
+                <TextBlock Classes="figure" FontSize="13" Text="{Binding BatteryPowerFlowText}" Margin="0,2,0,0" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" IsVisible="{Binding ShowBatteryRemaining}">
+                <TextBlock Classes="caps" Text="{Binding Labels.RemainingTime}" />
+                <TextBlock Classes="figure" FontSize="13" Text="{Binding BatteryRemainingText}" Margin="0,2,0,0" />
+              </StackPanel>
+            </Grid>
 
             <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,12,0,10" />
 
@@ -44,6 +69,14 @@
                 <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimit}" Margin="8,0,0,0" />
               </StackPanel>
               <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimitHint}" Margin="0,6,0,0" />
+            </StackPanel>
+
+            <!-- Only when the agent refused the connection because its certificate rotated. Without this the page
+                 would say "no agent" and the user would conclude the limit is unsupported. -->
+            <StackPanel IsVisible="{Binding ShowRetrustCertificate}" Margin="0,8,0,0">
+              <TextBlock Classes="hint" Text="{Binding RetrustCertificateNote}" TextWrapping="Wrap" />
+              <Button Classes="link" Content="{Binding RetrustCertificate}" HorizontalAlignment="Left"
+                      Margin="0,6,0,0" Command="{Binding RetrustCertificateCommand}" />
             </StackPanel>
 
             <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,12,0,10"
@@ -61,7 +94,9 @@
           </StackPanel>
         </Border>
 
-        <Border Grid.Column="2" Classes="card" Width="360" VerticalAlignment="Top">
+        <!-- Stretched, not top-aligned: the WPF page put these two cards in a UniformGrid, so the short one grew to
+             the height of the tall one instead of leaving a hole beside it. -->
+        <Border Grid.Column="2" Classes="card" Width="360" VerticalAlignment="Stretch">
           <StackPanel>
             <Grid ColumnDefinitions="Auto,*,Auto">
               <StackPanel Orientation="Horizontal">
@@ -79,6 +114,183 @@
           </StackPanel>
         </Border>
       </Grid>
+
+      <!-- ============================================================ protection: DC profile and watchdog -->
+
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding BatteryHealthAvailable}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE83D;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.BatteryProtection}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,14,*">
+            <StackPanel Grid.Column="0">
+              <TextBlock Classes="caps" Text="{Binding Labels.DcProfile}" Margin="0,0,0,4" />
+              <ComboBox ItemsSource="{Binding DcProfileChoices}" SelectedItem="{Binding SelectedDcProfile}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DcProfileChoice">
+                    <TextBlock Text="{Binding Label}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+              <StackPanel Orientation="Horizontal">
+                <ToggleButton Classes="toggle" IsChecked="{Binding WatchdogOn}" VerticalAlignment="Center"
+                              IsEnabled="{Binding WatchdogAvailable}" />
+                <TextBlock Classes="hint" Text="{Binding Labels.Watchdog}" Margin="8,0,0,0" />
+              </StackPanel>
+              <TextBlock Classes="hint" Text="{Binding Labels.WatchdogHint}" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ capacity and wear -->
+
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding BatteryHealthAvailable}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE950;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.CapacityAndWear}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,*,*,*" IsVisible="{Binding BatteryCapacityAvailable}">
+            <StackPanel Grid.Column="0">
+              <TextBlock Classes="caps" Text="{Binding Labels.BatteryHealth}" />
+              <TextBlock Classes="figure" FontSize="18" Text="{Binding BatteryHealthText}" Margin="0,2,0,0" />
+              <TextBlock Classes="hint" Text="{Binding BatteryHealthNote}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1">
+              <TextBlock Classes="caps" Text="{Binding Labels.Wear}" />
+              <TextBlock Classes="figure" FontSize="18" Text="{Binding BatteryWearText}" Margin="0,2,0,0" />
+              <TextBlock Classes="hint" Text="{Binding BatteryWearNote}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="caps" Text="{Binding Labels.FullCharge}" />
+              <TextBlock Classes="figure" FontSize="18" Text="{Binding BatteryFullChargeText}" Margin="0,2,0,0" />
+              <TextBlock Classes="hint" Text="{Binding BatteryDesignText}" Margin="0,2,0,0" />
+              <TextBlock Classes="hint" Text="{Binding BatteryCycleText}" Margin="0,2,0,0"
+                         IsVisible="{Binding HasBatteryCycle}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3">
+              <TextBlock Classes="caps" Text="{Binding Labels.Voltage}" />
+              <TextBlock Classes="figure" FontSize="18" Text="{Binding BatteryVoltageText}" Margin="0,2,0,0" />
+              <TextBlock Classes="hint" Text="{Binding BatteryChemistryText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+          </Grid>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,12,0,10" />
+
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.WearTrend}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="link" Content="{Binding Labels.ClearHistory}"
+                    Command="{Binding ClearWearHistoryCommand}" IsVisible="{Binding HasWearHistory}" />
+          </Grid>
+
+          <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                  Background="{DynamicResource PanelBrush}" CornerRadius="6" Padding="8">
+            <controls:WearTrendChart Height="120"
+                                     Values="{Binding WearTrendPoints}"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     Fill="{DynamicResource ChartFillBrush}"
+                                     Marker="{DynamicResource AccentBrush}"
+                                     Grid="{DynamicResource CardBorderBrush}" />
+          </Border>
+
+          <TextBlock Classes="figure" FontSize="11" Text="{Binding WearTrendSummary}" Margin="0,8,0,0"
+                     Foreground="{DynamicResource TextSecondaryBrush}" />
+          <TextBlock Classes="hint" Text="{Binding WearTrendNote}" Margin="0,4,0,0" TextWrapping="Wrap"
+                     IsVisible="{Binding HasWearTrendNote}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ component temperatures -->
+
+      <Border Classes="card" Margin="0,0,0,14">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xE9CA;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.ComponentTemperatures}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,*,*,*">
+            <Border Grid.Column="0" Classes="panel" Margin="0,0,6,0">
+              <StackPanel>
+                <TextBlock Classes="caps" Text="{Binding Labels.SystemTemperature}" />
+                <TextBlock Classes="figure" FontSize="16" Text="{Binding SysTemperatureCardText}" Margin="0,2,0,0" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Classes="panel" Margin="6,0,6,0">
+              <StackPanel>
+                <TextBlock Classes="caps" Text="{Binding Labels.Disk1}" />
+                <TextBlock Classes="figure" FontSize="16" Text="{Binding Disk1TemperatureText}" Margin="0,2,0,0" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Classes="panel" Margin="6,0,6,0">
+              <StackPanel>
+                <TextBlock Classes="caps" Text="{Binding Labels.Disk2}" />
+                <TextBlock Classes="figure" FontSize="16" Text="{Binding Disk2TemperatureText}" Margin="0,2,0,0" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="3" Classes="panel" Margin="6,0,0,0">
+              <StackPanel>
+                <TextBlock Classes="caps" Text="{Binding Labels.Battery}" />
+                <TextBlock Classes="figure" FontSize="16" Text="{Binding BatteryTemperatureText}" Margin="0,2,0,0" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================================================ storage drives -->
+
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding StorageAvailable}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Classes="cardicon" Text="&#xEDA2;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.StorageDrives}" />
+          </StackPanel>
+
+          <ItemsControl ItemsSource="{Binding StorageDrives}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:StorageDriveRow">
+                <Border Classes="panel" Margin="0,0,0,6">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                    <Border Grid.Column="0" Classes="pill" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding LetterTag}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Model}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="hint" Text="{Binding BusType}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Classes="caps" Text="{Binding FreeLabel}" />
+                      <TextBlock Classes="figure" FontSize="12" Text="{Binding FreeText}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Margin="14,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Classes="caps" Text="{Binding TemperatureLabel}" />
+                      <TextBlock Classes="figure" FontSize="12" Text="{Binding TemperatureText}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Margin="14,0,0,0" VerticalAlignment="Center">
+                      <TextBlock Classes="caps" Text="{Binding HealthLabel}" />
+                      <TextBlock Classes="figure" FontSize="12" Text="{Binding HealthText}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.NoStorageDrives}" IsVisible="{Binding HasNoStorageDrives}" />
+        </StackPanel>
+      </Border>
 
       <!-- ============================================================ the thermal contract -->
 

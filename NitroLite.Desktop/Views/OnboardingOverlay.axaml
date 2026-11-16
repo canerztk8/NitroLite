@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NitroLite.Desktop.ViewModels"
+             x:Class="NitroLite.Desktop.Views.OnboardingOverlay"
+             x:DataType="vm:MainViewModel">
+
+  <!--
+    The three-step walkthrough the WPF window showed on first launch. It is a layer rather than a window so the shell
+    stays visible behind it: the user can see the app they are being asked to configure.
+
+    Step one lists what the probe found, step two names the profile that will be applied, step three asks about the
+    elevated sign-in entry. The last step is skipped on a platform with no such entry, which is why the switch is
+    hidden rather than disabled.
+  -->
+  <Grid Background="#99000000">
+
+    <Border MaxWidth="560" VerticalAlignment="Center" HorizontalAlignment="Center"
+            Background="{DynamicResource CardBrush}"
+            BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
+            CornerRadius="8" Padding="26,22">
+
+      <StackPanel>
+
+        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+          <TextBlock Classes="caps" Text="{Binding OnboardingStepLabel}" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Classes="link" Content="{Binding Labels.OnboardingSkip}"
+                  Command="{Binding OnboardingSkipCommand}" />
+        </Grid>
+
+        <TextBlock Text="{Binding OnboardingTitle}" FontSize="19" FontWeight="SemiBold" Margin="0,0,0,8" />
+        <TextBlock Text="{Binding OnboardingBody}" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+
+        <!-- Step one: what the probe found. The same rows the settings page prints, so the two never disagree. -->
+        <Border IsVisible="{Binding IsOnboardingFirstStep}" Margin="0,14,0,0"
+                Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                BorderThickness="1" CornerRadius="6" Padding="12,10" MaxHeight="220">
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding CapabilityRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:CapabilityRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
+                    <TextBlock Classes="capglyph" Classes.ok="{Binding Supported}"
+                               Classes.no="{Binding !Supported}" Text="{Binding Glyph}" />
+                    <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Label}" Margin="8,0,0,0" />
+                    <TextBlock Grid.Column="2" Classes="hint" Text="{Binding StateText}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+
+        <!-- Step two: the profile that will be applied when the walkthrough finishes. -->
+        <Border IsVisible="{Binding IsOnboardingSecondStep}" Margin="0,14,0,0"
+                Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="1" CornerRadius="6" Padding="12,10">
+          <TextBlock Text="{Binding OnboardingRecommendedText}" FontSize="12" FontWeight="SemiBold"
+                     Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Step three: the elevated sign-in entry. Hidden where the platform has none. -->
+        <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,0"
+              IsVisible="{Binding OnboardingAutoStartAvailable}">
+          <TextBlock Classes="hint" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center" />
+          <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding OnboardingAutoStartOn}"
+                        VerticalAlignment="Center" />
+        </Grid>
+
+        <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,18,0,12" />
+
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Button Classes="primary" Content="{Binding Labels.OnboardingBack}" Padding="14,7" FontSize="11"
+                  Command="{Binding OnboardingBackCommand}" IsVisible="{Binding !IsOnboardingFirstStep}" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <Button Classes="primary" Content="{Binding Labels.OnboardingNext}" Padding="14,7" FontSize="11"
+                    Command="{Binding OnboardingNextCommand}" IsVisible="{Binding !IsOnboardingLastStep}" />
+            <Button Classes="primary" Content="{Binding Labels.OnboardingFinish}" Padding="14,7" FontSize="11"
+                    Command="{Binding OnboardingFinishCommand}" IsVisible="{Binding IsOnboardingLastStep}" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

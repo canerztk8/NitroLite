@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
@@ -52,6 +53,12 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer;
     private MainViewModel? _viewModel;
 
+    /// <summary>
+    /// Takes the banner down again. The WPF window kept the same timer: a message that never leaves is a message that
+    /// sits on top of the page it is reporting about.
+    /// </summary>
+    private readonly DispatcherTimer _toastTimer;
+
     /// <summary>The in-game overlay, created with the window and shown only while the setting is on.</summary>
     private OsdOverlayWindow? _osd;
 
@@ -70,6 +77,9 @@ public partial class MainWindow : Window
         _timer = new DispatcherTimer { Interval = VisibleInterval };
         _timer.Tick += async (_, _) => await TickAsync();
 
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _toastTimer.Tick += (_, _) => HideToast();
+
         Opened += async (_, _) =>
         {
             // The clipboard is the only platform service the view model needs, and it is a delegate so a test can
@@ -82,6 +92,8 @@ public partial class MainWindow : Window
 
             _viewModel = DataContext as MainViewModel;
             if (_viewModel == null) return;
+
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
             RestoreWindowPosition();
             await _viewModel.InitializeAsync();
@@ -102,9 +114,63 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _timer.Stop();
+            _toastTimer.Stop();
+            if (_viewModel != null) _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _osd?.Close();
             _osd = null;
         };
+    }
+
+    /// <summary>
+    /// Raises the banner whenever the view model has something new to say. Only <c>Status</c> matters: every other
+    /// property is a reading, and a reading is not an event.
+    /// </summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.Status)) return;
+        if (_viewModel == null || !_viewModel.HasStatus) return;
+
+        ShowToast(_viewModel.Status, _viewModel.HasToastAction);
+    }
+
+    /// <summary>
+    /// Puts the banner on screen for as long as the message needs. The duration is the WPF window's rule, kept
+    /// verbatim: three seconds for a short confirmation, longer for a sentence that has to be read, and longer again
+    /// when the banner carries a button the user has to notice.
+    /// </summary>
+    internal static TimeSpan ToastDurationFor(string? message, bool hasAction = false)
+    {
+        const int floorSeconds = 3;
+        const int ceilingSeconds = 10;
+        const int charactersPerSecond = 22;
+        const int actionSeconds = 5;
+        const int actionCeilingSeconds = 15;
+
+        int length = message?.Length ?? 0;
+        int seconds = floorSeconds + (length / charactersPerSecond);
+        if (hasAction)
+            return TimeSpan.FromSeconds(Math.Clamp(seconds + actionSeconds, floorSeconds + actionSeconds, actionCeilingSeconds));
+
+        return TimeSpan.FromSeconds(Math.Clamp(seconds, floorSeconds, ceilingSeconds));
+    }
+
+    private void ShowToast(string message, bool hasAction)
+    {
+        _toastTimer.Stop();
+        _toastTimer.Interval = ToastDurationFor(message, hasAction);
+
+        // Only an actionable banner takes the pointer; otherwise it stays click-through so it never blocks the page
+        // underneath it.
+        ToastBanner.IsHitTestVisible = hasAction;
+        ToastBanner.Opacity = 1;
+        _toastTimer.Start();
+    }
+
+    private void HideToast()
+    {
+        _toastTimer.Stop();
+        ToastBanner.Opacity = 0;
+        ToastBanner.IsHitTestVisible = false;
     }
 
     /// <summary>

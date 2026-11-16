@@ -25,6 +25,23 @@ public interface IDialogService
     Task<string?> PickExecutableAsync(string? startDirectory = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asks for any file to read. Returns the chosen path, or null when the user cancelled.
+    /// </summary>
+    /// <param name="extension">
+    /// The extension the picker filters on, without the dot. Null offers every file, which is what a restore dialog
+    /// wants: a backup renamed by a mail client still has to be selectable.
+    /// </param>
+    Task<string?> PickFileAsync(string title, string? extension = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks where to write a file. Returns the chosen path, or null when the user cancelled.
+    /// </summary>
+    /// <param name="suggestedName">The name the picker starts with, so the user does not have to invent one.</param>
+    /// <param name="extension">The extension appended when the user types a bare name, without the dot.</param>
+    Task<string?> SaveFileAsync(
+        string title, string suggestedName, string? extension = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asks a yes/no question. Returns true only when the user agreed; a cancelled dialog is a no.
     /// </summary>
     Task<bool> ConfirmAsync(string title, string message, CancellationToken cancellationToken = default);

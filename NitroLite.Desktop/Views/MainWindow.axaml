@@ -24,6 +24,8 @@
     so the live SİSTEM card can sit under the list without being a page of its own. Its width is a bound column
     definition, which is what lets the splitter write the new width straight into the settings file.
   -->
+  <Grid>
+
   <Border Background="{DynamicResource PageBrush}"
           BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
     <Grid RowDefinitions="44,*">
@@ -119,7 +121,8 @@
               <ItemsControl ItemsSource="{Binding NavTabs}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:NavTab">
-                    <Button Classes="nav" Command="{Binding SelectCommand}">
+                    <Button Classes="nav" Command="{Binding SelectCommand}"
+                            AutomationProperties.AutomationId="{Binding AutomationId}">
                       <Border Classes="navitem" Classes.selected="{Binding IsSelected}">
                         <!-- The mark takes 12px, the icon and the label share the rest, exactly as in the WPF rail:
                              a separate Auto column for the icon would leave the longest label too narrow to fit. -->
@@ -288,12 +291,20 @@
 
             <!-- The last thing that happened, printed at the foot of the page the way the WPF window did it. The
                  action button is optional: a message that can be acted on carries one, a plain confirmation does
-                 not. -->
-            <Border IsVisible="{Binding HasStatus}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                 not. It is a banner, not a footer: it fades in over the page, fades out again on its own timer, and
+                 only takes the pointer while it carries a button. A banner that stayed would sit on top of the page
+                 it is reporting about. -->
+            <Border x:Name="ToastBanner" IsVisible="{Binding HasStatus}"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,24" MaxWidth="720" Padding="16,9"
                     Background="{DynamicResource CardBrush}"
                     BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
-                    CornerRadius="4">
+                    CornerRadius="4" Opacity="0" IsHitTestVisible="False">
+              <Border.Transitions>
+                <Transitions>
+                  <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+                </Transitions>
+              </Border.Transitions>
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="&#x25CF;" FontSize="13" FontWeight="Bold" Margin="0,0,8,0"
                            Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
@@ -310,4 +321,10 @@
       </Grid>
     </Grid>
   </Border>
+
+  <!-- The first-run walkthrough sits above the shell, not beside it: the window behind it stays visible so the user
+       can see what is being configured. -->
+  <views:OnboardingOverlay IsVisible="{Binding ShowOnboarding}" />
+
+  </Grid>
 </Window>

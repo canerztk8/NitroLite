@@ -630,29 +630,32 @@ public static class UpdateService
         $"{NewIssueUrl}?title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body)}";
 
     /// <summary>
-    /// The laptop model Windows reports, for the prefilled issue. A localised "unknown" when WMI cannot answer, so
-    /// the body never carries an empty field.
+    /// Supplies the machine model for the prefilled issue. Set once by the platform at startup: Windows reads it from
+    /// <c>Win32_ComputerSystem</c>, Linux from the DMI files, and the shared code below never has to know which.
+    /// </summary>
+    /// <remarks>
+    /// A delegate rather than a direct read because this file is compiled into the platform-independent assembly, and a
+    /// <c>System.Management</c> call there would drag the WMI stack into a Linux process. Null is a legitimate state —
+    /// a test that never sets it gets the localised "unknown" — so the body never carries an empty field.
+    /// </remarks>
+    public static Func<string?>? MachineModelProvider { get; set; }
+
+    /// <summary>
+    /// The laptop model, for the prefilled issue. A localised "unknown" when the platform cannot answer, so the body
+    /// never carries an empty field.
     /// </summary>
     public static string GetMachineModel()
     {
         try
         {
-            using var searcher = new System.Management.ManagementObjectSearcher(
-                "SELECT Manufacturer, Model FROM Win32_ComputerSystem");
-            using var results = searcher.Get();
-            foreach (System.Management.ManagementObject item in results)
-            {
-                // ManagementObject wraps a native COM object; the collection does not dispose the items in it.
-                using (item)
-                {
-                    var manufacturer = (item["Manufacturer"]?.ToString() ?? "").Trim();
-                    var model = (item["Model"]?.ToString() ?? "").Trim();
-                    var text = string.Join(" ", new[] { manufacturer, model }.Where(part => part.Length > 0));
-                    if (text.Length > 0) return text;
-                }
-            }
+            var text = MachineModelProvider?.Invoke()?.Trim();
+            if (!string.IsNullOrEmpty(text)) return text;
         }
-        catch { }
+        catch
+        {
+            // A provider that throws is a machine whose model could not be read, which is what the fallback says.
+        }
+
         return Loc.T("Bilinmiyor");
     }
 }

@@ -1,0 +1,1462 @@
+using System.Globalization;
+using System.IO;
+using NitroLite.Core;
+using NitroLite.Core.Hardware;
+using NitroLite.Desktop.Mvvm;
+
+namespace NitroLite.Desktop.ViewModels;
+
+/// <summary>One drive in the storage card.</summary>
+public sealed class StorageDriveRow
+{
+    public StorageDriveRow(StorageDrive drive)
+    {
+        LetterTag = drive.LetterTag;
+        Model = drive.Model;
+        BusType = drive.BusType;
+        FreeText = drive.FreeText;
+        UsedPercent = Math.Clamp(drive.UsedPercent, 0, 100);
+        TemperatureText = drive.TemperatureC is int celsius ? $"{celsius} °C" : "--";
+        HealthText = drive.HealthText;
+        Healthy = drive.Healthy;
+    }
+
+    public string LetterTag { get; }
+    public string Model { get; }
+    public string BusType { get; }
+    public string FreeText { get; }
+    public double UsedPercent { get; }
+    public string TemperatureText { get; }
+    public string HealthText { get; }
+    public bool Healthy { get; }
+
+    /// <summary>The tick or cross the health badge prints.</summary>
+    public string HealthGlyph => Healthy ? "\u2713" : "\u2715";
+
+    // The column headings live on the row rather than on the page: a compiled binding inside the item template cannot
+    // reach the parent's Labels, and a heading that is not translated is worse than one that repeats.
+    public string FreeLabel => Loc.T("Boş alan");
+    public string TemperatureLabel => Loc.T("Sıcaklık");
+    public string HealthLabel => Loc.T("Sağlık");
+}
+
+/// <summary>One Acer background service in the services card.</summary>
+public sealed class AcerServiceRow
+{
+    public AcerServiceRow(AcerServiceEntry entry)
+    {
+        Name = entry.Name;
+        Label = entry.Label;
+        Status = entry.Status;
+        StartType = entry.StartType;
+        IsDisabled = entry.IsDisabled;
+    }
+
+    public string Name { get; }
+    public string Label { get; }
+    public string Status { get; }
+    public string StartType { get; }
+    public bool IsDisabled { get; }
+
+    /// <summary>
+    /// The one line the row prints. The start type is already folded into the status by the platform service — a
+    /// disabled service reports "Devre dışı", a stopped manual one says so in words — so printing the raw enum beside
+    /// it only repeated the answer in a second language.
+    /// </summary>
+    public string StateText => Status;
+}
+
+/// <summary>One entry in the DC power-profile picker.</summary>
+public sealed class DcProfileChoice
+{
+    public DcProfileChoice(DcPowerProfilePreference value, string label, string description)
+    {
+        Value = value;
+        Label = label;
+        Description = description;
+    }
+
+    public DcPowerProfilePreference Value { get; }
+    public string Label { get; }
+    public string Description { get; }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// Phase 3 of the WPF parity work: the battery and thermal page, the services and tools page, and the first-run
+/// walkthrough.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A second file rather than another thousand lines in the first one. The split is by page, which is also the split the
+/// WPF window used (<c>MainWindow.Battery.cs</c>, <c>MainWindow.Debloat.cs</c>, <c>MainWindow.Settings.cs</c>), so a
+/// reader looking for the battery logic finds it in one place.
+/// </para>
+/// <para>
+/// Every service here is optional. A platform that does not supply one leaves the corresponding card hidden rather than
+/// offering a control that writes nowhere, which is the same rule the rest of the window follows.
+/// </para>
+/// </remarks>
+public sealed partial class MainViewModel
+{
+    // ---------------------------------------------------------------- the services this page needs
+
+    private readonly IBatteryHealthService? _batteryHealth;
+    private readonly IStorageHealthService? _storageHealth;
+    private readonly IDebloatService? _debloat;
+    private readonly ISystemToolsService? _systemTools;
+    private readonly IUpdateService? _updates;
+    private readonly IDiagnosticsService? _diagnostics;
+    private readonly IDirectWmiControl? _directWmi;
+    private readonly IRunAtStartupService? _runAtStartup;
+
+    // ---------------------------------------------------------------- battery page state
+
+    private BatteryHealthSnapshot _batterySnapshot = BatteryHealthSnapshot.Empty;
+    private BatteryWearTrend _wearTrend = new();
+    private IReadOnlyList<double> _wearTrendPoints = Array.Empty<double>();
+    private string _wearTrendSummary = "";
+    private string _wearTrendNote = "";
+    private bool _wearTrendVisible;
+    private DcProfileChoice? _selectedDcProfile;
+    private bool _watchdogOn;
+    private bool _batteryBusy;
+    private bool? _lastBatteryOnAc;
+
+    // ---------------------------------------------------------------- storage
+
+    private IReadOnlyList<StorageDriveRow> _storageDrives = Array.Empty<StorageDriveRow>();
+
+    // ---------------------------------------------------------------- services page state
+
+    private IReadOnlyList<AcerServiceRow> _acerServices = Array.Empty<AcerServiceRow>();
+    private bool _nitroSenseRunning;
+    private bool _servicesBusy;
+    private string _servicesStatus = "";
+    private string _repairToolsStatus = "";
+    private bool _toolsBusy;
+
+    // ---------------------------------------------------------------- update, diagnostics, backup
+
+    private UpdateCheckResult? _pendingUpdate;
+    private string _updateStatus = "";
+    private bool _updateBusy;
+    private string _diagnosticsNote = "";
+
+    // ---------------------------------------------------------------- the first-run walkthrough
+
+    private int _onboardingStep;
+    private bool _showOnboarding;
+    private bool _onboardingAutoStartOn;
+
+    /// <summary>
+    /// How often the slow battery read runs, in telemetry ticks. The level and the flow come from the fast reader the
+    /// header already uses; the capacities come from WMI, which costs tens of milliseconds and does not change between
+    /// one minute and the next.
+    /// </summary>
+    private const int BatteryHealthTickInterval = 30;
+
+    // ================================================================================================================
+    // Battery and thermal page
+    // ================================================================================================================
+
+    /// <summary>True when this machine has a battery the platform can read.</summary>
+    public bool BatteryHealthAvailable => _batteryHealth?.IsSupported == true;
+
+    /// <summary>True when the capacity half of the reading is present, so the wear card has numbers to print.</summary>
+    public bool BatteryCapacityAvailable =>
+        BatteryHealthAvailable && _batterySnapshot.Details is { DesignCapacityMWh: > 0, FullChargeCapacityMWh: > 0 };
+
+    /// <summary>The big figure on the charge card, or "-- %" when the level could not be read.</summary>
+    public string BatteryLevelText =>
+        _batterySnapshot.Status.BatteryPercent >= 0 ? $"{_batterySnapshot.Status.BatteryPercent}%" : "-- %";
+
+    /// <summary>
+    /// The state sentence. Windows keeps its "charging" flag set while the 80 % limit holds the pack at 0 W, so the
+    /// wording is decided by the actual current when it was read.
+    /// </summary>
+    public string BatteryFlowStateText
+    {
+        get
+        {
+            var status = _batterySnapshot.Status;
+            if (!status.IsPluggedIn) return Labels.OnBattery;
+            if (status.ChargeRateUnknown) return Labels.OnAdapter;
+            if (status.ChargeRateWatts > 0) return Labels.OnAdapterCharging;
+            return _watchdogOn && status.BatteryPercent >= 78 ? Labels.OnAdapterHeld : Labels.OnAdapterIdle;
+        }
+    }
+
+    /// <summary>The live power flow, e.g. <c>0,0 W (Adaptörde)</c> or <c>12,4 W (Deşarj)</c>.</summary>
+    public string BatteryPowerFlowText
+    {
+        get
+        {
+            var status = _batterySnapshot.Status;
+            if (status.IsDischarging && status.DischargeRateWatts > 0)
+            {
+                return string.Format(CultureInfo.CurrentCulture, "{0:F1} W ({1})",
+                    status.DischargeRateWatts, Labels.Discharging);
+            }
+
+            if (status.IsCharging && status.ChargeRateWatts > 0)
+            {
+                return string.Format(CultureInfo.CurrentCulture, "{0:F1} W ({1})",
+                    status.ChargeRateWatts, Labels.Charging);
+            }
+
+            return status.IsPluggedIn
+                ? string.Format(CultureInfo.CurrentCulture, "0,0 W ({0})", Labels.OnAdapter)
+                : "-- W";
+        }
+    }
+
+    /// <summary>
+    /// The remaining-time line. Hidden on the adapter: there is no "time left" when the machine is not running off the
+    /// pack, and the estimate the API returns in that state is a placeholder that reads as "calculating" forever.
+    /// </summary>
+    public string BatteryRemainingText
+    {
+        get
+        {
+            int minutes = _batterySnapshot.Status.EstimatedRemainingMinutes;
+            if (minutes <= 0) return Labels.RemainingUnknown;
+            var span = TimeSpan.FromMinutes(minutes);
+            return string.Format(CultureInfo.CurrentCulture, "{0} sa {1} dk", (int)span.TotalHours, span.Minutes);
+        }
+    }
+
+    public bool ShowBatteryRemaining => BatteryHealthAvailable && !_batterySnapshot.Status.IsPluggedIn;
+
+    /// <summary>True when the pack is above the 80 % threshold the watchdog watches.</summary>
+    public bool ShowOverchargeBanner => BatteryHealthAvailable && _batterySnapshot.Status.IsOvercharged;
+
+    public string OverchargeMessage => Labels.OverchargeMessage(_batterySnapshot.Status.BatteryPercent);
+
+    /// <summary>
+    /// True when the Care Center agent refused the connection because its certificate changed. The charge limit is
+    /// then unreachable, and without this the page would say "no agent" and the user would conclude the laptop does
+    /// not support the limit at all.
+    /// </summary>
+    public bool ShowRetrustCertificate => _hardware is ICareCenterTrust { CertificateMismatch: true };
+
+    /// <summary>The explanation shown next to the re-trust button.</summary>
+    public string RetrustCertificateNote => Labels.RetrustCertificateNote;
+
+    public string RetrustCertificate => Labels.RetrustCertificate;
+
+    /// <summary>The health figure, marked as an estimate when the capacities behind it were not measured.</summary>
+    public string BatteryHealthText
+    {
+        get
+        {
+            if (_batterySnapshot.Details is not { } details) return "--";
+            if (details.DesignCapacityMWh <= 0 || details.FullChargeCapacityMWh <= 0) return "--";
+
+            var text = string.Format(CultureInfo.CurrentCulture, "{0:F1} %", details.HealthPercent);
+            return details.IsDesignCapacityEstimated || details.IsFullChargeCapacityEstimated
+                ? text + TelemetryFormatter.EstimatedSuffix
+                : text;
+        }
+    }
+
+    /// <summary>One word under the health figure: good, worn, or time to replace it.</summary>
+    public string BatteryHealthNote
+    {
+        get
+        {
+            if (_batterySnapshot.Details is not { } details) return Labels.CapacityUnreadable;
+            if (details.DesignCapacityMWh <= 0 || details.FullChargeCapacityMWh <= 0) return Labels.CapacityUnreadable;
+            if (details.HealthPercent >= 80) return Labels.HealthGood;
+            return details.HealthPercent >= 60 ? Labels.HealthWorn : Labels.HealthReplace;
+        }
+    }
+
+    public string BatteryWearText
+    {
+        get
+        {
+            if (_batterySnapshot.Details is not { } details) return "--";
+            if (details.DesignCapacityMWh <= 0 || details.FullChargeCapacityMWh <= 0) return "--";
+
+            var text = string.Format(CultureInfo.CurrentCulture, "{0:F1} %", details.WearLevelPercent);
+            return details.IsDesignCapacityEstimated || details.IsFullChargeCapacityEstimated
+                ? text + TelemetryFormatter.EstimatedSuffix
+                : text;
+        }
+    }
+
+    public string BatteryWearNote
+    {
+        get
+        {
+            if (_batterySnapshot.Details is not { } details) return "--";
+            if (details.DesignCapacityMWh <= 0 || details.FullChargeCapacityMWh <= 0) return "--";
+            if (details.WearLevelPercent < 10) return Labels.WearLow;
+            return details.WearLevelPercent < 25 ? Labels.WearMedium : Labels.WearHigh;
+        }
+    }
+
+    public string BatteryFullChargeText => _batterySnapshot.Details is { FullChargeCapacityMWh: > 0 } details
+        ? string.Format(CultureInfo.CurrentCulture, "{0:F0} mWh", details.FullChargeCapacityMWh)
+        : "--";
+
+    public string BatteryDesignText => _batterySnapshot.Details is { DesignCapacityMWh: > 0 } details
+        ? Labels.FactoryCapacity(string.Format(CultureInfo.CurrentCulture, "{0:F0} mWh", details.DesignCapacityMWh))
+        : Labels.FactoryCapacity("--");
+
+    /// <summary>The cycle line, or empty when the firmware does not report one. Empty hides the row.</summary>
+    public string BatteryCycleText => _batterySnapshot.Details?.CycleCount is int cycles
+        ? Labels.CycleCount(cycles)
+        : "";
+
+    public bool HasBatteryCycle => BatteryCycleText.Length > 0;
+
+    public string BatteryVoltageText => _batterySnapshot.Details is { VoltageVolts: > 0 } details
+        ? string.Format(CultureInfo.CurrentCulture, "{0:F2} V", details.VoltageVolts)
+        : "--";
+
+    /// <summary>
+    /// The chemistry line, with the series cell count inferred from the pack voltage. Li-ion cells are 3.6 to 3.85 V
+    /// nominal, so a 15.4 V pack is four cells; the inference is labelled as one.
+    /// </summary>
+    public string BatteryChemistryText
+    {
+        get
+        {
+            if (_batterySnapshot.Details is not { } details) return "--";
+
+            var parts = new List<string>();
+            if (details.Chemistry.Length > 0) parts.Add(details.Chemistry);
+
+            int cells = details.VoltageVolts > 0 ? (int)Math.Round(details.VoltageVolts / 3.85) : 0;
+            if (cells is >= 1 and <= 8 && details.Chemistry.StartsWith(Labels.Lithium, StringComparison.Ordinal))
+            {
+                parts.Add(Labels.CellCountFromVoltage(cells));
+            }
+
+            return parts.Count > 0 ? string.Join(" · ", parts) : "--";
+        }
+    }
+
+    /// <summary>The battery's own name, e.g. <c>LGC AP18E8M</c>, or the generic word when it has none.</summary>
+    public string BatteryNameText
+    {
+        get
+        {
+            if (_batterySnapshot.Details is not { } details) return Labels.Battery;
+
+            var text = string.Join(" ", new[] { details.Manufacturer, details.ModelName }
+                .Where(part => !string.IsNullOrWhiteSpace(part)));
+            return text.Length > 0 ? text : Labels.Battery;
+        }
+    }
+
+    /// <summary>The 80 % watchdog. It decides whether the overcharge banner is raised, not what the firmware does.</summary>
+    public bool WatchdogOn
+    {
+        get => _watchdogOn;
+        set
+        {
+            if (!Set(ref _watchdogOn, value)) return;
+            if (_batteryHealth != null) _batteryHealth.WatchdogEnabled = value;
+            _settings.BatteryWatchdogEnabled = value;
+            SaveSettings();
+            Raise(nameof(BatteryFlowStateText));
+            Raise(nameof(ShowOverchargeBanner));
+            Raise(nameof(OverchargeMessage));
+        }
+    }
+
+    public bool WatchdogAvailable => BatteryHealthAvailable;
+
+    /// <summary>The DC power-profile picker: what the machine does when the charger is pulled.</summary>
+    public IReadOnlyList<DcProfileChoice> DcProfileChoices { get; } =
+    [
+        new(DcPowerProfilePreference.Eco, Loc.T("Eco"), Loc.T("60 Hz, sessiz fan ve kapalı CPU Boost")),
+        new(DcPowerProfilePreference.Balanced, Loc.T("Dengeli"), Loc.T("Etkin ayarları koru"))
+    ];
+
+    public DcProfileChoice? SelectedDcProfile
+    {
+        get => _selectedDcProfile;
+        set
+        {
+            if (!Set(ref _selectedDcProfile, value) || value == null) return;
+            _settings.DcPowerMode = value.Value;
+            SaveSettings();
+        }
+    }
+
+    // ---------------------------------------------------------------- the wear trend
+
+    public IReadOnlyList<double> WearTrendPoints => _wearTrendPoints;
+
+    public string WearTrendSummary => _wearTrendSummary;
+
+    public string WearTrendNote => _wearTrendNote;
+
+    public bool HasWearTrendNote => _wearTrendNote.Length > 0;
+
+    /// <summary>True when there are at least two readings, which is what a curve needs.</summary>
+    public bool ShowWearTrendChart => _wearTrendVisible;
+
+    /// <summary>True when there is anything to clear, so the button is not offered on a fresh install.</summary>
+    public bool HasWearHistory => _wearTrend.Samples.Count > 0;
+
+    public string WearTrendFirstDate => _wearTrend.First is { } first
+        ? first.TimestampUtc.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)
+        : "";
+
+    public string WearTrendLastDate => _wearTrend.Last is { } last
+        ? last.TimestampUtc.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)
+        : "";
+
+    // ---------------------------------------------------------------- component temperatures
+
+    /// <summary>The SYS1 figure for the component matrix, or "--" when the backend reported nothing.</summary>
+    public string SysTemperatureCardText => SysTemperature > 0 ? $"{SysTemperature} °C" : "--";
+
+    public string Disk1TemperatureText => _storageDrives.Count > 0 && _storageDrives[0].TemperatureText != "--"
+        ? _storageDrives[0].TemperatureText
+        : "--";
+
+    public string Disk2TemperatureText => _storageDrives.Count > 1 && _storageDrives[1].TemperatureText != "--"
+        ? _storageDrives[1].TemperatureText
+        : "--";
+
+    /// <summary>
+    /// The pack's own temperature. Neither WMI battery class reports one, and the Linux power-supply node only does on
+    /// some machines, so the card prints "--" rather than a number it does not have.
+    /// </summary>
+    public string BatteryTemperatureText => "--";
+
+    // ---------------------------------------------------------------- storage
+
+    public bool StorageAvailable => _storageHealth?.IsSupported == true;
+
+    public IReadOnlyList<StorageDriveRow> StorageDrives => _storageDrives;
+
+    public bool HasStorageDrives => _storageDrives.Count > 0;
+
+    public bool HasNoStorageDrives => StorageAvailable && _storageDrives.Count == 0;
+
+    // ================================================================================================================
+    // Services and tools page
+    // ================================================================================================================
+
+    public bool ServicesAvailable => _debloat?.IsSupported == true;
+
+    public IReadOnlyList<AcerServiceRow> AcerServices => _acerServices;
+
+    public bool HasAcerServices => _acerServices.Count > 0;
+
+    public bool HasNoAcerServices => ServicesAvailable && _acerServices.Count == 0;
+
+    public bool NitroSenseRunning => _nitroSenseRunning;
+
+    public string NitroSenseStateText => _nitroSenseRunning ? Labels.Running : Labels.Stopped;
+
+    public string ServicesStatus
+    {
+        get => _servicesStatus;
+        private set
+        {
+            if (!Set(ref _servicesStatus, value)) return;
+            Raise(nameof(HasServicesStatus));
+            Status = value;
+        }
+    }
+
+    public bool HasServicesStatus => _servicesStatus.Length > 0;
+
+    public bool ServicesBusy => _servicesBusy;
+
+    public bool RepairToolsAvailable => _systemTools?.IsSupported == true;
+
+    public string RepairToolsStatus
+    {
+        get => _repairToolsStatus;
+        private set
+        {
+            if (!Set(ref _repairToolsStatus, value)) return;
+            Raise(nameof(HasRepairToolsStatus));
+        }
+    }
+
+    public bool HasRepairToolsStatus => _repairToolsStatus.Length > 0;
+
+    public bool ToolsBusy => _toolsBusy;
+
+    /// <summary>True when this platform has a direct-WMI backend to offer.</summary>
+    public bool DirectWmiAvailable => _directWmi != null;
+
+    public string DirectWmiStatus => _directWmi?.StatusText ?? "";
+
+    // ---------------------------------------------------------------- sign-in entries
+
+    /// <summary>True when this platform has an ordinary per-user sign-in entry.</summary>
+    public bool RunAtStartupAvailable => _runAtStartup?.IsSupported == true;
+
+    /// <summary>The plain <c>HKCU\...\Run</c> entry. Turning it on removes the elevated task, and the other way round.</summary>
+    public bool RunAtStartupOn
+    {
+        get => _runAtStartupOn;
+        set
+        {
+            if (!Set(ref _runAtStartupOn, value)) return;
+            _ = ApplyRunAtStartupAsync(value);
+        }
+    }
+
+    /// <summary>Start minimised to the tray. Baked into the command line, so changing it rewrites the entry.</summary>
+    public bool StartMinimizedOn
+    {
+        get => _settings.StartMinimized;
+        set
+        {
+            if (_settings.StartMinimized == value) return;
+            _settings.StartMinimized = value;
+            Raise();
+            SaveSettings();
+
+            // The flag lives in the registered command line, so an entry that is already there has to be rewritten.
+            if (_runAtStartupOn) _ = ApplyRunAtStartupAsync(true);
+        }
+    }
+
+    /// <summary>
+    /// The ATK mouse integration. Off by default, and off hides the rail's FARE row and the mouse cards: a machine with
+    /// no ATK mouse would otherwise show four configurations that write nowhere.
+    /// </summary>
+    public bool AtkMouseIntegrationOn
+    {
+        get => _settings.AtkMouseIntegrationEnabled;
+        set
+        {
+            if (_settings.AtkMouseIntegrationEnabled == value) return;
+            _settings.AtkMouseIntegrationEnabled = value;
+            Raise();
+            SaveSettings();
+            Raise(nameof(ShowSystemMouseRow));
+            Raise(nameof(SystemMouseText));
+        }
+    }
+
+    // ---------------------------------------------------------------- update
+
+    public bool UpdateAvailable => _updates != null;
+
+    public string UpdateVersionText => _updates?.CurrentVersionText ?? VersionText;
+
+    public string UpdateStatus
+    {
+        get => _updateStatus;
+        private set
+        {
+            if (!Set(ref _updateStatus, value)) return;
+            Raise(nameof(HasUpdateStatus));
+        }
+    }
+
+    public bool HasUpdateStatus => _updateStatus.Length > 0;
+
+    public bool HasPendingUpdate => _pendingUpdate != null;
+
+    public string UpdateNowText => _pendingUpdate is { } pending
+        ? Labels.UpdateTo(pending.DisplayVersion)
+        : Labels.Update;
+
+    public bool AutoUpdateCheckOn
+    {
+        get => _settings.AutoUpdateCheck;
+        set
+        {
+            if (_settings.AutoUpdateCheck == value) return;
+            _settings.AutoUpdateCheck = value;
+            Raise();
+            SaveSettings();
+        }
+    }
+
+    // ---------------------------------------------------------------- diagnostics and backup
+
+    public bool DiagnosticsAvailable => _diagnostics?.IsSupported == true;
+
+    public string DiagnosticsNote
+    {
+        get => _diagnosticsNote;
+        private set
+        {
+            if (!Set(ref _diagnosticsNote, value)) return;
+            Raise(nameof(HasDiagnosticsNote));
+        }
+    }
+
+    public bool HasDiagnosticsNote => _diagnosticsNote.Length > 0;
+
+    // ================================================================================================================
+    // The first-run walkthrough
+    // ================================================================================================================
+
+    /// <summary>True while the three-step overlay is on screen.</summary>
+    public bool ShowOnboarding => _showOnboarding;
+
+    /// <summary>Zero-based step index: 0 hardware, 1 profile, 2 start-up.</summary>
+    public int OnboardingStep => _onboardingStep;
+
+    public bool IsOnboardingFirstStep => _onboardingStep <= 0;
+
+    public bool IsOnboardingSecondStep => _onboardingStep == 1;
+
+    public bool IsOnboardingLastStep => _onboardingStep >= 2;
+
+    public string OnboardingStepLabel => Labels.OnboardingStepFormat(_onboardingStep + 1, 3);
+
+    public string OnboardingTitle => _onboardingStep switch
+    {
+        0 => Labels.OnboardingHardwareTitle,
+        1 => Labels.OnboardingProfileTitle,
+        _ => Labels.OnboardingStartupTitle
+    };
+
+    public string OnboardingBody => _onboardingStep switch
+    {
+        0 => Labels.OnboardingHardwareBody,
+        1 => Labels.OnboardingProfileBody,
+        _ => Labels.OnboardingStartupBody
+    };
+
+    /// <summary>The recommended starting profile, printed as one line on step two.</summary>
+    public string OnboardingRecommendedText => Labels.OnboardingRecommended;
+
+    /// <summary>
+    /// The sign-in switch on step three. Hidden on a platform with no elevated auto-start, which is why the step is
+    /// skipped rather than shown with a control that cannot work.
+    /// </summary>
+    public bool OnboardingAutoStartAvailable => _autoStart != null;
+
+    public bool OnboardingAutoStartOn
+    {
+        get => _onboardingAutoStartOn;
+        set => Set(ref _onboardingAutoStartOn, value);
+    }
+
+    // ================================================================================================================
+    // Commands
+    // ================================================================================================================
+
+    public RelayCommand ClearWearHistoryCommand { get; private set; } = null!;
+    public RelayCommand RetrustCertificateCommand { get; private set; } = null!;
+    public AsyncCommand DisableServicesCommand { get; private set; } = null!;
+    public AsyncCommand RestoreServicesCommand { get; private set; } = null!;
+    public AsyncCommand KillNitroSenseCommand { get; private set; } = null!;
+    public AsyncCommand FixLightingCommand { get; private set; } = null!;
+    public AsyncCommand FixAcerServicesCommand { get; private set; } = null!;
+    public AsyncCommand RestoreMuxCommand { get; private set; } = null!;
+    public AsyncCommand OptimizeCommand { get; private set; } = null!;
+    public AsyncCommand RestoreOptimizeCommand { get; private set; } = null!;
+    public AsyncCommand StartDirectWmiCommand { get; private set; } = null!;
+    public AsyncCommand CheckUpdatesCommand { get; private set; } = null!;
+    public AsyncCommand UpdateNowCommand { get; private set; } = null!;
+    public RelayCommand ReleaseNotesCommand { get; private set; } = null!;
+    public RelayCommand ReportBugCommand { get; private set; } = null!;
+    public RelayCommand OpenLogsCommand { get; private set; } = null!;
+    public AsyncCommand ExportHardwareReportCommand { get; private set; } = null!;
+    public RelayCommand CreateDiagnosticsCommand { get; private set; } = null!;
+    public AsyncCommand CreateBackupCommand { get; private set; } = null!;
+    public AsyncCommand RestoreBackupCommand { get; private set; } = null!;
+    public RelayCommand OnboardingNextCommand { get; private set; } = null!;
+    public RelayCommand OnboardingBackCommand { get; private set; } = null!;
+    public RelayCommand OnboardingSkipCommand { get; private set; } = null!;
+    public AsyncCommand OnboardingFinishCommand { get; private set; } = null!;
+    public RelayCommand ReopenOnboardingCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Wires the phase-3 commands. Called from the constructor, after the fields are assigned, so a command can never
+    /// capture a null service.
+    /// </summary>
+    private void BuildPhase3Commands()
+    {
+        ClearWearHistoryCommand = new RelayCommand(() => _ = ClearWearHistoryAsync());
+        RetrustCertificateCommand = new RelayCommand(() => _ = RetrustCertificateAsync());
+        DisableServicesCommand = new AsyncCommand(DisableServicesAsync);
+        RestoreServicesCommand = new AsyncCommand(RestoreServicesAsync);
+        KillNitroSenseCommand = new AsyncCommand(KillNitroSenseAsync);
+        FixLightingCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.FixKeyboardLightingAsync, Labels.FixLighting));
+        FixAcerServicesCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.FixAcerServicesAsync, Labels.FixAcerServices));
+        RestoreMuxCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.RestoreMuxSwitchAsync, Labels.RestoreMux));
+        OptimizeCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.OptimizeAsync, Labels.Optimize));
+        RestoreOptimizeCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.RestoreOptimizeAsync, Labels.RestoreOptimize));
+        StartDirectWmiCommand = new AsyncCommand(StartDirectWmiAsync);
+        CheckUpdatesCommand = new AsyncCommand(() => CheckForUpdatesAsync(silent: false));
+        UpdateNowCommand = new AsyncCommand(UpdateNowAsync);
+        ReleaseNotesCommand = new RelayCommand(OpenReleaseNotes);
+        ReportBugCommand = new RelayCommand(ReportBug);
+        OpenLogsCommand = new RelayCommand(OpenLogsFolder);
+        ExportHardwareReportCommand = new AsyncCommand(ExportHardwareReportAsync);
+        CreateDiagnosticsCommand = new RelayCommand(CreateDiagnostics);
+        CreateBackupCommand = new AsyncCommand(CreateBackupAsync);
+        RestoreBackupCommand = new AsyncCommand(RestoreBackupAsync);
+        OnboardingNextCommand = new RelayCommand(OnboardingNext);
+        OnboardingBackCommand = new RelayCommand(OnboardingBack);
+        OnboardingSkipCommand = new RelayCommand(() => _ = FinishOnboardingAsync(applyRecommended: false));
+        OnboardingFinishCommand = new AsyncCommand(() => FinishOnboardingAsync(applyRecommended: true));
+        ReopenOnboardingCommand = new RelayCommand(ReopenOnboarding);
+    }
+
+    // ================================================================================================================
+    // Lifecycle
+    // ================================================================================================================
+
+    /// <summary>
+    /// The first read of everything this page owns. Called once from <see cref="InitializeAsync"/> after the capability
+    /// probe, because the walkthrough's first step lists what the probe found.
+    /// </summary>
+    private async Task InitializePhase3Async()
+    {
+        _watchdogOn = _settings.BatteryWatchdogEnabled;
+        if (_batteryHealth != null) _batteryHealth.WatchdogEnabled = _watchdogOn;
+
+        _selectedDcProfile = DcProfileChoices.FirstOrDefault(c => c.Value == _settings.DcPowerMode)
+                             ?? DcProfileChoices[0];
+        Raise(nameof(SelectedDcProfile));
+
+        await RefreshBatteryHealthAsync().ConfigureAwait(true);
+        await RefreshStorageAsync().ConfigureAwait(true);
+        await RefreshServicesAsync().ConfigureAwait(true);
+        await RefreshRunAtStartupAsync().ConfigureAwait(true);
+
+        // A silent check: a machine with no network is not something to report on startup, and the window must not wait
+        // for GitHub before it becomes usable.
+        if (_updates != null && _settings.AutoUpdateCheck) _ = CheckForUpdatesAsync(silent: true);
+
+        MaybeShowOnboarding();
+    }
+
+    /// <summary>
+    /// The per-tick half. The battery's slow read runs once a minute; the level and the flow come from the fast reader
+    /// the header already uses, so the card is never a minute behind on the number that matters.
+    /// </summary>
+    private async Task TickPhase3Async()
+    {
+        if (_batteryHealth == null) return;
+
+        // A replug changes the state sentence and the remaining-time row, and waiting up to a minute for it would make
+        // the card look stuck. The comparison is free after the first tick.
+        if (_lastBatteryOnAc != OnAcPower)
+        {
+            _lastBatteryOnAc = OnAcPower;
+            await RefreshBatteryHealthAsync().ConfigureAwait(true);
+            return;
+        }
+
+        if (_tick % BatteryHealthTickInterval == 0) await RefreshBatteryHealthAsync().ConfigureAwait(true);
+    }
+
+    private async Task RefreshBatteryHealthAsync()
+    {
+        if (_batteryHealth == null || _batteryBusy) return;
+
+        _batteryBusy = true;
+        try
+        {
+            var snapshot = await _batteryHealth.ReadAsync().ConfigureAwait(true);
+            _batterySnapshot = snapshot;
+
+            // One reading a day is enough for a wear curve; the history decides whether this one is new.
+            if (snapshot.Details is { } details) _batteryHealth.RecordWearSample(details);
+
+            RefreshWearTrend();
+            RaiseBatteryProperties();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Pil sağlığı okunamadı", ex.Message);
+        }
+        finally
+        {
+            _batteryBusy = false;
+        }
+    }
+
+    private void RefreshWearTrend()
+    {
+        if (_batteryHealth == null)
+        {
+            _wearTrend = new BatteryWearTrend();
+            _wearTrendPoints = Array.Empty<double>();
+            _wearTrendSummary = "";
+            _wearTrendNote = "";
+            _wearTrendVisible = false;
+            return;
+        }
+
+        _wearTrend = _batteryHealth.GetWearTrend();
+        var samples = _wearTrend.Samples;
+
+        if (samples.Count == 0)
+        {
+            _wearTrendPoints = Array.Empty<double>();
+            _wearTrendSummary = Labels.WearNoSamples;
+            _wearTrendNote = "";
+            _wearTrendVisible = false;
+            return;
+        }
+
+        if (!_wearTrend.HasTrend)
+        {
+            _wearTrendPoints = Array.Empty<double>();
+            _wearTrendSummary = Labels.WearOneSample;
+            _wearTrendNote = Labels.WearFirstSample(
+                samples[0].TimestampUtc.ToLocalTime().ToString("d", CultureInfo.CurrentCulture),
+                samples[0].WearLevelPercent);
+            _wearTrendVisible = false;
+            return;
+        }
+
+        _wearTrendPoints = samples.Select(s => s.WearLevelPercent).ToList();
+        _wearTrendVisible = true;
+
+        double days = _wearTrend.SpanDays ?? 0;
+        double change = _wearTrend.WearChangePercent ?? 0;
+
+        // The sign is part of the text, so it is formatted here rather than through a format specifier in the
+        // catalogue: a translator should not have to preserve "+0.0;-0.0;0.0" to keep the page readable.
+        var changeText = change.ToString("+0.0;-0.0;0.0", CultureInfo.CurrentCulture);
+        _wearTrendSummary = Labels.WearChangeSummary(Math.Max(1, (int)Math.Round(days)), changeText);
+
+        if (_wearTrend.WearPerYearPercent is not double perYear)
+        {
+            _wearTrendNote = Labels.WearNeedsAWeek;
+        }
+        else if (change <= 0)
+        {
+            // A pack that reads healthier than before recalibrated; saying "it is healing" would be a lie.
+            _wearTrendNote = Labels.WearRecalibrated;
+        }
+        else
+        {
+            _wearTrendNote = Labels.WearPerYear(perYear);
+        }
+    }
+
+    private void RaiseBatteryProperties()
+    {
+        Raise(nameof(BatteryHealthAvailable));
+        Raise(nameof(BatteryCapacityAvailable));
+        Raise(nameof(BatteryLevelText));
+        Raise(nameof(BatteryFlowStateText));
+        Raise(nameof(BatteryPowerFlowText));
+        Raise(nameof(BatteryRemainingText));
+        Raise(nameof(ShowBatteryRemaining));
+        Raise(nameof(ShowOverchargeBanner));
+        Raise(nameof(OverchargeMessage));
+        Raise(nameof(BatteryHealthText));
+        Raise(nameof(BatteryHealthNote));
+        Raise(nameof(BatteryWearText));
+        Raise(nameof(BatteryWearNote));
+        Raise(nameof(BatteryFullChargeText));
+        Raise(nameof(BatteryDesignText));
+        Raise(nameof(BatteryCycleText));
+        Raise(nameof(HasBatteryCycle));
+        Raise(nameof(BatteryVoltageText));
+        Raise(nameof(BatteryChemistryText));
+        Raise(nameof(BatteryNameText));
+        Raise(nameof(WatchdogAvailable));
+        Raise(nameof(WearTrendPoints));
+        Raise(nameof(WearTrendSummary));
+        Raise(nameof(WearTrendNote));
+        Raise(nameof(HasWearTrendNote));
+        Raise(nameof(ShowWearTrendChart));
+        Raise(nameof(HasWearHistory));
+        Raise(nameof(WearTrendFirstDate));
+        Raise(nameof(WearTrendLastDate));
+        Raise(nameof(SysTemperatureCardText));
+        Raise(nameof(Disk1TemperatureText));
+        Raise(nameof(Disk2TemperatureText));
+        Raise(nameof(BatteryTemperatureText));
+    }
+
+    private async Task ClearWearHistoryAsync()
+    {
+        if (_batteryHealth == null) return;
+
+        if (_dialogs != null)
+        {
+            var confirmed = await _dialogs.ConfirmAsync(Labels.ClearHistory, Labels.ClearHistoryConfirm)
+                .ConfigureAwait(true);
+            if (!confirmed) return;
+        }
+
+        if (!_batteryHealth.ClearWearHistory())
+        {
+            Status = Labels.ClearHistoryFailed;
+            return;
+        }
+
+        RefreshWearTrend();
+        Raise(nameof(WearTrendPoints));
+        Raise(nameof(WearTrendSummary));
+        Raise(nameof(WearTrendNote));
+        Raise(nameof(HasWearTrendNote));
+        Raise(nameof(ShowWearTrendChart));
+        Raise(nameof(HasWearHistory));
+        Raise(nameof(WearTrendFirstDate));
+        Raise(nameof(WearTrendLastDate));
+        Status = Labels.ClearHistoryDone;
+    }
+
+    /// <summary>
+    /// Drops the pinned Care Center thumbprint and reads the charge limit again. Only reachable from the note that
+    /// appears when the agent presented a different certificate, so trusting a new one is always a user action.
+    /// </summary>
+    private async Task RetrustCertificateAsync()
+    {
+        if (_hardware is not ICareCenterTrust trust) return;
+
+        if (!trust.ForgetPinnedCertificate())
+        {
+            Status = Labels.RetrustCertificateFailed;
+            return;
+        }
+
+        Raise(nameof(ShowRetrustCertificate));
+        Status = Labels.RetrustCertificateDone;
+
+        // The limit is read again through the same path the page already uses; a failure there is reported by that
+        // path, so nothing is swallowed here.
+        await RefreshBatteryHealthAsync().ConfigureAwait(true);
+    }
+
+    private async Task RefreshStorageAsync()
+    {
+        if (_storageHealth == null || !_storageHealth.IsSupported) return;
+
+        try
+        {
+            // The storage namespace is slow: a cold query walks every physical disk and every partition.
+            var drives = await Task.Run(() => _storageHealth.GetDrives()).ConfigureAwait(true);
+            _storageDrives = drives.Select(d => new StorageDriveRow(d)).ToList();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Depolama sürücüleri okunamadı", ex.Message);
+            _storageDrives = Array.Empty<StorageDriveRow>();
+        }
+
+        Raise(nameof(StorageAvailable));
+        Raise(nameof(StorageDrives));
+        Raise(nameof(HasStorageDrives));
+        Raise(nameof(HasNoStorageDrives));
+        Raise(nameof(Disk1TemperatureText));
+        Raise(nameof(Disk2TemperatureText));
+    }
+
+    // ================================================================================================================
+    // Services
+    // ================================================================================================================
+
+    private async Task RefreshServicesAsync()
+    {
+        if (_debloat == null || !_debloat.IsSupported) return;
+
+        try
+        {
+            var (statuses, running) = await Task.Run(() =>
+                (_debloat.GetServiceStatuses(), _debloat.IsNitroSenseRunning())).ConfigureAwait(true);
+
+            _acerServices = statuses.Select(s => new AcerServiceRow(s)).ToList();
+            _nitroSenseRunning = running;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Acer servis durumları okunamadı", ex.Message);
+            _acerServices = Array.Empty<AcerServiceRow>();
+        }
+
+        Raise(nameof(ServicesAvailable));
+        Raise(nameof(AcerServices));
+        Raise(nameof(HasAcerServices));
+        Raise(nameof(HasNoAcerServices));
+        Raise(nameof(NitroSenseRunning));
+        Raise(nameof(NitroSenseStateText));
+    }
+
+    private async Task DisableServicesAsync()
+    {
+        if (_debloat == null || _servicesBusy) return;
+
+        if (_dialogs != null && !await _dialogs.ConfirmAsync(Labels.AcerServices, Labels.DisableServicesConfirm)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        _servicesBusy = true;
+        Raise(nameof(ServicesBusy));
+        try
+        {
+            var result = await _debloat.DisableBackgroundServicesAsync().ConfigureAwait(true);
+            ServicesStatus = result.Success
+                ? Labels.ServicesDisabled
+                : Labels.ServicesFailed(result.Error ?? Labels.UnknownError);
+        }
+        finally
+        {
+            _servicesBusy = false;
+            Raise(nameof(ServicesBusy));
+            await RefreshServicesAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task RestoreServicesAsync()
+    {
+        if (_debloat == null || _servicesBusy) return;
+
+        if (_dialogs != null && !await _dialogs.ConfirmAsync(Labels.RestoreServices, Labels.RestoreServicesConfirm)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        _servicesBusy = true;
+        Raise(nameof(ServicesBusy));
+        try
+        {
+            var result = await _debloat.RestoreServicesAsync().ConfigureAwait(true);
+            ServicesStatus = result.Success
+                ? Labels.ServicesRestored
+                : Labels.ServicesFailed(result.Error ?? Labels.UnknownError);
+        }
+        finally
+        {
+            _servicesBusy = false;
+            Raise(nameof(ServicesBusy));
+            await RefreshServicesAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task KillNitroSenseAsync()
+    {
+        if (_debloat == null || _servicesBusy) return;
+
+        if (!_debloat.IsNitroSenseRunning())
+        {
+            ServicesStatus = Labels.NitroSenseAlreadyClosed;
+            await RefreshServicesAsync().ConfigureAwait(true);
+            return;
+        }
+
+        if (_dialogs != null && !await _dialogs.ConfirmAsync(Labels.KillNitroSense, Labels.KillNitroSenseConfirm)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        _servicesBusy = true;
+        Raise(nameof(ServicesBusy));
+        try
+        {
+            var result = await _debloat.KillNitroSenseAsync().ConfigureAwait(true);
+            ServicesStatus = result.Success ? Labels.NitroSenseClosed : Labels.NitroSenseCloseFailed;
+        }
+        finally
+        {
+            _servicesBusy = false;
+            Raise(nameof(ServicesBusy));
+            await RefreshServicesAsync().ConfigureAwait(true);
+        }
+    }
+
+    // ================================================================================================================
+    // Repair and optimisation tools
+    // ================================================================================================================
+
+    private async Task RunToolAsync(Func<CancellationToken, Task<ToolResult>>? run, string title)
+    {
+        if (run == null || _toolsBusy) return;
+
+        if (_dialogs != null && !await _dialogs.ConfirmAsync(title, Labels.RepairConfirm).ConfigureAwait(true)) return;
+
+        _toolsBusy = true;
+        Raise(nameof(ToolsBusy));
+        RepairToolsStatus = Labels.RepairRunning;
+        try
+        {
+            var result = await run(CancellationToken.None).ConfigureAwait(true);
+            RepairToolsStatus = (result.Success ? "\u25CF " : "\u25B2 ") + result.Message;
+            Status = result.Message;
+        }
+        catch (Exception ex)
+        {
+            RepairToolsStatus = "\u25B2 " + Labels.RepairFailed(ex.Message);
+        }
+        finally
+        {
+            _toolsBusy = false;
+            Raise(nameof(ToolsBusy));
+            await RefreshServicesAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task StartDirectWmiAsync()
+    {
+        if (_directWmi == null) return;
+
+        try
+        {
+            var started = await _directWmi.StartAsync().ConfigureAwait(true);
+            Raise(nameof(DirectWmiStatus));
+            Status = started ? Labels.DirectWmiStarted : Labels.DirectWmiDeclined;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Doğrudan WMI başlatılamadı", ex.ToString());
+            Status = Labels.DirectWmiFailed(ex.Message);
+        }
+    }
+
+    // ================================================================================================================
+    // Sign-in entries
+    // ================================================================================================================
+
+    private bool _runAtStartupOn;
+
+    private async Task RefreshRunAtStartupAsync()
+    {
+        if (_runAtStartup == null || !_runAtStartup.IsSupported) return;
+
+        try
+        {
+            var enabled = await _runAtStartup.IsEnabledAsync().ConfigureAwait(true);
+            Set(ref _runAtStartupOn, enabled, nameof(RunAtStartupOn));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Otomatik başlatma durumu okunamadı", ex.Message);
+        }
+    }
+
+    private async Task ApplyRunAtStartupAsync(bool enabled)
+    {
+        if (_runAtStartup == null) return;
+
+        try
+        {
+            var ok = await _runAtStartup.SetEnabledAsync(enabled, _settings.StartMinimized).ConfigureAwait(true);
+            if (!ok)
+            {
+                // The write failed, so the switch goes back to what the registry actually says rather than staying on a
+                // position the machine is not in.
+                Status = Labels.AutoStartFailed;
+                await RefreshRunAtStartupAsync().ConfigureAwait(true);
+                return;
+            }
+
+            // Two registrations would start NitroLite twice at logon, so the elevated task is removed when the plain
+            // entry takes over.
+            if (enabled && _autoStart != null)
+            {
+                try { await _autoStart.DisableAsync().ConfigureAwait(true); }
+                catch (Exception ex) { AppLog.Warn("Yönetici görevi kaldırılamadı", ex.Message); }
+            }
+
+            await RefreshAutoStartAsync().ConfigureAwait(true);
+            Status = enabled ? Labels.AutoStartEnabled : Labels.AutoStartDisabled;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Otomatik başlatma değiştirilemedi", ex.ToString());
+            Status = Labels.AutoStartFailed;
+            await RefreshRunAtStartupAsync().ConfigureAwait(true);
+        }
+    }
+
+    // ================================================================================================================
+    // Update, diagnostics, backup
+    // ================================================================================================================
+
+    private async Task CheckForUpdatesAsync(bool silent)
+    {
+        if (_updates == null || _updateBusy) return;
+
+        _updateBusy = true;
+        try
+        {
+            var info = await _updates.CheckAsync().ConfigureAwait(true);
+            _pendingUpdate = info;
+            Raise(nameof(HasPendingUpdate));
+            Raise(nameof(UpdateNowText));
+
+            if (info == null)
+            {
+                if (!silent) UpdateStatus = Labels.UpdateCurrent;
+                return;
+            }
+
+            UpdateStatus = Labels.UpdateFound(info.DisplayVersion);
+            if (!silent) Status = UpdateStatus;
+        }
+        finally
+        {
+            _updateBusy = false;
+        }
+    }
+
+    private async Task UpdateNowAsync()
+    {
+        if (_updates == null) return;
+
+        // A development build cannot replace itself, and a Linux build cannot install a Windows package over itself.
+        // Both cases open the release page, which is the honest answer to "update".
+        if (!_updates.IsPackaged)
+        {
+            OpenUrl(_updates.ReleasePageUrl);
+            UpdateStatus = Labels.UpdateManual;
+            return;
+        }
+
+        UpdateStatus = Labels.UpdateDownloading;
+        await Task.Yield();
+    }
+
+    private void OpenReleaseNotes()
+    {
+        if (_updates == null) return;
+        OpenUrl(_updates.ReleaseNotesUrl(_pendingUpdate));
+    }
+
+    private void ReportBug()
+    {
+        if (_updates == null) return;
+
+        try
+        {
+            var language = Loc.Languages.FirstOrDefault(l => l.Code == Loc.Language)?.NativeName ?? Loc.Language;
+            var body = _updates.BuildIssueBody(
+                _updates.CurrentVersionText,
+                System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+                _updates.GetMachineModel(),
+                language);
+            OpenUrl(_updates.BuildIssueUrl(Labels.BugReportTitle, body));
+        }
+        catch (Exception ex)
+        {
+            Status = Labels.BugReportFailed(ex.Message);
+        }
+    }
+
+    private void OpenLogsFolder()
+    {
+        var folder = _diagnostics?.DataDirectory ?? AppPaths.DataDirectory;
+        OpenUrl(folder);
+    }
+
+    private async Task ExportHardwareReportAsync()
+    {
+        var report = HardwareReportText;
+        if (report.Length == 0 || _dialogs == null)
+        {
+            Status = Labels.ReportNotReady;
+            return;
+        }
+
+        var path = await _dialogs.SaveFileAsync(Labels.ExportReport, "nitrolite-hardware-report.md", "md")
+            .ConfigureAwait(true);
+        if (path == null) return;
+
+        try
+        {
+            await File.WriteAllTextAsync(path, report).ConfigureAwait(true);
+            Status = Labels.ReportExported(Path.GetFileName(path));
+        }
+        catch (Exception ex)
+        {
+            Status = Labels.ReportExportFailed(ex.Message);
+        }
+    }
+
+    private void CreateDiagnostics()
+    {
+        if (_diagnostics == null) return;
+
+        try
+        {
+            var path = _diagnostics.CreateBundle();
+            DiagnosticsNote = Labels.LastBundle(Path.GetFileName(path));
+            Status = Labels.BundleCreated(Path.GetFileName(path));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Teşhis paketi oluşturulamadı", ex.ToString());
+            Status = Labels.BundleFailed(ex.Message);
+        }
+    }
+
+    private async Task CreateBackupAsync()
+    {
+        if (_dialogs == null) return;
+
+        var path = await _dialogs.SaveFileAsync(
+            Labels.CreateBackup, BackupService.SuggestedFileName(DateTime.Now), "json").ConfigureAwait(true);
+        if (path == null) return;
+
+        try
+        {
+            var result = await Task.Run(() => BackupService.Create(
+                path,
+                _settings,
+                AppPaths.GetDataFile("game_profiles.json"),
+                AppPaths.GetDataFile("rgb_presets.json"),
+                UpdateVersionText)).ConfigureAwait(true);
+
+            Status = result.Success
+                ? Labels.BackupSaved(Path.GetFileName(path))
+                : result.Error ?? Labels.BackupFailed;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Yedek oluşturulamadı", ex.ToString());
+            Status = Labels.BackupFailedDetail(ex.Message);
+        }
+    }
+
+    private async Task RestoreBackupAsync()
+    {
+        if (_dialogs == null) return;
+
+        var path = await _dialogs.PickFileAsync(Labels.RestoreBackup, "json").ConfigureAwait(true);
+        if (path == null) return;
+
+        if (!await _dialogs.ConfirmAsync(Labels.RestoreBackup, Labels.RestoreBackupConfirm).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await Task.Run(() => BackupService.Restore(
+                path,
+                AppPaths.GetDataFile("settings.json"),
+                AppPaths.GetDataFile("game_profiles.json"),
+                AppPaths.GetDataFile("rgb_presets.json"))).ConfigureAwait(true);
+
+            Status = result.Success ? Labels.BackupRestored : result.Error ?? Labels.BackupRestoreFailed;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Yedek geri yüklenemedi", ex.ToString());
+            Status = Labels.BackupRestoreFailedDetail(ex.Message);
+        }
+    }
+
+    private void OpenUrl(string url)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            })?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Status = Labels.LinkFailed(ex.Message);
+        }
+    }
+
+    // ================================================================================================================
+    // The first-run walkthrough
+    // ================================================================================================================
+
+    /// <summary>
+    /// Shows the walkthrough on a first run. Called after the capability probe, because step one lists what the probe
+    /// found: on a first run with no cache this is the first moment the list can be filled in.
+    /// </summary>
+    private void MaybeShowOnboarding()
+    {
+        if (_settings.OnboardingCompleted) return;
+
+        _onboardingStep = 0;
+        _showOnboarding = true;
+        RaiseOnboardingProperties();
+    }
+
+    private void ReopenOnboarding()
+    {
+        _onboardingStep = 0;
+        _showOnboarding = true;
+        RaiseOnboardingProperties();
+    }
+
+    private void OnboardingNext()
+    {
+        if (_onboardingStep >= 2) return;
+        _onboardingStep++;
+        RaiseOnboardingProperties();
+    }
+
+    private void OnboardingBack()
+    {
+        if (_onboardingStep <= 0) return;
+        _onboardingStep--;
+        RaiseOnboardingProperties();
+    }
+
+    /// <summary>
+    /// Closes the walkthrough and records that it is done. <paramref name="applyRecommended"/> is what the "Tamamla"
+    /// button passes: the recommended starting profile is written only when the user finished the walkthrough, not when
+    /// they skipped it.
+    /// </summary>
+    private async Task FinishOnboardingAsync(bool applyRecommended)
+    {
+        if (applyRecommended)
+        {
+            // The recommended profile: Balanced, automatic fans, and the 80 % charge limit when the machine has one.
+            // Assigning the selection is the whole gesture — the setters apply the mode and the fan speed.
+            if (ModeControlAvailable && SelectedMode?.Mode != OperatingMode.Default)
+            {
+                var balanced = Modes.FirstOrDefault(m => m.Mode == OperatingMode.Default);
+                if (balanced != null) SelectedMode = balanced;
+            }
+
+            if (FanControlAvailable && SelectedFanMode?.Mode != FanMode.Auto)
+            {
+                var auto = FanModes.FirstOrDefault(m => m.Mode == FanMode.Auto);
+                if (auto != null) SelectedFanMode = auto;
+            }
+
+            if (BatteryLimitAvailable && !BatteryLimitOn) BatteryLimitOn = true;
+
+            if (OnboardingAutoStartAvailable && _onboardingAutoStartOn && _autoStart != null)
+            {
+                try { await _autoStart.EnableAsync().ConfigureAwait(true); }
+                catch (Exception ex) { AppLog.Warn("Otomatik başlatma açılamadı", ex.Message); }
+            }
+        }
+
+        _settings.OnboardingCompleted = true;
+        SaveSettings();
+
+        _showOnboarding = false;
+        RaiseOnboardingProperties();
+    }
+
+    private void RaiseOnboardingProperties()
+    {
+        Raise(nameof(ShowOnboarding));
+        Raise(nameof(OnboardingStep));
+        Raise(nameof(IsOnboardingFirstStep));
+        Raise(nameof(IsOnboardingSecondStep));
+        Raise(nameof(IsOnboardingLastStep));
+        Raise(nameof(OnboardingStepLabel));
+        Raise(nameof(OnboardingTitle));
+        Raise(nameof(OnboardingBody));
+        Raise(nameof(OnboardingRecommendedText));
+        Raise(nameof(OnboardingAutoStartAvailable));
+        Raise(nameof(OnboardingAutoStartOn));
+    }
+}

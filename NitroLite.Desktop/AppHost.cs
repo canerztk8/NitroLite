@@ -37,7 +37,15 @@ public sealed record PlatformServices(
     IMouseProfileService? MouseProfiles,
     IHardwareMonitor? Monitor,
     IMemoryCleaner? MemoryCleaner,
-    IOpenRgbStatusProvider? OpenRgb);
+    IOpenRgbStatusProvider? OpenRgb,
+    IBatteryHealthService? BatteryHealth,
+    IStorageHealthService? StorageHealth,
+    IDebloatService? Debloat,
+    ISystemToolsService? SystemTools,
+    IUpdateService? Updates,
+    IDiagnosticsService? Diagnostics,
+    IDirectWmiControl? DirectWmi,
+    IRunAtStartupService? RunAtStartup);
 
 /// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
@@ -87,7 +95,15 @@ public sealed class AppHost : IDisposable
             services.Monitor,
             services.MemoryCleaner,
             dialogs,
-            services.OpenRgb);
+            services.OpenRgb,
+            services.BatteryHealth,
+            services.StorageHealth,
+            services.Debloat,
+            services.SystemTools,
+            services.Updates,
+            services.Diagnostics,
+            services.DirectWmi,
+            services.RunAtStartup);
     }
 
     public MainViewModel ViewModel { get; }
@@ -134,6 +150,14 @@ public sealed class AppHost : IDisposable
         IHardwareMonitor? monitor = null;
         IMemoryCleaner? memoryCleaner = null;
         IOpenRgbStatusProvider? openRgb = null;
+        IBatteryHealthService? batteryHealth = null;
+        IStorageHealthService? storageHealth = null;
+        IDebloatService? debloat = null;
+        ISystemToolsService? systemTools = null;
+        IUpdateService? updates = null;
+        IDiagnosticsService? diagnostics = null;
+        IDirectWmiControl? directWmi = null;
+        IRunAtStartupService? runAtStartup = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -156,6 +180,24 @@ public sealed class AppHost : IDisposable
                 // shows a useful page.
                 monitor = new WindowsHardwareMonitor();
                 memoryCleaner = new WindowsMemoryCleaner();
+
+                // The battery page, the services page and the tools. Each one wraps the class the WPF front end used, so
+                // the behaviour a user already knows is the behaviour they get.
+                batteryHealth = new WindowsBatteryHealthService();
+                storageHealth = new WindowsStorageHealthService();
+                debloat = new WindowsDebloatService();
+                systemTools = new WindowsSystemToolsService();
+                updates = new WindowsUpdateService();
+                diagnostics = new WindowsDiagnosticsService();
+                runAtStartup = new WindowsRunAtStartupService();
+
+                // The direct-WMI row is only meaningful when the hybrid controller is the one in use; a machine whose
+                // backend is something else gets no row rather than a button that cannot work.
+                if (hardware is HybridHardwareController hybrid) directWmi = new WindowsDirectWmiControl(hybrid);
+
+                // The issue body names the machine model, and the WMI read behind it lives in this assembly. The shared
+                // updater cannot reference it, so the composition root hands it over.
+                UpdateService.MachineModelProvider = WindowsMachineModel.Read;
             }
             catch (Exception ex)
             {
@@ -204,6 +246,16 @@ public sealed class AppHost : IDisposable
                 // The SDK is the third lighting path, and the only one that can say whether it answered. The status
                 // line stays hidden until the fallback has actually been tried.
                 openRgb = controller;
+
+                // The battery reads /sys/class/power_supply/BAT*; the storage, debloat and repair cards report
+                // themselves unsupported and hide, because none of them has a Linux equivalent that works without root.
+                batteryHealth = new LinuxBatteryHealthService(fs);
+                storageHealth = new LinuxStorageHealthService();
+                debloat = new LinuxDebloatService();
+                systemTools = new LinuxSystemToolsService();
+                updates = new LinuxUpdateService(fs);
+                diagnostics = new LinuxDiagnosticsService();
+                runAtStartup = new LinuxRunAtStartupService();
             }
             catch (Exception ex)
             {
@@ -215,7 +267,8 @@ public sealed class AppHost : IDisposable
 
         return new PlatformServices(
             settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
-            refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb);
+            refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb,
+            batteryHealth, storageHealth, debloat, systemTools, updates, diagnostics, directWmi, runAtStartup);
     }
 
 #if WINDOWS

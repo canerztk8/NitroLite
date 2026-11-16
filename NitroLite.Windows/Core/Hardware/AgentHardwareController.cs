@@ -16,7 +16,7 @@ namespace NitroLite.Core.Hardware;
 /// ungated: they are idempotent, and serialising them would make the telemetry timer wait behind a fan write.
 /// </para>
 /// </summary>
-public sealed class AgentHardwareController : IHardwareController
+public sealed class AgentHardwareController : IHardwareController, ICareCenterTrust
 {
     private readonly AcerAgentClient _agent;
     private readonly CareCenterClient _careCenter;
@@ -40,6 +40,16 @@ public sealed class AgentHardwareController : IHardwareController
     public AcerAgentClient Agent => _agent;
 
     public string BackendName => "AASSvc";
+
+    /// <summary>
+    /// True when the Care Center agent answered with a certificate other than the pinned one. The battery page turns
+    /// this into an explanation and a "trust the new certificate" button, because the alternative is a charge limit
+    /// that silently stopped working after an Acer update.
+    /// </summary>
+    public bool CertificateMismatch => _careCenter.CertificateMismatch;
+
+    /// <inheritdoc />
+    public bool ForgetPinnedCertificate() => _careCenter.ForgetPinnedCertificate();
 
     public bool IsAvailable => _agent.IsConnected;
 

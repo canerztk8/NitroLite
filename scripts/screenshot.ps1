@@ -10,7 +10,7 @@
     Your real settings in %LOCALAPPDATA%\NitroLite are never read or written.
 
     Pages are addressed by AutomationId, not by their visible label, so the same command works in
-    every language: NavModes, NavMonitoring, NavRgb, NavBattery, NavDebloat.
+    every language: NavModes, NavMonitoring, NavLighting, NavBattery, NavTools.
 
     Every capture is downscaled to -MaxWidth (1280px by default) and written as a JPEG, because a
     full-size PNG of a 1325px window is several times larger than anything needed to check layout
@@ -24,7 +24,7 @@
     Capture all five pages.
 
 .PARAMETER Theme
-    light, dark, midnightoled, slatesteel, amberconsole or nordfrost.
+    warmcream (the default, aliased as light), dark, midnightoled, slatesteel, amberconsole or nordfrost.
 
 .PARAMETER Language
     Language code: en, tr, de, es, ru, pt, hi, id.
@@ -61,7 +61,7 @@
     Large scroll increments before each capture.
 
 .PARAMETER Exe
-    Path to NitroLite.exe. Defaults to the Release build, then the Debug build.
+    Path to NitroLite.Desktop.exe. Defaults to the Release build, then the Debug build.
 
 .PARAMETER KeepOpen
     Leave the app running and the data folder in place, for poking at it afterwards.
@@ -75,9 +75,6 @@
 
 .PARAMETER FanCurveFlat
     Turns the curve on with a flat shape at this percentage, so a fixed fan speed can be measured.
-
-.PARAMETER GameFanCurve
-    Ticks the per-game fan curve box on the game profile card, so its editor is captured open.
 
 .PARAMETER Settle
     Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
@@ -97,7 +94,7 @@
 param(
     [string]$Page = 'NavModes',
     [switch]$All,
-    [ValidateSet('light', 'dark', 'midnightoled', 'slatesteel', 'amberconsole', 'nordfrost')][string]$Theme = 'light',
+    [ValidateSet('warmcream', 'light', 'dark', 'midnightoled', 'slatesteel', 'amberconsole', 'nordfrost')][string]$Theme = 'warmcream',
     [string]$Language = 'tr',
     [string]$Out = '',
     [int]$MaxWidth = 1280,
@@ -112,7 +109,6 @@ param(
     [ValidateRange(0, 4)][int]$MouseProfile,
     [switch]$FanCurve,
     [ValidateRange(30, 100)][int]$FanCurveFlat,
-    [switch]$GameFanCurve,
     [int]$Settle = 0,
     [string]$Seed = ''
 )
@@ -155,17 +151,17 @@ public class Shot {
 # ---- resolve the executable -------------------------------------------------------------------
 if (-not $Exe) {
     $Exe = @(
-        (Join-Path $root 'NitroLite\bin\Release\net10.0-windows\NitroLite.exe'),
-        (Join-Path $root 'NitroLite\bin\Debug\net10.0-windows\NitroLite.exe')
+        (Join-Path $root 'NitroLite.Desktop\bin\Release\net10.0-windows\NitroLite.Desktop.exe'),
+        (Join-Path $root 'NitroLite.Desktop\bin\Debug\net10.0-windows\NitroLite.Desktop.exe')
     ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if (-not $Exe) { throw 'NitroLite.exe not found. Build it first, or pass -Exe.' }
+    if (-not $Exe) { throw 'NitroLite.Desktop.exe not found. Build it first, or pass -Exe.' }
 }
 if (-not (Test-Path $Exe)) { throw "Not found: $Exe" }
 
 # ---- the single-instance mutex is machine-wide, so a running copy has to go --------------------
-$running = Get-Process NitroLite -ErrorAction SilentlyContinue
+$running = Get-Process NitroLite.Desktop -ErrorAction SilentlyContinue
 if ($running) {
-    Write-Host "Stopping the running NitroLite (the single-instance mutex would swallow the test copy)." -ForegroundColor Yellow
+    Write-Host "Stopping the running NitroLite.Desktop (the single-instance mutex would swallow the test copy)." -ForegroundColor Yellow
     $running | Stop-Process -Force
     Start-Sleep -Milliseconds 1200
 }
@@ -179,7 +175,8 @@ if ($Seed) {
 }
 # The palette is stored by name, so the capture script names it rather than numbering it.
 $themeValue = switch ($Theme) {
-    'light' { 'Light' }
+    'warmcream' { 'WarmCream' }
+    'light' { 'WarmCream' }
     'dark' { 'Dark' }
     'midnightoled' { 'MidnightOled' }
     'slatesteel' { 'SlateSteel' }
@@ -217,7 +214,7 @@ $jpegCodec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
     Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
 if ($Format -ne 'png' -and -not $jpegCodec) { throw 'No JPEG encoder is available; pass -Format png.' }
 
-$pages = if ($All) { @('NavModes', 'NavMonitoring', 'NavRgb', 'NavBattery', 'NavDebloat') } else { @($Page) }
+$pages = if ($All) { @('NavModes', 'NavMonitoring', 'NavLighting', 'NavBattery', 'NavTools') } else { @($Page) }
 
 # ---- launch -----------------------------------------------------------------------------------
 $env:NITROLITE_DATA_DIR = $dataDir
@@ -327,20 +324,6 @@ foreach ($pageId in $pages) {
     }
     $nav.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 1400
-
-    # Toggled before scrolling: opening the panel makes the page taller, so the scroll has to see the final layout.
-    if ($GameFanCurve) {
-        $chkCond = New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ChkGameFanCurve')
-        $chk = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $chkCond)
-        if ($chk) {
-            $tp = $chk.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
-            if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
-            Start-Sleep -Milliseconds 500
-        } else {
-            Write-Host "  ChkGameFanCurve not found" -ForegroundColor Yellow
-        }
-    }
 
     if ($Scrolls -ne 0) {
         $scrollCond = New-Object System.Windows.Automation.PropertyCondition(

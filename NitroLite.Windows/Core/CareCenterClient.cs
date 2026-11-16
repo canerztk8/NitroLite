@@ -44,18 +44,23 @@ public class CareCenterClient
     /// </summary>
     public bool CertificateMismatch { get; private set; }
 
-    /// <summary>Drops the stored thumbprint so the next connection trusts whatever the agent presents.</summary>
-    public void ForgetPinnedCertificate()
+    /// <summary>
+    /// Drops the stored thumbprint so the next connection trusts whatever the agent presents. Returns false when the
+    /// pin file could not be removed, which is what a read-only data folder does.
+    /// </summary>
+    public bool ForgetPinnedCertificate()
     {
         CertificateMismatch = false;
         try
         {
             var path = AppPaths.GetDataFile(CertificatePinFile);
             if (File.Exists(path)) File.Delete(path);
+            return true;
         }
         catch (Exception ex)
         {
             AppLog.Warn("Care Center sertifika sabitlemesi silinemedi", ex.Message);
+            return false;
         }
     }
 

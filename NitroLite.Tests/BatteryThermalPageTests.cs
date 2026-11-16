@@ -1,4 +1,9 @@
-﻿using NitroLite.Core;
+﻿using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using NitroLite.Core;
+using NitroLite.Desktop.ViewModels;
 using Xunit;
 
 namespace NitroLite.Tests;
@@ -44,5 +49,171 @@ public class BatteryIdentityTests
     public void ChemistryCodesMapToNames(int code, string expected)
     {
         Assert.Equal(expected, BatteryWatchdogService.BatteryChemistryName(code));
+    }
+}
+
+/// <summary>
+/// Phase 3 of the WPF parity pass: the battery and thermal page.
+/// </summary>
+/// <remarks>
+/// The page is a reading, not a control surface, so the assertions are about what it prints from a given snapshot and
+/// about the two settings it owns: the DC profile and the watchdog. Both are written to the settings file, which is
+/// where a restart reads them from.
+/// </remarks>
+public class BatteryThermalPageTests
+{
+    private static MainViewModel Create(
+        AppSettings? settings = null,
+        Phase3Fakes.FakeBattery? battery = null,
+        Phase3Fakes.FakeStorage? storage = null,
+        Phase3Fakes.StubHardware? hardware = null,
+        string? path = null) =>
+        new(settings ?? new AppSettings(),
+            hardware,
+            null,
+            path ?? Phase3Fakes.TempSettingsPath(),
+            batteryHealth: battery,
+            storageHealth: storage);
+
+    [Fact]
+    public async Task HealthDetails_Rendered()
+    {
+        var battery = new Phase3Fakes.FakeBattery();
+        using var vm = Create(battery: battery, storage: new Phase3Fakes.FakeStorage());
+
+        await vm.InitializeAsync();
+
+        Assert.True(vm.BatteryHealthAvailable);
+        Assert.True(vm.BatteryCapacityAvailable);
+
+        // The four figures on the capacity card, each formatted the way the page formats it.
+        Assert.Contains("92", vm.BatteryHealthText);
+        Assert.Contains("8", vm.BatteryWearText);
+        Assert.Contains("82", vm.BatteryFullChargeText);
+        Assert.Contains("15", vm.BatteryVoltageText);
+
+        // The cycle count is only printed when the firmware reported one.
+        Assert.True(vm.HasBatteryCycle);
+        Assert.Contains("143", vm.BatteryCycleText);
+
+        // The drive list is the storage card, and both entries carry a letter tag.
+        Assert.True(vm.StorageAvailable);
+        Assert.Equal(2, vm.StorageDrives.Count);
+        Assert.Equal("[C:]", vm.StorageDrives[0].LetterTag);
+        Assert.Equal("[D:]", vm.StorageDrives[1].LetterTag);
+        Assert.False(vm.HasNoStorageDrives);
+    }
+
+    [Fact]
+    public async Task WearTrend_Records()
+    {
+        var battery = new Phase3Fakes.FakeBattery();
+        battery.SeedWear(6.0, 7.0);
+
+        using var vm = Create(battery: battery);
+        await vm.InitializeAsync();
+
+        // Two seeded readings plus the one the first read records: three a week apart is a trend, so the chart is drawn
+        // and the summary names the change.
+        Assert.True(vm.ShowWearTrendChart);
+        Assert.True(vm.HasWearHistory);
+        Assert.Equal(3, vm.WearTrendPoints.Count);
+        Assert.Equal(8.0, vm.WearTrendPoints[^1]);
+        Assert.NotEmpty(vm.WearTrendSummary);
+        Assert.NotEmpty(vm.WearTrendFirstDate);
+        Assert.NotEmpty(vm.WearTrendLastDate);
+
+        // Clearing the history empties the chart and hides it again. The command is fire-and-forget by design, so the
+        // assertion waits for the effect rather than for the call.
+        vm.ClearWearHistoryCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => battery.Clears == 1);
+        Assert.Equal(1, battery.Clears);
+        Assert.False(vm.ShowWearTrendChart);
+        Assert.False(vm.HasWearHistory);
+        Assert.Empty(vm.WearTrendPoints);
+    }
+
+    [Fact]
+    public async Task Overcharge_Warns()
+    {
+        var battery = new Phase3Fakes.FakeBattery();
+        battery.Snapshot = new BatteryHealthSnapshot
+        {
+            Status = new BatteryStatusInfo
+            {
+                BatteryPercent = 84,
+                IsPluggedIn = true,
+                IsCharging = false,
+                IsOvercharged = true
+            },
+            Details = battery.Snapshot.Details
+        };
+
+        using var vm = Create(battery: battery);
+        await vm.InitializeAsync();
+
+        Assert.True(vm.ShowOverchargeBanner);
+        Assert.Contains("84", vm.OverchargeMessage);
+
+        // Below the threshold the banner is gone: the watchdog only speaks when the pack is above 80 %. The battery is
+        // read once a minute rather than on every tick, so the test runs the ticks that reach the next read.
+        battery.Snapshot = new BatteryHealthSnapshot
+        {
+            Status = new BatteryStatusInfo { BatteryPercent = 79, IsPluggedIn = true, IsOvercharged = false },
+            Details = battery.Snapshot.Details
+        };
+        for (int i = 0; i < 30; i++) await vm.RefreshTelemetryAsync();
+        Assert.False(vm.ShowOverchargeBanner);
+    }
+
+    [Fact]
+    public async Task DcProfile_Persists()
+    {
+        var path = Phase3Fakes.TempSettingsPath();
+        try
+        {
+            using var vm = Create(path: path);
+            await vm.InitializeAsync();
+
+            // The picker offers both profiles and starts on the one the settings file names, which is Eco by default.
+            Assert.Equal(2, vm.DcProfileChoices.Count);
+            Assert.Equal(DcPowerProfilePreference.Eco, vm.SelectedDcProfile!.Value);
+
+            var balanced = vm.DcProfileChoices.First(c => c.Value == DcPowerProfilePreference.Balanced);
+            vm.SelectedDcProfile = balanced;
+
+            var reloaded = SettingsManager.LoadSettingsWithFallback(path);
+            Assert.Equal(DcPowerProfilePreference.Balanced, reloaded.DcPowerMode);
+        }
+        finally
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Watchdog_Toggles()
+    {
+        var path = Phase3Fakes.TempSettingsPath();
+        try
+        {
+            var battery = new Phase3Fakes.FakeBattery();
+            using var vm = Create(battery: battery, path: path);
+            await vm.InitializeAsync();
+
+            // On by default, and the service is told so on the first read.
+            Assert.True(vm.WatchdogOn);
+            Assert.True(vm.WatchdogAvailable);
+            Assert.True(battery.WatchdogEnabled);
+
+            vm.WatchdogOn = false;
+
+            Assert.False(battery.WatchdogEnabled);
+            Assert.False(SettingsManager.LoadSettingsWithFallback(path).BatteryWatchdogEnabled);
+        }
+        finally
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+        }
     }
 }

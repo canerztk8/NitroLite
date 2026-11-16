@@ -315,6 +315,7 @@ public sealed class ShellLabels
     public string LightingPageTitle => Loc.T("Klavye RGB Aydınlatma Kontrolü");
     public string BatteryPageTitle => Loc.T("Pil Şarj Sınırı ve Sağlığı");
     public string ToolsPageTitle => Loc.T("Sistem Servisleri ve Başlangıç Ayarları");
+    public string ToolsPageSubtitle => Loc.T("Arka plan servisleri, onarım araçları ve başlangıç davranışı");
 
     // ---------------------------------------------------------------- page 1: modes and fans
 
@@ -434,4 +435,167 @@ public sealed class ShellLabels
     public string BacklightTimeoutHint => Loc.T("30 saniye boşta kaldığında aydınlatmayı kapat");
     public string BrightnessLevel(int level, int max) => Loc.T($"Parlaklık: {level} / {max}");
     public string SpeedLevel(int level, int max) => Loc.T($"Efekt Hızı: {level} / {max}");
+
+    // ---------------------------------------------------------------- page 4: the battery and the thermal contract
+
+    public string PowerFlow => Loc.T("Anlık Güç Akışı");
+    public string RemainingTime => Loc.T("Kalan Süre");
+    public string BatteryProtection => Loc.T("Pil Koruması");
+    public string DcProfile => Loc.T("Pilde Çalışma Güç Profili (DC Modu)");
+    public string Watchdog => Loc.T("Pil Bekçisi (Watchdog)");
+    public string WatchdogHint => Loc.T("Pil %80 sınırını aştığında uyarı bandı gösterir; firmware'e yazmaz.");
+    public string CapacityAndWear => Loc.T("Batarya Kapasite ve Aşınma Durumu");
+    public string BatteryHealth => Loc.T("Pil Sağlığı");
+    public string Wear => Loc.T("Aşınma");
+    public string FullCharge => Loc.T("Tam Şarj");
+    public string Voltage => Loc.T("Pil Gerilimi");
+    public string Chemistry => Loc.T("Kimya");
+    public string WearTrend => Loc.T("Aşınma Trendi");
+    public string ComponentTemperatures => Loc.T("Bileşen Sıcaklık Matrisi");
+    public string Disk1 => Loc.T("Disk 1");
+    public string Disk2 => Loc.T("Disk 2");
+    public string BusType => Loc.T("Veri yolu");
+    public string FreeSpace => Loc.T("Boş alan");
+    public string Health => Loc.T("Sağlık");
+    public string StorageDrives => Loc.T("Depolama Sürücüleri");
+    public string NoStorageDrives => Loc.T("Depolama bilgisi okunamadı.");
+
+    public string OnAdapter => Loc.T("Adaptörde");
+    public string OnAdapterCharging => Loc.T("Adaptörde · şarj oluyor");
+    public string OnAdapterHeld => Loc.T("Adaptörde · sınırda bekliyor");
+    public string OnAdapterIdle => Loc.T("Adaptörde · şarj tamam");
+    public string Discharging => Loc.T("Deşarj");
+    public string Charging => Loc.T("Şarj");
+    public string RemainingUnknown => Loc.T("Hesaplanıyor…");
+    public string OverchargeMessage(int percent) =>
+        Loc.T($"Pil %{percent} seviyesinde ve şarj sınırı kapalı. Pil ömrü için %80 sınırını açın.");
+
+    public string CapacityUnreadable => Loc.T("Kapasite okunamadı");
+    public string HealthGood => Loc.T("İyi");
+    public string HealthWorn => Loc.T("Aşınmış");
+    public string HealthReplace => Loc.T("Değiştirilmeli");
+    public string WearLow => Loc.T("Düşük aşınma");
+    public string WearMedium => Loc.T("Orta aşınma");
+    public string WearHigh => Loc.T("Yüksek aşınma");
+    public string FactoryCapacity(string value) => Loc.T($"Fabrika {value}");
+    public string CycleCount(int cycles) => Loc.T($"Döngü: {cycles}");
+    public string Lithium => Loc.T("Lityum");
+    public string CellCountFromVoltage(int cells) => Loc.T($"{cells} hücre (gerilimden)");
+    public string Battery => Loc.T("Pil");
+
+    public string WearNoSamples => Loc.T("Henüz ölçüm yok");
+    public string WearOneSample => Loc.T("Tek ölçüm var");
+    public string WearFirstSample(string date, double wear) => Loc.T($"İlk ölçüm {date}: %{wear:F1} aşınma");
+    public string WearChangeSummary(int days, string change) => Loc.T($"{days} günde {change} puan");
+    public string WearNeedsAWeek => Loc.T("Eğilim için en az bir hafta ölçüm gerekir.");
+    public string WearRecalibrated => Loc.T("Pil yeniden kalibre olmuş; aşınma azalmış görünüyor.");
+    public string WearPerYear(double perYear) => Loc.T($"Yılda yaklaşık %{perYear:F1}");
+    public string ClearHistory => Loc.T("Geçmişi sil");
+    public string ClearHistoryConfirm => Loc.T("Pil aşınma geçmişi silinsin mi? Bu işlem geri alınamaz.");
+    public string ClearHistoryFailed => Loc.T("Pil geçmişi silinemedi.");
+    public string ClearHistoryDone => Loc.T("Pil aşınma geçmişi silindi.");
+
+    public string RetrustCertificate => Loc.T("Yeni sertifikaya güven");
+    public string RetrustCertificateNote => Loc.T("Acer Care Center'in sertifikası değişmiş; bağlantı güvenlik için reddedildi. Acer güncellemesinden sonra bu normaldir.");
+    public string RetrustCertificateDone => Loc.T("Sertifika sabitlemesi sıfırlandı; şarj sınırı yeniden okunuyor.");
+    public string RetrustCertificateFailed => Loc.T("Sertifika sabitlemesi silinemedi; veri klasörü yazılamıyor olabilir.");
+
+    // ---------------------------------------------------------------- page 5: the services and the tools
+
+    public string Running => Loc.T("Çalışıyor");
+    public string Stopped => Loc.T("Durdu");
+    public string AcerServices => Loc.T("Acer arka plan servisleri");
+    public string AcerServicesHint => Loc.T("NitroLite'ın kullanmadığı güncelleme ve telemetri servisleri. Acer ajanı ve aydınlatma servisi korunur.");
+    public string DisableServices => Loc.T("Devre Dışı Bırak");
+    public string DisableServicesConfirm => Loc.T("Acer arka plan servisleri devre dışı bırakılsın mı? Bu işlem geri alınabilir.");
+    public string ServicesDisabled => Loc.T("Acer arka plan servisleri devre dışı bırakıldı.");
+    public string ServicesFailed(string error) => Loc.T($"Servis işlemi başarısız: {error}");
+    public string UnknownError => Loc.T("Bilinmeyen hata");
+    public string RestoreServices => Loc.T("Servisleri Geri Yükle");
+    public string RestoreServicesConfirm => Loc.T("Acer servisleri eski başlangıç türlerine döndürülsün mü?");
+    public string ServicesRestored => Loc.T("Acer servisleri geri yüklendi.");
+    public string NitroSense => Loc.T("NitroSense");
+    public string KillNitroSense => Loc.T("NitroSense'i Kapat");
+    public string KillNitroSenseConfirm => Loc.T("NitroSense ve yardımcı süreçleri kapatılsın mı?");
+    public string NitroSenseAlreadyClosed => Loc.T("NitroSense zaten kapalı.");
+    public string NitroSenseClosed => Loc.T("NitroSense kapatıldı.");
+    public string NitroSenseCloseFailed => Loc.T("NitroSense kapatılamadı.");
+    public string NoAcerServices => Loc.T("Yüklü Acer arka plan servisi bulunamadı.");
+
+    public string RepairTools => Loc.T("Sistem ve Donanım Onarım Araçları");
+    public string RepairToolsHint => Loc.T("Servis kayıtlarını ve MUX değerini yeniden yazar; hiçbiri donanım ayarını değiştirmez.");
+    public string RepairConfirm => Loc.T("Bu onarım aracı çalıştırılsın mı?");
+    public string RepairRunning => Loc.T("Onarım çalışıyor…");
+    public string RepairFailed(string error) => Loc.T($"Onarım başarısız: {error}");
+    public string FixLighting => Loc.T("Klavye RGB Servisini Onar");
+    public string FixAcerServices => Loc.T("Acer & NitroSense Servislerini Onar");
+    public string RestoreMux => Loc.T("MUX Switch Kaydını Onar");
+    public string WindowsOptimization => Loc.T("Windows & Sistem Optimizasyonu");
+    public string Optimize => Loc.T("Optimize Et");
+    public string RestoreOptimize => Loc.T("Geri Al");
+    public string DirectWmi => Loc.T("Doğrudan WMI arka ucu");
+    public string StartCheck => Loc.T("Kontrolü başlat");
+    public string DirectWmiStarted => Loc.T("Doğrudan WMI arka ucu başlatıldı.");
+    public string DirectWmiDeclined => Loc.T("Yönetici izni verilmedi; Acer servisi kullanılıyor.");
+    public string DirectWmiFailed(string error) => Loc.T($"Doğrudan WMI başlatılamadı: {error}");
+
+    public string StartupAndIntegration => Loc.T("Başlangıç ve Entegrasyon");
+    public string RunAtStartup => Loc.T("Windows açılışında otomatik çalıştır");
+    public string RunAtStartupHint => Loc.T("Kullanıcı kaydına yazılır; yönetici izni istemez.");
+    public string StartMinimized => Loc.T("Windows açılışında tepside başlat");
+    public string StartMinimizedHint => Loc.T("Pencere açılmaz; uygulama doğrudan sistem tepsisinde başlar.");
+    public string AtkMouseIntegration => Loc.T("ATK Fare Entegrasyonu");
+    public string AtkMouseIntegrationHint => Loc.T("Kapalıyken fare profili satırı ve kartları gizlenir.");
+
+    public string UpdatesAndDiagnostics => Loc.T("Güncelleme, Teşhis ve Yedekleme");
+    public string AutoUpdateCheck => Loc.T("Güncellemeleri otomatik denetle");
+    public string Version => Loc.T("Sürüm");
+    public string CheckNow => Loc.T("Şimdi denetle");
+    public string Update => Loc.T("Güncelle");
+    public string ReleaseNotes => Loc.T("Sürüm Notları");
+    public string UpdateCurrent => Loc.T("Sürüm güncel.");
+    public string UpdateFound(string version) => Loc.T($"Yeni sürüm: {version}");
+    public string UpdateManual => Loc.T("Bu derleme kendini güncelleyemez; sürüm sayfası açıldı.");
+    public string UpdateDownloading => Loc.T("Güncelleme indiriliyor…");
+    public string UpdateTo(string version) => Loc.T($"{version} sürümüne güncelle");
+    public string BugReportTitle => Loc.T("NitroLite hata bildirimi");
+    public string BugReportFailed(string error) => Loc.T($"Hata bildirimi açılamadı: {error}");
+    public string ReportBug => Loc.T("Hata bildir");
+    public string OpenLogs => Loc.T("Günlük klasörünü aç");
+    public string ExportReport => Loc.T("Raporu dışa aktar");
+    public string ReportNotReady => Loc.T("Donanım raporu henüz hazır değil.");
+    public string ReportExported(string name) => Loc.T($"Rapor kaydedildi: {name}");
+    public string ReportExportFailed(string error) => Loc.T($"Rapor kaydedilemedi: {error}");
+    public string CreateBundle => Loc.T("Paketi oluştur");
+    public string LastBundle(string name) => Loc.T($"Son paket: {name}");
+    public string BundleCreated(string name) => Loc.T($"Teşhis paketi oluşturuldu: {name}");
+    public string BundleFailed(string error) => Loc.T($"Teşhis paketi oluşturulamadı: {error}");
+    public string Backup => Loc.T("Yedekleme");
+    public string CreateBackup => Loc.T("Yedekle");
+    public string BackupSaved(string name) => Loc.T($"Yedek kaydedildi: {name}");
+    public string BackupFailed => Loc.T("Yedek oluşturulamadı.");
+    public string BackupFailedDetail(string error) => Loc.T($"Yedek oluşturulamadı: {error}");
+    public string RestoreBackup => Loc.T("Geri yükle");
+    public string RestoreBackupConfirm => Loc.T("Yedek geri yüklensin mi? Geçerli ayarların üzerine yazılır.");
+    public string BackupRestored => Loc.T("Yedek geri yüklendi. Değişiklikler için uygulamayı yeniden başlatın.");
+    public string BackupRestoreFailed => Loc.T("Yedek geri yüklenemedi.");
+    public string BackupRestoreFailedDetail(string error) => Loc.T($"Yedek geri yüklenemedi: {error}");
+    public string LinkFailed(string error) => Loc.T($"Bağlantı açılamadı: {error}");
+
+    // ---------------------------------------------------------------- the first-run walkthrough
+
+    public string OnboardingStepFormat(int step, int total) => Loc.T($"Adım {step} / {total}");
+    public string OnboardingHardwareTitle => Loc.T("Donanımınız");
+    public string OnboardingHardwareBody => Loc.T("Bu makinede bulunan Acer düğümleri ve desteklenen özellikler aşağıda listelendi. Desteklenmeyen satırlar gizlenir.");
+    public string OnboardingProfileTitle => Loc.T("Profil");
+    public string OnboardingProfileBody => Loc.T("Önerilen başlangıç profili: Dengeli mod, otomatik fan ve %80 şarj sınırı. Tamamla dediğinizde bu ayarlar uygulanır.");
+    public string OnboardingStartupTitle => Loc.T("Başlangıç");
+    public string OnboardingStartupBody => Loc.T("NitroLite'ın Windows açılışında yönetici yetkisiyle, UAC sormadan başlamasını istiyor musunuz?");
+    public string OnboardingRecommended => Loc.T("Dengeli · Otomatik fan · %80 şarj sınırı");
+    public string OnboardingSkip => Loc.T("Atla");
+    public string OnboardingBack => Loc.T("Geri");
+    public string OnboardingNext => Loc.T("İleri");
+    public string OnboardingFinish => Loc.T("Tamamla");
+    public string OnboardingSection => Loc.T("İlk Kurulum");
+    public string OnboardingReopen => Loc.T("İlk kurulum sihirbazını yeniden aç");
 }

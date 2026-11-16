@@ -103,6 +103,9 @@ public class WpfParityPhase1Tests
     {
         public string? PickResult { get; set; }
 
+        /// <summary>What the save dialog answers. Null means the user cancelled.</summary>
+        public string? SaveResult { get; set; }
+
         public bool ConfirmResult { get; set; }
 
         public int ConfirmCalls { get; private set; }
@@ -111,6 +114,13 @@ public class WpfParityPhase1Tests
 
         public Task<string?> PickExecutableAsync(string? startDirectory = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(PickResult);
+
+        public Task<string?> PickFileAsync(string title, string? extension = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(PickResult);
+
+        public Task<string?> SaveFileAsync(
+            string title, string suggestedName, string? extension = null, CancellationToken cancellationToken = default) =>
+            Task.FromResult(SaveResult);
 
         public Task<bool> ConfirmAsync(string title, string message, CancellationToken cancellationToken = default)
         {
@@ -176,8 +186,10 @@ public class WpfParityPhase1Tests
     [Fact]
     public async Task SystemMouseRow_ShowsProfile()
     {
+        // The row is gated on the integration switch as well as on the hardware: the WPF window hid it unless the user
+        // had turned ATK mouse support on, because four configurations that write nowhere are worse than no row.
         var mouse = new FakeMouse { IsSupported = true, CurrentProfile = 3 };
-        using (var vm = Create(mouseProfiles: mouse))
+        using (var vm = Create(new AppSettings { AtkMouseIntegrationEnabled = true }, mouseProfiles: mouse))
         {
             await vm.InitializeAsync();
 
@@ -186,10 +198,18 @@ public class WpfParityPhase1Tests
             Assert.Equal("Config 3", vm.SystemMouseText);
         }
 
-        // A laptop with no ATK mouse draws no row at all: four configurations that write nowhere would be worse than
-        // no row.
+        // The same mouse with the switch off draws no row.
+        using (var vm = Create(new AppSettings { AtkMouseIntegrationEnabled = false }, mouseProfiles: mouse))
+        {
+            await vm.InitializeAsync();
+
+            Assert.True(vm.MouseProfileAvailable);
+            Assert.False(vm.ShowSystemMouseRow);
+        }
+
+        // A laptop with no ATK mouse draws no row at all, whatever the switch says.
         var absent = new FakeMouse { IsSupported = false };
-        using (var vm = Create(mouseProfiles: absent))
+        using (var vm = Create(new AppSettings { AtkMouseIntegrationEnabled = true }, mouseProfiles: absent))
         {
             await vm.InitializeAsync();
 

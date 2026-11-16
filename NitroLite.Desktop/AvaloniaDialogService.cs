@@ -72,6 +72,77 @@ public sealed class AvaloniaDialogService : IDialogService
         }
     }
 
+    /// <summary>Asks for any file to read. Returns the chosen path, or null when the user cancelled.</summary>
+    public async Task<string?> PickFileAsync(
+        string title, string? extension = null, CancellationToken cancellationToken = default)
+    {
+        var owner = _owner();
+        if (owner == null) return null;
+
+        var storage = owner.StorageProvider;
+        if (storage == null || !storage.CanOpen) return null;
+
+        try
+        {
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = title,
+                AllowMultiple = false,
+                FileTypeFilter = BuildFilter(extension)
+            }).ConfigureAwait(true);
+
+            var file = files.Count > 0 ? files[0] : null;
+            return file?.TryGetLocalPath();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Dosya seçici açılamadı", ex.ToString());
+            return null;
+        }
+    }
+
+    /// <summary>Asks where to write a file. Returns the chosen path, or null when the user cancelled.</summary>
+    public async Task<string?> SaveFileAsync(
+        string title, string suggestedName, string? extension = null, CancellationToken cancellationToken = default)
+    {
+        var owner = _owner();
+        if (owner == null) return null;
+
+        var storage = owner.StorageProvider;
+        if (storage == null || !storage.CanSave) return null;
+
+        try
+        {
+            var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = title,
+                SuggestedFileName = suggestedName,
+                DefaultExtension = extension,
+                ShowOverwritePrompt = true,
+                FileTypeChoices = BuildFilter(extension)
+            }).ConfigureAwait(true);
+
+            return file?.TryGetLocalPath();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Kaydetme penceresi açılamadı", ex.ToString());
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The filter list for one extension. A null extension offers every file, which is what the restore dialog needs:
+    /// a backup renamed by a mail client still has to be selectable.
+    /// </summary>
+    private static List<FilePickerFileType>? BuildFilter(string? extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension)) return null;
+
+        var pattern = "*." + extension.TrimStart('.');
+        return [new FilePickerFileType(pattern) { Patterns = [pattern] }];
+    }
+
     /// <summary>Asks a yes/no question. Returns true only when the user agreed.</summary>
     public async Task<bool> ConfirmAsync(string title, string message, CancellationToken cancellationToken = default)
     {
