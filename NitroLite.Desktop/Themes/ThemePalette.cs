@@ -172,22 +172,22 @@ public sealed class ThemePalette
     /// </remarks>
     public static ThemePalette WarmCream { get; } = new()
     {
-        Page = Color.Parse("#F5F1E8"),
-        Card = Color.Parse("#FAF8F3"),
-        CardHover = Color.Parse("#F0EBE0"),
-        Panel = Color.Parse("#EFE9DC"),
-        Rail = Color.Parse("#F0EBDF"),
-        CardBorder = Color.Parse("#CCC6BA"),
+        Page = Color.Parse("#F2EDE3"),
+        Card = Color.Parse("#F8F4EB"),
+        CardHover = Color.Parse("#EDE6D8"),
+        Panel = Color.Parse("#E8E0D2"),
+        Rail = Color.Parse("#EAE3D5"),
+        CardBorder = Color.Parse("#CFC4AF"),
         CardBorderStrong = Color.Parse("#B8AB93"),
         TextPrimary = Color.Parse("#1B1917"),
         TextSecondary = Color.Parse("#4A4238"),
         TextMuted = Color.Parse("#6E6558"),
-        Accent = Color.Parse("#D93829"),
-        OnAccent = Color.Parse("#FBF7EF"),
+        Accent = Color.Parse("#C0392B"),
+        OnAccent = Color.Parse("#F7F2E8"),
         Success = Color.Parse("#5F6B3E"),
         Warning = Color.Parse("#B45309"),
         Danger = Color.Parse("#9B2C1F"),
-        ChartFill = Color.Parse("#1AD93829")
+        ChartFill = Color.Parse("#104A4238")
     };
 
     /// <summary>The same paper after dark: warm graphite, bone ink, a lifted vermilion.</summary>

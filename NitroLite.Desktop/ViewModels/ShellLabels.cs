@@ -260,6 +260,7 @@ public sealed class ShellLabels
     public string NowCaption => Loc.T("ŞİMDİ");
     public string HideCaption => Loc.T("GİZLE");
     public string ShowCaption => Loc.T("GÖSTER");
+    public string WaitingForRecording => Loc.T("Kayıt bekleniyor");
     public string PowerModes => Loc.T("Güç Modları");
     public string FanControl => Loc.T("Fan Kontrolü");
     public string FanSegmentCustom => Loc.T("Özel");

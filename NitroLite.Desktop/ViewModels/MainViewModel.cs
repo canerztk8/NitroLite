@@ -41,9 +41,8 @@ public sealed class ModeChoice : ObservableObject
     public string ShortHint { get; init; } = "";
 
     /// <summary>
-    /// Path data for the card's icon, in Avalonia's geometry mini-language. A string rather than a
-    /// <c>Geometry</c> so this file stays free of Avalonia types; the view binds it to <c>PathIcon.Data</c>, which
-    /// converts it.
+    /// The Segoe Fluent codepoint the tile draws. A string rather than a <c>Geometry</c> so this file stays free of
+    /// Avalonia types; the view binds it to a <c>TextBlock</c> in the icon font.
     /// </summary>
     public string Icon { get; }
 
@@ -120,7 +119,7 @@ public sealed class NavTab : ObservableObject
 
     public string Label { get; }
 
-    /// <summary>Path data for the rail icon, in Avalonia's geometry mini-language.</summary>
+    /// <summary>The Segoe Fluent codepoint the rail draws, in the icon font.</summary>
     public string Icon { get; }
 
     public RelayCommand SelectCommand { get; }
@@ -608,18 +607,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SparklineBandToggleText));
             Raise(nameof(SparklineRangeText));
             Raise(nameof(SparklineNowText));
+            Raise(nameof(SparklineEmpty));
             Raise(nameof(SystemGameText));
             Raise(nameof(ActiveZoneText));
             Raise(nameof(ModeBadgeText));
         }
     }
 
-    /// <summary>The last thing that happened, shown in the footer. Never an exception message on its own.</summary>
+    /// <summary>The last thing that happened, printed at the foot of the page. Never an exception message on its own.</summary>
     public string Status
     {
         get => _status;
-        private set => Set(ref _status, value);
+        private set
+        {
+            if (!Set(ref _status, value)) return;
+            Raise(nameof(HasStatus));
+        }
     }
+
+    /// <summary>True while there is something to report, which is what shows the toast.</summary>
+    public bool HasStatus => !string.IsNullOrWhiteSpace(_status);
 
     /// <summary>True once the backend has answered. The window uses it to hide the "no backend" banner.</summary>
     public bool IsReady
@@ -711,23 +718,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void SelectNavTab(NavTab tab) => SelectedTab = tab;
 
-    // 24×24 path data for the rail. A monitor for the monitoring page, a keyboard for the lighting page, a battery for
-    // the battery page and a wrench for the tools page; the mode ladder keeps the bars it already had.
-    private const string NavIconModes =
-        "M4,20 H8 V10 H4 Z M10,20 H14 V4 H10 Z M16,20 H20 V13 H16 Z";
+    // The rail glyphs are the WPF ones: Segoe Fluent codepoints, drawn by the icon font rather than by hand-built path
+    // data. Hand-built paths never quite matched the weight of the rest of the window, and the font is already present
+    // on every Windows install this app targets.
+    private const string NavIconModes = "\uE9D9";
 
-    private const string NavIconMonitoring =
-        "M2,4 H22 V16 H2 Z M4,6 H20 V14 H4 Z M8,19 H16 V21 H8 Z M11,16 H13 V19 H11 Z";
+    private const string NavIconMonitoring = "\uE9D2";
 
-    private const string NavIconLighting =
-        "M2,7 H22 V17 H2 Z M4,9 H7 V11 H4 Z M9,9 H12 V11 H9 Z M14,9 H17 V11 H14 Z M19,9 H20 V11 H19 Z " +
-        "M4,13 H7 V15 H4 Z M9,13 H12 V15 H9 Z M14,13 H17 V15 H14 Z M19,13 H20 V15 H19 Z";
+    private const string NavIconLighting = "\uE765";
 
-    private const string NavIconBattery =
-        "M2,7 H19 V17 H2 Z M21,10 H23 V14 H21 Z M4,9 H16 V15 H4 Z";
+    private const string NavIconBattery = "\uE83F";
 
-    private const string NavIconTools =
-        "M14,2 A5,5 0 1,0 19,9 L22,12 L20,14 L17,11 A5,5 0 0,0 14,2 Z M2,20 L9,13 L11,15 L4,22 Z";
+    private const string NavIconTools = "\uE90F";
 
     /// <summary>
     /// The 60-second band at the top of the modes page. Hiding it is a view preference, not a setting: it is one click
@@ -760,6 +762,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>"ŞİMDİ 62 °C".</summary>
     public string SparklineNowText => $"{Labels.NowCaption} {CpuTemperature} °C";
+
+    /// <summary>
+    /// True until the first sample lands. The band draws a placeholder rather than an empty frame, because a blank
+    /// rectangle at the top of the page reads as a broken chart.
+    /// </summary>
+    public bool SparklineEmpty => _cpuTemperatureHistory.Snapshot().Count == 0;
+
+    public string SparklineEmptyText => Labels.WaitingForRecording;
 
     // ---------------------------------------------------------------- the live system box
 
@@ -1233,6 +1243,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(CpuFanHistory));
         Raise(nameof(GpuFanHistory));
         Raise(nameof(SparklineRangeText));
+        Raise(nameof(SparklineEmpty));
     }
 
     // ---------------------------------------------------------------- operating mode
@@ -1772,6 +1783,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Labels.DeleteProfile,
                 DeleteGameProfile));
         }
+
+        // The quick picker on the modes page opens on the first rule rather than on nothing, so the delete button
+        // beside it is live from the first frame.
+        if (SelectedGameProfile == null || !GameProfiles.Contains(SelectedGameProfile))
+            SelectedGameProfile = GameProfiles.FirstOrDefault();
 
         Raise(nameof(HasGameProfiles));
         Raise(nameof(HasNoGameProfiles));
@@ -2867,11 +2883,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     // 24×24 path data. Bars for the power ladder, a moon for Quiet and a leaf for Eco: the shape says the same thing
     // as the hint. PathIcon stretches each geometry to fill its box, so a single short bar would have been blown up
     // into a solid square; the two ends of the ladder therefore get glyphs that are meant to fill the box.
-    private const string ModeIconQuiet = "M12,3 C7.03,3 3,7.03 3,12 C3,16.97 7.03,21 12,21 C16.97,21 21,16.97 21,12 C21,11.54 20.96,11.08 20.9,10.64 C19.92,12.01 18.32,12.9 16.5,12.9 C13.52,12.9 11.1,10.48 11.1,7.5 C11.1,5.69 11.99,4.08 13.36,3.1 C12.92,3.04 12.46,3 12,3 Z";
-    private const string ModeIconBalanced = "M4,12 H8 V20 H4 Z M10,16 H14 V20 H10 Z";
-    private const string ModeIconPerformance = "M4,8 H8 V20 H4 Z M10,12 H14 V20 H10 Z M16,16 H20 V20 H16 Z";
-    private const string ModeIconTurbo = "M2,4 H6 V20 H2 Z M8,8 H12 V20 H8 Z M14,12 H18 V20 H14 Z M20,16 H24 V20 H20 Z";
-    private const string ModeIconEco = "M20,4 C10,4 4,10 4,20 C14,20 20,14 20,4 Z";
+    // The mode tiles carry the same glyphs the WPF window used: a moon for quiet, a monitor for balanced, a ladder for
+    // performance, a gauge for turbo and a leaf for eco.
+    private const string ModeIconQuiet = "\uE708";
+    private const string ModeIconBalanced = "\uE9D2";
+    private const string ModeIconPerformance = "\uE9D9";
+    private const string ModeIconTurbo = "\uE945";
+    private const string ModeIconEco = "\uE8AB";
 
     private static string ModeIcon(OperatingMode mode) => mode switch
     {

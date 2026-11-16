@@ -6,104 +6,149 @@
              x:DataType="vm:MainViewModel">
 
   <!--
-    Page 4: the battery and the thermal contract. The charge limit is here rather than on the dashboard because it is a
-    battery-lifetime setting, and the curve editor is here because the curve is what enforces the safety floors.
+    Page 4: the battery and the thermal contract. The WPF page put the charge state on the left and School Mode on the
+    right, then the capacity card, then the component temperatures. The charge limit is here rather than on the
+    dashboard because it is a battery-lifetime setting, and the curve editor is here because the curve is what enforces
+    the safety floors.
   -->
-  <ScrollViewer>
-    <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="0,0,0,16" Spacing="12">
+  <ScrollViewer VerticalScrollBarVisibility="Hidden">
+    <StackPanel>
 
-      <TextBlock Classes="pagetitle" Text="{Binding Labels.BatteryPageTitle}" />
+      <TextBlock Classes="pagetitle" Text="{Binding Labels.BatteryPageTitle}" Margin="0,0,0,14" />
 
-      <!-- ============================================================ battery -->
+      <!-- ============================================================ charge state and School Mode -->
 
-      <Border Classes="card">
-        <StackPanel Spacing="9">
-          <TextBlock Classes="section" Text="{Binding Labels.BatteryStatus}" />
+      <Grid ColumnDefinitions="*,14,Auto" Margin="0,0,0,14">
 
-          <Grid ColumnDefinitions="Auto,*">
-            <TextBlock Classes="figurebig" Text="{Binding BatteryPercentText}" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" Spacing="2" Margin="16,0,0,0" VerticalAlignment="Center">
-              <TextBlock Classes="caps" Text="{Binding Labels.BatteryCaption}" />
-              <TextBlock Classes="rowtitle" Text="{Binding BatteryStateText}" />
+        <Border Grid.Column="0" Classes="card">
+          <StackPanel>
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.BatteryStatus}" Margin="0,0,0,8" />
+
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding BatteryPercentText}" FontSize="26" FontWeight="Bold"
+                         Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding BatteryStateText}" FontSize="12" Margin="12,0,0,0"
+                         Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
             </StackPanel>
-          </Grid>
 
-          <ProgressBar Classes="fanbar" Minimum="0" Maximum="100" Value="{Binding BatteryBarPercent}" />
+            <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding BatteryBarPercent}"
+                         Margin="0,8,0,0" />
 
-          <!-- The charge limit. Hidden on a machine whose firmware has no such node, rather than shown as a switch
-               that would write nowhere. -->
-          <Border Classes="panel" IsVisible="{Binding BatteryLimitAvailable}">
-            <StackPanel Spacing="4">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="rowtitle" Text="{Binding Labels.BatteryLimit}" VerticalAlignment="Center" />
-                <ToggleSwitch Grid.Column="1" IsChecked="{Binding BatteryLimitOn}" />
-              </Grid>
-              <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimitHint}" />
+            <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,12,0,10" />
+
+            <!-- The charge limit. Hidden on a machine whose firmware has no such node, rather than shown as a switch
+                 that would write nowhere. -->
+            <StackPanel IsVisible="{Binding BatteryLimitAvailable}">
+              <StackPanel Orientation="Horizontal">
+                <ToggleButton Classes="toggle" IsChecked="{Binding BatteryLimitOn}" VerticalAlignment="Center" />
+                <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimit}" Margin="8,0,0,0" />
+              </StackPanel>
+              <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimitHint}" Margin="0,6,0,0" />
             </StackPanel>
-          </Border>
-        </StackPanel>
-      </Border>
+
+            <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,12,0,10"
+                    IsVisible="{Binding AutoRefreshRateAvailable}" />
+
+            <StackPanel IsVisible="{Binding AutoRefreshRateAvailable}">
+              <StackPanel Orientation="Horizontal">
+                <ToggleButton Classes="toggle" IsChecked="{Binding AutoRefreshRateOnBattery}"
+                              VerticalAlignment="Center" />
+                <TextBlock Classes="hint" Text="{Binding Labels.AutoRefreshRate}" Margin="8,0,0,0" />
+              </StackPanel>
+              <TextBlock Classes="hint" Text="{Binding RefreshRateStatus}" Margin="0,6,0,0"
+                         IsVisible="{Binding HasRefreshRateStatus}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="2" Classes="card" Width="360" VerticalAlignment="Top">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.SchoolMode}" VerticalAlignment="Center" />
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.SchoolModeHint}">
+                  <TextBlock Text="?" />
+                </Border>
+              </StackPanel>
+              <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding SchoolModeOn}"
+                            VerticalAlignment="Center" IsEnabled="{Binding SchoolModeAvailable}" />
+            </Grid>
+
+            <TextBlock Classes="hint" Text="{Binding SchoolModeDetail}" Margin="0,8,0,0"
+                       IsVisible="{Binding HasSchoolModeDetail}" />
+          </StackPanel>
+        </Border>
+      </Grid>
 
       <!-- ============================================================ the thermal contract -->
 
-      <Border Classes="card">
-        <StackPanel Spacing="9">
-          <TextBlock Classes="section" Text="{Binding Labels.ThermalSafety}" />
+      <Border Classes="card" Margin="0,0,0,14">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Classes="cardicon" Text="&#xE9D9;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.ThermalSafety}" />
+          </StackPanel>
 
           <Border Classes="panel">
             <TextBlock Classes="figure" Text="{Binding ThermalFloorSummary}" TextWrapping="Wrap" />
           </Border>
 
-          <TextBlock Classes="hint" Text="{Binding Labels.ThermalSafetyHint}" />
+          <TextBlock Classes="hint" Text="{Binding Labels.ThermalSafetyHint}" Margin="0,8,0,0" />
         </StackPanel>
       </Border>
 
       <!-- ============================================================ the curve -->
 
       <Border Classes="card">
-        <StackPanel Spacing="9">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="section" Text="{Binding Labels.FanCurveEditor}" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="figure" FontSize="11" Text="{Binding CurvePreview}"
-                       VerticalAlignment="Center" />
+        <StackPanel>
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="cardicon" Text="&#xE9D9;" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <TextBlock Classes="section" Text="{Binding Labels.FanCurveEditor}" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Classes="figure" FontSize="11" Text="{Binding CurvePreview}"
+                       Foreground="{DynamicResource TextSecondaryBrush}" />
           </Grid>
 
           <Grid ColumnDefinitions="*,*">
-            <controls:FanCurvePreview Height="190"
-                                      Points="{Binding CurvePoints}"
-                                      CurrentTemperature="{Binding CurrentTemperature}"
-                                      SurfaceBrush="{DynamicResource CardBrush}"
-                                      BandBrush="{DynamicResource DangerSoftBrush}"
-                                      CurveBrush="{DynamicResource AccentBrush}"
-                                      MarkerBrush="{DynamicResource WarningBrush}"
-                                      GridBrush="{DynamicResource CardBorderBrush}"
-                                      TextBrush="{DynamicResource TextMutedBrush}"
-                                      FloorBrush="{DynamicResource DangerBrush}" />
+            <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                    Background="{DynamicResource PanelBrush}">
+              <controls:FanCurvePreview Height="190"
+                                        Points="{Binding CurvePoints}"
+                                        CurrentTemperature="{Binding CurrentTemperature}"
+                                        SurfaceBrush="{DynamicResource PanelBrush}"
+                                        BandBrush="{DynamicResource DangerSoftBrush}"
+                                        CurveBrush="{DynamicResource TextPrimaryBrush}"
+                                        MarkerBrush="{DynamicResource AccentBrush}"
+                                        GridBrush="{DynamicResource CardBorderBrush}"
+                                        TextBrush="{DynamicResource TextMutedBrush}"
+                                        FloorBrush="{DynamicResource DangerBrush}" />
+            </Border>
 
-            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="1">
+            <StackPanel Grid.Column="1" Margin="14,0,0,0">
               <ItemsControl ItemsSource="{Binding CurveAnchors}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:CurveAnchorViewModel">
-                    <DockPanel Margin="0,1">
-                      <TextBlock DockPanel.Dock="Left" Width="46" Classes="hint" Text="{Binding Label}" />
-                      <TextBlock DockPanel.Dock="Right" Width="40" Classes="figure" FontSize="11"
-                                 TextAlignment="Right" Text="{Binding EffectiveText}" />
-                      <Slider Minimum="30" Maximum="100" Margin="8,0,8,0" MinWidth="50"
-                              TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding Percent}" />
-                    </DockPanel>
+                    <Grid ColumnDefinitions="34,*,42" Margin="0,0,0,6">
+                      <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding Label}"
+                                 Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                      <Slider Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
+                              IsSnapToTickEnabled="True" Value="{Binding Percent}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Classes="figure" FontSize="11" Text="{Binding EffectiveText}"
+                                 HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </StackPanel>
           </Grid>
 
-          <StackPanel Orientation="Horizontal" Spacing="10">
+          <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
             <Button Classes="primary" Content="{Binding Labels.ApplyCurve}"
                     Command="{Binding ApplyCurveCommand}" />
           </StackPanel>
         </StackPanel>
       </Border>
-
     </StackPanel>
   </ScrollViewer>
 </UserControl>

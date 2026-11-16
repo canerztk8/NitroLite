@@ -5,189 +5,239 @@
         x:Class="NitroLite.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="{Binding Labels.AppTitle}"
-        Width="1180"
-        Height="820"
-        MinWidth="1000"
-        MinHeight="680"
+        Width="1060"
+        Height="730"
+        MinWidth="1060"
+        MinHeight="730"
         WindowStartupLocation="CenterScreen"
         SystemDecorations="None"
-        ExtendClientAreaToDecorationsHint="False">
+        ExtendClientAreaToDecorationsHint="False"
+        Background="{DynamicResource PageBrush}">
 
   <!--
-    The shell, laid out like the WPF window it replaces: a 44px printed header, a 225px rail, and the page.
+    The shell, measured against the WPF window it replaces: a 44px printed header, a 215px rail, and the page inset
+    26/20. The window is 1060x730 and refuses to go smaller, because that is the size at which the five pages were
+    laid out and every card still fits without a scrollbar.
 
-    The rail is a list of buttons rather than a TabControl so the selected marker, the icon and the label are one
-    control, and so the live SİSTEM card can sit under the list without being a page of its own.
+    The rail is a list of buttons rather than a TabControl so the marker, the glyph and the label are one control, and
+    so the live SİSTEM card can sit under the list without being a page of its own.
   -->
-  <Grid RowDefinitions="44,*,Auto">
+  <Border Background="{DynamicResource PageBrush}"
+          BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+    <Grid RowDefinitions="44,*">
 
-    <!-- ============================================================ title bar -->
+      <!-- ============================================================ title bar -->
 
-    <Border Grid.Row="0" Classes="bar" BorderThickness="0,0,0,1" Padding="18,0"
-            PointerPressed="OnCaptionPressed">
-      <Grid ColumnDefinitions="Auto,*,Auto">
+      <Border Grid.Row="0" Background="{DynamicResource PageBrush}"
+              BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,0,1"
+              PointerPressed="OnCaptionPressed">
+        <Grid Margin="18,0" ColumnDefinitions="Auto,*,Auto">
 
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-          <TextBlock Text="{Binding Labels.AppTitle}" FontSize="13" FontWeight="SemiBold"
-                     VerticalAlignment="Center" />
-          <TextBlock Text="{Binding VersionText}" Classes="caps" VerticalAlignment="Center" />
-        </StackPanel>
-
-        <!-- The live figures are printed, not boxed: they sit on the paper like a printed header. -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="18">
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Labels.BatteryCaption}" Classes="caps" />
-            <TextBlock Text="{Binding BatteryPercentText}" Classes="figure" FontSize="11" />
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Labels.ModeCaption}" Classes="caps" />
-            <TextBlock Text="{Binding ModeBadgeText}" FontSize="11" FontWeight="SemiBold"
-                       Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Labels.AppTitle}" FontSize="13" FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding VersionText}" FontSize="10" Margin="8,0,0,0"
+                       Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
           </StackPanel>
 
-          <!-- The window has no system chrome, so it draws its own three buttons, as the WPF window did. -->
-          <StackPanel Orientation="Horizontal" Spacing="2" Margin="4,0,0,0">
+          <!-- The live figures are printed, not boxed: they sit on the paper like a printed header. -->
+          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,20,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Labels.BatteryCaption}" Classes="caps" Margin="0,0,6,0" />
+              <TextBlock Text="{Binding BatteryPercentText}" Classes="figure" FontSize="11" />
+            </StackPanel>
+
+            <!-- The mode figure doubles as the quickest way to change it: the same list the mode page offers. -->
+            <Button Padding="6,3" Margin="0,0,14,0" Background="Transparent"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                    CornerRadius="2" VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding Labels.ModeCaption}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding Labels.ModeCaption}" Classes="caps" Margin="0,0,6,0" />
+                <TextBlock Text="{Binding ModeBadgeText}" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+              </StackPanel>
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                  <ItemsControl ItemsSource="{Binding Modes}" MinWidth="150">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ModeChoice">
+                        <Button Classes="nav" Command="{Binding SelectCommand}">
+                          <Border Classes="navitem">
+                            <Grid ColumnDefinitions="Auto,*">
+                              <TextBlock Grid.Column="0" Classes="navicon" Text="{Binding Icon}" />
+                              <TextBlock Grid.Column="1" Classes="navlabel" Text="{Binding Label}" />
+                            </Grid>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+
+            <!-- The window has no system chrome, so it draws its own three buttons, as the WPF window did. -->
             <Button Classes="caption" Click="OnMinimizeClick" ToolTip.Tip="{Binding Labels.Minimize}">
-              <PathIcon Data="M0,4.5 H10 V5.5 H0 Z" Width="10" Height="10" />
+              <TextBlock Text="&#x2013;" FontSize="13" Foreground="{DynamicResource TextSecondaryBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
             <Button Classes="caption" Click="OnMaximizeClick" ToolTip.Tip="{Binding Labels.Maximize}">
-              <PathIcon Data="M0,0 H10 V10 H0 Z M1,1 V9 H9 V1 Z" Width="10" Height="10" />
+              <TextBlock Text="&#xE922;" Classes="icon" FontSize="9"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
             <Button Classes="caption close" Click="OnCloseClick" ToolTip.Tip="{Binding Labels.HideToTray}">
-              <PathIcon Data="M0.7,0 L5,4.3 L9.3,0 L10,0.7 L5.7,5 L10,9.3 L9.3,10 L5,5.7 L0.7,10 L0,9.3 L4.3,5 L0,0.7 Z"
-                        Width="10" Height="10" />
+              <TextBlock Text="&#x2715;" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
-          </StackPanel>
-        </StackPanel>
-      </Grid>
-    </Border>
-
-    <!-- ============================================================ rail + page -->
-
-    <Grid Grid.Row="1" ColumnDefinitions="225,*">
-
-      <Border Grid.Column="0" Background="{DynamicResource RailBrush}"
-              BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,1,0"
-              Padding="10,14,10,10">
-        <Grid RowDefinitions="Auto,*,Auto,Auto">
-
-          <StackPanel Grid.Row="0">
-            <TextBlock Text="{Binding Labels.NavCaption}" Classes="caps" Margin="8,0,0,7" />
-
-            <ItemsControl ItemsSource="{Binding NavTabs}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:NavTab">
-                  <Button Classes="nav" Command="{Binding SelectCommand}">
-                    <Border Classes="navitem" Classes.selected="{Binding IsSelected}">
-                      <Grid ColumnDefinitions="12,Auto,*">
-                        <Rectangle Grid.Column="0" Classes="navmark" Classes.selected="{Binding IsSelected}" />
-                        <PathIcon Grid.Column="1" Data="{Binding Icon}" />
-                        <TextBlock Grid.Column="2" Classes="navlabel" Text="{Binding Label}" Margin="9,0,0,0" />
-                      </Grid>
-                    </Border>
-                  </Button>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-
-          <!-- The live readout: a small card on the rail, so the figures read as one block rather than as loose
-               lines under the navigation. It stays put whichever page is showing. -->
-          <Border Grid.Row="2" Background="{DynamicResource CardBrush}"
-                  BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                  CornerRadius="6" Padding="6,7,6,4" Margin="0,0,0,10">
-            <StackPanel>
-              <TextBlock Text="{Binding Labels.SystemCaption}" Classes="caps" Margin="8,0,0,6" />
-
-              <Border Classes="sidestat">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding Labels.Cpu}" Classes="caps" />
-                  <TextBlock Grid.Column="1" Text="{Binding SystemCpuText}" Classes="figure" />
-                </Grid>
-              </Border>
-
-              <Border Classes="sidestat">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding Labels.Gpu}" Classes="caps" />
-                  <TextBlock Grid.Column="1" Text="{Binding SystemGpuText}" Classes="figure" />
-                </Grid>
-              </Border>
-
-              <Border Classes="sidestat">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding Labels.FanCaption}" Classes="caps" />
-                  <TextBlock Grid.Column="1" Text="{Binding SystemFanText}" Classes="figure" />
-                </Grid>
-              </Border>
-
-              <Border Classes="sidestat">
-                <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding Labels.BoostCaption}" Classes="caps" />
-                  <TextBlock Grid.Column="1" Text="{Binding SystemBoostText}" FontSize="11"
-                             FontWeight="SemiBold" VerticalAlignment="Center" />
-                </Grid>
-              </Border>
-
-              <!-- The active game, or the sentence that says there is none. Trimmed rather than wrapped: a long
-                   process name must not push the rail's own layout around. -->
-              <Border Classes="sidestat">
-                <Grid ColumnDefinitions="Auto,*">
-                  <TextBlock Text="{Binding Labels.GameCaption}" Classes="caps" />
-                  <TextBlock Grid.Column="1" Text="{Binding SystemGameText}" FontSize="10"
-                             Foreground="{DynamicResource SuccessBrush}" FontWeight="SemiBold"
-                             HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
-                             Margin="6,0,0,0" VerticalAlignment="Center" />
-                </Grid>
-              </Border>
-            </StackPanel>
-          </Border>
-
-          <!-- The signature sits at the very bottom of the rail, under the readout. -->
-          <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-            <TextBlock Text="&#x2665;" FontSize="10" Foreground="{DynamicResource AccentBrush}"
-                       VerticalAlignment="Center" />
-            <TextBlock Text="{Binding Labels.SignaturePrefix}" FontSize="10"
-                       Foreground="{DynamicResource TextMutedBrush}" Margin="4,0,0,0"
-                       VerticalAlignment="Center" />
-            <TextBlock Text="{Binding Labels.SignatureName}" FontSize="10"
-                       Foreground="{DynamicResource TextSecondaryBrush}" Margin="4,0,0,0"
-                       VerticalAlignment="Center" />
           </StackPanel>
         </Grid>
       </Border>
 
-      <!-- The page. Only this column scrolls, so the rail and the header stay put. -->
-      <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="22,16,22,0">
+      <!-- ============================================================ rail + page -->
 
-        <!-- Standing note while the backend is unreachable. The toast alone is gone after three seconds, and a window
-             whose every hardware control silently does nothing reads as broken. -->
-        <Border Grid.Row="0" IsVisible="{Binding ShowNoBackendBanner}"
-                Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
-                BorderThickness="1" CornerRadius="4" Margin="0,0,0,12">
-          <Grid ColumnDefinitions="3,*">
-            <Border Grid.Column="0" Background="{DynamicResource AccentBrush}" />
-            <StackPanel Grid.Column="1" Margin="12,8,12,9">
-              <TextBlock Text="{Binding Labels.NoBackend}" Classes="caps"
-                         Foreground="{DynamicResource AccentBrush}" />
-              <TextBlock Text="{Binding NoBackendDetail}" Classes="hint" Margin="0,4,0,0" />
+      <Grid Grid.Row="1" ColumnDefinitions="215,*">
+
+        <Border Grid.Column="0" Background="{DynamicResource RailBrush}"
+                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,1,0"
+                Padding="10,16,10,12">
+          <Grid RowDefinitions="Auto,*,Auto,Auto">
+
+            <StackPanel Grid.Row="0">
+              <TextBlock Text="{Binding Labels.NavCaption}" Classes="caps" Margin="10,0,0,8" />
+
+              <ItemsControl ItemsSource="{Binding NavTabs}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:NavTab">
+                    <Button Classes="nav" Command="{Binding SelectCommand}">
+                      <Border Classes="navitem" Classes.selected="{Binding IsSelected}">
+                        <!-- The mark takes 12px, the icon and the label share the rest, exactly as in the WPF rail:
+                             a separate Auto column for the icon would leave the longest label too narrow to fit. -->
+                        <Grid ColumnDefinitions="12,*">
+                          <Rectangle Grid.Column="0" Classes="navmark" Classes.selected="{Binding IsSelected}" />
+                          <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Classes="navicon" Text="{Binding Icon}" />
+                            <TextBlock Classes="navlabel" Text="{Binding Label}" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <!-- The live readout: a small card on the rail, so the figures read as one block rather than as loose
+                 lines under the navigation. It stays put whichever page is showing. -->
+            <Border Grid.Row="2" Background="{DynamicResource CardBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="6,7,6,4" Margin="0,0,0,10">
+              <StackPanel>
+                <TextBlock Text="{Binding Labels.SystemCaption}" Classes="caps" Margin="4,0,0,6" />
+
+                <Border Classes="sidestat">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Labels.Cpu}" Classes="caps" />
+                    <TextBlock Grid.Column="1" Text="{Binding SystemCpuText}" Classes="figure"
+                               HorizontalAlignment="Right" />
+                  </Grid>
+                </Border>
+
+                <Border Classes="sidestat">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Labels.Gpu}" Classes="caps" />
+                    <TextBlock Grid.Column="1" Text="{Binding SystemGpuText}" Classes="figure"
+                               HorizontalAlignment="Right" />
+                  </Grid>
+                </Border>
+
+                <Border Classes="sidestat">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Labels.FanCaption}" Classes="caps" />
+                    <TextBlock Grid.Column="1" Text="{Binding SystemFanText}" Classes="figure"
+                               HorizontalAlignment="Right" />
+                  </Grid>
+                </Border>
+
+                <Border Classes="sidestat">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding Labels.BoostCaption}" Classes="caps" />
+                    <TextBlock Grid.Column="1" Text="{Binding SystemBoostText}" FontSize="11"
+                               FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+
+                <!-- The active game, or the sentence that says there is none. Trimmed rather than wrapped: a long
+                     process name must not push the rail's own layout around. -->
+                <Border Classes="sidestat">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <TextBlock Text="{Binding Labels.GameCaption}" Classes="caps" />
+                    <TextBlock Grid.Column="1" Text="{Binding SystemGameText}" FontSize="11"
+                               Foreground="{DynamicResource SuccessBrush}" FontWeight="SemiBold"
+                               HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                               Margin="6,0,0,0" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <!-- The signature sits at the very bottom of the rail, under the readout. -->
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center"
+                        Margin="10,0,10,10">
+              <TextBlock Text="&#x2665;" FontSize="10" Foreground="{DynamicResource AccentBrush}"
+                         VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Labels.SignaturePrefix}" FontSize="10"
+                         Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Labels.SignatureName}" FontSize="10"
+                         Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
             </StackPanel>
           </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
-          <views:DashboardView IsVisible="{Binding IsModesPage}" />
-          <views:MonitoringView IsVisible="{Binding IsMonitoringPage}" />
-          <views:LightingView IsVisible="{Binding IsLightingPage}" />
-          <views:BatteryView IsVisible="{Binding IsBatteryPage}" />
-          <views:SettingsView IsVisible="{Binding IsToolsPage}" />
+        <!-- The page. Only this column scrolls, so the rail and the header stay put. -->
+        <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="26,20,26,0">
+
+          <!-- Standing note while the backend is unreachable. The toast alone is gone after three seconds, and a
+               window whose every hardware control silently does nothing reads as broken. -->
+          <Border Grid.Row="0" IsVisible="{Binding ShowNoBackendBanner}"
+                  Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                  BorderThickness="1" CornerRadius="2" Margin="0,0,0,14">
+            <Grid ColumnDefinitions="3,*">
+              <Border Grid.Column="0" Background="{DynamicResource AccentBrush}" />
+              <StackPanel Grid.Column="1" Margin="12,9,12,10">
+                <TextBlock Text="{Binding Labels.NoBackend}" Classes="caps"
+                           Foreground="{DynamicResource AccentBrush}" />
+                <TextBlock Text="{Binding NoBackendDetail}" FontSize="11" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="1">
+            <views:DashboardView IsVisible="{Binding IsModesPage}" />
+            <views:MonitoringView IsVisible="{Binding IsMonitoringPage}" />
+            <views:LightingView IsVisible="{Binding IsLightingPage}" />
+            <views:BatteryView IsVisible="{Binding IsBatteryPage}" />
+            <views:SettingsView IsVisible="{Binding IsToolsPage}" />
+
+            <!-- The last thing that happened, printed at the foot of the page the way the WPF window did it. -->
+            <Border IsVisible="{Binding HasStatus}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,24" MaxWidth="720" Padding="16,9"
+                    Background="{DynamicResource CardBrush}"
+                    BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
+                    CornerRadius="4" IsHitTestVisible="False">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#x25CF;" FontSize="13" FontWeight="Bold" Margin="0,0,8,0"
+                           Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Status}" FontSize="12" FontWeight="SemiBold" MaxWidth="640"
+                           TextWrapping="Wrap" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </Grid>
         </Grid>
       </Grid>
     </Grid>
-
-    <!-- ============================================================ status line -->
-
-    <Border Grid.Row="2" Classes="bar" BorderThickness="0,1,0,0" Padding="18,5">
-      <TextBlock Text="{Binding Status}" Classes="hint" />
-    </Border>
-  </Grid>
+  </Border>
 </Window>
