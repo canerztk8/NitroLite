@@ -2912,7 +2912,13 @@
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtCapabilitySummary" Text="" Style="{StaticResource SectionHint}" Margin="0,3,0,0" TextWrapping="Wrap" />
                                             </StackPanel>
-                                            <Button x:Name="BtnRescanHardware" Grid.Column="1" Content="Yeniden tara" Click="BtnRescanHardware_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <!-- Copies a Markdown report to the clipboard, ready to paste into a GitHub
+                                                     issue. Never raises UAC: it reports whatever the current backend already
+                                                     answered, and says "not read" for the rest. -->
+                                                <Button x:Name="BtnCopyHardwareReport" Content="Raporu kopyala" Click="BtnCopyHardwareReport_Click" Margin="0,0,8,0" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" ToolTip="GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez." />
+                                                <Button x:Name="BtnRescanHardware" Content="Yeniden tara" Click="BtnRescanHardware_Click" Background="Transparent" Foreground="{DynamicResource Ink}" BorderBrush="{DynamicResource Rule}" BorderThickness="1" FontWeight="SemiBold" Padding="12,6" Cursor="Hand" FontSize="11" />
+                                            </StackPanel>
                                         </Grid>
 
                                         <Separator Background="{DynamicResource BorderDark}" Margin="0,12,0,12" />

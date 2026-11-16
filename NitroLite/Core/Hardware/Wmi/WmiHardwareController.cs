@@ -37,6 +37,12 @@ public sealed class WmiHardwareController : IHardwareController
     private WmiWorkerClient? _client;
     private bool _disposed;
 
+    /// <summary>Set once the live sensor probe has run, so an unverified layout is only tested once per session.</summary>
+    private bool _sensorProbeDone;
+
+    /// <summary>The layout the live probe confirmed, or null when the machine did not answer plausibly.</summary>
+    private SensorLayout? _discoveredSensors;
+
     /// <summary>
     /// <paramref name="capabilities"/> supplies the probe result. It is a delegate rather than a value because the
     /// user can rescan from the settings page at any time, and a controller holding the snapshot from launch would
@@ -68,6 +74,12 @@ public sealed class WmiHardwareController : IHardwareController
 
     /// <summary>The read-back policy, so the settings page can reset its counters.</summary>
     public ReadBackPolicy ReadBack => _readBack;
+
+    /// <summary>True once the live sensor probe has run in this session, whatever it decided.</summary>
+    public bool SensorProbeRan => _sensorProbeDone;
+
+    /// <summary>The layout the live probe confirmed, or null. Reported so a bug report says what was discovered.</summary>
+    public SensorLayout? DiscoveredSensors => _discoveredSensors;
 
     /// <summary>
     /// Connects on first use. A worker that died is dropped by <see cref="SendAsync"/>, so the next request after a
@@ -112,8 +124,18 @@ public sealed class WmiHardwareController : IHardwareController
             CoolBoost = ReadBool(data, "coolBoost"),
             LcdOverdrive = ReadBool(data, "lcdOverdrive"),
             WinKeyLock = ReadBool(data, "winKeyLock"),
-            SupportedOperatingModes = ReadModes(data)
+            SupportedOperatingModes = ReadModes(data),
+            SupportedModeMask = ReadMask(data)
         };
+    }
+
+    /// <summary>The raw <c>0x0A</c> answer, or null when the worker did not read one.</summary>
+    private static ulong? ReadMask(JsonObject data)
+    {
+        if (data["supportedModeMask"] is not JsonValue node) return null;
+        if (node.TryGetValue<ulong>(out var wide)) return wide;
+        if (node.TryGetValue<long>(out var signed) && signed >= 0) return (ulong)signed;
+        return null;
     }
 
     /// <summary>
@@ -161,6 +183,17 @@ public sealed class WmiHardwareController : IHardwareController
         var snapshot = Snapshot;
         var layout = snapshot?.Sensors ?? SensorLayout.Default;
 
+        // An unverified layout is a guess: the profile table does not name this machine, so nobody has measured which
+        // sensor ids its firmware answers. The first sample doubles as the probe — the ids are queried, the answers
+        // are put through the plausibility window, and only a machine that answered like a machine is trusted with
+        // the tachometer. A failed probe costs nothing: the readings still show, and the stall watchdog stays in
+        // standby instead of judging a real die against a number that was never a speed.
+        if (!layout.Verified && !_sensorProbeDone)
+        {
+            _sensorProbeDone = true;
+            _discoveredSensors = await ProbeSensorsAsync(layout).ConfigureAwait(false);
+        }
+
         var response = await SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
         {
             ["cpuTempSensor"] = layout.CpuTempSensor,
@@ -172,26 +205,70 @@ public sealed class WmiHardwareController : IHardwareController
 
         if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
 
-        return BuildMonitorData(data, layout, snapshot?.MaxCpuFanRpm ?? 0, snapshot?.MaxGpuFanRpm ?? 0);
+        return BuildMonitorData(
+            data, layout, snapshot?.MaxCpuFanRpm ?? 0, snapshot?.MaxGpuFanRpm ?? 0,
+            tachometerConfirmed: layout.Verified || _discoveredSensors != null);
+    }
+
+    /// <summary>
+    /// Asks the firmware for every sensor id in <paramref name="layout"/> and decides whether the answers describe a
+    /// real machine. Returns the confirmed layout, or null when the machine did not answer plausibly.
+    /// </summary>
+    private async Task<SensorLayout?> ProbeSensorsAsync(SensorLayout layout)
+    {
+        var response = await SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
+        {
+            ["cpuTempSensor"] = layout.CpuTempSensor,
+            ["cpuFanRpmSensor"] = layout.CpuFanRpmSensor,
+            ["sys1TempSensor"] = layout.Sys1TempSensor,
+            ["gpuFanRpmSensor"] = layout.GpuFanRpmSensor,
+            ["gpuTempSensor"] = layout.GpuTempSensor
+        }).ConfigureAwait(false);
+
+        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
+        if (data["sensors"] is not JsonObject sensors) return null;
+
+        var answered = new Dictionary<string, int?>(StringComparer.Ordinal)
+        {
+            [SensorDiscovery.CpuTemp] = ReadSensorValue(sensors, SensorDiscovery.CpuTemp),
+            [SensorDiscovery.CpuFanRpm] = ReadSensorValue(sensors, SensorDiscovery.CpuFanRpm),
+            [SensorDiscovery.Sys1Temp] = ReadSensorValue(sensors, SensorDiscovery.Sys1Temp),
+            [SensorDiscovery.GpuFanRpm] = ReadSensorValue(sensors, SensorDiscovery.GpuFanRpm),
+            [SensorDiscovery.GpuTemp] = ReadSensorValue(sensors, SensorDiscovery.GpuTemp)
+        };
+
+        return SensorDiscovery.Resolve(answered, layout);
     }
 
     /// <summary>
     /// Turns one <c>ReadTelemetry</c> answer into a sample. Pure, so the mapping from a firmware answer to a
     /// <see cref="MonitorData"/> can be pinned without a pipe or a worker.
+    /// <para>
+    /// Every reading passes <see cref="SensorPlausibility"/> first. The status byte is the primary gate, but a
+    /// firmware that does not know an id sometimes answers status zero with a sentinel in the value field, and
+    /// publishing that would show a 6553.5 °C die or let the stall watchdog compare a real temperature against a
+    /// number that was never a speed.
+    /// </para>
+    /// <para>
+    /// <paramref name="tachometerConfirmed"/> is what separates "the fan is spinning" from "the firmware answered
+    /// something". It defaults to <see cref="SensorLayout.Verified"/>: a profile nobody measured, and a machine whose
+    /// live sensor probe did not pass, leave the watchdog in standby rather than judging a guess.
+    /// </para>
     /// </summary>
-    public static MonitorData BuildMonitorData(JsonObject data, SensorLayout layout, int maxCpuFanRpm, int maxGpuFanRpm)
+    public static MonitorData BuildMonitorData(
+        JsonObject data, SensorLayout layout, int maxCpuFanRpm, int maxGpuFanRpm, bool? tachometerConfirmed = null)
     {
         var sensors = data["sensors"] as JsonObject;
 
-        int? cpuRpm = layout.Supported ? ReadSensorValue(sensors, "cpuFanRpm") : null;
-        int? gpuRpm = layout.Supported ? ReadSensorValue(sensors, "gpuFanRpm") : null;
-        bool measured = cpuRpm.HasValue && gpuRpm.HasValue;
+        int? cpuRpm = layout.Supported ? PlausibleRpm(ReadSensorValue(sensors, SensorDiscovery.CpuFanRpm)) : null;
+        int? gpuRpm = layout.Supported ? PlausibleRpm(ReadSensorValue(sensors, SensorDiscovery.GpuFanRpm)) : null;
+        bool measured = (tachometerConfirmed ?? layout.Verified) && cpuRpm.HasValue && gpuRpm.HasValue;
 
         return new MonitorData
         {
-            CpuTemperature = layout.Supported ? ReadSensorValue(sensors, "cpuTemp") ?? 0 : 0,
-            GpuTemperature = layout.Supported ? ReadSensorValue(sensors, "gpuTemp") ?? 0 : 0,
-            SysTemperature = layout.Supported ? ReadSensorValue(sensors, "sys1Temp") ?? 0 : 0,
+            CpuTemperature = layout.Supported ? PlausibleTemperature(ReadSensorValue(sensors, SensorDiscovery.CpuTemp)) : 0,
+            GpuTemperature = layout.Supported ? PlausibleTemperature(ReadSensorValue(sensors, SensorDiscovery.GpuTemp)) : 0,
+            SysTemperature = layout.Supported ? PlausibleTemperature(ReadSensorValue(sensors, SensorDiscovery.Sys1Temp)) : 0,
 
             CpuFanSpeed = measured ? cpuRpm!.Value : DeriveRpm(ReadInt(data, "cpuFanPercent") ?? 0, maxCpuFanRpm),
             GpuFanSpeed = measured ? gpuRpm!.Value : DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, maxGpuFanRpm),
@@ -199,6 +276,14 @@ public sealed class WmiHardwareController : IHardwareController
             IsFanRpmMeasured = measured
         };
     }
+
+    /// <summary>A temperature that survived the window, or 0 so the UI renders "-- °C" instead of a wrong number.</summary>
+    private static int PlausibleTemperature(int? value) =>
+        value is int reading && SensorPlausibility.IsPlausibleTemperature(reading) ? reading : 0;
+
+    /// <summary>A fan speed that survived the window, or null so the sample falls back to the derived value.</summary>
+    private static int? PlausibleRpm(int? value) =>
+        value is int reading && SensorPlausibility.IsPlausibleFanRpm(reading) ? reading : null;
 
     /// <summary>
     /// One sensor's reading, or null when the firmware answered a non-zero status or no value at all. The status

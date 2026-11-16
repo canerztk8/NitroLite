@@ -77,6 +77,20 @@ public sealed class ReadBackPolicy
     /// <summary>Keyboard backlight colour through <c>SetGamingRgbKb</c>.</summary>
     public const string KeyboardLighting = "wmi.keyboardLighting";
 
+    /// <summary>
+    /// Every capability this policy tracks, in the order the hardware report lists them. Kept here rather than in the
+    /// report so a new capability cannot be added to the policy and forgotten by the diagnostics.
+    /// </summary>
+    public static IReadOnlyList<string> AllCapabilities { get; } = new[]
+    {
+        FanBehavior,
+        FanSpeed,
+        OperatingMode,
+        MuxMode,
+        BatteryLimit,
+        KeyboardLighting
+    };
+
     private readonly AppSettings _settings;
     private readonly Func<TimeSpan, Task> _delay;
 

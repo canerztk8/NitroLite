@@ -91,6 +91,13 @@ public sealed record CapabilitySnapshot
     /// <summary>The WMI schema answer, kept so the hardware report does not have to probe twice.</summary>
     public AcerWmiProbeResult Wmi { get; init; } = new();
 
+    /// <summary>
+    /// The Acer-prefixed <c>root\WMI</c> classes and their GUID qualifiers, as the schema layer found them. Empty on
+    /// a snapshot restored from the cache, which is why the report says "not read" rather than "none".
+    /// </summary>
+    public IReadOnlyDictionary<string, string> AcerClassGuids { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
     public AcerRegistrySnapshot Registry { get; init; } = AcerRegistrySnapshot.Empty;
 
     /// <summary>Profile records that were dropped by validation, one line each.</summary>
@@ -186,6 +193,7 @@ public static class CapabilityProbe
             WmiMuxSignal = wmiMuxSignal,
             Capabilities = capabilities,
             Wmi = schema.Wmi,
+            AcerClassGuids = schema.AcerClassGuids,
             Registry = schema.Registry,
             Rejections = catalog.Rejections,
             CapturedUtc = DateTime.UtcNow

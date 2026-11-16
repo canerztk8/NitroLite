@@ -1805,7 +1805,7 @@ public partial class MainWindow : Window
             if (NavRgb.IsChecked == true)
             {
                 // The extra switches live on this page, and the backend may have come up since the window opened.
-                await RefreshExtraSwitchesAsync();
+                await RefreshHardwareExtrasAsync();
             }
 
             if (NavDebloat.IsChecked == true)

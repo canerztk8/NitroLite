@@ -1070,5 +1070,10 @@
   "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Windows कुंजी लॉक की स्थिति पढ़ी नहीं जा सकती; स्विच केवल इस सत्र पर लागू होता है।",
   "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost बदला नहीं जा सका: फ़र्मवेयर ने आदेश अस्वीकार कर दिया।",
   "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD Overdrive बदला नहीं जा सका: पैनल यह सेटिंग समर्थित नहीं करता।",
-  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Windows कुंजी लॉक बदला नहीं जा सका: फ़र्मवेयर ने आदेश अस्वीकार कर दिया।"
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Windows कुंजी लॉक बदला नहीं जा सका: फ़र्मवेयर ने आदेश अस्वीकार कर दिया।",
+  "Raporu kopyala": "रिपोर्ट कॉपी करें",
+  "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "GitHub इश्यू में पेस्ट करने के लिए तैयार Markdown हार्डवेयर रिपोर्ट क्लिपबोर्ड पर कॉपी करता है। इसमें सीरियल नंबर, उपयोगकर्ता नाम या फ़ाइल पथ नहीं होता।",
+  "Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı.": "हार्डवेयर रिपोर्ट तैयार नहीं है: क्षमता स्कैन अभी पूरा नहीं हुआ।",
+  "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "हार्डवेयर रिपोर्ट क्लिपबोर्ड पर कॉपी हो गई। आप इसे GitHub इश्यू में पेस्ट कर सकते हैं।",
+  "Donanım raporu kopyalanamadı: {0}": "हार्डवेयर रिपोर्ट कॉपी नहीं हो सकी: {0}"
 }

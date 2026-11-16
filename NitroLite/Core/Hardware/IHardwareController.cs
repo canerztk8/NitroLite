@@ -52,6 +52,13 @@ public sealed record HardwareCapabilities
     /// </summary>
     public IReadOnlyList<OperatingMode> SupportedOperatingModes { get; init; } = Array.Empty<OperatingMode>();
 
+    /// <summary>
+    /// The raw <c>GetGamingMiscSetting(0x0A)</c> answer, when a backend read one. Kept alongside the decoded list
+    /// because the hardware report is what a maintainer reads when a model advertises a mode this build does not
+    /// know, and the raw word is the only thing that shows it.
+    /// </summary>
+    public ulong? SupportedModeMask { get; init; }
+
     /// <summary>Nothing is known yet: the backend has not been asked.</summary>
     public static HardwareCapabilities Unknown { get; } = new();
 }

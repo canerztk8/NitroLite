@@ -1070,5 +1070,10 @@
   "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "The Windows-key lock state cannot be read back; the switch only applies to this session.",
   "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost could not be changed: the firmware refused the command.",
   "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD Overdrive could not be changed: the panel does not support this setting.",
-  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "The Windows-key lock could not be changed: the firmware refused the command."
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "The Windows-key lock could not be changed: the firmware refused the command.",
+  "Raporu kopyala": "Copy report",
+  "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Copies a Markdown hardware report to the clipboard, ready to paste into a GitHub issue. It contains no serial number, user name or file path.",
+  "Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı.": "The hardware report is not ready: the capability scan has not finished yet.",
+  "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Hardware report copied to the clipboard. You can paste it into a GitHub issue.",
+  "Donanım raporu kopyalanamadı: {0}": "The hardware report could not be copied: {0}"
 }

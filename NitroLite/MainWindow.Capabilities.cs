@@ -52,7 +52,7 @@ public partial class MainWindow
 
         // CoolBoost, LCD overdrive and the Windows-key lock are answered by the backend rather than by the probe, so
         // they are filled in from here: this is the one funnel both the cached and the freshly probed path go through.
-        _ = RefreshExtraSwitchesAsync();
+        _ = RefreshHardwareExtrasAsync();
 
         EnsureVisiblePageSelected();
     }
@@ -62,6 +62,26 @@ public partial class MainWindow
     {
         if (nav != null) nav.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         if (!visible && page != null) page.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Applies the operating modes the machine's own firmware advertises, from
+    /// <c>GetGamingMiscSetting(0x0A)</c> by way of <see cref="HardwareCapabilities.SupportedOperatingModes"/>.
+    /// <para>
+    /// This is what makes an Acer laptop the profile table does not name behave correctly: a Nitro V 15 whose
+    /// firmware leaves the Turbo bit clear loses the Turbo tile, and a machine that advertises all five keeps all
+    /// five. An empty list means the firmware did not answer, which is not evidence that no mode works, so the
+    /// existing set is left alone rather than every tile being hidden.
+    /// </para>
+    /// </summary>
+    internal void ApplySupportedModes(IReadOnlyList<OperatingMode> modes)
+    {
+        if (modes.Count == 0) return;
+
+        _supportedModes = modes;
+        // The cached availability tuple would short-circuit the redraw, so drop it before asking for one.
+        _lastModeAvailability = null;
+        UpdateHighPowerAvailabilityUi();
     }
 
     /// <summary>

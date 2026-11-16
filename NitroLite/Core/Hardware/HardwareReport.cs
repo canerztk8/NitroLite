@@ -6,6 +6,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32;
+using NitroLite.Core.Hardware.Wmi;
 
 namespace NitroLite.Core.Hardware;
 
@@ -147,6 +148,175 @@ public static class HardwareReport
         sb.AppendLine("This file contains no serial number, user name, file path or log content.");
         return sb.ToString();
     }
+
+    /// <summary>
+    /// A Markdown report meant to be pasted straight into a GitHub issue, built from the snapshot the window already
+    /// holds rather than from a fresh probe.
+    /// <para>
+    /// This is the report a user on an unlisted model sends in, so it is built around the questions that decide where
+    /// a bug lives: which profile matched (or that the catch-all did), what the firmware's own bitmasks say, whether
+    /// the sensor ids answered plausibly, and which capabilities the read-back policy has switched off. Nothing here
+    /// needs elevation — the caller passes whatever it already has, and a section nobody could read says so instead
+    /// of being omitted.
+    /// </para>
+    /// <para>
+    /// Deliberately excluded, and asserted by a test: serial numbers, machine UUID, Windows user name, file paths and
+    /// log content. Everything below is either public model data or a firmware answer.
+    /// </para>
+    /// </summary>
+    public static string BuildMarkdown(
+        CapabilitySnapshot probe,
+        HardwareCapabilities? capabilities = null,
+        ReadBackPolicy? readBack = null,
+        SensorLayout? discoveredSensors = null,
+        bool sensorProbeRan = false,
+        DeviceIdentity? identity = null)
+    {
+        identity ??= HardwareDetector.Current;
+        var sb = new StringBuilder();
+
+        sb.AppendLine("### NitroLite hardware report");
+        sb.AppendLine();
+        sb.AppendLine("| Application | |");
+        sb.AppendLine("| --- | --- |");
+        sb.AppendLine($"| NitroLite | {Escape(UpdateService.CurrentVersionText)} |");
+        sb.AppendLine($"| Windows | {Escape(WindowsVersionText())} |");
+        sb.AppendLine($"| Runtime | {Escape(RuntimeInformation.FrameworkDescription)} |");
+        sb.AppendLine($"| Language | {Escape(Loc.Language)} |");
+        sb.AppendLine();
+
+        sb.AppendLine("| Device | |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "Manufacturer", identity.Manufacturer);
+        AppendRow(sb, "Model", identity.Model);
+        AppendRow(sb, "Model code", identity.ModelCode);
+        AppendRow(sb, "Family", identity.ModelFamily);
+        AppendRow(sb, "Board", identity.BoardProduct);
+        AppendRow(sb, "BIOS", string.Join(" ", new[] { identity.BiosVendor, identity.BiosVersion }
+            .Where(s => !string.IsNullOrWhiteSpace(s))));
+        AppendRow(sb, "CPU vendor", identity.CpuVendor.ToString());
+        sb.AppendLine();
+
+        sb.AppendLine("| Profile | |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "Matched", $"{probe.ProfileId} ({probe.ProfileSource})");
+        AppendRow(sb, "Cache key", probe.CacheKey);
+        AppendRow(sb, "Notes", probe.ProfileNotes);
+        sb.AppendLine();
+
+        sb.AppendLine("| Capability | Outcome | Detail |");
+        sb.AppendLine("| --- | --- | --- |");
+        foreach (var capability in probe.Capabilities)
+            sb.AppendLine($"| {Escape(capability.Capability)} | {capability.Outcome} | {Escape(capability.Detail)} |");
+        sb.AppendLine();
+
+        sb.AppendLine("| Acer WMI | |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "AcerGamingFunction", probe.Wmi.Summary);
+        AppendRow(sb, "Methods", string.Join(", ", probe.Wmi.Methods));
+        AppendRow(sb, "Signatures", string.Join("<br>", probe.Wmi.Signatures));
+        AppendRow(sb, "Acer classes", probe.AcerClassGuids.Count == 0
+            ? "not read (cached snapshot)"
+            : string.Join(", ", probe.AcerClassGuids.Select(p => $"{p.Key} {p.Value}")));
+        sb.AppendLine();
+
+        sb.AppendLine("| Registry signal | Reading |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "Key present", probe.Registry.KeyPresent ? "yes" : "no");
+        AppendRow(sb, "dgpu_mode_capability", Format(probe.Registry.DgpuModeCapability));
+        AppendRow(sb, "KeyBoardArea", Format(probe.Registry.KeyboardArea));
+        AppendRow(sb, "LCD_Overdrive_support", Format(probe.Registry.LcdOverdriveSupport));
+        AppendRow(sb, "GPU_OC_Support", Format(probe.Registry.GpuOverclockSupport));
+        sb.AppendLine();
+
+        sb.AppendLine("| Live selector | Answer |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "GetGamingMiscSetting(0x09) MUX", probe.WmiMuxSignal switch
+        {
+            true => "3 (switchable over WMI)",
+            false => "not 3",
+            null => "not read (needs elevation)"
+        });
+        AppendRow(sb, "GetGamingMiscSetting(0x0A) modes", capabilities?.SupportedModeMask is ulong mask
+            ? $"0x{mask:X4} -> {FormatModes(capabilities.SupportedOperatingModes)}"
+            : "not read (needs elevation)");
+        AppendRow(sb, "APGeAction", capabilities == null
+            ? "not read (needs elevation)"
+            : capabilities.CoolBoost || capabilities.BacklightTimeout ? "present" : "absent");
+        AppendRow(sb, "GetGamingProfile(0) overdrive", capabilities == null
+            ? "not read (needs elevation)"
+            : capabilities.LcdOverdrive ? "supported" : "not supported");
+        AppendRow(sb, "Windows-key lock", capabilities == null
+            ? "not read (needs elevation)"
+            : capabilities.WinKeyLock ? "writable" : "not writable");
+        sb.AppendLine();
+
+        sb.AppendLine("| Sensors | |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "Profile layout", DescribeLayout(probe.Sensors));
+        AppendRow(sb, "Live probe", sensorProbeRan
+            ? discoveredSensors != null ? "ran, confirmed" : "ran, rejected"
+            : "not run");
+        if (discoveredSensors != null) AppendRow(sb, "Discovered layout", DescribeLayout(discoveredSensors));
+        AppendRow(sb, "Fan ceiling", $"CPU {probe.MaxCpuFanRpm} / GPU {probe.MaxGpuFanRpm} RPM");
+        AppendRow(sb, "Plausibility window", SensorPlausibility.Describe());
+        sb.AppendLine();
+
+        sb.AppendLine("| Read-back policy | Session failures | State |");
+        sb.AppendLine("| --- | --- | --- |");
+        if (readBack == null)
+        {
+            sb.AppendLine("| (direct-WMI backend not started) | - | - |");
+        }
+        else
+        {
+            foreach (var capability in ReadBackPolicy.AllCapabilities)
+            {
+                var state = readBack.IsPermanentlyDisabled(capability)
+                    ? "permanently disabled"
+                    : readBack.IsDisabled(capability) ? "disabled for this session" : "active";
+                sb.AppendLine($"| {Escape(capability)} | {readBack.ConsecutiveSessionFailures(capability)} | {state} |");
+            }
+        }
+        sb.AppendLine();
+
+        if (probe.Rejections.Count > 0)
+        {
+            sb.AppendLine("**Rejected profile records**");
+            sb.AppendLine();
+            foreach (var rejection in probe.Rejections) sb.AppendLine($"- {Escape(rejection)}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("_No serial number, machine UUID, user name, file path or log content is included._");
+        return sb.ToString();
+    }
+
+    /// <summary>One Markdown table row, skipped entirely when the value is empty so the table has no blank cells.</summary>
+    private static void AppendRow(StringBuilder sb, string label, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        sb.AppendLine($"| {Escape(label)} | {Escape(value)} |");
+    }
+
+    /// <summary>
+    /// Escapes the two characters that would break a Markdown table cell. Newlines become <c>&lt;br&gt;</c> so a
+    /// multi-line note stays inside its row instead of splitting the table.
+    /// </summary>
+    private static string Escape(string? value) => string.IsNullOrEmpty(value)
+        ? ""
+        : value.Replace("|", "\\|").Replace("\r\n", "<br>").Replace("\n", "<br>").Replace("\r", "<br>");
+
+    private static string Format(int? value) => value?.ToString(CultureInfo.InvariantCulture) ?? "";
+
+    private static string FormatModes(IReadOnlyList<OperatingMode> modes) =>
+        modes.Count == 0 ? "none advertised" : string.Join(", ", modes);
+
+    private static string DescribeLayout(SensorLayout layout) =>
+        $"cpu={layout.CpuTempSensor} gpu={layout.GpuTempSensor} sys1={layout.Sys1TempSensor} "
+        + $"rpm={layout.CpuFanRpmSensor}/{layout.GpuFanRpmSensor} "
+        + (layout.Supported ? "supported" : "unsupported")
+        + (layout.Verified ? ", verified" : ", unverified");
 
     /// <summary>
     /// The capability probe section: which profile matched, what each capability answered, and which profile records

@@ -808,6 +808,12 @@ public partial class MainWindow
     /// Asks the service which operating modes this model has. Nitro models differ: a Nitro V 15 without Turbo must
     /// not offer a Turbo button that the firmware rejects. A null answer leaves <see cref="_supportedModes"/> null,
     /// which <see cref="ModePolicy.IsModeSupported"/> reads as "unknown, show everything".
+    /// <para>
+    /// With no Acer service there is nobody to relay the answer, so the machine's own WMI bitmask is used instead —
+    /// but only once a backend is already up. Asking the direct-WMI backend here would raise the elevation prompt on
+    /// startup, which is the one thing the window must never do; the settings page and the lighting page refresh this
+    /// again after the user starts it.
+    /// </para>
     /// </summary>
     public async Task RefreshModeCapabilityAsync()
     {
@@ -818,6 +824,19 @@ public partial class MainWindow
         catch
         {
             _supportedModes = null;
+        }
+
+        if ((_supportedModes == null || _supportedModes.Count == 0) && _hardware.IsAvailable)
+        {
+            try
+            {
+                var caps = await _hardware.GetCapabilitiesAsync();
+                if (caps.SupportedOperatingModes.Count > 0) _supportedModes = caps.SupportedOperatingModes;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Desteklenen çalışma modları okunamadı", ex.Message);
+            }
         }
 
         // The cached availability tuple would short-circuit the redraw, so drop it before asking for one.

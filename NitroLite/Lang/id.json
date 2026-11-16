@@ -1070,5 +1070,10 @@
   "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Status kunci tombol Windows tidak dapat dibaca; sakelar hanya berlaku untuk sesi ini.",
   "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost tidak dapat diubah: firmware menolak perintahnya.",
   "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD Overdrive tidak dapat diubah: panel tidak mendukung pengaturan ini.",
-  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Kunci tombol Windows tidak dapat diubah: firmware menolak perintahnya."
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Kunci tombol Windows tidak dapat diubah: firmware menolak perintahnya.",
+  "Raporu kopyala": "Salin laporan",
+  "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Menyalin laporan perangkat keras Markdown ke papan klip, siap ditempel ke masalah GitHub. Tidak berisi nomor seri, nama pengguna, atau jalur berkas.",
+  "Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı.": "Laporan perangkat keras belum siap: pemindaian kemampuan belum selesai.",
+  "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Laporan perangkat keras disalin ke papan klip. Anda dapat menempelkannya ke masalah GitHub.",
+  "Donanım raporu kopyalanamadı: {0}": "Laporan perangkat keras tidak dapat disalin: {0}"
 }

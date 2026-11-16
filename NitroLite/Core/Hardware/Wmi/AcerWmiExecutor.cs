@@ -94,6 +94,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             // The mode bitmask and the WMI MUX signal are read here rather than in the window: both need elevation,
             // and both are cheap once the instance is already open.
             var supportedModes = new JsonArray();
+            ulong? supportedModeMask = null;
             bool wmiMux = false;
             if (gaming != null)
             {
@@ -102,6 +103,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     var mask = InvokeGetter(gaming, "GetGamingMiscSetting", AcerWmiProtocol.MiscIndexSupportedModes);
                     if (mask.HasValue)
                     {
+                        supportedModeMask = mask.Value;
                         foreach (var mode in AcerWmiProtocol.DecodeSupportedModes(mask.Value))
                             supportedModes.Add(mode.ToString());
                     }
@@ -135,6 +137,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 ["lcdOverdrive"] = registry.LcdOverdriveSupport is > 0,
                 ["winKeyLock"] = gaming != null,
                 ["supportedModes"] = supportedModes,
+                ["supportedModeMask"] = supportedModeMask.HasValue ? supportedModeMask.Value : null,
                 ["dgpuModeCapability"] = registry.DgpuModeCapability,
                 ["keyboardArea"] = registry.KeyboardArea
             });

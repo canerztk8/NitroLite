@@ -1070,5 +1070,10 @@
   "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Der Zustand der Windows-Tastensperre lässt sich nicht auslesen; der Schalter gilt nur für diese Sitzung.",
   "CoolBoost değiştirilemedi: firmware komutu reddetti.": "CoolBoost konnte nicht geändert werden: die Firmware hat den Befehl abgelehnt.",
   "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "LCD-Overdrive konnte nicht geändert werden: das Panel unterstützt diese Einstellung nicht.",
-  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Die Windows-Tastensperre konnte nicht geändert werden: die Firmware hat den Befehl abgelehnt."
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Die Windows-Tastensperre konnte nicht geändert werden: die Firmware hat den Befehl abgelehnt.",
+  "Raporu kopyala": "Bericht kopieren",
+  "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Kopiert einen Markdown-Hardwarebericht in die Zwischenablage, fertig zum Einfügen in ein GitHub-Issue. Er enthält keine Seriennummer, keinen Benutzernamen und keinen Dateipfad.",
+  "Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı.": "Der Hardwarebericht ist noch nicht bereit: die Funktionsprüfung ist noch nicht abgeschlossen.",
+  "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Hardwarebericht in die Zwischenablage kopiert. Sie können ihn in ein GitHub-Issue einfügen.",
+  "Donanım raporu kopyalanamadı: {0}": "Der Hardwarebericht konnte nicht kopiert werden: {0}"
 }

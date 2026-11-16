@@ -7,11 +7,13 @@ using NitroLite.Core.Hardware;
 namespace NitroLite;
 
 /// <summary>
-/// The three switches that only some firmwares have: CoolBoost, LCD overdrive and the Windows-key lock.
+/// What the backend can do beyond the fixed controls: the three switches only some firmwares register (CoolBoost,
+/// LCD overdrive, the Windows-key lock) and the operating modes this machine actually advertises.
 /// <para>
-/// All three live behind <c>APGeAction</c> or <c>GetGamingProfile</c>, which a Nitro V 15 does not register at all.
-/// The card therefore starts collapsed and only appears once the backend has positively answered that the feature
-/// exists — the same rule the capability page follows, where only a real "no" hides anything.
+/// All of it comes from the machine's own answer rather than from the model name, which is what lets an Acer laptop
+/// the profile table does not name still get every control it really has — and none it does not. The card starts
+/// collapsed and only appears once the backend has positively answered that a feature exists, the same rule the
+/// capability page follows, where only a real "no" hides anything.
 /// </para>
 /// </summary>
 public partial class MainWindow
@@ -23,10 +25,11 @@ public partial class MainWindow
     private bool _extraSwitchesLoaded;
 
     /// <summary>
-    /// Asks the backend which of the three switches exist, fills them in and shows the card when at least one does.
-    /// Safe to call repeatedly: the answer is cached for the session and a rescan clears it.
+    /// Asks the backend which extra switches and operating modes exist, applies both to the interface, and shows the
+    /// card when at least one switch does. Safe to call repeatedly: the answer is cached for the session and a rescan
+    /// clears it.
     /// </summary>
-    internal async Task RefreshExtraSwitchesAsync(bool force = false)
+    internal async Task RefreshHardwareExtrasAsync(bool force = false)
     {
         if (CardExtraSwitches == null) return;
         if (_extraSwitchesLoaded && !force) return;
@@ -48,6 +51,10 @@ public partial class MainWindow
         }
 
         _extraSwitchesLoaded = true;
+
+        // The mode tiles are driven by the same answer: a Nitro V 15 whose firmware leaves the Turbo bit clear must
+        // not be offered a Turbo button that does nothing.
+        ApplySupportedModes(caps.SupportedOperatingModes);
 
         bool any = caps.CoolBoost || caps.LcdOverdrive || caps.WinKeyLock;
         CardExtraSwitches.Visibility = any ? Visibility.Visible : Visibility.Collapsed;

@@ -391,6 +391,60 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Copies a Markdown hardware report to the clipboard, ready to paste into a GitHub issue.
+    /// <para>
+    /// It never raises the elevation prompt. The report is built from what the current backend has already answered,
+    /// and every section nobody could read says "not read (needs elevation)" instead of being dropped — a report that
+    /// silently omitted the WMI half would look like a machine without WMI. The privacy rule is enforced by the
+    /// generator and pinned by a test: no serial number, machine UUID, user name, file path or log content.
+    /// </para>
+    /// </summary>
+    private async void BtnCopyHardwareReport_Click(object sender, RoutedEventArgs e)
+    {
+        if (BtnCopyHardwareReport == null) return;
+        BtnCopyHardwareReport.IsEnabled = false;
+        try
+        {
+            var snapshot = _capabilitySnapshot;
+            if (snapshot == null)
+            {
+                ShowToast(Loc.T("Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı."), false);
+                return;
+            }
+
+            // Only ask a backend that is already up. GetCapabilitiesAsync on the direct-WMI path would start the
+            // elevated worker, and a diagnostics button must never be the thing that raises a UAC prompt.
+            HardwareCapabilities? capabilities = null;
+            if (_hardware.IsAvailable)
+            {
+                try { capabilities = await _hardware.GetCapabilitiesAsync(); }
+                catch (Exception ex) { AppLog.Warn("Rapor için yetenekler okunamadı", ex.Message); }
+            }
+
+            var wmi = (_hardware as HybridHardwareController)?.DirectWmi as WmiHardwareController;
+            var markdown = HardwareReport.BuildMarkdown(
+                snapshot,
+                capabilities,
+                wmi?.ReadBack,
+                wmi?.DiscoveredSensors,
+                wmi?.SensorProbeRan == true);
+
+            // WinForms comes in through the tray icon, so the WPF clipboard has to be named explicitly.
+            System.Windows.Clipboard.SetText(markdown);
+            ShowToast(Loc.T("Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz."));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Donanım raporu kopyalanamadı", ex.ToString());
+            ShowToast(Loc.T($"Donanım raporu kopyalanamadı: {ex.Message}"), false);
+        }
+        finally
+        {
+            BtnCopyHardwareReport.IsEnabled = true;
+        }
+    }
+
+    /// <summary>
     /// Drops the cached capability answer and asks the machine again. The probe is synchronous and touches WMI, so
     /// it runs off the UI thread; the summary line is filled in when it comes back.
     /// </summary>
@@ -421,7 +475,7 @@ public partial class MainWindow
             // A rescan is the user asking the hardware again, so the extra switches are re-probed too instead of
             // keeping the answer from the previous backend.
             _extraSwitchesLoaded = false;
-            await RefreshExtraSwitchesAsync(force: true);
+            await RefreshHardwareExtrasAsync(force: true);
 
             ShowToast(Loc.T($"Donanım yetenekleri yeniden tarandı: {snapshot.ProfileId}"), true);
         }

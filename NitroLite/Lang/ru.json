@@ -1070,5 +1070,10 @@
   "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "Состояние блокировки клавиши Windows не читается; переключатель действует только в этом сеансе.",
   "CoolBoost değiştirilemedi: firmware komutu reddetti.": "Не удалось изменить CoolBoost: прошивка отклонила команду.",
   "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "Не удалось изменить LCD Overdrive: матрица не поддерживает эту настройку.",
-  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Не удалось изменить блокировку клавиши Windows: прошивка отклонила команду."
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Не удалось изменить блокировку клавиши Windows: прошивка отклонила команду.",
+  "Raporu kopyala": "Копировать отчёт",
+  "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Копирует отчёт об оборудовании в формате Markdown в буфер обмена — готов к вставке в задачу GitHub. Не содержит серийного номера, имени пользователя и пути к файлу.",
+  "Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı.": "Отчёт об оборудовании не готов: проверка возможностей ещё не завершена.",
+  "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Отчёт об оборудовании скопирован в буфер обмена. Его можно вставить в задачу GitHub.",
+  "Donanım raporu kopyalanamadı: {0}": "Не удалось скопировать отчёт об оборудовании: {0}"
 }

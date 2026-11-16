@@ -1070,5 +1070,10 @@
   "Windows tuşu kilidinin durumu okunamıyor; anahtar yalnızca bu oturumda geçerli.": "O estado do bloqueio da tecla Windows não pode ser lido; o interruptor aplica-se apenas a esta sessão.",
   "CoolBoost değiştirilemedi: firmware komutu reddetti.": "Não foi possível alterar o CoolBoost: o firmware recusou o comando.",
   "LCD Overdrive değiştirilemedi: panel bu ayarı desteklemiyor.": "Não foi possível alterar o LCD Overdrive: o painel não suporta esta definição.",
-  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Não foi possível alterar o bloqueio da tecla Windows: o firmware recusou o comando."
+  "Windows tuşu kilidi değiştirilemedi: firmware komutu reddetti.": "Não foi possível alterar o bloqueio da tecla Windows: o firmware recusou o comando.",
+  "Raporu kopyala": "Copiar relatório",
+  "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Copia um relatório de hardware em Markdown para a área de transferência, pronto a colar num problema do GitHub. Não contém número de série, nome de utilizador nem caminho de ficheiro.",
+  "Donanım raporu hazır değil: yetenek taraması henüz tamamlanmadı.": "O relatório de hardware não está pronto: a análise de capacidades ainda não terminou.",
+  "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Relatório de hardware copiado para a área de transferência. Pode colá-lo num problema do GitHub.",
+  "Donanım raporu kopyalanamadı: {0}": "Não foi possível copiar o relatório de hardware: {0}"
 }
