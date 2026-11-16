@@ -56,6 +56,33 @@ public sealed class ElevatedStartupService
     /// <summary>The flags the task passes, matching what the standard Run entry uses.</summary>
     public const string AutostartFlag = "--autostart";
 
+    /// <summary>
+    /// The executable the task must launch. The WPF front end is retired, so a task that still points at
+    /// <c>NitroLite.exe</c> would start a program that no longer ships — and fail silently at logon, which is the worst
+    /// way for an autostart entry to break.
+    /// </summary>
+    public const string ExpectedExecutableName = "NitroLite.Desktop.exe";
+
+    /// <summary>The retired WPF front end. A registration naming it is stale and is removed.</summary>
+    public const string LegacyExecutableName = "NitroLite.exe";
+
+    /// <summary>True when <paramref name="path"/> is the Avalonia front end rather than the retired WPF one.</summary>
+    public static bool IsDesktopExecutable(string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        string.Equals(Path.GetFileName(Unquote(path)), ExpectedExecutableName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when <paramref name="path"/> names the retired WPF front end.</summary>
+    public static bool IsLegacyExecutable(string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        string.Equals(Path.GetFileName(Unquote(path)), LegacyExecutableName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Strips the quotes the task engine's <c>&lt;Command&gt;</c> element carries. <see cref="BuildTaskXml"/> quotes a
+    /// path with a space in it, so the value read back out of a registered task is <c>"C:\…\NitroLite.exe"</c> and
+    /// <see cref="Path.GetFileName(string)"/> would answer <c>NitroLite.exe"</c> — a name that matches nothing.
+    /// </summary>
+    private static string Unquote(string path) => path.Trim().Trim('"');
+
     private readonly IProcessRunner _runner;
     private readonly Func<bool> _isElevated;
     private readonly Func<string?> _executablePath;
@@ -194,6 +221,53 @@ public sealed class ElevatedStartupService
     }
 
     /// <summary>
+    /// Deletes a registration that still names the retired WPF front end. Returns true when one was removed.
+    /// </summary>
+    /// <remarks>
+    /// <c>schtasks /Create /F</c> already replaces a task of the same name, so this is not about the task this build
+    /// writes. It is about the case where the user turns the feature off, or never turns it on again: a task left
+    /// pointing at a deleted <c>NitroLite.exe</c> fails at logon with nothing on screen to say why, and the user has no
+    /// way to connect that to an app they upgraded months ago.
+    /// </remarks>
+    public async Task<bool> PurgeLegacyTaskAsync(CancellationToken cancellationToken = default)
+    {
+        var query = await _runner.RunAsync(
+            "schtasks.exe", $"/Query /TN \"{TaskName}\" /XML", elevate: false, cancellationToken).ConfigureAwait(false);
+
+        if (!query.Success || !IsLegacyExecutable(ReadCommandFromTaskXml(query.StandardOutput))) return false;
+
+        var delete = await _runner.RunAsync(
+            "schtasks.exe", $"/Delete /TN \"{TaskName}\" /F", elevate: false, cancellationToken).ConfigureAwait(false);
+
+        if (!delete.Success) return false;
+
+        AppLog.Info("Eski WPF otomatik başlatma görevi silindi", $"görev='{TaskName}'");
+        return true;
+    }
+
+    /// <summary>
+    /// The <c>&lt;Command&gt;</c> element of a task definition, or an empty string when the XML has none. Read with a
+    /// substring rather than an XML parser: the document carries a namespace and a schema location, and the one value
+    /// this needs is a single element.
+    /// </summary>
+    public static string ReadCommandFromTaskXml(string? xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml)) return "";
+
+        const string open = "<Command>";
+        const string close = "</Command>";
+
+        int start = xml.IndexOf(open, StringComparison.OrdinalIgnoreCase);
+        if (start < 0) return "";
+
+        start += open.Length;
+        int end = xml.IndexOf(close, start, StringComparison.OrdinalIgnoreCase);
+        if (end < 0) return "";
+
+        return xml[start..end].Trim();
+    }
+
+    /// <summary>
     /// Registers the task and removes the standard Run entry, so logon starts NitroLite once. Returns
     /// <see cref="ElevatedStartupOutcome.Cancelled"/> when the user declined the prompt, having changed nothing.
     /// </summary>
@@ -204,6 +278,17 @@ public sealed class ElevatedStartupService
         {
             return Fail("the executable path is unknown");
         }
+
+        // A dev build runs under dotnet.exe or a test host, so this is a warning rather than a refusal: the shipped
+        // app always resolves to NitroLite.Desktop.exe, and refusing would make the feature untestable.
+        if (!IsDesktopExecutable(exePath))
+        {
+            AppLog.Warn("Otomatik başlatma hedefi beklenen çalıştırılabilir değil",
+                $"{exePath} (beklenen: {ExpectedExecutableName})");
+        }
+
+        // Before the new registration, so a stale WPF task cannot survive a failed create.
+        await PurgeLegacyTaskAsync(cancellationToken).ConfigureAwait(false);
 
         string? userId = _userId();
         if (string.IsNullOrWhiteSpace(userId))

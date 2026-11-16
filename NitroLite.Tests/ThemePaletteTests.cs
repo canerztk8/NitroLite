@@ -1,112 +1,108 @@
-﻿using System.IO;
+using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using Avalonia.Media;
 using NitroLite.Core;
+using NitroLite.Desktop.Themes;
 using Xunit;
 
 namespace NitroLite.Tests;
 
 /// <summary>
-/// Guards the palette files themselves: every theme carries the same keys, and every theme is legible.
+/// Guards the palettes themselves: every theme carries every colour, and every theme is legible.
 /// </summary>
 /// <remarks>
-/// A missing key is not a compile error — it is a <c>ResourceReferenceKeyNotFoundException</c> at the moment the
-/// window loads, on the one machine that picked that palette. The key-set test is what turns that into a red build.
-/// The contrast test is the same idea for the other silent failure: a palette that loads but whose 1px rules
-/// disappear into the page, or whose body text is too faint to read.
+/// A missing colour is not a compile error — it is a transparent surface at the moment the window loads, on the one
+/// machine that picked that palette. The completeness test is what turns that into a red build. The contrast test is
+/// the same idea for the other silent failure: a palette that loads but whose 1px rules disappear into the page, or
+/// whose body text is too faint to read.
 /// </remarks>
-public class ThemeDictionaryTests
+public class ThemePaletteTests
 {
     // =============================================================================================================
-    // Reading the dictionaries.
+    // Reading the palettes.
     // =============================================================================================================
 
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "NitroLite.sln")))
-        {
-            dir = dir.Parent;
-        }
-        Assert.NotNull(dir);
-        return dir!.FullName;
-    }
-
-    private static string ThemePath(AppTheme theme) =>
-        Path.Combine(RepoRoot(), "NitroLite", ThemeCatalog.DictionaryPath(theme).Replace('/', Path.DirectorySeparatorChar));
-
-    /// <summary>Every <c>SolidColorBrush</c> in a dictionary, key to colour.</summary>
-    private static Dictionary<string, string> Brushes(AppTheme theme)
-    {
-        var path = ThemePath(theme);
-        Assert.True(File.Exists(path), $"Missing theme dictionary: {path}");
-        var text = File.ReadAllText(path, Encoding.UTF8);
-        var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (Match m in Regex.Matches(text, @"<SolidColorBrush\s+x:Key=""(?<key>[^""]+)""\s+Color=""(?<color>#[0-9A-Fa-f]{6,8})"""))
-        {
-            map[m.Groups["key"].Value] = m.Groups["color"].Value;
-        }
-        return map;
-    }
-
-    /// <summary>The concrete palettes: everything except the "follow Windows" preference.</summary>
+    /// <summary>The concrete palettes: everything except the "follow the desktop" preference.</summary>
     private static IEnumerable<AppTheme> ConcreteThemes =>
         ThemeCatalog.All.Where(t => t != AppTheme.System);
 
+    /// <summary>Every colour a palette carries, keyed by the property name the views ask for.</summary>
+    private static Dictionary<string, Color> Colours(AppTheme theme)
+    {
+        var palette = ThemePalette.For(theme);
+        return typeof(ThemePalette)
+            .GetProperties()
+            .Where(p => p.PropertyType == typeof(Color) && p.GetIndexParameters().Length == 0)
+            .ToDictionary(p => p.Name, p => (Color)p.GetValue(palette)!, StringComparer.Ordinal);
+    }
+
+    private static string Hex(Color colour) => $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
+
     // =============================================================================================================
-    // 1. Key parity.
+    // 1. Completeness.
     // =============================================================================================================
 
     [Fact]
-    public void EveryThemeCarriesExactlyTheSameKeys()
+    public void EveryPaletteCarriesExactlyTheSameColours()
     {
-        var reference = Brushes(AppTheme.Dark);
+        var reference = Colours(AppTheme.Dark);
         Assert.NotEmpty(reference);
 
         foreach (var theme in ConcreteThemes)
         {
-            var actual = Brushes(theme);
+            var actual = Colours(theme);
             var missing = reference.Keys.Except(actual.Keys, StringComparer.Ordinal).OrderBy(k => k).ToList();
             var extra = actual.Keys.Except(reference.Keys, StringComparer.Ordinal).OrderBy(k => k).ToList();
 
             Assert.True(missing.Count == 0, $"{theme} is missing: {string.Join(", ", missing)}");
-            Assert.True(extra.Count == 0, $"{theme} has keys Dark does not: {string.Join(", ", extra)}");
+            Assert.True(extra.Count == 0, $"{theme} has colours Dark does not: {string.Join(", ", extra)}");
         }
     }
 
     [Fact]
-    public void EveryThemeDefinesTheKeysTheWindowAsksFor()
+    public void EveryPaletteDefinesEveryColourTheViewsAskFor()
     {
-        // The handful the code-behind resolves by name at runtime; a typo here is a crash, not a compile error.
+        // The handful the styles resolve by name at runtime; a typo here is an invisible surface, not a compile error.
         var required = new[]
         {
-            "Paper", "PaperDeep", "CardBg", "CardBgHover", "PanelBg", "RailBg",
-            "Ink", "InkSoft", "InkFaint", "Rule", "RuleStrong", "BorderDark", "BorderStrong",
-            "Vermilion", "Live", "AccentRed", "AccentCyan", "AccentGreen", "AccentPurple",
-            "TextPrimary", "TextSecondary", "TextMuted", "OnAccent", "WarnBg",
-            "Slate", "Olive", "Link", "ChartFill", "BgDark"
+            "Page", "Card", "CardHover", "Panel", "Rail", "CardBorder", "CardBorderStrong",
+            "TextPrimary", "TextSecondary", "TextMuted", "Accent", "AccentHover", "AccentSoft",
+            "OnAccent", "Success", "Warning", "Danger", "ChartFill"
         };
 
         foreach (var theme in ConcreteThemes)
         {
-            var brushes = Brushes(theme);
+            var colours = Colours(theme);
             foreach (var key in required)
             {
-                Assert.True(brushes.ContainsKey(key), $"{theme} does not define {key}");
+                Assert.True(colours.ContainsKey(key), $"{theme} does not define {key}");
             }
         }
     }
 
     [Fact]
-    public void EveryColourIsAWellFormedHexValue()
+    public void EveryColourIsOpaqueExceptTheDocumentedWashes()
     {
+        // A surface that lost its alpha channel is a card you can see through; a wash that gained one is a badge that
+        // hides the text under it. Both are silent, so both are pinned.
+        var washes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ChartFill", "AccentSoft", "SuccessSoft", "WarningSoft", "DangerSoft"
+        };
+
         foreach (var theme in ConcreteThemes)
         {
-            foreach (var (key, colour) in Brushes(theme))
+            foreach (var (key, colour) in Colours(theme))
             {
-                Assert.Matches("^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$", colour);
-                Assert.True(colour.Length == 7 || colour.Length == 9, $"{theme}.{key} = {colour}");
+                if (washes.Contains(key))
+                {
+                    Assert.True(colour.A is > 0 and < 255, $"{theme}.{key} is not a wash: alpha {colour.A}");
+                }
+                else
+                {
+                    Assert.True(colour.A == 255, $"{theme}.{key} is translucent: alpha {colour.A}");
+                }
             }
         }
     }
@@ -115,20 +111,19 @@ public class ThemeDictionaryTests
     // 2. Contrast.
     // =============================================================================================================
 
-    /// <summary>WCAG 2.1 relative luminance of an <c>#RRGGBB</c> colour.</summary>
-    private static double Luminance(string hex)
+    /// <summary>WCAG 2.1 relative luminance of a colour.</summary>
+    private static double Luminance(Color colour)
     {
-        var h = hex.TrimStart('#');
-        double Channel(int offset)
+        double Channel(byte value)
         {
-            double c = Convert.ToInt32(h.Substring(offset, 2), 16) / 255.0;
+            double c = value / 255.0;
             return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
         }
-        return 0.2126 * Channel(0) + 0.7152 * Channel(2) + 0.0722 * Channel(4);
+        return 0.2126 * Channel(colour.R) + 0.7152 * Channel(colour.G) + 0.0722 * Channel(colour.B);
     }
 
-    /// <summary>WCAG 2.1 contrast ratio between two <c>#RRGGBB</c> colours.</summary>
-    private static double Contrast(string a, string b)
+    /// <summary>WCAG 2.1 contrast ratio between two colours.</summary>
+    private static double Contrast(Color a, Color b)
     {
         double la = Luminance(a), lb = Luminance(b);
         double hi = Math.Max(la, lb), lo = Math.Min(la, lb);
@@ -140,9 +135,9 @@ public class ThemeDictionaryTests
     {
         foreach (var theme in ConcreteThemes)
         {
-            var b = Brushes(theme);
-            double ratio = Contrast(b["Ink"], b["CardBg"]);
-            Assert.True(ratio >= 4.5, $"{theme}: Ink on CardBg is {ratio:F2}:1, below the 4.5:1 AA floor");
+            var c = Colours(theme);
+            double ratio = Contrast(c["TextPrimary"], c["Card"]);
+            Assert.True(ratio >= 4.5, $"{theme}: TextPrimary on Card is {ratio:F2}:1, below the 4.5:1 AA floor");
         }
     }
 
@@ -151,9 +146,9 @@ public class ThemeDictionaryTests
     {
         foreach (var theme in ConcreteThemes)
         {
-            var b = Brushes(theme);
-            double ratio = Contrast(b["BorderDark"], b["Paper"]);
-            Assert.True(ratio >= 1.45, $"{theme}: BorderDark on Paper is {ratio:F2}:1, below the 1.45:1 floor");
+            var c = Colours(theme);
+            double ratio = Contrast(c["CardBorder"], c["Page"]);
+            Assert.True(ratio >= 1.45, $"{theme}: CardBorder on Page is {ratio:F2}:1, below the 1.45:1 floor");
         }
     }
 
@@ -162,18 +157,18 @@ public class ThemeDictionaryTests
     {
         foreach (var theme in ConcreteThemes)
         {
-            var b = Brushes(theme);
+            var c = Colours(theme);
 
-            // The (?) badge is a 1px RuleStrong ring with InkFaint type on a card.
-            double ring = Contrast(b["RuleStrong"], b["CardBg"]);
-            Assert.True(ring >= 1.45, $"{theme}: RuleStrong on CardBg is {ring:F2}:1, the (?) ring would vanish");
+            // The (?) badge is a 1px CardBorderStrong ring with TextMuted type on a card.
+            double ring = Contrast(c["CardBorderStrong"], c["Card"]);
+            Assert.True(ring >= 1.45, $"{theme}: CardBorderStrong on Card is {ring:F2}:1, the (?) ring would vanish");
 
-            double glyph = Contrast(b["InkFaint"], b["CardBg"]);
-            Assert.True(glyph >= 3.0, $"{theme}: InkFaint on CardBg is {glyph:F2}:1, the (?) glyph would be unreadable");
+            double glyph = Contrast(c["TextMuted"], c["Card"]);
+            Assert.True(glyph >= 3.0, $"{theme}: TextMuted on Card is {glyph:F2}:1, the (?) glyph would be unreadable");
 
-            // The active mode card is marked by a Vermilion frame drawn over the card's Paper ground.
-            double frame = Contrast(b["Vermilion"], b["Paper"]);
-            Assert.True(frame >= 3.0, $"{theme}: Vermilion on Paper is {frame:F2}:1, the active mode frame would blur");
+            // The active mode card is marked by an Accent frame drawn over the page.
+            double frame = Contrast(c["Accent"], c["Page"]);
+            Assert.True(frame >= 3.0, $"{theme}: Accent on Page is {frame:F2}:1, the active mode frame would blur");
         }
     }
 
@@ -182,12 +177,11 @@ public class ThemeDictionaryTests
     {
         foreach (var theme in ConcreteThemes)
         {
-            var b = Brushes(theme);
-            // RuleStrong is the emphasis rule; if it is not further from the page than Rule, the hierarchy is flat.
-            Assert.True(Contrast(b["RuleStrong"], b["Paper"]) > Contrast(b["Rule"], b["Paper"]),
-                $"{theme}: RuleStrong is not stronger than Rule");
-            Assert.True(Contrast(b["BorderStrong"], b["Paper"]) > Contrast(b["BorderDark"], b["Paper"]),
-                $"{theme}: BorderStrong is not stronger than BorderDark");
+            var c = Colours(theme);
+            // CardBorderStrong is the emphasis rule; if it is not further from the page than CardBorder, the hierarchy
+            // is flat and a focused field looks like an unfocused one.
+            Assert.True(Contrast(c["CardBorderStrong"], c["Page"]) > Contrast(c["CardBorder"], c["Page"]),
+                $"{theme}: CardBorderStrong is not stronger than CardBorder");
         }
     }
 
@@ -196,10 +190,10 @@ public class ThemeDictionaryTests
     {
         foreach (var theme in ConcreteThemes)
         {
-            var b = Brushes(theme);
+            var c = Colours(theme);
             // A card that is the same colour as the page is a card you cannot see, whatever its border does.
-            Assert.NotEqual(b["CardBg"], b["Paper"]);
-            Assert.NotEqual(b["CardBgHover"], b["CardBg"]);
+            Assert.NotEqual(Hex(c["Card"]), Hex(c["Page"]));
+            Assert.NotEqual(Hex(c["CardHover"]), Hex(c["Card"]));
         }
     }
 
@@ -222,7 +216,7 @@ public class ThemeDictionaryTests
     [Fact]
     public void IsDarkTheme_DoesNotClassifyTheSystemPreference()
     {
-        // System is a preference, not a palette: what it resolves to is ThemeManager's answer.
+        // System is a preference, not a palette: what it resolves to is the desktop's answer.
         Assert.False(ThemeCatalog.IsDarkTheme(AppTheme.System));
     }
 
@@ -253,15 +247,12 @@ public class ThemeDictionaryTests
     }
 
     [Fact]
-    public void EveryConcretePaletteHasItsOwnDictionary()
+    public void EveryConcretePaletteHasItsOwnPalette()
     {
-        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<ThemePalette>();
         foreach (var theme in ConcreteThemes)
         {
-            var path = ThemeCatalog.DictionaryPath(theme);
-            Assert.True(paths.Add(path), $"{theme} shares a dictionary with another palette: {path}");
-            Assert.True(File.Exists(Path.Combine(RepoRoot(), "NitroLite", path.Replace('/', Path.DirectorySeparatorChar))),
-                $"{theme} points at a file that does not exist: {path}");
+            Assert.True(seen.Add(ThemePalette.For(theme)), $"{theme} shares a palette with another theme");
         }
     }
 
@@ -397,5 +388,16 @@ public class ThemeDictionaryTests
             try { File.Delete(path); } catch { }
             try { File.Delete(path + ".bak"); } catch { }
         }
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "NitroLite.sln")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 }

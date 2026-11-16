@@ -61,50 +61,6 @@ public class CapabilityVisibilityTests
         }
     }
 
-    [Fact]
-    public void EveryCapabilityConstantHasATranslatableLabel()
-    {
-        var constants = new[]
-        {
-            CapabilitySnapshot.WmiGamingFunction,
-            CapabilitySnapshot.WmiBatteryChargeLimit,
-            CapabilitySnapshot.MuxSwitch,
-            CapabilitySnapshot.KeyboardZones,
-            CapabilitySnapshot.GpuOverclock,
-            CapabilitySnapshot.PanelOverdrive,
-            CapabilitySnapshot.ProfileMatch
-        };
-
-        foreach (var capability in constants)
-        {
-            var label = MainWindow.CapabilityLabel(capability);
-            Assert.False(string.IsNullOrWhiteSpace(label));
-            Assert.NotEqual(capability, label);
-        }
-    }
-
-    [Fact]
-    public void AnUnknownCapabilityFallsBackToItsKeyRatherThanAnEmptyLabel()
-    {
-        Assert.Equal("brand.new", MainWindow.CapabilityLabel("brand.new"));
-    }
-
-    [Fact]
-    public void EveryProbeOutcomeHasAVerdict()
-    {
-        foreach (var outcome in Enum.GetValues<HardwareProbeOutcome>())
-        {
-            var verdict = MainWindow.VerdictLabel(outcome);
-            Assert.False(string.IsNullOrWhiteSpace(verdict));
-        }
-    }
-
-    [Fact]
-    public void TheWalkthroughHasThreeSteps()
-    {
-        Assert.Equal(3, MainWindow.OnboardingStepCount);
-    }
-
     // ---------------------------------------------------------------- diagnostics bundle
 
     [Fact]
@@ -255,32 +211,6 @@ public class CapabilityVisibilityTests
         finally
         {
             try { Directory.Delete(directory, true); } catch { }
-        }
-    }
-
-    // ---------------------------------------------------------------- toast action
-
-    [Fact]
-    public void AnActionableToastStaysUpLongerThanAPlainOne()
-    {
-        const string message = "Kısa bir hata";
-
-        Assert.True(MainWindow.ToastDurationFor(message, hasAction: true) > MainWindow.ToastDurationFor(message));
-    }
-
-    [Fact]
-    public void AnActionableToastIsCappedSoItCannotSitOnTheScreen()
-    {
-        Assert.Equal(TimeSpan.FromSeconds(15), MainWindow.ToastDurationFor(new string('a', 4000), hasAction: true));
-    }
-
-    [Fact]
-    public void AnActionableToastNeverFallsBelowItsFloor()
-    {
-        for (int length = 0; length <= 400; length += 7)
-        {
-            var duration = MainWindow.ToastDurationFor(new string('a', length), hasAction: true);
-            Assert.InRange(duration.TotalSeconds, 8, 15);
         }
     }
 }

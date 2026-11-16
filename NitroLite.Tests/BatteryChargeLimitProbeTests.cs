@@ -217,39 +217,6 @@ public class BatteryChargeLimitProbeTests
         if (result.Available) Assert.Contains(CareCenterProbe.ServiceName, result.Detail);
     }
 
-    // ---------------------------------------------------------------- the walkthrough row
-
-    [Fact]
-    public void RowText_NamesCareCenterAsTheSource()
-    {
-        var capability = HardwareProbeResult.Supported(CapabilitySnapshot.WmiBatteryChargeLimit,
-            "Acer Care Center (AcerCCAgentSvis running)");
-
-        var text = MainWindow.CapabilityRowText(capability);
-
-        Assert.Contains("Pil şarj sınırı", text);
-        Assert.Contains("destekleniyor", text);
-        Assert.Contains("Acer Care Center", text);
-    }
-
-    [Fact]
-    public void RowText_LeavesTheWmiAnswerWithoutASuffix()
-    {
-        var capability = HardwareProbeResult.Supported(CapabilitySnapshot.WmiBatteryChargeLimit, "AcerBatteryCare");
-
-        Assert.Equal("", MainWindow.CapabilitySourceNote(capability));
-        Assert.Equal("Pil şarj sınırı — destekleniyor", MainWindow.CapabilityRowText(capability));
-    }
-
-    [Fact]
-    public void RowText_DoesNotAddASourceToAnUnsupportedOrUnrelatedRow()
-    {
-        Assert.Equal("", MainWindow.CapabilitySourceNote(
-            HardwareProbeResult.Unsupported(CapabilitySnapshot.WmiBatteryChargeLimit, "Acer Care Center stopped")));
-        Assert.Equal("", MainWindow.CapabilitySourceNote(
-            HardwareProbeResult.Supported(CapabilitySnapshot.MuxSwitch, "Acer Care Center")));
-    }
-
     // ---------------------------------------------------------------- the WMID_GUID5 buffer
 
     [Fact]

@@ -103,7 +103,7 @@
 
           <TextBlock Classes="caption"
                      Text="{Binding Labels.NoBackend}"
-                     IsVisible="{Binding HasNoBackend}" />
+                     IsVisible="{Binding ShowNoBackendBanner}" />
         </StackPanel>
       </Border>
 
@@ -119,6 +119,21 @@
           <TextBlock Classes="caption" Text="{Binding Labels.AutoStartHint}" />
           <TextBlock Classes="caption" Text="{Binding AutoStartStatus}"
                      IsVisible="{Binding HasAutoStartStatus}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The battery refresh-rate switch. Only a platform that can actually change the panel rate supplies the
+           automation, so Linux hides the card rather than offering a switch that cannot work. -->
+      <Border Classes="card" IsVisible="{Binding AutoRefreshRateAvailable}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="{Binding Labels.AutoRefreshRate}" VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+            <ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoRefreshRateOnBattery}" />
+          </Grid>
+          <TextBlock Classes="caption" Text="{Binding Labels.AutoRefreshRateHint}" />
+          <TextBlock Classes="caption" Text="{Binding RefreshRateStatus}"
+                     IsVisible="{Binding HasRefreshRateStatus}" />
         </StackPanel>
       </Border>
 

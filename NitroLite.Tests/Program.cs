@@ -211,27 +211,6 @@ class Program
             failedTests++;
         }
 
-        // TEST 11: GameDetectionService Unit Tests
-        Console.WriteLine("\n[TEST 11] Testing GameDetectionService Unit Tests...");
-        try
-        {
-            var t = new GameDetectionServiceTests();
-            t.GameProfile_JsonSerialization_RoundtripsAllPropertiesAccurately();
-            t.ProfileManagement_SaveGetAndDelete_OperatesCleanly();
-            t.ProcessDisposalSafety_ProcessIterationPattern_SafelyDisposesAllHandles();
-            t.GameStateProperties_ThreadSafetyAndConsistency();
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("PASS: All GameDetectionService unit tests passed.");
-            Console.ResetColor();
-        }
-        catch (Exception ex)
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"FAIL in GameDetectionService unit tests: {ex.Message}");
-            Console.ResetColor();
-            failedTests++;
-        }
-
         // TEST 12: AcerAgentClient Unit Tests
         Console.WriteLine("\n[TEST 12] Testing AcerAgentClient Unit Tests...");
         try

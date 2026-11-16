@@ -7,7 +7,7 @@ namespace NitroLite.Core;
 /// <remarks>
 /// These are the app's own units, not a backend's. Brightness is a level from 0 to 9 and speed from 1 to 9 on both
 /// platforms; a backend that wants a percentage converts at its own boundary. Keeping the numbers here rather than in
-/// one backend is what lets the same view model drive the WPF window and the Avalonia window.
+/// one backend is what lets the same view model drive the Linux and the Windows backend.
 /// </remarks>
 public static class LightingLimits
 {

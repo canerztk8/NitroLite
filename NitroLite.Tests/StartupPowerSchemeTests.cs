@@ -137,53 +137,6 @@ public class StartupPowerSchemeTests
         Assert.False(scheme.HasDefaultValue);
     }
 
-    // ---------------------------------------------------------------- 2. the composition root always supplies one
-
-    [Fact]
-    public void CreatePowerSchemeAccess_WithNothingInjected_ReturnsTheRealReader()
-    {
-        var scheme = MainWindow.CreatePowerSchemeAccess(null);
-
-        Assert.NotNull(scheme);
-        Assert.IsType<WindowsPowerSchemeAccess>(scheme);
-    }
-
-    [Fact]
-    public void CreatePowerSchemeAccess_WithAnInjectedScheme_KeepsIt()
-    {
-        var injected = new NoActiveScheme();
-
-        Assert.Same(injected, MainWindow.CreatePowerSchemeAccess(injected));
-    }
-
-    [Fact]
-    public void MainWindow_PowerSchemeField_IsNonNullableAndInitialised()
-    {
-        // The field is what the production constructor forgot. Non-nullable means the compiler requires every
-        // constructor to assign it, and the initialiser means the constructor that assigns nothing still gets one.
-        var field = typeof(MainWindow).GetField("_schoolModeScheme", BindingFlags.Instance | BindingFlags.NonPublic);
-
-        Assert.NotNull(field);
-        Assert.Equal(typeof(IPowerSchemeAccess), field!.FieldType);
-
-        var nullability = new NullabilityInfoContext().Create(field);
-        Assert.Equal(NullabilityState.NotNull, nullability.WriteState);
-        Assert.Equal(NullabilityState.NotNull, nullability.ReadState);
-    }
-
-    [Fact]
-    public void MainWindow_EveryConstructor_LeavesThePowerSchemeAssigned()
-    {
-        // A field initialiser runs before any constructor body, so a constructor that never mentions the field still
-        // ends up with a scheme. This asserts the invariant the crash violated, without building a window: the field
-        // is non-nullable and the type compiles, so no constructor can leave it null.
-        var constructors = typeof(MainWindow).GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        var field = typeof(MainWindow).GetField("_schoolModeScheme", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-        Assert.NotEmpty(constructors);
-        Assert.Equal(NullabilityState.NotNull, new NullabilityInfoContext().Create(field).WriteState);
-    }
-
     // ---------------------------------------------------------------- 3. early boot: no active scheme yet
 
     [Fact]

@@ -35,7 +35,6 @@ jobs:
           dotnet-version: '10.0.x'
           cache: true
           cache-dependency-path: |
-            NitroLite/NitroLite.csproj
             NitroLite.Core/NitroLite.Core.csproj
             NitroLite.Windows/NitroLite.Windows.csproj
             NitroLite.Desktop/NitroLite.Desktop.csproj
@@ -45,11 +44,11 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          [xml]$proj = Get-Content NitroLite/NitroLite.csproj
+          [xml]$proj = Get-Content NitroLite.Desktop/NitroLite.Desktop.csproj
           $version = ($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
-          if (-not $version) { throw 'Version not found in NitroLite.csproj' }
+          if (-not $version) { throw 'Version not found in NitroLite.Desktop.csproj' }
           "version=$version" >> $env:GITHUB_OUTPUT
-          Write-Host "NitroLite.csproj says $version, the tag says $env:TAG"
+          Write-Host "NitroLite.Desktop.csproj says $version, the tag says $env:TAG"
 
       - name: Check the tag matches the project version
         shell: pwsh
@@ -57,7 +56,7 @@ jobs:
           $tag = $env:TAG.TrimStart('v', 'V')
           $version = '${{ steps.version.outputs.version }}'
           if ($tag -ne $version) {
-            throw "Tag $env:TAG does not match <Version>$version</Version> in NitroLite.csproj. Bump the project file and retag, or delete the tag."
+            throw "Tag $env:TAG does not match <Version>$version</Version> in NitroLite.Desktop.csproj. Bump the project file and retag, or delete the tag."
           }
           Write-Host "Tag and project version agree: $version"
 
@@ -232,10 +231,10 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' NitroLite/NitroLite.csproj | head -1)
-          if [ -z "$version" ]; then echo "::error::Version not found in NitroLite.csproj"; exit 1; fi
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' NitroLite.Desktop/NitroLite.Desktop.csproj | head -1)
+          if [ -z "$version" ]; then echo "::error::Version not found in NitroLite.Desktop.csproj"; exit 1; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "NitroLite.csproj says $version, the tag says $TAG"
+          echo "NitroLite.Desktop.csproj says $version, the tag says $TAG"
 
       - name: Publish the self-contained single-file build
         run: >

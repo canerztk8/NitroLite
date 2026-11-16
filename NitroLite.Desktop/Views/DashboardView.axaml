@@ -10,7 +10,7 @@
     <StackPanel MaxWidth="1120" HorizontalAlignment="Stretch" Margin="18" Spacing="14">
 
       <!-- A machine with no Acer nodes still opens a window; this is the sentence that explains it. -->
-      <Border Classes="card" IsVisible="{Binding HasNoBackend}">
+      <Border Classes="card" IsVisible="{Binding ShowNoBackendBanner}">
         <StackPanel Spacing="6">
           <TextBlock Classes="h2" Text="{Binding Labels.NoBackend}" />
           <TextBlock Classes="caption" Text="{Binding NoBackendDetail}" />

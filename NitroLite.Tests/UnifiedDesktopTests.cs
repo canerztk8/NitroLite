@@ -236,15 +236,26 @@ public class UnifiedDesktopTests
     [Fact]
     public void AppHost_OnWindows_WiresTheReportAndTheAutoStartCard()
     {
-        using var host = AppHost.Create();
+        // The composition root selects the UI language from the settings file it loads, and Loc is process-wide.
+        // Without the restore this test leaves the suite on whatever language an earlier test happened to save,
+        // which turns every later Turkish assertion into an order-dependent failure.
+        var original = Loc.Language;
+        try
+        {
+            using var host = AppHost.Create();
 
-        // Both cards exist only because the Windows composition root supplied a platform snapshot and a sign-in
-        // mechanism. A regression that dropped either would hide a feature the WPF build had.
-        Assert.True(host.ViewModel.HardwareReportAvailable);
-        Assert.True(host.ViewModel.AutoStartAvailable);
+            // Both cards exist only because the Windows composition root supplied a platform snapshot and a sign-in
+            // mechanism. A regression that dropped either would hide a feature the WPF build had.
+            Assert.True(host.ViewModel.HardwareReportAvailable);
+            Assert.True(host.ViewModel.AutoStartAvailable);
 
-        // The udev banner is a Linux-only affordance.
-        Assert.False(host.ViewModel.NeedsUdevRule);
+            // The udev banner is a Linux-only affordance.
+            Assert.False(host.ViewModel.NeedsUdevRule);
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+        }
     }
 
     // ---------------------------------------------------------------- 4. battery charge limit card

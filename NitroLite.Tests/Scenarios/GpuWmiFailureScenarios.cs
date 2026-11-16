@@ -107,20 +107,4 @@ public class GpuWmiFailureScenarios
 
     #endregion
 
-    #region S3-03 The GPU mode gate must fail closed
-
-    /// <summary>
-    /// A GPU mode query that failed is not evidence that the mode is supported. The gate has to refuse rather than
-    /// let the user write a mode the machine may not have.
-    /// </summary>
-    [Theory]
-    [InlineData(null, GpuOperatingMode.Optimus, false)]
-    [InlineData(null, GpuOperatingMode.DiscreteGpu, false)]
-    [InlineData(0, GpuOperatingMode.Optimus, false)]
-    public void AnUnknownCapabilityRefusesEveryGpuMode(int? capability, GpuOperatingMode target, bool expected)
-    {
-        Assert.Equal(expected, MainWindow.CanSwitchGpuMode(capability, target));
-    }
-
-    #endregion
 }

@@ -9,10 +9,9 @@ namespace NitroLite.Desktop.Themes;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The colours are the same ones <c>NitroLite/Themes/*.xaml</c> gives the WPF front end, so a user who moves between
-/// the two builds recognises the window. What differs is the delivery: WPF merges a <c>ResourceDictionary</c> from a
-/// file, Avalonia gets one built here, and both are read through <c>DynamicResource</c> so a swap repaints a live
-/// window with nothing re-bound by hand.
+/// The colours are the ones the retired WPF front end used, so a user who moves across recognises the window. What
+/// differs is the delivery: the palette is built here rather than merged from a <c>ResourceDictionary</c> file, and
+/// it is read through <c>DynamicResource</c> so a swap repaints a live window with nothing re-bound by hand.
 /// </para>
 /// <para>
 /// The soft variants are derived rather than listed. A palette that had to carry four more hand-picked colours would

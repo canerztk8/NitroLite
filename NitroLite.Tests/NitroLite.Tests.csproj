@@ -10,7 +10,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NitroLite\NitroLite.csproj" />
     <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
     <ProjectReference Include="..\NitroLite.Linux\NitroLite.Linux.csproj" />
     <!-- The Windows half of the unified backend. Referenced directly rather than through NitroLite.Desktop so the

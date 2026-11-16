@@ -127,57 +127,6 @@ public class AuditRound2Tests
     // ---------------------------------------------------------------- profile identity
 
     [Fact]
-    public void TwoGamesWithTheSameExeNameStaySeparateWhenThePathDiffers()
-    {
-        string file = Path.Combine(Path.GetTempPath(), "nl_profiles_" + Guid.NewGuid().ToString("N") + ".json");
-        try
-        {
-            using var service = new GameDetectionService(file);
-            string exe = "Game_" + Guid.NewGuid().ToString("N");
-            string pathA = Path.Combine(Path.GetTempPath(), "a", exe + ".exe");
-            string pathB = Path.Combine(Path.GetTempPath(), "b", exe + ".exe");
-
-            Assert.True(service.SaveProfile(new GameProfile { ExeName = exe, DisplayName = "A", InstallPath = pathA }));
-            Assert.True(service.SaveProfile(new GameProfile { ExeName = exe, DisplayName = "B", InstallPath = pathB }));
-
-            Assert.Equal(2, service.GetProfiles().Count(p => p.ExeName.Equals(exe, StringComparison.OrdinalIgnoreCase)));
-            Assert.Equal("A", service.GetProfile(exe, pathA)!.DisplayName);
-            Assert.Equal("B", service.GetProfile(exe, pathB)!.DisplayName);
-
-            // Deleting one must leave the other alone.
-            Assert.True(service.DeleteProfile(exe, pathA));
-            Assert.Null(service.GetProfile(exe, pathA));
-            Assert.Equal("B", service.GetProfile(exe, pathB)!.DisplayName);
-        }
-        finally
-        {
-            try { File.Delete(file); } catch { }
-        }
-    }
-
-    [Fact]
-    public void AProfileWithoutAPathAdoptsThePathInsteadOfDuplicating()
-    {
-        string file = Path.Combine(Path.GetTempPath(), "nl_profiles_" + Guid.NewGuid().ToString("N") + ".json");
-        try
-        {
-            using var service = new GameDetectionService(file);
-            string exe = "Game_" + Guid.NewGuid().ToString("N");
-            string path = Path.Combine(Path.GetTempPath(), "c", exe + ".exe");
-
-            Assert.True(service.SaveProfile(new GameProfile { ExeName = exe, DisplayName = "First" }));
-            Assert.True(service.SaveProfile(new GameProfile { ExeName = exe, DisplayName = "Second", InstallPath = path }));
-
-            Assert.Single(service.GetProfiles(), p => p.ExeName.Equals(exe, StringComparison.OrdinalIgnoreCase));
-            Assert.Equal("Second", service.GetProfile(exe, path)!.DisplayName);
-        }
-        finally
-        {
-            try { File.Delete(file); } catch { }
-        }
-    }
-
-    [Fact]
     public void IsInstalledIsFalseOnlyWhenTheRecordedExeIsGone()
     {
         string missing = Path.Combine(Path.GetTempPath(), "nl_missing_" + Guid.NewGuid().ToString("N") + ".exe");

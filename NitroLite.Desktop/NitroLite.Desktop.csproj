@@ -23,16 +23,16 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <!-- The Linux manifest: asInvoker, because the udev rule grants the session user write access and a manifest that
-         asked for elevation would make the app unusable on a desktop with no sudo prompt. -->
+  <PropertyGroup>
+    <!-- One manifest for both targets, and it lives here rather than in the retired WPF project. asInvoker on both:
+         the Linux build never needs elevation because the udev rule grants the session user write access, and the
+         Windows build elevates a helper rather than itself. PerMonitorV2 is what keeps the window sharp at 125% and
+         150% scaling. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
-  </PropertyGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
-    <!-- The same asInvoker manifest the WPF front end ships, shared rather than copied so the two Windows builds
-         cannot drift apart on the execution level or the DPI awareness. -->
-    <ApplicationManifest>..\NitroLite\app.manifest</ApplicationManifest>
+    <!-- The icon Explorer and the taskbar show. The WPF project carried it; the Avalonia build is the only front end
+         now, so it carries it instead. -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -65,10 +65,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The tray icon. Shared with the Windows build rather than copied, so the two front ends cannot drift apart, and
-         an AvaloniaResource rather than an EmbeddedResource because TrayIcon takes a WindowIcon, which is loaded
-         through AssetLoader from avares://. -->
-    <AvaloniaResource Include="..\NitroLite\app.ico" Link="Assets\app.ico" />
+    <!-- The tray icon and the window icon. An AvaloniaResource rather than an EmbeddedResource because TrayIcon takes
+         a WindowIcon, which is loaded through AssetLoader from avares://. -->
+    <AvaloniaResource Include="app.ico" Link="Assets\app.ico" />
   </ItemGroup>
 
 </Project>

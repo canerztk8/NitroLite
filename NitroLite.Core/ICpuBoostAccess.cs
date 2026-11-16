@@ -6,7 +6,7 @@ namespace NitroLite.Core;
 /// </summary>
 /// <remarks>
 /// The Windows implementation is <c>CpuPowerService</c>, which reaches the active power scheme through
-/// <c>powrprof.dll</c>. It stays in the WPF project; this interface is what lets school mode be compiled, and its
+/// <c>powrprof.dll</c>. It lives in NitroLite.Windows; this interface is what lets school mode be compiled, and its
 /// undo record tested, on a machine that has no power scheme at all.
 /// </remarks>
 public interface ICpuBoostAccess

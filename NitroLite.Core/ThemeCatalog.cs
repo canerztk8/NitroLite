@@ -48,17 +48,6 @@ public static class ThemeCatalog
     public static bool IsDarkTheme(string? themeName) =>
         TryParse(themeName, out var theme) && IsDarkTheme(theme);
 
-    /// <summary>The dictionary file for a concrete palette, relative to the application root.</summary>
-    public static string DictionaryPath(AppTheme theme) => theme switch
-    {
-        AppTheme.Dark => "Themes/Dark.xaml",
-        AppTheme.MidnightOled => "Themes/MidnightOled.xaml",
-        AppTheme.SlateSteel => "Themes/SlateSteel.xaml",
-        AppTheme.AmberConsole => "Themes/AmberConsole.xaml",
-        AppTheme.NordFrost => "Themes/NordFrost.xaml",
-        _ => "Themes/Light.xaml"
-    };
-
     /// <summary>
     /// The Turkish catalogue key that names <paramref name="theme"/> in the settings picker. The key is the source
     /// text, so the seven catalogues translate it like any other label.

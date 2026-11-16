@@ -473,21 +473,6 @@ public class CapabilityProbeTests
         Assert.Empty(AcerRegistrySnapshot.Empty.SupportedGpuModes);
     }
 
-    [Fact]
-    public void TheWindowPickerAndTheProbeAgreeOnTheBitmask()
-    {
-        // Both used to carry their own copy of the shift; a divergence would show a mode the hardware does not have.
-        foreach (var mode in Enum.GetValues<GpuOperatingMode>())
-        {
-            for (int mask = 0; mask <= 7; mask++)
-            {
-                Assert.Equal(
-                    AcerRegistrySnapshot.IsGpuModeSupported(mask, mode),
-                    MainWindow.IsGpuModeSupported(mask, mode));
-            }
-        }
-    }
-
     // ---------------------------------------------------------------- hardware report
 
     [Fact]

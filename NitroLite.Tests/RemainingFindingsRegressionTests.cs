@@ -163,27 +163,6 @@ public class RemainingFindingsRegressionTests
     }
 
     // =========================================================================
-    // FINDING 4: GameDetectionService Automation Disabled Race Condition Safety
-    // =========================================================================
-
-    [Fact]
-    public void Finding4_ScanProcesses_WhenAutoGameModeDisabled_NeverSetsActiveProfileOrDispatchesStarted()
-    {
-        using var service = new GameDetectionService();
-        service.AutoGameModeEnabled = false;
-
-        bool gameStartedFired = false;
-        service.GameStarted += _ => gameStartedFired = true;
-
-        service.TriggerScanForTesting();
-
-        Assert.False(gameStartedFired);
-        Assert.False(service.IsGameActive);
-        Assert.Null(service.ActiveGameProfile);
-        Assert.Equal(0, service.ActiveProcessId);
-    }
-
-    // =========================================================================
     // FINDING 5: MUX / GPU Operating Mode Unknown Initial State Handling
     // =========================================================================
 
@@ -261,29 +240,4 @@ public class RemainingFindingsRegressionTests
         Assert.Equal(expectedSuccess, actual);
     }
 
-    [Fact]
-    public void Finding4_GameDetectionService_ExitDetectionRace_DoesNotDispatchDuplicateGameEnded()
-    {
-        using var service = new GameDetectionService();
-        var dummyProfile = new GameProfile { ExeName = "testgame", DisplayName = "Test Game", AutoApply = true };
-
-        int gameEndedCount = 0;
-        service.GameEnded += _ => Interlocked.Increment(ref gameEndedCount);
-
-        // 1. Simulate active game running
-        service.SetActiveGameForTesting(dummyProfile, 999999); // PID that doesn't exist
-        Assert.True(service.IsGameActive);
-
-        // 2. Concurrently disable auto game mode (which cleans up active game)
-        service.AutoGameModeEnabled = false;
-
-        // GameEnded should fire exactly once for the teardown
-        Assert.Equal(1, gameEndedCount);
-        Assert.False(service.IsGameActive);
-
-        // 3. Fast-path exit scan executes after teardown: it must NOT fire GameEnded again!
-        service.TriggerScanForTesting();
-
-        Assert.Equal(1, gameEndedCount);
-    }
 }

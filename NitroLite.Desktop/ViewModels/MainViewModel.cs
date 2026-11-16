@@ -227,6 +227,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// can start elevated without a UAC prompt; the settings card hides itself everywhere else.
     /// </summary>
     private readonly IAutoStartService? _autoStart;
+
+    /// <summary>
+    /// The battery refresh-rate policy, or null when the caller did not wire it. Null hides the settings switch, which
+    /// is what a platform that cannot change the refresh rate should do.
+    /// </summary>
+    private readonly RefreshRateAutomation? _refreshRate;
+
+    /// <summary>Where the AC/battery state comes from, or null when the caller did not supply one.</summary>
+    private readonly Func<(bool OnAc, int? BatteryPercent)>? _powerState;
+
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
@@ -298,6 +308,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool _lcdOverdriveOn;
     private bool _backlightTimeoutOn;
     private bool _batteryLimitOn;
+    private bool _autoRefreshRateOnBattery;
+    private string _refreshRateStatus = "";
     private bool _autoStartOn;
     private string _autoStartStatus = "";
 
@@ -336,13 +348,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RgbProfileService? rgbProfiles = null,
         IThemeApplier? themeApplier = null,
         IRescannableBackend? rescan = null,
-        IAutoStartService? autoStart = null)
+        IAutoStartService? autoStart = null,
+        RefreshRateAutomation? refreshRate = null,
+        Func<(bool OnAc, int? BatteryPercent)>? powerState = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
         _platform = platform;
         _rescan = rescan;
         _autoStart = autoStart;
+        _refreshRate = refreshRate;
+        _powerState = powerState;
+        _autoRefreshRateOnBattery = settings.AutoRefreshRateSwitching;
         _settingsPath = settingsPath;
         _gameProfiles = gameProfiles;
         _schoolMode = schoolMode;
@@ -371,7 +388,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         // The pill is short on purpose; the banner carries the sentence that explains it.
-        _status = HasNoBackend ? _labels.NoBackend : _labels.Ready;
+        // The footer pill makes the same claim as the banner, so it uses the same rule: a backend that has not opened
+        // its transport yet is not a machine without hardware.
+        _status = ShowNoBackendBanner ? _labels.NoBackend : _labels.Ready;
 
         ApplyFanModeCommand = new AsyncCommand(ApplyFanModeAsync);
         AddGameProfileCommand = new RelayCommand(AddGameProfile);
@@ -427,6 +446,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public bool HasBackend => _hardware != null && _hardware.IsAvailable;
 
     public bool HasNoBackend => !HasBackend;
+
+    /// <summary>
+    /// True only when the app genuinely has nothing to talk to, which is what the banner and the settings row claim.
+    /// </summary>
+    /// <remarks>
+    /// A backend that exists but has not opened its transport yet is not the same thing. On Windows the transport
+    /// opens on demand, so <see cref="HasBackend"/> is false for the first seconds of every launch — long enough to
+    /// paint "no hardware backend" across the top of a working Nitro 16. The banner therefore needs a backend object
+    /// to be missing, or a platform whose negative answer is conclusive.
+    /// </remarks>
+    public bool ShowNoBackendBanner =>
+        _hardware == null || (NegativeAnswersAreConclusive && !HasBackend);
 
     /// <summary>
     /// The second line of the banner. Two different machines reach this state — a Windows build with no backend at
@@ -756,12 +787,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public bool BatteryLimitAvailable => _capabilities.BatteryChargeLimit;
 
+    /// <summary>True when the backend reports at least one of the optional switches this page carries.</summary>
+    public bool HasAnyExtra => CoolBoostAvailable || LcdOverdriveAvailable || BacklightTimeoutAvailable;
+
     /// <summary>
     /// True when the probe found none of the optional nodes this page carries, so the page can say so once. The battery
     /// limit is not in that list: it has its own card on the dashboard, where a user looks for it.
     /// </summary>
-    public bool NoExtrasAvailable =>
-        !CoolBoostAvailable && !LcdOverdriveAvailable && !BacklightTimeoutAvailable;
+    /// <remarks>
+    /// A negative answer is only allowed to become a claim when the platform can actually answer. The Windows service
+    /// socket has no CoolBoost or overdrive command, so both read as false on a machine that has them; saying "not on
+    /// this device" from that would be a lie about the user's hardware.
+    /// </remarks>
+    public bool NoExtrasAvailable => NegativeAnswersAreConclusive && !HasAnyExtra;
+
+    /// <summary>
+    /// True when the extras card has something to show: a switch, or the one-line "nothing here" badge. A platform
+    /// that cannot answer hides the card instead of leaving a titled empty box.
+    /// </summary>
+    public bool ShowExtrasCard => HasAnyExtra || NegativeAnswersAreConclusive;
+
+    /// <summary>
+    /// True when a "not supported" answer from this platform is a real answer rather than "could not ask". False on
+    /// Windows, where the transport opens on demand and the service socket cannot answer every capability.
+    /// </summary>
+    private bool NegativeAnswersAreConclusive => _platform?.NegativeAnswersAreConclusive ?? true;
 
     public bool BatteryLimitOn
     {
@@ -809,6 +859,47 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool HasAutoStartStatus => !string.IsNullOrWhiteSpace(AutoStartStatus);
+
+    // ---------------------------------------------------------------- battery refresh rate
+
+    /// <summary>
+    /// True when this platform can change the panel's refresh rate. The card hides itself otherwise, which is what
+    /// Linux does: the rate is not reachable from sysfs and a switch that cannot work is worse than no switch.
+    /// </summary>
+    public bool AutoRefreshRateAvailable => _refreshRate?.IsSupported == true;
+
+    /// <summary>
+    /// Drops the built-in panel to 60 Hz on battery and puts the user's own rate back on mains.
+    /// </summary>
+    /// <remarks>
+    /// The setter forces an evaluation: turning the option on while the machine is already on battery has to take
+    /// effect now, not at the next replug. The rate that was replaced is remembered by the automation, so a user who
+    /// deliberately runs at 120 Hz is not promoted to 165 Hz on every replug.
+    /// </remarks>
+    public bool AutoRefreshRateOnBattery
+    {
+        get => _autoRefreshRateOnBattery;
+        set
+        {
+            if (!Set(ref _autoRefreshRateOnBattery, value)) return;
+            _settings.AutoRefreshRateSwitching = value;
+            SaveSettings();
+            ApplyRefreshRate(force: true);
+        }
+    }
+
+    /// <summary>What the last transition did, or empty. The row is hidden rather than left blank.</summary>
+    public string RefreshRateStatus
+    {
+        get => _refreshRateStatus;
+        private set
+        {
+            if (!Set(ref _refreshRateStatus, value)) return;
+            Raise(nameof(HasRefreshRateStatus));
+        }
+    }
+
+    public bool HasRefreshRateStatus => !string.IsNullOrWhiteSpace(RefreshRateStatus);
 
     // ---------------------------------------------------------------- MUX switch
 
@@ -1279,6 +1370,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(CoolBoostAvailable));
             Raise(nameof(LcdOverdriveAvailable));
             Raise(nameof(BacklightTimeoutAvailable));
+            Raise(nameof(HasAnyExtra));
+            Raise(nameof(NoExtrasAvailable));
+            Raise(nameof(ShowExtrasCard));
             Raise(nameof(BatteryLimitAvailable));
             Raise(nameof(MuxAvailable));
             Raise(nameof(SchoolModeColumnSpan));
@@ -1297,6 +1391,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Status = Labels.NoAcerNodes;
                 Raise(nameof(HasBackend));
                 Raise(nameof(HasNoBackend));
+                Raise(nameof(ShowNoBackendBanner));
                 Raise(nameof(NoBackendDetail));
                 return;
             }
@@ -1346,6 +1441,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // Game detection runs on the same tick as telemetry, every other second: a /proc scan is cheap but not
             // free, and a game that starts is not going to be missed by a one-second delay.
             if (++_tick % 2 == 0) await PollGameAsync().ConfigureAwait(true);
+
+            // The refresh-rate policy is transition-driven, so after the first call this is a boolean comparison. It
+            // runs on every tick because a replug is not something to notice two seconds late.
+            ApplyRefreshRate(force: false);
         }
         catch (Exception ex)
         {
@@ -1460,6 +1559,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             AppLog.Warn("Otomatik başlatma değiştirilemedi", ex.ToString());
             AutoStartStatus = Labels.AutoStartFailed;
+        }
+    }
+
+    /// <summary>
+    /// Runs the battery refresh-rate policy for the current power state. Silent when the caller wired no automation,
+    /// no power state, or the platform cannot change the rate.
+    /// </summary>
+    private void ApplyRefreshRate(bool force)
+    {
+        if (_refreshRate == null || _powerState == null) return;
+
+        try
+        {
+            var (onAc, _) = _powerState();
+            var result = _refreshRate.Apply(onAc, force);
+
+            RefreshRateStatus = result.Action switch
+            {
+                RefreshRateAction.LoweredToBattery => Labels.RefreshRateLowered,
+                RefreshRateAction.RestoredToMaximum => Labels.RefreshRateRestored,
+                RefreshRateAction.Failed => Labels.RefreshRateFailed,
+                _ => RefreshRateStatus
+            };
+
+            if (result.Changed) AppLog.Info("Ekran yenileme hızı değişti", $"{result.From} Hz -> {result.To} Hz");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Ekran yenileme hızı değiştirilemedi", ex.Message);
         }
     }
 
@@ -1918,6 +2046,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(CoolBoostAvailable));
         Raise(nameof(LcdOverdriveAvailable));
         Raise(nameof(BacklightTimeoutAvailable));
+        Raise(nameof(HasAnyExtra));
+        Raise(nameof(NoExtrasAvailable));
+        Raise(nameof(ShowExtrasCard));
         Raise(nameof(BatteryLimitAvailable));
         Raise(nameof(MuxAvailable));
         Raise(nameof(SchoolModeColumnSpan));

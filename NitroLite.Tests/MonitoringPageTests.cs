@@ -51,29 +51,3 @@ public class HardwareInfoTests
         Assert.True(info.CpuThreads >= info.CpuCores);
     }
 }
-
-public class ChartValueTests
-{
-    [Fact]
-    public void GpuMetrics_AreSkippedWhileTheGpuSleeps()
-    {
-        var asleep = new MonitorData { GpuTemperature = 0, GpuPowerWatts = 0, GpuUsage = 0, VramTotalMB = 8192 };
-        Assert.Null(MainWindow.GetChartValue("GPU_TEMP", asleep));
-        Assert.Null(MainWindow.GetChartValue("GPU_WATT", asleep));
-        Assert.Null(MainWindow.GetChartValue("GPU_USAGE", asleep));
-        Assert.Null(MainWindow.GetChartValue("VRAM_GB", asleep));
-
-        var awake = new MonitorData { GpuTemperature = 55, GpuPowerWatts = 20, GpuUsage = 12, VramUsedMB = 2048, VramTotalMB = 8192 };
-        Assert.Equal(55, MainWindow.GetChartValue("GPU_TEMP", awake));
-        Assert.Equal(2.0, MainWindow.GetChartValue("VRAM_GB", awake));
-    }
-
-    [Fact]
-    public void MissingCpuReadings_AreSkipped_ButZeroUsageIsReal()
-    {
-        var d = new MonitorData { CpuTemperature = 0, CpuFrequencyMHz = 0, CpuUsage = 0 };
-        Assert.Null(MainWindow.GetChartValue("CPU_TEMP", d));
-        Assert.Null(MainWindow.GetChartValue("CPU_GHZ", d));
-        Assert.Equal(0, MainWindow.GetChartValue("CPU_USAGE", d));
-    }
-}

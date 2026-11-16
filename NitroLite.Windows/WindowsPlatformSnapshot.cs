@@ -66,6 +66,14 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
     public bool NeedsUdevRule => false;
 
     /// <summary>
+    /// Always false here. The transport opens on demand — the Acer service may not be up yet and the WMI worker is
+    /// only started when the user elevates — so an unavailable backend means "nothing is open yet", not "no hardware".
+    /// The service socket also has no CoolBoost or overdrive command, so those two read as false on a machine that has
+    /// both. The window therefore reports an unsupported capability as unknown rather than as absent.
+    /// </summary>
+    public bool NegativeAnswersAreConclusive => false;
+
+    /// <summary>
     /// What the probe wanted to say: the matched profile's notes and any profile records validation dropped. Empty
     /// when there is nothing to report, which is what hides the Notes card.
     /// </summary>

@@ -112,12 +112,4 @@ public class AuditDefectRemediationTests
         Assert.Empty(exceptions);
     }
 
-    [Fact]
-    public void OsdOverlayWindow_IsExiting_Property_CanBeSet()
-    {
-        var type = typeof(OsdOverlayWindow);
-        var prop = type.GetProperty("IsExiting");
-        Assert.NotNull(prop);
-        Assert.Equal(typeof(bool), prop.PropertyType);
-    }
 }

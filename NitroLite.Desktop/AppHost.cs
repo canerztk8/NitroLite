@@ -48,12 +48,14 @@ public sealed class AppHost : IDisposable
         string settingsPath,
         GameProfileService? gameProfiles,
         SchoolModeService? schoolMode,
-        RgbProfileService rgbProfiles)
+        RgbProfileService rgbProfiles,
+        RefreshRateAutomation? refreshRate,
+        Func<(bool OnAc, int? BatteryPercent)>? powerState)
     {
         _hardware = hardware;
         ViewModel = new MainViewModel(
             settings, hardware, platform, settingsPath, gameProfiles, schoolMode, rgbProfiles,
-            DesktopThemeManager.Instance, rescan, autoStart);
+            DesktopThemeManager.Instance, rescan, autoStart, refreshRate, powerState);
     }
 
     public MainViewModel ViewModel { get; }
@@ -86,13 +88,16 @@ public sealed class AppHost : IDisposable
         IAutoStartService? autoStart = null;
         GameProfileService? gameProfiles = null;
         SchoolModeService? schoolMode = null;
+        RefreshRateAutomation? refreshRate = null;
+        Func<(bool OnAc, int? BatteryPercent)>? powerState = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
         {
             try
             {
-                (hardware, platform, rescan, autoStart, gameProfiles, schoolMode) = CreateWindows(settings);
+                (hardware, platform, rescan, autoStart, gameProfiles, schoolMode, refreshRate, powerState) =
+                    CreateWindows(settings);
             }
             catch (Exception ex)
             {
@@ -116,6 +121,16 @@ public sealed class AppHost : IDisposable
                 var fs = RealSysfsFileSystem.Instance;
                 gameProfiles = CreateLinuxGameProfiles(settings, controller, fs);
                 schoolMode = CreateLinuxSchoolMode(settings, controller, linux, fs);
+
+                // The Linux display service reports IsSupported false, so the automation is inert and the settings
+                // card hides itself. Wiring it anyway keeps the composition root free of a platform branch that would
+                // have to be remembered when a Wayland or XRandR backend is added.
+                refreshRate = new RefreshRateAutomation(new LinuxDisplayRefreshRateService(), settings);
+                powerState = () =>
+                {
+                    var (onAc, percent) = LinuxPowerSupply.Read(fs);
+                    return (onAc ?? true, percent);
+                };
             }
             catch (Exception ex)
             {
@@ -126,7 +141,8 @@ public sealed class AppHost : IDisposable
 #endif
 
         return new AppHost(
-            settings, hardware, platform, rescan, autoStart, settingsPath, gameProfiles, schoolMode, new RgbProfileService());
+            settings, hardware, platform, rescan, autoStart, settingsPath, gameProfiles, schoolMode,
+            new RgbProfileService(), refreshRate, powerState);
     }
 
 #if WINDOWS
@@ -141,7 +157,9 @@ public sealed class AppHost : IDisposable
         IRescannableBackend Rescan,
         IAutoStartService AutoStart,
         GameProfileService GameProfiles,
-        SchoolModeService SchoolMode) CreateWindows(AppSettings settings)
+        SchoolModeService SchoolMode,
+        RefreshRateAutomation RefreshRate,
+        Func<(bool OnAc, int? BatteryPercent)> PowerState) CreateWindows(AppSettings settings)
     {
         var identity = HardwareDetector.Current;
         var catalog = ProfileCatalog.Load();
@@ -199,7 +217,11 @@ public sealed class AppHost : IDisposable
         // direct-WMI path usable at sign-in.
         var autoStart = new ElevatedAutoStartService();
 
-        return (hybrid, platform, platform, autoStart, gameProfiles, schoolMode);
+        // The panel automation. The power state is the same reader the game profiles use, so a Turbo profile and a
+        // 60 Hz drop can never disagree about whether the charger is plugged in.
+        var refreshRate = new RefreshRateAutomation(new DisplayRefreshRateService(), settings);
+
+        return (hybrid, platform, platform, autoStart, gameProfiles, schoolMode, refreshRate, WindowsPowerStatus.Read);
     }
 
     /// <summary>

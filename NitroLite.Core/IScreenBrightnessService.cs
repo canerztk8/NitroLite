@@ -4,7 +4,7 @@ namespace NitroLite.Core;
 /// <remarks>
 /// The contract lives here, next to the school-mode state machine that is its only consumer, so the state machine
 /// can be compiled and tested without the WMI implementation. The Windows implementation
-/// (<c>ScreenBrightnessService</c>) stays in the WPF project because it talks to <c>WmiMonitorBrightness</c>.
+/// (<c>ScreenBrightnessService</c>) lives in NitroLite.Windows because it talks to <c>WmiMonitorBrightness</c>.
 /// </remarks>
 public interface IScreenBrightnessService
 {

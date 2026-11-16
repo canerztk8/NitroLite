@@ -144,7 +144,7 @@
         </StackPanel>
       </Border>
 
-      <Border Classes="card">
+      <Border Classes="card" IsVisible="{Binding ShowExtrasCard}">
         <StackPanel Spacing="12">
           <TextBlock Classes="h2" Text="{Binding Labels.Extras}" />
 

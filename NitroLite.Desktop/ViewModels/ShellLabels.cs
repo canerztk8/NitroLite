@@ -26,7 +26,7 @@ public sealed class ShellLabels
     public string Ready => Loc.T("Hazır");
     public string NotConnected => Loc.T("Bağlı değil");
     public string NoBackend => Loc.T("Donanım arka ucu yok");
-    public string NoBackendDetail => Loc.T("Bu sürüm Linux sysfs arka ucunu kullanır. Windows'ta NitroLite (WPF) sürümünü kullanın.");
+    public string NoBackendDetail => Loc.T("Donanım arka ucu yanıt vermedi. Linux'ta acer-wmi veya Linuwu-Sense modülünün yüklü olduğunu, Windows'ta uygulamanın yönetici olarak çalıştığını denetleyin.");
     public string NoAcerNodes => Loc.T("Bu makinede Acer donanım düğümü bulunamadı.");
 
     // ---------------------------------------------------------------- dashboard
@@ -111,6 +111,12 @@ public sealed class ShellLabels
     public string AutoStartEnabled => Loc.T("Otomatik başlatma açıldı.");
     public string AutoStartDisabled => Loc.T("Otomatik başlatma kapatıldı.");
     public string AutoStartFailed => Loc.T("Otomatik başlatma değiştirilemedi.");
+
+    public string AutoRefreshRate => Loc.T("Pilde otomatik 60 Hz'e düşür");
+    public string AutoRefreshRateHint => Loc.T("Pil gücüne geçildiğinde panel 60 Hz'e iner; prize takılınca önceki hız geri gelir.");
+    public string RefreshRateLowered => Loc.T("Pil gücünde panel 60 Hz'e düşürüldü.");
+    public string RefreshRateRestored => Loc.T("Prize takıldı, önceki yenileme hızı geri getirildi.");
+    public string RefreshRateFailed => Loc.T("Ekran yenileme hızı değiştirilemedi.");
 
     // ---------------------------------------------------------------- MUX switch
     public string MuxSwitch => Loc.T("MUX Switch");

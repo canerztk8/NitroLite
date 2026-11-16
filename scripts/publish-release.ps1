@@ -3,7 +3,8 @@
     Builds the downloadable NitroLite package: artifacts\NitroLite-v<version>-win-x64.zip
 
 .DESCRIPTION
-    - NitroLite.exe: self-contained single file (no .NET install needed on the target PC).
+    - NitroLite.Desktop.exe: self-contained single file (no .NET install needed on the target PC). The Avalonia
+      front end is the only one that ships; the WPF project it replaced is retired.
     - Pinned to a patched .NET runtime ($RuntimeVersion). 10.0.14 fixes CVE-2026-111497 (Brotli decoder,
       GHSA-p3jp-9v83-76w9); the SDK's bundled 10.0.12 is affected, so never ship a package built without the pin.
     - tools\WinMemoryCleaner.exe: the unmodified upstream release, so the memory card works out of the box.
@@ -27,9 +28,9 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
-[xml]$proj = Get-Content (Join-Path $root 'NitroLite\NitroLite.csproj')
+[xml]$proj = Get-Content (Join-Path $root 'NitroLite.Desktop\NitroLite.Desktop.csproj')
 $version = ($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ } | Select-Object -First 1)
-if (-not $version) { throw 'Version not found in NitroLite.csproj' }
+if (-not $version) { throw 'Version not found in NitroLite.Desktop.csproj' }
 
 $artifacts = Join-Path $root 'artifacts'
 $stage     = Join-Path $artifacts 'NitroLite'
@@ -53,7 +54,7 @@ New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
 Get-ChildItem $artifacts -Force | Where-Object { $_.Name -like 'NitroLite*' } | Remove-Item -Recurse -Force
 # Always publish from a clean win-x64 build: an incremental build once kept a stale g.resources without app.ico,
 # and the packaged window then failed to open. (The normal Release build folder is left alone.)
-foreach ($p in 'NitroLite\obj\Release\net10.0-windows\win-x64', 'NitroLite\bin\Release\net10.0-windows\win-x64') {
+foreach ($p in 'NitroLite.Desktop\obj\Release\net10.0-windows\win-x64', 'NitroLite.Desktop\bin\Release\net10.0-windows\win-x64') {
     $full = Join-Path $root $p
     if (Test-Path $full) { Remove-Item $full -Recurse -Force }
 }
@@ -64,7 +65,7 @@ if (-not $SkipTests) {
 }
 
 Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
-    dotnet publish NitroLite/NitroLite.csproj -c Release -r win-x64 --self-contained true `
+    dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0-windows -r win-x64 --self-contained true `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
         -p:RuntimeFrameworkVersion=$RuntimeVersion -p:DebugType=none `
         -o $stage --nologo
@@ -74,9 +75,9 @@ Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
 Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item -Force
 
 # Guard against the vulnerable runtime: the single-file host carries the runtime version string.
-$exeBytes = [IO.File]::ReadAllBytes((Join-Path $stage 'NitroLite.exe'))
+$exeBytes = [IO.File]::ReadAllBytes((Join-Path $stage 'NitroLite.Desktop.exe'))
 if (-not ([Text.Encoding]::ASCII.GetString($exeBytes).Contains($RuntimeVersion))) {
-    throw "NitroLite.exe does not reference runtime $RuntimeVersion"
+    throw "NitroLite.Desktop.exe does not reference runtime $RuntimeVersion"
 }
 
 Copy-Item (Join-Path $root 'LICENSE') $stage
@@ -117,7 +118,7 @@ try {
 # Nothing else may reach the package: the updater refuses unknown entries, so a stray file
 # here would break in-app updates for everyone.
 $allowed = @(
-    'NitroLite.exe',
+    'NitroLite.Desktop.exe',
     'LICENSE',
     'THIRD-PARTY-NOTICES.md',
     'tools\WinMemoryCleaner.exe',

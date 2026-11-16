@@ -129,11 +129,11 @@ public class LocalizationSourceCoverageTests
         var keys = EnglishKeys();
         var missing = new List<string>();
 
-        // Every project that shows text: the platform-independent half of the source strings moved to NitroLite.Core,
+        // Every project that shows text: the platform-independent half of the source strings lives in NitroLite.Core,
         // the cross-platform shell keeps its labels in NitroLite.Desktop, and the Windows hardware and system services
-        // moved to NitroLite.Windows. A scan that looked at only one of them would stop seeing the others and let a
+        // live in NitroLite.Windows. A scan that looked at only one of them would stop seeing the others and let a
         // missing key through.
-        var files = new[] { "NitroLite", "NitroLite.Core", "NitroLite.Desktop", "NitroLite.Windows" }
+        var files = new[] { "NitroLite.Core", "NitroLite.Desktop", "NitroLite.Windows" }
             .SelectMany(project => Directory.GetFiles(Path.Combine(RepoRoot(), project), "*.cs", SearchOption.AllDirectories));
 
         foreach (var file in files)
@@ -158,7 +158,7 @@ public class LocalizationSourceCoverageTests
     }
 
     /// <summary>
-    /// The XAML keeps the Turkish source text, which is also the catalogue key, so a string edited in the markup
+    /// The markup keeps the Turkish source text, which is also the catalogue key, so a string edited in the view
     /// stops being translated without anything failing: the window still opens, in Turkish, in all seven languages.
     /// The code-side scan above cannot see this, because the string never passes through <c>Loc.T</c>.
     /// </summary>
@@ -168,7 +168,7 @@ public class LocalizationSourceCoverageTests
         var keys = EnglishKeys();
         var missing = new List<string>();
 
-        foreach (var file in Directory.GetFiles(Path.Combine(RepoRoot(), "NitroLite"), "*.xaml", SearchOption.AllDirectories))
+        foreach (var file in Directory.GetFiles(Path.Combine(RepoRoot(), "NitroLite.Desktop"), "*.axaml", SearchOption.AllDirectories))
         {
             if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
                 || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
@@ -188,28 +188,24 @@ public class LocalizationSourceCoverageTests
     }
 
     /// <summary>
-    /// The properties <see cref="NitroLite.Core.LocXaml"/> rewrites, minus the values that are not prose: a markup
+    /// The prose-carrying attributes of an Avalonia view, minus the values that are not prose: a binding or markup
     /// extension, a glyph entity, and anything without a run of two letters (<c>%80</c>, <c>60°</c>, <c>v1.2</c>).
     /// </summary>
     private static IEnumerable<(string Value, string Where)> XamlStrings(string source, string file)
     {
-        var attribute = new Regex("\\b(?:Text|Content|Header|ToolTip|Title)=\"(?<value>[^\"]*)\"", RegexOptions.Compiled);
-        var run = new Regex("<Run\\b[^>]*\\bText=\"(?<value>[^\"]*)\"", RegexOptions.Compiled);
+        var attribute = new Regex("\\b(?:Text|Content|Header|ToolTip\\.Tip|Title)=\"(?<value>[^\"]*)\"", RegexOptions.Compiled);
 
-        foreach (var regex in new[] { attribute, run })
+        foreach (Match match in attribute.Matches(source))
         {
-            foreach (Match match in regex.Matches(source))
-            {
-                var raw = match.Groups["value"].Value;
-                if (raw.Contains("&#x", StringComparison.Ordinal)) continue;
-                if (raw.StartsWith('{')) continue;
+            var raw = match.Groups["value"].Value;
+            if (raw.Contains("&#x", StringComparison.Ordinal)) continue;
+            if (raw.StartsWith('{')) continue;
 
-                var value = System.Net.WebUtility.HtmlDecode(raw);
-                if (!Regex.IsMatch(value, "[A-Za-zÇĞİÖŞÜçğıöşü]{2}")) continue;
+            var value = System.Net.WebUtility.HtmlDecode(raw);
+            if (!Regex.IsMatch(value, "[A-Za-zÇĞİÖŞÜçğıöşü]{2}")) continue;
 
-                var line = source.Take(match.Index).Count(c => c == '\n') + 1;
-                yield return (value, $"{file}:{line}");
-            }
+            var line = source.Take(match.Index).Count(c => c == '\n') + 1;
+            yield return (value, $"{file}:{line}");
         }
     }
 

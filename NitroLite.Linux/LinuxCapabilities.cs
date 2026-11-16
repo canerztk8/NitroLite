@@ -86,6 +86,12 @@ public sealed record LinuxCapabilities : IPlatformSnapshot
     public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
 
     /// <summary>
+    /// Always true here: the sysfs tree is enumerated once at startup, so a node that is not there is not there. A
+    /// false <c>IsAvailable</c> on this platform really does mean the kernel has no Acer module.
+    /// </summary>
+    public bool NegativeAnswersAreConclusive => true;
+
+    /// <summary>
     /// The privacy-safe Markdown report: DMI, the acer-wmi and Linuwu-Sense nodes, hwmon and the udev state. No serial
     /// number, machine UUID, user name or personal file path, which is what makes it safe to paste into an issue.
     /// </summary>

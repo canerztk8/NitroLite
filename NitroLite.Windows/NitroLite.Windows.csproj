@@ -25,6 +25,10 @@
   <ItemGroup>
     <!-- WMI: the Acer root\WMI classes, the SMBIOS identity and the battery class. -->
     <PackageReference Include="System.Management" Version="10.0.14" />
+
+    <!-- PowerModeChanged, which the battery watchdog and the power automation subscribe to. The WPF project got it
+         transitively from UseWPF; a class library has to ask for it. -->
+    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
