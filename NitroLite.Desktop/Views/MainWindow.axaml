@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:NitroLite.Desktop.ViewModels"
+        xmlns:views="using:NitroLite.Desktop.Views"
+        x:Class="NitroLite.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="NitroLite"
+        Width="1120"
+        Height="800"
+        MinWidth="960"
+        MinHeight="660"
+        WindowStartupLocation="CenterScreen">
+
+  <!-- Three rows: a fixed header, the tab body, a fixed status line. Only the middle row scrolls, so the device name
+       and the last write result stay visible while the user is deep in the fan curve. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <Border Grid.Row="0"
+            Background="#11161D"
+            BorderBrush="#1E2530"
+            BorderThickness="0,0,0,1"
+            Padding="20,14">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Classes="h1" Text="{Binding Labels.AppTitle}" VerticalAlignment="Center" />
+          <Border Classes="pill" VerticalAlignment="Center">
+            <TextBlock Classes="caption" Text="{Binding DeviceModel}" />
+          </Border>
+        </StackPanel>
+
+        <Border Grid.Column="2" Classes="pill" VerticalAlignment="Center">
+          <TextBlock Classes="caption" Text="{Binding Status}" />
+        </Border>
+      </Grid>
+    </Border>
+
+    <TabControl Grid.Row="1" TabStripPlacement="Left" Padding="0">
+      <TabItem Header="{Binding Labels.Dashboard}">
+        <views:DashboardView />
+      </TabItem>
+      <TabItem Header="{Binding Labels.Lighting}">
+        <views:LightingView />
+      </TabItem>
+      <TabItem Header="{Binding Labels.Settings}">
+        <views:SettingsView />
+      </TabItem>
+    </TabControl>
+
+    <Border Grid.Row="2"
+            Background="#11161D"
+            BorderBrush="#1E2530"
+            BorderThickness="0,1,0,0"
+            Padding="20,8">
+      <TextBlock Classes="caption" Text="{Binding Status}" />
+    </Border>
+  </Grid>
+</Window>

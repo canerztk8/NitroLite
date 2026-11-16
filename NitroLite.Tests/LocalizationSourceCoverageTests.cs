@@ -129,9 +129,10 @@ public class LocalizationSourceCoverageTests
         var keys = EnglishKeys();
         var missing = new List<string>();
 
-        // Both projects: the platform-independent half of the source strings moved to NitroLite.Core, and a scan
-        // that only looked at NitroLite would stop seeing them and let a missing key through.
-        var files = new[] { "NitroLite", "NitroLite.Core" }
+        // Every project that shows text: the platform-independent half of the source strings moved to NitroLite.Core,
+        // and the cross-platform shell keeps its labels in NitroLite.Desktop. A scan that looked at only one of them
+        // would stop seeing the others and let a missing key through.
+        var files = new[] { "NitroLite", "NitroLite.Core", "NitroLite.Desktop" }
             .SelectMany(project => Directory.GetFiles(Path.Combine(RepoRoot(), project), "*.cs", SearchOption.AllDirectories));
 
         foreach (var file in files)

@@ -82,10 +82,16 @@ public sealed class InMemorySysfsFileSystem : ISysfsFileSystem
         return SysfsWriteResult.Success;
     }
 
+    /// <summary>True when the file exists and no test has denied writes to it.</summary>
+    public bool CanWrite(string path)
+    {
+        var key = Normalize(path);
+        return _files.ContainsKey(key) && !_denied.Contains(key);
+    }
+
     public IReadOnlyList<string> EnumerateDirectories(string path)
     {
-        var prefix = Normalize(path) + "/";
-        return _directories
+        var prefix = Normalize(path) + "/";        return _directories
             .Where(d => d.StartsWith(prefix, StringComparison.Ordinal) &&
                         d.IndexOf('/', prefix.Length) < 0)
             .OrderBy(d => d, StringComparer.Ordinal)

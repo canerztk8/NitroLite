@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NitroLite.Desktop.ViewModels"
+             xmlns:core="using:NitroLite.Core"
+             x:Class="NitroLite.Desktop.Views.SettingsView"
+             x:DataType="vm:MainViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="18" Spacing="14">
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="h2" Text="{Binding Labels.Device}" />
+
+          <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto" >
+            <TextBlock Grid.Row="0" Classes="caption" Text="{Binding Labels.Model}" Margin="0,0,0,6" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DeviceModel}" Margin="0,0,0,6" />
+
+            <TextBlock Grid.Row="1" Classes="caption" Text="{Binding Labels.Bios}" Margin="0,0,0,6" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DeviceBios}" Margin="0,0,0,6" />
+
+            <TextBlock Grid.Row="2" Classes="caption" Text="{Binding Labels.Tier}" Margin="0,0,0,6" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding TierText}" Margin="0,0,0,6" />
+
+            <TextBlock Grid.Row="3" Classes="caption" Text="{Binding Labels.DataFolder}" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DataFolder}" TextWrapping="Wrap" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="{Binding Labels.CapabilitySummary}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="ghost"
+                    Content="{Binding Labels.Rescan}"
+                    Command="{Binding RescanCommand}" />
+          </Grid>
+          <TextBlock Text="{Binding CapabilitySummaryText}"
+                     FontFamily="monospace"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- The udev banner only appears when a write actually failed for lack of permission, so a user who already
+           installed the rule never sees it. -->
+      <Border Classes="card" IsVisible="{Binding NeedsUdevRule}" Background="#2A2113" BorderBrush="#4A3A18">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="h2" Text="{Binding Labels.UdevNeeded}" />
+          <TextBlock Classes="caption" Text="{Binding Labels.UdevInstruction}" />
+          <TextBox Text="{Binding UdevCommand}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="monospace" />
+          <Button Classes="primary"
+                  Content="{Binding Labels.CopyCommand}"
+                  Command="{Binding CopyUdevCommand}"
+                  HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="h2" Text="{Binding Labels.Language}" />
+          <ComboBox ItemsSource="{Binding Languages}"
+                    SelectedItem="{Binding SelectedLanguage}"
+                    MinWidth="240"
+                    HorizontalAlignment="Left">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:LocLanguage">
+                <TextBlock Text="{Binding NativeName}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Classes="caption" Text="{Binding Labels.LanguageRestartHint}" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="h2" Text="{Binding Labels.Notes}" />
+          <TextBlock Classes="caption" Text="{Binding NotesText}" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,0 +1,184 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:NitroLite.Desktop.ViewModels"
+             xmlns:controls="using:NitroLite.Desktop.Controls"
+             x:Class="NitroLite.Desktop.Views.DashboardView"
+             x:DataType="vm:MainViewModel">
+
+  <ScrollViewer>
+    <StackPanel Margin="18" Spacing="14">
+
+      <!-- A machine with no Acer nodes still opens a window; this is the sentence that explains it. -->
+      <Border Classes="card" IsVisible="{Binding HasNoBackend}">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="h2" Text="{Binding Labels.NoBackend}" />
+          <TextBlock Classes="caption" Text="{Binding Labels.NoBackendDetail}" />
+        </StackPanel>
+      </Border>
+
+      <TextBlock Classes="h2" Text="{Binding Labels.ThermalAndFans}" />
+
+      <Grid ColumnDefinitions="*,*,*">
+        <Border Classes="card" Margin="0,0,10,0">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="caption" Text="{Binding Labels.Cpu}" />
+            <TextBlock Classes="value" Text="{Binding CpuTemperatureText}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Margin="0,0,10,0">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="caption" Text="{Binding Labels.Gpu}" />
+            <TextBlock Classes="value" Text="{Binding GpuTemperatureText}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Classes="card">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="caption" Text="{Binding Labels.Sys}" />
+            <TextBlock Classes="value" Text="{Binding SysTemperatureText}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Grid ColumnDefinitions="*,*">
+        <Border Classes="card" Margin="0,0,10,0">
+          <StackPanel Spacing="2">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="caption" Text="{Binding Labels.Cpu}" VerticalAlignment="Center" />
+              <!-- "ölçüldü" vs "tahmini": the difference decides whether the stall watchdog may act, so it is shown
+                   rather than hidden in a log. -->
+              <Border Grid.Column="1" Classes="pill">
+                <TextBlock Classes="caption" Text="{Binding FanRpmSourceText}" />
+              </Border>
+            </Grid>
+            <TextBlock Classes="value" Text="{Binding CpuFanRpmText}" />
+            <TextBlock Classes="caption" Text="{Binding Labels.FanRpm}" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card">
+          <StackPanel Spacing="2">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="caption" Text="{Binding Labels.Gpu}" VerticalAlignment="Center" />
+              <Border Grid.Column="1" Classes="pill">
+                <TextBlock Classes="caption" Text="{Binding FanRpmSourceText}" />
+              </Border>
+            </Grid>
+            <TextBlock Classes="value" Text="{Binding GpuFanRpmText}" />
+            <TextBlock Classes="caption" Text="{Binding Labels.FanRpm}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Grid ColumnDefinitions="*,*">
+        <Border Classes="card" Margin="0,0,10,0">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="h2" Text="{Binding Labels.OperatingMode}" />
+            <ComboBox ItemsSource="{Binding Modes}"
+                      SelectedItem="{Binding SelectedMode}"
+                      IsEnabled="{Binding ModeControlAvailable}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ModeChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Classes="primary"
+                    Content="{Binding Labels.Apply}"
+                    Command="{Binding ApplyModeCommand}"
+                    HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Column="1" Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="h2" Text="{Binding Labels.FanMode}" />
+            <ComboBox ItemsSource="{Binding FanModes}"
+                      SelectedItem="{Binding SelectedFanMode}"
+                      IsEnabled="{Binding FanControlAvailable}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:FanModeChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <StackPanel Spacing="2" IsVisible="{Binding CustomFanVisible}">
+              <TextBlock Classes="caption" Text="{Binding Labels.CustomFanSpeed}" />
+              <Grid ColumnDefinitions="*,48">
+                <TextBlock Classes="caption" Text="{Binding Labels.CpuFanPercent}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CustomCpuPercentText}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+              </Grid>
+              <Slider Minimum="30" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                      Value="{Binding CustomCpuPercent}" />
+              <Grid ColumnDefinitions="*,48">
+                <TextBlock Classes="caption" Text="{Binding Labels.GpuFanPercent}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CustomGpuPercentText}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+              </Grid>
+              <Slider Minimum="30" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
+                      Value="{Binding CustomGpuPercent}" />
+            </StackPanel>
+
+            <Button Classes="primary"
+                    Content="{Binding Labels.Apply}"
+                    Command="{Binding ApplyFanModeCommand}"
+                    HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="h2" Text="{Binding Labels.FanCurve}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="caption" Text="{Binding CurvePreview}" VerticalAlignment="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="2*,3*">
+            <controls:FanCurvePreview Height="210"
+                                      Points="{Binding CurvePoints}"
+                                      CurrentTemperature="{Binding CurrentTemperature}" />
+
+            <StackPanel Grid.Column="1" Margin="16,0,0,0" Spacing="2">
+              <ItemsControl ItemsSource="{Binding CurveAnchors}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CurveAnchorViewModel">
+                    <Grid ColumnDefinitions="56,*,52,150" Margin="0,2">
+                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                      <Slider Grid.Column="1" Minimum="30" Maximum="100"
+                              TickFrequency="1" IsSnapToTickEnabled="True"
+                              Value="{Binding Percent}" />
+                      <TextBlock Grid.Column="2" Text="{Binding EffectiveText}"
+                                 VerticalAlignment="Center" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="3" Classes="caption" Text="{Binding SafetyText}"
+                                 VerticalAlignment="Center" Margin="12,0,0,0" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Grid>
+
+          <Border Background="#11161D" CornerRadius="8" Padding="10">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="caption" Text="{Binding Labels.ThermalFloors}" />
+              <TextBlock Classes="caption" Text="{Binding ThermalFloorSummary}" />
+            </StackPanel>
+          </Border>
+
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <CheckBox IsChecked="{Binding CurveEnabled}"
+                      Content="{Binding Labels.EnableCurve}"
+                      VerticalAlignment="Center" />
+            <Button Classes="primary"
+                    Content="{Binding Labels.ApplyCurve}"
+                    Command="{Binding ApplyCurveCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

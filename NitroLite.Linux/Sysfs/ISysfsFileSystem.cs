@@ -60,6 +60,16 @@ public interface ISysfsFileSystem
     /// <summary>Writes <paramref name="value"/> to the attribute. Never throws.</summary>
     SysfsWriteResult WriteAllText(string path, string value);
 
+    /// <summary>
+    /// True when the attribute exists and this process may open it for writing, without writing anything.
+    /// <para>
+    /// This is what lets the settings page say "install the udev rule" before the user presses a control and watches
+    /// it fail. Opening a sysfs attribute for write has no effect on the hardware — the write happens on
+    /// <c>write()</c> — so the check is safe to run at startup.
+    /// </para>
+    /// </summary>
+    bool CanWrite(string path);
+
     /// <summary>Immediate subdirectories, sorted. Empty when the directory is missing or unreadable.</summary>
     IReadOnlyList<string> EnumerateDirectories(string path);
 

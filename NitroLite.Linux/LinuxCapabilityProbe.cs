@@ -87,12 +87,22 @@ public sealed class LinuxCapabilityProbe
             notes.Add("Bu model dört bölgeli klavye taşıyor ama four_zoned_kb düğümü yok; OpenRGB köprüsü denenecek.");
         }
 
+        // A node that exists but cannot be opened for writing is the udev case, and it is worth saying so before the
+        // user presses a control and watches it fail. Checked here rather than on the first failed write so the
+        // settings page can show the rule on launch.
+        var needsUdevRule = NeedsUdevRule(nodes);
+        if (needsUdevRule)
+        {
+            notes.Add("sysfs düğümleri yazılabilir değil: packaging/linux/99-nitrolite.rules kurulmalı.");
+        }
+
         return new LinuxCapabilities
         {
             Identity = identity,
             Profile = profile,
             Hardware = hardware,
             Nodes = nodes,
+            NeedsUdevRule = needsUdevRule,
             Tier = (hasAcpi, hasSense) switch
             {
                 (true, true) => "both",
@@ -102,6 +112,44 @@ public sealed class LinuxCapabilityProbe
             },
             Notes = notes
         };
+    }
+
+    /// <summary>
+    /// True when at least one attribute the backend would write exists but this process may not open it for writing.
+    /// <para>
+    /// Only the nodes that carry a write are checked: a read-only attribute that cannot be written is not a
+    /// permission problem, and telling the user to install a udev rule for it would be wrong.
+    /// </para>
+    /// </summary>
+    private bool NeedsUdevRule(LinuxNodes nodes)
+    {
+        foreach (var path in WritableNodes(nodes))
+        {
+            if (!_fs.CanWrite(path)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Every attribute the backend writes, in the order the settings page lists them.</summary>
+    private static IEnumerable<string> WritableNodes(LinuxNodes nodes)
+    {
+        foreach (var path in new[]
+                 {
+                     nodes.PlatformProfile,
+                     nodes.FanSpeed,
+                     nodes.PerZoneMode,
+                     nodes.FourZoneMode,
+                     nodes.CoolBoost,
+                     nodes.LcdOverride,
+                     nodes.BacklightTimeout,
+                     nodes.BatteryLimiter,
+                     nodes.ChargeThreshold,
+                     nodes.DgpuMode
+                 })
+        {
+            if (path != null) yield return path;
+        }
     }
 
     /// <summary>

@@ -73,9 +73,26 @@ public sealed class RealSysfsFileSystem : ISysfsFileSystem
         }
     }
 
-    public IReadOnlyList<string> EnumerateDirectories(string path)
+    /// <summary>
+    /// Opens the attribute for writing and closes it again. sysfs applies a value on <c>write()</c>, not on
+    /// <c>open()</c>, so this reports the permission without touching the hardware.
+    /// </summary>
+    public bool CanWrite(string path)
     {
         try
+        {
+            if (!File.Exists(path)) return false;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public IReadOnlyList<string> EnumerateDirectories(string path)
+    {        try
         {
             if (!Directory.Exists(path)) return Array.Empty<string>();
             var entries = Directory.GetDirectories(path);

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Plain net10.0, like NitroLite.Core and NitroLite.Linux: this is the cross-platform front end and it must not
+         pull in WPF, WinForms, the registry, System.Management or a P/Invoke. The Windows front end stays in
+         NitroLite (net10.0-windows); this one runs on Linux against the sysfs backend. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NitroLite.Desktop</RootNamespace>
+    <AssemblyName>NitroLite.Desktop</AssemblyName>
+    <Version>1.2.5-f</Version>
+    <Authors>NitroLite Team</Authors>
+
+    <!-- Compiled bindings: a binding path that does not exist is a build error instead of a silently empty control.
+         Every view declares x:DataType, which is also what makes the XAML readable without the view model open. -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.23" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Core for the hardware contract, the settings file, the fan curve and the eight language catalogues; Linux for
+         the sysfs backend. Nothing else: the Windows half of the hardware layer is not referenced at all. -->
+    <ProjectReference Include="..\NitroLite.Core\NitroLite.Core.csproj" />
+    <ProjectReference Include="..\NitroLite.Linux\NitroLite.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The udev rule travels inside the assembly so the settings page can hand the user a working install command on
+         a machine that only has the published build. LogicalName is fixed because UdevGuide looks it up by name. -->
+    <EmbeddedResource Include="..\packaging\linux\99-nitrolite.rules"
+                      LogicalName="NitroLite.Desktop.99-nitrolite.rules" />
+  </ItemGroup>
+
+</Project>

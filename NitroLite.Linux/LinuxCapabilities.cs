@@ -74,6 +74,13 @@ public sealed record LinuxCapabilities
     /// <summary>Which tier answered, for the log and the report: "acer-wmi", "linuwu-sense", "both" or "none".</summary>
     public string Tier { get; init; } = "none";
 
+    /// <summary>
+    /// True when a node the backend would write exists but this process may not open it for writing, which is the
+    /// state every user is in until <c>packaging/linux/99-nitrolite.rules</c> is installed. The settings page turns
+    /// this into the one-line install command instead of letting the user discover it by pressing a control.
+    /// </summary>
+    public bool NeedsUdevRule { get; init; }
+
     /// <summary>Human-readable notes about what was missing and why, in the user's language.</summary>
     public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
 }
