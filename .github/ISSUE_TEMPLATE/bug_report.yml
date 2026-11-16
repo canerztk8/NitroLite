@@ -47,7 +47,7 @@ body:
     attributes:
       label: NitroLite version
       description: Shown at the top left of the window and in Settings.
-      placeholder: v1.2.5
+      placeholder: v1.3.0
     validations:
       required: true
 

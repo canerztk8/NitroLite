@@ -41,7 +41,7 @@ The same hardware control, delivered in a single process with no extra backgroun
 
 ## Brand Commitments
 
-- Name: NitroLite, version 1.2.5, MIT licence.
+- Name: NitroLite, version 1.3.0, MIT licence.
 - No emoji.
 - The visual identity is not binding: the user asked for "more modern", so the original dark theme and accent colours did not have to survive. What did survive is the rule that state is never carried by colour alone.
 
