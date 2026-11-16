@@ -12,7 +12,7 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/canerztk8/NitroLite/releases/download/v1.2.5-f/NitroLite-v1.2.5-f-win-x64.zip",
-      "hash": "7966efad20357933291810a2ffd6fb1be86664fc9101564582a44d980b9f60a8"
+      "hash": "91fd477a79625ca8f04f6761da94410e75cfe1359c5e96e9754b796a207f11d4"
     }
   },
   "extract_dir": "NitroLite",
