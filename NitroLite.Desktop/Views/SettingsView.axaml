@@ -1,7 +1,9 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:core="using:NitroLite.Core"
+             xmlns:conv="using:NitroLite.Desktop.Converters"
+             xmlns:sys="using:System"
              x:Class="NitroLite.Desktop.Views.SettingsView"
              x:DataType="vm:MainViewModel">
 
@@ -10,51 +12,17 @@
     whose header row carries the name, an optional (?) badge and the action on the right, with hairline rules between
     the rows inside. Everything that is a switch rather than a reading lives here, plus the device summary and the
     report a user pastes into an issue.
+
+    The game profile editor is deliberately not here. It lives on the modes page, where the mode and fan pickers it
+    writes to are, and a second copy on this page meant two places to keep in step and two places for a user to look.
+    Language and theme sit at the bottom, in the "NitroLite Ayarları" card the WPF page ended with: they are the
+    settings a user changes once, not the ones they come to this page for.
   -->
   <ScrollViewer VerticalScrollBarVisibility="Hidden">
     <StackPanel>
 
       <TextBlock Classes="pagetitle" Text="{Binding Labels.ToolsPageTitle}" />
       <TextBlock Classes="hint" Text="{Binding Labels.ToolsPageSubtitle}" Margin="0,4,0,14" />
-
-      <!-- ============================================================ appearance -->
-
-      <Border Classes="card" Margin="0,0,0,14">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Classes="cardicon" Text="&#xE790;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.Appearance}" />
-          </StackPanel>
-
-          <Grid ColumnDefinitions="*,*">
-            <StackPanel Margin="0,0,12,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.Theme}" Margin="0,0,0,4" />
-              <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:ThemeChoice">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Classes="hint" Text="{Binding Labels.ThemeApplied}" Margin="0,4,0,0" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="1">
-              <TextBlock Classes="caps" Text="{Binding Labels.Language}" Margin="0,0,0,4" />
-              <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="core:LocLanguage">
-                    <TextBlock Text="{Binding NativeName}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Classes="hint" Text="{Binding Labels.LanguageRestartHint}" Margin="0,4,0,0" />
-            </StackPanel>
-          </Grid>
-        </StackPanel>
-      </Border>
 
       <!-- ============================================================ Acer background services -->
 
@@ -107,6 +75,15 @@
             </StackPanel>
             <Button Grid.Column="1" Classes="primary" Content="{Binding Labels.KillNitroSense}" Padding="12,7"
                     FontSize="11" Command="{Binding KillNitroSenseCommand}" IsEnabled="{Binding NitroSenseRunning}" />
+          </Grid>
+
+          <!-- What the launcher is doing right now, in one line. The WPF page carried the same line under the
+               NitroSense row: the pill says whether the process is up, this says what that means for the key. -->
+          <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+            <TextBlock Classes="caps" Text="{Binding Labels.NitroSenseLauncherState}" VerticalAlignment="Top"
+                       Margin="0,1,10,0" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding NitroSenseLauncherStateText}"
+                       TextWrapping="Wrap" />
           </Grid>
 
           <TextBlock Classes="hint" Text="{Binding ServicesStatus}" Margin="0,8,0,0"
@@ -229,102 +206,20 @@
             <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding NitroKeyEnabled}"
                           VerticalAlignment="Center" />
           </Grid>
-        </StackPanel>
-      </Border>
 
-      <!-- ============================================================ game profiles -->
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
 
-      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding AutoGameModeAvailable}">
-        <StackPanel>
-
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="cardicon" Text="&#xE7FC;" Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock Classes="section" Text="{Binding Labels.GameProfiles}" />
-              <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.GameProfilesHint}">
-                <TextBlock Text="?" />
-              </Border>
-            </StackPanel>
-            <Border Grid.Column="2" Classes="pill" Margin="0,0,12,0">
-              <TextBlock Text="{Binding GameStatusText}" />
-            </Border>
-            <ToggleButton Grid.Column="3" Classes="toggle" IsChecked="{Binding AutoGameModeOn}"
-                          VerticalAlignment="Center" ToolTip.Tip="{Binding Labels.AutoGameDetect}" />
+          <!-- The second half of the same claim. On a model whose button the Acer service stack owns, NitroSense
+               coming forward is the only signal the press produces, so "the key opens NitroLite" is only true if
+               NitroSense is closed on the way. Disabled rather than hidden while the switch above is off: there is
+               nothing to redirect, and a row that vanished would read as a bug. -->
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.RedirectNitroSense}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.RedirectNitroSenseHint}"
+                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding RedirectNitroSenseEnabled}"
+                          IsEnabled="{Binding CanRedirectNitroSense}" VerticalAlignment="Center" />
           </Grid>
-
-          <!-- Adding a rule. The process name is what /proc reports, so "cs2" and "Cyberpunk2077.exe" are both valid
-               and a window title never matches anything. -->
-          <Grid ColumnDefinitions="*,*,*,Auto" Margin="0,0,0,10">
-            <StackPanel Margin="0,0,8,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.NewGameExe}" Margin="0,0,0,4" />
-              <TextBox Text="{Binding NewGameExe}" Watermark="cs2" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Margin="0,0,8,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.NewGameName}" Margin="0,0,0,4" />
-              <TextBox Text="{Binding NewGameName}" Watermark="Counter-Strike 2" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Margin="0,0,8,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.TargetMode}" Margin="0,0,0,4" />
-              <ComboBox ItemsSource="{Binding GameModeChoices}" SelectedItem="{Binding NewGameMode}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:ModeChoice">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Column="3">
-              <TextBlock Classes="caps" Text="{Binding Labels.TargetFanMode}" Margin="0,0,0,4" />
-              <StackPanel Orientation="Horizontal">
-                <ComboBox ItemsSource="{Binding GameFanChoices}" SelectedItem="{Binding NewGameFanMode}"
-                          MinWidth="130">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:FanModeChoice">
-                      <TextBlock Text="{Binding Label}" />
-                    </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-                <Button Classes="primary" Content="{Binding Labels.AddGame}" Margin="6,0,0,0"
-                        Padding="12,7" FontSize="11" Command="{Binding AddGameProfileCommand}" />
-              </StackPanel>
-            </StackPanel>
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding GameProfileStatus}" Margin="0,0,0,8"
-                     IsVisible="{Binding HasGameProfileStatus}" />
-
-          <!-- The rules themselves: what it is called, what /proc calls it, and what it switches to. -->
-          <ItemsControl ItemsSource="{Binding GameProfiles}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:GameProfileRow">
-                <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0"
-                        Padding="0,8">
-                  <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                    <StackPanel>
-                      <TextBlock Classes="rowtitle" Text="{Binding DisplayName}" />
-                      <TextBlock Classes="mono" Text="{Binding ExeName}" />
-                    </StackPanel>
-
-                    <Border Grid.Column="1" Classes="pill" Margin="10,0,0,0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding ModeLabel}" />
-                    </Border>
-
-                    <Border Grid.Column="2" Classes="pill" Margin="8,0,0,0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding FanLabel}" />
-                    </Border>
-
-                    <Button Grid.Column="3" Classes="primary" Margin="12,0,0,0" VerticalAlignment="Center"
-                            Content="{Binding DeleteLabel}" Foreground="{DynamicResource DangerBrush}"
-                            Command="{Binding DeleteCommand}" />
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-
-          <TextBlock Classes="hint" Text="{Binding Labels.NoGameProfiles}"
-                     IsVisible="{Binding HasNoGameProfiles}" />
         </StackPanel>
       </Border>
 
@@ -435,8 +330,18 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <!-- The direct-WMI backend is the fallback for a machine whose Acer service is missing or broken. It is
-               offered as a row rather than a card because it is one button and one status line. -->
+          <!-- The direct-WMI backend is the fallback for a machine whose Acer service is missing or broken. The
+               switch is the emergency rollback the setting exists for: off pins every read and write to the Acer
+               service socket, which is the behaviour before the hardware abstraction existed. The controller reads
+               the setting on every call, so the change takes effect without a restart. -->
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0" IsVisible="{Binding DirectWmiAvailable}">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.UseDirectWmiBackend}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.UseDirectWmiBackendHint}"
+                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding UseDirectWmiBackend}"
+                          VerticalAlignment="Center" />
+          </Grid>
+
           <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0" IsVisible="{Binding DirectWmiAvailable}">
             <TextBlock Classes="caps" Text="{Binding Labels.DirectWmi}" VerticalAlignment="Center" />
             <TextBlock Grid.Column="1" Classes="hint" Text="{Binding DirectWmiStatus}" Margin="10,0,0,0"
@@ -488,6 +393,90 @@
           <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.OnboardingReopen}" Padding="12,7"
                   FontSize="11" Command="{Binding ReopenOnboardingCommand}" />
         </Grid>
+      </Border>
+
+      <!-- ============================================================ NitroLite's own settings -->
+
+      <!-- Language and theme, at the bottom where the WPF page kept them. They are the settings a user changes once
+           and then stops thinking about, so they do not belong above the tools the page exists for. -->
+      <Border Classes="card" Margin="0,0,0,14">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+            <TextBlock Classes="cardicon" Text="&#xE713;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.NitroLiteSettings}" />
+          </StackPanel>
+          <TextBlock Classes="hint" Text="{Binding Labels.NitroLiteSettingsHint}" Margin="0,0,0,12" />
+
+          <Grid ColumnDefinitions="*,*">
+            <StackPanel Margin="0,0,12,0">
+              <TextBlock Classes="caps" Text="{Binding Labels.Language}" Margin="0,0,0,4" />
+              <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="core:LocLanguage">
+                    <TextBlock Text="{Binding NativeName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" Text="{Binding Labels.LanguageRestartHint}" Margin="0,4,0,0" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1">
+              <TextBlock Classes="caps" Text="{Binding Labels.Theme}" Margin="0,0,0,4" />
+              <TextBlock Classes="hint" Text="{Binding Labels.ThemeCardsHint}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Grid>
+
+          <!-- One card per palette, built from ThemeCatalog rather than written here, so adding a palette is still
+               one enum member and one dictionary. The screenshot answers "what does this look like"; the five
+               swatches answer "what are its colours"; the name is what the settings file stores. -->
+          <ItemsControl ItemsSource="{Binding ThemeCards}" Margin="0,10,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ThemeCardViewModel">
+                <Button Classes="themecard" Classes.selected="{Binding IsSelected}"
+                        Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Label}"
+                        Margin="0,0,10,10">
+                  <StackPanel Width="196">
+                    <Border CornerRadius="4" ClipToBounds="True" BorderThickness="1"
+                            BorderBrush="{DynamicResource CardBorderStrongBrush}">
+                      <Image Width="196" Height="110" Stretch="UniformToFill"
+                             RenderOptions.BitmapInterpolationMode="HighQuality"
+                             Source="{Binding Theme, Converter={x:Static conv:ThemePreviewConverter.Instance}}" />
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Swatches}" Margin="0,6,0,0"
+                                  HorizontalAlignment="Center">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="sys:String">
+                          <Border Width="13" Height="13" CornerRadius="2" Margin="0,0,3,0"
+                                  BorderThickness="1"
+                                  BorderBrush="{DynamicResource CardBorderStrongBrush}"
+                                  Background="{Binding Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="{Binding Label}" FontSize="11" Margin="0,5,0,0"
+                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.ThemeApplied}" Margin="0,2,0,0" />
+        </StackPanel>
       </Border>
 
       <!-- Hidden when the probe had nothing to report, rather than shown as an empty card. -->

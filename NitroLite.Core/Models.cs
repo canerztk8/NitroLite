@@ -438,6 +438,24 @@ public class AppSettings
     public bool NitroKeyEnabled { get; set; } = true;
 
     /// <summary>
+    /// Take the Nitro key away from NitroSense: close it when it comes to the front and raise NitroLite instead.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A second switch rather than part of <see cref="NitroKeyEnabled"/> because the two answer different questions.
+    /// That one says "the key opens NitroLite"; this one says "and NitroSense does not get to open as well". A user who
+    /// wants NitroLite on the key but keeps NitroSense for its own panels can have exactly that.
+    /// </para>
+    /// <para>
+    /// On by default, which is the behaviour the key has always had here: on a model whose button the Acer service
+    /// stack owns, NitroSense coming forward is the only signal the press produces, so leaving it running would mean
+    /// the key opens the wrong window.
+    /// </para>
+    /// </remarks>
+    [JsonPropertyName("redirect_nitro_sense_enabled")]
+    public bool RedirectNitroSenseEnabled { get; set; } = true;
+
+    /// <summary>
     /// Emergency rollback switch for the hardware layer. On (the default) NitroLite may reach the hardware through a
     /// direct WMI backend when the Acer service is not running; off pins every read and write to the Acer service
     /// socket, which is the behaviour before the hardware abstraction existed.

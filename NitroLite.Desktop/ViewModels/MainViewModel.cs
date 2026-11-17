@@ -3,6 +3,7 @@ using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Desktop.Mvvm;
+using NitroLite.Desktop.Themes;
 
 namespace NitroLite.Desktop.ViewModels;
 
@@ -340,6 +341,58 @@ public sealed record GpuModeChoice(GpuOperatingMode Mode, string Label)
 /// </summary>
 public sealed record ThemeChoice(AppTheme Theme, string Label)
 {
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// One preview card in the theme picker: a screenshot of the palette, its five colours and its name.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A card rather than a combo-box row, for the same reason <see cref="ModeChoice"/> is one: the choice is made by
+/// looking, and a list of names asks the user to imagine what "Kuzey Buzulu" looks like. Clicking the card applies the
+/// palette immediately, so there is no separate Apply button and no state in which the picker shows one theme while
+/// the window runs another.
+/// </para>
+/// <para>
+/// The swatches are hex strings and the screenshot is fetched by a converter, because the view model holds no Avalonia
+/// types. <see cref="IsSelected"/> is owned here rather than derived from the parent so a card can repaint on its own
+/// when the selection moves.
+/// </para>
+/// </remarks>
+public sealed class ThemeCardViewModel : ObservableObject
+{
+    private bool _isSelected;
+
+    public ThemeCardViewModel(
+        AppTheme theme,
+        string label,
+        IReadOnlyList<string> swatches,
+        Action<ThemeCardViewModel>? select = null)
+    {
+        Theme = theme;
+        Label = label;
+        Swatches = swatches;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    public AppTheme Theme { get; }
+
+    /// <summary>The translated palette name, rebuilt when the language changes.</summary>
+    public string Label { get; }
+
+    /// <summary>Page, card, rule, ink and accent, as <c>#RRGGBB</c>.</summary>
+    public IReadOnlyList<string> Swatches { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    /// <summary>True when this is the stored preference, which is what paints the card's accent frame.</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
     public override string ToString() => Label;
 }
 
@@ -930,6 +983,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SystemGameText));
             Raise(nameof(ActiveZoneText));
             Raise(nameof(ModeBadgeText));
+            // The launcher line is a sentence built from these labels, so it is re-raised rather than rebuilt.
+            Raise(nameof(NitroSenseLauncherStateText));
         }
     }
 
@@ -3877,6 +3932,61 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _settings.Theme = value.Theme;
             SaveSettings();
             Status = Labels.ThemeApplied;
+            RefreshThemeCards();
+        }
+    }
+
+    /// <summary>
+    /// The preview cards, one per palette <see cref="ThemeCatalog"/> ships. Built from the catalogue rather than
+    /// written into the XAML, so adding a palette is still one enum member and one dictionary.
+    /// </summary>
+    public ObservableCollection<ThemeCardViewModel> ThemeCards { get; } = new();
+
+    /// <summary>
+    /// Applies a palette from its card. Routed through <see cref="SelectedTheme"/> rather than duplicating its work:
+    /// that is the property the rest of the code reads, and its setter is what saves the choice and repaints.
+    /// </summary>
+    private void SelectThemeCard(ThemeCardViewModel card)
+    {
+        var match = Themes.FirstOrDefault(t => t.Theme == card.Theme);
+        if (match == null) return;
+
+        // Already chosen: nothing to apply, nothing to write. Clicking the current card is not an action.
+        if (_selectedTheme?.Theme == card.Theme) return;
+
+        SelectedTheme = match;
+    }
+
+    /// <summary>
+    /// Rebuilds the cards in the current language, keeping the selection. The stored preference is what paints a card
+    /// as chosen, not the resolved palette: with "System" the window is showing one of the concrete themes, but the
+    /// card that has to look chosen is the System one.
+    /// </summary>
+    private void BuildThemeCards()
+    {
+        var previous = _selectedTheme?.Theme ?? _settings.Theme;
+
+        ThemeCards.Clear();
+        foreach (var theme in ThemeCatalog.All)
+        {
+            ThemeCards.Add(new ThemeCardViewModel(
+                theme,
+                Loc.T(ThemeCatalog.DisplayNameKey(theme)),
+                ThemePalette.SwatchHexes(theme),
+                SelectThemeCard));
+        }
+
+        RefreshThemeCards();
+    }
+
+    /// <summary>Moves the accent frame to the stored preference. Cheap enough to run on every selection change.</summary>
+    private void RefreshThemeCards()
+    {
+        var chosen = _selectedTheme?.Theme ?? _settings.Theme;
+
+        foreach (var card in ThemeCards)
+        {
+            card.IsSelected = card.Theme == chosen;
         }
     }
 
@@ -3897,6 +4007,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _selectedTheme = Themes.FirstOrDefault(t => t.Theme == previous) ?? Themes.FirstOrDefault();
         Raise(nameof(SelectedTheme));
+
+        // The cards carry the same names, so they are rebuilt with the picker rather than left in the old language.
+        BuildThemeCards();
     }
 
     public string DeviceModel => _platform?.Identity.ModelCode is { Length: > 0 } code

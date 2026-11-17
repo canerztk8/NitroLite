@@ -69,6 +69,22 @@ public sealed class ThemePalette
     public Color WarningSoft => WithAlpha(Warning, 0x24);
     public Color DangerSoft => WithAlpha(Danger, 0x24);
 
+    /// <summary>
+    /// The five colours a theme card shows as swatches, as the <c>#RRGGBB</c> strings the view paints.
+    /// </summary>
+    /// <remarks>
+    /// Page, card, rule, ink and accent: the five that answer "what does this palette look like" without a screenshot.
+    /// Hex strings rather than brushes because the view model holds no Avalonia types — the view turns them into
+    /// brushes with <c>HexToBrushConverter</c>, the same route every other colour in the window takes.
+    /// </remarks>
+    public static IReadOnlyList<string> SwatchHexes(AppTheme theme)
+    {
+        var palette = For(theme);
+        return new[] { palette.Page, palette.Card, palette.CardBorder, palette.TextPrimary, palette.Accent }
+            .Select(colour => $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}")
+            .ToArray();
+    }
+
     /// <summary>The palette for a concrete theme. <see cref="AppTheme.System"/> is resolved by the caller.</summary>
     public static ThemePalette For(AppTheme theme) => theme switch
     {

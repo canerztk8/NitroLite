@@ -137,8 +137,10 @@ public partial class App : Application
             // the window ends up behind it. The sweep runs for a few seconds, and the window is raised again once it
             // is done because NitroSense can take the foreground on its way out.
             //
-            // Part of claiming the key, not a second setting: a switch that says "the key opens NitroLite" and then
-            // lets NitroSense open anyway is a switch that does not do what it says.
+            // Gated on the redirect switch, which is what "the key opens NitroLite and not NitroSense" means. With it
+            // off the key still raises the window; NitroSense is simply left alone.
+            if (_host?.ViewModel.RedirectNitroSenseEnabled != true) return;
+
             _ = Task.Run(() =>
             {
                 if (_nitroSense?.CloseFor(NitroSenseSuppressionWindow) == true)
@@ -159,6 +161,7 @@ public partial class App : Application
         Dispatcher.UIThread.Post(() =>
         {
             if (_host?.ViewModel.NitroKeyEnabled != true) return;
+            if (_host.ViewModel.RedirectNitroSenseEnabled != true) return;
             if (_window == null) return;
             if (_window.IsVisible && _window.WindowState != WindowState.Minimized) return;
 

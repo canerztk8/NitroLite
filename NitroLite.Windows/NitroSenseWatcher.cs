@@ -1,8 +1,54 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using NitroLite.Core;
 
 namespace NitroLite.Windows;
+
+/// <summary>
+/// What a foreground window turned out to be, as far as the Nitro key is concerned.
+/// </summary>
+public enum NitroSenseWindowKind
+{
+    /// <summary>Not NitroSense. The common answer, and the one that must cost nothing.</summary>
+    None = 0,
+
+    /// <summary>A window owned by a process the Acer stack runs under.</summary>
+    Process = 1,
+
+    /// <summary>A packaged app's window: the process is <c>ApplicationFrameHost</c> and only the title says which app.</summary>
+    ApplicationFrameHost = 2,
+
+    /// <summary>A <c>#32770</c> dialog belonging to NitroSense — the permission prompt the key can raise.</summary>
+    ErrorDialog = 3
+}
+
+/// <summary>
+/// The foreground window, flattened to the four facts the decision needs.
+/// </summary>
+/// <remarks>
+/// <see cref="Content"/> is the text of the window's child labels, and it is only filled for a dialog. A permission
+/// prompt's own title is usually just the app name; the sentence that identifies it as the prompt is in a child
+/// static, so a check that read only the title would miss the case this exists for.
+/// </remarks>
+public readonly record struct ForegroundWindowInfo(
+    int ProcessId,
+    string ProcessName,
+    string ClassName,
+    string Title,
+    string Content,
+    IntPtr Handle)
+{
+    /// <summary>Nothing in front, or a window that could not be read.</summary>
+    public static ForegroundWindowInfo None => new(0, "", "", "", "", IntPtr.Zero);
+
+    /// <summary>
+    /// A window known only by its process, for a caller that injects the process id and nothing else. The class and
+    /// title are empty, so only the process rule can match — which is exactly what such a caller is testing.
+    /// </summary>
+    public static ForegroundWindowInfo ForProcess(int processId) =>
+        new(processId, "", "", "", "", IntPtr.Zero);
+}
 
 /// <summary>
 /// Watches for NitroSense coming to the front, which is what the Nitro key does on a model whose button the Acer
@@ -19,8 +65,14 @@ namespace NitroLite.Windows;
 /// process on the desktop, and the question "which window is in front" is cheap enough to ask four times a second.
 /// </para>
 /// <para>
-/// It only reports. Closing NitroSense and bringing NitroLite forward is the shell's decision, because the setting
-/// lives there and so does the window.
+/// Three shapes of window count as the key, because the same button produces all three depending on how NitroSense
+/// was installed: the app's own process, a packaged build whose window belongs to <c>ApplicationFrameHost</c>, and the
+/// permission dialog the Acer service raises when it cannot reach its driver. The first two are reported; the dialog
+/// is closed here, because it is a window rather than the app and one <c>WM_CLOSE</c> is the whole fix.
+/// </para>
+/// <para>
+/// It only reports the app cases. Closing NitroSense and bringing NitroLite forward is the shell's decision, because
+/// the setting lives there and so does the window.
 /// </para>
 /// </remarks>
 public sealed class NitroSenseWatcher : INitroSenseWatcher
@@ -39,6 +91,25 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     /// </para>
     /// </remarks>
     public static readonly string[] ProcessNames = { "NitroSenseLauncher", "SenseOverlay", "NitroSense" };
+
+    /// <summary>
+    /// The prefix every process in the Acer stack starts with. A build that renames the executable to
+    /// <c>NitroSenseSomething</c> is still the app, and the prefix is what catches it without the list above having to
+    /// learn the new name.
+    /// </summary>
+    public const string NitroSenseProcessPrefix = "NitroSense";
+
+    /// <summary>The host process a packaged (MSIX) app's window belongs to.</summary>
+    public const string ApplicationFrameHostProcess = "ApplicationFrameHost";
+
+    /// <summary>The window class every Windows dialog uses, including the Acer permission prompt.</summary>
+    public const string DialogClassName = "#32770";
+
+    /// <summary>The package name the Acer permission prompt carries in its text.</summary>
+    public const string NitroSensePackageName = "NitroSenseforNotebook";
+
+    /// <summary>The message that asks a window to close, which is what the user's own click on the X sends.</summary>
+    private const uint WmClose = 0x0010;
 
     /// <summary>How often the foreground window is checked. Fast enough to feel immediate, cheap enough to ignore.</summary>
     public const int PollMilliseconds = 400;
@@ -61,9 +132,16 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     /// </summary>
     public const int MaxClosesPerWindow = 20;
 
-    private readonly Func<int> _foregroundProcessId;
+    /// <summary>
+    /// How many child labels of a dialog are read before the enumeration stops. A permission prompt has a handful; the
+    /// bound is there so a window with a pathological child count cannot spend the poll inside the loop.
+    /// </summary>
+    private const int MaxDialogChildren = 24;
+
+    private readonly Func<ForegroundWindowInfo> _foregroundWindow;
     private readonly Func<bool>? _shouldReact;
     private readonly Func<int, bool> _isNitroSense;
+    private readonly Action<IntPtr> _closeWindow;
     private readonly object _gate = new();
 
     private Timer? _timer;
@@ -82,7 +160,9 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     private int _closeLoopRunning;
 
     /// <param name="foregroundProcessId">
-    /// The process owning the foreground window. Injectable so the decision can be tested without a desktop.
+    /// The process owning the foreground window. Injectable so the decision can be tested without a desktop. A caller
+    /// that passes this and not <paramref name="foregroundWindow"/> gets a window with no class and no title, so only
+    /// the process rule can match.
     /// </param>
     /// <param name="shouldReact">
     /// Asked before every poll. The shell uses it to stay out of the way while NitroLite is already in front.
@@ -90,14 +170,28 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     /// <param name="isNitroSense">
     /// Answers whether a process id is NitroSense. Injectable so the decision can be tested without the program.
     /// </param>
+    /// <param name="foregroundWindow">
+    /// The whole foreground window, for a caller that needs the class and title rules as well. Injectable for the same
+    /// reason as the two above.
+    /// </param>
+    /// <param name="closeWindow">
+    /// Asks a window to close. Injectable so the dialog rule can be asserted without a dialog on screen.
+    /// </param>
     public NitroSenseWatcher(
         Func<int>? foregroundProcessId = null,
         Func<bool>? shouldReact = null,
-        Func<int, bool>? isNitroSense = null)
+        Func<int, bool>? isNitroSense = null,
+        Func<ForegroundWindowInfo>? foregroundWindow = null,
+        Action<IntPtr>? closeWindow = null)
     {
-        _foregroundProcessId = foregroundProcessId ?? ForegroundProcessId;
         _shouldReact = shouldReact;
         _isNitroSense = isNitroSense ?? IsNitroSense;
+        _closeWindow = closeWindow ?? PostClose;
+
+        _foregroundWindow = foregroundWindow
+            ?? (foregroundProcessId == null
+                ? ReadForegroundWindow
+                : () => ForegroundWindowInfo.ForProcess(foregroundProcessId()));
     }
 
     public event EventHandler? NitroSenseActivated;
@@ -136,21 +230,31 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         if (_disposed) return;
         if (_shouldReact != null && !_shouldReact()) return;
 
-        int processId = _foregroundProcessId();
-        if (processId <= 0) return;
+        var window = _foregroundWindow();
+        if (window.ProcessId <= 0) return;
 
         // The same window staying in front is not a second press.
-        if (processId == _lastProcessId) return;
+        if (window.ProcessId == _lastProcessId) return;
 
-        if (!_isNitroSense(processId))
+        var kind = Classify(window, _isNitroSense(window.ProcessId));
+        if (kind == NitroSenseWindowKind.None)
         {
             _lastProcessId = 0;
             return;
         }
 
-        _lastProcessId = processId;
+        _lastProcessId = window.ProcessId;
 
         if (Stopwatch.GetTimestamp() < _quietUntilTicks) return;
+
+        // The permission dialog is a window, not the app: one WM_CLOSE is the whole fix, and it is done here because
+        // this is where the handle is. The event is still raised, because the press has to bring NitroLite forward
+        // whether the key opened the app or the prompt.
+        if (kind == NitroSenseWindowKind.ErrorDialog) _closeWindow(window.Handle);
+
+        // Logged on every accepted press, with the shape that matched. Without this line the only evidence that the
+        // key works is the window moving, which is exactly what a user reporting "it does nothing" cannot show.
+        AppLog.Info("Nitro tuşu algılandı", Describe(kind, window));
 
         try
         {
@@ -162,6 +266,78 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             AppLog.Warn("NitroSense abonesi hata verdi", ex.Message);
         }
     }
+
+    /// <summary>
+    /// Which of the three shapes a foreground window is, as a pure function so every rule can be asserted without a
+    /// desktop.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The order matters, and the dialog comes first. A permission prompt is owned by the NitroSense process, so the
+    /// process rule would match it too — and matching there would close the whole process tree when one
+    /// <c>WM_CLOSE</c> on the dialog is the whole fix. The dialog rule is narrow enough to lead: it needs the
+    /// <c>#32770</c> class <em>and</em> NitroSense's name in the window's text.
+    /// </para>
+    /// <para>
+    /// The process rule is next because it is the cheapest and the most common. The packaged-app rule is last because
+    /// its process name says nothing at all: <c>ApplicationFrameHost</c> hosts every MSIX app on the machine, so the
+    /// title is the only evidence there is.
+    /// </para>
+    /// </remarks>
+    public static NitroSenseWindowKind Classify(ForegroundWindowInfo window, bool processIsNitroSense)
+    {
+        if (window.ProcessId <= 0) return NitroSenseWindowKind.None;
+
+        if (IsDialogClass(window.ClassName) &&
+            (MentionsNitroSense(window.Title) || MentionsNitroSense(window.Content)))
+        {
+            return NitroSenseWindowKind.ErrorDialog;
+        }
+
+        if (processIsNitroSense || IsNitroSenseProcessName(window.ProcessName))
+        {
+            return NitroSenseWindowKind.Process;
+        }
+
+        if (IsApplicationFrameHost(window.ProcessName) && MentionsNitroSense(window.Title))
+        {
+            return NitroSenseWindowKind.ApplicationFrameHost;
+        }
+
+        return NitroSenseWindowKind.None;
+    }
+
+    /// <summary>True when a process name belongs to the Acer stack by prefix, which covers a renamed executable.</summary>
+    public static bool IsNitroSenseProcessName(string? name) =>
+        !string.IsNullOrEmpty(name) &&
+        name.StartsWith(NitroSenseProcessPrefix, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when the process is the host a packaged app's window belongs to.</summary>
+    public static bool IsApplicationFrameHost(string? name) =>
+        string.Equals(name, ApplicationFrameHostProcess, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when the window class is the one every Windows dialog uses.</summary>
+    public static bool IsDialogClass(string? className) =>
+        string.Equals(className, DialogClassName, StringComparison.Ordinal);
+
+    /// <summary>
+    /// True when a piece of window text names NitroSense. The package name is checked as well as the product name so
+    /// the intent is readable, even though the second contains the first.
+    /// </summary>
+    public static bool MentionsNitroSense(string? text) =>
+        !string.IsNullOrEmpty(text) &&
+        (text.Contains(NitroSensePackageName, StringComparison.OrdinalIgnoreCase) ||
+         text.Contains(NitroSenseProcessPrefix, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The log line's detail: which shape matched, and the evidence for it.</summary>
+    private static string Describe(NitroSenseWindowKind kind, ForegroundWindowInfo window) => kind switch
+    {
+        NitroSenseWindowKind.ApplicationFrameHost =>
+            $"ApplicationFrameHost (paketli uygulama) başlık='{window.Title}'",
+        NitroSenseWindowKind.ErrorDialog =>
+            $"izin penceresi sınıf='{window.ClassName}' başlık='{window.Title}' içerik='{window.Content}'",
+        _ => $"süreç='{window.ProcessName}'"
+    };
 
     /// <summary>True when the process with this id is NitroSense. A process that has already exited is not.</summary>
     internal static bool IsNitroSense(int processId)
@@ -310,25 +486,129 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
 
     // -------------------------------------------------------------- interop
 
-    private static int ForegroundProcessId()
+    /// <summary>
+    /// The foreground window, read once per poll. Every failure answers <see cref="ForegroundWindowInfo.None"/>: a
+    /// window that closed between the read and the query is not an error, and a poll that threw would stop the timer.
+    /// </summary>
+    private static ForegroundWindowInfo ReadForegroundWindow()
     {
         try
         {
             var window = GetForegroundWindow();
-            if (window == IntPtr.Zero) return 0;
+            if (window == IntPtr.Zero) return ForegroundWindowInfo.None;
 
             GetWindowThreadProcessId(window, out uint processId);
-            return (int)processId;
+            if (processId == 0) return ForegroundWindowInfo.None;
+
+            var className = ReadClassName(window);
+            var title = ReadWindowText(window);
+
+            // A dialog's own title is often just the app name; the sentence that says what went wrong is in a child
+            // label. Reading the children is what makes the permission prompt identifiable at all.
+            var content = IsDialogClass(className) ? ReadChildText(window) : "";
+
+            return new ForegroundWindowInfo(
+                (int)processId, ReadProcessName((int)processId), className, title, content, window);
         }
         catch
         {
-            return 0;
+            return ForegroundWindowInfo.None;
         }
     }
+
+    private static string ReadClassName(IntPtr window)
+    {
+        var buffer = new StringBuilder(256);
+        return GetClassName(window, buffer, buffer.Capacity) > 0 ? buffer.ToString() : "";
+    }
+
+    private static string ReadWindowText(IntPtr window)
+    {
+        var buffer = new StringBuilder(512);
+        return GetWindowText(window, buffer, buffer.Capacity) > 0 ? buffer.ToString() : "";
+    }
+
+    /// <summary>
+    /// The text of a dialog's child labels, joined by a space. Bounded by <see cref="MaxDialogChildren"/> so a window
+    /// with a pathological child count cannot spend the poll inside the enumeration.
+    /// </summary>
+    private static string ReadChildText(IntPtr window)
+    {
+        var parts = new List<string>();
+        var buffer = new StringBuilder(512);
+
+        try
+        {
+            EnumChildWindows(window, (child, _) =>
+            {
+                if (parts.Count >= MaxDialogChildren) return false;
+
+                buffer.Clear();
+                if (GetWindowText(child, buffer, buffer.Capacity) > 0 && buffer.Length > 0)
+                {
+                    parts.Add(buffer.ToString());
+                }
+
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch
+        {
+            // A dialog that closed mid-enumeration leaves what was read so far, which is enough to classify it.
+        }
+
+        return string.Join(' ', parts);
+    }
+
+    private static string ReadProcessName(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return process.ProcessName;
+        }
+        catch
+        {
+            // The process ended between the foreground read and this call, or it is not ours to open.
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// Asks a window to close. <c>WM_CLOSE</c> rather than a process kill: the dialog is a window, and asking it to
+    /// close is what the user's own click on the X does. Killing the process would take NitroSense's tray icon with it.
+    /// </summary>
+    private static void PostClose(IntPtr window)
+    {
+        if (window == IntPtr.Zero) return;
+
+        try
+        {
+            PostMessage(window, WmClose, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("NitroSense izin penceresi kapatılamadı", ex.Message);
+        }
+    }
+
+    private delegate bool EnumChildProc(IntPtr window, IntPtr parameter);
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr window, StringBuilder className, int maxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr window, StringBuilder text, int maxCount);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr parameter);
+
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 }

@@ -590,6 +590,38 @@ public sealed class ShellLabels
     public string NitroKeyHint =>
         Loc.T("Kapalıyken donanım tuşu yok sayılır. Açıkken tuş NitroLite'ı açar; NitroSense açılırsa kapatılır.");
 
+    // The second half of the same claim: the key opens NitroLite, and NitroSense does not get to open as well.
+    public string RedirectNitroSense => Loc.T("NitroSense'i NitroLite'a yönlendir");
+    public string RedirectNitroSenseHint =>
+        Loc.T("Açıkken NitroSense penceresi ve izin uyarısı kapatılır, tuş NitroLite'ı öne getirir.");
+
+    // What the launcher is doing right now, in one line under the NitroSense row.
+    public string NitroSenseLauncherState => Loc.T("Başlatıcı durumu");
+    public string NitroSenseLauncherNoKey =>
+        Loc.T("Bu makinede Nitro tuşu yok; yönlendirme devre dışı.");
+    public string NitroSenseLauncherRedirecting =>
+        Loc.T("NitroSense açık; tuş NitroLite'a yönlendiriliyor ve NitroSense kapatılıyor.");
+    public string NitroSenseLauncherIdle =>
+        Loc.T("NitroSense kapalı; tuş NitroLite'ı öne getirir.");
+    public string NitroSenseLauncherRunning =>
+        Loc.T("NitroSense açık; yönlendirme kapalı, ikisi de çalışır.");
+    public string NitroSenseLauncherStopped =>
+        Loc.T("NitroSense kapalı; yönlendirme kapalı.");
+
+    // The emergency rollback switch for the hardware layer.
+    public string UseDirectWmiBackend => Loc.T("Doğrudan WMI arka ucunu kullan");
+    public string UseDirectWmiBackendHint =>
+        Loc.T("Kapatıldığında tüm okuma ve yazmalar Acer servis soketine döner. Yeniden başlatma gerekmez.");
+    public string DirectWmiBackendOn => Loc.T("Doğrudan WMI arka ucu etkin.");
+    public string DirectWmiBackendOff => Loc.T("Doğrudan WMI arka ucu kapalı; Acer servisi kullanılıyor.");
+
+    // The bottom card: language and theme, where the WPF page kept them.
+    public string NitroLiteSettings => Loc.T("NitroLite Ayarları");
+    public string NitroLiteSettingsHint =>
+        Loc.T("Dil ve tema. Seçim anında uygulanır, NitroLite yeniden başlamaz.");
+    public string ThemeCardsHint =>
+        Loc.T("Bir karta tıklayın; palet anında uygulanır.");
+
     public string UpdatesAndDiagnostics => Loc.T("Güncelleme, Teşhis ve Yedekleme");
     public string AutoUpdateCheck => Loc.T("Güncellemeleri otomatik denetle");
     public string Version => Loc.T("Sürüm");

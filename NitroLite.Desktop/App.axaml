@@ -591,6 +591,30 @@
       <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
     </Style>
 
+    <!-- A theme card: the screenshot is the button, so the frame is the only chrome it carries. The chosen one is
+         framed in the accent; the rest are framed in nothing, which is what makes the choice readable at a glance
+         without a tick or a label. -->
+    <Style Selector="Button.themecard">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.themecard /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.themecard:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.themecard.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
     <!-- The window buttons: 28x28, no frame, a paper tone under the pointer. -->
     <Style Selector="Button.caption">
       <Setter Property="Width" Value="28" />

@@ -567,7 +567,84 @@ public sealed partial class MainViewModel
             if (_settings.NitroKeyEnabled == value) return;
             _settings.NitroKeyEnabled = value;
             Raise();
+            // The redirect row is only meaningful while the key is on, so it follows this switch.
+            Raise(nameof(CanRedirectNitroSense));
             SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// Take the key away from NitroSense: close it when it comes to the front and raise NitroLite instead.
+    /// </summary>
+    /// <remarks>
+    /// A second switch rather than part of <see cref="NitroKeyEnabled"/> because the two answer different questions.
+    /// That one says "the key opens NitroLite"; this one says "and NitroSense does not get to open as well". The row is
+    /// only offered on a machine that has the button, and only makes sense while the first switch is on, so it is
+    /// disabled rather than hidden when that one is off.
+    /// </remarks>
+    public bool RedirectNitroSenseEnabled
+    {
+        get => _settings.RedirectNitroSenseEnabled;
+        set
+        {
+            if (_settings.RedirectNitroSenseEnabled == value) return;
+            _settings.RedirectNitroSenseEnabled = value;
+            Raise();
+            Raise(nameof(NitroSenseLauncherStateText));
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// True when the redirect row can be changed: the key is on, so there is something to redirect.
+    /// </summary>
+    public bool CanRedirectNitroSense => NitroKeyEnabled;
+
+    /// <summary>
+    /// What the NitroSense launcher is doing right now, in one line under the NitroSense row.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the two facts the page already has — whether the process is up and whether the key is being
+    /// redirected — rather than from a third probe. The pill beside the row says whether NitroSense is running; this
+    /// says what that means for the key, which is the question a user setting the switch is actually asking.
+    /// </remarks>
+    public string NitroSenseLauncherStateText
+    {
+        get
+        {
+            if (!NitroKeyAvailable) return Labels.NitroSenseLauncherNoKey;
+
+            if (RedirectNitroSenseEnabled)
+            {
+                return NitroSenseRunning
+                    ? Labels.NitroSenseLauncherRedirecting
+                    : Labels.NitroSenseLauncherIdle;
+            }
+
+            return NitroSenseRunning
+                ? Labels.NitroSenseLauncherRunning
+                : Labels.NitroSenseLauncherStopped;
+        }
+    }
+
+    /// <summary>
+    /// The emergency rollback switch for the hardware layer: off pins every read and write to the Acer service socket.
+    /// </summary>
+    /// <remarks>
+    /// The controller reads the setting through a delegate on every call rather than caching it at construction, so
+    /// flipping this takes effect on the next read — no restart, which is the whole point of offering it to someone
+    /// whose machine is misbehaving right now.
+    /// </remarks>
+    public bool UseDirectWmiBackend
+    {
+        get => _settings.UseDirectWmiBackend;
+        set
+        {
+            if (_settings.UseDirectWmiBackend == value) return;
+            _settings.UseDirectWmiBackend = value;
+            Raise();
+            SaveSettings();
+            Status = value ? Labels.DirectWmiBackendOn : Labels.DirectWmiBackendOff;
         }
     }
 
@@ -1009,6 +1086,7 @@ public sealed partial class MainViewModel
         Raise(nameof(HasNoAcerServices));
         Raise(nameof(NitroSenseRunning));
         Raise(nameof(NitroSenseStateText));
+        Raise(nameof(NitroSenseLauncherStateText));
     }
 
     private async Task DisableServicesAsync()
