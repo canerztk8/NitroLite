@@ -21,6 +21,11 @@ namespace NitroLite.Core.Hardware.Wmi;
 /// not. A refusal falls back to the plain pipe: the tests run both ends in one process, where both sides carry the
 /// same label and it never gets in the way.
 /// </para>
+/// <para>
+/// The two branches are not combined. <see cref="PipeOptions.CurrentUserOnly"/> builds its own DACL, and passing it
+/// alongside an explicit <see cref="PipeSecurity"/> is rejected; the explicit descriptor below is the same
+/// restriction plus the label, so the fallback is the only place the flag is needed.
+/// </para>
 /// </summary>
 internal static class WorkerPipe
 {
@@ -60,8 +65,14 @@ internal static class WorkerPipe
             if (user == null) return null;
 
             // Deny the network logon first — deny ACEs are evaluated before allow ACEs — then grant the signed-in
-            // user full control, then lower the mandatory label to Medium so a medium-integrity client can write.
-            var sddl = $"D:(D;;GA;;;NU)(A;;GA;;;{user.Value})S:(ML;;NW;;;ME)";
+            // user exactly the rights a duplex pipe needs, then lower the mandatory label to Medium so a
+            // medium-integrity client can write.
+            //
+            // The leading P makes the DACL protected. Without it Windows merges in whatever the \Device\NamedPipe
+            // container inherits, so the ACL this code wrote is not the ACL the pipe ends up with and neither the
+            // code nor a test can say what it is. The mask is FILE_GENERIC_READ | FILE_GENERIC_WRITE rather than
+            // GENERIC_ALL: WRITE_DAC and WRITE_OWNER would let a client rewrite the pipe's own security descriptor.
+            var sddl = $"D:P(D;;GA;;;NU)(A;;0x12019F;;;{user.Value})S:(ML;;NW;;;ME)";
 
             var security = new PipeSecurity();
             security.SetSecurityDescriptorSddlForm(sddl, AccessControlSections.Access | AccessControlSections.Audit);

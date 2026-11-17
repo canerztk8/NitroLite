@@ -198,7 +198,7 @@ public static class WmiWorkerHost
         if (mode == null || !mode.IsValidWorkerRequest)
         {
             AppLog.Warn("--wmi-worker reddedildi: eksik veya geçersiz argüman",
-                $"pipe='{mode?.PipeName}' parent={mode?.ParentProcessId} nonce={mode?.Nonce.Length ?? 0} karakter");
+                $"pipe='{mode?.PipeName}' parent={mode?.ParentProcessId}");
             return ExitInvalidArguments;
         }
 
@@ -214,7 +214,9 @@ public static class WmiWorkerHost
         try
         {
             using var executor = new AcerWmiExecutor();
-            using var server = new WmiWorkerServer(mode.PipeName, mode.Nonce, executor);
+            // The parent id is the authentication gate: every connection is checked against it, so a process that
+            // merely runs as the same user cannot take the helper over.
+            using var server = new WmiWorkerServer(mode.PipeName, executor, mode.ParentProcessId);
 
             AppLog.Info("--wmi-worker başladı", $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
 

@@ -260,8 +260,7 @@ public class WmiControllerTests
     [Fact]
     public void Launcher_Arguments_RoundTripThroughTheWorkerParser()
     {
-        var nonce = WmiWorkerClient.GenerateNonce();
-        var arguments = WmiWorkerLauncher.BuildArguments("nitrolite-wmi-abc", 4242, nonce);
+        var arguments = WmiWorkerLauncher.BuildArguments("nitrolite-wmi-abc", 4242);
 
         var mode = StartupMode.Parse(SplitArguments(arguments));
 
@@ -269,7 +268,6 @@ public class WmiControllerTests
         Assert.True(mode.IsValidWorkerRequest);
         Assert.Equal("nitrolite-wmi-abc", mode.PipeName);
         Assert.Equal(4242, mode.ParentProcessId);
-        Assert.Equal(nonce, mode.Nonce);
     }
 
     // ---------------------------------------------------------------- WmiHardwareController

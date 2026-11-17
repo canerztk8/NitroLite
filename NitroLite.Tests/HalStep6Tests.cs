@@ -53,7 +53,10 @@ public class HalStep6Tests
             isElevated: () => elevated,
             executablePath: () => ExePath,
             userId: () => UserSid,
-            tempFilePath: () => tempPath ?? Path.Combine(Path.GetTempPath(), $"nitrolite-task-{Guid.NewGuid():N}.xml"));
+            tempFilePath: () => tempPath ?? Path.Combine(Path.GetTempPath(), $"nitrolite-task-{Guid.NewGuid():N}.xml"),
+            // The COM path is exercised by its own test; every other test here pins the schtasks fallback, so the
+            // stub reports a failure and lets the service fall through.
+            registerTask: (_, _, _, _) => "the COM path is not exercised here");
 
     // ------------------------------------------------------------------ 1. the task definition
 
@@ -394,9 +397,20 @@ public class HalStep6Tests
     public void WorkerLauncher_ArgumentsStillMatchTheWorkerParser()
     {
         // The elevation change must not have touched the command line the worker parses.
-        string arguments = WmiWorkerLauncher.BuildArguments("nitrolite-wmi-test", 4242, new string('a', 64));
+        string arguments = WmiWorkerLauncher.BuildArguments("nitrolite-wmi-test", 4242);
 
         Assert.True(StartupMode.Parse(arguments.Split(' ')).IsValidWorkerRequest);
+    }
+
+    [Fact]
+    public void WorkerLauncher_ArgumentsCarryNoHandshakeSecret()
+    {
+        // The nonce used to travel here, where Win32_Process.CommandLine handed it to any process running as the
+        // same user. It now goes over the pipe, so the command line must not mention it at all.
+        string arguments = WmiWorkerLauncher.BuildArguments("nitrolite-wmi-test", 4242);
+
+        Assert.DoesNotContain("--nonce", arguments, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("nonce", arguments, StringComparison.OrdinalIgnoreCase);
     }
 
     // ------------------------------------------------------------------ 6. auto-starting WMI at launch

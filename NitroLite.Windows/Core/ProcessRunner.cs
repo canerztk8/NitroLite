@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 
 namespace NitroLite.Core;
 
@@ -38,16 +39,55 @@ public sealed class ProcessRunner : IProcessRunner
     /// <summary><c>ERROR_CANCELLED</c>: the user clicked No on the UAC prompt.</summary>
     public const int ErrorCancelled = 1223;
 
+    /// <summary>
+    /// Full path of the tool to launch. A bare name is resolved against System32 rather than left to
+    /// <c>CreateProcess</c>, which searches the working directory first and then PATH — both of which a user can
+    /// write to, and one of which is inherited from whatever launched NitroLite.
+    /// </summary>
+    public static string ResolveExecutable(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return fileName;
+        if (Path.IsPathRooted(fileName)) return fileName;
+        if (fileName.Contains(Path.DirectorySeparatorChar) || fileName.Contains(Path.AltDirectorySeparatorChar))
+            return fileName;
+
+        var system = Environment.SystemDirectory;
+        return string.IsNullOrEmpty(system) ? fileName : Path.Combine(system, fileName);
+    }
+
+    /// <summary>
+    /// The directory the child starts in. Pinned to the tool's own folder so a relative path inside the command
+    /// cannot be resolved against a folder the user controls.
+    /// </summary>
+    public static string WorkingDirectoryFor(string resolvedExecutable)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(resolvedExecutable);
+            if (!string.IsNullOrEmpty(directory)) return directory;
+        }
+        catch (ArgumentException)
+        {
+            // A malformed path falls through to the system directory below.
+        }
+
+        var system = Environment.SystemDirectory;
+        return string.IsNullOrEmpty(system) ? AppContext.BaseDirectory : system;
+    }
+
     public async Task<ProcessRunResult> RunAsync(
         string fileName,
         string arguments,
         bool elevate,
         CancellationToken cancellationToken = default)
     {
-        var startInfo = new ProcessStartInfo(fileName, arguments)
+        var resolved = ResolveExecutable(fileName);
+
+        var startInfo = new ProcessStartInfo(resolved, arguments)
         {
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
+            WorkingDirectory = WorkingDirectoryFor(resolved),
 
             // A verb is only honoured with UseShellExecute, and redirecting the output is only possible without it.
             // The elevated path therefore gets an exit code and nothing else, which is all schtasks needs.

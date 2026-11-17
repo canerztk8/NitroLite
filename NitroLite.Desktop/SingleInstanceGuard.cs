@@ -58,6 +58,8 @@ public sealed class SingleInstanceGuard : IDisposable
     {
         if (OperatingSystem.IsWindows())
         {
+            bool refusedByAnotherSession = false;
+
             foreach (var name in new[] { MutexName, MutexNameFallback })
             {
                 try
@@ -71,8 +73,10 @@ public sealed class SingleInstanceGuard : IDisposable
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    // The mutex exists but belongs to another user's session: that is still "already running".
-                    return new SingleInstanceGuard(null, null, isFirst: false);
+                    // The mutex exists but belongs to another user's session. That is not this session's answer:
+                    // the per-session name is tried next, so two users logged on at once each get their own
+                    // window instead of the second one silently refusing to start.
+                    refusedByAnotherSession = true;
                 }
                 catch (Exception ex)
                 {
@@ -80,7 +84,8 @@ public sealed class SingleInstanceGuard : IDisposable
                 }
             }
 
-            return new SingleInstanceGuard(null, null, isFirst: true);
+            // Both names were refused, so another session owns the machine-wide slot and the per-session one too.
+            return new SingleInstanceGuard(null, null, isFirst: !refusedByAnotherSession);
         }
 
         try
@@ -115,18 +120,24 @@ public sealed class SingleInstanceGuard : IDisposable
             {
                 try
                 {
+                    // CurrentUserOnly: the signal is a wake-up, not a message, but a pipe any local account can
+                    // write to is still a way to make the window jump to the front at will.
                     _server = new NamedPipeServerStream(
-                        PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                        PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
+                        PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
                     await _server.WaitForConnectionAsync(_stop.Token).ConfigureAwait(false);
 
-                    // One byte is the whole protocol: the message is the connection.
+                    // One byte is the whole protocol: the message is the connection. The count is checked rather
+                    // than assumed — a client that connects and closes without writing has not asked for anything,
+                    // and raising the event for it would be a free way to yank the window forward.
                     var buffer = new byte[1];
-                    await _server.ReadAsync(buffer, _stop.Token).ConfigureAwait(false);
+                    int read = await _server.ReadAsync(buffer, _stop.Token).ConfigureAwait(false);
+
                     _server.Dispose();
                     _server = null;
 
-                    ActivationRequested?.Invoke();
+                    if (read == 1) ActivationRequested?.Invoke();
                 }
                 catch (OperationCanceledException)
                 {
@@ -136,6 +147,13 @@ public sealed class SingleInstanceGuard : IDisposable
                 {
                     AppLog.Warn("Tek örnek dinleyicisi durdu", ex.Message);
                     return;
+                }
+                finally
+                {
+                    // A throw between the accept and the dispose would otherwise leave the handle open and the
+                    // next iteration would fail on a pipe name that is still in use.
+                    try { _server?.Dispose(); } catch { /* already gone */ }
+                    _server = null;
                 }
             }
         });

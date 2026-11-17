@@ -590,7 +590,8 @@ public class RetireLegacyWpfTests
             isElevated: () => true,
             executablePath: () => @"C:\Apps\NitroLite\NitroLite.Desktop.exe",
             userId: () => "S-1-5-21-1",
-            tempFilePath: () => Path.Combine(Path.GetTempPath(), $"nitrolite_task_{Guid.NewGuid():N}.xml"));
+            tempFilePath: () => Path.Combine(Path.GetTempPath(), $"nitrolite_task_{Guid.NewGuid():N}.xml"),
+            registerTask: (_, _, _, _) => "the COM path is not exercised here");
 
         var result = await service.EnableAsync(startMinimized: false);
 

@@ -1,24 +1,31 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
+using Microsoft.Win32.SafeHandles;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
 /// <summary>
-/// The worker's end of the pipe: accepts exactly one client, proves it knows the nonce, then serves typed commands
-/// until the client goes away.
+/// The worker's end of the pipe: accepts one client, proves it is the process that started this helper, then serves
+/// typed commands until the client goes away.
 /// <para>
 /// The pipe is created by <see cref="WorkerPipe"/>, which locks the DACL to the current user and lowers the
 /// mandatory integrity label to Medium. The label matters as much as the ACL: an elevated process creates High
 /// objects, and a High pipe refuses the medium-integrity window that started the worker no matter what its DACL
-/// says. The operating system then refuses a connection from any other account before a single byte is read. That
-/// is the outer wall. The nonce is the inner one, and it covers the case the ACL cannot: another process running as
-/// the same user — a script, a game overlay, anything that enumerates pipe names — connecting first and driving the
-/// elevated worker. Without the nonce that process would inherit administrator hardware control for free.
+/// says. The operating system then refuses a connection from any other account before a single byte is read.
 /// </para>
 /// <para>
-/// One client for the life of the process is intentional. The worker exists to serve the window that started it; a
-/// second client is either a mistake or an attack, and neither deserves a retry.
+/// That is not enough on its own, because every process running as the same user passes the ACL. The gate that
+/// actually holds is the client's process id: <c>GetNamedPipeClientProcessId</c> reports the id the kernel assigned
+/// to the connecting process, and a caller cannot forge it. A connection from anything other than the window named
+/// on the command line is dropped and the worker goes back to listening, so a rogue client that connects first
+/// cannot take the helper away from its owner and cannot kill it either.
+/// </para>
+/// <para>
+/// The nonce is the third layer and the weakest, which is why it is no longer the only one. It used to travel on the
+/// command line, where <c>Win32_Process.CommandLine</c> handed it to any same-user process; it now arrives on the
+/// pipe and is echoed back, so the window can prove the reply came from the helper it started.
 /// </para>
 /// </summary>
 public sealed class WmiWorkerServer : IDisposable
@@ -27,16 +34,21 @@ public sealed class WmiWorkerServer : IDisposable
     public static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(5);
 
     private readonly string _pipeName;
-    private readonly string _nonce;
+    private readonly int _expectedClientProcessId;
     private readonly IWmiExecutor _executor;
+    private NamedPipeServerStream? _pipe;
     private bool _disposed;
 
-    public WmiWorkerServer(string pipeName, string nonce, IWmiExecutor executor)
+    /// <param name="expectedClientProcessId">
+    /// The process id every connection is checked against. Zero disables the check, which is what the tests use when
+    /// both ends live in one process; the host always passes the parent id it was started with.
+    /// </param>
+    public WmiWorkerServer(string pipeName, IWmiExecutor executor, int expectedClientProcessId = 0)
     {
         if (string.IsNullOrWhiteSpace(pipeName)) throw new ArgumentException("pipe name is required", nameof(pipeName));
         _pipeName = pipeName;
-        _nonce = nonce ?? "";
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        _expectedClientProcessId = expectedClientProcessId;
     }
 
     /// <summary>
@@ -44,37 +56,135 @@ public sealed class WmiWorkerServer : IDisposable
     /// </summary>
     /// <returns>
     /// True when a client completed the handshake and was served; false when nobody connected in time or the
-    /// handshake was rejected. Either way the caller should exit — the worker has no second act.
+    /// accept window closed. A rejected connection is not a failure: the worker drops it and keeps listening, so a
+    /// rogue client cannot deny the helper to the window that owns it.
     /// </returns>
     public async Task<bool> RunAsync(TimeSpan acceptTimeout, CancellationToken cancellationToken = default)
     {
-        using var pipe = WorkerPipe.Create(_pipeName);
+        var deadline = DateTime.UtcNow + acceptTimeout;
 
-        using var acceptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        acceptCts.CancelAfter(acceptTimeout);
-
+        _pipe = WorkerPipe.Create(_pipeName);
         try
         {
-            await pipe.WaitForConnectionAsync(acceptCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero) return false;
+
+                using var acceptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                acceptCts.CancelAfter(remaining);
+
+                try
+                {
+                    await _pipe.WaitForConnectionAsync(acceptCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return false;
+                }
+                catch (IOException)
+                {
+                    return false;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return false;
+                }
+
+                if (!IsExpectedClient(_pipe))
+                {
+                    Disconnect();
+                    continue;
+                }
+
+                if (!await HandshakeAsync(_pipe, cancellationToken).ConfigureAwait(false))
+                {
+                    Disconnect();
+                    continue;
+                }
+
+                await ServeAsync(_pipe, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
             return false;
         }
-        catch (IOException)
+        finally
         {
-            return false;
+            var pipe = _pipe;
+            _pipe = null;
+            try { pipe?.Dispose(); } catch { /* the pipe is already gone */ }
         }
-
-        if (!await HandshakeAsync(pipe, cancellationToken).ConfigureAwait(false)) return false;
-
-        await ServeAsync(pipe, cancellationToken).ConfigureAwait(false);
-        return true;
     }
 
     /// <summary>
-    /// Reads the hello, checks the nonce and answers. A wrong nonce, a wrong message type or a timeout all end the
-    /// connection; the client is told why so the window can log something better than "the pipe closed".
+    /// True when the connected client is the process that started this helper. The id comes from the kernel, so it
+    /// cannot be spoofed; the account is checked as well so a recycled id cannot stand in for the parent.
+    /// </summary>
+    private bool IsExpectedClient(NamedPipeServerStream pipe)
+    {
+        if (_expectedClientProcessId <= 0) return true;
+
+        uint clientProcessId;
+        try
+        {
+            if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out clientProcessId))
+            {
+                AppLog.Warn("--wmi-worker bağlantısı reddedildi", "istemci süreç kimliği okunamadı");
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Without the id there is no way to tell the parent from any other process running as this user, and
+            // the pipe ACL cannot: they all pass it. Refusing is the safe answer — the window falls back to the
+            // non-elevated backend instead of handing administrator hardware control to a stranger.
+            AppLog.Warn("--wmi-worker bağlantısı reddedildi", "istemci süreç kimliği bu makinede okunamıyor");
+            return false;
+        }
+
+        if (clientProcessId != (uint)_expectedClientProcessId)
+        {
+            AppLog.Warn("--wmi-worker bağlantısı reddedildi",
+                $"beklenen pid={_expectedClientProcessId}, gelen pid={clientProcessId}");
+            return false;
+        }
+
+        try
+        {
+            var clientUser = pipe.GetImpersonationUserName();
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            if (!string.IsNullOrEmpty(clientUser) && !string.IsNullOrEmpty(identity.Name)
+                && !string.Equals(clientUser, identity.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                AppLog.Warn("--wmi-worker bağlantısı reddedildi",
+                    $"istemci hesabı '{clientUser}', beklenen '{identity.Name}'");
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException
+                                      or InvalidOperationException)
+        {
+            // The id check already passed; a pipe that cannot report the account is not a reason to refuse.
+        }
+
+        return true;
+    }
+
+    /// <summary>Drops the current connection so the accept loop can take the next one.</summary>
+    private void Disconnect()
+    {
+        try { _pipe?.Disconnect(); }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+            // Already disconnected, or the pipe is gone. Either way the loop moves on.
+        }
+    }
+
+    /// <summary>
+    /// Reads the hello, checks its shape and answers with a welcome that echoes the nonce. A wrong message type, a
+    /// malformed nonce or a timeout all end the connection; the client is told why so the window can log something
+    /// better than "the pipe closed".
     /// </summary>
     private async Task<bool> HandshakeAsync(Stream pipe, CancellationToken cancellationToken)
     {
@@ -101,9 +211,12 @@ public sealed class WmiWorkerServer : IDisposable
             return false;
         }
 
-        if (!WmiWorkerProtocol.NonceMatches(_nonce, request.Nonce))
+        // The value is not compared against anything held here: the caller generated it, and echoing it back is
+        // what proves the reply came from the helper that received the hello. It still has to look like a nonce, so
+        // the field cannot be used to smuggle a payload through the handshake.
+        if (!StartupMode.IsHexNonce(request.Nonce))
         {
-            await TryReplyAsync(pipe, WmiWorkerResponse.Failure("handshake_failed", "nonce mismatch"),
+            await TryReplyAsync(pipe, WmiWorkerResponse.Failure("handshake_failed", "nonce is missing or malformed"),
                 cancellationToken).ConfigureAwait(false);
             return false;
         }
@@ -112,6 +225,7 @@ public sealed class WmiWorkerServer : IDisposable
         {
             Type = WmiWorkerProtocol.TypeWelcome,
             Ok = true,
+            Nonce = request.Nonce,
             Data = new JsonObject { ["protocol"] = 1 }
         }, cancellationToken).ConfigureAwait(false);
 
@@ -320,8 +434,11 @@ public sealed class WmiWorkerServer : IDisposable
         }
         catch (Exception ex)
         {
-            // A throw here would end the worker and leave the window with a dead pipe and no explanation.
-            return WmiWorkerResponse.Failure(WmiOperationResult.CodeWmiFailed, $"{ex.GetType().Name}: {ex.Message}");
+            // A throw here would end the worker and leave the window with a dead pipe and no explanation. The
+            // exception type and message stay in the log: they name internal types and paths, and the caller is a
+            // pipe that may not be the window at all.
+            AppLog.Warn("--wmi-worker komutu başarısız", $"{ex.GetType().Name}: {ex.Message}");
+            return WmiWorkerResponse.Failure(WmiOperationResult.CodeWmiFailed, "the worker could not run the command");
         }
     }
 
@@ -443,5 +560,14 @@ public sealed class WmiWorkerServer : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        // The pipe is a field rather than a local so this can actually close it. A Dispose that only sets a flag
+        // leaves the handle open until the process exits, which is the leak the field exists to avoid.
+        var pipe = _pipe;
+        _pipe = null;
+        try { pipe?.Dispose(); } catch { /* the pipe is already gone */ }
     }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetNamedPipeClientProcessId(SafePipeHandle pipe, out uint clientProcessId);
 }

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 
@@ -88,23 +89,31 @@ public sealed class ElevatedStartupService
     private readonly Func<string?> _executablePath;
     private readonly Func<string?> _userId;
     private readonly Func<string> _tempFilePath;
+    private readonly Func<string, string, string, string, string?> _registerTask;
 
     /// <summary>
     /// Every dependency is injectable so the XML, the mutual exclusion and the cancelled prompt can be tested without
     /// registering a real task, reading the real registry or raising a real UAC prompt.
     /// </summary>
+    /// <param name="registerTask">
+    /// Registers the task from memory through the Task Scheduler COM API. Takes the task name, the executable, its
+    /// arguments and the user SID; returns null on success and the reason on failure. The default is
+    /// <see cref="TryRegisterWithCom"/>; the tests inject a stub so a run never touches the real Task Scheduler.
+    /// </param>
     public ElevatedStartupService(
         IProcessRunner? runner = null,
         Func<bool>? isElevated = null,
         Func<string?>? executablePath = null,
         Func<string?>? userId = null,
-        Func<string>? tempFilePath = null)
+        Func<string>? tempFilePath = null,
+        Func<string, string, string, string, string?>? registerTask = null)
     {
         _runner = runner ?? new ProcessRunner();
         _isElevated = isElevated ?? MemoryCleanerService.IsRunningAsAdministrator;
         _executablePath = executablePath ?? (() => Environment.ProcessPath);
         _userId = userId ?? CurrentUserSid;
         _tempFilePath = tempFilePath ?? (() => Path.Combine(Path.GetTempPath(), $"nitrolite-task-{Guid.NewGuid():N}.xml"));
+        _registerTask = registerTask ?? TryRegisterWithCom;
     }
 
     /// <summary>The current user's SID, which is what the task's principal and logon trigger are keyed on.</summary>
@@ -142,6 +151,112 @@ public sealed class ElevatedStartupService
     /// </summary>
     public static string BuildTaskArguments(bool startMinimized) =>
         startMinimized ? $"{AutostartFlag} --minimized" : AutostartFlag;
+
+    /// <summary>
+    /// True when <paramref name="exePath"/> sits somewhere a program is not installed: the temp folders, or the
+    /// user's Downloads folder.
+    /// <para>
+    /// A task registered against such a path starts whatever is at that path at logon, with the highest available
+    /// token. The file that was checked when the task was created is not the file that runs months later, and a
+    /// folder the user unpacks archives into is exactly where a replacement would be waiting. The check is the one
+    /// <see cref="DebloatService.IsTemporaryLocation"/> already performs, extended with Downloads because that is
+    /// where a portable build is most often tried from.
+    /// </para>
+    /// </summary>
+    public static bool IsUnsafeAutostartLocation(string? exePath, IEnumerable<string>? extraRoots = null)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return false;
+
+        var roots = new List<string>
+        {
+            Path.GetTempPath(),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
+        };
+
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(profile)) roots.Add(Path.Combine(profile, "Downloads"));
+        if (extraRoots != null) roots.AddRange(extraRoots);
+
+        return DebloatService.IsTemporaryLocation(exePath, roots);
+    }
+
+    /// <summary>
+    /// Registers the task through the Task Scheduler COM API, so the definition never touches the disk. Returns null
+    /// on success and the reason on failure; the caller falls back to <c>schtasks</c>.
+    /// </summary>
+    /// <remarks>
+    /// This only works when the process already holds an administrator token: registering a task that runs at
+    /// <c>HighestAvailable</c> is itself a privileged operation, and COM has no way to raise a prompt for it. That is
+    /// why the UAC path still uses <c>schtasks</c> — the alternative would be a second elevated helper that accepts a
+    /// task definition over a pipe, which is a larger privileged surface than the file it replaces.
+    /// </remarks>
+    public static string? TryRegisterWithCom(string taskName, string executablePath, string arguments, string userId)
+    {
+        object? serviceObject = null;
+        try
+        {
+            var comType = Type.GetTypeFromProgID("Schedule.Service");
+            if (comType == null) return "the Task Scheduler COM server is not registered";
+
+            serviceObject = Activator.CreateInstance(comType);
+            if (serviceObject == null) return "the Task Scheduler COM server could not be created";
+
+            dynamic service = serviceObject;
+            service.Connect();
+
+            dynamic folder = service.GetFolder("\\");
+            dynamic definition = service.NewTask(0); // TASK_CREATE
+
+            definition.RegistrationInfo.Author = "NitroLite";
+            definition.RegistrationInfo.Description = "NitroLite elevated auto-start (optional)";
+
+            dynamic principal = definition.Principal;
+            principal.UserId = userId;
+            principal.LogonType = 3; // TASK_LOGON_INTERACTIVE_TOKEN
+            principal.RunLevel = 1;  // TASK_RUNLEVEL_HIGHEST
+
+            dynamic trigger = definition.Triggers.Create(9); // TASK_TRIGGER_LOGON
+            trigger.UserId = userId;
+            trigger.Enabled = true;
+
+            dynamic settings = definition.Settings;
+            settings.MultipleInstances = 2; // TASK_INSTANCES_IGNORE_NEW
+            settings.DisallowStartIfOnBatteries = false;
+            settings.StopIfGoingOnBatteries = false;
+            settings.AllowHardTerminate = true;
+            settings.StartWhenAvailable = false;
+            settings.RunOnlyIfNetworkAvailable = false;
+            settings.AllowDemandStart = true;
+            settings.Enabled = true;
+            settings.Hidden = false;
+            settings.RunOnlyIfIdle = false;
+            settings.WakeToRun = false;
+            // PT0S is "no limit". Without it Windows terminates the task after 72 hours of runtime.
+            settings.ExecutionTimeLimit = "PT0S";
+            settings.Priority = 7;
+            settings.IdleSettings.StopOnIdleEnd = false;
+            settings.IdleSettings.RestartOnIdle = false;
+
+            dynamic action = definition.Actions.Create(0); // TASK_ACTION_EXEC
+            action.Path = executablePath;
+            action.Arguments = arguments;
+
+            // 6 = TASK_CREATE_OR_UPDATE, 3 = TASK_LOGON_INTERACTIVE_TOKEN.
+            folder.RegisterTaskDefinition(taskName, definition, 6, userId, null, 3);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"{ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            if (serviceObject != null)
+            {
+                try { Marshal.FinalReleaseComObject(serviceObject); } catch { /* already released */ }
+            }
+        }
+    }
 
     /// <summary>
     /// The task definition. Pure, so the three Windows defaults that would break a tray application can be asserted
@@ -287,6 +402,15 @@ public sealed class ElevatedStartupService
                 $"{exePath} (beklenen: {ExpectedExecutableName})");
         }
 
+        // A copy running out of a temp folder or Downloads is not a program the user installed: it is a file that
+        // will be gone, or replaced, by the time the task fires. Registering it with HighestAvailable would hand
+        // whatever ends up at that path an elevated logon start.
+        if (IsUnsafeAutostartLocation(exePath))
+        {
+            return Fail("the executable runs from a temporary or download folder, so it must not be registered " +
+                        $"for autostart: {exePath}");
+        }
+
         // Before the new registration, so a stale WPF task cannot survive a failed create.
         await PurgeLegacyTaskAsync(cancellationToken).ConfigureAwait(false);
 
@@ -296,13 +420,26 @@ public sealed class ElevatedStartupService
             return Fail("the current user's SID could not be read");
         }
 
-        string xml = BuildTaskXml(exePath, BuildTaskArguments(startMinimized), userId);
+        string arguments = BuildTaskArguments(startMinimized);
+
+        // Already elevated: the definition goes straight into the Task Scheduler through COM, so no file is written
+        // and there is no window in which one could be swapped for another.
+        if (_isElevated())
+        {
+            string? comError = _registerTask(TaskName, exePath, arguments, userId);
+            if (comError == null) return FinishEnable();
+
+            AppLog.Warn("Görev COM ile kaydedilemedi, schtasks'a düşülüyor", comError);
+        }
+
+        // Not elevated, or COM refused: schtasks needs the definition on disk. The file is held open read-only with
+        // FileShare.Read for the whole call, so no other process can replace it while the UAC prompt is up.
+        string xml = BuildTaskXml(exePath, arguments, userId);
         string tempPath = _tempFilePath();
 
         try
         {
-            // UTF-16 with a BOM: schtasks reads the declaration and refuses a file whose encoding disagrees with it.
-            await File.WriteAllTextAsync(tempPath, xml, Encoding.Unicode, cancellationToken).ConfigureAwait(false);
+            using var hold = await WriteAndHoldAsync(tempPath, xml, cancellationToken).ConfigureAwait(false);
 
             var result = await _runner.RunAsync(
                 "schtasks.exe",
@@ -334,6 +471,60 @@ public sealed class ElevatedStartupService
             try { File.Delete(tempPath); } catch { }
         }
 
+        return FinishEnable();
+    }
+
+    /// <summary>
+    /// Writes the task definition and hands back a read-only handle that keeps it frozen for as long as it is open.
+    /// <para>
+    /// <c>schtasks</c> reads the file as the elevated process, so the file has to exist; what must not happen is
+    /// another process replacing it while the UAC prompt is on screen. <see cref="FileShare.Read"/> grants readers
+    /// and denies writers and deleters, which is exactly the access <c>schtasks</c> needs and nothing more. The bytes
+    /// are compared with what was written before the handle is returned, so a file that changed in the moment
+    /// between the write and the reopen is refused rather than registered.
+    /// </para>
+    /// </summary>
+    private static async Task<FileStream> WriteAndHoldAsync(string path, string xml, CancellationToken cancellationToken)
+    {
+        // UTF-16 with a BOM: schtasks reads the declaration and refuses a file whose encoding disagrees with it.
+        var preamble = Encoding.Unicode.GetPreamble();
+        var body = Encoding.Unicode.GetBytes(xml);
+        var bytes = new byte[preamble.Length + body.Length];
+        preamble.CopyTo(bytes, 0);
+        body.CopyTo(bytes, preamble.Length);
+
+        await using (var write = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, useAsync: true))
+        {
+            await write.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+            await write.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var hold = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+        try
+        {
+            var readBack = new byte[bytes.Length];
+            await hold.ReadExactlyAsync(readBack, cancellationToken).ConfigureAwait(false);
+            if (!readBack.AsSpan().SequenceEqual(bytes))
+            {
+                throw new InvalidOperationException(
+                    "the task definition changed on disk before it could be registered");
+            }
+
+            return hold;
+        }
+        catch
+        {
+            hold.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// The half of <see cref="EnableAsync"/> that runs once the task exists: drop the standard Run entry so logon
+    /// starts NitroLite once, and report the change.
+    /// </summary>
+    private ElevatedStartupResult FinishEnable()
+    {
         // Two registrations would start NitroLite twice at logon. The task wins because the user just chose it.
         if (RemoveStandardAutoStart?.Invoke() == false)
         {

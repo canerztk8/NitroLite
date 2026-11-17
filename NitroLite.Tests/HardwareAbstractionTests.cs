@@ -33,17 +33,31 @@ public class HardwareAbstractionTests
     }
 
     [Fact]
+    public void Parse_WorkerFlagWinsOverTheOtherRoles()
+    {
+        // The helper is a second process of this executable, so the role has to be decided before the
+        // single-instance guard classifies it as a duplicate. The parser is the only place that decision is made,
+        // and it must not be swayed by the flags the window also understands.
+        var mode = StartupMode.Parse(new[]
+        {
+            "--autostart", "--minimized", "--wmi-worker", "--pipe", "p", "--parent-pid", "7"
+        });
+
+        Assert.True(mode.IsWmiWorker);
+        Assert.True(mode.IsValidWorkerRequest);
+    }
+
+    [Fact]
     public void Parse_WorkerWithEveryArgument_IsAValidRequest()
     {
         var mode = StartupMode.Parse(new[]
         {
-            "--wmi-worker", "--pipe", "nitrolite-wmi-1", "--parent-pid", "4242", "--nonce", ValidNonce
+            "--wmi-worker", "--pipe", "nitrolite-wmi-1", "--parent-pid", "4242"
         });
 
         Assert.True(mode.IsWmiWorker);
         Assert.Equal("nitrolite-wmi-1", mode.PipeName);
         Assert.Equal(4242, mode.ParentProcessId);
-        Assert.Equal(ValidNonce, mode.Nonce);
         Assert.True(mode.IsValidWorkerRequest);
     }
 
@@ -52,7 +66,7 @@ public class HardwareAbstractionTests
     {
         var mode = StartupMode.Parse(new[]
         {
-            "--wmi-worker", "--pipe=nitrolite-wmi-2", "--parent-pid=99", "--nonce=" + ValidNonce
+            "--wmi-worker", "--pipe=nitrolite-wmi-2", "--parent-pid=99"
         });
 
         Assert.True(mode.IsValidWorkerRequest);
@@ -65,16 +79,31 @@ public class HardwareAbstractionTests
     {
         var mode = StartupMode.Parse(new[]
         {
-            "--WMI-WORKER", "--PIPE", "p", "--PARENT-PID", "7", "--NONCE", ValidNonce
+            "--WMI-WORKER", "--PIPE", "p", "--PARENT-PID", "7"
         });
 
         Assert.True(mode.IsValidWorkerRequest);
     }
 
     [Fact]
-    public void Parse_WorkerWithoutNonce_IsRejected()
+    public void Parse_IgnoresALegacyNonceArgument()
     {
-        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "p", "--parent-pid", "7" });
+        // The handshake value no longer travels on the command line. An older launcher that still passes one must
+        // not break the parse, and the value must not be picked up from anywhere.
+        var mode = StartupMode.Parse(new[]
+        {
+            "--wmi-worker", "--pipe", "p", "--parent-pid", "7", "--nonce", ValidNonce
+        });
+
+        Assert.True(mode.IsValidWorkerRequest);
+        Assert.Equal("p", mode.PipeName);
+        Assert.Equal(7, mode.ParentProcessId);
+    }
+
+    [Fact]
+    public void Parse_WorkerWithoutAPipe_IsRejected()
+    {
+        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--parent-pid", "7" });
         Assert.True(mode.IsWmiWorker);
         Assert.False(mode.IsValidWorkerRequest);
     }
@@ -82,14 +111,14 @@ public class HardwareAbstractionTests
     [Fact]
     public void Parse_WorkerWithoutParent_IsRejected()
     {
-        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "p", "--nonce", ValidNonce });
+        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "p" });
         Assert.False(mode.IsValidWorkerRequest);
     }
 
     [Fact]
     public void Parse_UnparsableParentPid_IsRejected()
     {
-        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "p", "--parent-pid", "abc", "--nonce", ValidNonce });
+        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "p", "--parent-pid", "abc" });
         Assert.Equal(0, mode.ParentProcessId);
         Assert.False(mode.IsValidWorkerRequest);
     }
@@ -97,10 +126,11 @@ public class HardwareAbstractionTests
     [Fact]
     public void Parse_FlagFollowedByAnotherFlag_DoesNotSwallowItAsAValue()
     {
-        // "--pipe --nonce <hex>" must leave the pipe empty: naming the pipe "--nonce" would be worse than failing.
-        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "--nonce", ValidNonce, "--parent-pid", "7" });
+        // "--pipe --parent-pid 7" must leave the pipe empty: naming the pipe "--parent-pid" would be worse than
+        // failing.
+        var mode = StartupMode.Parse(new[] { "--wmi-worker", "--pipe", "--parent-pid", "7" });
         Assert.Equal("", mode.PipeName);
-        Assert.Equal(ValidNonce, mode.Nonce);
+        Assert.Equal(7, mode.ParentProcessId);
         Assert.False(mode.IsValidWorkerRequest);
     }
 

@@ -15,6 +15,11 @@ public class MemoryCleanerResult
     public bool Cleaned { get; set; }
     /// <summary>True when WinMemoryCleaner is not installed; the caller offers the download page.</summary>
     public bool ToolMissing { get; set; }
+    /// <summary>
+    /// True when a file called WinMemoryCleaner.exe exists but is not a build NitroLite recognises, so it was not
+    /// launched. The caller offers the download page and says why.
+    /// </summary>
+    public bool ToolUntrusted { get; set; }
     /// <summary>True when the elevation prompt was dismissed, so nothing ran.</summary>
     public bool ElevationRefused { get; set; }
     /// <summary>Exit code of WinMemoryCleaner; null when it did not run or the code could not be read.</summary>
@@ -53,6 +58,22 @@ public class MemoryCleanerService
     /// working sets of other processes would only push their pages back into the list we just released.
     /// </summary>
     public const string CleanArguments = "/StandbyList";
+
+    /// <summary>
+    /// SHA-256 of the WinMemoryCleaner builds NitroLite is willing to launch. The tool runs with an administrator
+    /// token, so "a file with the right name" is not enough: a copy dropped into a folder the user can write to
+    /// would otherwise turn the RAM card into a way to run an arbitrary executable elevated.
+    /// <para>
+    /// The list is a set rather than a single value so a release can add the next upstream build without dropping
+    /// the one users already have. <c>scripts/publish-release.ps1</c> pins the same digest for the copy it bundles;
+    /// the two must be updated together.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<string> KnownGoodSha256 { get; } = new[]
+    {
+        // WinMemoryCleaner 3.0.8, the build the release package ships.
+        "8b68d56c6ee28740f76513f21b21f5a1018f0ef291467b3f3d39d43daf0c0f2f"
+    };
 
     [DllImport("ntdll.dll")]
     private static extern int NtQuerySystemInformation(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength, out int ReturnLength);
@@ -143,8 +164,8 @@ public class MemoryCleanerService
     }
 
     /// <summary>
-    /// Full path of a WinMemoryCleaner NitroLite is willing to launch, or null when there is none. Only fixed
-    /// locations are searched: the tool runs elevated, so a directory the user can write to is not a candidate.
+    /// Full path of the first WinMemoryCleaner NitroLite can see, or null when there is none. This answers "is the
+    /// tool installed", not "may it be launched": <see cref="FindVerifiedTool"/> is the one that decides that.
     /// </summary>
     public static string? FindTool()
     {
@@ -161,6 +182,63 @@ public class MemoryCleanerService
         }
         return null;
     }
+
+    /// <summary>
+    /// Full path of the first WinMemoryCleaner whose contents match a build NitroLite recognises, or null when every
+    /// candidate is either missing or unrecognised. A candidate that fails the digest check is skipped rather than
+    /// reported, so a tampered copy in the data folder falls through to the bundled one instead of disabling the
+    /// card.
+    /// </summary>
+    public static string? FindVerifiedTool()
+    {
+        foreach (string candidate in ToolCandidates())
+        {
+            try
+            {
+                if (!File.Exists(candidate)) continue;
+                if (IsKnownGood(candidate)) return candidate;
+            }
+            catch
+            {
+                // An unreadable candidate is not a candidate.
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// True when the file's SHA-256 is one of <see cref="KnownGoodSha256"/>. A file that cannot be read is not
+    /// trusted: the answer has to be "no" when the check cannot be made.
+    /// </summary>
+    public static bool IsKnownGood(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var digest = System.Security.Cryptography.SHA256.HashData(stream);
+            var hex = Convert.ToHexString(digest).ToLowerInvariant();
+
+            foreach (var known in KnownGoodSha256)
+            {
+                if (string.Equals(known, hex, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+                                      or ArgumentException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// True when the file sits under the signed-in user's profile, which is where a portable or winget copy lands.
+    /// Reported separately from the digest so the log can say which of the two reasons applied.
+    /// </summary>
+    public static bool IsInUserWritableFolder(string? path) => DirectoryTrust.IsUnderUserProfile(path);
 
     private static IEnumerable<string> ToolCandidates()
     {
@@ -196,23 +274,49 @@ public class MemoryCleanerService
 
         // PATH is deliberately not searched. The tool is launched with Verb = "runas", so a directory the user can
         // write to (a per-user PATH entry, a redirected profile) would turn "clean the standby list" into "run
-        // whatever is called WinMemoryCleaner.exe as administrator". Every candidate above is a fixed location the
-        // user cannot drop a file into without already having the rights the elevation prompt would grant.
+        // whatever is called WinMemoryCleaner.exe as administrator".
+        //
+        // The candidates above are not all protected — the data folder and the winget shim both live under the
+        // user's profile — so the location is not what makes them safe. The digest is: FindVerifiedTool refuses to
+        // return a file whose SHA-256 is not a build NitroLite recognises, which is what stops a replaced copy from
+        // being launched elevated.
     }
 
     /// <summary>
     /// Runs WinMemoryCleaner with <see cref="CleanArguments"/> and reports how much the standby list shrank.
     /// Asks for elevation when NitroLite itself is not elevated.
     /// </summary>
+    /// <remarks>
+    /// Only a build whose digest is in <see cref="KnownGoodSha256"/> is launched. The tool runs with an
+    /// administrator token, so a file that merely has the right name is not enough: a copy planted in the data
+    /// folder would otherwise be an arbitrary executable started elevated. A candidate that fails the check is
+    /// skipped, which lets a tampered portable copy fall through to the bundled one.
+    /// </remarks>
     public async Task<MemoryCleanerResult> CleanMemoryAsync()
     {
         var result = new MemoryCleanerResult();
 
-        string? tool = FindTool();
+        string? tool = FindVerifiedTool();
         if (tool == null)
         {
-            result.ToolMissing = true;
+            // "Not installed" and "installed but not a build we trust" are different answers: the first offers a
+            // download, the second has to explain why the file that is already there was refused.
+            result.ToolMissing = FindTool() == null;
+            result.ToolUntrusted = !result.ToolMissing;
+            if (result.ToolUntrusted)
+            {
+                result.Error = "the WinMemoryCleaner copy on this machine is not a build NitroLite recognises";
+                AppLog.Warn("Bellek temizleyici çalıştırılmadı",
+                    $"WinMemoryCleaner.exe bilinen bir sürüm değil: {FindTool()}");
+            }
             return result;
+        }
+
+        if (IsInUserWritableFolder(tool))
+        {
+            // Informational: the digest already pins the contents, so a profile folder is fine. The line exists so
+            // a support log shows which copy ran.
+            AppLog.Info("Bellek temizleyici kullanıcı klasöründen çalışıyor", tool);
         }
 
         var listsBefore = ReadMemoryLists();

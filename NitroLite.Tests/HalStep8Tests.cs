@@ -337,7 +337,7 @@ public class HalStep8Tests
     // ---------------------------------------------------------------- worker dispatch
 
     private static WmiWorkerServer ServerWith(FakeExtraExecutor executor) =>
-        new("nitrolite-test-pipe", "nonce", executor);
+        new("nitrolite-test-pipe", executor);
 
     [Fact]
     public void Dispatch_GetCoolBoost_ForwardsToTheExecutor()

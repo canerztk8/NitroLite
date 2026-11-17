@@ -10,9 +10,15 @@ namespace NitroLite.Core.Hardware.Wmi;
 /// commands.
 /// <para>
 /// This class never decides whether a value is safe — the worker does that. What it does own is the handshake: the
-/// nonce is generated here, handed to the worker on its command line, and repeated on the first message. A worker
-/// that answers anything other than a welcome is not the worker this process started, and the connection is dropped
-/// rather than used.
+/// nonce is generated here, sent as the first message, and required back on the welcome. A worker that answers
+/// anything other than a welcome carrying that value is not the worker this process started, and the connection is
+/// dropped rather than used.
+/// </para>
+/// <para>
+/// The nonce never touches the command line. It used to travel as <c>--nonce</c>, which put it in
+/// <c>Win32_Process.CommandLine</c> where any process running as the same user could read it; the worker now
+/// authenticates its caller by process id, and the nonce only has to prove the reply came from the helper that
+/// received it.
 /// </para>
 /// </summary>
 public sealed class WmiWorkerClient : IDisposable
@@ -65,7 +71,18 @@ public sealed class WmiWorkerClient : IDisposable
 
             var response = WmiWorkerProtocol.DeserializeResponse(json);
             if (response == null) throw new InvalidOperationException("the worker sent a malformed handshake reply");
+
+            // The type is checked as well as the flag: a reply that is not a welcome did not come from a worker that
+            // accepted this hello, whatever its "ok" field says.
+            if (!string.Equals(response.Type, WmiWorkerProtocol.TypeWelcome, StringComparison.Ordinal))
+                throw new InvalidOperationException($"the worker answered '{response.Type}' instead of a welcome");
+
             if (!response.Ok) throw new InvalidOperationException($"the worker refused the handshake: {response.Error}");
+
+            // Only the helper that received this hello can echo the value back, so a mismatch means something else
+            // is on the other end of the pipe.
+            if (!WmiWorkerProtocol.NonceMatches(nonce, response.Nonce))
+                throw new InvalidOperationException("the worker did not echo the handshake value");
 
             return new WmiWorkerClient(pipe);
         }
@@ -73,6 +90,13 @@ public sealed class WmiWorkerClient : IDisposable
         {
             pipe.Dispose();
             throw new InvalidOperationException("the worker did not answer the handshake in time");
+        }
+        catch (IOException ex)
+        {
+            // The worker drops a connection it does not recognise, which can happen before the hello is even
+            // written. The caller treats every handshake failure the same way, so it gets one exception type.
+            pipe.Dispose();
+            throw new InvalidOperationException($"the worker closed the pipe during the handshake: {ex.Message}", ex);
         }
         catch
         {

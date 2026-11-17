@@ -21,10 +21,16 @@ public enum StartupModeKind
 /// to come forward and exit, and the caller would then wait on a named pipe that nobody is listening to. Keeping the
 /// decision in a pure method makes that ordering testable without starting a process.
 /// </para>
+/// <para>
+/// The handshake secret is deliberately absent. It used to travel as <c>--nonce</c>, which put it in
+/// <c>Win32_Process.CommandLine</c> where any process running as the same user could read it and then drive the
+/// elevated helper. It now travels over the pipe itself, and the worker authenticates its caller by process id
+/// instead — a value the caller cannot forge.
+/// </para>
 /// </summary>
 public sealed record StartupMode
 {
-    /// <summary>Shortest nonce the helper accepts. 32 hex characters is 128 bits, which is what the parent generates.</summary>
+    /// <summary>Shortest nonce the handshake accepts. 32 hex characters is 128 bits, which is what the parent generates.</summary>
     public const int MinNonceLength = 32;
 
     public StartupModeKind Kind { get; init; } = StartupModeKind.Normal;
@@ -35,21 +41,17 @@ public sealed record StartupMode
     /// <summary>Process id of the window that started the helper. 0 when absent or unparsable.</summary>
     public int ParentProcessId { get; init; }
 
-    /// <summary>Single-use handshake value the parent generated. Empty unless this is the helper.</summary>
-    public string Nonce { get; init; } = "";
-
     public bool IsWmiWorker => Kind == StartupModeKind.WmiWorker;
 
     /// <summary>
-    /// True when the helper was given everything it needs to be safe to run: a pipe to talk on, a parent to watch,
-    /// and a nonce long enough to be a real secret. A helper started without these would be an elevated process
+    /// True when the helper was given everything it needs to be safe to run: a pipe to talk on and a parent whose
+    /// process id it can check every connection against. A helper started without these would be an elevated process
     /// with no owner and no way to authenticate its caller, so it refuses to start instead.
     /// </summary>
     public bool IsValidWorkerRequest =>
         IsWmiWorker
         && !string.IsNullOrWhiteSpace(PipeName)
-        && ParentProcessId > 0
-        && IsHexNonce(Nonce);
+        && ParentProcessId > 0;
 
     /// <summary>
     /// Reads the role out of the command line. Unknown arguments are ignored: this only answers "am I the helper",
@@ -62,7 +64,6 @@ public sealed record StartupMode
         bool isWorker = false;
         string pipe = "";
         int parentPid = 0;
-        string nonce = "";
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -78,7 +79,6 @@ public sealed record StartupMode
             // Both "--pipe name" and "--pipe=name" are accepted: a launcher written by hand tends to use the first
             // form, a generated command line the second.
             if (TryReadValue(args, ref i, arg, "--pipe", out var pipeValue)) { pipe = pipeValue; continue; }
-            if (TryReadValue(args, ref i, arg, "--nonce", out var nonceValue)) { nonce = nonceValue; continue; }
             if (TryReadValue(args, ref i, arg, "--parent-pid", out var pidValue))
             {
                 parentPid = int.TryParse(pidValue, out var parsed) && parsed > 0 ? parsed : 0;
@@ -91,8 +91,7 @@ public sealed record StartupMode
         {
             Kind = StartupModeKind.WmiWorker,
             PipeName = pipe,
-            ParentProcessId = parentPid,
-            Nonce = nonce
+            ParentProcessId = parentPid
         };
     }
 
@@ -106,8 +105,8 @@ public sealed record StartupMode
 
         if (arg.Equals(name, StringComparison.OrdinalIgnoreCase))
         {
-            // A following flag is not this flag's value: "--pipe --nonce abc" must leave the pipe empty rather than
-            // name it "--nonce", which would then be used as a pipe name.
+            // A following flag is not this flag's value: "--pipe --parent-pid 7" must leave the pipe empty rather
+            // than name it "--parent-pid", which would then be used as a pipe name.
             if (index + 1 >= args.Length) return true;
             var next = args[index + 1]?.Trim() ?? "";
             if (next.StartsWith("--", StringComparison.Ordinal)) return true;

@@ -386,19 +386,119 @@ public class WmiWorkerTests
     }
 
     [Fact]
-    public async Task Pipe_WrongNonce_IsRefused()
+    public async Task Pipe_RejectedHandshake_LeavesTheWorkerListening()
     {
+        // A rogue client that connects first must not be able to take the helper away from its owner, and must not
+        // be able to kill it either: the worker drops the connection and goes back to waiting.
         var pipeName = NewPipeName();
         var executor = new FakeExecutor();
-        using var server = new WmiWorkerServer(pipeName, WmiWorkerClient.GenerateNonce(), executor);
+        using var server = new WmiWorkerServer(pipeName, executor);
 
-        var serverTask = Task.Run(() => server.RunAsync(TimeSpan.FromSeconds(10)));
+        var serverTask = Task.Run(() => server.RunAsync(TimeSpan.FromSeconds(15)));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            WmiWorkerClient.ConnectAsync(pipeName, WmiWorkerClient.GenerateNonce(), TimeSpan.FromSeconds(10)));
+            WmiWorkerClient.ConnectAsync(pipeName, "not-a-nonce", TimeSpan.FromSeconds(5)));
 
-        Assert.False(await serverTask);
+        using var client = await WmiWorkerClient.ConnectAsync(
+            pipeName, WmiWorkerClient.GenerateNonce(), TimeSpan.FromSeconds(5));
+
+        var response = await client.SendAsync(WmiWorkerCommand.Ping);
+
+        Assert.True(response.Ok);
+        Assert.Equal(1, executor.PingCalls);
+
+        // The server only finishes once the client goes away, so the handle is closed before the wait.
+        client.Dispose();
+        Assert.True(await serverTask.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public async Task Pipe_ClientThatIsTheParent_IsAccepted()
+    {
+        // The other half of the gate: the check has to let the real parent through, or the elevated path is dead.
+        var pipeName = NewPipeName();
+        var executor = new FakeExecutor();
+        using var server = new WmiWorkerServer(pipeName, executor, expectedClientProcessId: Environment.ProcessId);
+
+        var serverTask = Task.Run(() => server.RunAsync(TimeSpan.FromSeconds(10)));
+        using var client = await WmiWorkerClient.ConnectAsync(
+            pipeName, WmiWorkerClient.GenerateNonce(), TimeSpan.FromSeconds(5));
+
+        var response = await client.SendAsync(WmiWorkerCommand.Ping);
+
+        Assert.True(response.Ok);
+        Assert.Equal(1, executor.PingCalls);
+
+        client.Dispose();
+        Assert.True(await serverTask.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public async Task Pipe_ClientThatIsNotTheParent_IsRefusedAndTheWorkerKeepsListening()
+    {
+        // The process id comes from the kernel, so a caller cannot forge it. A pid that cannot be this test process
+        // stands in for "some other program running as the same user".
+        var pipeName = NewPipeName();
+        var executor = new FakeExecutor();
+        using var server = new WmiWorkerServer(pipeName, executor, expectedClientProcessId: 1);
+
+        var serverTask = Task.Run(() => server.RunAsync(TimeSpan.FromSeconds(3)));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WmiWorkerClient.ConnectAsync(pipeName, WmiWorkerClient.GenerateNonce(), TimeSpan.FromSeconds(2)));
+
+        Assert.False(await serverTask.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Equal(0, executor.PingCalls);
+    }
+
+    [Fact]
+    public async Task Pipe_ClientRejectsAReplyThatDoesNotEchoTheNonce()
+    {
+        // The window proves it is talking to the helper it started by requiring its own value back. A server that
+        // answers with a welcome but no echo is not that helper.
+        var pipeName = NewPipeName();
+        using var server = new NamedPipeServerStream(
+            pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+        var serverTask = Task.Run(async () =>
+        {
+            await server.WaitForConnectionAsync();
+            await WmiWorkerProtocol.ReadAsync(server);
+            await WmiWorkerProtocol.WriteAsync(server, WmiWorkerProtocol.Serialize(new WmiWorkerResponse
+            {
+                Type = WmiWorkerProtocol.TypeWelcome,
+                Ok = true
+            }));
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WmiWorkerClient.ConnectAsync(pipeName, WmiWorkerClient.GenerateNonce(), TimeSpan.FromSeconds(5)));
+
+        await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task Pipe_ClientRejectsAReplyThatIsNotAWelcome()
+    {
+        var pipeName = NewPipeName();
+        using var server = new NamedPipeServerStream(
+            pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+        var serverTask = Task.Run(async () =>
+        {
+            await server.WaitForConnectionAsync();
+            await WmiWorkerProtocol.ReadAsync(server);
+            await WmiWorkerProtocol.WriteAsync(server, WmiWorkerProtocol.Serialize(new WmiWorkerResponse
+            {
+                Type = WmiWorkerProtocol.TypeResult,
+                Ok = true
+            }));
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WmiWorkerClient.ConnectAsync(pipeName, WmiWorkerClient.GenerateNonce(), TimeSpan.FromSeconds(5)));
+
+        await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -593,7 +693,7 @@ public class WmiWorkerTests
             var pipeName = NewPipeName();
             var nonce = WmiWorkerClient.GenerateNonce();
             var executor = new FakeExecutor();
-            var server = new WmiWorkerServer(pipeName, nonce, executor);
+            var server = new WmiWorkerServer(pipeName, executor);
 
             var serverTask = Task.Run(() => server.RunAsync(TimeSpan.FromSeconds(10)));
             var client = await WmiWorkerClient.ConnectAsync(pipeName, nonce, TimeSpan.FromSeconds(10));
