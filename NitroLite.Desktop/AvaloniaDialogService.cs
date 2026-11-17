@@ -43,7 +43,7 @@ public sealed class AvaloniaDialogService : IDialogService
         if (!string.IsNullOrWhiteSpace(startDirectory) && Directory.Exists(startDirectory))
         {
             try { start = await storage.TryGetFolderFromPathAsync(startDirectory).ConfigureAwait(true); }
-            catch (Exception ex) { AppLog.Warn("Başlangıç klasörü açılamadı", ex.Message); }
+            catch (Exception ex) { AppLog.Warn(Loc.T("Başlangıç klasörü açılamadı"), ex.Message); }
         }
 
         try
@@ -67,7 +67,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Dosya seçici açılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Dosya seçici açılamadı"), ex.ToString());
             return null;
         }
     }
@@ -96,7 +96,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Dosya seçici açılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Dosya seçici açılamadı"), ex.ToString());
             return null;
         }
     }
@@ -126,7 +126,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Kaydetme penceresi açılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Kaydetme penceresi açılamadı"), ex.ToString());
             return null;
         }
     }
@@ -153,7 +153,7 @@ public sealed class AvaloniaDialogService : IDialogService
         if (owner == null)
         {
             // No window to own the dialog: the only safe answer to "delete this?" is no.
-            AppLog.Warn("Onay penceresi sahibi bulunamadı", title);
+            AppLog.Warn(Loc.T("Onay penceresi sahibi bulunamadı"), title);
             return false;
         }
 
@@ -163,7 +163,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Onay penceresi açılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Onay penceresi açılamadı"), ex.ToString());
             return false;
         }
     }

@@ -62,7 +62,7 @@ public sealed class WindowsBatteryHealthService : IBatteryHealthService, IDispos
         {
             // A machine whose battery namespace is missing still has a level and a plug state; the capacity card
             // prints "--" rather than the whole page failing.
-            AppLog.Warn("Pil kapasite ayrıntıları okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Pil kapasite ayrıntıları okunamadı"), ex.Message);
         }
 
         return new BatteryHealthSnapshot { Status = status, Details = details };

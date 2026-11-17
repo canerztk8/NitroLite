@@ -376,7 +376,7 @@ public sealed class ElevatedStartupService
         // app always resolves to NitroLite.exe, and refusing would make the feature untestable.
         if (!IsDesktopExecutable(exePath))
         {
-            AppLog.Warn("Otomatik başlatma hedefi beklenen çalıştırılabilir değil",
+            AppLog.Warn(Loc.T("Otomatik başlatma hedefi beklenen çalıştırılabilir değil"),
                 $"{exePath} (beklenen: {ExpectedExecutableName})");
         }
 
@@ -404,7 +404,7 @@ public sealed class ElevatedStartupService
             string? comError = _registerTask(TaskName, exePath, arguments, userId);
             if (comError == null) return FinishEnable();
 
-            AppLog.Warn("Görev COM ile kaydedilemedi, schtasks'a düşülüyor", comError);
+            AppLog.Warn(Loc.T("Görev COM ile kaydedilemedi, schtasks'a düşülüyor"), comError);
         }
 
         // Not elevated, or COM refused: schtasks needs the definition on disk. The file is held open read-only with
@@ -425,7 +425,7 @@ public sealed class ElevatedStartupService
             if (result.Cancelled)
             {
                 LastError = "the user declined the elevation prompt";
-                AppLog.Info("Yönetici yetkisiyle otomatik başlatma için izin verilmedi",
+                AppLog.Info(Loc.T("Yönetici yetkisiyle otomatik başlatma için izin verilmedi"),
                     "Kullanıcı UAC penceresinde Hayır'ı seçti; görev oluşturulmadı.");
                 return ElevatedStartupResult.Cancelled(LastError);
             }
@@ -503,12 +503,12 @@ public sealed class ElevatedStartupService
         // Two registrations would start NitroLite twice at logon. The task wins because the user just chose it.
         if (RemoveStandardAutoStart?.Invoke() == false)
         {
-            AppLog.Warn("Standart başlangıç kaydı kaldırılamadı",
+            AppLog.Warn(Loc.T("Standart başlangıç kaydı kaldırılamadı"),
                 "Yönetici görevi oluşturuldu; HKCU Run kaydı silinemedi.");
         }
 
         LastError = "";
-        AppLog.Info("Yönetici yetkisiyle otomatik başlatma etkin", $"görev='{TaskName}'");
+        AppLog.Info(Loc.T("Yönetici yetkisiyle otomatik başlatma etkin"), $"görev='{TaskName}'");
         return ElevatedStartupResult.Applied_();
     }
 
@@ -524,7 +524,7 @@ public sealed class ElevatedStartupService
         if (result.Cancelled)
         {
             LastError = "the user declined the elevation prompt";
-            AppLog.Info("Yönetici görevi kaldırılmadı", "Kullanıcı UAC penceresinde Hayır'ı seçti.");
+            AppLog.Info(Loc.T("Yönetici görevi kaldırılmadı"), "Kullanıcı UAC penceresinde Hayır'ı seçti.");
             return ElevatedStartupResult.Cancelled(LastError);
         }
 
@@ -535,7 +535,7 @@ public sealed class ElevatedStartupService
         }
 
         LastError = "";
-        AppLog.Info("Yönetici yetkisiyle otomatik başlatma kapatıldı", $"görev='{TaskName}'");
+        AppLog.Info(Loc.T("Yönetici yetkisiyle otomatik başlatma kapatıldı"), $"görev='{TaskName}'");
         return ElevatedStartupResult.Applied_();
     }
 
@@ -569,7 +569,7 @@ public sealed class ElevatedStartupService
     private ElevatedStartupResult Fail(string detail)
     {
         LastError = detail;
-        AppLog.Warn("Yönetici yetkisiyle otomatik başlatma değiştirilemedi", detail);
+        AppLog.Warn(Loc.T("Yönetici yetkisiyle otomatik başlatma değiştirilemedi"), detail);
         return ElevatedStartupResult.Failed(detail);
     }
 

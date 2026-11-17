@@ -218,7 +218,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             _timer = new Timer(_ => Poll(), null, PollMilliseconds, PollMilliseconds);
         }
 
-        AppLog.Info("NitroSense izleyicisi başladı", $"aralık={PollMilliseconds} ms");
+        AppLog.Info(Loc.T("NitroSense izleyicisi başladı"), $"aralık={PollMilliseconds} ms");
     }
 
     public void Stop()
@@ -274,7 +274,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
 
         // Logged on every accepted press, with the shape that matched. Without this line the only evidence that the
         // key works is the window moving, which is exactly what a user reporting "it does nothing" cannot show.
-        AppLog.Info("Nitro tuşu algılandı", Describe(kind, window));
+        AppLog.Info(Loc.T("Nitro tuşu algılandı"), Describe(kind, window));
 
         try
         {
@@ -421,7 +421,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                 // that is what is happening; more would be a fight the user sees as a flickering window.
                 if (closes >= MaxClosesPerWindow)
                 {
-                    AppLog.Warn("NitroSense tekrar tekrar açılıyor",
+                    AppLog.Warn(Loc.T("NitroSense tekrar tekrar açılıyor"),
                         $"pencere içinde {closes} kez kapatıldı; Acer servisi yeniden başlatıyor olabilir.");
                     break;
                 }
@@ -429,7 +429,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                 Thread.Sleep(SweepMilliseconds);
             }
 
-            if (closed) AppLog.Info("NitroSense kapatıldı", "Nitro tuşu NitroLite'a yönlendirildi.");
+            if (closed) AppLog.Info(Loc.T("NitroSense kapatıldı"), "Nitro tuşu NitroLite'a yönlendirildi.");
 
             return closed;
         }
@@ -454,7 +454,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             }
             catch (Exception ex)
             {
-                AppLog.Warn("NitroSense süreçleri listelenemedi", $"{name}: {ex.Message}");
+                AppLog.Warn(Loc.T("NitroSense süreçleri listelenemedi"), $"{name}: {ex.Message}");
                 continue;
             }
 
@@ -471,11 +471,11 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                         // runs inside, which would leave the window it was meant to remove.
                         process.Kill(entireProcessTree: true);
                         closed = true;
-                        AppLog.Info("NitroSense süreci kapatıldı", name);
+                        AppLog.Info(Loc.T("NitroSense süreci kapatıldı"), name);
                     }
                     catch (Exception ex)
                     {
-                        AppLog.Warn("NitroSense kapatılamadı", $"{name}: {ex.Message}");
+                        AppLog.Warn(Loc.T("NitroSense kapatılamadı"), $"{name}: {ex.Message}");
                     }
                 }
             }
@@ -484,7 +484,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         if (!closed) return false;
 
         SuppressFor(CloseCooldown);
-        if (log) AppLog.Info("NitroSense kapatıldı", "Nitro tuşu NitroLite'a yönlendirildi.");
+        if (log) AppLog.Info(Loc.T("NitroSense kapatıldı"), "Nitro tuşu NitroLite'a yönlendirildi.");
 
         return true;
     }
@@ -632,7 +632,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         }
         catch (Exception ex)
         {
-            AppLog.Warn("NitroSense izin penceresi kapatılamadı", ex.Message);
+            AppLog.Warn(Loc.T("NitroSense izin penceresi kapatılamadı"), ex.Message);
         }
     }
 

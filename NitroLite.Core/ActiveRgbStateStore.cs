@@ -45,7 +45,7 @@ public static class ActiveRgbStateStore
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Aktif RGB durumu okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Aktif RGB durumu okunamadı"), ex.Message);
             return null;
         }
     }
@@ -62,7 +62,7 @@ public static class ActiveRgbStateStore
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Aktif RGB durumu yazılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Aktif RGB durumu yazılamadı"), ex.Message);
         }
     }
 }

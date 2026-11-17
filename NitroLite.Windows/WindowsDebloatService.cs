@@ -36,7 +36,7 @@ public sealed class WindowsDebloatService : IDebloatService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Acer servis durumları okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Acer servis durumları okunamadı"), ex.Message);
             return Array.Empty<AcerServiceEntry>();
         }
     }
@@ -46,7 +46,7 @@ public sealed class WindowsDebloatService : IDebloatService
         try { return _inner.IsNitroSenseRunning(); }
         catch (Exception ex)
         {
-            AppLog.Warn("NitroSense durumu okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("NitroSense durumu okunamadı"), ex.Message);
             return false;
         }
     }
@@ -99,7 +99,7 @@ public sealed class WindowsDebloatService : IDebloatService
             try { return _inner.IsNitroSenseLauncherBlocked; }
             catch (Exception ex)
             {
-                AppLog.Warn("NitroSense başlatıcı durumu okunamadı", ex.Message);
+                AppLog.Warn(Loc.T("NitroSense başlatıcı durumu okunamadı"), ex.Message);
                 return false;
             }
         }

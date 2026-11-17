@@ -38,7 +38,7 @@ public sealed class WindowsUpdateService : IUpdateService
         {
             // A machine with no network is not an error to report; the card says "could not check" only when the user
             // asked, and that decision belongs to the caller.
-            AppLog.Warn("Güncelleme denetlenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Güncelleme denetlenemedi"), ex.Message);
             return null;
         }
     }
@@ -76,12 +76,12 @@ public sealed class WindowsUpdateService : IUpdateService
             staging = UpdateService.ExtractToStaging(package);
             var executable = UpdateService.InstallFromStaging(staging, AppContext.BaseDirectory);
 
-            AppLog.Info("Güncelleme kuruldu", $"{result.DisplayVersion} → {executable}");
+            AppLog.Info(Loc.T("Güncelleme kuruldu"), $"{result.DisplayVersion} → {executable}");
             return UpdateInstallResult.Installed(executable);
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Güncelleme kurulamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Güncelleme kurulamadı"), ex.ToString());
             return UpdateInstallResult.Fail(Loc.T($"Güncelleme kurulamadı: {ex.Message}"));
         }
         finally

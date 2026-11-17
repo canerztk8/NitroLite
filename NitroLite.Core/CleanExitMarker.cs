@@ -49,7 +49,7 @@ public static class CleanExitMarker
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Çalışma işareti yazılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Çalışma işareti yazılamadı"), ex.Message);
         }
     }
 
@@ -63,7 +63,7 @@ public static class CleanExitMarker
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Çalışma işareti silinemedi", ex.Message);
+            AppLog.Warn(Loc.T("Çalışma işareti silinemedi"), ex.Message);
         }
     }
 }

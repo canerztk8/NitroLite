@@ -33,7 +33,7 @@ public static class UdevGuide
             using var stream = typeof(UdevGuide).Assembly.GetManifestResourceStream(ResourceName);
             if (stream == null)
             {
-                AppLog.Warn("udev kuralı gömülü kaynağı bulunamadı", ResourceName);
+                AppLog.Warn(Loc.T("udev kuralı gömülü kaynağı bulunamadı"), ResourceName);
                 return null;
             }
 
@@ -43,7 +43,7 @@ public static class UdevGuide
         }
         catch (Exception ex)
         {
-            AppLog.Warn("udev kuralı veri klasörüne yazılamadı", ex.Message);
+            AppLog.Warn(Loc.T("udev kuralı veri klasörüne yazılamadı"), ex.Message);
             return null;
         }
     }

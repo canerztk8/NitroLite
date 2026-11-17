@@ -306,7 +306,7 @@ public class MemoryCleanerService
             if (result.ToolUntrusted)
             {
                 result.Error = "the WinMemoryCleaner copy on this machine is not a build NitroLite recognises";
-                AppLog.Warn("Bellek temizleyici çalıştırılmadı",
+                AppLog.Warn(Loc.T("Bellek temizleyici çalıştırılmadı"),
                     $"WinMemoryCleaner.exe bilinen bir sürüm değil: {FindTool()}");
             }
             return result;
@@ -316,7 +316,7 @@ public class MemoryCleanerService
         {
             // Informational: the digest already pins the contents, so a profile folder is fine. The line exists so
             // a support log shows which copy ran.
-            AppLog.Info("Bellek temizleyici kullanıcı klasöründen çalışıyor", tool);
+            AppLog.Info(Loc.T("Bellek temizleyici kullanıcı klasöründen çalışıyor"), tool);
         }
 
         var listsBefore = ReadMemoryLists();

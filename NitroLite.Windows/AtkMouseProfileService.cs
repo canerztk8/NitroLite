@@ -62,7 +62,7 @@ public sealed class AtkMouseProfileService : IMouseProfileService
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Fare profili uygulanamadı", $"Config {profile}: {ex.Message}");
+                AppLog.Warn(Loc.T("Fare profili uygulanamadı"), $"Config {profile}: {ex.Message}");
                 return false;
             }
         }, cancellationToken);
@@ -89,7 +89,7 @@ public sealed class AtkMouseProfileService : IMouseProfileService
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Fare profili okunamadı", ex.Message);
+                AppLog.Warn(Loc.T("Fare profili okunamadı"), ex.Message);
                 return (int?)null;
             }
         }, cancellationToken);

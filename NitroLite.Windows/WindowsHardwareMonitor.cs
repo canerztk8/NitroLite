@@ -33,7 +33,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Donanım izleyici kurulamadı", ex.Message);
+                AppLog.Warn(Loc.T("Donanım izleyici kurulamadı"), ex.Message);
                 return new HardwareMonitorService(initNvml: false);
             }
         });
@@ -66,7 +66,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Donanım bilgisi okunamadı", ex.Message);
+                AppLog.Warn(Loc.T("Donanım bilgisi okunamadı"), ex.Message);
                 return new MonitorInfo();
             }
         }
@@ -94,7 +94,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Donanım bilgisi okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Donanım bilgisi okunamadı"), ex.Message);
             return new MonitorInfo();
         }
     }
@@ -122,7 +122,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Telemetri zenginleştirilemedi", ex.Message);
+            AppLog.Warn(Loc.T("Telemetri zenginleştirilemedi"), ex.Message);
         }
     }
 
@@ -147,7 +147,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Yedek telemetri okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Yedek telemetri okunamadı"), ex.Message);
         }
 
         return data;

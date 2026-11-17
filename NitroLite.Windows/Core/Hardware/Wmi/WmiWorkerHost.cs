@@ -197,7 +197,7 @@ public static class WmiWorkerHost
     {
         if (mode == null || !mode.IsValidWorkerRequest)
         {
-            AppLog.Warn("--wmi-worker reddedildi: eksik veya geçersiz argüman",
+            AppLog.Warn(Loc.T("--wmi-worker reddedildi: eksik veya geçersiz argüman"),
                 $"pipe='{mode?.PipeName}' parent={mode?.ParentProcessId}");
             return ExitInvalidArguments;
         }
@@ -218,13 +218,13 @@ public static class WmiWorkerHost
             // merely runs as the same user cannot take the helper over.
             using var server = new WmiWorkerServer(mode.PipeName, executor, mode.ParentProcessId);
 
-            AppLog.Info("--wmi-worker başladı", $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
+            AppLog.Info(Loc.T("--wmi-worker başladı"), $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
 
             var served = server.RunAsync(AcceptTimeout, cts.Token).GetAwaiter().GetResult();
 
             if (Volatile.Read(ref parentGone) == 1)
             {
-                AppLog.Info("--wmi-worker ebeveyn kapandığı için çıkıyor");
+                AppLog.Info(Loc.T("--wmi-worker ebeveyn kapandığı için çıkıyor"));
                 return ExitParentGone;
             }
 

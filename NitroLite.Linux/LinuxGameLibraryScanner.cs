@@ -68,7 +68,7 @@ public sealed class LinuxGameLibraryScanner : IGameLibraryScanner
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Oyun klasörü okunamadı", $"{dir}: {ex.Message}");
+                AppLog.Warn(Loc.T("Oyun klasörü okunamadı"), $"{dir}: {ex.Message}");
                 continue;
             }
 
@@ -190,7 +190,7 @@ public sealed class LinuxGameLibraryScanner : IGameLibraryScanner
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Steam kitaplık dosyası okunamadı", $"{vdf}: {ex.Message}");
+                AppLog.Warn(Loc.T("Steam kitaplık dosyası okunamadı"), $"{vdf}: {ex.Message}");
             }
         }
 

@@ -147,7 +147,7 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Giriş aygıtları taranamadı", ex.Message);
+                AppLog.Warn(Loc.T("Giriş aygıtları taranamadı"), ex.Message);
             }
             finally
             {
@@ -160,12 +160,12 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
 
             if (_devices.Count == 0)
             {
-                AppLog.Info("Nitro tuşu giriş aygıtı bulunamadı",
+                AppLog.Info(Loc.T("Nitro tuşu giriş aygıtı bulunamadı"),
                     "acer-wmi modülü yüklü değil ya da kullanıcı 'input' grubunda değil.");
             }
             else
             {
-                AppLog.Info("Nitro tuşu giriş aygıtı bağlandı", string.Join(", ", _devices.Select(d => d.Name)));
+                AppLog.Info(Loc.T("Nitro tuşu giriş aygıtı bağlandı"), string.Join(", ", _devices.Select(d => d.Name)));
             }
         }
     }
@@ -200,7 +200,7 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
             catch (Exception ex)
             {
                 // A closed device is how Stop unblocks this loop, so it is not worth a warning.
-                if (!token.IsCancellationRequested) AppLog.Warn("Nitro tuşu aygıtı okunamadı", ex.Message);
+                if (!token.IsCancellationRequested) AppLog.Warn(Loc.T("Nitro tuşu aygıtı okunamadı"), ex.Message);
                 return;
             }
 
@@ -226,7 +226,7 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Nitro tuşu abonesi hata verdi", ex.Message);
+            AppLog.Warn(Loc.T("Nitro tuşu abonesi hata verdi"), ex.Message);
         }
     }
 

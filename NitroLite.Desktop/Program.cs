@@ -112,7 +112,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            AppLog.Error("CLI komutu çalıştırılamadı", $"{command}: {ex}");
+            AppLog.Error(Loc.T("CLI komutu çalıştırılamadı"), $"{command}: {ex}");
             return 1;
         }
     }
@@ -138,7 +138,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            AppLog.Error("Donanım raporu yazdırılamadı", ex.ToString());
+            AppLog.Error(Loc.T("Donanım raporu yazdırılamadı"), ex.ToString());
             return 1;
         }
     }
@@ -186,7 +186,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            AppLog.Error("Donanım komutu çalıştırılamadı", ex.ToString());
+            AppLog.Error(Loc.T("Donanım komutu çalıştırılamadı"), ex.ToString());
             return 1;
         }
     }

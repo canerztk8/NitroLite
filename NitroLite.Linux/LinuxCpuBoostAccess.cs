@@ -113,7 +113,7 @@ public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
         var result = _fs.WriteAllText(path, value + "\n");
         if (!result.Ok)
         {
-            AppLog.Warn("CPU Boost yazılamadı", $"{path}: {result.Status} {result.Detail}");
+            AppLog.Warn(Loc.T("CPU Boost yazılamadı"), $"{path}: {result.Status} {result.Detail}");
             return false;
         }
 

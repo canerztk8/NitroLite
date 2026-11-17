@@ -1320,7 +1320,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Pil yüzdesi okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Pil yüzdesi okunamadı"), ex.Message);
         }
     }
 
@@ -1509,7 +1509,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("CPU boost modu okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("CPU boost modu okunamadı"), ex.Message);
             return CpuBoostMode.Aggressive;
         }
     }
@@ -1524,7 +1524,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("CPU boost modu yazılamadı", ex.Message);
+            AppLog.Warn(Loc.T("CPU boost modu yazılamadı"), ex.Message);
             Status = Labels.WriteFailed;
         }
     }
@@ -2233,7 +2233,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Bekleme belleği boşaltılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Bekleme belleği boşaltılamadı"), ex.ToString());
             MemoryCleanStatus = Labels.MemoryCleanFailed;
         }
         finally
@@ -3600,7 +3600,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oyun kitaplığı taranamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Oyun kitaplığı taranamadı"), ex.ToString());
             GameScanStatus = Labels.GameScanFailed;
         }
         finally
@@ -4028,7 +4028,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fare profili okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Fare profili okunamadı"), ex.Message);
         }
     }
 
@@ -4249,11 +4249,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
 
             Status = Labels.GameSessionRecovered;
-            AppLog.Info("Yarım kalan oyun oturumu geri alındı", $"{recovery.SavedMode} · {recovery.SavedFan}");
+            AppLog.Info(Loc.T("Yarım kalan oyun oturumu geri alındı"), $"{recovery.SavedMode} · {recovery.SavedFan}");
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oyun oturumu geri alınamadı", ex.Message);
+            AppLog.Warn(Loc.T("Oyun oturumu geri alınamadı"), ex.Message);
         }
         finally
         {
@@ -4284,7 +4284,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (SaveSettings()) return;
 
         Status = Labels.GameSessionRecoveryNotSaved;
-        AppLog.Warn("Oyun oturumu kaydı yazılamadı", "Çökme durumunda mod ve fan geri alınamayabilir.");
+        AppLog.Warn(Loc.T("Oyun oturumu kaydı yazılamadı"), "Çökme durumunda mod ve fan geri alınamayabilir.");
     }
 
     /// <summary>Clears the recovery record once the session ended cleanly.</summary>
@@ -4599,7 +4599,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Okul modu kurtarma başarısız", ex.Message);
+                AppLog.Warn(Loc.T("Okul modu kurtarma başarısız"), ex.Message);
             }
         }
 
@@ -4673,7 +4673,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Error("Linux arayüzü başlatılamadı", ex.ToString());
+            AppLog.Error(Loc.T("Linux arayüzü başlatılamadı"), ex.ToString());
             Status = Labels.NoAcerNodes;
         }
         finally
@@ -4779,7 +4779,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Telemetri okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Telemetri okunamadı"), ex.Message);
         }
         finally
         {
@@ -4817,8 +4817,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (verdict == null) return;
 
-        AppLog.Error(
-            "Fan durmuş görünüyor",
+        AppLog.Error(Loc.T("Fan durmuş görünüyor"),
             $"{verdict.Target} · {verdict.TemperatureC} °C · {verdict.FanRpm} RPM · {verdict.Sustained.TotalSeconds:F0} sn");
 
         if (_fanStallReported) return;
@@ -4897,11 +4896,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // Not committed: the next step proposes the same speed again, which is what makes a transient refusal
             // recover instead of leaving the fans at the previous value until the temperature happens to move.
-            AppLog.Warn("Fan hızı uygulanmadı", $"%{percent}");
+            AppLog.Warn(Loc.T("Fan hızı uygulanmadı"), $"%{percent}");
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fan hızı yazılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Fan hızı yazılamadı"), ex.Message);
         }
         finally
         {
@@ -4994,7 +4993,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Otomatik başlatma değiştirilemedi", ex.ToString());
+            AppLog.Warn(Loc.T("Otomatik başlatma değiştirilemedi"), ex.ToString());
             AutoStartStatus = Labels.AutoStartFailed;
         }
     }
@@ -5020,11 +5019,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 _ => RefreshRateStatus
             };
 
-            if (result.Changed) AppLog.Info("Ekran yenileme hızı değişti", $"{result.From} Hz -> {result.To} Hz");
+            if (result.Changed) AppLog.Info(Loc.T("Ekran yenileme hızı değişti"), $"{result.From} Hz -> {result.To} Hz");
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Ekran yenileme hızı değiştirilemedi", ex.Message);
+            AppLog.Warn(Loc.T("Ekran yenileme hızı değiştirilemedi"), ex.Message);
         }
     }
 
@@ -5041,7 +5040,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Otomatik başlatma durumu okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Otomatik başlatma durumu okunamadı"), ex.Message);
         }
     }
 
@@ -5123,7 +5122,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // the page the user is working on. A refusal is still reported, because a silent one looks like a bug.
             if (!ok)
             {
-                AppLog.Warn("Klavye aydınlatması", "Donanım yazımı uygulanmadı.");
+                AppLog.Warn(Loc.T("Klavye aydınlatması"), "Donanım yazımı uygulanmadı.");
                 Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
                 return;
             }
@@ -5144,7 +5143,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Donanım yazımı başarısız", $"{Labels.KeyboardLighting}: {ex.Message}");
+            AppLog.Warn(Loc.T("Donanım yazımı başarısız"), $"{Labels.KeyboardLighting}: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
         }
         finally
@@ -5297,7 +5296,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Okul modu değiştirilemedi", ex.Message);
+            AppLog.Warn(Loc.T("Okul modu değiştirilemedi"), ex.Message);
             Status = Labels.SchoolModeRefused;
         }
         finally
@@ -5628,7 +5627,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Klavye aydınlatması kapatılamadı", ex.Message);
+                AppLog.Warn(Loc.T("Klavye aydınlatması kapatılamadı"), ex.Message);
             }
             return;
         }
@@ -5651,7 +5650,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Klavye aydınlatması yeniden uygulanamadı", ex.Message);
+            AppLog.Warn(Loc.T("Klavye aydınlatması yeniden uygulanamadı"), ex.Message);
         }
     }
 
@@ -5684,7 +5683,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!await _writeGate.WaitAsync(WriteGateTimeout).ConfigureAwait(false))
             {
-                AppLog.Warn("Fanlar otomatiğe alınamadı", "yazma kapısı zaman aşımına uğradı");
+                AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), "yazma kapısı zaman aşımına uğradı");
                 return false;
             }
 
@@ -5699,7 +5698,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fanlar otomatiğe alınamadı", ex.Message);
+            AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), ex.Message);
             return false;
         }
 
@@ -5707,7 +5706,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             // The firmware refused. The settings file is left alone: the curve is still armed as far as the machine
             // is concerned, and a file that said otherwise would be a lie the next launch acts on.
-            AppLog.Warn("Fanlar otomatiğe alınamadı", "donanım yazımı reddedildi");
+            AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), "donanım yazımı reddedildi");
             return false;
         }
 
@@ -5726,7 +5725,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fan kontrolleri güncellenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Fan kontrolleri güncellenemedi"), ex.Message);
         }
 
         return true;
@@ -5748,7 +5747,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oyun oturumu kapatılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Oyun oturumu kapatılamadı"), ex.Message);
         }
 
         bool ok = false;
@@ -5758,7 +5757,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Temiz çıkış başarısız", ex.Message);
+            AppLog.Warn(Loc.T("Temiz çıkış başarısız"), ex.Message);
         }
 
         try
@@ -5768,7 +5767,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             // A status line nobody is going to read is not worth failing the exit over.
-            AppLog.Warn("Çıkış durumu yazılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Çıkış durumu yazılamadı"), ex.Message);
         }
     }
 
@@ -5789,7 +5788,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             if (!task.Wait(timeout))
             {
-                AppLog.Warn("Fanlar otomatiğe alınamadı", "zaman aşımına uğradı");
+                AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), "zaman aşımına uğradı");
                 return false;
             }
 
@@ -5797,7 +5796,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fanlar otomatiğe alınamadı", ex.Message);
+            AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), ex.Message);
             return false;
         }
     }
@@ -5819,7 +5818,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Donanım yazımı başarısız", $"{what}: {ex.Message}");
+            AppLog.Warn(Loc.T("Donanım yazımı başarısız"), $"{what}: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {what}";
             return false;
         }
@@ -5840,12 +5839,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             bool ok = await write().ConfigureAwait(true);
-            if (!ok) AppLog.Warn("Donanım yazımı başarısız", what);
+            if (!ok) AppLog.Warn(Loc.T("Donanım yazımı başarısız"), what);
             return ok;
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Donanım yazımı başarısız", $"{what}: {ex.Message}");
+            AppLog.Warn(Loc.T("Donanım yazımı başarısız"), $"{what}: {ex.Message}");
             return false;
         }
         finally
@@ -6162,7 +6161,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Gecikmeli yazma başarısız", ex.Message);
+                AppLog.Warn(Loc.T("Gecikmeli yazma başarısız"), ex.Message);
             }
         }
 

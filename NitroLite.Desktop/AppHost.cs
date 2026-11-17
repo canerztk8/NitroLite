@@ -94,7 +94,7 @@ public sealed class AppHost : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Pil gözcüsü başlatılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Pil gözcüsü başlatılamadı"), ex.Message);
         }
 
         ViewModel = new MainViewModel(
@@ -177,7 +177,7 @@ public sealed class AppHost : IDisposable
 
         if (load.PrimaryCorrupt)
         {
-            AppLog.Warn("Ayarlar dosyası bozuktu, yedekten okundu", load.PrimaryError);
+            AppLog.Warn(Loc.T("Ayarlar dosyası bozuktu, yedekten okundu"), load.PrimaryError);
         }
 
         // The stored choice wins; a fresh install follows the desktop language; a file written before the language
@@ -263,7 +263,7 @@ public sealed class AppHost : IDisposable
             catch (Exception ex)
             {
                 // A probe that throws is a machine with no Acer support, not a reason to refuse to start.
-                AppLog.Error("Windows donanım arka ucu kurulamadı", ex.ToString());
+                AppLog.Error(Loc.T("Windows donanım arka ucu kurulamadı"), ex.ToString());
             }
         }
 #else
@@ -276,7 +276,7 @@ public sealed class AppHost : IDisposable
                 hardware = controller;
                 platform = linux;
                 rescan = controller;
-                AppLog.Info("Linux sysfs arka ucu bağlandı",
+                AppLog.Info(Loc.T("Linux sysfs arka ucu bağlandı"),
                     $"{linux.Tier} · {linux.Identity.ModelCode} · udev={(linux.NeedsUdevRule ? "gerekli" : "tamam")}");
 
                 var fs = RealSysfsFileSystem.Instance;
@@ -325,7 +325,7 @@ public sealed class AppHost : IDisposable
             catch (Exception ex)
             {
                 // A probe that throws is a machine with no Acer support, not a reason to refuse to start.
-                AppLog.Error("Linux donanım arka ucu kurulamadı", ex.ToString());
+                AppLog.Error(Loc.T("Linux donanım arka ucu kurulamadı"), ex.ToString());
             }
         }
 #endif
@@ -353,7 +353,7 @@ public sealed class AppHost : IDisposable
             var recovery = UpdateService.RecoverInterruptedUpdate();
             if (!recovery.IsClean)
             {
-                AppLog.Info("Güncelleme kalıntıları denetlendi",
+                AppLog.Info(Loc.T("Güncelleme kalıntıları denetlendi"),
                     $"geri={recovery.Restored.Count} silinen={recovery.Removed.Count} başarısız={recovery.Failed.Count}");
             }
 
@@ -363,7 +363,7 @@ public sealed class AppHost : IDisposable
         {
             // A folder that cannot be repaired is not a reason to refuse to start: the app still runs from whatever
             // is there, and the log says what was found.
-            AppLog.Warn("Yarım kalan güncelleme denetlenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Yarım kalan güncelleme denetlenemedi"), ex.Message);
         }
     }
 
@@ -402,7 +402,7 @@ public sealed class AppHost : IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Donanım yetenekleri okunamadı", ex.ToString());
+                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.ToString());
             }
 
             return snapshot;
@@ -431,7 +431,7 @@ public sealed class AppHost : IDisposable
 
         var schoolMode = CreateWindowsSchoolMode(settings, hybrid);
 
-        AppLog.Info("Windows donanım arka ucu bağlandı",
+        AppLog.Info(Loc.T("Windows donanım arka ucu bağlandı"),
             $"{identity.ModelCode} · wmi={(settings.UseDirectWmiBackend ? "etkin" : "yedek")}");
 
         // The Task Scheduler entry is the only way to start elevated without a UAC prompt, and it is what makes the

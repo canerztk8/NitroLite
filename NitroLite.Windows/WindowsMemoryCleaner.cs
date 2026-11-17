@@ -36,7 +36,7 @@ public sealed class WindowsMemoryCleaner : IMemoryCleaner
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Bekleme belleği boşaltılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Bekleme belleği boşaltılamadı"), ex.ToString());
             return new MemoryCleanResult { Cleaned = false, Error = ex.Message };
         }
     }

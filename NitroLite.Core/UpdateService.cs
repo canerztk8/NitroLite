@@ -570,7 +570,7 @@ public static class UpdateService
                 {
                     // A rollback that fails leaves the install folder in the state this whole method exists to
                     // prevent, so it has to be in the log even though the original exception is what the user sees.
-                    AppLog.Error("Güncelleme geri alınamadı", $"{destination}: {ex.Message}");
+                    AppLog.Error(Loc.T("Güncelleme geri alınamadı"), $"{destination}: {ex.Message}");
                 }
             }
             foreach (var (pending, _) in prepared) TryDelete(pending);
@@ -649,9 +649,9 @@ public static class UpdateService
         var removed = failed.Count == 0 ? SweepLeftovers(installDirectory) : new List<string>();
 
         if (restored.Count > 0)
-            AppLog.Warn("Yarım kalan güncelleme kurtarıldı", string.Join(", ", restored));
+            AppLog.Warn(Loc.T("Yarım kalan güncelleme kurtarıldı"), string.Join(", ", restored));
         if (failed.Count > 0)
-            AppLog.Error("Yarım kalan güncelleme kurtarılamadı", string.Join(", ", failed));
+            AppLog.Error(Loc.T("Yarım kalan güncelleme kurtarılamadı"), string.Join(", ", failed));
 
         return new UpdateRecoveryReport(restored, removed, failed);
     }
@@ -689,7 +689,7 @@ public static class UpdateService
         }
         catch (Exception ex)
         {
-            AppLog.Error("Güncelleme dosyası geri konamadı", $"{source}: {ex.Message}");
+            AppLog.Error(Loc.T("Güncelleme dosyası geri konamadı"), $"{source}: {ex.Message}");
             return false;
         }
     }

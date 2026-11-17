@@ -201,7 +201,7 @@ public sealed class BatteryWearHistory
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Pil aşınma geçmişi silinemedi", $"{path}: {ex.Message}");
+                AppLog.Warn(Loc.T("Pil aşınma geçmişi silinemedi"), $"{path}: {ex.Message}");
                 return false;
             }
         }
@@ -234,7 +234,7 @@ public sealed class BatteryWearHistory
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Pil aşınma geçmişi okunamadı", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T("Pil aşınma geçmişi okunamadı"), $"{path}: {ex.Message}");
             _samples = new List<BatteryWearSample>();
         }
         return _samples;
@@ -278,7 +278,7 @@ public sealed class BatteryWearHistory
         catch (Exception ex)
         {
             // The reading stays in memory for this session, so the page still shows it; only the file is missing.
-            AppLog.Warn("Pil aşınma geçmişi yazılamadı", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T("Pil aşınma geçmişi yazılamadı"), $"{path}: {ex.Message}");
             return false;
         }
     }

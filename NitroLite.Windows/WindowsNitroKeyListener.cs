@@ -222,7 +222,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Acer WMI olay izleyicisi kapatılamadı", ex.Message);
+                AppLog.Warn(Loc.T("Acer WMI olay izleyicisi kapatılamadı"), ex.Message);
             }
         }
 
@@ -267,24 +267,24 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
                 if (_eventClassNames.Count > 0)
                 {
-                    AppLog.Info("Nitro tuşu WMI olay sınıfı bulundu", $"sınıf='{string.Join("', '", _eventClassNames)}'");
+                    AppLog.Info(Loc.T("Nitro tuşu WMI olay sınıfı bulundu"), $"sınıf='{string.Join("', '", _eventClassNames)}'");
                 }
                 else
                 {
-                    AppLog.Info("Nitro tuşu WMI üzerinden bulunamadı", "Acer olay sınıfı kayıtlı değil.");
+                    AppLog.Info(Loc.T("Nitro tuşu WMI üzerinden bulunamadı"), "Acer olay sınıfı kayıtlı değil.");
                 }
 
                 AcerHardwarePresent = DetectAcerHardware(scope);
                 if (AcerHardwarePresent)
                 {
-                    AppLog.Info("Acer donanımı algılandı",
+                    AppLog.Info(Loc.T("Acer donanımı algılandı"),
                         $"model='{WindowsMachineModel.Read() ?? "bilinmiyor"}' olay sınıfı={_eventClassNames.Count}");
                 }
             }
             catch (Exception ex)
             {
                 // A machine without the Acer hotkey driver, or a WMI service that is not answering.
-                AppLog.Info("Acer WMI olay sınıfı sorgulanamadı", ex.Message);
+                AppLog.Info(Loc.T("Acer WMI olay sınıfı sorgulanamadı"), ex.Message);
             }
         }
     }
@@ -331,7 +331,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         }
         catch (Exception ex)
         {
-            AppLog.Info("Acer WMI olay sınıfları taranamadı", ex.Message);
+            AppLog.Info(Loc.T("Acer WMI olay sınıfları taranamadı"), ex.Message);
         }
 
         return found;
@@ -383,7 +383,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         chosen = FirstClassThatAccepts(_eventClassNames, className => TryStartWatcher(className, null));
         if (chosen == null)
         {
-            AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı",
+            AppLog.Warn(Loc.T("Acer WMI olay izleyicisi başlatılamadı"),
                 $"{string.Join("', '", _eventClassNames)}: iki sorgu biçimi de reddedildi");
         }
     }
@@ -420,7 +420,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             watcher.Start();
 
             _watchers.Add(watcher);
-            AppLog.Info("Nitro tuşu WMI olay izleyicisi bağlandı",
+            AppLog.Info(Loc.T("Nitro tuşu WMI olay izleyicisi bağlandı"),
                 within.HasValue
                     ? $"sınıf='{className}' aralık={within.Value.TotalSeconds:0} sn"
                     : $"sınıf='{className}' aralık=yok");
@@ -451,7 +451,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         // Logged rather than ignored: the code is per model, and this line is what turns "the key does nothing" into a
         // one-line fix. The instance name is included because the generic ACPI event class is shared with every other
         // ACPI-WMI device on the machine.
-        AppLog.Info("Acer WMI olayı (Nitro tuşu değil)",
+        AppLog.Info(Loc.T("Acer WMI olayı (Nitro tuşu değil)"),
             $"sınıf='{className}' örnek='{instanceName}' kod=0x{code:X2} " +
             $"veri={Convert.ToHexString(ReadEventBytes(e.NewEvent))}");
     }
@@ -518,7 +518,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Ham giriş penceresi kurulamadı", ex.Message);
+            AppLog.Warn(Loc.T("Ham giriş penceresi kurulamadı"), ex.Message);
             _rawInput?.Dispose();
             _rawInput = null;
         }
@@ -584,7 +584,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
         // Logged on every accepted press. Without this line the only evidence that the key works is the window
         // moving, which is exactly what a user reporting "it does nothing" cannot show.
-        AppLog.Info("Nitro tuşu algılandı", source);
+        AppLog.Info(Loc.T("Nitro tuşu algılandı"), source);
 
         try
         {
@@ -593,7 +593,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         catch (Exception ex)
         {
             // A subscriber that throws must not take the message loop down with it.
-            AppLog.Warn("Nitro tuşu abonesi hata verdi", ex.Message);
+            AppLog.Warn(Loc.T("Nitro tuşu abonesi hata verdi"), ex.Message);
         }
     }
 
@@ -786,7 +786,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             {
                 if (RegisterRawInputDevices([device], 1, (uint)Marshal.SizeOf<RawInputDevice>())) continue;
 
-                AppLog.Info("Ham giriş sayfası kaydedilemedi",
+                AppLog.Info(Loc.T("Ham giriş sayfası kaydedilemedi"),
                     $"sayfa=0x{device.usUsagePage:X4} kullanım=0x{device.usUsage:X4} ({Marshal.GetLastWin32Error()})");
             }
         }
@@ -802,7 +802,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                     }
                     catch (Exception ex)
                     {
-                        AppLog.Warn("Ham giriş raporu okunamadı", ex.Message);
+                        AppLog.Warn(Loc.T("Ham giriş raporu okunamadı"), ex.Message);
                     }
 
                     return IntPtr.Zero;

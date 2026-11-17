@@ -130,7 +130,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Yedek yazılamadı", $"{targetPath}: {ex.Message}");
+            AppLog.Warn(Loc.T("Yedek yazılamadı"), $"{targetPath}: {ex.Message}");
             return BackupResult.Fail(Loc.T($"Yedek yazılamadı: {ex.Message}"));
         }
     }
@@ -223,7 +223,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Geri yükleme öncesi güvenlik yedeği yazılamadı", $"{settingsPath}: {ex.Message}");
+            AppLog.Warn(Loc.T("Geri yükleme öncesi güvenlik yedeği yazılamadı"), $"{settingsPath}: {ex.Message}");
         }
 
         try
@@ -233,7 +233,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Yedekten ayarlar yazılamadı", $"{settingsPath}: {ex.Message}");
+            AppLog.Warn(Loc.T("Yedekten ayarlar yazılamadı"), $"{settingsPath}: {ex.Message}");
             return BackupResult.Fail(Loc.T($"Ayarlar yazılamadı: {ex.Message}"));
         }
 
@@ -284,7 +284,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn($"Yedeğe {label} eklenemedi", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T($"Yedeğe {label} eklenemedi"), $"{path}: {ex.Message}");
             result.Skipped.Add(Loc.T(label));
             return null;
         }
@@ -313,7 +313,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn($"Yedekten {label} yazılamadı", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T($"Yedekten {label} yazılamadı"), $"{path}: {ex.Message}");
             result.Failed.Add(Loc.T(label));
         }
     }

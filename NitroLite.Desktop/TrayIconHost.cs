@@ -212,7 +212,7 @@ public sealed class TrayIconHost : IDisposable
 
         if (TrayMenuPolicy.IsDoubleClick(sinceLast))
         {
-            AppLog.Info("Tepsi simgesine çift tıklandı", "pencere öne getiriliyor");
+            AppLog.Info(Loc.T("Tepsi simgesine çift tıklandı"), "pencere öne getiriliyor");
         }
 
         showWindow();
@@ -251,7 +251,7 @@ public sealed class TrayIconHost : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Tepsi simgesi yüklenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Tepsi simgesi yüklenemedi"), ex.Message);
             return null;
         }
     }

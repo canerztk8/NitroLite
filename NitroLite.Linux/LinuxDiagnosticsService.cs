@@ -120,7 +120,7 @@ public sealed class LinuxDiagnosticsService : IDiagnosticsService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Teşhis dosyası okunamadı", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T("Teşhis dosyası okunamadı"), $"{path}: {ex.Message}");
             return null;
         }
     }

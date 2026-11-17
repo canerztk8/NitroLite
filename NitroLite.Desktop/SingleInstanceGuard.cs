@@ -80,7 +80,7 @@ public sealed class SingleInstanceGuard : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Warn("Tek örnek kilidi alınamadı", $"{name}: {ex.Message}");
+                    AppLog.Warn(Loc.T("Tek örnek kilidi alınamadı"), $"{name}: {ex.Message}");
                 }
             }
 
@@ -101,7 +101,7 @@ public sealed class SingleInstanceGuard : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Tek örnek kilidi alınamadı", ex.Message);
+            AppLog.Warn(Loc.T("Tek örnek kilidi alınamadı"), ex.Message);
             return new SingleInstanceGuard(null, null, isFirst: true);
         }
     }
@@ -145,7 +145,7 @@ public sealed class SingleInstanceGuard : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Warn("Tek örnek dinleyicisi durdu", ex.Message);
+                    AppLog.Warn(Loc.T("Tek örnek dinleyicisi durdu"), ex.Message);
                     return;
                 }
                 finally
@@ -175,7 +175,7 @@ public sealed class SingleInstanceGuard : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Çalışan pencereye ulaşılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Çalışan pencereye ulaşılamadı"), ex.Message);
             return false;
         }
     }

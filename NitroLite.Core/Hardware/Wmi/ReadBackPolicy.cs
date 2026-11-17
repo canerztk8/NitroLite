@@ -201,7 +201,7 @@ public sealed class ReadBackPolicy
             if (count >= SessionsBeforePermanentDisable && !IsPermanentlyDisabled(capability))
             {
                 _settings.DisabledCapabilities.Add(capability);
-                AppLog.Warn("Doğrudan WMI yeteneği kalıcı olarak kapatıldı",
+                AppLog.Warn(Loc.T("Doğrudan WMI yeteneği kalıcı olarak kapatıldı"),
                     $"{capability}: {count} ardışık oturumda geri okuma başarısız ({error})");
 
                 return new ReadBackResult
@@ -214,7 +214,7 @@ public sealed class ReadBackPolicy
             }
         }
 
-        AppLog.Warn("Doğrudan WMI yeteneği bu oturum için kapatıldı",
+        AppLog.Warn(Loc.T("Doğrudan WMI yeteneği bu oturum için kapatıldı"),
             $"{capability}: {MaxAttempts} denemede geri okuma eşleşmedi ({error})");
 
         return new ReadBackResult

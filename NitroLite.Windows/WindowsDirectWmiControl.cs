@@ -36,7 +36,7 @@ public sealed class WindowsDirectWmiControl : IDirectWmiControl
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Doğrudan WMI başlatılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Doğrudan WMI başlatılamadı"), ex.ToString());
             return false;
         }
     }

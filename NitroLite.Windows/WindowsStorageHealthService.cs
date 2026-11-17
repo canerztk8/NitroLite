@@ -27,7 +27,7 @@ public sealed class WindowsStorageHealthService : IStorageHealthService
         catch (Exception ex)
         {
             // A machine whose storage namespace is missing has no list, not a broken page.
-            AppLog.Warn("Depolama sürücüleri okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Depolama sürücüleri okunamadı"), ex.Message);
             return Array.Empty<StorageDrive>();
         }
 

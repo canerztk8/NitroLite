@@ -51,7 +51,7 @@ public sealed class LinuxProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Süreç tablosu listelenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Süreç tablosu listelenemedi"), ex.Message);
             return result;
         }
 
@@ -106,7 +106,7 @@ public sealed class LinuxProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Süreç dosyası okunamadı", $"{directory}/{name}: {ex.Message}");
+            AppLog.Warn(Loc.T("Süreç dosyası okunamadı"), $"{directory}/{name}: {ex.Message}");
             return null;
         }
     }

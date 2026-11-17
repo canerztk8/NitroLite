@@ -919,7 +919,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Pil sağlığı okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Pil sağlığı okunamadı"), ex.Message);
         }
         finally
         {
@@ -1098,7 +1098,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Depolama sürücüleri okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Depolama sürücüleri okunamadı"), ex.Message);
             _storageDrives = Array.Empty<StorageDriveRow>();
         }
 
@@ -1130,7 +1130,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Acer servis durumları okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Acer servis durumları okunamadı"), ex.Message);
             _acerServices = Array.Empty<AcerServiceRow>();
         }
 
@@ -1314,7 +1314,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Doğrudan WMI başlatılamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Doğrudan WMI başlatılamadı"), ex.ToString());
             Status = Labels.DirectWmiFailed(ex.Message);
         }
     }
@@ -1336,7 +1336,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Otomatik başlatma durumu okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Otomatik başlatma durumu okunamadı"), ex.Message);
         }
     }
 
@@ -1361,7 +1361,7 @@ public sealed partial class MainViewModel
             if (enabled && _autoStart != null)
             {
                 try { await _autoStart.DisableAsync().ConfigureAwait(true); }
-                catch (Exception ex) { AppLog.Warn("Yönetici görevi kaldırılamadı", ex.Message); }
+                catch (Exception ex) { AppLog.Warn(Loc.T("Yönetici görevi kaldırılamadı"), ex.Message); }
             }
 
             await RefreshAutoStartAsync().ConfigureAwait(true);
@@ -1369,7 +1369,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Otomatik başlatma değiştirilemedi", ex.ToString());
+            AppLog.Warn(Loc.T("Otomatik başlatma değiştirilemedi"), ex.ToString());
             Status = Labels.AutoStartFailed;
             await RefreshRunAtStartupAsync().ConfigureAwait(true);
         }
@@ -1465,7 +1465,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Güncelleme uygulanamadı", ex.Message);
+            AppLog.Warn(Loc.T("Güncelleme uygulanamadı"), ex.Message);
             UpdateStatus = Labels.UpdateFailed(ex.Message);
         }
         finally
@@ -1542,7 +1542,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Teşhis paketi oluşturulamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Teşhis paketi oluşturulamadı"), ex.ToString());
             Status = Labels.BundleFailed(ex.Message);
         }
     }
@@ -1570,7 +1570,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Yedek oluşturulamadı", ex.ToString());
+            AppLog.Warn(Loc.T("Yedek oluşturulamadı"), ex.ToString());
             Status = Labels.BackupFailedDetail(ex.Message);
         }
     }
@@ -1599,7 +1599,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Yedek geri yüklenemedi", ex.ToString());
+            AppLog.Warn(Loc.T("Yedek geri yüklenemedi"), ex.ToString());
             Status = Labels.BackupRestoreFailedDetail(ex.Message);
         }
     }
@@ -1686,7 +1686,7 @@ public sealed partial class MainViewModel
             if (OnboardingAutoStartAvailable && _onboardingAutoStartOn && _autoStart != null)
             {
                 try { await _autoStart.EnableAsync().ConfigureAwait(true); }
-                catch (Exception ex) { AppLog.Warn("Otomatik başlatma açılamadı", ex.Message); }
+                catch (Exception ex) { AppLog.Warn(Loc.T("Otomatik başlatma açılamadı"), ex.Message); }
             }
         }
 

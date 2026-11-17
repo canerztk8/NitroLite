@@ -136,7 +136,7 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
         var mask = await _agent.GetGpuModeCapabilityAsync().ConfigureAwait(false);
         if (mask is int bits && bits > 0 && !AcerRegistrySnapshot.IsGpuModeSupported(bits, mode))
         {
-            AppLog.Warn("MUX yazımı reddedildi", $"mod {mode} yetenek bitmaskesinde yok ({bits})");
+            AppLog.Warn(Loc.T("MUX yazımı reddedildi"), $"mod {mode} yetenek bitmaskesinde yok ({bits})");
             return false;
         }
 

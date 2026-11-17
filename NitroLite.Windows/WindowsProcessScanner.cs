@@ -65,7 +65,7 @@ public sealed class WindowsProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Süreç tablosu listelenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Süreç tablosu listelenemedi"), ex.Message);
             return result;
         }
 
@@ -95,7 +95,7 @@ public sealed class WindowsProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Süreç tablosu listelenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Süreç tablosu listelenemedi"), ex.Message);
             return entries;
         }
 
@@ -110,7 +110,7 @@ public sealed class WindowsProcessScanner : IProcessScanner
                 catch (Exception ex)
                 {
                     // A process that vanished mid-enumeration is normal, not an error worth a log line per process.
-                    AppLog.Warn("Süreç okunamadı", ex.Message);
+                    AppLog.Warn(Loc.T("Süreç okunamadı"), ex.Message);
                 }
             }
         }
@@ -138,7 +138,7 @@ public sealed class WindowsProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Süreç yolu okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Süreç yolu okunamadı"), ex.Message);
             return "";
         }
         finally

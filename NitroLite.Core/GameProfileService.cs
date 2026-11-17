@@ -189,7 +189,7 @@ public sealed class GameProfileService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oyun algılama hatası", ex.Message);
+            AppLog.Warn(Loc.T("Oyun algılama hatası"), ex.Message);
             return GameDetectionResult.Nothing;
         }
         finally
@@ -284,7 +284,7 @@ public sealed class GameProfileService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Süreç listesi okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Süreç listesi okunamadı"), ex.Message);
             return Array.Empty<RunningProcess>();
         }
     }
@@ -354,7 +354,7 @@ public sealed class GameProfileService
         catch (Exception ex)
         {
             // A read that fails leaves the settings-file values in place, which is the best available answer.
-            AppLog.Warn("Oyun öncesi durum okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Oyun öncesi durum okunamadı"), ex.Message);
         }
 
         return snapshot;
@@ -392,7 +392,7 @@ public sealed class GameProfileService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oyun profili uygulanamadı", $"{profile.DisplayName}: {ex.Message}");
+            AppLog.Warn(Loc.T("Oyun profili uygulanamadı"), $"{profile.DisplayName}: {ex.Message}");
         }
     }
 
@@ -411,7 +411,7 @@ public sealed class GameProfileService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oyun sonrası ayarlar geri yüklenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Oyun sonrası ayarlar geri yüklenemedi"), ex.Message);
         }
     }
 }

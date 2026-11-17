@@ -264,7 +264,7 @@ public sealed class SchoolModeService
             }
             catch (Exception ex)
             {
-                AppLog.Warn("Okul modu: klavye ışığı kapatılamadı", ex.Message);
+                AppLog.Warn(Loc.T("Okul modu: klavye ışığı kapatılamadı"), ex.Message);
                 outcome.Failed.Add(Loc.T("Klavye ışığı"));
             }
         }
@@ -283,7 +283,7 @@ public sealed class SchoolModeService
         var backup = ReadBackup();
         if (backup == null) return false;
 
-        AppLog.Warn("Sahipsiz okul modu yedeği bulundu", "Yarım kalan okul modu geri alınıyor.");
+        AppLog.Warn(Loc.T("Sahipsiz okul modu yedeği bulundu"), "Yarım kalan okul modu geri alınıyor.");
         await RestoreFromBackupAsync(backup);
         DeleteBackup();
         return true;
@@ -433,7 +433,7 @@ public sealed class SchoolModeService
             outcome.Failed.AddRange(powerFailed);
             if (powerSkipped.Count > 0)
             {
-                AppLog.Warn("Okul modu: okunamayan ayarlar atlandı", string.Join(", ", powerSkipped));
+                AppLog.Warn(Loc.T("Okul modu: okunamayan ayarlar atlandı"), string.Join(", ", powerSkipped));
                 outcome.Warnings.Add(Loc.T($"Okul modu: mevcut değeri okunamayan ayarlar değiştirilmedi: {string.Join(", ", powerSkipped)}"));
             }
         }
@@ -524,7 +524,7 @@ public sealed class SchoolModeService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Okul modu yedeği yazılamadı", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T("Okul modu yedeği yazılamadı"), $"{path}: {ex.Message}");
             return false;
         }
     }
@@ -539,7 +539,7 @@ public sealed class SchoolModeService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Okul modu yedeği okunamadı", $"{path}: {ex.Message}");
+            AppLog.Warn(Loc.T("Okul modu yedeği okunamadı"), $"{path}: {ex.Message}");
             return null;
         }
     }
@@ -549,6 +549,6 @@ public sealed class SchoolModeService
         var path = BackupPath;
         if (string.IsNullOrEmpty(path)) return;
         try { if (File.Exists(path)) File.Delete(path); }
-        catch (Exception ex) { AppLog.Warn("Okul modu yedeği silinemedi", $"{path}: {ex.Message}"); }
+        catch (Exception ex) { AppLog.Warn(Loc.T("Okul modu yedeği silinemedi"), $"{path}: {ex.Message}"); }
     }
 }

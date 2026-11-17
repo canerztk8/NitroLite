@@ -46,7 +46,7 @@ public sealed class LinuxUpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Güncelleme denetlenemedi", ex.Message);
+            AppLog.Warn(Loc.T("Güncelleme denetlenemedi"), ex.Message);
             return null;
         }
     }
@@ -78,7 +78,7 @@ public sealed class LinuxUpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Makine modeli okunamadı", ex.Message);
+            AppLog.Warn(Loc.T("Makine modeli okunamadı"), ex.Message);
         }
 
         return Loc.T("Bilinmiyor");

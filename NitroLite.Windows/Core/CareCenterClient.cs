@@ -148,7 +148,7 @@ public class CareCenterClient
                 if (string.Equals(pinned, thumbprint, StringComparison.OrdinalIgnoreCase)) return true;
                 CertificateMismatch = true;
                 LastError = Loc.T("Care Center sertifikası daha önce güvenilen sertifikadan farklı; bağlantı reddedildi.");
-                AppLog.Warn("Care Center sertifika sabitlemesi tutmadı",
+                AppLog.Warn(Loc.T("Care Center sertifika sabitlemesi tutmadı"),
                     $"Beklenen: {pinned}{Environment.NewLine}Gelen: {thumbprint}{Environment.NewLine}" +
                     $"Sertifika yenilendiyse {path} dosyasını silin.");
                 return false;

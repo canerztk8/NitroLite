@@ -365,7 +365,7 @@ public sealed class WmiHardwareController : IHardwareController
 
             if (!TryReadUlong(state, "muxRaw", out var raw) || !IsMuxValueInRange(raw))
             {
-                AppLog.Warn("MUX yazımı reddedildi",
+                AppLog.Warn(Loc.T("MUX yazımı reddedildi"),
                     $"mevcut GetGamingMiscSetting(0x02) değeri {DescribeRaw(state)}; beklenen üst bayt 1..3");
                 return false;
             }
@@ -583,7 +583,7 @@ public sealed class WmiHardwareController : IHardwareController
 
         if (response.Data is JsonObject data && ReadNullableBool(data, "commitApplied") == false)
         {
-            AppLog.Warn("Klavye statik kilidi uygulanmadı",
+            AppLog.Warn(Loc.T("Klavye statik kilidi uygulanmadı"),
                 $"SetGamingKBBacklight durumu {ReadInt(data, "commitStatus")}; bölge renkleri yine de yazıldı.");
         }
 
@@ -758,7 +758,7 @@ public sealed class WmiHardwareController : IHardwareController
         }
         catch (Exception ex)
         {
-            AppLog.Warn("--wmi-worker bağlantısı koptu", $"{command}: {ex.Message}");
+            AppLog.Warn(Loc.T("--wmi-worker bağlantısı koptu"), $"{command}: {ex.Message}");
             DropClient();
             return null;
         }

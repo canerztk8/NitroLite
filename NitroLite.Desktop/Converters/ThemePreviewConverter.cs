@@ -74,7 +74,7 @@ public sealed class ThemePreviewConverter : IValueConverter
             catch (Exception ex)
             {
                 // A build without the assets, or a test with no display: the card falls back to its swatches.
-                AppLog.Warn("Tema önizlemesi yüklenemedi", $"{theme}: {ex.Message}");
+                AppLog.Warn(Loc.T("Tema önizlemesi yüklenemedi"), $"{theme}: {ex.Message}");
             }
 
             Cache[theme] = bitmap;

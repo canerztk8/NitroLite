@@ -224,7 +224,7 @@ public partial class App : Application, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Temiz çıkış sırasında hata", ex.Message);
+            AppLog.Warn(Loc.T("Temiz çıkış sırasında hata"), ex.Message);
         }
         finally
         {
@@ -256,7 +256,7 @@ public partial class App : Application, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Oturum kapanışında fanlar iade edilemedi", ex.Message);
+            AppLog.Warn(Loc.T("Oturum kapanışında fanlar iade edilemedi"), ex.Message);
         }
         finally
         {
@@ -275,7 +275,7 @@ public partial class App : Application, IDisposable
     /// </summary>
     private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
     {
-        AppLog.Error("Yakalanmamış istisna", (e.ExceptionObject as Exception)?.ToString() ?? "bilinmeyen");
+        AppLog.Error(Loc.T("Yakalanmamış istisna"), (e.ExceptionObject as Exception)?.ToString() ?? "bilinmeyen");
         HandBackFansBestEffort("yakalanmamış istisna");
     }
 
@@ -298,7 +298,7 @@ public partial class App : Application, IDisposable
 
     private void OnUiException(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        AppLog.Error("Arayüz istisnası", e.Exception?.ToString() ?? "bilinmeyen");
+        AppLog.Error(Loc.T("Arayüz istisnası"), e.Exception?.ToString() ?? "bilinmeyen");
 
         if (++_survivedUiExceptions <= MaxSurvivedUiExceptions)
         {
@@ -308,7 +308,7 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        AppLog.Error("Arayüz istisnası sınırı aşıldı", "Uygulama kapatılıyor.");
+        AppLog.Error(Loc.T("Arayüz istisnası sınırı aşıldı"), "Uygulama kapatılıyor.");
         e.Handled = false;
     }
 

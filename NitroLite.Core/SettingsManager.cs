@@ -51,7 +51,7 @@ public static class SettingsManager
 
             primaryCorrupt = true;
             primaryError = error;
-            AppLog.Warn("Ayarlar dosyası okunamadı", $"{primaryPath}: {error}");
+            AppLog.Warn(Loc.T("Ayarlar dosyası okunamadı"), $"{primaryPath}: {error}");
         }
 
         // 2. Try Backup settings file (.bak)
@@ -145,7 +145,7 @@ public static class SettingsManager
             {
                 // The write below still goes ahead, but a corrupt settings file would now have no copy to fall
                 // back to, so the failure has to be visible in the log.
-                AppLog.Warn("Ayarlar yedeği yazılamadı", $"{backupPath}: {ex.Message}");
+                AppLog.Warn(Loc.T("Ayarlar yedeği yazılamadı"), $"{backupPath}: {ex.Message}");
             }
         }
 

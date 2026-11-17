@@ -145,7 +145,7 @@ public static class CliTaskRunner
 
         if (hardware == null)
         {
-            AppLog.Warn("CLI komutu için donanım arka ucu yok", command);
+            AppLog.Warn(Loc.T("CLI komutu için donanım arka ucu yok"), command);
             return 1;
         }
 
@@ -167,7 +167,7 @@ public static class CliTaskRunner
         }
         catch (Exception ex)
         {
-            AppLog.Error("CLI komutu başarısız", $"{command}: {ex}");
+            AppLog.Error(Loc.T("CLI komutu başarısız"), $"{command}: {ex}");
             return 1;
         }
     }
@@ -233,7 +233,7 @@ public static class CliTaskRunner
         if (autoStart != null)
         {
             try { await autoStart.DisableAsync(cancellationToken).ConfigureAwait(false); }
-            catch (Exception ex) { AppLog.Warn("Otomatik başlatma kaldırılamadı", ex.Message); }
+            catch (Exception ex) { AppLog.Warn(Loc.T("Otomatik başlatma kaldırılamadı"), ex.Message); }
         }
 
         return fan;

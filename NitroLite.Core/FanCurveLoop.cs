@@ -146,7 +146,7 @@ public sealed class FanCurveLoop : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fan eğrisi adımı başarısız", ex.Message);
+            AppLog.Warn(Loc.T("Fan eğrisi adımı başarısız"), ex.Message);
         }
     }
 

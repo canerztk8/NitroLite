@@ -45,7 +45,7 @@ public partial class LightingView : UserControl
         }
         catch (Exception ex)
         {
-            AppLog.Error("Renk seçici açılamadı", ex.ToString());
+            AppLog.Error(Loc.T("Renk seçici açılamadı"), ex.ToString());
         }
     }
 }

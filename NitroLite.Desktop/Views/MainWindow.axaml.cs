@@ -192,7 +192,7 @@ public partial class MainWindow : Window
         {
             // An exception out of this handler is raised on the thread pool and kills the process. A window that
             // opened without its telemetry is still a window the user can read the log from.
-            AppLog.Error("Pencere açılışı başarısız", ex.ToString());
+            AppLog.Error(Loc.T("Pencere açılışı başarısız"), ex.ToString());
         }
     }
 
@@ -285,7 +285,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Panoya kopyalanamadı", ex.Message);
+            AppLog.Warn(Loc.T("Panoya kopyalanamadı"), ex.Message);
         }
     }
 
@@ -300,7 +300,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Klavye aydınlatması yeniden uygulanamadı", ex.Message);
+            AppLog.Warn(Loc.T("Klavye aydınlatması yeniden uygulanamadı"), ex.Message);
         }
     }
 
@@ -328,7 +328,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Pencere öne getirilemedi", ex.Message);
+            AppLog.Warn(Loc.T("Pencere öne getirilemedi"), ex.Message);
         }
     }
 
@@ -484,7 +484,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Error("Telemetri döngüsü başarısız", ex.ToString());
+            AppLog.Error(Loc.T("Telemetri döngüsü başarısız"), ex.ToString());
         }
     }
 
@@ -512,7 +512,7 @@ public partial class MainWindow : Window
         if (_timer.Interval == wanted) return;
 
         _timer.Interval = wanted;
-        AppLog.Info("Telemetri aralığı değişti", $"{wanted.TotalSeconds:F0} sn");
+        AppLog.Info(Loc.T("Telemetri aralığı değişti"), $"{wanted.TotalSeconds:F0} sn");
     }
 
     /// <summary>
@@ -617,7 +617,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Bellek kırpılamadı", ex.Message);
+            AppLog.Warn(Loc.T("Bellek kırpılamadı"), ex.Message);
         }
     }
 

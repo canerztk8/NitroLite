@@ -120,7 +120,7 @@ public sealed class WmiWorkerLauncher : IDisposable
         if (!_isTrustedLocation(_executablePath))
         {
             LastError = "the helper executable sits in a folder any local account can write to";
-            AppLog.Warn("--wmi-worker başlatılmadı", $"{LastError}: {_executablePath}");
+            AppLog.Warn(Loc.T("--wmi-worker başlatılmadı"), $"{LastError}: {_executablePath}");
             return null;
         }
 
@@ -152,14 +152,14 @@ public sealed class WmiWorkerLauncher : IDisposable
         {
             UserDeclined = true;
             LastError = "the user declined the elevation prompt";
-            AppLog.Info("Doğrudan WMI için yönetici izni verilmedi",
+            AppLog.Info(Loc.T("Doğrudan WMI için yönetici izni verilmedi"),
                 "Kullanıcı UAC penceresinde Hayır'ı seçti; bu oturumda bir daha sorulmayacak.");
             return null;
         }
         catch (Exception ex)
         {
             LastError = $"{ex.GetType().Name}: {ex.Message}";
-            AppLog.Warn("--wmi-worker başlatılamadı", LastError);
+            AppLog.Warn(Loc.T("--wmi-worker başlatılamadı"), LastError);
             return null;
         }
 
@@ -180,13 +180,13 @@ public sealed class WmiWorkerLauncher : IDisposable
             {
                 var client = await _connect(pipeName, nonce, ConnectTimeout, cancellationToken).ConfigureAwait(false);
                 LastError = "";
-                AppLog.Info("--wmi-worker bağlandı", $"pipe='{pipeName}' pid={process.Id}");
+                AppLog.Info(Loc.T("--wmi-worker bağlandı"), $"pipe='{pipeName}' pid={process.Id}");
                 return client;
             }
             catch (Exception ex)
             {
                 LastError = $"{ex.GetType().Name}: {ex.Message}";
-                AppLog.Warn("--wmi-worker el sıkışması başarısız", LastError);
+                AppLog.Warn(Loc.T("--wmi-worker el sıkışması başarısız"), LastError);
                 try { process.Kill(entireProcessTree: true); } catch { }
                 return null;
             }
