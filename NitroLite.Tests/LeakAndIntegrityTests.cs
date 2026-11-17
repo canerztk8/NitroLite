@@ -483,4 +483,64 @@ public class LeakAndIntegrityTests : IDisposable
 
         Assert.Equal(0, updates.InstallAttempts);
     }
+
+    [Fact]
+    public async Task ReleaseNotesCommand_DoesNotOpenRealBrowser_UrlIsCaptured()
+    {
+        // This test ensures that calling ReleaseNotesCommand does not trigger a real browser
+        // to open during tests. The URL should be captured by the UrlCapturer instead.
+        var urlCapturer = new Phase3Fakes.UrlCapturer();
+        var updates = new Phase3Fakes.FakeUpdates
+        {
+            CheckResult = new UpdateCheckResult(
+                "v9.9.9", "https://example.invalid/notes", "abc123",
+                "https://example.invalid/NitroLite.zip", "NitroLite.zip", 1024)
+        };
+
+        using var vm = new MainViewModel(
+            new AppSettings(),
+            new Phase3Fakes.StubHardware(),
+            null,
+            Path_("settings.json"),
+            updates: updates,
+            urlOpener: urlCapturer.Capture);
+
+        await vm.InitializeAsync();
+        vm.CheckUpdatesCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => vm.HasPendingUpdate);
+
+        vm.ReleaseNotesCommand.Execute(null);
+
+        // The URL should be captured, not opened in a real browser
+        Assert.Single(urlCapturer.OpenedUrls);
+        Assert.Equal("https://example.invalid/releases", urlCapturer.OpenedUrls[0]);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesCommand_DoesNotOpenRealBrowser_UrlIsCaptured()
+    {
+        // This test ensures that CheckForUpdatesCommand also does not trigger a real browser.
+        var urlCapturer = new Phase3Fakes.UrlCapturer();
+        var updates = new Phase3Fakes.FakeUpdates
+        {
+            CheckResult = new UpdateCheckResult(
+                "v9.9.9", "https://example.invalid/notes", "abc123",
+                "https://example.invalid/NitroLite.zip", "NitroLite.zip", 1024)
+        };
+
+        using var vm = new MainViewModel(
+            new AppSettings(),
+            new Phase3Fakes.StubHardware(),
+            null,
+            Path_("settings.json"),
+            updates: updates,
+            urlOpener: urlCapturer.Capture);
+
+        await vm.InitializeAsync();
+        vm.CheckUpdatesCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => vm.HasPendingUpdate);
+
+        // No URL should be opened during check - only when viewing release notes
+        Assert.Empty(urlCapturer.OpenedUrls);
+    }
 }

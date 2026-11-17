@@ -279,6 +279,13 @@ internal static class Phase3Fakes
         public string BuildIssueUrl(string title, string body) => ReleasePageUrl;
     }
 
+    /// <summary>Captures URLs opened by the view model so a test can verify the link without opening a browser.</summary>
+    internal sealed class UrlCapturer
+    {
+        public List<string> OpenedUrls { get; } = new();
+        public Action<string> Capture => url => OpenedUrls.Add(url);
+    }
+
     /// <summary>A bundle builder that writes a real file, so the note can name it.</summary>
     internal sealed class FakeDiagnostics : IDiagnosticsService
     {

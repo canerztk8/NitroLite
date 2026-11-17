@@ -154,7 +154,8 @@ public class ServicesPageTests
         Phase3Fakes.FakeDiagnostics? diagnostics = null,
         Phase3Fakes.FakeRunAtStartup? runAtStartup = null,
         IDialogService? dialogs = null,
-        string? path = null) =>
+        string? path = null,
+        Phase3Fakes.UrlCapturer? urlCapturer = null) =>
         new(settings ?? new AppSettings(),
             null,
             null,
@@ -164,7 +165,8 @@ public class ServicesPageTests
             systemTools: tools,
             updates: updates,
             diagnostics: diagnostics,
-            runAtStartup: runAtStartup);
+            runAtStartup: runAtStartup,
+            urlOpener: urlCapturer?.Capture);
 
     [Fact]
     public async Task ServiceList_Loads()

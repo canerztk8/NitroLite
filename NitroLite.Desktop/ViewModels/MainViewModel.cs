@@ -905,7 +905,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IRunAtStartupService? runAtStartup = null,
         INitroKeyListener? nitroKey = null,
         INitroSenseWatcher? nitroSense = null,
-        FanStallWatchdog? fanStall = null)
+        FanStallWatchdog? fanStall = null,
+        Action<string>? urlOpener = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -937,6 +938,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _runAtStartup = runAtStartup;
         _nitroKey = nitroKey;
         _nitroSense = nitroSense;
+        _urlOpener = urlOpener;
 
         // The watchdog is a dependency rather than a field initialiser so a test can shorten its ten-second sustain
         // window. Production always gets the default one.

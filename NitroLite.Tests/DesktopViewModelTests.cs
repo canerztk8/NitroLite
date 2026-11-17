@@ -110,7 +110,8 @@ public class DesktopViewModelTests
         InMemorySysfsFileSystem fs,
         AppSettings? settings = null,
         IThemeApplier? themeApplier = null,
-        string? settingsPath = null)
+        string? settingsPath = null,
+        Phase3Fakes.UrlCapturer? urlCapturer = null)
     {
         var appSettings = settings ?? new AppSettings();
 
@@ -124,7 +125,8 @@ public class DesktopViewModelTests
             controller,
             controller.Capabilities,
             settingsPath ?? AppPaths.GetDataFile("settings.json"),
-            themeApplier: themeApplier);
+            themeApplier: themeApplier,
+            urlOpener: urlCapturer?.Capture);
         return (vm, controller);
     }
 

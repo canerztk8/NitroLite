@@ -113,6 +113,13 @@ public sealed partial class MainViewModel
     private readonly INitroKeyListener? _nitroKey;
     private readonly INitroSenseWatcher? _nitroSense;
 
+    /// <summary>
+    /// Optional URL opener for testing. When null, the default system browser is used via Process.Start.
+    /// When provided, it receives the URL without actually opening a browser, allowing tests to capture
+    /// and verify the URL without side effects.
+    /// </summary>
+    private readonly Action<string>? _urlOpener;
+
     // ---------------------------------------------------------------- battery page state
 
     private BatteryHealthSnapshot _batterySnapshot = BatteryHealthSnapshot.Empty;
@@ -1608,11 +1615,18 @@ public sealed partial class MainViewModel
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            if (_urlOpener != null)
             {
-                FileName = url,
-                UseShellExecute = true
-            })?.Dispose();
+                _urlOpener(url);
+            }
+            else
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                })?.Dispose();
+            }
         }
         catch (Exception ex)
         {
