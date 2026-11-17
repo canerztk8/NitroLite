@@ -4,8 +4,27 @@ namespace NitroLite.Core;
 /// <remarks>
 /// <see cref="Sha256"/> is the digest GitHub publishes for the asset. It is carried here rather than looked up again at
 /// install time so the number the user was shown and the number that is verified are the same one.
+/// <para>
+/// <see cref="DownloadUrl"/> and <see cref="AssetName"/> are what the install needs and the card does not print. They
+/// are optional so a platform that only checks for releases — the Linux build, which cannot install a Windows package
+/// over itself — can leave them out and the card still works.
+/// </para>
 /// </remarks>
-public sealed record UpdateCheckResult(string DisplayVersion, string? ReleaseNotesUrl, string? Sha256);
+public sealed record UpdateCheckResult(
+    string DisplayVersion,
+    string? ReleaseNotesUrl,
+    string? Sha256,
+    string? DownloadUrl = null,
+    string? AssetName = null,
+    long SizeBytes = 0);
+
+/// <summary>What an install attempt did, in the words the card will show.</summary>
+public sealed record UpdateInstallResult(bool Success, string? ExecutablePath, string? Error)
+{
+    public static UpdateInstallResult Fail(string error) => new(false, null, error);
+
+    public static UpdateInstallResult Installed(string executablePath) => new(true, executablePath, null);
+}
 
 /// <summary>
 /// Asks GitHub for a newer release and builds the links around it.
@@ -38,6 +57,18 @@ public interface IUpdateService
 
     /// <summary>Asks GitHub. Null means "already current", which is a normal answer rather than a failure.</summary>
     Task<UpdateCheckResult?> CheckAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Downloads the pending release, verifies it against the digest GitHub published, and swaps the running
+    /// executable. Never throws: every failure comes back as an <see cref="UpdateInstallResult"/> with the reason.
+    /// </summary>
+    /// <remarks>
+    /// The new build is on disk when this returns success, but this process is still running the old one, so the
+    /// caller tells the user to restart rather than trying to relaunch itself. A relaunch would race the
+    /// single-instance guard: the new process would find the old one still holding it and exit.
+    /// </remarks>
+    Task<UpdateInstallResult> InstallAsync(
+        UpdateCheckResult result, IProgress<double>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The pending release's page, or the releases list when the payload carried no usable one. The address comes out

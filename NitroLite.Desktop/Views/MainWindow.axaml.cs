@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -76,6 +76,18 @@ public partial class MainWindow : Window
     private OsdOverlayWindow? _osd;
 
     /// <summary>
+    /// Guards the one-shot setup in the <see cref="Window.Opened"/> handler.
+    /// </summary>
+    /// <remarks>
+    /// Closing the window only hides it, so <see cref="Window.Opened"/> fires again on every return from the tray.
+    /// Without this guard each return subscribed the same handlers a second time, built a second
+    /// <see cref="OsdOverlayWindow"/> that nothing ever closed, and re-ran the game-session recovery — which wrote the
+    /// pre-game mode and fan back over a game that was still running. It is a gate rather than a flag because a tray
+    /// launch calls the setup directly and the window's own <c>Opened</c> can follow it.
+    /// </remarks>
+    private readonly OneShotGate _initialized = new();
+
+    /// <summary>
     /// The last size and position the window had while it was not maximised. Avalonia has no <c>RestoreBounds</c>, so
     /// the numbers are captured on every move and resize and written back when the window is restored.
     /// </summary>
@@ -96,48 +108,7 @@ public partial class MainWindow : Window
         _railSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _railSaveTimer.Tick += (_, _) => SaveRailWidth();
 
-        Opened += async (_, _) =>
-        {
-            try
-            {
-                // The clipboard is the only platform service the view model needs, and it is a delegate so a test can
-                // leave it unset. Set it before the first command can run.
-                ClipboardService.Setter = text =>
-                {
-                    var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-                    if (clipboard != null) _ = CopyAsync(clipboard, text);
-                };
-
-                _viewModel = DataContext as MainViewModel;
-                if (_viewModel == null) return;
-
-                _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-
-                // The rail starts at the width the user left it at. An absolute width also decides how the splitter
-                // behaves: with a pixel column next to a star column it resizes the pixel one, so the rail keeps a real
-                // width instead of turning into a star that the page can squeeze.
-                _railColumn = RailGrid.ColumnDefinitions[0];
-                _railColumn.Width = new GridLength(_viewModel.SidebarWidth);
-                _railColumn.PropertyChanged += OnRailColumnChanged;
-
-                RestoreWindowPosition();
-                await _viewModel.InitializeAsync();
-
-                // The overlay is a second window bound to the same view model, so the two can never disagree about a
-                // reading. It is created here rather than in the XAML because it must not be a child of this window.
-                _osd = new OsdOverlayWindow { DataContext = _viewModel };
-                _viewModel.OsdChanged += (_, _) => ApplyOsd();
-                ApplyOsd();
-
-                _timer.Start();
-            }
-            catch (Exception ex)
-            {
-                // An exception out of this handler is raised on the thread pool and kills the process. A window that
-                // opened without its telemetry is still a window the user can read the log from.
-                AppLog.Error("Pencere açılışı başarısız", ex.ToString());
-            }
-        };
+        Opened += async (_, _) => await InitializeOnceAsync();
 
         PositionChanged += (_, _) => CaptureNormalBounds();
         SizeChanged += (_, _) => CaptureNormalBounds();
@@ -153,6 +124,68 @@ public partial class MainWindow : Window
             _osd?.Close();
             _osd = null;
         };
+    }
+
+    /// <summary>
+    /// The one-shot setup: the clipboard hook, the subscriptions, the window placement, the view model's first read
+    /// and the overlay window.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Idempotent, and called from two places. <see cref="Window.Opened"/> is the normal one, but a launch that starts
+    /// in the tray never raises it — the window is never shown — so the shell calls this directly. Without that, a
+    /// tray launch would have no telemetry loop and no fan curve, which is the opposite of what the tray is for.
+    /// </para>
+    /// <para>
+    /// The guard is what makes the second call free. Closing the window only hides it, so <see cref="Window.Opened"/>
+    /// fires again on every return from the tray; a second pass would subscribe the same handlers twice, build a
+    /// second overlay window that nothing ever closes, and re-run the game-session recovery against a session that is
+    /// still running.
+    /// </para>
+    /// </remarks>
+    public async Task InitializeOnceAsync()
+    {
+        if (!_initialized.TryEnter()) return;
+
+        try
+        {
+            // The clipboard is the only platform service the view model needs, and it is a delegate so a test can
+            // leave it unset. Set it before the first command can run.
+            ClipboardService.Setter = text =>
+            {
+                var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard != null) _ = CopyAsync(clipboard, text);
+            };
+
+            _viewModel = DataContext as MainViewModel;
+            if (_viewModel == null) return;
+
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+
+            // The rail starts at the width the user left it at. An absolute width also decides how the splitter
+            // behaves: with a pixel column next to a star column it resizes the pixel one, so the rail keeps a real
+            // width instead of turning into a star that the page can squeeze.
+            _railColumn = RailGrid.ColumnDefinitions[0];
+            _railColumn.Width = new GridLength(_viewModel.SidebarWidth);
+            _railColumn.PropertyChanged += OnRailColumnChanged;
+
+            RestoreWindowPosition();
+            await _viewModel.InitializeAsync();
+
+            // The overlay is a second window bound to the same view model, so the two can never disagree about a
+            // reading. It is created here rather than in the XAML because it must not be a child of this window.
+            _osd = new OsdOverlayWindow { DataContext = _viewModel };
+            _viewModel.OsdChanged += (_, _) => ApplyOsd();
+            ApplyOsd();
+
+            _timer.Start();
+        }
+        catch (Exception ex)
+        {
+            // An exception out of this handler is raised on the thread pool and kills the process. A window that
+            // opened without its telemetry is still a window the user can read the log from.
+            AppLog.Error("Pencere açılışı başarısız", ex.ToString());
+        }
     }
 
     /// <summary>

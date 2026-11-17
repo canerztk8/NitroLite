@@ -198,7 +198,10 @@ public static class AcerWmiProbe
             {
                 try
                 {
-                    foreach (ManagementObject instance in cls.GetInstances())
+                    // The collection is a COM enumerator and is disposable in its own right. Disposing only the
+                    // first instance left the enumerator alive, which is the handle the probe leaked on every run.
+                    using var instances = cls.GetInstances();
+                    foreach (ManagementObject instance in instances)
                     {
                         instance.Dispose();
                         break;
@@ -277,8 +280,15 @@ public static class AcerWmiProbe
     {
         try
         {
-            var inputs = DescribeParameters(method.InParameters);
-            var outputs = DescribeParameters(method.OutParameters);
+            // Both parameter objects are COM wrappers over a WMI class definition. They are read once and never
+            // touched again, so they are released here rather than left to the finalizer: the probe walks every
+            // method of the class, and a machine with forty of them would hold forty pairs of wrappers until a
+            // collection that may not come.
+            using var inParameters = method.InParameters;
+            using var outParameters = method.OutParameters;
+
+            var inputs = DescribeParameters(inParameters);
+            var outputs = DescribeParameters(outParameters);
             return $"{method.Name}({inputs}) -> {outputs}";
         }
         catch

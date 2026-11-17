@@ -224,9 +224,13 @@ public sealed class BatteryWearHistory
             // A hand-edited or half-written file must not break the page: unusable rows are dropped, and the rest
             // is sorted so the trend always reads oldest to newest.
             _samples = (parsed ?? new List<BatteryWearSample>())
-                .Where(s => s != null && s.TimestampUtc > DateTime.MinValue && s.HealthPercent is >= 0 and <= 100)
+                .Where(IsUsable)
                 .OrderBy(s => s.TimestampUtc)
                 .ToList();
+
+            // The cap is enforced on read as well as on write. A file written by an older build, or by hand, could
+            // hold thousands of rows, and the chart draws every one of them.
+            if (_samples.Count > MaxSamples) _samples.RemoveRange(0, _samples.Count - MaxSamples);
         }
         catch (Exception ex)
         {
@@ -235,6 +239,29 @@ public sealed class BatteryWearHistory
         }
         return _samples;
     }
+
+    /// <summary>
+    /// True when a row read from disk can be drawn.
+    /// </summary>
+    /// <remarks>
+    /// A JSON number can be <c>NaN</c> or an infinity, and both survive deserialisation. A single one of them turns
+    /// the whole trend into a line that is not a number, and the chart then draws nothing at all — which reads as
+    /// "the history is empty" rather than "one row is broken". The range checks come after the finiteness check on
+    /// purpose: every comparison against <c>NaN</c> is false, so a range test alone would let it through.
+    /// </remarks>
+    private static bool IsUsable(BatteryWearSample? sample)
+    {
+        if (sample == null) return false;
+        if (sample.TimestampUtc <= DateTime.MinValue) return false;
+        if (!IsFinite(sample.HealthPercent) || sample.HealthPercent is < 0 or > 100) return false;
+        if (!IsFinite(sample.WearLevelPercent) || sample.WearLevelPercent is < 0 or > 100) return false;
+        if (!IsFinite(sample.FullChargeCapacityMWh) || sample.FullChargeCapacityMWh < 0) return false;
+        if (!IsFinite(sample.DesignCapacityMWh) || sample.DesignCapacityMWh < 0) return false;
+        if (sample.CycleCount is < 0) return false;
+        return true;
+    }
+
+    private static bool IsFinite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
     private bool Write(List<BatteryWearSample> samples)
     {

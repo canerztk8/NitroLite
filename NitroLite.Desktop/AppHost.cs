@@ -47,7 +47,8 @@ public sealed record PlatformServices(
     IDirectWmiControl? DirectWmi,
     IRunAtStartupService? RunAtStartup,
     INitroKeyListener? NitroKey,
-    INitroSenseWatcher? NitroSense);
+    INitroSenseWatcher? NitroSense,
+    SettingsLoadResult? SettingsLoad);
 
 /// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
@@ -126,6 +127,14 @@ public sealed class AppHost : IDisposable
             services.RunAtStartup,
             services.NitroKey,
             services.NitroSense);
+
+        // A settings file that had to be discarded is the one startup failure the user has to be told about: the app
+        // is running on the backup or on defaults, and the preferences they set may be gone. The message is handed
+        // over rather than raised here because the window has not subscribed to Status yet.
+        if (services.SettingsLoad is { PrimaryCorrupt: true } load)
+        {
+            ViewModel.ReportSettingsRecovered(load.Source);
+        }
     }
 
     public MainViewModel ViewModel { get; }
@@ -151,6 +160,13 @@ public sealed class AppHost : IDisposable
     /// </summary>
     public static PlatformServices CreateServices()
     {
+#if WINDOWS
+        // An update that was interrupted leaves the install folder with a missing file and its only good copy under
+        // a .old name. The repair has to run before anything reads those files, which is why it is the first thing
+        // the composition root does.
+        if (OperatingSystem.IsWindows()) RepairInstallFolder();
+#endif
+
         var settingsPath = AppPaths.GetDataFile("settings.json");
         var backupPath = settingsPath + ".bak";
         var legacyPath = AppPaths.GetDataFile("config.json");
@@ -318,10 +334,39 @@ public sealed class AppHost : IDisposable
             settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
             refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb,
             batteryHealth, storageHealth, debloat, systemTools, updates, diagnostics, directWmi, runAtStartup,
-            nitroKey, nitroSense);
+            nitroKey, nitroSense, load);
     }
 
 #if WINDOWS
+    /// <summary>
+    /// Repairs an install folder an interrupted update left behind, then sweeps the leftovers of a completed one.
+    /// </summary>
+    /// <remarks>
+    /// The sweep is skipped when the repair reported a failure. <see cref="UpdateService.RecoverInterruptedUpdate"/>
+    /// deliberately leaves a <c>.old</c> file in place when it could not move it back, because that file is the only
+    /// surviving copy; deleting it here would destroy exactly what the repair exists to preserve.
+    /// </remarks>
+    private static void RepairInstallFolder()
+    {
+        try
+        {
+            var recovery = UpdateService.RecoverInterruptedUpdate();
+            if (!recovery.IsClean)
+            {
+                AppLog.Info("Güncelleme kalıntıları denetlendi",
+                    $"geri={recovery.Restored.Count} silinen={recovery.Removed.Count} başarısız={recovery.Failed.Count}");
+            }
+
+            if (recovery.Failed.Count == 0) UpdateService.CleanUpPreviousVersion();
+        }
+        catch (Exception ex)
+        {
+            // A folder that cannot be repaired is not a reason to refuse to start: the app still runs from whatever
+            // is there, and the log says what was found.
+            AppLog.Warn("Yarım kalan güncelleme denetlenemedi", ex.Message);
+        }
+    }
+
     /// <summary>
     /// The Windows backend: the Acer service when it answers, direct WMI when the user asked for it, and the elevated
     /// worker behind that. The capability probe is lazy on purpose — it enumerates <c>root\WMI</c> and reads the

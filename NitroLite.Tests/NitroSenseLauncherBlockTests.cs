@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -121,7 +121,7 @@ public class NitroSenseLauncherBlockTests
         }
         finally
         {
-            try { Directory.Delete(dir, true); } catch { }
+            try { TestDataIsolation.DeleteFolder(dir); } catch { }
         }
     }
 
@@ -139,7 +139,7 @@ public class NitroSenseLauncherBlockTests
         }
         finally
         {
-            try { Directory.Delete(dir, true); } catch { }
+            try { TestDataIsolation.DeleteFolder(dir); } catch { }
         }
     }
 
@@ -161,7 +161,7 @@ public class NitroSenseLauncherBlockTests
         }
         finally
         {
-            try { Directory.Delete(dir, true); } catch { }
+            try { TestDataIsolation.DeleteFolder(dir); } catch { }
         }
     }
 

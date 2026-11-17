@@ -416,6 +416,21 @@ public class SchoolModeServiceTests
     }
 
     [Fact]
+    public async Task DisableAsync_WithACorruptUndoRecord_LeavesTheFileForHandRepair()
+    {
+        // The record is the only copy of the values the machine was in before school mode. An unreadable one is not
+        // an empty one: deleting it throws away the one thing that could still be repaired by hand.
+        var h = new Harness().WithPreviousValues();
+        File.WriteAllText(h.Service.BackupPath!, "{ this is not json");
+
+        var outcome = await h.Service.DisableAsync();
+
+        Assert.True(outcome.Success, string.Join(", ", outcome.Failed));
+        Assert.False(h.Settings.SchoolModeEnabled);
+        Assert.True(File.Exists(h.Service.BackupPath), "an unreadable undo record must survive the switch-off");
+    }
+
+    [Fact]
     public async Task EnableAsync_WithNoBackupPath_StillApplies()
     {
         // Persistence is optional: a read-only data folder must not stop school mode from working this session.

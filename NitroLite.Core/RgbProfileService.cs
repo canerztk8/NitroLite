@@ -52,15 +52,20 @@ public class RgbPreset
 
 public class RgbProfileService
 {
-    private static readonly string PresetsFile = AppPaths.GetDataFile("rgb_presets.json");
+    private readonly string _presetsFile;
     private readonly List<RgbPreset> _presets = new();
     private readonly object _presetsLock = new();
 
     /// <summary>Set when the presets file existed but could not be read, so the UI can say so.</summary>
     public string? LoadError { get; private set; }
 
-    public RgbProfileService()
+    /// <param name="presetsPath">
+    /// Where the custom presets live. Left out, the file sits in the app data folder; a test passes its own path so it
+    /// never touches the real one.
+    /// </param>
+    public RgbProfileService(string? presetsPath = null)
     {
+        _presetsFile = presetsPath ?? AppPaths.GetDataFile("rgb_presets.json");
         LoadPresets();
     }
 
@@ -90,29 +95,30 @@ public class RgbProfileService
             var existing = _presets.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existing?.IsBuiltIn == true)
                 throw new ArgumentException(Loc.T("Fabrika profili adı kullanılamaz; farklı bir profil adı seçin."), nameof(name));
+
+            RgbPreset preset;
             if (existing != null)
             {
-                existing.Effect = effect;
-                existing.Brightness = brightness;
-                existing.Speed = speed;
-                existing.Direction = direction;
-                existing.Color = color;
-                existing.LEDs = new List<string>(leds);
+                preset = existing;
             }
             else
             {
-                _presets.Add(new RgbPreset
-                {
-                    Name = name,
-                    Effect = effect,
-                    Brightness = brightness,
-                    Speed = speed,
-                    Direction = direction,
-                    Color = color,
-                    LEDs = new List<string>(leds),
-                    IsBuiltIn = false
-                });
+                preset = new RgbPreset { Name = name, IsBuiltIn = false };
+                _presets.Add(preset);
             }
+
+            preset.Effect = effect;
+            preset.Brightness = brightness;
+            preset.Speed = speed;
+            preset.Direction = direction;
+            preset.Color = color;
+            preset.LEDs = new List<string>(leds);
+
+            // The page's own controls cannot produce an out-of-range value, but the page is not the only caller and
+            // the preset is written to a file that is read back on the next launch. Sanitising here is what keeps a
+            // bad colour or a speed of zero out of the file rather than out of the keyboard later.
+            preset.Sanitize();
+
             if (!Persist())
             {
                 // Surface the failure (the UI shows it) instead of claiming the preset was saved.
@@ -259,9 +265,9 @@ public class RgbProfileService
 
             try
             {
-                if (File.Exists(PresetsFile))
+                if (File.Exists(_presetsFile))
                 {
-                    var json = File.ReadAllText(PresetsFile);
+                    var json = File.ReadAllText(_presetsFile);
                     var custom = JsonSerializer.Deserialize<List<RgbPreset>>(json);
                     if (custom != null)
                     {
@@ -283,8 +289,35 @@ public class RgbProfileService
             {
                 // Custom presets are gone until the file is fixed; say so instead of pretending they loaded.
                 LoadError = Loc.T($"RGB profil dosyası okunamadı ({ex.Message}); yalnızca fabrika profilleri yüklendi.");
-                AppLog.Warn("RGB profilleri okunamadı", $"{PresetsFile}: {ex}");
+                AppLog.Warn("RGB profilleri okunamadı", $"{_presetsFile}: {ex}");
+                QuarantineCorruptFile();
             }
+        }
+    }
+
+    /// <summary>
+    /// Moves an unreadable presets file aside instead of deleting it.
+    /// </summary>
+    /// <remarks>
+    /// The file is the only copy of the user's own presets. Deleting it would throw away something that may be
+    /// repairable by hand, and leaving it in place means the next save overwrites it with the factory list — so it is
+    /// renamed to <c>.bad</c>, which keeps the bytes and lets the next save start from a clean file.
+    /// </remarks>
+    private void QuarantineCorruptFile()
+    {
+        try
+        {
+            if (!File.Exists(_presetsFile)) return;
+
+            var quarantined = _presetsFile + ".bad";
+            File.Move(_presetsFile, quarantined, overwrite: true);
+            AppLog.Warn("RGB profil dosyası kenara alındı", quarantined);
+        }
+        catch (Exception ex)
+        {
+            // A file that cannot be moved is left where it is: the next save overwrites it, which is no worse than
+            // the state this method found it in.
+            AppLog.Warn("RGB profil dosyası kenara alınamadı", $"{_presetsFile}: {ex.Message}");
         }
     }
 
@@ -298,7 +331,7 @@ public class RgbProfileService
                 custom = _presets.Where(p => !p.IsBuiltIn).ToList();
             }
             var json = JsonSerializer.Serialize(custom, new JsonSerializerOptions { WriteIndented = true });
-            AtomicFile.WriteAllText(PresetsFile, json);
+            AtomicFile.WriteAllText(_presetsFile, json);
             return true;
         }
         catch

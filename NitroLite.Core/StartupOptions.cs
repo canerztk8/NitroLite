@@ -33,4 +33,22 @@ public class StartupOptions
 
         return options;
     }
+
+    /// <summary>
+    /// True when the window must not appear at launch.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The flag is what the sign-in entry carries while "start in the tray" is checked, and the switch rewrites the
+    /// registered command line when it changes, so the two cannot disagree.
+    /// </para>
+    /// <para>
+    /// The stored preference is consulted as well, but only for a sign-in launch. A shortcut created before the flag
+    /// existed would otherwise open a window on a machine whose owner asked for the tray, while double-clicking the
+    /// icon still always shows the window — a launch that appears to do nothing is the one complaint this rule must
+    /// not create.
+    /// </para>
+    /// </remarks>
+    public static bool ShouldStartHidden(StartupOptions? options, bool startInTrayPreference) =>
+        options?.StartMinimized == true || (options?.IsAutoStart == true && startInTrayPreference);
 }

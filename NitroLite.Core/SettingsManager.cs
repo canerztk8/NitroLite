@@ -136,7 +136,10 @@ public static class SettingsManager
         {
             try
             {
-                File.Copy(filePath, backupPath, overwrite: true);
+                // Through AtomicFile rather than File.Copy: a copy is not atomic, so a crash halfway through it left
+                // a truncated .bak that the next launch would try to read as the fallback. The content is read first
+                // and written the same way the primary file is.
+                AtomicFile.WriteAllText(backupPath, File.ReadAllText(filePath));
             }
             catch (Exception ex)
             {

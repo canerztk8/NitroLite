@@ -53,6 +53,12 @@ public static class LightingPolicy
         if (cfg == null) return null;
 
         var effect = string.IsNullOrWhiteSpace(cfg.Effect) ? "STATIC" : cfg.Effect.Trim().ToUpperInvariant();
+
+        // An effect the keyboard does not have is not a preference. The firmware rejects the write and the keyboard
+        // keeps whatever it had, so a hand-edited file or a build that shipped a different set would leave the page
+        // showing an effect that is not on the keys. The list checked here is the same one the dropdown offers.
+        if (!AllEffects.Contains(effect, StringComparer.Ordinal)) effect = "STATIC";
+
         var color = NormalizeHex(cfg.Color, DefaultColor);
 
         var leds = new List<string>(4);

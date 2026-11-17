@@ -206,6 +206,21 @@ public sealed class ShellLabels
     public string DeleteProfileConfirm(string name) => Loc.T($"'{name}' profili silinsin mi? Bu işlem geri alınamaz.");
     public string GameSessionRecovered => Loc.T("Yarım kalan oyun oturumu geri alındı; önceki mod ve fan ayarları geri yüklendi.");
 
+    /// <summary>
+    /// Shown when the record that undoes a game session could not be written. The session still starts, so the
+    /// message says what is at risk rather than claiming the game did not launch.
+    /// </summary>
+    public string GameSessionRecoveryNotSaved =>
+        Loc.T("Yarım kalan oyun oturumu kaydı diske yazılamadı; uygulama çökerse mod ve fan geri alınamayabilir.");
+
+    /// <summary>Shown when the settings file was unreadable and the backup took its place.</summary>
+    public string SettingsRestoredFromBackup =>
+        Loc.T("Ayarlar dosyası okunamadı; önceki ayarlar yedekten geri yüklendi.");
+
+    /// <summary>Shown when the settings file was unreadable and there was no backup to fall back to.</summary>
+    public string SettingsResetToDefaults =>
+        Loc.T("Ayarlar dosyası okunamadı ve yedek yok; uygulama varsayılan ayarlarla başladı.");
+
     // ---------------------------------------------------------------- mouse
 
     public string MouseCaption => Loc.T("FARE");
@@ -718,6 +733,10 @@ public sealed class ShellLabels
     public string UpdateFound(string version) => Loc.T($"Yeni sürüm: {version}");
     public string UpdateManual => Loc.T("Bu derleme kendini güncelleyemez; sürüm sayfası açıldı.");
     public string UpdateDownloading => Loc.T("Güncelleme indiriliyor…");
+    public string UpdateProgress(double fraction) =>
+        Loc.T($"Güncelleme indiriliyor… %{Math.Round(fraction * 100)}");
+    public string UpdateInstalled => Loc.T("Güncelleme kuruldu; uygulamayı yeniden başlatın.");
+    public string UpdateFailed(string error) => Loc.T($"Güncelleme kurulamadı: {error}");
     public string UpdateTo(string version) => Loc.T($"{version} sürümüne güncelle");
     public string BugReportTitle => Loc.T("NitroLite hata bildirimi");
     public string BugReportFailed(string error) => Loc.T($"Hata bildirimi açılamadı: {error}");

@@ -87,7 +87,24 @@ public partial class App : Application
             }
 
             _window = new MainWindow { DataContext = _host.ViewModel };
-            desktop.MainWindow = _window;
+
+            // "Start in the tray" is a stored preference, and the sign-in entry carries --minimized while it is on.
+            // Either one means the window must not appear: a launch at sign-in that opened a window is the opposite
+            // of what the switch promises.
+            bool startHidden = StartupOptions.ShouldStartHidden(
+                StartupOptions.Parse(Environment.GetCommandLineArgs()), _host.ViewModel.StartMinimizedOn);
+
+            if (startHidden)
+            {
+                // Not handed to the lifetime: it shows whatever it is given, and a window that appears for one frame
+                // before hiding is exactly the flash the switch exists to avoid. The setup runs here instead, so the
+                // telemetry loop and the fan curve are live while the window sits in the tray.
+                _ = _window.InitializeOnceAsync();
+            }
+            else
+            {
+                desktop.MainWindow = _window;
+            }
 
             // Hiding the window must not end the process: the telemetry timer and the fan curve keep running while
             // the app sits in the tray. Only the clean exit below shuts it down.

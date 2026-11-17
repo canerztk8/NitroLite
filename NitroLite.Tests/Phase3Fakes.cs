@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -244,12 +244,30 @@ internal static class Phase3Fakes
     {
         public string CurrentVersionText => "v1.2.5";
 
-        public bool IsPackaged => false;
+        /// <summary>True models a published single-file build, which is the only one that can install over itself.</summary>
+        public bool IsPackaged { get; set; }
 
         public string ReleasePageUrl => "https://example.invalid/releases";
 
+        /// <summary>What the next check answers. Null means "already current".</summary>
+        public UpdateCheckResult? CheckResult { get; set; }
+
         public Task<UpdateCheckResult?> CheckAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<UpdateCheckResult?>(null);
+            Task.FromResult(CheckResult);
+
+        /// <summary>How many times an install was attempted, so a test can assert the button reached the pipeline.</summary>
+        public int InstallAttempts { get; private set; }
+
+        /// <summary>What the next install answers. Null means the refusal a non-packaged build gives.</summary>
+        public UpdateInstallResult? InstallResult { get; set; }
+
+        public Task<UpdateInstallResult> InstallAsync(
+            UpdateCheckResult result, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+        {
+            InstallAttempts++;
+            progress?.Report(1);
+            return Task.FromResult(InstallResult ?? UpdateInstallResult.Fail("not packaged"));
+        }
 
         public string ReleaseNotesUrl(UpdateCheckResult? result) => ReleasePageUrl;
 

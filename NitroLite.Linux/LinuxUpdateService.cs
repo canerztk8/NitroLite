@@ -51,6 +51,14 @@ public sealed class LinuxUpdateService : IUpdateService
         }
     }
 
+    /// <summary>
+    /// Always refused. The published package is a Windows zip, so there is nothing this build could install over
+    /// itself; the card opens the release page instead.
+    /// </summary>
+    public Task<UpdateInstallResult> InstallAsync(
+        UpdateCheckResult result, IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(UpdateInstallResult.Fail(Loc.T("Bu derleme kendini güncelleyemez.")));
+
     public string ReleaseNotesUrl(UpdateCheckResult? result) =>
         result?.ReleaseNotesUrl is { Length: > 0 } url && UpdateService.IsSafeHttpsUrl(url)
             ? url

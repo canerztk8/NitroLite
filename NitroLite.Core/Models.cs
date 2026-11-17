@@ -611,6 +611,38 @@ public class AppSettings
         // launch. Null stays null: no lighting block means "read the keyboard's own state".
         KeyboardLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(KeyboardLighting));
         LastActiveLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(LastActiveLighting));
+
+        // Both capability maps come out of a file a user can edit and a crash can truncate. A null here reached a
+        // dictionary lookup and a list add on the first capability read, so a hand-edited file took the whole page
+        // down instead of costing one feature.
+        CapabilitySessionFailures ??= new Dictionary<string, int>();
+        DisabledCapabilities ??= new List<string>();
+
+        // A negative count is not a count: it would never reach the three that switches a capability off, so the
+        // entry is dropped rather than kept as a number that means nothing. A blank name cannot be looked up either.
+        foreach (var key in CapabilitySessionFailures
+                     .Where(p => p.Value < 0 || string.IsNullOrWhiteSpace(p.Key))
+                     .Select(p => p.Key)
+                     .ToList())
+        {
+            CapabilitySessionFailures.Remove(key);
+        }
+
+        DisabledCapabilities.RemoveAll(name => string.IsNullOrWhiteSpace(name));
+
+        // The recovery record is what a crash mid-game leaves behind, and it is replayed straight to the firmware on
+        // the next launch. Its enums come out of the same file, so they get the same range check as everything else:
+        // a record holding (OperatingMode)99 would otherwise be the one hardware write that is a guess.
+        if (GameSessionRecovery is { } recovery)
+        {
+            if (!Enum.IsDefined(recovery.SavedMode)) recovery.SavedMode = OperatingMode.Default;
+            if (!Enum.IsDefined(recovery.SavedFan)) recovery.SavedFan = FanMode.Auto;
+            if (!Enum.IsDefined(recovery.SavedBoost)) recovery.SavedBoost = CpuBoostMode.Aggressive;
+            if (recovery.SavedAcBoost is { } ac && !Enum.IsDefined(ac)) recovery.SavedAcBoost = null;
+            if (recovery.SavedDcBoost is { } dc && !Enum.IsDefined(dc)) recovery.SavedDcBoost = null;
+            if (recovery.SavedMouseProfile is < 0 or > 4) recovery.SavedMouseProfile = 0;
+            if (recovery.Timestamp == default) recovery.Timestamp = DateTime.UtcNow;
+        }
     }
 }
 

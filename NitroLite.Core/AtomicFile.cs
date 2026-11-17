@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 
 namespace NitroLite.Core;
 
@@ -7,12 +8,27 @@ namespace NitroLite.Core;
 /// target and is then moved over it.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The temporary file is removed when anything fails. Every caller used to write its own version of this and none of
 /// them cleaned up, so a save that kept failing (a full disk, a locked file) left one <c>.tmp.&lt;guid&gt;</c> behind
 /// per attempt, and they accumulated in the data folder with nothing to remove them.
+/// </para>
+/// <para>
+/// The rename is atomic, but the bytes behind it are not on the platter until they are flushed. A power cut between
+/// the write and the move used to leave a zero-length file where the settings had been: the file system had the
+/// directory entry but not the data. <see cref="FileOptions.WriteThrough"/> bypasses the operating system's write
+/// cache and the explicit <see cref="FileStream.Flush(bool)"/> pushes what is left out of the file system's own
+/// buffer, so by the time the move happens the content is durable.
+/// </para>
 /// </remarks>
 public static class AtomicFile
 {
+    /// <summary>
+    /// The encoding every file this class writes uses: UTF-8 without a byte order mark, which is what
+    /// <see cref="File.WriteAllText(string, string)"/> produced before and what the readers expect.
+    /// </summary>
+    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
     public static void WriteAllText(string path, string contents)
     {
         var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
@@ -24,7 +40,21 @@ public static class AtomicFile
                 Directory.CreateDirectory(dir);
             }
 
-            File.WriteAllText(tmp, contents);
+            using (var stream = new FileStream(
+                       tmp, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096,
+                       FileOptions.WriteThrough))
+            {
+                using (var writer = new StreamWriter(stream, Utf8NoBom, bufferSize: 4096, leaveOpen: true))
+                {
+                    writer.Write(contents);
+                    writer.Flush();
+                }
+
+                // After the writer has handed everything to the stream, and before the move: this is the call that
+                // makes the content survive a power cut.
+                stream.Flush(flushToDisk: true);
+            }
+
             File.Move(tmp, path, overwrite: true);
         }
         catch

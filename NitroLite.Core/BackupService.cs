@@ -43,6 +43,13 @@ public sealed class BackupResult
     /// <summary>Parts the file did not carry, or that were deliberately left out.</summary>
     public List<string> Skipped { get; } = new();
 
+    /// <summary>
+    /// Parts that were in the file but could not be written. Separate from <see cref="Skipped"/> because the two
+    /// mean opposite things: a skipped part was never in the backup, a failed one was and is now missing from the
+    /// machine. A restore with anything in here reports <see cref="Success"/> false.
+    /// </summary>
+    public List<string> Failed { get; } = new();
+
     public static BackupResult Fail(string error) => new() { Success = false, Error = error };
 }
 
@@ -74,6 +81,13 @@ public static class BackupService
     /// it. The cap is checked on the file length, before anything is read.
     /// </summary>
     public const long MaxBackupBytes = 16L * 1024 * 1024;
+
+    /// <summary>
+    /// The suffix a restore leaves next to the settings file: the settings that were in use before the backup was
+    /// applied. A restore overwrites the file the app reads at startup, so a user who picked the wrong backup would
+    /// otherwise have nothing to go back to.
+    /// </summary>
+    public const string PreRestoreSuffix = ".pre-restore";
 
     public static string SuggestedFileName(DateTime now) => $"NitroLite-backup-{now:yyyy-MM-dd}.json";
 
@@ -196,6 +210,22 @@ public static class BackupService
 
         var result = new BackupResult { Success = true };
 
+        // The live settings are copied aside before anything is written. A restore replaces the file the app reads at
+        // startup, so a user who picked the wrong backup would otherwise have no way back. A failure here is logged
+        // and the restore still goes ahead: refusing to restore because the safety copy could not be made would be a
+        // worse answer than restoring without one.
+        try
+        {
+            if (File.Exists(settingsPath))
+            {
+                AtomicFile.WriteAllText(settingsPath + PreRestoreSuffix, File.ReadAllText(settingsPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Geri yükleme öncesi güvenlik yedeği yazılamadı", $"{settingsPath}: {ex.Message}");
+        }
+
         try
         {
             SettingsManager.SaveSettingsAtomic(settingsPath, restored);
@@ -211,6 +241,23 @@ public static class BackupService
 
         WriteJsonFile(document.GameProfiles, gameProfilesPath, JsonValueKind.Array, "Oyun profilleri", result);
         WriteJsonFile(document.RgbPresets, rgbPresetsPath, JsonValueKind.Array, "RGB profilleri", result);
+
+        // A part that was in the backup and could not be written is a partial restore, and reporting it as a success
+        // is what let a user believe their game rules had come back when they had not.
+        if (result.Failed.Count > 0)
+        {
+            // The lists travel with the failure. A caller that only sees the message cannot tell which part is
+            // missing, and the page names them one by one.
+            var partial = new BackupResult
+            {
+                Success = false,
+                Error = Loc.T($"Yedek kısmen geri yüklendi; yazılamayan bölümler: {string.Join(", ", result.Failed)}")
+            };
+            partial.Written.AddRange(result.Written);
+            partial.Skipped.AddRange(result.Skipped);
+            partial.Failed.AddRange(result.Failed);
+            return partial;
+        }
 
         return result;
     }
@@ -258,15 +305,16 @@ public static class BackupService
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
             var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
-            var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
-            File.WriteAllText(tmp, json);
-            File.Move(tmp, path, overwrite: true);
+
+            // Through AtomicFile: the hand-rolled temporary file here wrote straight to disk and left the .tmp
+            // behind when the move failed, so a restore that kept failing filled the data folder with copies.
+            AtomicFile.WriteAllText(path, json);
             result.Written.Add(Loc.T(label));
         }
         catch (Exception ex)
         {
             AppLog.Warn($"Yedekten {label} yazılamadı", $"{path}: {ex.Message}");
-            result.Skipped.Add(Loc.T(label));
+            result.Failed.Add(Loc.T(label));
         }
     }
 }

@@ -708,6 +708,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _memoryCleanStatus = "";
     private bool _memoryCleanSucceeded;
 
+    /// <summary>
+    /// Set by the composition root when the settings file had to be discarded, and raised once the window is
+    /// listening. Null when the file loaded normally.
+    /// </summary>
+    private SettingsLoadSource? _settingsRecovery;
+
+    /// <summary>
+    /// Guards <see cref="InitializeAsync"/>, which is the first read of every service and the one place a crash
+    /// record is replayed.
+    /// </summary>
+    /// <remarks>
+    /// The window guards its own setup, but the view model is reachable without a window — the shell calls it for a
+    /// launch that starts in the tray — so the guard belongs here too. A second pass would replay a game-session
+    /// record written by a game that started after the first pass, and put the pre-game mode and fan back over a game
+    /// that is still running.
+    /// </remarks>
+    private readonly OneShotGate _initialized = new();
+
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
 
@@ -3808,7 +3826,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             .ToList();
 
         // The rule is the state, so it is written as it is dragged; only the file write waits for the drag to stop.
-        _curveDebounce.Run(SaveSettings);
+        _curveDebounce.Run(() => SaveSettings());
     }
 
     /// <summary>The rule behind a row, matched on the executable name the row carries.</summary>
@@ -4227,7 +4245,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Timestamp = DateTime.UtcNow
         };
 
-        SaveSettings();
+        // The record is the only thing that puts the machine back if the process dies mid-game, so a write that did
+        // not land is reported rather than assumed. The session still starts: refusing to launch a game because a
+        // settings file could not be written would be the worse trade.
+        if (SaveSettings()) return;
+
+        Status = Labels.GameSessionRecoveryNotSaved;
+        AppLog.Warn("Oyun oturumu kaydı yazılamadı", "Çökme durumunda mod ve fan geri alınamayabilir.");
     }
 
     /// <summary>Clears the recovery record once the session ended cleanly.</summary>
@@ -4497,8 +4521,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Reads the machine's current state. Called once when the window opens; every step is skipped rather than forced
     /// when the backend does not answer, so a machine with only tier 1 still gets a usable window.
     /// </summary>
+    /// <summary>
+    /// Tells the user that the settings file could not be read and the app started from the backup or from defaults.
+    /// </summary>
+    /// <remarks>
+    /// Called by the composition root, which is the only place that sees the load result. It is a method rather than
+    /// a constructor parameter because the constructor already carries every platform service, and this is a
+    /// one-shot message rather than a dependency. The message is held until <see cref="InitializeAsync"/> because the
+    /// window subscribes to <see cref="Status"/> when it opens, and a banner raised before that is never shown.
+    /// </remarks>
+    public void ReportSettingsRecovered(SettingsLoadSource source) => _settingsRecovery = source;
+
     public async Task InitializeAsync()
     {
+        if (!_initialized.TryEnter()) return;
+
+        // Raised first, so the banner is the first thing the window has to say: the app is running on the backup or
+        // on defaults, and every preference the user set may be gone.
+        if (_settingsRecovery is SettingsLoadSource recovered)
+        {
+            _settingsRecovery = null;
+            Status = recovered == SettingsLoadSource.Defaults
+                ? Labels.SettingsResetToDefaults
+                : Labels.SettingsRestoredFromBackup;
+        }
+
         // The mode cards are filtered by the power source, so the source has to be read before the list is built: a
         // window opened on battery would otherwise offer Turbo and hide Eco until the first telemetry tick.
         ReadPowerState();
@@ -5007,10 +5054,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The curve only drives anything in custom mode, so applying it also selects that mode.
         SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Custom) ?? SelectedFanMode;
 
-        var (cpu, gpu) = EffectiveCustomPercents();
-        await RunWriteAsync(
+        // The curve is what the user just edited, so the speed written is the curve's own answer at the current
+        // temperature. Writing the manual slider here put the fans at a speed the curve never asked for and left them
+        // there until the next step, which is the mismatch this method used to have.
+        int temperature = CpuTemperature;
+        var evaluator = _curveEvaluator;
+        var (cpu, gpu) = CurveEnabled && temperature > 0
+            ? (evaluator.Curve.PercentAt(temperature), evaluator.Curve.PercentAt(temperature))
+            : EffectiveCustomPercents();
+
+        var now = DateTime.UtcNow;
+        bool ok = await RunWriteAsync(
             () => _hardware.SetFanModeAsync(FanMode.Custom, cpu, gpu),
             Labels.FanCurve).ConfigureAwait(true);
+
+        // Committed only when the firmware accepted it, so the loop does not immediately write the same speed again
+        // and a refused write is proposed again on the next step.
+        if (ok && CurveEnabled && temperature > 0) evaluator.Commit(cpu, temperature, now);
     }
 
     private async Task ApplyLightingAsync()
@@ -5993,21 +6053,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _settings.FanCurvePoints = FanCurve.Sanitize(
             CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
         _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
-        _curveDebounce.Run(SaveSettings);
+        _curveDebounce.Run(() => SaveSettings());
     }
 
     private FanCurve CurrentCurve() =>
         new(CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
 
-    private void SaveSettings()
+    /// <summary>
+    /// Writes the settings file.
+    /// </summary>
+    /// <returns>
+    /// False when the file could not be written. Most callers ignore it — a preference that failed to save is
+    /// reported by the log and retried on the next change — but a caller recording something it cannot afford to
+    /// lose, such as the game-session recovery record, has to be able to say so instead of assuming the write landed.
+    /// </returns>
+    private bool SaveSettings()
     {
         try
         {
             SettingsManager.SaveSettingsAtomic(_settingsPath, _settings);
+            return true;
         }
         catch (Exception ex)
         {
             AppLog.Warn("Ayarlar kaydedilemedi", ex.Message);
+            return false;
         }
     }
 

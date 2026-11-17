@@ -205,22 +205,32 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         {
             if (_disposed || _started) return;
             _started = true;
+
+            // Created inside the lock, not after it. The old order set the flag, released the lock and only then
+            // built the timer, so a Stop that landed in between saw _started true, cleared it, disposed a null
+            // timer and returned — and the timer this method went on to create was never disposed by anyone.
+            _timer = new Timer(_ => Poll(), null, PollMilliseconds, PollMilliseconds);
         }
 
-        _timer = new Timer(_ => Poll(), null, PollMilliseconds, PollMilliseconds);
         AppLog.Info("NitroSense izleyicisi başladı", $"aralık={PollMilliseconds} ms");
     }
 
     public void Stop()
     {
+        Timer? timer;
+
         lock (_gate)
         {
             if (!_started) return;
             _started = false;
+
+            // Taken out of the field under the lock so a concurrent Start can only ever build a new timer, never
+            // adopt the one being disposed here.
+            timer = _timer;
+            _timer = null;
         }
 
-        _timer?.Dispose();
-        _timer = null;
+        timer?.Dispose();
     }
 
     /// <summary>
@@ -482,8 +492,11 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
 
         Stop();
     }

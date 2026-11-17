@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -67,7 +67,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -96,7 +96,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -126,7 +126,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -159,7 +159,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -190,7 +190,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -225,7 +225,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -253,7 +253,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 
@@ -277,7 +277,7 @@ public class LightingOffPersistenceTests
         }
         finally
         {
-            Directory.Delete(dir, true);
+            TestDataIsolation.DeleteFolder(dir);
         }
     }
 

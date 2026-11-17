@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Runtime.CompilerServices;
 using NitroLite.Core;
 using Xunit;
@@ -12,6 +12,38 @@ internal static class TestDataIsolation
     /// RGB presets, thermal history, debloat backup) to a throw-away folder so tests never read or overwrite
     /// the real user data in %LOCALAPPDATA%\NitroLite.
     /// </summary>
+    /// <summary>
+    /// Deletes a throw-away folder, retrying while a debounced write is still finishing.
+    /// </summary>
+    /// <remarks>
+    /// A view model saves on a 350-400 ms debounce, so a test that changes a control and then deletes its folder can
+    /// catch the write in flight: <see cref="AtomicFile"/> holds the temporary file open for the length of the write,
+    /// and a delete that lands in that window fails with "used by another process". The folder is disposable and the
+    /// write is not a defect, so the delete waits for it instead of failing the test.
+    /// </remarks>
+    internal static void DeleteFolder(string path)
+    {
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            try
+            {
+                Directory.Delete(path, recursive: true);
+                return;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(25);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Thread.Sleep(25);
+            }
+        }
+
+        // A folder that still cannot be deleted is left for the sweep in RedirectAppDataToTempFolder.
+        try { Directory.Delete(path, recursive: true); } catch { }
+    }
+
     [ModuleInitializer]
     internal static void RedirectAppDataToTempFolder()
     {

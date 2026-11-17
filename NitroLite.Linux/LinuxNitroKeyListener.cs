@@ -132,17 +132,30 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
             if (_probed || _disposed) return;
             _probed = true;
 
+            // Every device the source opened is tracked here, not just the ones that were kept: a device that is
+            // opened and then rejected, or one that is still open when a later device throws, holds a file
+            // descriptor on /dev/input. The finally closes whatever did not end up in _devices.
+            var opened = new List<IEvdevDevice>();
+
             try
             {
                 foreach (var device in _source.OpenAll())
                 {
+                    opened.Add(device);
                     if (IsNitroDevice(device)) _devices.Add(device);
-                    else device.Dispose();
                 }
             }
             catch (Exception ex)
             {
                 AppLog.Warn("Giriş aygıtları taranamadı", ex.Message);
+            }
+            finally
+            {
+                foreach (var device in opened)
+                {
+                    if (_devices.Contains(device)) continue;
+                    try { device.Dispose(); } catch { /* the device is already gone */ }
+                }
             }
 
             if (_devices.Count == 0)

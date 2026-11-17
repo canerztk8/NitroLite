@@ -1406,6 +1406,16 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// Downloads the pending release, verifies it against the digest GitHub published, and swaps the executable.
+    /// </summary>
+    /// <remarks>
+    /// Every path that cannot install ends at the release page rather than at a dead button: a development build, a
+    /// Linux build, a check that found nothing, and a release published without a digest all open the page the user
+    /// can act on. The new build is on disk when this succeeds, but this process is still running the old one, so the
+    /// card asks for a restart instead of relaunching — a relaunch would race the single-instance guard and the new
+    /// process would exit on finding the old one still holding it.
+    /// </remarks>
     private async Task UpdateNowAsync()
     {
         if (_updates == null) return;
@@ -1419,8 +1429,49 @@ public sealed partial class MainViewModel
             return;
         }
 
+        // Nothing to install: the check has not run, or it found nothing. The release page is still the right answer.
+        if (_pendingUpdate is not { } pending)
+        {
+            OpenUrl(_updates.ReleasePageUrl);
+            UpdateStatus = Labels.UpdateManual;
+            return;
+        }
+
+        // A package with no published digest cannot be verified, and an unverified executable is not something this
+        // app installs by itself. The release page lets the user do it deliberately.
+        if (string.IsNullOrWhiteSpace(pending.Sha256) || string.IsNullOrWhiteSpace(pending.DownloadUrl))
+        {
+            OpenUrl(_updates.ReleaseNotesUrl(pending));
+            UpdateStatus = Labels.UpdateManual;
+            return;
+        }
+
+        if (_updateBusy) return;
+        _updateBusy = true;
         UpdateStatus = Labels.UpdateDownloading;
-        await Task.Yield();
+
+        try
+        {
+            var progress = new Progress<double>(fraction => UpdateStatus = Labels.UpdateProgress(fraction));
+            var result = await _updates.InstallAsync(pending, progress).ConfigureAwait(true);
+
+            if (!result.Success || result.ExecutablePath == null)
+            {
+                UpdateStatus = Labels.UpdateFailed(result.Error ?? "");
+                return;
+            }
+
+            UpdateStatus = Labels.UpdateInstalled;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Güncelleme uygulanamadı", ex.Message);
+            UpdateStatus = Labels.UpdateFailed(ex.Message);
+        }
+        finally
+        {
+            _updateBusy = false;
+        }
     }
 
     private void OpenReleaseNotes()

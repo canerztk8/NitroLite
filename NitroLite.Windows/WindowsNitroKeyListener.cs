@@ -621,6 +621,16 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         private const uint RidevInputSink = 0x00000100;
         private const uint RidiDeviceInfo = 0x2000000B;
 
+        /// <summary><c>ERROR_CLASS_ALREADY_EXISTS</c>: the window class is still registered from an earlier run.</summary>
+        private const int ErrorClassAlreadyExists = 1410;
+
+        /// <summary>
+        /// The window class name. Registered per process, so a second <see cref="Start"/> after a
+        /// <see cref="Stop"/> would fail with <c>ERROR_CLASS_ALREADY_EXISTS</c> unless the class is unregistered
+        /// when the message loop ends.
+        /// </summary>
+        private const string ClassName = "NitroLiteRawInput";
+
         private static readonly IntPtr HwndMessage = new(-3);
 
         private readonly Action<RawInputReport> _onReport;
@@ -656,27 +666,38 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
         private void Run()
         {
+            var instance = GetModuleHandle(null);
+            bool registered = false;
+
             try
             {
                 _threadId = GetCurrentThreadId();
                 _wndProc = WindowProc;
 
-                var instance = GetModuleHandle(null);
                 var windowClass = new WndClassEx
                 {
                     cbSize = (uint)Marshal.SizeOf<WndClassEx>(),
                     lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProc),
                     hInstance = instance,
-                    lpszClassName = "NitroLiteRawInput"
+                    lpszClassName = ClassName
                 };
 
                 if (RegisterClassEx(ref windowClass) == 0)
                 {
-                    _error = $"RegisterClassEx failed ({Marshal.GetLastWin32Error()})";
-                    return;
+                    // A class left behind by a previous run is usable as it is: the name, the instance and the
+                    // window procedure are the same ones this call would have registered. Refusing here is what made
+                    // a restart of the listener fail with ERROR_CLASS_ALREADY_EXISTS.
+                    int error = Marshal.GetLastWin32Error();
+                    if (error != ErrorClassAlreadyExists)
+                    {
+                        _error = $"RegisterClassEx failed ({error})";
+                        return;
+                    }
                 }
 
-                _hwnd = CreateWindowEx(0, windowClass.lpszClassName, "", 0, 0, 0, 0, 0, HwndMessage, IntPtr.Zero, instance, IntPtr.Zero);
+                registered = true;
+
+                _hwnd = CreateWindowEx(0, ClassName, "", 0, 0, 0, 0, 0, HwndMessage, IntPtr.Zero, instance, IntPtr.Zero);
                 if (_hwnd == IntPtr.Zero)
                 {
                     _error = $"CreateWindowEx failed ({Marshal.GetLastWin32Error()})";
@@ -699,6 +720,14 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             }
             finally
             {
+                // The class belongs to this thread and outlives the window, so it is released here rather than in
+                // Dispose: by the time the loop has ended the window is destroyed and the unregister succeeds.
+                if (registered)
+                {
+                    try { UnregisterClass(ClassName, instance); }
+                    catch { /* the class is already gone */ }
+                }
+
                 Signal();
             }
         }
@@ -931,6 +960,9 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern ushort RegisterClassEx(ref WndClassEx windowClass);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool UnregisterClass(string className, IntPtr instance);
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern IntPtr CreateWindowEx(

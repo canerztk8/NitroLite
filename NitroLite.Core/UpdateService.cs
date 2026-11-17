@@ -216,17 +216,26 @@ public static class UpdateService
     /// Downloads the package to a temporary file, reporting 0..1 progress. The caller verifies it before use. A
     /// failed or interrupted download leaves nothing behind.
     /// </summary>
+    public static Task<string> DownloadAsync(
+        UpdateInfo info, IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
+        DownloadAsync(info.DownloadUrl, info.SizeBytes, progress, cancellationToken);
+
+    /// <inheritdoc cref="DownloadAsync(UpdateInfo, IProgress{double}?, CancellationToken)"/>
+    /// <remarks>
+    /// The address and the expected size on their own, for a caller that holds an <see cref="UpdateCheckResult"/>
+    /// rather than an <see cref="UpdateInfo"/>. The two are the only fields the download reads.
+    /// </remarks>
     public static async Task<string> DownloadAsync(
-        UpdateInfo info, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+        string url, long sizeBytes, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
         var target = Path.Combine(Path.GetTempPath(), $"NitroLite-update-{Guid.NewGuid():N}.zip");
         try
         {
-            using var response = await Http.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var total = response.Content.Headers.ContentLength ?? info.SizeBytes;
+            var total = response.Content.Headers.ContentLength ?? sizeBytes;
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
             await using (var destination = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
             {
@@ -331,9 +340,6 @@ public static class UpdateService
 
             if (entry.Length > MaxEntryBytes)
                 throw new InvalidDataException($"Package entry is too large: {relative} ({entry.Length} bytes)");
-            totalBytes += entry.Length;
-            if (totalBytes > MaxPackageBytes)
-                throw new InvalidDataException($"Package expands to more than {MaxPackageBytes / (1024 * 1024)} MB.");
 
             var destination = Path.GetFullPath(Path.Combine(staging, relative));
             if (!destination.StartsWith(stagingRoot, StringComparison.OrdinalIgnoreCase))
@@ -341,6 +347,17 @@ public static class UpdateService
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             entry.ExtractToFile(destination, overwrite: true);
+
+            // The declared length is what the archive claims, and a crafted one can claim a few kilobytes while
+            // expanding to gigabytes. The size that matters is the one on the file that was just written, and the
+            // running total is what the package cap is applied to.
+            long written = new FileInfo(destination).Length;
+            if (written > MaxEntryBytes)
+                throw new InvalidDataException($"Package entry is too large: {relative} ({written} bytes)");
+
+            totalBytes += written;
+            if (totalBytes > MaxPackageBytes)
+                throw new InvalidDataException($"Package expands to more than {MaxPackageBytes / (1024 * 1024)} MB.");
         }
 
         foreach (var required in new[] { "NitroLite.exe" })

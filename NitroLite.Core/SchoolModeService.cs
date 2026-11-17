@@ -83,7 +83,22 @@ public sealed class SchoolModeService
     public const uint TargetSleepSeconds = 600;
     public const uint TargetDiskOffSeconds = 120;
 
-    /// <summary>Passive: the processor slows down before the fan speeds up, so the fan stays off in a quiet room.</summary>
+    /// <summary>
+    /// Passive: the processor slows down before the fan speeds up, so the fan stays off in a quiet room.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The setting is <c>System cooling policy</c> under the processor power management subgroup, and its two values
+    /// are 0 = Active and 1 = Passive. Passive is the one a lecture hall wants: the machine throttles instead of
+    /// spinning up, which is the difference between a laptop nobody notices and one the whole row can hear.
+    /// </para>
+    /// <para>
+    /// It is written on DC only, like every other setting in <see cref="PowerSettings"/>, because school mode is a
+    /// battery profile. On a machine whose firmware hides the setting the write is refused, and that is reported as
+    /// one failed part rather than aborting the rest: the processor cap and the screen timeout still apply, and a
+    /// school mode that refused to start over a fan curve would be worse than one that is missing a step.
+    /// </para>
+    /// </remarks>
     public const uint TargetCoolingPolicy = 1;
 
     /// <summary>100 = the processor prefers efficiency over speed for the same work (CPPC energy preference).</summary>
@@ -278,9 +293,13 @@ public sealed class SchoolModeService
     public async Task<SchoolModeOutcome> DisableAsync()
     {
         var backup = ReadBackup();
-        var outcome = backup == null ? new SchoolModeOutcome() : await RestoreFromBackupAsync(backup);
 
-        DeleteBackup();
+        // The record is deleted only when it was actually read. A null here means the file is missing — nothing to
+        // delete — or unreadable, and deleting an unreadable record throws away the only copy of the values the
+        // machine was in before school mode, which is the one thing that could still be repaired by hand.
+        var outcome = backup == null ? new SchoolModeOutcome() : await RestoreFromBackupAsync(backup);
+        if (backup != null) DeleteBackup();
+
         _settings.SchoolModeEnabled = false;
         return outcome;
     }

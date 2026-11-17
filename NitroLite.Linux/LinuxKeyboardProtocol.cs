@@ -175,7 +175,10 @@ public static class LinuxKeyboardProtocol
         var fields = new[]
         {
             ModeFor(effect).ToString(CultureInfo.InvariantCulture),
-            Math.Clamp(speed, 0, MaxSpeed).ToString(CultureInfo.InvariantCulture),
+            // Clamped to the range the app itself offers, not to the module's wider one. A speed of zero is a value
+            // no slider can produce, so one arriving here came from a hand-edited or half-written settings file, and
+            // writing it would leave the keyboard on a level the app cannot describe or restore.
+            Math.Clamp(speed, LightingLimits.MinSpeed, LightingLimits.MaxSpeed).ToString(CultureInfo.InvariantCulture),
             BrightnessLevelToPercent(brightnessLevel).ToString(CultureInfo.InvariantCulture),
             NormalizeDirection(direction).ToString(CultureInfo.InvariantCulture),
             rgb.R.ToString(CultureInfo.InvariantCulture),
