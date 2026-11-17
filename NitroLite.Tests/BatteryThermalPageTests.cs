@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -134,6 +135,24 @@ public class BatteryThermalPageTests
     }
 
     [Fact]
+    public async Task WearTrend_IsNotDrawnFromASingleAfternoon()
+    {
+        // The bug: the reported capacity drifts by more than a point between two reads minutes apart, the drop rule
+        // let the second read in, and the page drew a wear curve on the first day. Two readings an hour apart are a
+        // trend only in the arithmetic sense, so the chart waits for the same week the per-year rate does.
+        var battery = new Phase3Fakes.FakeBattery();
+        battery.SeedWearAt(TimeSpan.FromHours(1), 6.0, 7.0);
+
+        using var vm = Create(battery: battery);
+        await vm.InitializeAsync();
+
+        Assert.True(vm.HasWearHistory);
+        Assert.False(vm.ShowWearTrendChart);
+        Assert.Empty(vm.WearTrendPoints);
+        Assert.Equal(vm.Labels.WearNeedsAWeek, vm.WearTrendNote);
+    }
+
+    [Fact]
     public async Task Overcharge_Warns()
     {
         var battery = new Phase3Fakes.FakeBattery();
@@ -184,6 +203,35 @@ public class BatteryThermalPageTests
 
             var reloaded = SettingsManager.LoadSettingsWithFallback(path);
             Assert.Equal(DcPowerProfilePreference.Balanced, reloaded.DcPowerMode);
+        }
+        finally
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task DcProfile_ExplainsWhatTheChoiceChanges()
+    {
+        var path = Phase3Fakes.TempSettingsPath();
+        try
+        {
+            using var vm = Create(path: path);
+
+            // The view binds the description before InitializeAsync runs, so the first read has to announce it. Without
+            // the notification the card under the picker stays blank for the whole session.
+            var announced = new List<string?>();
+            vm.PropertyChanged += (_, e) => announced.Add(e.PropertyName);
+
+            await vm.InitializeAsync();
+
+            Assert.Contains(nameof(vm.SelectedDcProfileDescription), announced);
+            Assert.False(string.IsNullOrWhiteSpace(vm.SelectedDcProfileDescription));
+
+            var eco = vm.SelectedDcProfileDescription;
+            vm.SelectedDcProfile = vm.DcProfileChoices.First(c => c.Value == DcPowerProfilePreference.Balanced);
+            Assert.NotEqual(eco, vm.SelectedDcProfileDescription);
+            Assert.False(string.IsNullOrWhiteSpace(vm.SelectedDcProfileDescription));
         }
         finally
         {

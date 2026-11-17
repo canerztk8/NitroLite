@@ -45,8 +45,6 @@ public partial class OsdOverlayWindow : Window
             return;
         }
 
-        if (!IsVisible) Show();
-
         var screens = Screens;
         if (screens == null) return;
 
@@ -60,9 +58,19 @@ public partial class OsdOverlayWindow : Window
         var area = screen.WorkingArea;
         var scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
 
-        double width = Bounds.Width > 0 ? Bounds.Width : ClientSize.Width;
-        double height = Bounds.Height > 0 ? Bounds.Height : ClientSize.Height;
-        if (width <= 0 || height <= 0) return;
+        // The frame's own size in device-independent pixels. The XAML sizes the frame to its content, so there is no
+        // declared width to fall back on: before the first layout the content is measured here instead, because the
+        // frame has to be placed before it is shown and placing it needs its size.
+        double width = Bounds.Width;
+        double height = Bounds.Height;
+        if (width <= 0 || height <= 0)
+        {
+            Measure(Size.Infinity);
+            width = DesiredSize.Width;
+            height = DesiredSize.Height;
+        }
+
+        if (double.IsNaN(width) || double.IsNaN(height) || width <= 0 || height <= 0) return;
 
         double margin = EdgeMargin * scale;
         double left = viewModel.OsdCorner is 1 or 3
@@ -72,7 +80,12 @@ public partial class OsdOverlayWindow : Window
             ? area.Y + area.Height - height - margin
             : area.Y + margin;
 
+        // Placed before it is shown, never after. Moving a window that is already on screen makes the Windows backend
+        // rebuild its composition target, and the overlay then stays invisible: the window is there, topmost and the
+        // right size, and nothing is drawn into it. That is the bug this ordering exists for.
         Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+
+        if (!IsVisible) Show();
     }
 
     /// <summary>

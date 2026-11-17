@@ -105,14 +105,20 @@ internal static class Phase3Fakes
         }
 
         /// <summary>Seeds a history without going through a read, so a trend test does not need three ticks.</summary>
-        public void SeedWear(params double[] wearLevels)
+        public void SeedWear(params double[] wearLevels) => SeedWearAt(TimeSpan.FromDays(7), wearLevels);
+
+        /// <summary>
+        /// Seeds a history at an explicit spacing. A week is a trend; minutes are two reads of the same afternoon,
+        /// which is the case the chart has to refuse.
+        /// </summary>
+        public void SeedWearAt(TimeSpan spacing, params double[] wearLevels)
         {
-            var start = DateTime.UtcNow.AddDays(-wearLevels.Length * 7);
+            var start = DateTime.UtcNow - spacing * wearLevels.Length;
             for (int i = 0; i < wearLevels.Length; i++)
             {
                 _samples.Add(new BatteryWearSample
                 {
-                    TimestampUtc = start.AddDays(i * 7),
+                    TimestampUtc = start + spacing * i,
                     HealthPercent = 100 - wearLevels[i],
                     WearLevelPercent = wearLevels[i],
                     FullChargeCapacityMWh = 90_000 * (1 - wearLevels[i] / 100)

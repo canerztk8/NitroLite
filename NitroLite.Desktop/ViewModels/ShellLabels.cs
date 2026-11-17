@@ -103,6 +103,9 @@ public sealed class ShellLabels
     // ---------------------------------------------------------------- theme and charts
     public string Theme => Loc.T("Tema");
     public string ThemeApplied => Loc.T("Tema seçimi hemen uygulanır.");
+    public string UiFont => Loc.T("Yazı tipi");
+    public string UiFontHint => Loc.T("Arayüzün tamamı bu yazı tipiyle çizilir. Her seçenek Türkçe, Rusça ve Hintçe dahil sekiz dili de kapsar.");
+    public string FontApplied => Loc.T("Yazı tipi hemen uygulanır.");
     public string LastMinute => Loc.T("Seçili metriğin son 60 saniyesi");
 
     // ---------------------------------------------------------------- sign-in launch
@@ -467,7 +470,7 @@ public sealed class ShellLabels
     public string SysTemperatureHint => Loc.T("Sensörün konumu Acer tarafından belirtilmiyor.");
 
     public string MemoryCleanTitle => Loc.T("Bekleme Belleğini Boşaltma");
-    public string MemoryCleanHint => Loc.T("Windows'un bekleme listesindeki önbelleği serbest bırakır; çalışan uygulamalar kapanmaz.");
+    public string MemoryCleanHint => Loc.T("İşletim sisteminin önbelleğe aldığı belleği serbest bırakır; çalışan uygulamalar kapanmaz.");
     public string Cleaning => Loc.T("Boşaltılıyor…");
     public string CleanStandby => Loc.T("Bekleme Belleğini Boşalt");
     public string GetMemoryCleaner => Loc.T("WinMemoryCleaner'ı indir (ücretsiz, GPL-3.0)");
@@ -486,8 +489,7 @@ public sealed class ShellLabels
     public string Minimum => Loc.T("Min");
     public string Maximum => Loc.T("Maks");
     public string Average => Loc.T("Ortalama");
-    public string ModeTrace => Loc.T("Mod İzleme");
-    public string ModeTraceHint => Loc.T("Çalışma modu değişimleri, sıcaklık şeridinin üzerinde işaretlenir.");
+    public string ModeChangeHint => Loc.T("Çalışma modu değişimleri grafikte dikey çizgiyle işaretlenir.");
     public string ChartEmptyHint => Loc.T("Grafik için henüz yeterli örnek yok; birkaç saniye içinde dolacak.");
 
     /// <summary>
@@ -535,7 +537,7 @@ public sealed class ShellLabels
 
     public string PowerFlow => Loc.T("Anlık Güç Akışı");
     public string RemainingTime => Loc.T("Kalan Süre");
-    public string BatteryProtection => Loc.T("Pil Koruması");
+    public string BatteryProtection => Loc.T("Pil Tasarrufu");
     public string DcProfile => Loc.T("Pilde Çalışma Güç Profili (DC Modu)");
     public string Watchdog => Loc.T("Pil Bekçisi (Watchdog)");
     public string WatchdogHint => Loc.T("Pil %80 sınırını aştığında uyarı bandı gösterir; firmware'e yazmaz.");

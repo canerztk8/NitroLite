@@ -495,6 +495,24 @@
           </ItemsControl>
 
           <TextBlock Classes="hint" Text="{Binding Labels.ThemeApplied}" Margin="0,2,0,0" />
+
+          <!-- The typeface. Each item is drawn in the face it names, so the picker is its own preview: a font list
+               written in one font tells a reader nothing about the other four. -->
+          <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Margin="0,14,0,0"
+                  Padding="0,12,0,0">
+            <StackPanel>
+              <TextBlock Classes="caps" Text="{Binding Labels.UiFont}" Margin="0,0,0,4" />
+              <ComboBox ItemsSource="{Binding UiFonts}" SelectedItem="{Binding SelectedUiFont}"
+                        HorizontalAlignment="Stretch" MaxWidth="360">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="core:UiFontChoice">
+                    <TextBlock Text="{Binding DisplayName}" FontFamily="{Binding Stack}" FontSize="13" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" Text="{Binding Labels.UiFontHint}" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
         </StackPanel>
       </Border>
 

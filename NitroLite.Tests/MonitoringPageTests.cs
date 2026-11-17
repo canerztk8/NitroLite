@@ -112,6 +112,8 @@ public class MonitoringPageTests
     {
         public bool IsSupported { get; init; } = true;
 
+        public bool NeedsExternalTool { get; init; } = true;
+
         public MemoryCleanResult Result { get; init; } = new()
         {
             Cleaned = true,
@@ -318,51 +320,32 @@ public class MonitoringPageTests
         Assert.Equal("-- °C", vm.ChartMinText);
     }
 
-    // ---------------------------------------------------------------- 3. the mode trace
+    // ---------------------------------------------------------------- 3. the mode-change marks
 
     [Fact]
-    public async Task ModeTrace_RecordsModeChanges()
+    public async Task ModeChangeMarks_RecordsModeChanges()
     {
         using var vm = Create(monitor: new FakeMonitor(), hardware: new StubHardware());
 
         await vm.RefreshTelemetryAsync();
 
-        // The mode the app launched in is the first mark: the strip shows where the session began.
-        Assert.Single(vm.ModeTraceMarks);
+        // The mode the app launched in is the first mark: the chart shows where the session began.
+        Assert.Single(vm.ModeChangeMarks);
 
-        // A mode change is marked, and the strip's label names the mode the machine is in.
+        // A mode change is marked on the chart.
         var performance = vm.Modes.First(m => m.Mode == OperatingMode.Extreme);
         vm.SelectedMode = performance;
 
-        Assert.Equal(2, vm.ModeTraceMarks.Count);
-        Assert.InRange(vm.ModeTraceMarks[^1], 0.0, 1.0);
-        Assert.Equal(performance.Label, vm.ModeTraceModeText);
+        Assert.Equal(2, vm.ModeChangeMarks.Count);
+        Assert.InRange(vm.ModeChangeMarks[^1], 0.0, 1.0);
 
-        // Selecting the same mode again is not a change, so it does not add a third tick.
+        // Selecting the same mode again is not a change, so it does not add a third rule.
         vm.SelectedMode = performance;
-        Assert.Equal(2, vm.ModeTraceMarks.Count);
+        Assert.Equal(2, vm.ModeChangeMarks.Count);
 
         var quiet = vm.Modes.First(m => m.Mode == OperatingMode.Quiet);
         vm.SelectedMode = quiet;
-        Assert.Equal(3, vm.ModeTraceMarks.Count);
-    }
-
-    [Fact]
-    public void ModeTrace_TogglePersists()
-    {
-        var path = TempSettingsPath();
-        using (var vm = Create(path: path))
-        {
-            Assert.True(vm.ModeTraceVisible);
-            Assert.Equal(vm.Labels.HideCaption, vm.ModeTraceToggleText);
-
-            vm.ToggleModeTraceCommand.Execute(null);
-            Assert.False(vm.ModeTraceVisible);
-            Assert.Equal(vm.Labels.ShowCaption, vm.ModeTraceToggleText);
-        }
-
-        // The choice reached the file, not just the object: a collapsed band is a layout choice, not a per-session one.
-        Assert.True(SettingsManager.LoadSettingsWithFallback(path).ModeTraceCollapsed);
+        Assert.Equal(3, vm.ModeChangeMarks.Count);
     }
 
     // ---------------------------------------------------------------- 4. the overlay
@@ -465,5 +448,18 @@ public class MonitoringPageTests
 
         Assert.False(vm.MemoryCleanSucceeded);
         Assert.Equal(vm.Labels.MemoryCleanToolMissing, vm.MemoryCleanStatus);
+    }
+
+    [Fact]
+    public void RamClean_OffersTheDownloadOnlyWhenTheCleanNeedsAHelper()
+    {
+        // Windows shells out to WinMemoryCleaner, so the card offers its page. Linux drops the page cache through the
+        // kernel, so there is nothing to download and the row is hidden rather than pointing at a Windows tool.
+        using var windows = Create(cleaner: new FakeCleaner { NeedsExternalTool = true });
+        Assert.True(windows.MemoryCleanToolDownloadVisible);
+
+        using var linux = Create(cleaner: new FakeCleaner { NeedsExternalTool = false });
+        Assert.True(linux.MemoryCleanAvailable);
+        Assert.False(linux.MemoryCleanToolDownloadVisible);
     }
 }

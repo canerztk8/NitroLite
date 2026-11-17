@@ -405,11 +405,11 @@ public class AppSettings
     public AppTheme Theme { get; set; } = AppTheme.WarmCream;
 
     /// <summary>
-    /// The live temperature strip on the modes page, hidden by the user. Persisted because it is a layout choice, not
-    /// a per-session one: someone who collapsed it to reach the game profiles wants it collapsed next time too.
+    /// The chosen UI typeface, as a <see cref="UiFontCatalog"/> id. Null means the user has not chosen one, which is
+    /// the default face; an id this build no longer ships resolves to the default rather than to a missing font.
     /// </summary>
-    [JsonPropertyName("mode_trace_collapsed")]
-    public bool ModeTraceCollapsed { get; set; } = false;
+    [JsonPropertyName("ui_font")]
+    public string? UiFont { get; set; }
 
     /// <summary>
     /// Width of the left navigation rail, in device-independent pixels. Persisted because it is a layout choice:
@@ -582,6 +582,13 @@ public class AppSettings
         FanCurveMinDwellSeconds = Math.Clamp(FanCurveMinDwellSeconds, 0, 120);
 
         if (Language != null && !Loc.IsSupported(Language)) Language = null;
+
+        // A face this build no longer ships would leave the window asking for a font that is not there. Null is the
+        // default, so the unknown id is dropped rather than kept and resolved on every launch.
+        if (UiFont != null && !UiFontCatalog.All.Any(f => string.Equals(f.Id, UiFont, StringComparison.OrdinalIgnoreCase)))
+        {
+            UiFont = null;
+        }
 
         // A game rule with no executable can never match, and one with a broken curve would leave the fans under
         // software control with nothing to follow. Both are dropped or repaired here rather than at detection time,

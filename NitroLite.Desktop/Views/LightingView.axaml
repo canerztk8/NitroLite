@@ -13,7 +13,7 @@
       because the point is "this effect ignores your colour", and four hues would read as four chosen colours.
     -->
     <LinearGradientBrush x:Key="RainbowBrush" StartPoint="0%,0%" EndPoint="100%,0%">
-      <GradientStop Offset="0" Color="#FF2A55" />
+      <GradientStop Offset="0" Color="#FF0000" />
       <GradientStop Offset="0.25" Color="#FFAA00" />
       <GradientStop Offset="0.5" Color="#00FFA3" />
       <GradientStop Offset="0.75" Color="#00E5FF" />

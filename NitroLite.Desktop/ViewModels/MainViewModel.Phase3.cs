@@ -375,10 +375,16 @@ public sealed partial class MainViewModel
     public bool WatchdogAvailable => BatteryHealthAvailable;
 
     /// <summary>The DC power-profile picker: what the machine does when the charger is pulled.</summary>
+    /// <remarks>
+    /// The descriptions name the four settings the two profiles actually differ in — operating mode, fan mode, CPU
+    /// boost and panel refresh rate — because "Eco" and "Dengeli" on their own tell nobody which of them moves.
+    /// </remarks>
     public IReadOnlyList<DcProfileChoice> DcProfileChoices { get; } =
     [
-        new(DcPowerProfilePreference.Eco, Loc.T("Eco"), Loc.T("60 Hz, sessiz fan ve kapalı CPU Boost")),
-        new(DcPowerProfilePreference.Balanced, Loc.T("Dengeli"), Loc.T("Etkin ayarları koru"))
+        new(DcPowerProfilePreference.Eco, Loc.T("Eco"),
+            Loc.T("Pilde çalışma modu Sessiz'e döner, fan otomatiğe geçer, CPU Boost kapanır ve ekran 60 Hz'e iner. Pil belirgin şekilde daha uzun gider; oyunlarda ve ağır işlerde performans düşer.")),
+        new(DcPowerProfilePreference.Balanced, Loc.T("Dengeli"),
+            Loc.T("Pilde hiçbir ayar değişmez: çalışma modu, fan eğrisi, CPU Boost ve ekran yenileme hızı olduğu gibi kalır. Performans tam kalır; pil daha çabuk biter."))
     ];
 
     public DcProfileChoice? SelectedDcProfile
@@ -389,8 +395,12 @@ public sealed partial class MainViewModel
             if (!Set(ref _selectedDcProfile, value) || value == null) return;
             _settings.DcPowerMode = value.Value;
             SaveSettings();
+            Raise(nameof(SelectedDcProfileDescription));
         }
     }
+
+    /// <summary>What the selected profile changes, in the card under the picker.</summary>
+    public string SelectedDcProfileDescription => _selectedDcProfile?.Description ?? "";
 
     // ---------------------------------------------------------------- the wear trend
 
@@ -402,7 +412,10 @@ public sealed partial class MainViewModel
 
     public bool HasWearTrendNote => _wearTrendNote.Length > 0;
 
-    /// <summary>True when there are at least two readings, which is what a curve needs.</summary>
+    /// <summary>
+    /// True when the readings span at least a week, which is what a curve needs. Two readings an hour apart are a
+    /// trend only in the arithmetic sense, and drawing them would claim a direction the data does not have.
+    /// </summary>
     public bool ShowWearTrendChart => _wearTrendVisible;
 
     /// <summary>True when there is anything to clear, so the button is not offered on a fresh install.</summary>
@@ -854,6 +867,7 @@ public sealed partial class MainViewModel
         _selectedDcProfile = DcProfileChoices.FirstOrDefault(c => c.Value == _settings.DcPowerMode)
                              ?? DcProfileChoices[0];
         Raise(nameof(SelectedDcProfile));
+        Raise(nameof(SelectedDcProfileDescription));
 
         await RefreshBatteryHealthAsync().ConfigureAwait(true);
         await RefreshStorageAsync().ConfigureAwait(true);
@@ -948,9 +962,6 @@ public sealed partial class MainViewModel
             return;
         }
 
-        _wearTrendPoints = samples.Select(s => s.WearLevelPercent).ToList();
-        _wearTrendVisible = true;
-
         double days = _wearTrend.SpanDays ?? 0;
         double change = _wearTrend.WearChangePercent ?? 0;
 
@@ -958,6 +969,19 @@ public sealed partial class MainViewModel
         // catalogue: a translator should not have to preserve "+0.0;-0.0;0.0" to keep the page readable.
         var changeText = change.ToString("+0.0;-0.0;0.0", CultureInfo.CurrentCulture);
         _wearTrendSummary = Labels.WearChangeSummary(Math.Max(1, (int)Math.Round(days)), changeText);
+
+        // Two readings an hour apart are a trend only in the arithmetic sense. The chart waits for the same week the
+        // per-year rate does, so the plot and the sentence under it can never disagree about whether there is one.
+        if (!_wearTrend.HasMeaningfulTrend)
+        {
+            _wearTrendPoints = Array.Empty<double>();
+            _wearTrendVisible = false;
+            _wearTrendNote = Labels.WearNeedsAWeek;
+            return;
+        }
+
+        _wearTrendPoints = samples.Select(s => s.WearLevelPercent).ToList();
+        _wearTrendVisible = true;
 
         if (_wearTrend.WearPerYearPercent is not double perYear)
         {

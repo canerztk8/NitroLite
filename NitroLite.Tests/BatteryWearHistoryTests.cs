@@ -85,14 +85,29 @@ public class BatteryWearHistoryTests : IDisposable
     }
 
     [Fact]
-    public void ARealDropIsRecordedEvenWithinTheInterval()
+    public void ARealDropIsRecordedOnceADayHasPassed()
     {
-        // A pack that loses a whole point in an hour is news, not noise; waiting a day would hide it.
+        // A pack that loses a whole point is news, not noise, so the two-week interval does not have to elapse. But
+        // the reading still waits a day: the reported capacity moves by more than a point between two reads minutes
+        // apart, and letting those in is what drew a wear curve on the first day.
         var history = new BatteryWearHistory(_path);
         history.TryRecord(Details(96.0), Day0);
 
-        Assert.True(history.TryRecord(Details(94.9), Day0.AddHours(1)));
+        Assert.True(history.TryRecord(Details(94.9), Day0 + BatteryWearHistory.MinimumDropInterval));
         Assert.Equal(2, history.GetSamples().Count);
+    }
+
+    [Fact]
+    public void ADropWithinTheSameDayIsNotRecorded()
+    {
+        // The bug this guards: two reads an hour apart, a point of drift between them, and the page drew a trend out
+        // of a single afternoon.
+        var history = new BatteryWearHistory(_path);
+        history.TryRecord(Details(96.0), Day0);
+
+        Assert.False(history.TryRecord(Details(94.9), Day0.AddHours(1)));
+        Assert.False(history.TryRecord(Details(94.9), Day0.AddHours(23)));
+        Assert.Single(history.GetSamples());
     }
 
     [Fact]

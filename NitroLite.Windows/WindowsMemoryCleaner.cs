@@ -13,6 +13,9 @@ public sealed class WindowsMemoryCleaner : IMemoryCleaner
 {
     public bool IsSupported => true;
 
+    /// <summary>WinMemoryCleaner is a separate GPL-3.0 program, so the card offers its download page.</summary>
+    public bool NeedsExternalTool => true;
+
     public async Task<MemoryCleanResult> CleanStandbyMemoryAsync(CancellationToken cancellationToken = default)
     {
         try

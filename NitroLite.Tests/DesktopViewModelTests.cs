@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Avalonia.Media;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
@@ -133,7 +133,11 @@ public class DesktopViewModelTests
     {
         public List<AppTheme> Applied { get; } = new();
 
+        public List<string> Fonts { get; } = new();
+
         public void Apply(AppTheme theme) => Applied.Add(theme);
+
+        public void ApplyFont(string fontStack) => Fonts.Add(fontStack);
     }
 
     /// <summary>

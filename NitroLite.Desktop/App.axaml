@@ -17,6 +17,14 @@
   -->
   <Application.Resources>
 
+    <!--
+      The UI typeface. The settings page swaps this key through DesktopThemeManager.ApplyFont, and the Window style
+      below reads it with DynamicResource, so a font change repaints every text in the tree without a restart. The
+      value here is the default face; the tail of the list is script coverage, not a style choice — the app ships in
+      eight languages and Hindi needs a Devanagari face.
+    -->
+    <FontFamily x:Key="UiFontFamily">Segoe UI Variable Text, Segoe UI, Ubuntu, Noto Sans, Nirmala UI, Noto Sans Devanagari, sans-serif</FontFamily>
+
     <!-- A 3px ruled track, the filled part in ink, an 8x16 square ink thumb. -->
     <ControlTheme x:Key="NitroSlider" TargetType="Slider">
       <Setter Property="Height" Value="18" />
@@ -80,7 +88,7 @@
 
     <Style Selector="Window">
       <Setter Property="Background" Value="{DynamicResource PageBrush}" />
-      <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Ubuntu, Noto Sans, sans-serif" />
+      <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
     </Style>

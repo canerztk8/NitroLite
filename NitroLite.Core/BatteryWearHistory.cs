@@ -29,10 +29,24 @@ public sealed class BatteryWearSample
 /// <summary>What the recorded samples say about how fast the pack is wearing.</summary>
 public sealed class BatteryWearTrend
 {
+    /// <summary>
+    /// The shortest span a wear curve is drawn over. Below it the readings are measurement noise, not a direction:
+    /// the pack's reported capacity moves by a fraction of a percent between two reads minutes apart, and a curve
+    /// through those points would claim a trend the data does not have.
+    /// </summary>
+    public const double MinimumTrendSpanDays = 7;
+
     public IReadOnlyList<BatteryWearSample> Samples { get; init; } = Array.Empty<BatteryWearSample>();
 
     /// <summary>Two readings are the minimum for a direction; one reading is a number, not a trend.</summary>
     public bool HasTrend => Samples.Count >= 2;
+
+    /// <summary>
+    /// True when the readings span at least <see cref="MinimumTrendSpanDays"/>, which is what the chart and the
+    /// per-year rate both need. <see cref="HasTrend"/> alone is not enough: two readings an hour apart are a trend
+    /// only in the arithmetic sense.
+    /// </summary>
+    public bool HasMeaningfulTrend => SpanDays is double days && days >= MinimumTrendSpanDays;
 
     public BatteryWearSample? First => Samples.Count > 0 ? Samples[0] : null;
     public BatteryWearSample? Last => Samples.Count > 0 ? Samples[^1] : null;
@@ -44,14 +58,14 @@ public sealed class BatteryWearTrend
     public double? WearChangePercent => HasTrend ? Last!.WearLevelPercent - First!.WearLevelPercent : null;
 
     /// <summary>
-    /// Wear per year at the observed rate. Null below a week of history: extrapolating a year from two readings a
-    /// day apart would turn measurement noise into a number that looks like a fact.
+    /// Wear per year at the observed rate. Null below <see cref="MinimumTrendSpanDays"/> of history: extrapolating a
+    /// year from two readings a day apart would turn measurement noise into a number that looks like a fact.
     /// </summary>
     public double? WearPerYearPercent
     {
         get
         {
-            if (SpanDays is not double days || days < 7) return null;
+            if (SpanDays is not double days || days < MinimumTrendSpanDays) return null;
             return WearChangePercent!.Value / days * 365.0;
         }
     }
@@ -66,8 +80,8 @@ public sealed class BatteryWearTrend
 /// </para>
 /// <para>
 /// Wear moves over months, not days, so a reading is only appended when the last one is at least
-/// <see cref="MinimumInterval"/> old, or when health dropped by <see cref="MinimumDropPercent"/> in the meantime.
-/// The file is capped at <see cref="MaxSamples"/> readings.
+/// <see cref="MinimumInterval"/> old, or when health dropped by <see cref="MinimumDropPercent"/> and the last one is
+/// at least <see cref="MinimumDropInterval"/> old. The file is capped at <see cref="MaxSamples"/> readings.
 /// </para>
 /// </summary>
 public sealed class BatteryWearHistory
@@ -80,6 +94,17 @@ public sealed class BatteryWearHistory
     /// degrades is caught by <see cref="MinimumDropPercent"/> long before the interval elapses.
     /// </summary>
     public static readonly TimeSpan MinimumInterval = TimeSpan.FromDays(15);
+
+    /// <summary>
+    /// The shortest gap between two readings when the second one is let in early by <see cref="MinimumDropPercent"/>.
+    /// </summary>
+    /// <remarks>
+    /// Without this the drop rule was the bug behind a wear curve on the first day: the reported capacity moves by
+    /// more than a percent between two reads minutes apart, so the second read was recorded, the history held two
+    /// points, and the page drew a trend out of a single afternoon. A real one-percent loss takes weeks, so a day is
+    /// a generous floor and the curve can no longer appear before the pack has been watched for a while.
+    /// </remarks>
+    public static readonly TimeSpan MinimumDropInterval = TimeSpan.FromDays(1);
 
     private readonly string? _path;
     private readonly object _lock = new();
@@ -137,7 +162,8 @@ public sealed class BatteryWearHistory
                 if (now <= last.TimestampUtc) return false;
 
                 bool intervalElapsed = now - last.TimestampUtc >= MinimumInterval;
-                bool droppedEnough = last.HealthPercent - details.HealthPercent >= MinimumDropPercent;
+                bool droppedEnough = last.HealthPercent - details.HealthPercent >= MinimumDropPercent
+                                     && now - last.TimestampUtc >= MinimumDropInterval;
                 if (!intervalElapsed && !droppedEnough) return false;
             }
 

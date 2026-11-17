@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Styling;
 using NitroLite.Core;
@@ -89,5 +90,22 @@ public sealed class DesktopThemeManager : IThemeApplier
         merged.Add(_current);
 
         app.RequestedThemeVariant = ThemeCatalog.IsDarkTheme(resolved) ? ThemeVariant.Dark : ThemeVariant.Light;
+    }
+
+    /// <summary>
+    /// Replaces the UI typeface. The window style reads <c>UiFontFamily</c> with <c>DynamicResource</c>, so setting
+    /// the key repaints every text in the tree without a restart and without re-binding anything by hand.
+    /// </summary>
+    /// <remarks>
+    /// The key lives on the application's own dictionary rather than in the palette one: a palette swap replaces that
+    /// dictionary wholesale, and the chosen font has to survive it.
+    /// </remarks>
+    public void ApplyFont(string fontStack)
+    {
+        var app = Application.Current;
+        if (app == null) return;
+
+        var resources = app.Resources ??= new ResourceDictionary();
+        resources["UiFontFamily"] = new FontFamily(fontStack);
     }
 }

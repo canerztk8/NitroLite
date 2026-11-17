@@ -5,7 +5,8 @@ using Avalonia.Media;
 namespace NitroLite.Desktop.Controls;
 
 /// <summary>
-/// The monitoring page's history chart: a line, a wash under it, a dot on the newest sample, and three grid rules.
+/// The monitoring page's history chart: a line, a wash under it, a dot on the newest sample, three grid rules, and a
+/// vertical rule wherever the operating mode changed.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -48,11 +49,18 @@ public sealed class TelemetryChart : Control
     public static readonly StyledProperty<double> StrokeThicknessProperty =
         AvaloniaProperty.Register<TelemetryChart, double>(nameof(StrokeThickness), 1.5);
 
+    /// <summary>Where the operating mode changed, as fractions of the width from 0 to 1.</summary>
+    public static readonly StyledProperty<IReadOnlyList<double>?> MarksProperty =
+        AvaloniaProperty.Register<TelemetryChart, IReadOnlyList<double>?>(nameof(Marks));
+
+    public static readonly StyledProperty<IBrush?> MarkProperty =
+        AvaloniaProperty.Register<TelemetryChart, IBrush?>(nameof(Mark));
+
     static TelemetryChart()
     {
         AffectsRender<TelemetryChart>(
             ValuesProperty, MinimumProperty, MaximumProperty, StrokeProperty, FillProperty, GridProperty,
-            DotProperty, DotRingProperty, StrokeThicknessProperty);
+            DotProperty, DotRingProperty, StrokeThicknessProperty, MarksProperty, MarkProperty);
     }
 
     /// <summary>The samples to draw, oldest first. Fewer than two draws the grid only.</summary>
@@ -114,6 +122,24 @@ public sealed class TelemetryChart : Control
         set => SetValue(StrokeThicknessProperty, value);
     }
 
+    /// <summary>
+    /// The operating-mode changes, as fractions of the width. Each one is drawn as a full-height vertical rule, so the
+    /// series can be read either side of it: the question a mode change raises is whether the line has been falling
+    /// since, and a rule is what makes "since" visible.
+    /// </summary>
+    public IReadOnlyList<double>? Marks
+    {
+        get => GetValue(MarksProperty);
+        set => SetValue(MarksProperty, value);
+    }
+
+    /// <summary>The rule colour. The view binds it to the accent, so a mode change is the loudest thing on the chart.</summary>
+    public IBrush? Mark
+    {
+        get => GetValue(MarkProperty);
+        set => SetValue(MarkProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         double width = Bounds.Width;
@@ -121,6 +147,10 @@ public sealed class TelemetryChart : Control
         if (width <= 1 || height <= 1) return;
 
         DrawGrid(context, width, height);
+
+        // Under the series rather than over it: the rule is a divider, and a divider that hides the reading it divides
+        // is worse than no divider.
+        DrawMarks(context, width, height);
 
         var values = Values;
         if (values == null || values.Count < 2) return;
@@ -172,6 +202,24 @@ public sealed class TelemetryChart : Control
         if (ring != null) context.DrawEllipse(ring, null, last, 4.5, 4.5);
         var dot = Dot;
         if (dot != null) context.DrawEllipse(dot, null, last, 3, 3);
+    }
+
+    /// <summary>
+    /// One vertical rule per mode change, full height. A short tick at the top would be lost against the line; a full
+    /// one reads as a divider, which is what a mode change is.
+    /// </summary>
+    private void DrawMarks(DrawingContext context, double width, double height)
+    {
+        var brush = Mark;
+        var marks = Marks;
+        if (brush == null || marks == null || marks.Count == 0) return;
+
+        var pen = new Pen(brush, 1);
+        foreach (var fraction in marks)
+        {
+            double x = Math.Round(Math.Clamp(fraction, 0, 1) * width) + 0.5;
+            context.DrawLine(pen, new Point(x, 0), new Point(x, height));
+        }
     }
 
     /// <summary>

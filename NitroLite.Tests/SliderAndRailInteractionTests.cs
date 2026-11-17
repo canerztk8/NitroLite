@@ -82,13 +82,24 @@ public class SliderAndRailInteractionTests
     [Theory]
     [InlineData("DashboardView.axaml")]
     [InlineData("LightingView.axaml")]
-    [InlineData("BatteryView.axaml")]
     public void EveryPage_UsesTheSliderThatCanBeClicked(string view)
     {
         var xaml = ReadView(view);
 
         Assert.DoesNotContain("<Slider ", xaml);
         Assert.Contains("<controls:NitroSlider ", xaml);
+    }
+
+    [Fact]
+    public void TheBatteryPage_HasNoSliderLeftToGetWrong()
+    {
+        // The fan-curve editor moved to the work-modes page, which is where the curve belongs; the battery page keeps
+        // the readings and the saver. A plain Slider here would be the bug the theory above guards, so the absence is
+        // pinned rather than left to chance.
+        var xaml = ReadView("BatteryView.axaml");
+
+        Assert.DoesNotContain("<Slider ", xaml);
+        Assert.DoesNotContain("<controls:NitroSlider ", xaml);
     }
 
     // ---------------------------------------------------------------- the rail

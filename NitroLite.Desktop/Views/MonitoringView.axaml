@@ -8,8 +8,8 @@
   <!--
     Page 2: the readings. The WPF page put the processor and the graphics card side by side as two cards of labelled
     rows, each row a name, a figure and a 4px bar, then a wider card for the machine as a whole, then the history
-    chart. That is the shape here too, with the mode trace added as its own card because a mode change is only
-    interesting against the temperature it happened at.
+    chart. That is the shape here too, with the mode changes marked on the chart itself: a mode change is only
+    interesting against the temperature it happened at, and a rule on the same axis says that without a second card.
   -->
   <ScrollViewer VerticalScrollBarVisibility="Hidden">
     <StackPanel>
@@ -165,8 +165,10 @@
               </Grid>
 
               <!-- The helper is a separate GPL-3.0 program, so the card offers its own download page rather than
-                   pretending the button above can work without it. -->
-              <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                   pretending the button above can work without it. Linux has no helper to download, so the row is
+                   hidden there. -->
+              <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0"
+                    IsVisible="{Binding MemoryCleanToolDownloadVisible}">
                 <TextBlock Grid.Column="0" Classes="hint" Text="{Binding Labels.GetMemoryCleanerHint}"
                            VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
                 <Button Grid.Column="1" Classes="link" Content="{Binding Labels.GetMemoryCleaner}"
@@ -188,6 +190,9 @@
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.TelemetryCharts}" />
                 <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ChartGapHint}">
                   <TextBlock Text="?" />
+                </Border>
+                <Border Classes="infobadge" Margin="4,0,0,0" ToolTip.Tip="{Binding Labels.ModeChangeHint}">
+                  <TextBlock Text="|" />
                 </Border>
               </StackPanel>
               <TextBlock Classes="hint" Text="{Binding Labels.LastMinute}" Margin="0,2,0,0" />
@@ -211,9 +216,11 @@
                                        Values="{Binding ChartValues}"
                                        Minimum="{Binding ChartMinimum}"
                                        Maximum="{Binding ChartMaximum}"
+                                       Marks="{Binding ModeChangeMarks}"
                                        Stroke="{DynamicResource TextPrimaryBrush}"
                                        Fill="{DynamicResource ChartFillBrush}"
                                        Grid="{DynamicResource CardBorderBrush}"
+                                       Mark="{DynamicResource AccentBrush}"
                                        Dot="{DynamicResource AccentBrush}"
                                        DotRing="{DynamicResource CardBrush}" />
 
@@ -264,42 +271,6 @@
         </StackPanel>
       </Border>
 
-      <!-- ============================================================ the mode trace -->
-
-      <Border Classes="card">
-        <StackPanel>
-          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
-            <StackPanel Grid.Column="0" Margin="0,0,16,0">
-              <StackPanel Orientation="Horizontal">
-                <TextBlock Classes="rowtitle" Text="{Binding Labels.ModeTrace}" />
-                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ModeTraceHint}">
-                  <TextBlock Text="?" />
-                </Border>
-              </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,0">
-                <TextBlock Classes="caps" Text="{Binding ModeTraceModeText}"
-                           Foreground="{DynamicResource AccentBrush}" />
-                <TextBlock Classes="caps" Text="{Binding ModeTraceRangeText}" />
-                <TextBlock Classes="caps" Text="{Binding ModeTraceNowText}" />
-              </StackPanel>
-            </StackPanel>
-
-            <Button Grid.Column="1" Classes="primary" Content="{Binding ModeTraceToggleText}" Padding="10,5"
-                    FontSize="11" VerticalAlignment="Center" Command="{Binding ToggleModeTraceCommand}" />
-          </Grid>
-
-          <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
-                  BorderThickness="1" CornerRadius="2" Height="64" ClipToBounds="True"
-                  IsVisible="{Binding ModeTraceVisible}">
-            <controls:ModeTraceChart Values="{Binding CpuTemperatureHistory}"
-                                     Marks="{Binding ModeTraceMarks}"
-                                     Stroke="{DynamicResource TextPrimaryBrush}"
-                                     Fill="{DynamicResource ChartFillBrush}"
-                                     Mark="{DynamicResource AccentBrush}"
-                                     Baseline="{DynamicResource CardBorderStrongBrush}" />
-          </Border>
-        </StackPanel>
-      </Border>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

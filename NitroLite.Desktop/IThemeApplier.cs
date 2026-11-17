@@ -14,4 +14,11 @@ public interface IThemeApplier
 {
     /// <summary>Swaps the running window's palette. Never throws: a missing application is a no-op.</summary>
     void Apply(AppTheme theme);
+
+    /// <summary>
+    /// Swaps the running window's typeface. <paramref name="fontStack"/> is a comma-separated family list, because
+    /// the tail of every stack is the script coverage the eight UI languages need. Never throws: a missing
+    /// application is a no-op.
+    /// </summary>
+    void ApplyFont(string fontStack);
 }

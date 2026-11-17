@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using NitroLite.Core;
 using NitroLite.Desktop;
@@ -460,6 +460,10 @@ public class Wave2ParityTests
     {
         public List<AppTheme> Applied { get; } = new();
 
+        public List<string> Fonts { get; } = new();
+
         public void Apply(AppTheme theme) => Applied.Add(theme);
+
+        public void ApplyFont(string fontStack) => Fonts.Add(fontStack);
     }
 }

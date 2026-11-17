@@ -684,12 +684,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private (double Low, double High) _chartRange = (0, 1);
     private ChartStats _chartStats = ChartStats.Empty;
 
-    // The mode trace: the changes inside the window, and the strip's own two labels.
+    // The mode changes inside the chart window, as fractions of its width.
     private readonly List<(DateTime At, OperatingMode Mode)> _modeMarks = new();
-    private IReadOnlyList<double> _modeTraceMarks = Array.Empty<double>();
-    private bool _modeTraceVisible;
-    private string _modeTraceRange = "--";
-    private string _modeTraceNow = "-- °C";
+    private IReadOnlyList<double> _modeChangeMarks = Array.Empty<double>();
 
     // The lighting page's direction list, the zone the deck pointed the palette at, and the extra switch.
     private DirectionChoice? _selectedDirection;
@@ -759,6 +756,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private LocLanguage? _selectedLanguage;
     private ThemeChoice? _selectedTheme;
+    private UiFontChoice? _selectedUiFont;
     private string _udevCommand = "";
     private bool _needsUdevRule;
 
@@ -920,11 +918,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _osdEnabled = settings.OsdEnabled;
         _osdCorner = Math.Clamp(settings.OsdCorner, 0, 3);
         _osdMonitor = Math.Max(0, settings.OsdMonitor);
-        _modeTraceVisible = !settings.ModeTraceCollapsed;
 
         // The stored palette goes on before the window exists, so the first frame is already the right colour rather
         // than flashing the default and repainting.
         _themeApplier?.Apply(_selectedTheme?.Theme ?? settings.Theme);
+
+        // Same for the typeface: the first frame is already in the chosen font.
+        _selectedUiFont = UiFontCatalog.Resolve(settings.UiFont);
+        _themeApplier?.ApplyFont(_selectedUiFont.Stack);
 
         _selectedLanguage = Loc.Languages.FirstOrDefault(l => l.Code == Loc.Language) ?? Loc.Languages[0];
         _needsUdevRule = platform?.NeedsUdevRule == true;
@@ -957,7 +958,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         DeleteSelectedGameCommand = new AsyncCommand(DeleteSelectedGameAsync);
         CopyDesktopCurveCommand = new RelayCommand(CopyDesktopCurveToGame);
         ToastActionCommand = new RelayCommand(RunToastAction);
-        ToggleModeTraceCommand = new RelayCommand(() => ModeTraceVisible = !ModeTraceVisible);
         CleanMemoryCommand = new RelayCommand(() => _ = CleanMemoryAsync());
         GetMemoryCleanerCommand = new RelayCommand(() => OpenUrl(MemoryCleanerTool.ReleasesUrl));
         CycleOsdCornerCommand = new RelayCommand(CycleOsdCorner);
@@ -1510,10 +1510,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Eight swatches, chosen to be distinguishable on both the cream and the dark palettes and to cover the effects
         // the firmware ships: a red, an amber, a green, a cyan, a blue, a violet, a magenta and white.
         //
-        // The red keeps its green and blue channels low on purpose. A "coral" red — the #D93829 this used to be — is
-        // the same colour on screen, but the keyboard's diffuser mixes the three LEDs, so the green and blue it carries
-        // light the keys up and the red arrives as salmon. On the deck the swatch has to be the colour the keys show.
-        AddSwatch("#E01B1B", Loc.T("Kırmızı"));
+        // The red is pure #FF0000 on purpose. A "coral" red — the #D93829 this used to be — is the same colour on
+        // screen, but the keyboard's diffuser mixes the three LEDs, so the green and blue it carries light the keys up
+        // and the red arrives as salmon. On the deck the swatch has to be the colour the keys show.
+        AddSwatch("#FF0000", Loc.T("Kırmızı"));
         AddSwatch("#F59E0B", Loc.T("Kehribar"));
         AddSwatch("#5F6B3E", Loc.T("Zeytin yeşili"));
         AddSwatch("#22D3EE", Loc.T("Buz mavisi"));
@@ -1678,7 +1678,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _telemetryHistory.RemoveAll(sample => sample.Timestamp < windowStart);
 
         RefreshChart();
-        RefreshModeTrace();
+        RefreshModeMarks();
 
         Raise(nameof(CpuTemperatureHistory));
         Raise(nameof(GpuTemperatureHistory));
@@ -1938,39 +1938,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True while the chart has fewer than two measured samples, so the card can say why it is empty.</summary>
     public bool ChartEmpty => _chartValues.Count < 2;
 
-    // ---------------------------------------------------------------- the mode trace
+    // ---------------------------------------------------------------- the mode changes
 
     /// <summary>
-    /// The operating-mode changes recorded inside the window, as fractions of the strip's width. The chart draws a tick
-    /// at each one, so a mode switch is visible against the temperature it happened at.
+    /// The operating-mode changes recorded inside the window, as fractions of the chart's width. The chart draws a
+    /// vertical rule at each one, so a mode switch is visible against the series it happened at.
     /// </summary>
-    public IReadOnlyList<double> ModeTraceMarks => _modeTraceMarks;
-
-    public bool ModeTraceVisible
-    {
-        get => _modeTraceVisible;
-        set
-        {
-            if (!Set(ref _modeTraceVisible, value)) return;
-            _settings.ModeTraceCollapsed = !value;
-            SaveSettings();
-            Raise(nameof(ModeTraceToggleText));
-        }
-    }
-
-    /// <summary>The band's own toggle caption: GİZLE while it is drawn, GÖSTER while it is folded away.</summary>
-    public string ModeTraceToggleText => ModeTraceVisible ? Labels.HideCaption : Labels.ShowCaption;
-
-    public string ModeTraceRangeText => _modeTraceRange;
-    public string ModeTraceNowText => _modeTraceNow;
-
-    /// <summary>The mode the machine is in now, which is what the strip's label names.</summary>
-    public string ModeTraceModeText => SelectedMode?.Label ?? Labels.NotConnected;
-
-    public RelayCommand ToggleModeTraceCommand { get; private set; } = null!;
+    public IReadOnlyList<double> ModeChangeMarks => _modeChangeMarks;
 
     /// <summary>
-    /// Records a mode change for the strip. Called from the mode setter and from the game-profile switch, so a change
+    /// Records a mode change for the chart. Called from the mode setter and from the game-profile switch, so a change
     /// made by a game is marked exactly like one made by a click.
     /// </summary>
     private void RecordModeMark(OperatingMode mode)
@@ -1979,13 +1956,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _modeMarks.Add((DateTime.Now, mode));
         if (_modeMarks.Count > 64) _modeMarks.RemoveAt(0);
 
-        // Redrawn here rather than only on the next telemetry tick: a click that moves the mode should move the tick
+        // Redrawn here rather than only on the next telemetry tick: a click that moves the mode should move the rule
         // under the cursor, not a second later.
-        RefreshModeTrace();
+        RefreshModeMarks();
     }
 
-    /// <summary>Recomputes the strip's marks and its two labels from the samples already held.</summary>
-    private void RefreshModeTrace()
+    /// <summary>Recomputes the chart's mode-change rules from the changes already held.</summary>
+    private void RefreshModeMarks()
     {
         var windowStart = DateTime.Now - ChartWindow;
 
@@ -1995,37 +1972,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (at < windowStart) continue;
             marks.Add(Math.Clamp((at - windowStart).TotalSeconds / ChartWindow.TotalSeconds, 0, 1));
         }
-        _modeTraceMarks = marks;
 
-        var values = new List<double>();
-        foreach (var sample in _telemetryHistory)
-        {
-            if (sample.Timestamp < windowStart) continue;
-            if (sample.CpuTemperature > 0) values.Add(sample.CpuTemperature);
-        }
-
-        if (values.Count == 0)
-        {
-            _modeTraceRange = "--";
-            _modeTraceNow = "-- °C";
-        }
-        else
-        {
-            double low = values[0];
-            double high = values[0];
-            foreach (var value in values)
-            {
-                if (value < low) low = value;
-                if (value > high) high = value;
-            }
-            _modeTraceRange = $"{low:0}–{high:0} °C";
-            _modeTraceNow = $"{values[^1]:0} °C";
-        }
-
-        Raise(nameof(ModeTraceMarks));
-        Raise(nameof(ModeTraceRangeText));
-        Raise(nameof(ModeTraceNowText));
-        Raise(nameof(ModeTraceModeText));
+        _modeChangeMarks = marks;
+        Raise(nameof(ModeChangeMarks));
     }
 
     /// <summary>
@@ -2106,6 +2055,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>True when this platform has a standby list to release. False hides the whole card.</summary>
     public bool MemoryCleanAvailable => _memoryCleaner?.IsSupported == true;
+
+    /// <summary>
+    /// True when the clean needs a separate program. Windows does — WinMemoryCleaner — so the card offers its download
+    /// page; Linux drops the page cache through the kernel, so the row is hidden rather than pointing at a Windows tool.
+    /// </summary>
+    public bool MemoryCleanToolDownloadVisible => _memoryCleaner?.NeedsExternalTool == true;
 
     public bool MemoryCleanRunning
     {
@@ -4336,6 +4291,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The cards carry the same names, so they are rebuilt with the picker rather than left in the old language.
         BuildThemeCards();
+    }
+
+    /// <summary>
+    /// The typefaces the settings page offers. Built from <see cref="UiFontCatalog"/> rather than written into the
+    /// XAML, so adding a face is one entry in the catalogue.
+    /// </summary>
+    public IReadOnlyList<UiFontChoice> UiFonts => UiFontCatalog.All;
+
+    /// <summary>
+    /// The chosen typeface. Applying it is immediate — the window repaints from the swapped resource — and the choice
+    /// is written to the settings file so the next launch starts in it.
+    /// </summary>
+    public UiFontChoice? SelectedUiFont
+    {
+        get => _selectedUiFont;
+        set
+        {
+            if (!Set(ref _selectedUiFont, value) || value == null) return;
+            _themeApplier?.ApplyFont(value.Stack);
+            _settings.UiFont = value.Id;
+            SaveSettings();
+            Status = Labels.FontApplied;
+        }
     }
 
     public string DeviceModel => _platform?.Identity.ModelCode is { Length: > 0 } code

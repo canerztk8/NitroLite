@@ -480,14 +480,14 @@ public class LightingPageTests
     // ---------------------------------------------------------------- 2b. the reds
 
     /// <summary>
-    /// Every red the app ships has to arrive on the keyboard as red.
+    /// Every red the app ships has to arrive on the keyboard as red — pure #FF0000, not a red that leans pink.
     /// </summary>
     /// <remarks>
-    /// The keyboard's diffuser mixes the three LEDs, so a red that carries much green or blue lights the keys up
+    /// The keyboard's diffuser mixes the three LEDs, so a red that carries any green or blue lights the keys up
     /// salmon or pink: the swatch on screen was red and the keyboard was not. The palette's red was #D93829 — a coral
     /// with a fifth of its red in blue — and every built-in preset shipped #FF2A55, a crimson with a third of its red
-    /// in blue, which is why the preset called "Kırmızı Nefes" breathed pink. Both channels now stay under a fifth of
-    /// the red one, which is what makes the colour read as red rather than as a washed-out red.
+    /// in blue, which is why the preset called "Kırmızı Nefes" breathed pink. The reds are now #FF0000 exactly, so
+    /// there is nothing left for the diffuser to wash out.
     /// </remarks>
     [Fact]
     public void TheRedsTheAppShips_AreRedNotPink()
@@ -505,6 +505,8 @@ public class LightingPageTests
 
         foreach (var (where, hex) in reds)
         {
+            Assert.Equal("#FF0000", hex.ToUpperInvariant());
+
             var (red, green, blue) = Channels(hex);
             Assert.True(green * 5 <= red, $"{where} is {hex}: green {green} against red {red} reads as salmon");
             Assert.True(blue * 5 <= red, $"{where} is {hex}: blue {blue} against red {red} reads as pink");

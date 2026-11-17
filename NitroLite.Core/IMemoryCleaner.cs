@@ -58,13 +58,20 @@ public static class MemoryCleanerTool
 /// Releases the operating system's standby (cached) memory.
 /// </summary>
 /// <remarks>
-/// Windows has a standby list and a tool that empties it; Linux does not have the same list, so its implementation
-/// reports <see cref="IsSupported"/> false and the card hides itself rather than offering a button that does nothing.
+/// Windows has a standby list and a tool that empties it; Linux has the page cache and a kernel knob that drops it.
+/// Both are the same operation from the user's side — hand back the memory the system is holding on spec — so both
+/// report <see cref="IsSupported"/> true and the card is the same card.
 /// </remarks>
 public interface IMemoryCleaner
 {
     /// <summary>True when this platform can release the standby list at all.</summary>
     bool IsSupported { get; }
+
+    /// <summary>
+    /// True when the clean needs a separate program the user may have to install. The card offers that program's
+    /// download page only when this is true: Linux's clean is a kernel interface, so there is nothing to download.
+    /// </summary>
+    bool NeedsExternalTool { get; }
 
     /// <summary>Releases the standby list. Never throws: a failure comes back as a result with <c>Error</c> set.</summary>
     Task<MemoryCleanResult> CleanStandbyMemoryAsync(CancellationToken cancellationToken = default);

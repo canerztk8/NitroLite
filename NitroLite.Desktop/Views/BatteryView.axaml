@@ -120,7 +120,7 @@
         </Border>
       </Grid>
 
-      <!-- ============================================================ protection: DC profile and watchdog -->
+      <!-- ============================================================ saving: DC profile and watchdog -->
 
       <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding BatteryHealthAvailable}">
         <StackPanel>
@@ -140,6 +140,11 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
+
+              <!-- What the choice actually changes. The two profiles differ in four settings, and a name alone
+                   ("Eco", "Dengeli") tells nobody which of them moves. -->
+              <TextBlock Classes="hint" Text="{Binding SelectedDcProfileDescription}" Margin="0,6,0,0"
+                         TextWrapping="Wrap" />
             </StackPanel>
 
             <StackPanel Grid.Column="2">
@@ -297,76 +302,6 @@
           </ItemsControl>
 
           <TextBlock Classes="hint" Text="{Binding Labels.NoStorageDrives}" IsVisible="{Binding HasNoStorageDrives}" />
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ the thermal contract -->
-
-      <Border Classes="card" Margin="0,0,0,14">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-            <TextBlock Classes="cardicon" Text="&#xE9D9;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.ThermalSafety}" />
-          </StackPanel>
-
-          <Border Classes="panel">
-            <TextBlock Classes="figure" Text="{Binding ThermalFloorSummary}" TextWrapping="Wrap" />
-          </Border>
-
-          <TextBlock Classes="hint" Text="{Binding Labels.ThermalSafetyHint}" Margin="0,8,0,0" />
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ the curve -->
-
-      <Border Classes="card">
-        <StackPanel>
-          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="cardicon" Text="&#xE9D9;" Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock Classes="section" Text="{Binding Labels.FanCurveEditor}" />
-            </StackPanel>
-            <TextBlock Grid.Column="2" Classes="figure" FontSize="11" Text="{Binding CurvePreview}"
-                       Foreground="{DynamicResource TextSecondaryBrush}" />
-          </Grid>
-
-          <Grid ColumnDefinitions="*,*">
-            <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                    Background="{DynamicResource PanelBrush}">
-              <controls:FanCurvePreview Height="190"
-                                        Points="{Binding CurvePoints}"
-                                        CurrentTemperature="{Binding CurrentTemperature}"
-                                        SurfaceBrush="{DynamicResource PanelBrush}"
-                                        BandBrush="{DynamicResource DangerSoftBrush}"
-                                        CurveBrush="{DynamicResource TextPrimaryBrush}"
-                                        MarkerBrush="{DynamicResource AccentBrush}"
-                                        GridBrush="{DynamicResource CardBorderBrush}"
-                                        TextBrush="{DynamicResource TextMutedBrush}"
-                                        FloorBrush="{DynamicResource DangerBrush}" />
-            </Border>
-
-            <StackPanel Grid.Column="1" Margin="14,0,0,0">
-              <ItemsControl ItemsSource="{Binding CurveAnchors}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:CurveAnchorViewModel">
-                    <Grid ColumnDefinitions="34,*,42" Margin="0,0,0,6">
-                      <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding Label}"
-                                 Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                      <controls:NitroSlider Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
-                              IsSnapToTickEnabled="True" Value="{Binding Percent}" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="2" Classes="figure" FontSize="11" Text="{Binding EffectiveText}"
-                                 HorizontalAlignment="Right" VerticalAlignment="Center" />
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </StackPanel>
-          </Grid>
-
-          <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-            <Button Classes="primary" Content="{Binding Labels.ApplyCurve}"
-                    Command="{Binding ApplyCurveCommand}" />
-          </StackPanel>
         </StackPanel>
       </Border>
     </StackPanel>
