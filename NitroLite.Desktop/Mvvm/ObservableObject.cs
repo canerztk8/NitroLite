@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using NitroLite.Core;
 
 namespace NitroLite.Desktop.Mvvm;
 
@@ -63,6 +64,12 @@ public sealed class AsyncCommand : ICommand
         try
         {
             await _execute().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            // An exception out of an async void handler is raised on the thread pool, where nothing catches it and
+            // the process dies. A command that failed is a status line, not a crash.
+            AppLog.Error("Komut başarısız", ex.ToString());
         }
         finally
         {

@@ -64,6 +64,19 @@ public sealed class LinuxBatteryHealthService : IBatteryHealthService
 
     public bool ClearWearHistory() => _history.Clear();
 
+    /// <summary>
+    /// Nothing to start: the Linux service reads <c>/sys/class/power_supply</c> on demand, and a background poll of a
+    /// sysfs file would be a wakeup per tick for a value that only changes when the page is open.
+    /// </summary>
+    public void Start()
+    {
+    }
+
+    /// <summary>Nothing to release: the service holds no timer, no handle and no unmanaged memory.</summary>
+    public void Dispose()
+    {
+    }
+
     private BatteryStatusInfo ReadStatus(string directory)
     {
         var status = new BatteryStatusInfo();

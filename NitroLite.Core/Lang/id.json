@@ -486,6 +486,7 @@
   "Fan Profili:": "Profil Fan:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "Perlindungan otomatis saat kipas gagal (beralih ke mode Eco)",
   "Fan devri": "Kecepatan kipas",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "Satu kipas tampak berhenti: tidak ada kipas yang berputar pada chip yang panas. Matikan mesin dan periksa kipasnya.",
   "Fan eğrisi başlatılamadı.": "Kurva kipas tidak dapat dimulai.",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "Kurva kipas berasal dari profil game selama sesi ini.",
   "Fan eğrisi değiştirilemedi: {0}": "Kurva kipas tidak dapat diubah: {0}",

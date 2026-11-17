@@ -286,6 +286,9 @@ public sealed class ShellLabels
     public string CurveEnabled => Loc.T("Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.");
     public string CurveDisabled => Loc.T("Fan eğrisi kapandı; fanlar otomatik moda döndü.");
 
+    /// <summary>Raised when a fan is confirmed stopped while its die is hot.</summary>
+    public string FanStallDetected => Loc.T("Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.");
+
     /// <summary>"güvenlik tabanı %60" for an anchor that sits on or above a floor.</summary>
     public string SafetyFloor(int percent) => Loc.T($"güvenlik tabanı %{percent}");
 

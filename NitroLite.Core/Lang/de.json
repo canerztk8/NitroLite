@@ -486,6 +486,7 @@
   "Fan Profili:": "Lüfterprofil:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "Automatischer Schutz bei Lüfterausfall (in den Eco-Modus wechseln)",
   "Fan devri": "Lüfterdrehzahl",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "Ein Lüfter scheint zu stehen: Auf einem heißen Chip dreht sich kein Lüfter. Schalten Sie das Gerät aus und prüfen Sie den Lüfter.",
   "Fan eğrisi başlatılamadı.": "Die Lüfterkurve konnte nicht gestartet werden.",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "Die Lüfterkurve kommt für diese Sitzung aus dem Spielprofil.",
   "Fan eğrisi değiştirilemedi: {0}": "Die Lüfterkurve konnte nicht geändert werden: {0}",

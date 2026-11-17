@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using NitroLite.Core;
 using NitroLite.Desktop.ViewModels;
 
 namespace NitroLite.Desktop.Views;
@@ -26,14 +27,25 @@ public partial class LightingView : UserControl
     /// The swatch beside the hex box: opens the picker on the active target's colour and writes whatever comes back.
     /// The dialog is the view's business, so the view model only ever sees the finished <c>#RRGGBB</c>.
     /// </summary>
+    /// <remarks>
+    /// Wrapped because an <c>async void</c> handler has nowhere to put an exception: one thrown out of the dialog
+    /// would be raised on the thread pool and take the process down instead of leaving the page usable.
+    /// </remarks>
     private async void OnPickColorClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm) return;
-        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+        try
+        {
+            if (DataContext is not MainViewModel vm) return;
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
 
-        var dialog = new ColorPickerDialog(vm.ActiveColor, vm.Labels.CustomColor);
-        if (!await dialog.ShowDialog<bool>(owner)) return;
+            var dialog = new ColorPickerDialog(vm.ActiveColor, vm.Labels.CustomColor);
+            if (!await dialog.ShowDialog<bool>(owner)) return;
 
-        vm.ApplyPickedColor(dialog.PickedHex);
+            vm.ApplyPickedColor(dialog.PickedHex);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Renk seçici açılamadı", ex.ToString());
+        }
     }
 }

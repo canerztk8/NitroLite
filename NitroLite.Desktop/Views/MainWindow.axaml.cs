@@ -88,7 +88,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _timer = new DispatcherTimer { Interval = VisibleInterval };
-        _timer.Tick += async (_, _) => await TickAsync();
+        _timer.Tick += async (_, _) => await TickSafelyAsync();
 
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _toastTimer.Tick += (_, _) => HideToast();
@@ -98,36 +98,45 @@ public partial class MainWindow : Window
 
         Opened += async (_, _) =>
         {
-            // The clipboard is the only platform service the view model needs, and it is a delegate so a test can
-            // leave it unset. Set it before the first command can run.
-            ClipboardService.Setter = text =>
+            try
             {
-                var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-                if (clipboard != null) _ = clipboard.SetTextAsync(text);
-            };
+                // The clipboard is the only platform service the view model needs, and it is a delegate so a test can
+                // leave it unset. Set it before the first command can run.
+                ClipboardService.Setter = text =>
+                {
+                    var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                    if (clipboard != null) _ = CopyAsync(clipboard, text);
+                };
 
-            _viewModel = DataContext as MainViewModel;
-            if (_viewModel == null) return;
+                _viewModel = DataContext as MainViewModel;
+                if (_viewModel == null) return;
 
-            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+                _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
-            // The rail starts at the width the user left it at. An absolute width also decides how the splitter
-            // behaves: with a pixel column next to a star column it resizes the pixel one, so the rail keeps a real
-            // width instead of turning into a star that the page can squeeze.
-            _railColumn = RailGrid.ColumnDefinitions[0];
-            _railColumn.Width = new GridLength(_viewModel.SidebarWidth);
-            _railColumn.PropertyChanged += OnRailColumnChanged;
+                // The rail starts at the width the user left it at. An absolute width also decides how the splitter
+                // behaves: with a pixel column next to a star column it resizes the pixel one, so the rail keeps a real
+                // width instead of turning into a star that the page can squeeze.
+                _railColumn = RailGrid.ColumnDefinitions[0];
+                _railColumn.Width = new GridLength(_viewModel.SidebarWidth);
+                _railColumn.PropertyChanged += OnRailColumnChanged;
 
-            RestoreWindowPosition();
-            await _viewModel.InitializeAsync();
+                RestoreWindowPosition();
+                await _viewModel.InitializeAsync();
 
-            // The overlay is a second window bound to the same view model, so the two can never disagree about a
-            // reading. It is created here rather than in the XAML because it must not be a child of this window.
-            _osd = new OsdOverlayWindow { DataContext = _viewModel };
-            _viewModel.OsdChanged += (_, _) => ApplyOsd();
-            ApplyOsd();
+                // The overlay is a second window bound to the same view model, so the two can never disagree about a
+                // reading. It is created here rather than in the XAML because it must not be a child of this window.
+                _osd = new OsdOverlayWindow { DataContext = _viewModel };
+                _viewModel.OsdChanged += (_, _) => ApplyOsd();
+                ApplyOsd();
 
-            _timer.Start();
+                _timer.Start();
+            }
+            catch (Exception ex)
+            {
+                // An exception out of this handler is raised on the thread pool and kills the process. A window that
+                // opened without its telemetry is still a window the user can read the log from.
+                AppLog.Error("Pencere açılışı başarısız", ex.ToString());
+            }
         };
 
         PositionChanged += (_, _) => CaptureNormalBounds();
@@ -218,7 +227,39 @@ public partial class MainWindow : Window
     {
         UpdateTelemetryPollingRate();
 
-        if (_viewModel != null) _ = _viewModel.ReassertKeyboardLightingAsync();
+        if (_viewModel != null) _ = ReassertLightingAsync(_viewModel);
+    }
+
+    /// <summary>
+    /// Copies text and swallows what the clipboard throws. A platform clipboard can refuse for reasons the app cannot
+    /// see — another process holding it, a session with no clipboard at all — and a fire-and-forget task that throws
+    /// takes the process down with it.
+    /// </summary>
+    private static async Task CopyAsync(Avalonia.Input.Platform.IClipboard clipboard, string text)
+    {
+        try
+        {
+            await clipboard.SetTextAsync(text).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Panoya kopyalanamadı", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the keyboard lighting after a resume, without letting a failure escape as an unobserved task.
+    /// </summary>
+    private static async Task ReassertLightingAsync(MainViewModel viewModel)
+    {
+        try
+        {
+            await viewModel.ReassertKeyboardLightingAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Klavye aydınlatması yeniden uygulanamadı", ex.Message);
+        }
     }
 
     /// <summary>
@@ -386,6 +427,22 @@ public partial class MainWindow : Window
         // Re-placed on every tick because the frame's own size changes with the numbers it holds: a GPU name that
         // wraps would otherwise push a bottom corner off the edge.
         ApplyOsd();
+    }
+
+    /// <summary>
+    /// The timer's own handler. A tick that throws would escape an <c>async void</c> lambda and take the process down
+    /// from the thread pool, so the failure is logged and the next tick still runs.
+    /// </summary>
+    private async Task TickSafelyAsync()
+    {
+        try
+        {
+            await TickAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Telemetri döngüsü başarısız", ex.ToString());
+        }
     }
 
     /// <summary>Shows, hides or moves the overlay to match the view model.</summary>

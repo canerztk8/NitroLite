@@ -1,4 +1,4 @@
-namespace NitroLite.Core;
+﻿namespace NitroLite.Core;
 
 /// <summary>Which die is hot while its fan is not turning.</summary>
 public enum FanStallTarget
@@ -44,10 +44,24 @@ public sealed class FanStallWatchdog
     /// <summary>Shortest gap between two alerts, so a machine that stays broken is not a toast every second.</summary>
     public static readonly TimeSpan Cooldown = TimeSpan.FromMinutes(5);
 
+    private readonly TimeSpan _sustainFor;
+    private readonly TimeSpan _cooldown;
+
     private DateTime? _cpuStalledSince;
     private DateTime? _gpuStalledSince;
     private DateTime _lastAlertUtc = DateTime.MinValue;
     private bool _hasAlerted;
+
+    /// <param name="sustainFor">
+    /// Overridable so a test can confirm a stall without waiting ten seconds. Production always uses
+    /// <see cref="SustainFor"/>: a shorter window would fire on a single bad sample.
+    /// </param>
+    /// <param name="cooldown">Overridable for the same reason.</param>
+    public FanStallWatchdog(TimeSpan? sustainFor = null, TimeSpan? cooldown = null)
+    {
+        _sustainFor = sustainFor ?? SustainFor;
+        _cooldown = cooldown ?? Cooldown;
+    }
 
     /// <summary>True once an alert has been raised; cleared by <see cref="Reset"/>.</summary>
     public bool HasAlerted => _hasAlerted;
@@ -67,7 +81,7 @@ public sealed class FanStallWatchdog
         // The cooldown is the only gate after the first alert: the condition is still true, so the next alert is
         // due as soon as it expires. Clearing the timers here instead would make the user wait another ten seconds
         // on top of the cooldown for a fault that never went away.
-        if (_hasAlerted && nowUtc - _lastAlertUtc < Cooldown) return null;
+        if (_hasAlerted && nowUtc - _lastAlertUtc < _cooldown) return null;
 
         _hasAlerted = true;
         _lastAlertUtc = nowUtc;
@@ -107,8 +121,8 @@ public sealed class FanStallWatchdog
 
     private FanStallTarget Confirmed(DateTime nowUtc)
     {
-        bool cpu = _cpuStalledSince is { } cpuSince && nowUtc - cpuSince >= SustainFor;
-        bool gpu = _gpuStalledSince is { } gpuSince && nowUtc - gpuSince >= SustainFor;
+        bool cpu = _cpuStalledSince is { } cpuSince && nowUtc - cpuSince >= _sustainFor;
+        bool gpu = _gpuStalledSince is { } gpuSince && nowUtc - gpuSince >= _sustainFor;
         return (cpu, gpu) switch
         {
             (true, true) => FanStallTarget.Both,

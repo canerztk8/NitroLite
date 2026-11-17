@@ -28,6 +28,7 @@ public class BatteryWatchdogService : IDisposable
     private readonly CancellationTokenSource _cts = new();
 
     private bool _isDisposed = false;
+    private bool _started = false;
     private double _smoothedDischargeRateMw = 0.0;
     private bool _emaInitialized = false;
     // Counts game-session ticks so the ~235 ms WMI query runs every fifth tick on battery instead of every tick.
@@ -84,8 +85,18 @@ public class BatteryWatchdogService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Starts the three-second loop. Idempotent: the composition root starts it once at launch, and a second call
+    /// would otherwise run a second loop over the same stateful discharge smoothing.
+    /// </summary>
     public void Start()
     {
+        lock (_statusLock)
+        {
+            if (_isDisposed || _started) return;
+            _started = true;
+        }
+
         Task.Run(RunLoopAsync);
     }
 

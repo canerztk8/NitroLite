@@ -44,10 +44,21 @@ public sealed class BatteryHealthSnapshot
 /// <see cref="IsSupported"/> false and the page hides its battery cards instead of drawing zeros.
 /// </para>
 /// </remarks>
-public interface IBatteryHealthService
+public interface IBatteryHealthService : IDisposable
 {
     /// <summary>True when this machine has a battery this platform can read.</summary>
     bool IsSupported { get; }
+
+    /// <summary>
+    /// Starts the service's own background loop, if it has one. Idempotent, and a no-op on a platform that reads
+    /// the battery on demand only.
+    /// </summary>
+    /// <remarks>
+    /// The Windows implementation polls the battery every three seconds so the overcharge banner and the discharge
+    /// estimate stay live while the page is closed. Nothing started that loop before, so the figures only moved when
+    /// the page happened to be open.
+    /// </remarks>
+    void Start();
 
     /// <summary>
     /// The 80 % watchdog. Setting it does not write to the firmware; it only decides whether the app raises the

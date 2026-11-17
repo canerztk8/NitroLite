@@ -17,6 +17,18 @@ namespace NitroLite.Tests.Fuzzing;
 /// </remarks>
 public class FuzzInvariantTests
 {
+
+    /// <summary>
+    /// Evaluates and commits, which is what the poll loop does once the hardware accepted the write. The evaluator
+    /// only proposes: a refused write must not be remembered as applied.
+    /// </summary>
+    private static int? Step(FanCurveEvaluator evaluator, double temperatureC, DateTime nowUtc)
+    {
+        var target = evaluator.Evaluate(temperatureC, nowUtc);
+        if (target is int percent) evaluator.Commit(percent, temperatureC, nowUtc);
+        return target;
+    }
+
     #region Invariant 1 — the thermal floor
 
     /// <summary>
@@ -100,16 +112,16 @@ public class FuzzInvariantTests
         var evaluator = new FanCurveEvaluator(curve);
         var t0 = new DateTime(2026, 11, 14, 12, 0, 0, DateTimeKind.Utc);
 
-        Assert.Equal(FanCurve.MaxPercent, evaluator.Evaluate(95, t0));
+        Assert.Equal(FanCurve.MaxPercent, Step(evaluator, 95, t0));
 
         // The machine cools and the clock steps back an hour in the same poll.
-        int? backwards = evaluator.Evaluate(40, t0.AddHours(-1));
+        int? backwards = Step(evaluator, 40, t0.AddHours(-1));
         Assert.Equal(curve.PercentAt(40), backwards);
 
         // A day forward, then a normal dwell: the curve still slows down.
         var later = t0.AddDays(1);
-        Assert.Equal(FanCurve.MaxPercent, evaluator.Evaluate(96, later));
-        Assert.Equal(curve.PercentAt(40), evaluator.Evaluate(40, later.AddSeconds(30)));
+        Assert.Equal(FanCurve.MaxPercent, Step(evaluator, 96, later));
+        Assert.Equal(curve.PercentAt(40), Step(evaluator, 40, later.AddSeconds(30)));
     }
 
     /// <summary>
@@ -124,7 +136,7 @@ public class FuzzInvariantTests
         var now = new DateTime(2026, 11, 14, 12, 0, 0, DateTimeKind.Utc);
 
         // Settle at 70 °C.
-        evaluator.Evaluate(70, now);
+        Step(evaluator, 70, now);
         int settled = evaluator.AppliedPercent!.Value;
 
         int downwardSteps = 0;
@@ -132,7 +144,7 @@ public class FuzzInvariantTests
         {
             now = now.AddSeconds(1);
             double wobble = i % 2 == 0 ? 69.8 : 70.2;
-            int? target = evaluator.Evaluate(wobble, now);
+            int? target = Step(evaluator, wobble, now);
             if (target.HasValue && target.Value < settled) downwardSteps++;
         }
 

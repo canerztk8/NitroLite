@@ -486,6 +486,7 @@
   "Fan Profili:": "फ़ैन प्रोफ़ाइल:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "फैन विफलता पर स्वचालित सुरक्षा (इको मोड में जाएँ)",
   "Fan devri": "फैन गति",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "एक पंखा रुका हुआ लगता है: गर्म चिप पर कोई पंखा नहीं घूम रहा। मशीन बंद करें और पंखे की जाँच करें।",
   "Fan eğrisi başlatılamadı.": "फ़ैन कर्व शुरू नहीं हो सका।",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "इस सत्र के लिए फ़ैन कर्व गेम प्रोफ़ाइल से आता है।",
   "Fan eğrisi değiştirilemedi: {0}": "फ़ैन कर्व बदला नहीं जा सका: {0}",

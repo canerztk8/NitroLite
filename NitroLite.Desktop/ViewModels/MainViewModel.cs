@@ -592,6 +592,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
     /// <summary>
+    /// How long the shutdown path waits for the write gate before giving up. A step stuck in a WMI call must not hold
+    /// the exit open: the machine is going down either way, and a bounded failure is reported instead of a hang.
+    /// </summary>
+    private static readonly TimeSpan WriteGateTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// The three sliders that write to the machine. A drag raises a change per pixel, and each change would otherwise
     /// be a settings file write and a firmware call; the pause collapses the burst into one of each.
     /// </summary>
@@ -704,6 +710,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
+
+    /// <summary>
+    /// The thermal floor for the manual custom-speed sliders. Separate from <see cref="_curveEvaluator"/> because the
+    /// two answer different questions: the curve decides what the temperature asks for, this decides how far the
+    /// user's own number may be lowered while the die is hot.
+    /// </summary>
+    private readonly ManualFanFloor _manualFanFloor = new();
+
+    /// <summary>
+    /// The fan curve's own clock. Runs whether or not the window is on screen, so hiding the window to play a game
+    /// does not slow the curve down to the tray's five-second telemetry rate.
+    /// </summary>
+    private readonly FanCurveLoop _curveLoop;
+
+    /// <summary>
+    /// Catches a fan that has stopped while its die is hot. Fed from the telemetry tick, and only with readings the
+    /// Acer service actually produced: the fallback path reports 0 RPM because nothing measured the fans.
+    /// </summary>
+    private readonly FanStallWatchdog _fanStall;
+
+    /// <summary>Guards the stall watchdog's alert so a confirmed fault is reported once, not on every tick.</summary>
+    private bool _fanStallReported;
 
     /// <summary>
     /// True while the view model is filling its controls from the hardware. It starts true because the constructor
@@ -849,7 +877,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IDirectWmiControl? directWmi = null,
         IRunAtStartupService? runAtStartup = null,
         INitroKeyListener? nitroKey = null,
-        INitroSenseWatcher? nitroSense = null)
+        INitroSenseWatcher? nitroSense = null,
+        FanStallWatchdog? fanStall = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -881,6 +910,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _runAtStartup = runAtStartup;
         _nitroKey = nitroKey;
         _nitroSense = nitroSense;
+
+        // The watchdog is a dependency rather than a field initialiser so a test can shorten its ten-second sustain
+        // window. Production always gets the default one.
+        _fanStall = fanStall ?? new FanStallWatchdog();
+
         _schoolModeOn = settings.SchoolModeEnabled;
         _fanProtectionOn = settings.FanFailureProtection;
         _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);
@@ -892,6 +926,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _customGpuPercent = AppSettings.ClampCustomFanPercent(settings.CustomFanGpuPercent);
 
         _curveEvaluator = new FanCurveEvaluator(settings.BuildFanCurve());
+
+        // The curve's own clock, started by InitializeAsync once the first read is done and stopped by Dispose. It is
+        // built here rather than lazily so a test can assert the cadence without a window.
+        _curveLoop = new FanCurveLoop(StepFanAsync);
 
         // A settings file written by an older build can carry a profile for a helper or a duplicate of a title that is
         // already listed. Cleaning it here is the one place it is safe: the scan filters its own candidates, so running
@@ -2205,8 +2243,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SyncFanSelection();
             SyncFanSegment();
             Raise(nameof(CustomFanVisible));
+
+            // A new mode means a new set of speeds to write, so both trackers forget what they had applied. Without
+            // this the loop would compare against a speed the previous mode left behind and skip the first write.
+            _curveEvaluator.Reset();
+            _manualFanFloor.Reset();
+            SyncFanLoop();
+
             if (!_suppressWrite) _ = ApplyFanModeAsync();
         }
+    }
+
+    /// <summary>
+    /// Starts or stops the fan loop to match the current mode. The loop is the only thing that writes a fixed fan
+    /// speed, so it runs exactly when there is a fixed speed to write and sleeps the rest of the time.
+    /// </summary>
+    private void SyncFanLoop()
+    {
+        if (_disposed) return;
+
+        if (_hardware != null && SelectedFanMode?.Mode == FanMode.Custom) _curveLoop.Start();
+        else _curveLoop.Stop();
     }
 
     private void SyncFanSelection()
@@ -2248,6 +2305,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// same from SliderCustomFan_ValueChanged: the numbers are the user's choice whether or not the mode is active, so
     /// they are always kept, and only the write waits for the mode.
     /// </summary>
+    /// <remarks>
+    /// What is written is not always what the slider says. <see cref="ManualFanFloor"/> raises the speed to the
+    /// thermal floor for the current temperature, so a slider left at 30 % on a 95 °C machine writes 100 %. The
+    /// stored number is untouched: the floor is a temporary override, and the fan returns to the user's own value as
+    /// soon as the die is cool again.
+    /// </remarks>
     private async Task ApplyCustomFanAsync()
     {
         _settings.CustomFanCpuPercent = CustomCpuPercent;
@@ -2258,9 +2321,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_hardware == null || GameActive) return;
         if (SelectedFanMode?.Mode != FanMode.Custom) return;
 
-        await RunWriteAsync(
-            () => _hardware.SetFanModeAsync(FanMode.Custom, CustomCpuPercent, CustomGpuPercent),
+        int temperature = CpuTemperature;
+        int effective = _manualFanFloor.EffectivePercent(CustomCpuPercent, temperature);
+
+        bool ok = await RunWriteAsync(
+            () => _hardware.SetFanModeAsync(FanMode.Custom, effective, effective),
             Labels.FanMode).ConfigureAwait(true);
+
+        // The loop must not immediately rewrite what this call just wrote, and a refused write must not be recorded
+        // as applied, so the tracker is updated only on success.
+        if (ok) _manualFanFloor.Commit(effective, temperature);
+    }
+
+    /// <summary>
+    /// The speeds to write for the current custom selection: the user's numbers, raised to the thermal floor. Every
+    /// path that writes a fixed speed goes through here, so no caller can bypass the floor.
+    /// </summary>
+    private (int Cpu, int Gpu) EffectiveCustomPercents()
+    {
+        int temperature = CpuTemperature;
+        return (_manualFanFloor.EffectivePercent(CustomCpuPercent, temperature),
+                _manualFanFloor.EffectivePercent(CustomGpuPercent, temperature));
     }
 
     public string CustomCpuPercentText => $"%{CustomCpuPercent}";
@@ -2286,9 +2367,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SaveSettings();
 
             // Re-arming has to forget what was applied, or the first evaluation after a re-arm would decide the fans
-            // are already at the right speed and never write.
+            // are already at the right speed and never write. The manual floor forgets too: disarming the curve hands
+            // the fans back to the sliders, and the first manual write must not be skipped as "already applied".
             _curveEvaluator.Reset();
+            _manualFanFloor.Reset();
             SyncFanSegment();
+            SyncFanLoop();
             Status = value ? Labels.CurveEnabled : Labels.CurveDisabled;
             if (!value) _ = ApplyFanModeAsync();
         }
@@ -2859,9 +2943,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The switch follows what was written, not what was asked for. The two differ on the re-assert path, where
         // the stored choice is put back on the keyboard without the user having touched anything.
-        _suppressWrite = true;
-        try { BacklightTimeoutOn = enable; }
-        finally { _suppressWrite = false; }
+        SyncControls(() => BacklightTimeoutOn = enable);
 
         _settings.BacklightTimeoutEnabled = enable;
         SaveSettings();
@@ -2869,12 +2951,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Puts the switch back where it was, without the write the setter would otherwise start.</summary>
-    private void RevertBacklightTimeout(bool attempted)
-    {
-        _suppressWrite = true;
-        try { BacklightTimeoutOn = !attempted; }
-        finally { _suppressWrite = false; }
-    }
+    private void RevertBacklightTimeout(bool attempted) => SyncControls(() => BacklightTimeoutOn = !attempted);
 
     /// <summary>
     /// Reads the 30-second timeout and puts the switch on what the keyboard actually holds.
@@ -2899,9 +2976,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var state = await _hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
         if (state is bool on)
         {
-            _suppressWrite = true;
-            try { BacklightTimeoutOn = on; }
-            finally { _suppressWrite = false; }
+            SyncControls(() => BacklightTimeoutOn = on);
 
             _settings.BacklightTimeoutEnabled = on;
             SaveSettings();
@@ -4532,12 +4607,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // Whatever happened above, the controls must work from now on: a failed initial read is not a reason to
             // leave the window read-only for the rest of the session.
             _suppressWrite = false;
+
+            // The machine may already be in custom mode when the window opens, in which case the fan loop has to be
+            // running before the first telemetry sample rather than after the user touches a card.
+            SyncFanLoop();
         }
     }
 
     /// <summary>
-    /// One telemetry sample, plus the fan-curve step when the curve is armed. Called by the window's timer; the guard
-    /// keeps a slow read from stacking up behind the next tick.
+    /// One telemetry sample. The fan curve is not stepped here: it has its own clock, so hiding the window to play a
+    /// game does not slow it to the tray's five-second rate. The guard keeps a slow read from stacking up behind the
+    /// next tick.
     /// </summary>
     public async Task RefreshTelemetryAsync()
     {
@@ -4596,7 +4676,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             RecordHistory(data);
 
-            await StepCurveAsync(data.CpuTemperature).ConfigureAwait(true);
+            // The fan curve is not stepped here. It has its own clock (see FanCurveLoop) so that hiding the window to
+            // play a game does not slow it to the tray's five-second telemetry rate. What runs here is the stall
+            // watchdog, which needs the same sample the page is showing.
+            ObserveFanStall(data);
 
             // Game detection runs on the same tick as telemetry, every other second: a /proc scan is cheap but not
             // free, and a game that starts is not going to be missed by a one-second delay.
@@ -4625,21 +4708,120 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Applies the curve for the current temperature when it is armed and the fan mode is custom. The evaluator owns
-    /// the hysteresis and the dwell time, and <see cref="FanCurve.PercentAt"/> owns the safety floor, so neither is
-    /// re-implemented here.
+    /// Feeds the stall watchdog one sample and acts on a confirmed fault.
     /// </summary>
-    private async Task StepCurveAsync(int cpuTemperature)
+    /// <remarks>
+    /// <para>
+    /// Only a reading the Acer service produced is fed in. The fallback path reports 0 RPM because nothing measured
+    /// the fans, and judging that would fire on every machine without the service.
+    /// </para>
+    /// <para>
+    /// The switch is what decides whether the app acts. With it off the fault is still logged, because a user reading
+    /// the log after a thermal shutdown deserves to know the fan had stopped, but nothing is written to the hardware:
+    /// dropping the machine into Eco is a visible change and it is not one to make on a setting the user left alone.
+    /// </para>
+    /// </remarks>
+    private void ObserveFanStall(MonitorData data)
     {
-        if (!CurveEnabled || SelectedFanMode?.Mode != FanMode.Custom) return;
+        if (!data.IsFanRpmMeasured)
+        {
+            // Nothing measured the fans, so there is nothing to judge. The watchdog is reset rather than left holding
+            // a timer that a later real sample would complete against a gap it never saw.
+            _fanStall.Reset();
+            _fanStallReported = false;
+            return;
+        }
 
-        var target = _curveEvaluator.Evaluate(cpuTemperature, DateTime.UtcNow);
-        if (target is not int percent) return;
+        var verdict = _fanStall.Observe(
+            data.CpuTemperature, data.GpuTemperature, data.CpuFanSpeed, data.GpuFanSpeed, DateTime.UtcNow);
 
-        await _writeGate.WaitAsync().ConfigureAwait(true);
+        if (verdict == null) return;
+
+        AppLog.Error(
+            "Fan durmuş görünüyor",
+            $"{verdict.Target} · {verdict.TemperatureC} °C · {verdict.FanRpm} RPM · {verdict.Sustained.TotalSeconds:F0} sn");
+
+        if (_fanStallReported) return;
+        _fanStallReported = true;
+
+        Status = Labels.FanStallDetected;
+
+        if (!FanProtectionOn) return;
+
+        // The protective mode is the coolest one the firmware offers. Eco is the battery choice and is not always
+        // advertised, so Quiet is the fallback: both drop the package power, which is the only lever left when a fan
+        // has stopped.
+        var protective = Modes.FirstOrDefault(m => m.Mode == OperatingMode.Eco)
+                         ?? Modes.FirstOrDefault(m => m.Mode == OperatingMode.Quiet);
+
+        if (protective == null) return;
+
+        SyncControls(() => SelectedMode = protective);
+        _ = ApplyModeAsync(protective.Mode);
+    }
+
+    /// <summary>
+    /// One step of the fan loop. The curve drives the fans when it is armed; otherwise the manual sliders do, raised
+    /// to the thermal floor for the current temperature. Both write through the same gate and both record only what
+    /// the hardware accepted, so a refused write is proposed again on the next step instead of being remembered.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the fan loop's background thread, which is why nothing here touches a control: the properties it reads
+    /// are plain fields, and the only thing it raises is a log line.
+    /// </remarks>
+    private async Task StepFanAsync()
+    {
+        if (_hardware == null || _disposed) return;
+        if (SelectedFanMode?.Mode != FanMode.Custom) return;
+
+        // A game's own fan rule owns the fans while it runs; writing here would fight it.
+        if (GameActive) return;
+
+        int temperature = CpuTemperature;
+        if (temperature <= 0) return;
+
+        var now = DateTime.UtcNow;
+
+        if (CurveEnabled)
+        {
+            // Captured once: the UI thread can replace the evaluator when the curve is edited, and a step that read
+            // the field twice could evaluate against one curve and commit to another.
+            var evaluator = _curveEvaluator;
+            if (evaluator.Evaluate(temperature, now) is not int percent) return;
+
+            await WriteFanPercentAsync(percent, () => evaluator.Commit(percent, temperature, now)).ConfigureAwait(false);
+            return;
+        }
+
+        var floor = _manualFanFloor;
+        if (floor.Evaluate(CustomCpuPercent, temperature) is not int manual) return;
+
+        await WriteFanPercentAsync(manual, () => floor.Commit(manual, temperature)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes one fixed speed to both fans and records it only when the firmware accepted it. The commit is a
+    /// callback rather than a value because the two callers track different state.
+    /// </summary>
+    private async Task WriteFanPercentAsync(int percent, Action commit)
+    {
+        await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await _hardware!.SetFanModeAsync(FanMode.Custom, percent, percent).ConfigureAwait(true);
+            bool ok = await _hardware!.SetFanModeAsync(FanMode.Custom, percent, percent).ConfigureAwait(false);
+            if (ok)
+            {
+                commit();
+                return;
+            }
+
+            // Not committed: the next step proposes the same speed again, which is what makes a transient refusal
+            // recover instead of leaving the fans at the previous value until the temperature happens to move.
+            AppLog.Warn("Fan hızı uygulanmadı", $"%{percent}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fan hızı yazılamadı", ex.Message);
         }
         finally
         {
@@ -4651,6 +4833,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task ReadStateAsync()
     {
+        // The previous value is restored rather than cleared: this runs while the window is still filling itself in,
+        // and a read that finished after the first one would otherwise switch writes back on underneath it.
+        bool previous = _suppressWrite;
         _suppressWrite = true;
         try
         {
@@ -4687,7 +4872,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            _suppressWrite = false;
+            _suppressWrite = previous;
         }
     }
 
@@ -4772,10 +4957,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             bool enabled = await _autoStart.IsEnabledAsync().ConfigureAwait(true);
 
-            bool previous = _suppressWrite;
-            _suppressWrite = true;
-            AutoStartOn = enabled;
-            _suppressWrite = previous;
+            SyncControls(() => AutoStartOn = enabled);
         }
         catch (Exception ex)
         {
@@ -4801,8 +4983,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || SelectedFanMode is not FanModeChoice choice) return;
 
+        // A fixed speed goes through the thermal floor even when the user picked it from the mode card rather than
+        // from the slider: the floor is a property of the temperature, not of which control asked for the write.
+        var (cpu, gpu) = choice.Mode == FanMode.Custom ? EffectiveCustomPercents() : (CustomCpuPercent, CustomGpuPercent);
+
         await RunWriteAsync(
-            () => _hardware.SetFanModeAsync(choice.Mode, CustomCpuPercent, CustomGpuPercent),
+            () => _hardware.SetFanModeAsync(choice.Mode, cpu, gpu),
             Labels.FanMode).ConfigureAwait(true);
     }
 
@@ -4820,8 +5006,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The curve only drives anything in custom mode, so applying it also selects that mode.
         SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Custom) ?? SelectedFanMode;
+
+        var (cpu, gpu) = EffectiveCustomPercents();
         await RunWriteAsync(
-            () => _hardware.SetFanModeAsync(FanMode.Custom, CustomCpuPercent, CustomGpuPercent),
+            () => _hardware.SetFanModeAsync(FanMode.Custom, cpu, gpu),
             Labels.FanCurve).ConfigureAwait(true);
     }
 
@@ -5378,50 +5566,146 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Hands the fans back to the firmware and disarms the curve. Called before the process exits so a machine is not
     /// left with a fixed fan speed written by a program that is no longer running.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The handback comes first and the bookkeeping second. The old order saved the settings and then wrote Auto, so
+    /// a refused write left the file saying the curve was off while the fans were still running at a fixed speed —
+    /// and the next launch believed the file.
+    /// </para>
+    /// <para>
+    /// Everything here is <c>ConfigureAwait(false)</c> and the gate wait is bounded. This runs on the shutdown path,
+    /// where the UI thread may be the one waiting for it: capturing the context would deadlock the exit, and an
+    /// unbounded wait would hang it if a step were stuck in a WMI call.
+    /// </para>
+    /// </remarks>
     public async Task<bool> RestoreFansToAutoAsync()
     {
         if (_hardware == null) return true;
 
-        await _writeGate.WaitAsync().ConfigureAwait(true);
+        // The loop has to stop before the handback, or its next step would write a fixed speed straight back over
+        // the Auto write and the machine would exit with the fans pinned.
+        _curveLoop.Stop();
+
+        bool ok;
         try
         {
-            _curveEnabled = false;
-            Raise(nameof(CurveEnabled));
-            _settings.FanCurveEnabled = false;
-            SaveSettings();
-            _curveEvaluator.Reset();
+            if (!await _writeGate.WaitAsync(WriteGateTimeout).ConfigureAwait(false))
+            {
+                AppLog.Warn("Fanlar otomatiğe alınamadı", "yazma kapısı zaman aşımına uğradı");
+                return false;
+            }
 
-            bool ok = await _hardware.SetFanModeAsync(FanMode.Auto).ConfigureAwait(true);
-            SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
-            return ok;
+            try
+            {
+                ok = await _hardware.SetFanModeAsync(FanMode.Auto).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
         catch (Exception ex)
         {
             AppLog.Warn("Fanlar otomatiğe alınamadı", ex.Message);
             return false;
         }
-        finally
+
+        if (!ok)
         {
-            _writeGate.Release();
+            // The firmware refused. The settings file is left alone: the curve is still armed as far as the machine
+            // is concerned, and a file that said otherwise would be a lie the next launch acts on.
+            AppLog.Warn("Fanlar otomatiğe alınamadı", "donanım yazımı reddedildi");
+            return false;
         }
+
+        _curveEnabled = false;
+        _settings.FanCurveEnabled = false;
+        _curveEvaluator.Reset();
+        _manualFanFloor.Reset();
+        SaveSettings();
+
+        // The controls follow the handback, but a binding that cannot be updated from this thread must not turn a
+        // successful handback into a failed exit.
+        try
+        {
+            Raise(nameof(CurveEnabled));
+            SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fan kontrolleri güncellenemedi", ex.Message);
+        }
+
+        return true;
     }
 
     /// <summary>
     /// Clean exit: end any game session, put the fans back under firmware control, and report whether that worked.
     /// The caller shuts the application down afterwards; nothing here closes a window.
     /// </summary>
+    /// <remarks>
+    /// The fan handback is the one thing that must happen, so it runs even when ending the game session throws: a
+    /// machine left with a fixed fan speed is worse than a game profile that was not closed cleanly.
+    /// </remarks>
     public async Task CleanExitAsync()
     {
         try
         {
-            if (_gameProfiles != null) await _gameProfiles.StopAsync().ConfigureAwait(true);
-            bool ok = await RestoreFansToAutoAsync().ConfigureAwait(true);
-            Status = ok ? Labels.CleanExitDone : Labels.CleanExitPartial;
+            if (_gameProfiles != null) await _gameProfiles.StopAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Oyun oturumu kapatılamadı", ex.Message);
+        }
+
+        bool ok = false;
+        try
+        {
+            ok = await RestoreFansToAutoAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             AppLog.Warn("Temiz çıkış başarısız", ex.Message);
-            Status = Labels.CleanExitPartial;
+        }
+
+        try
+        {
+            Status = ok ? Labels.CleanExitDone : Labels.CleanExitPartial;
+        }
+        catch (Exception ex)
+        {
+            // A status line nobody is going to read is not worth failing the exit over.
+            AppLog.Warn("Çıkış durumu yazılamadı", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The fan handback, synchronously, for the two paths that cannot await: <c>ProcessExit</c> and
+    /// <c>UnhandledException</c>.
+    /// </summary>
+    /// <remarks>
+    /// The work runs on a thread-pool thread and is waited for with a bound. Running it inline would deadlock the
+    /// moment the caller is the UI thread, which is exactly where an unhandled exception is raised, and an unbounded
+    /// wait would turn a crash into a hang.
+    /// </remarks>
+    public bool RestoreFansToAutoBlocking(TimeSpan timeout)
+    {
+        try
+        {
+            var task = Task.Run(RestoreFansToAutoAsync);
+
+            if (!task.Wait(timeout))
+            {
+                AppLog.Warn("Fanlar otomatiğe alınamadı", "zaman aşımına uğradı");
+                return false;
+            }
+
+            return task.Result;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fanlar otomatiğe alınamadı", ex.Message);
+            return false;
         }
     }
 
@@ -5791,6 +6075,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        // The loop is stopped before the gate is disposed: a step in flight is holding the gate, and disposing it
+        // underneath that step would throw on a background thread nobody is watching.
+        _curveLoop.Dispose();
+
         _lightingDebounce.Dispose();
         _customFanDebounce.Dispose();
         _curveDebounce.Dispose();

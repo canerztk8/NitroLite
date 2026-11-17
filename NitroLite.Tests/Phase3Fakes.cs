@@ -49,6 +49,15 @@ internal static class Phase3Fakes
 
         public bool WatchdogEnabled { get; set; } = true;
 
+        /// <summary>How many times the composition root asked the service to start its loop.</summary>
+        public int Starts { get; private set; }
+
+        public void Start() => Starts++;
+
+        public void Dispose()
+        {
+        }
+
         public BatteryHealthSnapshot Snapshot { get; set; } = new()
         {
             Status = new BatteryStatusInfo

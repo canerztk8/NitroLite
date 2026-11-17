@@ -486,6 +486,7 @@
   "Fan Profili:": "Профиль вентилятора:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "Автоматическая защита при отказе вентилятора (переход в режим Eco)",
   "Fan devri": "Обороты вентилятора",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "Вентилятор, похоже, остановился: на горячем чипе не вращается ни один вентилятор. Выключите машину и проверьте вентилятор.",
   "Fan eğrisi başlatılamadı.": "Не удалось запустить кривую вентиляторов.",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "На время этой сессии кривая вентилятора берётся из профиля игры.",
   "Fan eğrisi değiştirilemedi: {0}": "Не удалось изменить кривую вентилятора: {0}",

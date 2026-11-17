@@ -4,6 +4,19 @@ using System.Text.Json.Nodes;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
+/// <summary>What a pair of fan percentages asks the firmware for.</summary>
+public enum FanSpeedRoute
+{
+    /// <summary>Both fans at a fixed speed, written through <c>SetGamingFanSpeed</c>.</summary>
+    FixedSpeed = 0,
+
+    /// <summary>Both fans back under firmware control, written through <c>SetGamingFanBehavior</c>.</summary>
+    ReleaseToFirmware = 1,
+
+    /// <summary>One fan released and one driven, which the firmware cannot express.</summary>
+    Invalid = 2
+}
+
 /// <summary>
 /// The real WMID_Gaming executor. Runs only inside the elevated <c>--wmi-worker</c> process.
 /// <para>
@@ -295,12 +308,39 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
     }
 
+    /// <summary>
+    /// Which write a pair of fan percentages asks for.
+    /// </summary>
+    /// <remarks>
+    /// Zero is not a speed, it is "hand the fan back". Writing 0 to <c>SetGamingFanSpeed</c> asks the EC for a stopped
+    /// fan, which is the one thing this app must never do on a hot machine, so a pair of zeros is routed to the
+    /// behaviour call that actually returns the fans to the firmware. A single zero is refused rather than guessed
+    /// at: <c>SetGamingFanBehavior</c> drives both fans at once, so there is no way to release one and keep driving
+    /// the other, and picking one of the two readings would be a silent decision about a fan.
+    /// </remarks>
+    public static FanSpeedRoute RouteFanSpeed(int cpuPercent, int gpuPercent) => (cpuPercent, gpuPercent) switch
+    {
+        (0, 0) => FanSpeedRoute.ReleaseToFirmware,
+        (0, _) or (_, 0) => FanSpeedRoute.Invalid,
+        _ => FanSpeedRoute.FixedSpeed
+    };
+
     public WmiOperationResult SetFanSpeed(int cpuPercent, int gpuPercent)
     {
         if (!WmiWorkerValidation.IsValidFanPercent(cpuPercent))
             return WmiOperationResult.InvalidArgument($"cpu fan percentage {cpuPercent} outside 0 or 30..100");
         if (!WmiWorkerValidation.IsValidFanPercent(gpuPercent))
             return WmiOperationResult.InvalidArgument($"gpu fan percentage {gpuPercent} outside 0 or 30..100");
+
+        switch (RouteFanSpeed(cpuPercent, gpuPercent))
+        {
+            case FanSpeedRoute.ReleaseToFirmware:
+                return SetFanBehavior(FanMode.Auto, FanMode.Auto);
+
+            case FanSpeedRoute.Invalid:
+                return WmiOperationResult.InvalidArgument(
+                    "a fan speed of 0 releases both fans; it cannot be combined with a driven fan");
+        }
 
         lock (_gate)
         {

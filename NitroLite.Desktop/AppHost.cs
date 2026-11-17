@@ -76,12 +76,26 @@ public sealed class AppHost : IDisposable
     private readonly IHardwareController? _hardware;
     private readonly INitroKeyListener? _nitroKey;
     private readonly INitroSenseWatcher? _nitroSense;
+    private readonly IBatteryHealthService? _batteryHealth;
 
     private AppHost(PlatformServices services, IDialogService? dialogs)
     {
         _hardware = services.Hardware;
         _nitroKey = services.NitroKey;
         _nitroSense = services.NitroSense;
+        _batteryHealth = services.BatteryHealth;
+
+        // The battery's own loop is started here rather than by the page: the overcharge banner and the discharge
+        // estimate have to be live while the page is closed, which is the whole point of a watchdog.
+        try
+        {
+            _batteryHealth?.Start();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Pil gözcüsü başlatılamadı", ex.Message);
+        }
+
         ViewModel = new MainViewModel(
             services.Settings,
             services.Hardware,
@@ -495,6 +509,7 @@ public sealed class AppHost : IDisposable
     {
         ViewModel.Dispose();
         _nitroKey?.Dispose();
+        _batteryHealth?.Dispose();
         _hardware?.Dispose();
     }
 }

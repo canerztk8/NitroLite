@@ -156,12 +156,23 @@ public class FanCurveTests
 
     // ---------------------------------------------------------------- when to write
 
+    /// <summary>
+    /// Evaluates and commits, which is what the view model does once the hardware accepted the write. The evaluator
+    /// itself only proposes: a refused write must not be remembered as applied.
+    /// </summary>
+    private static int? Step(FanCurveEvaluator evaluator, double temperatureC, DateTime nowUtc)
+    {
+        var target = evaluator.Evaluate(temperatureC, nowUtc);
+        if (target is int percent) evaluator.Commit(percent, temperatureC, nowUtc);
+        return target;
+    }
+
     [Fact]
     public void FirstEvaluationAlwaysWrites()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
         Assert.Null(evaluator.AppliedPercent);
-        Assert.Equal(70, evaluator.Evaluate(65, T0));
+        Assert.Equal(70, Step(evaluator, 65, T0));
         Assert.Equal(70, evaluator.AppliedPercent);
     }
 
@@ -169,28 +180,28 @@ public class FanCurveTests
     public void AnUnchangedTargetIsNotWrittenAgain()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(65, T0);
-        Assert.Null(evaluator.Evaluate(65, T0.AddSeconds(1)));
+        Step(evaluator, 65, T0);
+        Assert.Null(Step(evaluator, 65, T0.AddSeconds(1)));
         // 65.1 °C still rounds to the same 70 %: a sensor wobble must not reach the fans.
-        Assert.Null(evaluator.Evaluate(65.1, T0.AddSeconds(2)));
+        Assert.Null(Step(evaluator, 65.1, T0.AddSeconds(2)));
     }
 
     [Fact]
     public void ARiseIsWrittenImmediately()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(65, T0);
+        Step(evaluator, 65, T0);
         // One second later, well inside the dwell time: heat is the emergency, so it still goes out.
-        Assert.Equal(72, evaluator.Evaluate(66, T0.AddSeconds(1)));
+        Assert.Equal(72, Step(evaluator, 66, T0.AddSeconds(1)));
     }
 
     [Fact]
     public void AFallInsideTheHysteresisBandIsHeld()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(66, T0);
+        Step(evaluator, 66, T0);
         // 64 °C is only 2 °C below the 66 °C that produced 72 %: inside the 3 °C band, so nothing moves.
-        Assert.Null(evaluator.Evaluate(64, T0.AddSeconds(60)));
+        Assert.Null(Step(evaluator, 64, T0.AddSeconds(60)));
         Assert.Equal(72, evaluator.AppliedPercent);
     }
 
@@ -198,23 +209,23 @@ public class FanCurveTests
     public void AFallOutsideTheBandWaitsForTheDwellTime()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(66, T0);
+        Step(evaluator, 66, T0);
         // 62 °C is 4 °C below: outside the band, but only 5 s have passed.
-        Assert.Null(evaluator.Evaluate(62, T0.AddSeconds(5)));
+        Assert.Null(Step(evaluator, 62, T0.AddSeconds(5)));
         Assert.Equal(72, evaluator.AppliedPercent);
         // The same reading after the dwell time is written.
-        Assert.Equal(64, evaluator.Evaluate(62, T0.AddSeconds(11)));
+        Assert.Equal(64, Step(evaluator, 62, T0.AddSeconds(11)));
     }
 
     [Fact]
     public void AMissingOrImpossibleReadingNeverChangesTheSpeed()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(65, T0);
-        Assert.Null(evaluator.Evaluate(0, T0.AddSeconds(60)));
-        Assert.Null(evaluator.Evaluate(-1, T0.AddSeconds(60)));
-        Assert.Null(evaluator.Evaluate(double.NaN, T0.AddSeconds(60)));
-        Assert.Null(evaluator.Evaluate(double.PositiveInfinity, T0.AddSeconds(60)));
+        Step(evaluator, 65, T0);
+        Assert.Null(Step(evaluator, 0, T0.AddSeconds(60)));
+        Assert.Null(Step(evaluator, -1, T0.AddSeconds(60)));
+        Assert.Null(Step(evaluator, double.NaN, T0.AddSeconds(60)));
+        Assert.Null(Step(evaluator, double.PositiveInfinity, T0.AddSeconds(60)));
         Assert.Equal(70, evaluator.AppliedPercent);
     }
 
@@ -222,28 +233,62 @@ public class FanCurveTests
     public void ResetMakesTheNextEvaluationWriteAgain()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(65, T0);
+        Step(evaluator, 65, T0);
         evaluator.Reset();
         Assert.Null(evaluator.AppliedPercent);
-        Assert.Equal(70, evaluator.Evaluate(65, T0.AddSeconds(1)));
+        Assert.Equal(70, Step(evaluator, 65, T0.AddSeconds(1)));
     }
 
     [Fact]
     public void AClockThatStepsBackwardsDoesNotFreezeTheCurve()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve());
-        evaluator.Evaluate(66, T0);
+        Step(evaluator, 66, T0);
         // An NTP correction moved the wall clock back an hour. Read as "no time has passed" this used to hold the
         // fans at the old speed until the clock caught up again.
-        Assert.Equal(64, evaluator.Evaluate(62, T0.AddHours(-1)));
+        Assert.Equal(64, Step(evaluator, 62, T0.AddHours(-1)));
     }
 
     [Fact]
     public void AZeroDwellTimeLetsTheFansSlowDownOnTheNextPoll()
     {
         var evaluator = new FanCurveEvaluator(TwoPointCurve(minDwellSeconds: 0));
-        evaluator.Evaluate(66, T0);
-        Assert.Equal(64, evaluator.Evaluate(62, T0));
+        Step(evaluator, 66, T0);
+        Assert.Equal(64, Step(evaluator, 62, T0));
+    }
+
+    [Fact]
+    public void ARefusedWriteIsProposedAgainInsteadOfBeingRememberedAsApplied()
+    {
+        var evaluator = new FanCurveEvaluator(TwoPointCurve());
+
+        // The first write is refused, so nothing is committed.
+        Assert.Equal(70, evaluator.Evaluate(65, T0));
+        Assert.Null(evaluator.AppliedPercent);
+
+        // The next poll proposes the same speed again. Before the split, the evaluator had already recorded 70 % and
+        // returned null here, so the fans stayed wherever they were until the temperature happened to move.
+        Assert.Equal(70, evaluator.Evaluate(65, T0.AddSeconds(2)));
+        Assert.Null(evaluator.AppliedPercent);
+
+        // Once the hardware accepts it, the evaluator settles.
+        evaluator.Commit(70, 65, T0.AddSeconds(2));
+        Assert.Equal(70, evaluator.AppliedPercent);
+        Assert.Null(evaluator.Evaluate(65, T0.AddSeconds(4)));
+    }
+
+    [Fact]
+    public void ARefusedRiseIsProposedAgainOnTheNextPoll()
+    {
+        var evaluator = new FanCurveEvaluator(TwoPointCurve());
+        Step(evaluator, 65, T0);
+
+        // 66 °C asks for 72 %, the firmware says no, and the evaluator still believes it is at 70 %.
+        Assert.Equal(72, evaluator.Evaluate(66, T0.AddSeconds(1)));
+        Assert.Equal(70, evaluator.AppliedPercent);
+
+        // The next poll asks again rather than deciding the fans are already there.
+        Assert.Equal(72, evaluator.Evaluate(66, T0.AddSeconds(2)));
     }
 
     // ---------------------------------------------------------------- settings

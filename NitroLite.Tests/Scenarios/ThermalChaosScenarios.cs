@@ -13,6 +13,17 @@ public class ThermalChaosScenarios
 {
     private static readonly DateTime T0 = new(2026, 11, 14, 12, 0, 0, DateTimeKind.Utc);
 
+    /// <summary>
+    /// Evaluates and commits, which is what the poll loop does once the hardware accepted the write. The evaluator
+    /// only proposes: a refused write must not be remembered as applied.
+    /// </summary>
+    private static int? Step(FanCurveEvaluator evaluator, double temperatureC, DateTime nowUtc)
+    {
+        var target = evaluator.Evaluate(temperatureC, nowUtc);
+        if (target is int percent) evaluator.Commit(percent, temperatureC, nowUtc);
+        return target;
+    }
+
     #region S1-01 A stuck CPU sensor must not hide a hot GPU
 
     /// <summary>
@@ -97,7 +108,7 @@ public class ThermalChaosScenarios
     {
         var evaluator = new FanCurveEvaluator(new FanCurve(FanCurve.DefaultPoints()));
 
-        Assert.Null(evaluator.Evaluate(reading, T0));
+        Assert.Null(Step(evaluator, reading, T0));
     }
 
     /// <summary>
@@ -132,7 +143,7 @@ public class ThermalChaosScenarios
         var evaluator = new FanCurveEvaluator(curve);
 
         // Settle at a high speed first, so every later step is a downward one.
-        Assert.Equal(curve.PercentAt(75), evaluator.Evaluate(75, T0));
+        Assert.Equal(curve.PercentAt(75), Step(evaluator, 75, T0));
 
         var writes = new List<int>();
         var now = T0;
@@ -141,7 +152,7 @@ public class ThermalChaosScenarios
             // 69.8 and 70.2 straddle the 70 °C anchor; the band is 3 °C wide.
             double reading = i % 2 == 0 ? 69.8 : 70.2;
             now = now.AddSeconds(1);
-            int? target = evaluator.Evaluate(reading, now);
+            int? target = Step(evaluator, reading, now);
             if (target.HasValue) writes.Add(target.Value);
         }
 
@@ -160,17 +171,17 @@ public class ThermalChaosScenarios
         var curve = new FanCurve(FanCurve.DefaultPoints());
         var evaluator = new FanCurveEvaluator(curve);
 
-        int settled = evaluator.Evaluate(75, T0)!.Value;
+        int settled = Step(evaluator, 75, T0)!.Value;
 
         var now = T0;
         for (int i = 0; i < 50; i++)
         {
             now = now.AddSeconds(30);
             // 74.5 is inside the 3 °C band below 75, so the curve must hold.
-            Assert.Null(evaluator.Evaluate(74.5, now));
+            Assert.Null(Step(evaluator, 74.5, now));
         }
 
-        Assert.Equal(settled, evaluator.Evaluate(75, now.AddSeconds(30)) is null ? settled : -1);
+        Assert.Equal(settled, Step(evaluator, 75, now.AddSeconds(30)) is null ? settled : -1);
     }
 
     #endregion
@@ -187,11 +198,11 @@ public class ThermalChaosScenarios
         var curve = new FanCurve(FanCurve.DefaultPoints());
         var evaluator = new FanCurveEvaluator(curve);
 
-        evaluator.Evaluate(80, T0);
+        Step(evaluator, 80, T0);
         int high = curve.PercentAt(80);
 
         // The machine cools, but the clock goes back an hour at the same moment.
-        int? target = evaluator.Evaluate(50, T0.AddHours(-1));
+        int? target = Step(evaluator, 50, T0.AddHours(-1));
 
         Assert.NotNull(target);
         Assert.True(target!.Value < high, $"The fans stayed at {high} % after the machine cooled to 50 °C.");
@@ -207,8 +218,8 @@ public class ThermalChaosScenarios
         var curve = new FanCurve(FanCurve.DefaultPoints());
         var evaluator = new FanCurveEvaluator(curve);
 
-        evaluator.Evaluate(80, T0);
-        int? target = evaluator.Evaluate(50, T0.AddDays(1));
+        Step(evaluator, 80, T0);
+        int? target = Step(evaluator, 50, T0.AddDays(1));
 
         Assert.NotNull(target);
         Assert.Equal(curve.PercentAt(50), target!.Value);
@@ -225,13 +236,13 @@ public class ThermalChaosScenarios
         var evaluator = new FanCurveEvaluator(curve);
 
         var now = T0.AddDays(1);
-        evaluator.Evaluate(80, now);
+        Step(evaluator, 80, now);
 
         int writes = 0;
         for (int i = 0; i < 30; i++)
         {
             now = now.AddSeconds(1);
-            if (evaluator.Evaluate(50, now).HasValue) writes++;
+            if (Step(evaluator, 50, now).HasValue) writes++;
         }
 
         Assert.True(writes <= 1, $"A forward clock jump produced {writes} writes in 30 s.");

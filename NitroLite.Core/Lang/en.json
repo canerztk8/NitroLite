@@ -486,6 +486,7 @@
   "Fan Profili:": "Fan Profile:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "Automatic protection on fan failure (switch to Eco mode)",
   "Fan devri": "Fan speed",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "A fan looks stopped: no fan is turning on a hot die. Shut the machine down and check the fan.",
   "Fan eğrisi başlatılamadı.": "The fan curve could not be started.",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "The fan curve comes from the game profile for this session.",
   "Fan eğrisi değiştirilemedi: {0}": "The fan curve could not be changed: {0}",

@@ -76,6 +76,15 @@ public sealed class WindowsBatteryHealthService : IBatteryHealthService, IDispos
 
     public bool ClearWearHistory() => _history.Clear();
 
+    /// <summary>
+    /// Starts the three-second battery loop. Idempotent, and a no-op when the watchdog was handed in by a caller that
+    /// owns it: a test that passes its own watchdog decides when it runs.
+    /// </summary>
+    public void Start()
+    {
+        if (_ownsWatchdog) _watchdog.Start();
+    }
+
     public void Dispose()
     {
         if (_ownsWatchdog) _watchdog.Dispose();

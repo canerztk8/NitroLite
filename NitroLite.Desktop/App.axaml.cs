@@ -37,6 +37,12 @@ public partial class App : Application
     /// </summary>
     private static readonly TimeSpan NitroSenseSuppressionWindow = TimeSpan.FromSeconds(4);
 
+    /// <summary>
+    /// How long a shutdown path waits for the fans to be handed back. Bounded because the alternative is a machine
+    /// that will not finish shutting down: the handback is worth two seconds, not an indefinite wait.
+    /// </summary>
+    private static readonly TimeSpan ShutdownHandbackTimeout = TimeSpan.FromSeconds(2);
+
     private int _survivedUiExceptions;
 
     public override void Initialize()
@@ -105,6 +111,12 @@ public partial class App : Application
             // A session that ends — sign-out, shutdown, a forced logoff — is not a clean exit, but the fans still have
             // to go back to the firmware. The handler is synchronous because the session does not wait for a task.
             desktop.ShutdownRequested += (_, _) => OnShutdownRequested();
+
+            // The two paths that never reach the clean exit: a crash, and a process that is being torn down. Both get
+            // a best-effort handback, because a machine left with a fixed fan speed is the one failure worth
+            // surviving a crash.
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
 
             // One bad control must not take the window down with it. The exception is logged and the app keeps
             // running; a run of them means something is throwing on every pass and the process gives up instead of
@@ -175,6 +187,11 @@ public partial class App : Application
     /// The only path that ends the process. The fans are handed back to the firmware first: a machine left with a
     /// fixed fan speed written by a program that is no longer running is the one failure a tray menu can cause.
     /// </summary>
+    /// <remarks>
+    /// The handback is awaited without capturing the UI thread, and the window and the lifetime are touched back on
+    /// it. Awaiting with the context captured would deadlock the moment this is called from the UI thread, because
+    /// the continuation would be queued behind the very frame that is waiting for it.
+    /// </remarks>
     private async Task ExitAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
         if (_exiting) return;
@@ -182,7 +199,7 @@ public partial class App : Application
 
         try
         {
-            if (_host != null) await _host.ViewModel.CleanExitAsync();
+            if (_host != null) await _host.ViewModel.CleanExitAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -190,9 +207,14 @@ public partial class App : Application
         }
         finally
         {
-            if (_window != null) _window.AllowClose = true;
-            DisposeHost();
-            desktop.Shutdown();
+            // Posted rather than awaited: the window and the lifetime are UI-thread objects, and a post cannot
+            // deadlock the thread that is shutting them down.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_window != null) _window.AllowClose = true;
+                DisposeHost();
+                desktop.Shutdown();
+            });
         }
     }
 
@@ -200,11 +222,16 @@ public partial class App : Application
     /// The session is ending and there is no time for a full clean exit. The fans are still handed back, because the
     /// alternative is a machine that boots with a fixed fan speed and no program to change it.
     /// </summary>
+    /// <remarks>
+    /// The handback runs on a thread-pool thread with a bound. The old version called
+    /// <c>GetAwaiter().GetResult()</c> on the UI thread, which blocks the thread the continuation needs: a deadlock,
+    /// not a handback, and the fans stayed where they were.
+    /// </remarks>
     private void OnShutdownRequested()
     {
         try
         {
-            _host?.ViewModel.RestoreFansToAutoAsync().GetAwaiter().GetResult();
+            _host?.ViewModel.RestoreFansToAutoBlocking(ShutdownHandbackTimeout);
         }
         catch (Exception ex)
         {
@@ -213,6 +240,38 @@ public partial class App : Application
         finally
         {
             DisposeHost();
+        }
+    }
+
+    /// <summary>
+    /// The process is being torn down. There is no time for a clean exit, so the fans get one best-effort handback.
+    /// </summary>
+    private void OnProcessExit(object? sender, EventArgs e) => HandBackFansBestEffort("süreç çıkışı");
+
+    /// <summary>
+    /// An exception escaped every handler and the process is about to die with the fans at whatever speed the last
+    /// write left them at.
+    /// </summary>
+    private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        AppLog.Error("Yakalanmamış istisna", (e.ExceptionObject as Exception)?.ToString() ?? "bilinmeyen");
+        HandBackFansBestEffort("yakalanmamış istisna");
+    }
+
+    /// <summary>
+    /// One bounded attempt to put the fans back under firmware control, for the paths that cannot await. Never
+    /// throws: it runs while the process is already failing, and a second failure there helps nobody.
+    /// </summary>
+    private void HandBackFansBestEffort(string reason)
+    {
+        try
+        {
+            if (_host?.ViewModel.RestoreFansToAutoBlocking(ShutdownHandbackTimeout) == true) return;
+            AppLog.Warn("Fanlar otomatik moda iade edilemedi", reason);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Fanlar otomatik moda iade edilemedi", $"{reason}: {ex.Message}");
         }
     }
 
@@ -234,6 +293,11 @@ public partial class App : Application
 
     private void DisposeHost()
     {
+        // Unsubscribed first: the process-exit and crash handlers reach the view model, and a handler that ran after
+        // the host was disposed would write to a disposed gate.
+        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+
         // Unsubscribed before the host is disposed: the listener's read loop can raise one last event while it is
         // shutting down, and a handler that reached a disposed view model would throw on a background thread.
         if (_nitroKey != null)

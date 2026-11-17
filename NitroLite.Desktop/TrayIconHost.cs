@@ -72,7 +72,8 @@ public sealed class TrayIconHost : IDisposable
             IsEnabled = false,
             IsVisible = false
         };
-        _retryItem.Click += async (_, _) => await _viewModel.RetryDesktopRestoreAsync().ConfigureAwait(true);
+        _retryItem.Click += async (_, _) => await RunMenuActionAsync(
+            () => _viewModel.RetryDesktopRestoreAsync(), "Masaüstü ayarları yeniden uygulanamadı").ConfigureAwait(true);
         _menu.Add(_retryItem);
 
         _menu.Add(new NativeMenuItemSeparator());
@@ -85,7 +86,8 @@ public sealed class TrayIconHost : IDisposable
             {
                 ToggleType = NativeMenuItemToggleType.CheckBox
             };
-            item.Click += async (_, _) => await _viewModel.ApplyModeFromTrayAsync(mode).ConfigureAwait(true);
+            item.Click += async (_, _) => await RunMenuActionAsync(
+                () => _viewModel.ApplyModeFromTrayAsync(mode), "Mod uygulanamadı").ConfigureAwait(true);
 
             _menu.Add(item);
             _modeItems[mode] = item;
@@ -100,7 +102,8 @@ public sealed class TrayIconHost : IDisposable
             {
                 ToggleType = NativeMenuItemToggleType.Radio
             };
-            item.Click += async (_, _) => await _viewModel.ApplyCpuBoostFromTrayAsync(mode).ConfigureAwait(true);
+            item.Click += async (_, _) => await RunMenuActionAsync(
+                () => _viewModel.ApplyCpuBoostFromTrayAsync(mode), "CPU Boost uygulanamadı").ConfigureAwait(true);
 
             _boostItem.Menu!.Add(item);
             _boostItems[mode] = item;
@@ -175,6 +178,26 @@ public sealed class TrayIconHost : IDisposable
         var pending = _viewModel.HasPendingDesktopRestore;
         _retryItem.IsVisible = TrayMenuPolicy.ShowRetry(pending);
         _retryItem.IsEnabled = TrayMenuPolicy.EnableRetry(pending, _viewModel.GameActive);
+    }
+
+    /// <summary>
+    /// Runs one menu action and swallows what it throws.
+    /// </summary>
+    /// <remarks>
+    /// A tray menu handler is an <c>async void</c> lambda: an exception out of one is raised on the thread pool,
+    /// where nothing catches it and the process dies. A menu row that failed is a log line, not a crash — and the
+    /// tray is exactly where the app sits while the user is in a game, so a crash there loses the fan curve too.
+    /// </remarks>
+    private static async Task RunMenuActionAsync(Func<Task> action, string what)
+    {
+        try
+        {
+            await action().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error(what, ex.ToString());
+        }
     }
 
     /// <summary>

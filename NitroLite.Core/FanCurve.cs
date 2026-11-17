@@ -188,6 +188,12 @@ public sealed class FanCurve
 /// <para>
 /// Stateful on purpose: the caller feeds it one temperature per poll and writes only when it returns a value.
 /// </para>
+/// <para>
+/// <see cref="Evaluate"/> proposes and <see cref="Commit"/> records, and the split is the point. The evaluator used
+/// to record the speed it had just asked for, so a write the firmware refused was remembered as applied: the next
+/// poll compared against a speed the fans were never running at and returned null, and the curve stayed wrong until
+/// the temperature moved far enough to produce a different target. A refused write is now simply proposed again.
+/// </para>
 /// </summary>
 public sealed class FanCurveEvaluator
 {
@@ -214,6 +220,10 @@ public sealed class FanCurveEvaluator
     /// <summary>
     /// The speed to apply now, or null when the fans should be left alone. A missing or impossible reading
     /// (0 °C from a stopped service, a negative or NaN value) never changes the fan speed.
+    /// <para>
+    /// Nothing is recorded here. The caller writes the value and then calls <see cref="Commit"/> with the same
+    /// arguments, so a write that did not land leaves the evaluator where it was.
+    /// </para>
     /// </summary>
     public int? Evaluate(double temperatureC, DateTime nowUtc)
     {
@@ -221,19 +231,13 @@ public sealed class FanCurveEvaluator
 
         int target = _curve.PercentAt(temperatureC);
 
-        if (_appliedPercent is null)
-        {
-            Apply(target, temperatureC, nowUtc);
-            return target;
-        }
+        if (_appliedPercent is null) return target;
 
         if (target == _appliedPercent) return null;
 
-        if (target > _appliedPercent)
-        {
-            Apply(target, temperatureC, nowUtc);
-            return target;
-        }
+        // Rising is immediate: heat is the emergency, and waiting for a dwell time to pass would leave the die hot
+        // for no reason.
+        if (target > _appliedPercent) return target;
 
         // Slowing down: only once the temperature has clearly left the band that produced the current speed,
         // and never more often than the dwell time.
@@ -245,11 +249,14 @@ public sealed class FanCurveEvaluator
         double elapsedSeconds = (nowUtc - _lastWriteUtc).TotalSeconds;
         if (elapsedSeconds >= 0 && elapsedSeconds < _curve.MinDwellSeconds) return null;
 
-        Apply(target, temperatureC, nowUtc);
         return target;
     }
 
-    private void Apply(int percent, double temperatureC, DateTime nowUtc)
+    /// <summary>
+    /// Records a speed the hardware accepted. Call this only after the write returned true: committing a refused
+    /// write is what made the curve believe the fans were somewhere they had never been.
+    /// </summary>
+    public void Commit(int percent, double temperatureC, DateTime nowUtc)
     {
         _appliedPercent = percent;
         _lastAppliedTemperatureC = temperatureC;

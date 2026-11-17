@@ -486,6 +486,7 @@
   "Fan Profili:": "Perfil de ventilador:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "Protección automática si falla el ventilador (cambiar a modo Eco)",
   "Fan devri": "Velocidad del ventilador",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "Un ventilador parece detenido: ningún ventilador gira sobre un chip caliente. Apague el equipo y revise el ventilador.",
   "Fan eğrisi başlatılamadı.": "No se pudo iniciar la curva de ventilador.",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "La curva de ventilador viene del perfil del juego durante esta sesión.",
   "Fan eğrisi değiştirilemedi: {0}": "No se pudo cambiar la curva del ventilador: {0}",

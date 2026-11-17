@@ -486,6 +486,7 @@
   "Fan Profili:": "Perfil da Ventoinha:",
   "Fan arızasında otomatik koruma (Eco moduna geç)": "Proteção automática em caso de falha do ventilador (mudar para o modo Eco)",
   "Fan devri": "Velocidade da ventoinha",
+  "Fan durmuş görünüyor: sıcak bir çipte fan dönmüyor. Makineyi kapatıp fanı kontrol edin.": "Uma ventoinha parece parada: nenhuma ventoinha gira sobre um chip quente. Desligue a máquina e verifique a ventoinha.",
   "Fan eğrisi başlatılamadı.": "Não foi possível iniciar a curva de ventoinha.",
   "Fan eğrisi bu oyun oturumu için oyun profilinden geliyor.": "A curva de ventoinha vem do perfil do jogo durante esta sessão.",
   "Fan eğrisi değiştirilemedi: {0}": "Não foi possível alterar a curva da ventoinha: {0}",
