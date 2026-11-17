@@ -361,10 +361,25 @@ internal static class Phase3Fakes
 
         public Task<LightingConfig?> GetLightingConfigAsync() => Task.FromResult<LightingConfig?>(null);
 
-        public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction,
-            string primaryColor, string[]? zoneColors) => Task.FromResult(true);
+        /// <summary>
+        /// Every lighting write, in the order it arrived, as <c>effect|brightness|speed|direction|colour|zones</c>.
+        /// Kept apart from <see cref="Writes"/> so the tests that count the other writes are not disturbed by it.
+        /// </summary>
+        public List<string> LightingWrites { get; } = new();
 
-        public Task<bool> TurnOffLightingAsync() => Task.FromResult(true);
+        public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction,
+            string primaryColor, string[]? zoneColors)
+        {
+            LightingWrites.Add(string.Join("|", effect, brightness, speed, direction, primaryColor,
+                string.Join(",", zoneColors ?? Array.Empty<string>())));
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> TurnOffLightingAsync()
+        {
+            LightingWrites.Add("OFF");
+            return Task.FromResult(true);
+        }
 
         public Task<bool?> GetBacklightTimeoutAsync() => Task.FromResult<bool?>(false);
 

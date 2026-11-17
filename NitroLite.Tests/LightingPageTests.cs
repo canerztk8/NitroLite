@@ -453,7 +453,9 @@ public class LightingPageTests
         Assert.False(vm.IsZone1Active);
         Assert.False(vm.IsPrimaryZoneActive);
         Assert.Equal(vm.Labels.Zone(3), vm.ActiveZoneText);
-        Assert.Contains(vm.Labels.Zone(3), vm.Status);
+
+        // A click on the deck is not an event worth a banner: the picker opening beside it is the feedback.
+        Assert.False(vm.HasStatus);
 
         // The primary colour is zone 0, which is the same numbering the palette's own buttons use.
         vm.SelectZoneForPicker(0);

@@ -2384,6 +2384,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ZoneSolid));
             Raise(nameof(ZonePreviewNote));
             Raise(nameof(HasZonePreviewNote));
+
+            // The page has no Apply button, so picking an effect is the write. Without this the list changed the
+            // view model and nothing else, and the keyboard stayed in whatever effect it was already in.
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2418,19 +2422,62 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public int DirectionLevel
     {
         get => _directionLevel;
-        set => Set(ref _directionLevel, Math.Clamp(value, 1, LightingLimits.MaxDirection));
+        set
+        {
+            if (!Set(ref _directionLevel, Math.Clamp(value, 1, LightingLimits.MaxDirection))) return;
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+        }
     }
 
     public string PrimaryColor
     {
         get => _primaryColor;
-        set => Set(ref _primaryColor, value);
+        set
+        {
+            if (!Set(ref _primaryColor, value)) return;
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+        }
     }
 
-    public string Zone1 { get => _zone1; set => Set(ref _zone1, value); }
-    public string Zone2 { get => _zone2; set => Set(ref _zone2, value); }
-    public string Zone3 { get => _zone3; set => Set(ref _zone3, value); }
-    public string Zone4 { get => _zone4; set => Set(ref _zone4, value); }
+    public string Zone1
+    {
+        get => _zone1;
+        set
+        {
+            if (!Set(ref _zone1, value)) return;
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+        }
+    }
+
+    public string Zone2
+    {
+        get => _zone2;
+        set
+        {
+            if (!Set(ref _zone2, value)) return;
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+        }
+    }
+
+    public string Zone3
+    {
+        get => _zone3;
+        set
+        {
+            if (!Set(ref _zone3, value)) return;
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+        }
+    }
+
+    public string Zone4
+    {
+        get => _zone4;
+        set
+        {
+            if (!Set(ref _zone4, value)) return;
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+        }
+    }
 
     public bool LightingAvailable => _capabilities.KeyboardLighting;
 
@@ -2494,7 +2541,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ActiveZone = Math.Clamp(zone, 0, LightingLimits.ZoneCount);
         ZonePickerOpen = true;
         Raise(nameof(ZonePickerOpen));
-        Status = $"{Labels.Zone(Math.Max(1, zone))} · {Labels.ColorPalette}";
     }
 
     public RelayCommand CustomColorCommand { get; private set; } = null!;
@@ -2511,7 +2557,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Zone2 = color;
         Zone3 = color;
         Zone4 = color;
-        Status = Labels.ApplyToAllZones;
     }
 
     /// <summary>
@@ -2523,7 +2568,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ActiveZone = 0;
         ZonePickerOpen = true;
         Raise(nameof(ZonePickerOpen));
-        Status = Labels.CustomColor;
     }
 
     /// <summary>
@@ -4568,10 +4612,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             bool ok = await _hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
                 config.Direction, config.Color, zones).ConfigureAwait(true);
-            Status = ok
-                ? $"{Labels.Applied}: {Labels.KeyboardLighting}"
-                : $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
-            if (!ok) return;
+
+            // No banner on success: the keyboard is the confirmation, and a toast on every slider step would cover
+            // the page the user is working on. A refusal is still reported, because a silent one looks like a bug.
+            if (!ok)
+            {
+                AppLog.Warn("Klavye aydınlatması", "Donanım yazımı uygulanmadı.");
+                Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
+                return;
+            }
 
             // The recovery copy is written only after the firmware accepted the write, so a resume puts back the
             // lighting the keyboard actually had rather than the one the user last clicked.
@@ -4595,7 +4644,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task TurnOffLightingAsync()
     {
         if (_hardware == null) return;
-        await RunWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
+
+        // Same rule as the rest of the page: turning the lights off is visible on the keyboard, so it does not need
+        // a banner. A refusal still reaches the log.
+        await RunQuietWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
     }
 
     // ---------------------------------------------------------------- MUX, school mode, profiles, report
@@ -4701,16 +4753,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (SelectedRgbProfile is not RgbPreset preset) return;
 
-        SelectedEffect = Effects.FirstOrDefault(e => e.Id == preset.Effect.ToUpperInvariant()) ?? SelectedEffect;
-        BrightnessLevel = preset.Brightness;
-        SpeedLevel = preset.Speed;
-        DirectionLevel = preset.Direction;
-        PrimaryColor = preset.Color;
+        // The editor is filled with the write guard on: each of these setters is a write of its own, and a preset is
+        // one write, not five. The single call below is the one that reaches the keyboard.
+        SyncControls(() =>
+        {
+            SelectedEffect = Effects.FirstOrDefault(e => e.Id == preset.Effect.ToUpperInvariant()) ?? SelectedEffect;
+            BrightnessLevel = preset.Brightness;
+            SpeedLevel = preset.Speed;
+            DirectionLevel = preset.Direction;
+            PrimaryColor = preset.Color;
 
-        if (preset.LEDs.Count > 0) Zone1 = preset.LEDs[0];
-        if (preset.LEDs.Count > 1) Zone2 = preset.LEDs[1];
-        if (preset.LEDs.Count > 2) Zone3 = preset.LEDs[2];
-        if (preset.LEDs.Count > 3) Zone4 = preset.LEDs[3];
+            if (preset.LEDs.Count > 0) Zone1 = preset.LEDs[0];
+            if (preset.LEDs.Count > 1) Zone2 = preset.LEDs[1];
+            if (preset.LEDs.Count > 2) Zone3 = preset.LEDs[2];
+            if (preset.LEDs.Count > 3) Zone4 = preset.LEDs[3];
+        });
 
         await ApplyLightingAsync().ConfigureAwait(true);
 
@@ -5028,6 +5085,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             AppLog.Warn("Donanım yazımı başarısız", $"{what}: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {what}";
+            return false;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The same gate and the same logging as <see cref="RunWriteAsync"/>, without the banner. The lighting page uses
+    /// it because the keyboard is its own confirmation: a toast on every slider step would cover the page the user is
+    /// working on, and the WPF window never raised one either.
+    /// </summary>
+    private async Task<bool> RunQuietWriteAsync(Func<Task<bool>> write, string what)
+    {
+        await _writeGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            bool ok = await write().ConfigureAwait(true);
+            if (!ok) AppLog.Warn("Donanım yazımı başarısız", what);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Donanım yazımı başarısız", $"{what}: {ex.Message}");
             return false;
         }
         finally
