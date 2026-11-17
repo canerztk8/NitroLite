@@ -136,8 +136,9 @@ public partial class App : Application
             // The Acer service launches NitroSense a moment after the key, so a single close races that launch and
             // the window ends up behind it. The sweep runs for a few seconds, and the window is raised again once it
             // is done because NitroSense can take the foreground on its way out.
-            if (_host?.ViewModel.NitroKeyReplacesNitroSense != true) return;
-
+            //
+            // Part of claiming the key, not a second setting: a switch that says "the key opens NitroLite" and then
+            // lets NitroSense open anyway is a switch that does not do what it says.
             _ = Task.Run(() =>
             {
                 if (_nitroSense?.CloseFor(NitroSenseSuppressionWindow) == true)
@@ -157,7 +158,7 @@ public partial class App : Application
     private void OnNitroSenseActivated(object? sender, EventArgs e) =>
         Dispatcher.UIThread.Post(() =>
         {
-            if (_host?.ViewModel.NitroKeyReplacesNitroSense != true) return;
+            if (_host?.ViewModel.NitroKeyEnabled != true) return;
             if (_window == null) return;
             if (_window.IsVisible && _window.WindowState != WindowState.Minimized) return;
 

@@ -235,13 +235,13 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             {
                 try
                 {
-                    // Asked first: a window that closes itself saves whatever the user had open in it.
-                    if (process.CloseMainWindow() && process.WaitForExit(1500)) closed = true;
-                    else
-                    {
-                        process.Kill();
-                        closed = true;
-                    }
+                    if (process.HasExited) continue;
+
+                    // Killed outright rather than asked to close. NitroSense has no document to save, and a polite
+                    // close that waits on the window would spend seconds per process — longer than the sweep it runs
+                    // inside, which would leave the window it was meant to remove.
+                    process.Kill(entireProcessTree: true);
+                    closed = true;
                 }
                 catch (Exception ex)
                 {

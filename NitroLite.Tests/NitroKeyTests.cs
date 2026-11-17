@@ -524,31 +524,22 @@ public class NitroKeyTests
     }
 
     [Fact]
-    public void NitroKeyReplacesNitroSense_DefaultsOffAndPersists()
+    public void NitroKey_OwnsTheButtonWithoutASecondSwitch()
     {
-        // Off by default: it closes a program, so the user has to ask for it.
-        Assert.False(new AppSettings().NitroKeyReplacesNitroSense);
-
-        var settings = new AppSettings { NitroKeyReplacesNitroSense = true };
-        var path = AppPaths.GetDataFile("nitro-sense-replacement.json");
+        // One switch, one meaning. A setting that says "the key opens NitroLite" and then lets NitroSense open anyway
+        // is a setting that does not do what it says, so closing NitroSense is part of claiming the key rather than a
+        // second thing to find.
+        var settings = new AppSettings();
+        var path = AppPaths.GetDataFile("nitro-key-ownership.json");
         SettingsManager.SaveSettingsAtomic(path, settings);
 
-        Assert.True(SettingsManager.LoadSettingsWithFallback(path).NitroKeyReplacesNitroSense);
-    }
+        var loaded = SettingsManager.LoadSettingsWithFallback(path);
 
-    [Fact]
-    public void NitroSenseReplacement_HiddenWhenUnsupported()
-    {
-        var settings = new AppSettings();
-
-        using var withoutWatcher = new MainViewModel(
-            settings, null, null, AppPaths.GetDataFile("nitro-sense-none.json"));
-        Assert.False(withoutWatcher.NitroSenseReplacementAvailable);
-
-        using var withWatcher = new MainViewModel(
-            settings, null, null, AppPaths.GetDataFile("nitro-sense-some.json"),
-            nitroSense: new NitroSenseWatcher());
-        Assert.True(withWatcher.NitroSenseReplacementAvailable);
+        Assert.True(loaded.NitroKeyEnabled);
+        Assert.DoesNotContain(
+            "nitro_key_replaces_nitro_sense",
+            File.ReadAllText(path),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

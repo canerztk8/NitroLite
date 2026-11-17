@@ -571,28 +571,6 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>
-    /// True when the platform can watch for NitroSense coming to the front. The replacement switch is bound to this:
-    /// a machine whose key already reaches NitroLite has no reason to close another program.
-    /// </summary>
-    public bool NitroSenseReplacementAvailable => _nitroSense?.IsSupported == true;
-
-    /// <summary>
-    /// Answer the Nitro key by closing NitroSense and coming forward instead of letting NitroSense open. Off by
-    /// default: it closes a program, so the user has to ask for it.
-    /// </summary>
-    public bool NitroKeyReplacesNitroSense
-    {
-        get => _settings.NitroKeyReplacesNitroSense;
-        set
-        {
-            if (_settings.NitroKeyReplacesNitroSense == value) return;
-            _settings.NitroKeyReplacesNitroSense = value;
-            Raise();
-            SaveSettings();
-        }
-    }
-
     // ---------------------------------------------------------------- update
 
     public bool UpdateAvailable => _updates != null;

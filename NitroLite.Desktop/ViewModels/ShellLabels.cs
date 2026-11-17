@@ -550,10 +550,8 @@ public sealed class ShellLabels
     // The Nitro key. One switch, no shortcut to record: the button is physical and has one meaning.
     public string NitroKey => Loc.T("Nitro tuşu");
     public string NitroKeyToggle => Loc.T("Nitro tuşu ile NitroLite'ı aç");
-    public string NitroKeyHint => Loc.T("Kapalıyken donanım tuşu yok sayılır.");
-    public string NitroSenseReplacement => Loc.T("Nitro tuşu NitroSense yerine NitroLite'ı aç");
-    public string NitroSenseReplacementHint =>
-        Loc.T("NitroSense öne geldiğinde kapatılır ve NitroLite açılır. Elle açtığınızda da kapanır.");
+    public string NitroKeyHint =>
+        Loc.T("Kapalıyken donanım tuşu yok sayılır. Açıkken tuş NitroLite'ı açar; NitroSense açılırsa kapatılır.");
 
     public string UpdatesAndDiagnostics => Loc.T("Güncelleme, Teşhis ve Yedekleme");
     public string AutoUpdateCheck => Loc.T("Güncellemeleri otomatik denetle");
