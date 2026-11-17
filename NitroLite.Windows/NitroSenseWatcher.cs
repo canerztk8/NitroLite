@@ -25,11 +25,29 @@ namespace NitroLite.Windows;
 /// </remarks>
 public sealed class NitroSenseWatcher : INitroSenseWatcher
 {
-    /// <summary>The process name NitroSense runs under.</summary>
-    public const string ProcessName = "NitroSense";
+    /// <summary>
+    /// The processes the Acer Nitro key stack runs under, in the order they have to be closed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>NitroSenseLauncher</c> comes first because it is what the Acer service starts on the key press, and it is
+    /// what spawns everything else. Closing it first stops the window before it exists.
+    /// </para>
+    /// <para>
+    /// <c>SenseOverlay</c> is the NitroSense window on this generation of the app: the name on the box is not the name
+    /// of the executable. <c>NitroSense</c> is the packaged app the launcher also tries to open.
+    /// </para>
+    /// </remarks>
+    public static readonly string[] ProcessNames = { "NitroSenseLauncher", "SenseOverlay", "NitroSense" };
 
     /// <summary>How often the foreground window is checked. Fast enough to feel immediate, cheap enough to ignore.</summary>
     public const int PollMilliseconds = 400;
+
+    /// <summary>
+    /// How often the close sweep looks for the launcher. Much faster than the foreground poll: the launcher lives for
+    /// about a tenth of a second before it opens the window, so a slow sweep would always arrive after the fact.
+    /// </summary>
+    public const int SweepMilliseconds = 50;
 
     /// <summary>
     /// How long the watcher stays quiet after closing NitroSense. The Acer service can relaunch it, and reacting to
@@ -38,10 +56,10 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     public static readonly TimeSpan CloseCooldown = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// How many times one window may close NitroSense before the loop gives up. The Acer service can relaunch it
+    /// How many times one window may close the stack before the loop gives up. The Acer service can relaunch it
     /// faster than this loop can close it, and a fight the user sees as a flickering window is worse than losing.
     /// </summary>
-    public const int MaxClosesPerWindow = 3;
+    public const int MaxClosesPerWindow = 20;
 
     private readonly Func<int> _foregroundProcessId;
     private readonly Func<bool>? _shouldReact;
@@ -151,13 +169,24 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         try
         {
             using var process = Process.GetProcessById(processId);
-            return process.ProcessName.Equals(ProcessName, StringComparison.OrdinalIgnoreCase);
+            return IsNitroSenseName(process.ProcessName);
         }
         catch
         {
             // The process ended between the foreground read and this call, or it is not ours to open.
             return false;
         }
+    }
+
+    /// <summary>True when this process name belongs to the NitroSense stack.</summary>
+    internal static bool IsNitroSenseName(string name)
+    {
+        foreach (var candidate in ProcessNames)
+        {
+            if (candidate.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+
+        return false;
     }
 
     public bool Close() => CloseCore(log: true);
@@ -192,8 +221,8 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                     closes++;
                 }
 
-                // The Acer service can relaunch NitroSense faster than this loop can close it. Three is enough to
-                // prove that is what is happening; more would be a fight the user sees as a flickering window.
+                // The Acer service can relaunch the stack faster than this loop can close it. Enough passes to prove
+                // that is what is happening; more would be a fight the user sees as a flickering window.
                 if (closes >= MaxClosesPerWindow)
                 {
                     AppLog.Warn("NitroSense tekrar tekrar açılıyor",
@@ -201,7 +230,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                     break;
                 }
 
-                Thread.Sleep(PollMilliseconds);
+                Thread.Sleep(SweepMilliseconds);
             }
 
             if (closed) AppLog.Info("NitroSense kapatıldı", "Nitro tuşu NitroLite'a yönlendirildi.");
@@ -218,34 +247,40 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     {
         bool closed = false;
 
-        Process[] processes;
-        try
+        // Launcher first: it is the process that opens the window, so closing it before the others means the window
+        // never gets a chance to appear.
+        foreach (var name in ProcessNames)
         {
-            processes = Process.GetProcessesByName(ProcessName);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn("NitroSense süreçleri listelenemedi", ex.Message);
-            return false;
-        }
-
-        foreach (var process in processes)
-        {
-            using (process)
+            Process[] processes;
+            try
             {
-                try
-                {
-                    if (process.HasExited) continue;
+                processes = Process.GetProcessesByName(name);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("NitroSense süreçleri listelenemedi", $"{name}: {ex.Message}");
+                continue;
+            }
 
-                    // Killed outright rather than asked to close. NitroSense has no document to save, and a polite
-                    // close that waits on the window would spend seconds per process — longer than the sweep it runs
-                    // inside, which would leave the window it was meant to remove.
-                    process.Kill(entireProcessTree: true);
-                    closed = true;
-                }
-                catch (Exception ex)
+            foreach (var process in processes)
+            {
+                using (process)
                 {
-                    AppLog.Warn("NitroSense kapatılamadı", ex.Message);
+                    try
+                    {
+                        if (process.HasExited) continue;
+
+                        // Killed outright rather than asked to close. NitroSense has no document to save, and a polite
+                        // close that waits on the window would spend seconds per process — longer than the sweep it
+                        // runs inside, which would leave the window it was meant to remove.
+                        process.Kill(entireProcessTree: true);
+                        closed = true;
+                        AppLog.Info("NitroSense süreci kapatıldı", name);
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Warn("NitroSense kapatılamadı", $"{name}: {ex.Message}");
+                    }
                 }
             }
         }

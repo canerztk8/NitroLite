@@ -524,6 +524,41 @@ public class NitroKeyTests
     }
 
     [Fact]
+    public void NitroSenseWatcher_KnowsTheRealProcessNames()
+    {
+        // The name on the box is not the name of the executable. On the AN16-41 the Acer service starts
+        // NitroSenseLauncher, which opens SenseOverlay — a watcher looking for "NitroSense" finds nothing at all and
+        // silently does nothing, which is exactly what the log showed.
+        Assert.True(NitroSenseWatcher.IsNitroSenseName("NitroSenseLauncher"));
+        Assert.True(NitroSenseWatcher.IsNitroSenseName("SenseOverlay"));
+        Assert.True(NitroSenseWatcher.IsNitroSenseName("NitroSense"));
+
+        // Case is not a signal.
+        Assert.True(NitroSenseWatcher.IsNitroSenseName("senseoverlay"));
+
+        Assert.False(NitroSenseWatcher.IsNitroSenseName("explorer"));
+        Assert.False(NitroSenseWatcher.IsNitroSenseName("NitroLite.Desktop"));
+    }
+
+    [Fact]
+    public void NitroSenseWatcher_ClosesTheLauncherBeforeTheWindow()
+    {
+        // The launcher is what opens the window, so closing it first means the window never gets a chance to appear.
+        // Closing SenseOverlay first would leave the launcher free to open it again a moment later.
+        Assert.Equal("NitroSenseLauncher", NitroSenseWatcher.ProcessNames[0]);
+        Assert.Contains("SenseOverlay", NitroSenseWatcher.ProcessNames);
+    }
+
+    [Fact]
+    public void NitroSenseWatcher_SweepsFasterThanItPolls()
+    {
+        // The launcher lives for about a tenth of a second. A sweep on the foreground-poll interval would always
+        // arrive after the window was already on screen.
+        Assert.True(NitroSenseWatcher.SweepMilliseconds < NitroSenseWatcher.PollMilliseconds);
+        Assert.True(NitroSenseWatcher.SweepMilliseconds <= 100);
+    }
+
+    [Fact]
     public void NitroKey_OwnsTheButtonWithoutASecondSwitch()
     {
         // One switch, one meaning. A setting that says "the key opens NitroLite" and then lets NitroSense open anyway
