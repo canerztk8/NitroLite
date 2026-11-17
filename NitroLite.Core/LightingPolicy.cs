@@ -77,6 +77,53 @@ public static class LightingPolicy
         };
     }
 
+    /// <summary>The red every shipped red became: pure red, with no green or blue for the diffuser to wash out.</summary>
+    public const string PureRed = "#FF0000";
+
+    /// <summary>
+    /// The reds NitroLite itself used to ship, before every red became <see cref="PureRed"/>.
+    /// </summary>
+    /// <remarks>
+    /// <c>#D93829</c> was the palette's coral, <c>#E01B1B</c> the palette's red that replaced it, <c>#FF2A55</c> the
+    /// crimson every built-in preset carried, and <c>#FF1A1A</c> / <c>#FF3D00</c> the reds those presets were moved
+    /// to next. None of them is offered anywhere in the app any more, so a file that still holds one is describing a
+    /// colour the user cannot pick again.
+    /// </remarks>
+    private static readonly string[] LegacyReds = { "#D93829", "#E01B1B", "#FF2A55", "#FF1A1A", "#FF3D00" };
+
+    /// <summary>
+    /// Rewrites one of the reds NitroLite used to ship into <see cref="PureRed"/>, and leaves every other colour
+    /// exactly as it is.
+    /// </summary>
+    /// <remarks>
+    /// This is a migration, not a rule: it runs on values read from disk, so a keyboard that was left on the old red
+    /// comes back on the new one instead of keeping a colour the palette no longer contains. A colour the user typed
+    /// themselves is untouched, because nothing else matches.
+    /// </remarks>
+    public static string MigrateLegacyRed(string? hex)
+    {
+        var normalized = NormalizeHex(hex, DefaultColor);
+        return LegacyReds.Contains(normalized, StringComparer.OrdinalIgnoreCase) ? PureRed : normalized;
+    }
+
+    /// <summary>
+    /// <see cref="MigrateLegacyRed"/> applied to a whole configuration: the primary colour and all four zones.
+    /// </summary>
+    public static LightingConfig? MigrateLegacyReds(LightingConfig? cfg)
+    {
+        if (cfg == null) return null;
+
+        return new LightingConfig
+        {
+            Effect = cfg.Effect,
+            Brightness = cfg.Brightness,
+            Speed = cfg.Speed,
+            Direction = cfg.Direction,
+            Color = MigrateLegacyRed(cfg.Color),
+            LEDs = (cfg.LEDs ?? new List<string>()).Select(MigrateLegacyRed).ToList()
+        };
+    }
+
     /// <summary>WAVE and NEON cycle the keyboard's own colours; every other effect uses the chosen colour.</summary>
     public static bool EffectUsesColor(string effect) => effect.ToUpperInvariant() switch
     {

@@ -81,6 +81,58 @@ public class LightingPolicyTests
         Assert.Equal("STATIC", LightingPolicy.DeviceEffectFor("STATIC", null));
     }
 
+    // Every red NitroLite used to ship is now #FF0000. A keyboard left on one of the old values has to come back on
+    // the new one, otherwise the fix is only visible to someone who re-picks the colour by hand.
+    [Theory]
+    [InlineData("#D93829")]
+    [InlineData("#E01B1B")]
+    [InlineData("#FF2A55")]
+    [InlineData("#FF1A1A")]
+    [InlineData("#FF3D00")]
+    [InlineData("#e01b1b")]
+    public void EveryRedTheAppUsedToShip_BecomesPureRed(string legacy)
+    {
+        Assert.Equal("#FF0000", LightingPolicy.MigrateLegacyRed(legacy));
+    }
+
+    // The migration is not a rule about reds in general: a colour the user chose is theirs.
+    [Theory]
+    [InlineData("#00E5FF")]
+    [InlineData("#FF6D00")]
+    [InlineData("#FFD600")]
+    [InlineData("#123456")]
+    public void AColourTheUserChose_IsLeftAlone(string chosen)
+    {
+        Assert.Equal(chosen, LightingPolicy.MigrateLegacyRed(chosen));
+    }
+
+    [Fact]
+    public void TheMigration_CoversThePrimaryColourAndEveryZone()
+    {
+        var legacy = new LightingConfig
+        {
+            Effect = "STATIC",
+            Brightness = 8,
+            Speed = 4,
+            Direction = 1,
+            Color = "#E01B1B",
+            LEDs = new() { "#E01B1B", "#FF2A55", "#00E5FF", "#FF1A1A" }
+        };
+
+        var migrated = LightingPolicy.MigrateLegacyReds(legacy)!;
+
+        Assert.Equal("#FF0000", migrated.Color);
+        Assert.Equal(new[] { "#FF0000", "#FF0000", "#00E5FF", "#FF0000" }, migrated.LEDs);
+        Assert.Equal("STATIC", migrated.Effect);
+        Assert.Equal(8, migrated.Brightness);
+    }
+
+    [Fact]
+    public void TheMigration_LeavesAMissingConfigurationMissing()
+    {
+        Assert.Null(LightingPolicy.MigrateLegacyReds(null));
+    }
+
     [Fact]
     public void Directions_FollowNitroSenseEnum()
     {

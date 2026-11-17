@@ -315,7 +315,7 @@ public class UnexpectedValueTests : IDisposable
                 Speed = 0,
                 Direction = 42,
                 Color = "not-a-colour",
-                LEDs = new List<string> { "#GGGGGG", "#FF2A55" }
+                LEDs = new List<string> { "#GGGGGG", "#123456" }
             }
         };
 
@@ -329,7 +329,7 @@ public class UnexpectedValueTests : IDisposable
         Assert.Equal(LightingPolicy.DefaultColor, lit.Color);
         Assert.Equal(4, lit.LEDs.Count);
         Assert.Equal(LightingPolicy.DefaultColor, lit.LEDs[0]);
-        Assert.Equal("#FF2A55", lit.LEDs[1]);
+        Assert.Equal("#123456", lit.LEDs[1]);
     }
 
     [Fact]

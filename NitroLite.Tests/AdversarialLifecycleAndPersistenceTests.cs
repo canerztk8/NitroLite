@@ -365,6 +365,41 @@ public class AdversarialLifecycleAndPersistenceTests
         }
     }
 
+    // A settings file written before every red became #FF0000 still names the old red. Loading it has to bring the
+    // colour forward, or the keyboard keeps a red the palette no longer offers and the fix looks like it never landed.
+    [Fact]
+    public void SettingsPersistence_ALegacyRed_ComesBackAsPureRed()
+    {
+        var settings = new AppSettings
+        {
+            KeyboardLighting = new LightingConfig
+            {
+                Effect = "STATIC",
+                Brightness = 8,
+                Speed = 4,
+                Direction = 1,
+                Color = "#E01B1B",
+                LEDs = new List<string> { "#E01B1B", "#FF2A55", "#00E5FF", "#FF1A1A" }
+            },
+            LastActiveLighting = new LightingConfig
+            {
+                Effect = "BREATHING",
+                Brightness = 7,
+                Speed = 3,
+                Direction = 1,
+                Color = "#FF1A1A",
+                LEDs = new List<string> { "#FF1A1A", "#FF1A1A", "#FF1A1A", "#FF1A1A" }
+            }
+        };
+
+        settings.Normalize();
+
+        Assert.Equal("#FF0000", settings.KeyboardLighting!.Color);
+        Assert.Equal(new[] { "#FF0000", "#FF0000", "#00E5FF", "#FF0000" }, settings.KeyboardLighting.LEDs);
+        Assert.Equal("#FF0000", settings.LastActiveLighting!.Color);
+        Assert.All(settings.LastActiveLighting.LEDs, c => Assert.Equal("#FF0000", c));
+    }
+
     [Fact]
     public void SettingsPersistence_StartupRefreshDecision_SkipsHardwareOverwrite()
     {

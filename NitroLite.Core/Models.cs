@@ -609,8 +609,8 @@ public class AppSettings
         // list. A null Effect or a null LEDs list used to reach cfg.Effect.Equals(...) and cfg.LEDs.ToArray() in the
         // startup refresh, and the exception aborted every step after it, leaving the window half-built on every
         // launch. Null stays null: no lighting block means "read the keyboard's own state".
-        KeyboardLighting = LightingPolicy.Sanitize(KeyboardLighting);
-        LastActiveLighting = LightingPolicy.Sanitize(LastActiveLighting);
+        KeyboardLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(KeyboardLighting));
+        LastActiveLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(LastActiveLighting));
     }
 }
 
