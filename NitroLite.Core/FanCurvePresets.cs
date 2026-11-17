@@ -34,20 +34,20 @@ public static class FanCurvePresets
     {
         new FanCurvePreset(
             "balanced",
-            "Dengeli",
-            "Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır.",
+            Loc.T("Dengeli"),
+            Loc.T("Fabrika eğrisine en yakın şekil: sessiz başlar, 80 °C'den sonra hızlanır."),
             new[] { 30, 32, 36, 42, 62, 100 }),
 
         new FanCurvePreset(
             "quiet",
-            "Sessiz",
-            "Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer.",
+            Loc.T("Sessiz"),
+            Loc.T("Orta sıcaklıklarda daha yavaş döner. 85 °C ve üstünde güvenlik sınırı yine devreye girer."),
             new[] { 30, 30, 30, 34, 50, 100 }),
 
         new FanCurvePreset(
             "gaming",
-            "Oyun",
-            "Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü.",
+            Loc.T("Oyun"),
+            Loc.T("Daha erken hızlanır ve sıcaklığı düşük tutar; Dengeli'den belirgin şekilde daha gürültülü."),
             new[] { 30, 38, 50, 65, 85, 100 })
     };
 

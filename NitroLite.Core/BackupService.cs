@@ -116,8 +116,8 @@ public static class BackupService
         };
         result.Written.Add(Loc.T("Ayarlar"));
 
-        document.GameProfiles = ReadJsonFile(gameProfilesPath, JsonValueKind.Array, "Oyun profilleri", result);
-        document.RgbPresets = ReadJsonFile(rgbPresetsPath, JsonValueKind.Array, "RGB profilleri", result);
+        document.GameProfiles = ReadJsonFile(gameProfilesPath, JsonValueKind.Array, Loc.T("Oyun profilleri"), result);
+        document.RgbPresets = ReadJsonFile(rgbPresetsPath, JsonValueKind.Array, Loc.T("RGB profilleri"), result);
 
         try
         {
@@ -239,8 +239,8 @@ public static class BackupService
 
         if (schoolModeDropped) result.Skipped.Add(Loc.T("Okul modu kapalı olarak geri yüklendi"));
 
-        WriteJsonFile(document.GameProfiles, gameProfilesPath, JsonValueKind.Array, "Oyun profilleri", result);
-        WriteJsonFile(document.RgbPresets, rgbPresetsPath, JsonValueKind.Array, "RGB profilleri", result);
+        WriteJsonFile(document.GameProfiles, gameProfilesPath, JsonValueKind.Array, Loc.T("Oyun profilleri"), result);
+        WriteJsonFile(document.RgbPresets, rgbPresetsPath, JsonValueKind.Array, Loc.T("RGB profilleri"), result);
 
         // A part that was in the backup and could not be written is a partial restore, and reporting it as a success
         // is what let a user believe their game rules had come back when they had not.
