@@ -159,14 +159,14 @@
                 ColumnDefinitions="44,*,52" RowDefinitions="Auto,Auto,Auto">
             <TextBlock Grid.Row="0" Grid.Column="0" Classes="caps" Text="{Binding Labels.Cpu}"
                        Margin="0,0,10,0" />
-            <Slider Grid.Row="0" Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
+            <controls:NitroSlider Grid.Row="0" Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
                     IsSnapToTickEnabled="True" Value="{Binding CustomCpuPercent}" VerticalAlignment="Center" />
             <TextBlock Grid.Row="0" Grid.Column="2" Classes="figure" Text="{Binding CustomCpuPercentText}"
                        HorizontalAlignment="Right" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Classes="caps" Text="{Binding Labels.Gpu}"
                        Margin="0,8,10,0" />
-            <Slider Grid.Row="1" Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
+            <controls:NitroSlider Grid.Row="1" Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
                     IsSnapToTickEnabled="True" Value="{Binding CustomGpuPercent}"
                     VerticalAlignment="Center" Margin="0,8,0,0" />
             <TextBlock Grid.Row="1" Grid.Column="2" Classes="figure" Text="{Binding CustomGpuPercentText}"
@@ -238,7 +238,7 @@
                   <Grid ColumnDefinitions="34,*,42" Margin="0,0,12,6">
                     <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding Label}"
                                Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                    <Slider Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
+                    <controls:NitroSlider Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
                             IsSnapToTickEnabled="True" Value="{Binding Percent}" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Classes="figure" FontSize="11" Text="{Binding EffectiveText}"
                                HorizontalAlignment="Right" VerticalAlignment="Center" />
@@ -492,7 +492,7 @@
                         <Grid ColumnDefinitions="30,*,38" Margin="0,0,14,8">
                           <TextBlock Grid.Column="0" Classes="figure" FontSize="10" Text="{Binding Label}"
                                      Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                          <Slider Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
+                          <controls:NitroSlider Grid.Column="1" Minimum="30" Maximum="100" TickFrequency="1"
                                   IsSnapToTickEnabled="True" Value="{Binding Percent}" VerticalAlignment="Center" />
                           <TextBlock Grid.Column="2" Classes="figure" FontSize="10" Text="{Binding EffectiveText}"
                                      HorizontalAlignment="Right" VerticalAlignment="Center" />

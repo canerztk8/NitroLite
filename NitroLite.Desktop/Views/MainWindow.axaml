@@ -113,10 +113,13 @@
 
       <!-- ============================================================ rail + page -->
 
-      <Grid Grid.Row="1">
+      <Grid Grid.Row="1" x:Name="RailGrid">
         <Grid.ColumnDefinitions>
-          <!-- Two-way: the splitter writes the new width, the converter clamps it, the view model persists it. -->
-          <ColumnDefinition Width="{Binding SidebarWidth, Mode=TwoWay, Converter={x:Static conv:DoubleToGridLengthConverter.Instance}}" />
+          <!-- The width lives on the column and is written by the window, not bound: a ColumnDefinition is an
+               AvaloniaObject with no DataContext, so a {Binding SidebarWidth} on it never resolves and the rail falls
+               back to its content's width. MinWidth/MaxWidth are what stop a drag at the ends — the splitter clamps
+               against them itself, so the rail cannot be pulled past the limit and left there. -->
+          <ColumnDefinition MinWidth="175" MaxWidth="290" />
           <ColumnDefinition Width="4" />
           <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>

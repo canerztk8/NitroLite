@@ -352,6 +352,11 @@ public class Wave1CriticalParityTests
                 Assert.NotNull(points);
                 Assert.Equal(6, points!.Count);
                 Assert.Equal(58, points.Single(p => p.TemperatureC == 70).Percent);
+
+                // The rule is in memory at once; the file write waits for the drag to stop, because a drag raises a
+                // change per pixel and each one is a whole settings file. The pause is what the wait below covers.
+                await Phase3Fakes.WaitUntilAsync(() =>
+                    SettingsManager.LoadSettingsWithFallback(path).GameProfiles[0].TargetFanCurvePoints != null);
             }
 
             var reloaded = SettingsManager.LoadSettingsWithFallback(path);

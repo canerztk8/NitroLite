@@ -54,6 +54,19 @@ public partial class MainWindow : Window
     private MainViewModel? _viewModel;
 
     /// <summary>
+    /// The rail's column. Its width is written here rather than bound, because a <see cref="ColumnDefinition"/> is an
+    /// <see cref="AvaloniaObject"/> with no data context: a binding on it never resolves and the rail silently falls
+    /// back to the width of its own content, which is what made the splitter look like it did nothing.
+    /// </summary>
+    private ColumnDefinition? _railColumn;
+
+    /// <summary>
+    /// Collapses a rail drag into one settings write. The splitter raises a width change per pixel, and the view model
+    /// saves the file on every assignment.
+    /// </summary>
+    private readonly DispatcherTimer _railSaveTimer;
+
+    /// <summary>
     /// Takes the banner down again. The WPF window kept the same timer: a message that never leaves is a message that
     /// sits on top of the page it is reporting about.
     /// </summary>
@@ -80,6 +93,9 @@ public partial class MainWindow : Window
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _toastTimer.Tick += (_, _) => HideToast();
 
+        _railSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _railSaveTimer.Tick += (_, _) => SaveRailWidth();
+
         Opened += async (_, _) =>
         {
             // The clipboard is the only platform service the view model needs, and it is a delegate so a test can
@@ -94,6 +110,13 @@ public partial class MainWindow : Window
             if (_viewModel == null) return;
 
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+
+            // The rail starts at the width the user left it at. An absolute width also decides how the splitter
+            // behaves: with a pixel column next to a star column it resizes the pixel one, so the rail keeps a real
+            // width instead of turning into a star that the page can squeeze.
+            _railColumn = RailGrid.ColumnDefinitions[0];
+            _railColumn.Width = new GridLength(_viewModel.SidebarWidth);
+            _railColumn.PropertyChanged += OnRailColumnChanged;
 
             RestoreWindowPosition();
             await _viewModel.InitializeAsync();
@@ -115,6 +138,8 @@ public partial class MainWindow : Window
         {
             _timer.Stop();
             _toastTimer.Stop();
+            _railSaveTimer.Stop();
+            if (_railColumn != null) _railColumn.PropertyChanged -= OnRailColumnChanged;
             if (_viewModel != null) _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _osd?.Close();
             _osd = null;
@@ -248,7 +273,38 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel vm) return;
 
         vm.SidebarWidth = AppSettings.DefaultSidebarWidth;
+
+        // The column is the thing that actually moves, so it is set as well: writing the view model alone would leave
+        // the rail where the drag left it.
+        if (_railColumn != null) _railColumn.Width = new GridLength(AppSettings.DefaultSidebarWidth);
+
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Restarts the rail's save timer. A drag raises this once per pixel and the view model writes the settings file
+    /// on every assignment, so the write waits for the drag to stop.
+    /// </summary>
+    private void OnRailColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != ColumnDefinition.WidthProperty) return;
+
+        _railSaveTimer.Stop();
+        _railSaveTimer.Start();
+    }
+
+    /// <summary>
+    /// Stores the rail's width. Read from the column rather than from the splitter's delta, so a keyboard resize and a
+    /// drag are stored the same way.
+    /// </summary>
+    private void SaveRailWidth()
+    {
+        _railSaveTimer.Stop();
+        if (_viewModel == null || _railColumn == null) return;
+
+        _viewModel.SidebarWidth = _railColumn.Width.IsAbsolute
+            ? _railColumn.Width.Value
+            : _railColumn.ActualWidth;
     }
 
     /// <summary>Hides to the tray rather than ending the process, so the fan curve keeps running.</summary>

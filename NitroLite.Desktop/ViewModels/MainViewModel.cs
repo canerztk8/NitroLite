@@ -591,6 +591,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
+    /// <summary>
+    /// The three sliders that write to the machine. A drag raises a change per pixel, and each change would otherwise
+    /// be a settings file write and a firmware call; the pause collapses the burst into one of each.
+    /// </summary>
+    private readonly Debouncer _lightingDebounce = new(TimeSpan.FromMilliseconds(350));
+    private readonly Debouncer _customFanDebounce = new(TimeSpan.FromMilliseconds(400));
+    private readonly Debouncer _curveDebounce = new(TimeSpan.FromMilliseconds(400));
+
     /// <summary>Automatic game switching, or null when the caller did not wire it (a test that does not need it).</summary>
     private readonly GameProfileService? _gameProfiles;
 
@@ -878,6 +886,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _fanProtectionOn = settings.FanFailureProtection;
         _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);
         _selectedMouseProfile = null;
+
+        // The two custom speeds are the user's own numbers, so they come back as they were left. Without this the
+        // sliders opened at their defaults and the first drag wrote those defaults over the stored choice.
+        _customCpuPercent = AppSettings.ClampCustomFanPercent(settings.CustomFanCpuPercent);
+        _customGpuPercent = AppSettings.ClampCustomFanPercent(settings.CustomFanGpuPercent);
 
         _curveEvaluator = new FanCurveEvaluator(settings.BuildFanCurve());
 
@@ -2267,6 +2280,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (Set(ref _customCpuPercent, Math.Clamp(value, FanCurve.MinPercent, FanCurve.MaxPercent)))
             {
                 Raise(nameof(CustomCpuPercentText));
+                if (!_suppressWrite) _customFanDebounce.Run(ApplyCustomFanAsync);
             }
         }
     }
@@ -2279,8 +2293,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (Set(ref _customGpuPercent, Math.Clamp(value, FanCurve.MinPercent, FanCurve.MaxPercent)))
             {
                 Raise(nameof(CustomGpuPercentText));
+                if (!_suppressWrite) _customFanDebounce.Run(ApplyCustomFanAsync);
             }
         }
+    }
+
+    /// <summary>
+    /// Stores the two custom speeds and, when the fans are already in custom mode, sends them. The WPF window did the
+    /// same from SliderCustomFan_ValueChanged: the numbers are the user's choice whether or not the mode is active, so
+    /// they are always kept, and only the write waits for the mode.
+    /// </summary>
+    private async Task ApplyCustomFanAsync()
+    {
+        _settings.CustomFanCpuPercent = CustomCpuPercent;
+        _settings.CustomFanGpuPercent = CustomGpuPercent;
+        SaveSettings();
+
+        // A game's own fan rule owns the fans while it runs; writing here would fight it.
+        if (_hardware == null || GameActive) return;
+        if (SelectedFanMode?.Mode != FanMode.Custom) return;
+
+        await RunWriteAsync(
+            () => _hardware.SetFanModeAsync(FanMode.Custom, CustomCpuPercent, CustomGpuPercent),
+            Labels.FanMode).ConfigureAwait(true);
     }
 
     public string CustomCpuPercentText => $"%{CustomCpuPercent}";
@@ -2359,6 +2394,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _brightnessLevel, Math.Clamp(value, 0, LightingLimits.MaxBrightnessLevel))) return;
             Raise(nameof(BrightnessLabel));
+
+            // The page has no Apply button, so the slider is the write. The WPF window did the same from
+            // SliderBrightness_ValueChanged, through the same kind of pause.
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2371,6 +2410,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // otherwise be written to the keyboard as a level the firmware rejects.
             if (!Set(ref _speedLevel, Math.Clamp(value, LightingLimits.MinSpeed, LightingLimits.MaxSpeed))) return;
             Raise(nameof(SpeedLabel));
+
+            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -3445,7 +3486,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         profile.TargetFanCurvePoints = GameCurveAnchors
             .Select(a => new FanCurvePoint(a.TemperatureC, a.Percent))
             .ToList();
-        SaveSettings();
+
+        // The rule is the state, so it is written as it is dragged; only the file write waits for the drag to stop.
+        _curveDebounce.Run(SaveSettings);
     }
 
     /// <summary>The rule behind a row, matched on the executable name the row carries.</summary>
@@ -5216,6 +5259,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // Moving one anchor makes the curve the user's own, so the preset button stops claiming it. Without this the
         // ŞABLON row would keep a shape highlighted that the anchors no longer are.
         SyncCurvePreset();
+
+        if (_suppressWrite) return;
+
+        // The shape is the state, so it is stored as it is dragged and the evaluator is re-armed at once: the next
+        // telemetry tick then follows the new shape. Only the file write waits for the drag to stop, because a drag
+        // raises this once per pixel and each write is a whole settings file.
+        _settings.FanCurvePoints = FanCurve.Sanitize(
+            CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
+        _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
+        _curveDebounce.Run(SaveSettings);
     }
 
     private FanCurve CurrentCurve() =>
@@ -5233,10 +5286,73 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs an action once the user has stopped moving a slider for a moment.
+    /// </summary>
+    /// <remarks>
+    /// A slider raises a change per pixel of the drag. Every one of these actions writes the settings file and talks to
+    /// the firmware, so without the pause a single drag is a hundred file writes and a hundred WMI calls — which is
+    /// what made the sliders feel like they were not saving: the last write was still queued behind the others.
+    /// The continuation resumes on the caller's context, so the properties it raises still reach the UI thread.
+    /// </remarks>
+    private sealed class Debouncer : IDisposable
+    {
+        private readonly TimeSpan _delay;
+        private CancellationTokenSource? _pending;
+
+        public Debouncer(TimeSpan delay) => _delay = delay;
+
+        public void Run(Func<Task> action)
+        {
+            _pending?.Cancel();
+            _pending?.Dispose();
+
+            var cts = new CancellationTokenSource();
+            _pending = cts;
+            _ = RunAsync(action, cts);
+        }
+
+        /// <summary>The same pause for an action that does not await anything, such as a settings write.</summary>
+        public void Run(Action action) => Run(() =>
+        {
+            action();
+            return Task.CompletedTask;
+        });
+
+        private async Task RunAsync(Func<Task> action, CancellationTokenSource cts)
+        {
+            try
+            {
+                await Task.Delay(_delay, cts.Token).ConfigureAwait(true);
+                if (cts.IsCancellationRequested) return;
+
+                await action().ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer change replaced this one; that change does the work.
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Gecikmeli yazma başarısız", ex.Message);
+            }
+        }
+
+        public void Dispose()
+        {
+            _pending?.Cancel();
+            _pending?.Dispose();
+            _pending = null;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        _lightingDebounce.Dispose();
+        _customFanDebounce.Dispose();
+        _curveDebounce.Dispose();
         _writeGate.Dispose();
     }
 }

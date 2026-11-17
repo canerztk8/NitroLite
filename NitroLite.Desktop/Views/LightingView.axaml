@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
+             xmlns:controls="using:NitroLite.Desktop.Controls"
              xmlns:conv="using:NitroLite.Desktop.Converters"
              xmlns:core="using:NitroLite.Core"
              x:Class="NitroLite.Desktop.Views.LightingView"
@@ -231,7 +232,7 @@
                            FontSize="11" HorizontalAlignment="Right"
                            Foreground="{DynamicResource AccentBrush}" />
               </Grid>
-              <Slider Minimum="0" Maximum="{Binding MaxBrightness}" TickFrequency="1"
+              <controls:NitroSlider Minimum="0" Maximum="{Binding MaxBrightness}" TickFrequency="1"
                       IsSnapToTickEnabled="True" Value="{Binding BrightnessLevel}" Margin="0,4,0,0" />
 
               <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0">
@@ -240,7 +241,7 @@
                            FontSize="11" HorizontalAlignment="Right"
                            Foreground="{DynamicResource AccentBrush}" />
               </Grid>
-              <Slider Minimum="1" Maximum="{Binding MaxSpeed}" TickFrequency="1"
+              <controls:NitroSlider Minimum="1" Maximum="{Binding MaxSpeed}" TickFrequency="1"
                       IsSnapToTickEnabled="True" Value="{Binding SpeedLevel}" Margin="0,4,0,0" />
             </StackPanel>
           </Grid>

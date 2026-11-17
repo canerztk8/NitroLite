@@ -28,17 +28,35 @@
                  the Fluent theme's RepeatButton theme refuses to paint. -->
             <Border Height="3" Background="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"
                     HorizontalAlignment="Left" Width="{Binding #PART_Thumb.Bounds.X}" />
+            <!-- Orientation is not optional. Track's default is Vertical, and a vertical track arranges the two
+                 RepeatButtons with zero height — so the slider has no hit area at all and neither a click nor a drag
+                 reaches it. The Fluent theme binds it for the same reason. -->
             <Track Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
-                   Value="{TemplateBinding Value}">
+                   Value="{TemplateBinding Value}" Orientation="{TemplateBinding Orientation}"
+                   IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+              <!-- The two buttons are the track's click area: Slider moves the thumb to the point that was pressed,
+                   and it listens on these two, not on the track. They carry their own template because the Fluent
+                   RepeatButton theme paints nothing here, and a control that paints nothing cannot be hit — which is
+                   why clicking the track used to do nothing at all. -->
               <Track.DecreaseButton>
-                <RepeatButton Name="PART_DecreaseButton" Focusable="False"
-                              Background="{DynamicResource TextPrimaryBrush}" BorderThickness="0"
-                              Padding="0" MinHeight="0" MinWidth="0" CornerRadius="0" />
+                <RepeatButton Name="PART_DecreaseButton" Focusable="False" Padding="0"
+                              MinHeight="0" MinWidth="0">
+                  <RepeatButton.Template>
+                    <ControlTemplate>
+                      <Border Background="Transparent" />
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
               </Track.DecreaseButton>
               <Track.IncreaseButton>
-                <RepeatButton Name="PART_IncreaseButton" Focusable="False"
-                              Background="Transparent" BorderThickness="0" Padding="0"
-                              MinHeight="0" MinWidth="0" CornerRadius="0" />
+                <RepeatButton Name="PART_IncreaseButton" Focusable="False" Padding="0"
+                              MinHeight="0" MinWidth="0">
+                  <RepeatButton.Template>
+                    <ControlTemplate>
+                      <Border Background="Transparent" />
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
               </Track.IncreaseButton>
               <Thumb Name="PART_Thumb" Width="8" Height="16">
                 <Thumb.Template>
@@ -745,8 +763,10 @@
     <!-- ============================================================ slider -->
 
     <!-- The WPF slider: a 3px ruled track, the filled part in ink, an 8x16 square ink thumb. The Fluent theme's own
-         Slider theme wins over an application-level Style, so the whole template is replaced through Theme. -->
-    <Style Selector="Slider">
+         Slider theme wins over an application-level Style, so the whole template is replaced through Theme. The
+         selector is :is(Slider) rather than Slider because the pages use NitroSlider, which adds the track's click
+         area, and a plain type selector would not match a derived control. -->
+    <Style Selector=":is(Slider)">
       <Setter Property="Theme" Value="{StaticResource NitroSlider}" />
     </Style>
 
