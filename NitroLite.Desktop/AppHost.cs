@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Desktop.ViewModels;
@@ -46,7 +46,8 @@ public sealed record PlatformServices(
     IDiagnosticsService? Diagnostics,
     IDirectWmiControl? DirectWmi,
     IRunAtStartupService? RunAtStartup,
-    INitroKeyListener? NitroKey);
+    INitroKeyListener? NitroKey,
+    INitroSenseWatcher? NitroSense);
 
 /// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
@@ -74,11 +75,13 @@ public sealed class AppHost : IDisposable
 {
     private readonly IHardwareController? _hardware;
     private readonly INitroKeyListener? _nitroKey;
+    private readonly INitroSenseWatcher? _nitroSense;
 
     private AppHost(PlatformServices services, IDialogService? dialogs)
     {
         _hardware = services.Hardware;
         _nitroKey = services.NitroKey;
+        _nitroSense = services.NitroSense;
         ViewModel = new MainViewModel(
             services.Settings,
             services.Hardware,
@@ -107,7 +110,8 @@ public sealed class AppHost : IDisposable
             services.Diagnostics,
             services.DirectWmi,
             services.RunAtStartup,
-            services.NitroKey);
+            services.NitroKey,
+            services.NitroSense);
     }
 
     public MainViewModel ViewModel { get; }
@@ -117,6 +121,12 @@ public sealed class AppHost : IDisposable
     /// machine has the button. Null only when the platform could not build one at all.
     /// </summary>
     public INitroKeyListener? NitroKey => _nitroKey;
+
+    /// <summary>
+    /// The NitroSense watcher, owned here for the same reason: the shell subscribes to it and the view model asks
+    /// whether the platform can watch at all. Null on a platform that cannot.
+    /// </summary>
+    public INitroSenseWatcher? NitroSense => _nitroSense;
 
     /// <summary>Builds everything. Never throws: a machine with no Acer support gets a window that explains it.</summary>
     public static AppHost Create(IDialogService? dialogs = null) => new(CreateServices(), dialogs);
@@ -169,6 +179,7 @@ public sealed class AppHost : IDisposable
         IDirectWmiControl? directWmi = null;
         IRunAtStartupService? runAtStartup = null;
         INitroKeyListener? nitroKey = null;
+        INitroSenseWatcher? nitroSense = null;
 
 #if WINDOWS
         if (OperatingSystem.IsWindows())
@@ -205,6 +216,11 @@ public sealed class AppHost : IDisposable
                 // The laptop's own Nitro key. Constructed here and started by the shell, because the listener has to
                 // outlive the window: the whole point is that the key works while the app sits in the tray.
                 nitroKey = new WindowsNitroKeyListener();
+
+                // The button on this model never reaches the listener: the Acer service stack owns it and answers by
+                // launching NitroSense. Watching for that window is the only signal left, and the shell decides what
+                // to do with it.
+                nitroSense = new NitroSenseWatcher();
 
                 // The direct-WMI row is only meaningful when the hybrid controller is the one in use; a machine whose
                 // backend is something else gets no row rather than a button that cannot work.
@@ -288,7 +304,7 @@ public sealed class AppHost : IDisposable
             settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
             refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb,
             batteryHealth, storageHealth, debloat, systemTools, updates, diagnostics, directWmi, runAtStartup,
-            nitroKey);
+            nitroKey, nitroSense);
     }
 
 #if WINDOWS

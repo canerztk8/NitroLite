@@ -787,7 +787,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IDiagnosticsService? diagnostics = null,
         IDirectWmiControl? directWmi = null,
         IRunAtStartupService? runAtStartup = null,
-        INitroKeyListener? nitroKey = null)
+        INitroKeyListener? nitroKey = null,
+        INitroSenseWatcher? nitroSense = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -818,6 +819,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _directWmi = directWmi;
         _runAtStartup = runAtStartup;
         _nitroKey = nitroKey;
+        _nitroSense = nitroSense;
         _schoolModeOn = settings.SchoolModeEnabled;
         _fanProtectionOn = settings.FanFailureProtection;
         _sidebarWidth = AppSettings.ClampSidebarWidth(settings.SidebarWidth);

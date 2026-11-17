@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:core="using:NitroLite.Core"
@@ -227,6 +227,17 @@
             <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.NitroKeyHint}" Margin="10,0,0,0"
                        VerticalAlignment="Center" TextWrapping="Wrap" />
             <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding NitroKeyEnabled}"
+                          VerticalAlignment="Center" />
+          </Grid>
+
+          <!-- Only on a machine whose button the Acer service stack owns: there the key produces no event NitroLite
+               can subscribe to, and NitroSense coming to the front is the only signal left. -->
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0"
+                IsVisible="{Binding NitroSenseReplacementAvailable}">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSenseReplacement}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.NitroSenseReplacementHint}" Margin="10,0,0,0"
+                       VerticalAlignment="Center" TextWrapping="Wrap" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding NitroKeyReplacesNitroSense}"
                           VerticalAlignment="Center" />
           </Grid>
         </StackPanel>

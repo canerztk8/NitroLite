@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Desktop;
@@ -408,6 +408,136 @@ public class NitroKeyTests
 
         Assert.Equal(1, presses);
         Assert.Contains("Nitro tuşu algılandı", File.ReadAllText(AppLog.LogFilePath));
+    }
+
+    [Fact]
+    public void WindowsNitroKeyListener_AcceptsTheVendorScanCode()
+    {
+        // The AN16-41 sends VK 0xFF with scan code 0x75 and the E0 prefix: no virtual key at all, so the scan code is
+        // the only identity the report carries.
+        Assert.Contains((ushort)0x75, WindowsNitroKeyListener.NitroKeyScanCodes);
+        Assert.Equal(0x02, WindowsNitroKeyListener.RiKeyE0);
+    }
+
+    [Fact]
+    public void WindowsNitroKeyListener_PollsTheEventClass()
+    {
+        // ACPI-WMI events are not pushed. Without WITHIN the watcher subscribes and never fires, which looks exactly
+        // like a machine that has no such event.
+        Assert.Equal(TimeSpan.FromSeconds(1), WindowsNitroKeyListener.EventPollInterval);
+    }
+
+    // =============================================================================================================
+    // 6. The NitroSense route, for a model whose button the Acer service stack owns.
+    // =============================================================================================================
+
+    [Fact]
+    public void NitroSenseWatcher_ReportsAnActivationOnce()
+    {
+        int foreground = 4242;
+        using var watcher = new NitroSenseWatcher(
+            foregroundProcessId: () => foreground,
+            isNitroSense: id => id == 4242);
+
+        int activations = 0;
+        watcher.NitroSenseActivated += (_, _) => activations++;
+
+        watcher.Poll();
+        watcher.Poll();
+
+        // The same window staying in front is not a second press.
+        Assert.Equal(1, activations);
+
+        // Another window in front, then NitroSense again: that is a second press.
+        foreground = 99;
+        watcher.Poll();
+        foreground = 4242;
+        watcher.Poll();
+
+        Assert.Equal(2, activations);
+    }
+
+    [Fact]
+    public void NitroSenseWatcher_IgnoresOtherWindows()
+    {
+        using var watcher = new NitroSenseWatcher(
+            foregroundProcessId: () => 7,
+            isNitroSense: _ => false);
+
+        int activations = 0;
+        watcher.NitroSenseActivated += (_, _) => activations++;
+
+        watcher.Poll();
+
+        Assert.Equal(0, activations);
+    }
+
+    [Fact]
+    public void NitroSenseWatcher_StaysQuietWhileTheShellSaysNo()
+    {
+        // The shell answers no while NitroLite is already in front: a window the user is looking at needs no help,
+        // and reacting then would close a NitroSense opened on purpose.
+        bool react = false;
+        using var watcher = new NitroSenseWatcher(
+            foregroundProcessId: () => 4242,
+            shouldReact: () => react,
+            isNitroSense: id => id == 4242);
+
+        int activations = 0;
+        watcher.NitroSenseActivated += (_, _) => activations++;
+
+        watcher.Poll();
+        Assert.Equal(0, activations);
+
+        react = true;
+        watcher.Poll();
+        Assert.Equal(1, activations);
+    }
+
+    [Fact]
+    public void NitroSenseWatcher_StaysQuietAfterClosing()
+    {
+        // The Acer service can relaunch NitroSense right after it is closed. Reacting to that would be a loop the
+        // user sees as a flickering window, so the watcher goes quiet for a while.
+        using var watcher = new NitroSenseWatcher(
+            foregroundProcessId: () => 4242,
+            isNitroSense: id => id == 4242);
+
+        int activations = 0;
+        watcher.NitroSenseActivated += (_, _) => activations++;
+
+        watcher.SuppressFor(TimeSpan.FromMinutes(1));
+        watcher.Poll();
+
+        Assert.Equal(0, activations);
+    }
+
+    [Fact]
+    public void NitroKeyReplacesNitroSense_DefaultsOffAndPersists()
+    {
+        // Off by default: it closes a program, so the user has to ask for it.
+        Assert.False(new AppSettings().NitroKeyReplacesNitroSense);
+
+        var settings = new AppSettings { NitroKeyReplacesNitroSense = true };
+        var path = AppPaths.GetDataFile("nitro-sense-replacement.json");
+        SettingsManager.SaveSettingsAtomic(path, settings);
+
+        Assert.True(SettingsManager.LoadSettingsWithFallback(path).NitroKeyReplacesNitroSense);
+    }
+
+    [Fact]
+    public void NitroSenseReplacement_HiddenWhenUnsupported()
+    {
+        var settings = new AppSettings();
+
+        using var withoutWatcher = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("nitro-sense-none.json"));
+        Assert.False(withoutWatcher.NitroSenseReplacementAvailable);
+
+        using var withWatcher = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("nitro-sense-some.json"),
+            nitroSense: new NitroSenseWatcher());
+        Assert.True(withWatcher.NitroSenseReplacementAvailable);
     }
 
     [Fact]

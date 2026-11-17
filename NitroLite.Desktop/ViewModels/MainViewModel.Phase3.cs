@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
@@ -111,6 +111,7 @@ public sealed partial class MainViewModel
     private readonly IDirectWmiControl? _directWmi;
     private readonly IRunAtStartupService? _runAtStartup;
     private readonly INitroKeyListener? _nitroKey;
+    private readonly INitroSenseWatcher? _nitroSense;
 
     // ---------------------------------------------------------------- battery page state
 
@@ -565,6 +566,28 @@ public sealed partial class MainViewModel
         {
             if (_settings.NitroKeyEnabled == value) return;
             _settings.NitroKeyEnabled = value;
+            Raise();
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// True when the platform can watch for NitroSense coming to the front. The replacement switch is bound to this:
+    /// a machine whose key already reaches NitroLite has no reason to close another program.
+    /// </summary>
+    public bool NitroSenseReplacementAvailable => _nitroSense?.IsSupported == true;
+
+    /// <summary>
+    /// Answer the Nitro key by closing NitroSense and coming forward instead of letting NitroSense open. Off by
+    /// default: it closes a program, so the user has to ask for it.
+    /// </summary>
+    public bool NitroKeyReplacesNitroSense
+    {
+        get => _settings.NitroKeyReplacesNitroSense;
+        set
+        {
+            if (_settings.NitroKeyReplacesNitroSense == value) return;
+            _settings.NitroKeyReplacesNitroSense = value;
             Raise();
             SaveSettings();
         }

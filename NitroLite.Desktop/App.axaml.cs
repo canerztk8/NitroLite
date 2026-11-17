@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -16,6 +16,7 @@ public partial class App : Application
     private MainWindow? _window;
     private INitroKeyListener? _nitroKey;
     private NitroKeyActivationGate? _nitroGate;
+    private INitroSenseWatcher? _nitroSense;
     private bool _exiting;
 
     /// <summary>
@@ -61,6 +62,16 @@ public partial class App : Application
                 _nitroGate = new NitroKeyActivationGate(() => _host?.ViewModel.NitroKeyEnabled == true, ShowWindow);
                 _nitroKey.NitroKeyPressed += OnNitroKeyPressed;
                 _nitroKey.Start();
+            }
+
+            // On a model whose button the Acer service stack owns, NitroSense coming to the front is the only signal
+            // the key produces. The watcher reports it; the decision to close NitroSense and come forward is made
+            // below, where the setting and the window are.
+            _nitroSense = _host.NitroSense;
+            if (_nitroSense != null && _nitroSense.IsSupported)
+            {
+                _nitroSense.NitroSenseActivated += OnNitroSenseActivated;
+                _nitroSense.Start();
             }
 
             _window = new MainWindow { DataContext = _host.ViewModel };
@@ -113,6 +124,25 @@ public partial class App : Application
     /// </summary>
     private void OnNitroKeyPressed(object? sender, EventArgs e) =>
         Dispatcher.UIThread.Post(() => _nitroGate?.HandlePress());
+
+    /// <summary>
+    /// NitroSense came to the front, which on this model means the Nitro key was pressed.
+    /// </summary>
+    /// <remarks>
+    /// Only acted on when the user asked for it and only while NitroLite is out of the way. A window the user is
+    /// already looking at needs no help, and reacting then would close a NitroSense that was opened on purpose.
+    /// </remarks>
+    private void OnNitroSenseActivated(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_host?.ViewModel.NitroKeyReplacesNitroSense != true) return;
+            if (_window == null) return;
+            if (_window.IsVisible && _window.WindowState != WindowState.Minimized) return;
+
+            // Closing waits on the process, so it does not belong on the UI thread.
+            _ = Task.Run(() => _nitroSense?.Close());
+            ShowWindow();
+        });
 
     /// <summary>
     /// The only path that ends the process. The fans are handed back to the firmware first: a machine left with a
@@ -182,6 +212,14 @@ public partial class App : Application
         if (_nitroKey != null)
         {
             _nitroKey.NitroKeyPressed -= OnNitroKeyPressed;
+
+            if (_nitroSense != null)
+            {
+                _nitroSense.NitroSenseActivated -= OnNitroSenseActivated;
+                _nitroSense.Stop();
+                _nitroSense.Dispose();
+                _nitroSense = null;
+            }
             _nitroKey.Stop();
             _nitroKey = null;
         }

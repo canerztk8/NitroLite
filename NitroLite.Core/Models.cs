@@ -438,6 +438,18 @@ public class AppSettings
     public bool NitroKeyEnabled { get; set; } = true;
 
     /// <summary>
+    /// Treat NitroSense coming to the front as the Nitro key and answer it instead: close NitroSense and bring
+    /// NitroLite forward.
+    /// <para>
+    /// Off by default, because it closes a program. On a model whose button never reaches NitroLite — the Acer service
+    /// stack owns it and answers by launching NitroSense — this is the only way to make the key open NitroLite, and
+    /// the user has to ask for it.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("nitro_key_replaces_nitro_sense")]
+    public bool NitroKeyReplacesNitroSense { get; set; }
+
+    /// <summary>
     /// Emergency rollback switch for the hardware layer. On (the default) NitroLite may reach the hardware through a
     /// direct WMI backend when the Acer service is not running; off pins every read and write to the Acer service
     /// socket, which is the behaviour before the hardware abstraction existed.

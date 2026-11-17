@@ -1,4 +1,4 @@
-using System.Management;
+﻿using System.Management;
 using System.Runtime.InteropServices;
 using NitroLite.Core;
 
@@ -54,6 +54,29 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     /// either of these is the button.
     /// </summary>
     public static readonly ushort[] NitroKeyUsages = { 0x0194, 0x0195 };
+
+    /// <summary>
+    /// The scan codes some models report for the button instead of a virtual key.
+    /// </summary>
+    /// <remarks>
+    /// The AN16-41 sends <c>VK 0xFF</c> — "no virtual key" — with scan code <c>0x75</c> and the E0 prefix, which is
+    /// not a keyboard key at all. The scan code is the identity here; the virtual key is deliberately not part of the
+    /// match, because the value the firmware sends is the one that means "none".
+    /// </remarks>
+    public static readonly IReadOnlySet<ushort> NitroKeyScanCodes = new HashSet<ushort> { 0x75 };
+
+    /// <summary>The <c>RI_KEY_E0</c> flag: the scan code came with the E0 prefix.</summary>
+    public const ushort RiKeyE0 = 0x02;
+
+    /// <summary>
+    /// How often WMI polls the ACPI event class.
+    /// </summary>
+    /// <remarks>
+    /// ACPI-WMI events are not pushed. Without a <c>WITHIN</c> clause the watcher subscribes successfully and then
+    /// never fires, which is indistinguishable from a machine that has no such event — the exact "the key does
+    /// nothing" symptom. One second is the interval the Acer tooling itself uses.
+    /// </remarks>
+    public static readonly TimeSpan EventPollInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// How many unmatched reports are logged before the log goes quiet. Enough to identify a device, few enough that a
@@ -349,22 +372,44 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
         foreach (var className in _eventClassNames)
         {
-            try
-            {
-                var scope = new ManagementScope(@"\\.\root\WMI");
-                scope.Connect();
+            // WITHIN first: ACPI-WMI events are not pushed, and without the clause the watcher subscribes and then
+            // never fires. Some providers reject the clause outright with "Invalid query", so the plain form is the
+            // fallback rather than the only form — a subscription that never fires still beats no subscription.
+            if (TryStartWatcher(className, EventPollInterval)) continue;
+            if (TryStartWatcher(className, null)) continue;
 
-                var watcher = new ManagementEventWatcher(scope, new WqlEventQuery($"SELECT * FROM {className}"));
-                watcher.EventArrived += OnWmiEvent;
-                watcher.Start();
+            AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı", $"{className}: iki sorgu biçimi de reddedildi");
+        }
+    }
 
-                _watchers.Add(watcher);
-                AppLog.Info("Nitro tuşu WMI olay izleyicisi bağlandı", $"sınıf='{className}'");
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı", $"{className}: {ex.Message}");
-            }
+    private bool TryStartWatcher(string className, TimeSpan? within)
+    {
+        try
+        {
+            var scope = new ManagementScope(@"\\.\root\WMI");
+            scope.Connect();
+
+            var query = new WqlEventQuery($"SELECT * FROM {className}");
+            if (within.HasValue) query.WithinInterval = within.Value;
+
+            var watcher = new ManagementEventWatcher(scope, query);
+            watcher.EventArrived += OnWmiEvent;
+            watcher.Start();
+
+            _watchers.Add(watcher);
+            AppLog.Info("Nitro tuşu WMI olay izleyicisi bağlandı",
+                within.HasValue
+                    ? $"sınıf='{className}' aralık={within.Value.TotalSeconds:0} sn"
+                    : $"sınıf='{className}' aralık=yok");
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Info("Acer WMI olay izleyicisi reddedildi",
+                $"sınıf='{className}' aralık={(within.HasValue ? "var" : "yok")}: {ex.Message}");
+
+            return false;
         }
     }
 
@@ -463,6 +508,12 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             if (NitroKeyVirtualKeys.Contains(report.VirtualKey))
             {
                 Raise($"ham giriş VK=0x{report.VirtualKey:X2}");
+                return;
+            }
+
+            if (NitroKeyScanCodes.Contains(report.MakeCode) && (report.Flags & RiKeyE0) != 0)
+            {
+                Raise($"ham giriş tarama=0x{report.MakeCode:X2} VK=0x{report.VirtualKey:X2}");
                 return;
             }
 
