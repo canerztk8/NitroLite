@@ -500,26 +500,27 @@ public class RetireLegacyWpfTests
     // =============================================================================================================
 
     [Theory]
+    [InlineData(@"C:\Program Files\NitroLite\NitroLite.exe", true)]
+    [InlineData(@"C:\Program Files\NitroLite\nitrolite.EXE", true)]
+    [InlineData("\"C:\\Program Files\\NitroLite\\NitroLite.exe\"", true)]
     [InlineData(@"C:\Program Files\NitroLite\NitroLite.Desktop.exe", true)]
-    [InlineData(@"C:\Program Files\NitroLite\nitrolite.desktop.EXE", true)]
     [InlineData("\"C:\\Program Files\\NitroLite\\NitroLite.Desktop.exe\"", true)]
-    [InlineData(@"C:\Program Files\NitroLite\NitroLite.exe", false)]
+    [InlineData(@"C:\Program Files\NitroLite\NitroLite.Core.dll", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
-    public void IsDesktopExecutable_AcceptsOnlyTheAvaloniaFrontEnd(string? path, bool expected)
+    public void IsDesktopExecutable_AcceptsThePackagedAndDevelopmentNames(string? path, bool expected)
     {
         Assert.Equal(expected, ElevatedStartupService.IsDesktopExecutable(path));
     }
 
-    [Theory]
-    [InlineData(@"C:\Program Files\NitroLite\NitroLite.exe", true)]
-    [InlineData("\"C:\\Program Files\\NitroLite\\NitroLite.exe\"", true)]
-    [InlineData(@"C:\Program Files\NitroLite\NitroLite.Desktop.exe", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void IsLegacyExecutable_AcceptsOnlyTheRetiredWpfFrontEnd(string? path, bool expected)
+    [Fact]
+    public void ExpectedExecutableName_MatchesTheFileTheUpdaterSwaps()
     {
-        Assert.Equal(expected, ElevatedStartupService.IsLegacyExecutable(path));
+        // The in-place updater replaces NitroLite.exe and nothing else, so the task's target and the package's
+        // allow-list have to name the same file. If they drift, an update leaves the scheduled task pointing at a
+        // binary that no longer exists.
+        Assert.Equal("NitroLite.exe", ElevatedStartupService.ExpectedExecutableName);
+        Assert.Contains("NitroLite.exe", UpdateService.PackageFiles, StringComparer.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -536,59 +537,30 @@ public class RetireLegacyWpfTests
     }
 
     [Fact]
-    public async Task PurgeLegacyTask_DeletesATaskThatStillNamesTheWpfExecutable()
+    public async Task Enable_RegistersThePackagedExecutableNameAndDeletesNothingFirst()
     {
-        var runner = new FakeRunner((_, arguments) => arguments.Contains("/XML", StringComparison.Ordinal)
-            ? Ok("<Task><Actions><Exec><Command>\"C:\\Apps\\NitroLite\\NitroLite.exe\"</Command></Exec></Actions></Task>")
-            : Ok());
+        // The package ships the Avalonia front end as NitroLite.exe, so the task must name that file. There is no
+        // legacy name left to purge: the retired WPF build used the same file name.
+        string registered = "";
 
-        var service = new ElevatedStartupService(runner, isElevated: () => true);
+        var runner = new FakeRunner((_, arguments) =>
+        {
+            const string marker = "/XML \"";
+            int start = arguments.IndexOf(marker, StringComparison.Ordinal);
+            if (start >= 0)
+            {
+                int from = start + marker.Length;
+                int to = arguments.IndexOf('"', from);
+                registered = File.ReadAllText(arguments[from..to]);
+            }
 
-        Assert.True(await service.PurgeLegacyTaskAsync());
-
-        Assert.Equal(2, runner.Calls.Count);
-        Assert.Contains("/Query", runner.Calls[0].Arguments, StringComparison.Ordinal);
-        Assert.Contains("/Delete", runner.Calls[1].Arguments, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task PurgeLegacyTask_LeavesATaskThatAlreadyNamesTheDesktopExecutable()
-    {
-        var runner = new FakeRunner((_, _) =>
-            Ok("<Task><Actions><Exec><Command>\"C:\\Apps\\NitroLite\\NitroLite.Desktop.exe\"</Command></Exec></Actions></Task>"));
-
-        var service = new ElevatedStartupService(runner, isElevated: () => true);
-
-        Assert.False(await service.PurgeLegacyTaskAsync());
-
-        Assert.Single(runner.Calls);
-        Assert.DoesNotContain(runner.Calls, c => c.Arguments.Contains("/Delete", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task PurgeLegacyTask_DoesNothingWhenTheTaskIsNotRegistered()
-    {
-        var runner = new FakeRunner((_, _) => Failed());
-
-        var service = new ElevatedStartupService(runner, isElevated: () => true);
-
-        Assert.False(await service.PurgeLegacyTaskAsync());
-
-        Assert.Single(runner.Calls);
-    }
-
-    [Fact]
-    public async Task Enable_PurgesTheLegacyTaskBeforeRegisteringTheNewOne()
-    {
-        // A stale WPF task must not survive a failed create, so the purge runs first.
-        var runner = new FakeRunner((_, arguments) => arguments.Contains("/XML", StringComparison.Ordinal)
-            ? Ok("<Task><Actions><Exec><Command>\"C:\\Apps\\NitroLite\\NitroLite.exe\"</Command></Exec></Actions></Task>")
-            : Ok());
+            return Ok();
+        });
 
         var service = new ElevatedStartupService(
             runner,
             isElevated: () => true,
-            executablePath: () => @"C:\Apps\NitroLite\NitroLite.Desktop.exe",
+            executablePath: () => @"C:\Apps\NitroLite\NitroLite.exe",
             userId: () => "S-1-5-21-1",
             tempFilePath: () => Path.Combine(Path.GetTempPath(), $"nitrolite_task_{Guid.NewGuid():N}.xml"),
             registerTask: (_, _, _, _) => "the COM path is not exercised here");
@@ -596,22 +568,19 @@ public class RetireLegacyWpfTests
         var result = await service.EnableAsync(startMinimized: false);
 
         Assert.True(result.Applied);
-
-        int delete = runner.Calls.FindIndex(c => c.Arguments.Contains("/Delete", StringComparison.Ordinal));
-        int create = runner.Calls.FindIndex(c => c.Arguments.Contains("/Create", StringComparison.Ordinal));
-        Assert.True(delete >= 0, "the legacy task was never deleted");
-        Assert.True(create > delete, "the new task was registered before the legacy one was removed");
+        Assert.Contains("NitroLite.exe", registered, StringComparison.Ordinal);
+        Assert.DoesNotContain(runner.Calls, c => c.Arguments.Contains("/Delete", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void BuildTaskXml_NamesTheDesktopExecutableAndKeepsTheTrayFriendlyDefaults()
+    public void BuildTaskXml_NamesThePackagedExecutableAndKeepsTrayFriendlyDefaults()
     {
         var xml = ElevatedStartupService.BuildTaskXml(
-            @"C:\Apps\NitroLite\NitroLite.Desktop.exe",
+            @"C:\Apps\NitroLite\NitroLite.exe",
             ElevatedStartupService.BuildTaskArguments(startMinimized: true),
             "S-1-5-21-1");
 
-        Assert.Contains("NitroLite.Desktop.exe", xml, StringComparison.Ordinal);
+        Assert.Contains("NitroLite.exe", xml, StringComparison.Ordinal);
         Assert.Contains("--autostart --minimized", xml, StringComparison.Ordinal);
         Assert.Contains("<RunLevel>HighestAvailable</RunLevel>", xml, StringComparison.Ordinal);
         Assert.Contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>", xml, StringComparison.Ordinal);

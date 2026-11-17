@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
@@ -58,24 +58,27 @@ public sealed class ElevatedStartupService
     public const string AutostartFlag = "--autostart";
 
     /// <summary>
-    /// The executable the task must launch. The WPF front end is retired, so a task that still points at
-    /// <c>NitroLite.exe</c> would start a program that no longer ships — and fail silently at logon, which is the worst
-    /// way for an autostart entry to break.
+    /// The executable the task must launch. The published package ships the Avalonia front end under this name, which
+    /// is deliberately the name the retired WPF build used: the in-place updater swaps <c>NitroLite.exe</c> and nothing
+    /// else, so a package that renamed the binary would leave every existing user unable to update, and every task the
+    /// old build registered pointing at a file that no longer exists.
     /// </summary>
-    public const string ExpectedExecutableName = "NitroLite.Desktop.exe";
+    public const string ExpectedExecutableName = "NitroLite.exe";
 
-    /// <summary>The retired WPF front end. A registration naming it is stale and is removed.</summary>
-    public const string LegacyExecutableName = "NitroLite.exe";
+    /// <summary>
+    /// The name the project builds under. A development build is <c>NitroLite.Desktop.exe</c> and is accepted so the
+    /// feature can be exercised without a package; the release script renames the binary before zipping it.
+    /// </summary>
+    public const string DevelopmentExecutableName = "NitroLite.Desktop.exe";
 
-    /// <summary>True when <paramref name="path"/> is the Avalonia front end rather than the retired WPF one.</summary>
-    public static bool IsDesktopExecutable(string? path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        string.Equals(Path.GetFileName(Unquote(path)), ExpectedExecutableName, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>True when <paramref name="path"/> names the retired WPF front end.</summary>
-    public static bool IsLegacyExecutable(string? path) =>
-        !string.IsNullOrWhiteSpace(path) &&
-        string.Equals(Path.GetFileName(Unquote(path)), LegacyExecutableName, StringComparison.OrdinalIgnoreCase);
+    /// <summary>True when <paramref name="path"/> is a NitroLite front end, packaged or from a development build.</summary>
+    public static bool IsDesktopExecutable(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        var name = Path.GetFileName(Unquote(path));
+        return string.Equals(name, ExpectedExecutableName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, DevelopmentExecutableName, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Strips the quotes the task engine's <c>&lt;Command&gt;</c> element carries. <see cref="BuildTaskXml"/> quotes a
@@ -336,31 +339,6 @@ public sealed class ElevatedStartupService
     }
 
     /// <summary>
-    /// Deletes a registration that still names the retired WPF front end. Returns true when one was removed.
-    /// </summary>
-    /// <remarks>
-    /// <c>schtasks /Create /F</c> already replaces a task of the same name, so this is not about the task this build
-    /// writes. It is about the case where the user turns the feature off, or never turns it on again: a task left
-    /// pointing at a deleted <c>NitroLite.exe</c> fails at logon with nothing on screen to say why, and the user has no
-    /// way to connect that to an app they upgraded months ago.
-    /// </remarks>
-    public async Task<bool> PurgeLegacyTaskAsync(CancellationToken cancellationToken = default)
-    {
-        var query = await _runner.RunAsync(
-            "schtasks.exe", $"/Query /TN \"{TaskName}\" /XML", elevate: false, cancellationToken).ConfigureAwait(false);
-
-        if (!query.Success || !IsLegacyExecutable(ReadCommandFromTaskXml(query.StandardOutput))) return false;
-
-        var delete = await _runner.RunAsync(
-            "schtasks.exe", $"/Delete /TN \"{TaskName}\" /F", elevate: false, cancellationToken).ConfigureAwait(false);
-
-        if (!delete.Success) return false;
-
-        AppLog.Info("Eski WPF otomatik başlatma görevi silindi", $"görev='{TaskName}'");
-        return true;
-    }
-
-    /// <summary>
     /// The <c>&lt;Command&gt;</c> element of a task definition, or an empty string when the XML has none. Read with a
     /// substring rather than an XML parser: the document carries a namespace and a schema location, and the one value
     /// this needs is a single element.
@@ -395,7 +373,7 @@ public sealed class ElevatedStartupService
         }
 
         // A dev build runs under dotnet.exe or a test host, so this is a warning rather than a refusal: the shipped
-        // app always resolves to NitroLite.Desktop.exe, and refusing would make the feature untestable.
+        // app always resolves to NitroLite.exe, and refusing would make the feature untestable.
         if (!IsDesktopExecutable(exePath))
         {
             AppLog.Warn("Otomatik başlatma hedefi beklenen çalıştırılabilir değil",
@@ -410,9 +388,6 @@ public sealed class ElevatedStartupService
             return Fail("the executable runs from a temporary or download folder, so it must not be registered " +
                         $"for autostart: {exePath}");
         }
-
-        // Before the new registration, so a stale WPF task cannot survive a failed create.
-        await PurgeLegacyTaskAsync(cancellationToken).ConfigureAwait(false);
 
         string? userId = _userId();
         if (string.IsNullOrWhiteSpace(userId))

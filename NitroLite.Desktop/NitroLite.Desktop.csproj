@@ -10,7 +10,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NitroLite.Desktop</RootNamespace>
     <AssemblyName>NitroLite.Desktop</AssemblyName>
-    <Version>1.2.5-f</Version>
+    <Version>1.3.0</Version>
     <Authors>NitroLite Team</Authors>
 
     <!-- Compiled bindings: a binding path that does not exist is a build error instead of a silently empty control.

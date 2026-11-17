@@ -3,8 +3,13 @@
     Builds the downloadable NitroLite package: artifacts\NitroLite-v<version>-win-x64.zip
 
 .DESCRIPTION
-    - NitroLite.Desktop.exe: self-contained single file (no .NET install needed on the target PC). The Avalonia
-      front end is the only one that ships; the WPF project it replaced is retired.
+    - NitroLite.exe: self-contained single file (no .NET install needed on the target PC). The Avalonia front end is
+      the only one that ships; the WPF project it replaced is retired.
+      The published binary is NitroLite.Desktop.exe and it is renamed here on purpose. The updater that ships inside
+      every 1.2.x WPF build looks for an entry called NitroLite.exe and refuses the package without one, so a zip
+      that carried NitroLite.Desktop.exe would leave every existing user unable to update in place. Keeping the name
+      also means the Task Scheduler entry and the HKCU Run entry the old build wrote keep pointing at a file that
+      exists, and that file is now this one.
     - Pinned to a patched .NET runtime ($RuntimeVersion). 10.0.14 fixes CVE-2026-111497 (Brotli decoder,
       GHSA-p3jp-9v83-76w9); the SDK's bundled 10.0.12 is affected, so never ship a package built without the pin.
     - tools\WinMemoryCleaner.exe: the unmodified upstream release, so the memory card works out of the box.
@@ -74,10 +79,16 @@ Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
 # Ship only what the app needs.
 Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item -Force
 
+# The one rename that makes in-place updates possible. See the .DESCRIPTION above: the 1.2.x updater, the scheduled
+# task and the Run entry all name NitroLite.exe, and this package has to answer to that name.
+$publishedExe = Join-Path $stage 'NitroLite.Desktop.exe'
+if (-not (Test-Path $publishedExe)) { throw "The publish step did not produce $publishedExe" }
+Move-Item $publishedExe (Join-Path $stage 'NitroLite.exe') -Force
+
 # Guard against the vulnerable runtime: the single-file host carries the runtime version string.
-$exeBytes = [IO.File]::ReadAllBytes((Join-Path $stage 'NitroLite.Desktop.exe'))
+$exeBytes = [IO.File]::ReadAllBytes((Join-Path $stage 'NitroLite.exe'))
 if (-not ([Text.Encoding]::ASCII.GetString($exeBytes).Contains($RuntimeVersion))) {
-    throw "NitroLite.Desktop.exe does not reference runtime $RuntimeVersion"
+    throw "NitroLite.exe does not reference runtime $RuntimeVersion"
 }
 
 Copy-Item (Join-Path $root 'LICENSE') $stage
@@ -118,7 +129,7 @@ try {
 # Nothing else may reach the package: the updater refuses unknown entries, so a stray file
 # here would break in-app updates for everyone.
 $allowed = @(
-    'NitroLite.Desktop.exe',
+    'NitroLite.exe',
     'LICENSE',
     'THIRD-PARTY-NOTICES.md',
     'tools\WinMemoryCleaner.exe',
