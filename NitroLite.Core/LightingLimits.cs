@@ -17,6 +17,12 @@ public static class LightingLimits
     /// <summary>Highest brightness NitroLite stores, as a level.</summary>
     public const int MaxBrightnessLevel = 9;
 
+    /// <summary>
+    /// Lowest effect speed. One, not zero: the protocol has no "speed 0", so a slider that reached it would write a
+    /// level the firmware rejects and the keyboard would keep whatever it had.
+    /// </summary>
+    public const int MinSpeed = 1;
+
     /// <summary>Highest effect speed.</summary>
     public const int MaxSpeed = 9;
 

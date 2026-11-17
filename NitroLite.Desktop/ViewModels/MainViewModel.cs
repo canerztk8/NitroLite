@@ -725,6 +725,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private FanModeChoice? _selectedGameFanMode;
     private MouseProfileOption? _selectedGameMouseProfile;
     private bool _gameFanCurveEnabled;
+    private bool _gameAutoApply = true;
     private MouseProfileOption? _selectedMouseProfile;
     private string _mouseProfileStatus = "";
 
@@ -889,6 +890,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         DeleteSelectedGameCommand = new AsyncCommand(DeleteSelectedGameAsync);
         ApplyDefaultMouseProfileCommand = new AsyncCommand(ApplyDefaultMouseProfileAsync);
         CopyDesktopCurveCommand = new RelayCommand(CopyDesktopCurveToGame);
+        SaveGameProfileCommand = new RelayCommand(SaveGameProfile);
+        TestMouseProfileCommand = new AsyncCommand(TestSelectedGameMouseProfileAsync);
         ToastActionCommand = new RelayCommand(RunToastAction);
         ToggleModeTraceCommand = new RelayCommand(() => ModeTraceVisible = !ModeTraceVisible);
         CleanMemoryCommand = new RelayCommand(() => _ = CleanMemoryAsync());
@@ -909,6 +912,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _labels, value)) return;
             foreach (var anchor in CurveAnchors) anchor.Labels = value;
+            foreach (var anchor in GameCurveAnchors) anchor.Labels = value;
             Raise(nameof(CurvePreview));
             Raise(nameof(CapabilitySummaryText));
             Raise(nameof(TierDisplay));
@@ -1546,11 +1550,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     // The unit is part of the text rather than a StringFormat in XAML: a format string in a compiled binding is one
     // more thing that can silently render nothing, and these five are read at a glance.
-    public string CpuTemperatureText => $"{CpuTemperature} °C";
-    public string GpuTemperatureText => $"{GpuTemperature} °C";
-    public string SysTemperatureText => $"{SysTemperature} °C";
-    public string CpuFanRpmText => $"{CpuFanRpm} RPM";
-    public string GpuFanRpmText => $"{GpuFanRpm} RPM";
+    //
+    // Every one of them goes through TelemetryFormatter, which is what makes "no reading" say so. A sensor that did
+    // not answer reports 0, and 0 °C / 0 RPM / 0.0 % are not readings: they are the absence of one, and printing them
+    // as figures claims the machine is at freezing point with its fans stopped.
+    public string CpuTemperatureText => TelemetryFormatter.FormatCpuTemperature(CpuTemperature);
+    public string GpuTemperatureText => TelemetryFormatter.FormatGpuTemperature(GpuTemperature);
+    public string SysTemperatureText => TelemetryFormatter.FormatTemperature(SysTemperature);
+    public string CpuFanRpmText => TelemetryFormatter.FormatFanRpm(CpuFanRpm);
+    public string GpuFanRpmText => TelemetryFormatter.FormatFanRpm(GpuFanRpm);
 
     /// <summary>
     /// True when the RPM numbers are tachometer readings. False means they were derived from a fan percentage and the
@@ -1679,7 +1687,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string CpuUsageText => $"{CpuUsage:F1} %";
+    public string CpuUsageText => TelemetryFormatter.FormatUsagePercent(CpuUsage);
 
     public double CpuPowerWatts
     {
@@ -1721,7 +1729,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string GpuUsageText => GpuUsage > 0 ? $"{GpuUsage:F1} %" : "-- %";
+    public string GpuUsageText => TelemetryFormatter.FormatUsagePercent(GpuUsage);
 
     public double GpuPowerWatts
     {
@@ -2141,6 +2149,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool ModeControlAvailable => _capabilities.OperatingModeControl;
 
+    /// <summary>
+    /// True when the page has to explain why the mode tiles are dead. The note is the difference between "this page
+    /// is broken" and "this machine has no backend": the rest of the page keeps working either way.
+    /// </summary>
+    public bool HasModeLockNote => !ModeControlAvailable;
+
     // ---------------------------------------------------------------- fan
 
     public ObservableCollection<FanModeChoice> FanModes { get; } = new();
@@ -2274,7 +2288,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => _speedLevel;
         set
         {
-            if (!Set(ref _speedLevel, Math.Clamp(value, 0, LightingLimits.MaxSpeed))) return;
+            // The floor is 1, not 0: the protocol has no "speed 0", and a stored 0 from an older settings file would
+            // otherwise be written to the keyboard as a level the firmware rejects.
+            if (!Set(ref _speedLevel, Math.Clamp(value, LightingLimits.MinSpeed, LightingLimits.MaxSpeed))) return;
             Raise(nameof(SpeedLabel));
         }
     }
@@ -3286,6 +3302,114 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         GameProfileStatus = Labels.GameCurveCopied(row.DisplayName);
     }
 
+    /// <summary>
+    /// True when the selected game's rule is applied on its own when the game starts.
+    /// </summary>
+    /// <remarks>
+    /// The service reads this on every poll, so turning it off stops the automatic switch without deleting the rule:
+    /// the mode, the boost and the curve stay configured and can still be applied by hand. A rule that is never
+    /// applied automatically is a saved preset, which is a thing users ask for.
+    /// </remarks>
+    public bool GameAutoApply
+    {
+        get => _gameAutoApply;
+        set
+        {
+            if (!Set(ref _gameAutoApply, value)) return;
+            if (_suppressWrite) return;
+            if (SelectedGameProfile is not GameProfileRow row) return;
+            if (FindProfile(row) is not GameProfile profile) return;
+
+            profile.AutoApply = value;
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// The six anchors of the selected game's own curve. Rebuilt whenever the selection moves, so the sliders always
+    /// edit the rule the picker names.
+    /// </summary>
+    public ObservableCollection<CurveAnchorViewModel> GameCurveAnchors { get; } = new();
+
+    /// <summary>
+    /// Fills <see cref="GameCurveAnchors"/> from the selected rule, falling back to the desktop curve when the rule
+    /// has no shape of its own yet.
+    /// </summary>
+    /// <remarks>
+    /// The anchors are always the six the editor offers, even when the stored list is shorter: a curve with three
+    /// points would otherwise give the user three sliders and no way to reach the other three temperatures.
+    /// </remarks>
+    private void BuildGameCurveAnchors()
+    {
+        var profile = SelectedGameProfile is GameProfileRow row ? FindProfile(row) : null;
+        var source = FanCurve.Sanitize(profile?.TargetFanCurvePoints ?? _settings.FanCurvePoints);
+
+        GameCurveAnchors.Clear();
+        foreach (var temperature in FanCurve.AnchorTemperatures)
+        {
+            int percent = source.FirstOrDefault(p => p.TemperatureC == temperature)?.Percent ?? FanCurve.MinPercent;
+            GameCurveAnchors.Add(new CurveAnchorViewModel(temperature, percent, OnGameCurveChanged) { Labels = Labels });
+        }
+    }
+
+    /// <summary>Writes a moved game anchor back into the rule. The shape is the state, so there is nothing else to save.</summary>
+    private void OnGameCurveChanged()
+    {
+        if (_suppressWrite) return;
+        if (SelectedGameProfile is not GameProfileRow row) return;
+        if (FindProfile(row) is not GameProfile profile) return;
+
+        profile.TargetFanCurvePoints = GameCurveAnchors
+            .Select(a => new FanCurvePoint(a.TemperatureC, a.Percent))
+            .ToList();
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// Flushes the selected rule to disk and says so. The per-game controls write as they change, so this is the
+    /// receipt rather than the only save: a user who tuned four pickers wants one line that confirms all four landed.
+    /// </summary>
+    public RelayCommand SaveGameProfileCommand { get; }
+
+    private void SaveGameProfile()
+    {
+        if (SelectedGameProfile is not GameProfileRow row) return;
+        if (FindProfile(row) is not GameProfile profile) return;
+
+        profile.TargetFanCurvePoints = GameCurveAnchors
+            .Select(a => new FanCurvePoint(a.TemperatureC, a.Percent))
+            .ToList();
+        SaveSettings();
+        BuildGameProfileRows();
+        GameProfileStatus = Labels.GameProfileSaved(row.DisplayName);
+        Status = GameProfileStatus;
+    }
+
+    /// <summary>
+    /// Applies the selected game's mouse profile to the hardware right now, without waiting for the game to start.
+    /// </summary>
+    /// <remarks>
+    /// The mouse's four configurations are stored in its own memory, so a user who is about to pick one for a game
+    /// wants to feel it under the hand first. This is the same write the game would make, made on demand.
+    /// </remarks>
+    public AsyncCommand TestMouseProfileCommand { get; }
+
+    private async Task TestSelectedGameMouseProfileAsync()
+    {
+        if (_mouseProfiles == null) return;
+        if (SelectedGameMouseProfile is not MouseProfileOption choice) return;
+
+        if (choice.Index <= 0)
+        {
+            MouseProfileStatus = Labels.MousePassiveApplied;
+            return;
+        }
+
+        bool ok = await _mouseProfiles.ApplyProfileAsync(choice.Index).ConfigureAwait(true);
+        MouseProfileStatus = ok ? Labels.MouseProfileApplied(choice.Index) : Labels.MouseProfileFailed;
+        Status = MouseProfileStatus;
+    }
+
     /// <summary>The rule behind a row, matched on the executable name the row carries.</summary>
     private GameProfile? FindProfile(GameProfileRow row) =>
         _settings.GameProfiles.FirstOrDefault(p =>
@@ -3316,6 +3440,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ? null
                 : MouseProfileOptions.FirstOrDefault(m => m.Index == profile.TargetAtkMouseProfile);
             _gameFanCurveEnabled = profile?.TargetFanCurveEnabled ?? false;
+            _gameAutoApply = profile?.AutoApply ?? true;
         }
         finally
         {
@@ -3327,6 +3452,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(SelectedGameFanMode));
         Raise(nameof(SelectedGameMouseProfile));
         Raise(nameof(GameFanCurveEnabled));
+        Raise(nameof(GameAutoApply));
+
+        // The six sliders follow the selection, so the card never edits one game's curve while naming another.
+        BuildGameCurveAnchors();
     }
 
     // ---------------------------------------------------------------- mouse profiles
@@ -3930,6 +4059,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             BuildModeChoices();
             Raise(nameof(ModeControlAvailable));
+            Raise(nameof(HasModeLockNote));
             Raise(nameof(FanControlAvailable));
             Raise(nameof(LightingAvailable));
             Raise(nameof(CoolBoostAvailable));
@@ -4753,6 +4883,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Raise(nameof(CapabilitySummaryText));
         Raise(nameof(ModeControlAvailable));
+        Raise(nameof(HasModeLockNote));
         Raise(nameof(FanControlAvailable));
         Raise(nameof(LightingAvailable));
         Raise(nameof(CoolBoostAvailable));

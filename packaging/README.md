@@ -67,7 +67,8 @@ To submit a new version:
 The installer is declared as `zip` with a `portable` nested installer, so WinGet unpacks the package and links
 `NitroLite\NitroLite.exe` as `nitrolite` instead of running a setup program. There is no uninstall entry to
 register, which matches how NitroLite works: delete the folder, after running
-`NitroLite.exe --uninstall-cleanup --yes` if you used **Windows & system optimisation**.
+`NitroLite.exe --uninstall-cleanup --yes` (or `NitroLite.exe --cli uninstall-cleanup`) if you used **Windows &
+system optimisation**.
 
 ## Why this is not code signing
 

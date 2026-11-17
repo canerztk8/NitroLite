@@ -40,10 +40,11 @@ internal static class Program
 #endif
 
         // The one-shot commands. Each of these talks to the hardware and exits without a window, so a script or a
-        // shortcut can repair a machine without a user in front of it.
+        // shortcut can repair a machine without a user in front of it. Both spellings arrive here: --cli <command>
+        // and the legacy --fix-lighting / --optimize-pc flags the shipped .bat files still use.
         if (CliTaskRunner.IsCliTask(args))
         {
-            return RunCliTask(CliTaskRunner.ParseCommand(args));
+            return RunCliTask(CliTaskRunner.ParseCommand(args), args);
         }
 
         if (args.Any(a => string.Equals(a, "--hardware-report", StringComparison.OrdinalIgnoreCase)))
@@ -80,14 +81,27 @@ internal static class Program
             .LogToTrace();
 
     /// <summary>
-    /// Runs one <c>--cli</c> command against the same backend the window would use, and returns its exit code.
+    /// Runs one one-shot command against the same backend the window would use, and returns its exit code.
     /// </summary>
-    private static int RunCliTask(string command)
+    /// <remarks>
+    /// The legacy spelling changes system state, so it asks first: without <c>--yes</c> the command is refused with
+    /// exit code 3 and the line that would work, which is what the Windows front end did. <c>--cli</c> is a command
+    /// someone typed on purpose and runs without the second flag.
+    /// </remarks>
+    private static int RunCliTask(string command, string[] args)
     {
         if (string.IsNullOrWhiteSpace(command))
         {
             Console.Error.WriteLine($"--cli: {string.Join(", ", CliTaskRunner.Commands)}");
             return 2;
+        }
+
+        if (CliTaskRunner.RequiresConfirmation(args) && !CliTaskRunner.IsConfirmed(args))
+        {
+            var flag = CliTaskRunner.ParseLegacyFlag(args);
+            Console.Error.WriteLine(Loc.T("Bu komut sistem ayarlarını değiştirir. Onaylamak için --yes ekleyin:"));
+            Console.Error.WriteLine($"  NitroLite.exe {flag} --yes");
+            return 3;
         }
 
         try

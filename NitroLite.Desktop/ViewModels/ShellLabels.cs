@@ -125,6 +125,12 @@ public sealed class ShellLabels
     public string GpuDiscrete => Loc.T("Harici GPU (Discrete)");
     public string MuxHint => Loc.T("Geçişten sonra oturumu kapatıp açmanız gerekebilir.");
 
+    /// <summary>
+    /// Shown under the MUX row on a machine that has no switch. The row stays visible and disabled rather than
+    /// disappearing: a feature that vanishes reads as a bug, one that is greyed out with a reason reads as an answer.
+    /// </summary>
+    public string MuxUnavailableNote => Loc.T("Bu cihazda MUX anahtarı yok; seçim devre dışı.");
+
     // ---------------------------------------------------------------- school mode
     public string SchoolMode => Loc.T("Okul modu");
     public string SchoolModeHint => Loc.T("Pil ömrünü en üst düzeye çıkarır: %40 parlaklık, 60 Hz, CPU Boost kapalı.");
@@ -177,6 +183,20 @@ public sealed class ShellLabels
     public string GameOwnCurve => Loc.T("Bu oyun için özel fan eğrisi");
     public string CopyDesktopCurve => Loc.T("Masaüstü eğrisini kopyala");
     public string GameCurveCopied(string name) => Loc.T($"Masaüstü eğrisi kopyalandı: {name}");
+
+    /// <summary>The caption above the six per-game curve anchors.</summary>
+    public string GameFanCurveCaption => Loc.T("OYUN FAN EĞRİSİ");
+
+    /// <summary>The switch that decides whether a rule is applied on its own when the game starts.</summary>
+    public string GameAutoApply => Loc.T("Bu oyun açılınca profili uygula");
+
+    public string GameAutoApplyHint => Loc.T("Açılışta uygulanır, kapanışta geri alınır");
+
+    public string GameAutoApplyTooltip => Loc.T("Yalnızca bu oyun için geçerli. Kapalıysa oyun algılanır ama bu profili kendiliğinden uygulamaz; elle çalıştırılabilir.");
+
+    public string SaveGameProfile => Loc.T("Yapılandırmayı Kaydet");
+
+    public string GameProfileSaved(string name) => Loc.T($"Yapılandırma kaydedildi: {name}");
     public string DeleteProfileTitle => Loc.T("Profili sil");
     public string DeleteProfileConfirm(string name) => Loc.T($"'{name}' profili silinsin mi? Bu işlem geri alınamaz.");
     public string GameSessionRecovered => Loc.T("Yarım kalan oyun oturumu geri alındı; önceki mod ve fan ayarları geri yüklendi.");
@@ -191,6 +211,11 @@ public sealed class ShellLabels
     public string MouseProfileApplied(int profile) => Loc.T($"Fare profili uygulandı: Config {profile}");
     public string MouseProfileFailed => Loc.T("Fare profili uygulanamadı; cihaz yanıt vermedi.");
     public string DefaultMouseProfile => Loc.T("Varsayılan Fare Profili");
+
+    /// <summary>Applies the selected game's mouse profile to the hardware right now, without waiting for the game.</summary>
+    public string TestMouseProfile => Loc.T("Dene");
+
+    public string TestMouseProfileHint => Loc.T("Seçili fare profilini donanım üzerinde anında test eder.");
 
     // ---------------------------------------------------------------- fan curve presets
 
@@ -326,12 +351,24 @@ public sealed class ShellLabels
     public string ShowCaption => Loc.T("GÖSTER");
     public string WaitingForRecording => Loc.T("Kayıt bekleniyor");
     public string PowerModes => Loc.T("Güç Modları");
+
+    /// <summary>
+    /// The line above the mode tiles when the backend cannot be reached. The page stays readable and the note says
+    /// which controls are off and why, instead of the whole page going grey with no explanation.
+    /// </summary>
+    public string ModeLockNote => Loc.T("Donanım arka ucu yanıt vermediği için mod değiştirme devre dışı. Okuma ve diğer ayarlar çalışmaya devam eder.");
     public string FanControl => Loc.T("Fan Kontrolü");
     public string FanSegmentCustom => Loc.T("Özel");
     public string FanSegmentCurve => Loc.T("Eğri");
     public string FanProtection => Loc.T("Fan arızasında otomatik koruma (Eco moduna geç)");
     public string GpuAndCpu => Loc.T("GPU & CPU");
     public string CpuBoostCaption => Loc.T("CPU BOOST");
+
+    /// <summary>
+    /// The long explanation behind the CPU BOOST badge. The badge used to carry the caption itself, which told the
+    /// user nothing they could not already read beside it.
+    /// </summary>
+    public string CpuBoostHint => Loc.T("Windows güç planındaki işlemci saat frekansı davranışı. Agresif en yüksek frekansa çıkar, Verimli boost'u açık tutar, Devre Dışı taban frekansta kalır.");
     public string BoostAggressive => Loc.T("Agresif");
     public string BoostEfficient => Loc.T("Verimli");
     public string BoostDisabled => Loc.T("Devre Dışı");

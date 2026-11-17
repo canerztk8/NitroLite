@@ -66,6 +66,34 @@ public static class TelemetryFormatter
     }
 
     /// <summary>
+    /// Formats a tachometer reading, or the placeholder when the fan reported nothing.
+    /// </summary>
+    /// <remarks>
+    /// A fan that is not turning reports 0, and 0 is not a reading: showing "0 RPM" would claim the fan has stopped,
+    /// which is the one thing the number must never say by accident. <see cref="FormatFanSpeedRpm"/> keeps its own
+    /// contract for the callers that want the raw figure; this is the one the window uses.
+    /// </remarks>
+    public static string FormatFanRpm(int rpm, string defaultText = "-- RPM")
+    {
+        if (rpm <= 0) return defaultText;
+        return $"{rpm} RPM";
+    }
+
+    /// <summary>
+    /// Formats a load percentage, or the placeholder when the sensor reported nothing.
+    /// </summary>
+    /// <remarks>
+    /// Zero load is not a reading either: a running CPU is never idle at exactly 0.0 %. The number keeps the active
+    /// culture's decimal separator, because it sits beside the temperature and the clock in the same readout and the
+    /// three must agree.
+    /// </remarks>
+    public static string FormatUsagePercent(double percent, string defaultText = "-- %")
+    {
+        if (percent <= 0 || double.IsNaN(percent) || double.IsInfinity(percent)) return defaultText;
+        return $"{percent:F1} %";
+    }
+
+    /// <summary>
     /// Formats fan speed percentage (e.g. "%66").
     /// </summary>
     public static string FormatFanSpeedPercent(int rpm, int maxRpm = 6000)

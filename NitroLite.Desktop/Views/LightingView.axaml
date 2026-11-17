@@ -241,7 +241,7 @@
                            FontSize="11" HorizontalAlignment="Right"
                            Foreground="{DynamicResource AccentBrush}" />
               </Grid>
-              <Slider Minimum="0" Maximum="{Binding MaxSpeed}" TickFrequency="1"
+              <Slider Minimum="1" Maximum="{Binding MaxSpeed}" TickFrequency="1"
                       IsSnapToTickEnabled="True" Value="{Binding SpeedLevel}" Margin="0,4,0,0" />
             </StackPanel>
           </Grid>

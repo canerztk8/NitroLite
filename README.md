@@ -147,7 +147,16 @@ Every Acer and Windows maintenance task runs from the **System Services & Tools*
   types, the HAGS value and the telemetry tasks back.
 - **Command line:** `NitroLite.exe` also accepts `--fix-lighting`, `--fix-services`, `--restore-mux`, `--optimize-pc`,
   `--restore-optimize` and `--uninstall-cleanup`. Commands that change system settings ask for confirmation:
-  `NitroLite.exe --optimize-pc --yes`.
+  `NitroLite.exe --optimize-pc --yes`. The same six commands are also reachable as `--cli <command>`, which is the
+  form to prefer in new scripts because it does not need the second flag:
+
+  ```bat
+  NitroLite.exe --optimize-pc --yes
+  NitroLite.exe --cli optimize
+  ```
+
+  `--yes`, `-y` and `--force` are all accepted. Without one, a legacy flag exits with code 3 and prints the line that
+  would work; `--cli` runs straight away.
 - **Before you delete the folder:** run `NitroLite.exe --uninstall-cleanup --yes`. NitroLite has no installer, so
   nothing else undoes the Windows-level changes **Windows & system optimisation** makes or removes the autostart
   entry. Skipping it leaves SysMain disabled and HAGS enabled after the app is gone.

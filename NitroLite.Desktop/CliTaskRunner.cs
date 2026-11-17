@@ -25,15 +25,84 @@ public static class CliTaskRunner
         "fix-lighting", "fix-services", "restore-mux", "optimize", "restore-optimize", "uninstall-cleanup"
     ];
 
+    /// <summary>
+    /// The spellings the Windows front end accepted before <c>--cli</c> existed, mapped to the command each one runs.
+    /// </summary>
+    /// <remarks>
+    /// A shortcut, a scheduled task or a <c>.bat</c> file written against the old spelling is the reason this table
+    /// exists: those files ship in <c>tools/</c> and are documented in the README, so dropping the flags would break
+    /// every one of them at once. <c>--optimize-pc</c> maps to <c>optimize</c> because the command was renamed, not
+    /// because the behaviour changed.
+    /// </remarks>
+    public static readonly IReadOnlyDictionary<string, string> LegacyFlags =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["--fix-lighting"] = "fix-lighting",
+            ["--fix-services"] = "fix-services",
+            ["--restore-mux"] = "restore-mux",
+            ["--optimize-pc"] = "optimize",
+            ["--restore-optimize"] = "restore-optimize",
+            ["--uninstall-cleanup"] = "uninstall-cleanup"
+        };
+
+    /// <summary>The flags that answer the confirmation a state-changing command asks for.</summary>
+    public static readonly string[] ConfirmationFlags = ["--yes", "-y", "--force"];
+
     /// <summary>True when the command line asks for a one-shot task rather than the window.</summary>
     public static bool IsCliTask(string[]? args) =>
         args != null && args.Any(a => !string.IsNullOrWhiteSpace(a) &&
-                                      a.Trim().Equals("--cli", StringComparison.OrdinalIgnoreCase));
+                                      (a.Trim().Equals("--cli", StringComparison.OrdinalIgnoreCase) ||
+                                       LegacyFlags.ContainsKey(a.Trim())));
 
     /// <summary>
-    /// The command named after <c>--cli</c>, or empty when the flag was the last thing on the line.
+    /// The command the line asks for, from either spelling. Empty when nothing was named.
     /// </summary>
+    /// <remarks>
+    /// <c>--cli</c> wins over a legacy flag on the same line: an explicit command is never overridden by a spelling
+    /// that happens to sit beside it.
+    /// </remarks>
     public static string ParseCommand(string[]? args)
+    {
+        var explicitCommand = ParseExplicitCommand(args);
+        return explicitCommand.Length > 0 ? explicitCommand : ParseLegacyCommand(args);
+    }
+
+    /// <summary>
+    /// The legacy flag the line carries, or empty when the command came from <c>--cli</c>. Used to echo the exact
+    /// spelling back in the confirmation message, so the user can copy the line that will work.
+    /// </summary>
+    public static string ParseLegacyFlag(string[]? args)
+    {
+        if (args == null) return "";
+
+        foreach (var arg in args)
+        {
+            var trimmed = arg?.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+            if (LegacyFlags.ContainsKey(trimmed)) return trimmed.ToLowerInvariant();
+        }
+
+        return "";
+    }
+
+    /// <summary>True when the line carries <c>--yes</c>, <c>-y</c> or <c>--force</c>.</summary>
+    public static bool IsConfirmed(string[]? args) =>
+        args != null && args.Any(a => !string.IsNullOrWhiteSpace(a) &&
+                                      ConfirmationFlags.Contains(a.Trim(), StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// True when the command came from a legacy flag, which is the form that asks for confirmation before it runs.
+    /// </summary>
+    /// <remarks>
+    /// The split is deliberate. <c>--cli fix-lighting</c> is a command someone typed on purpose and keeps working
+    /// without a second flag; <c>--fix-lighting</c> is the spelling a stray shortcut can carry, so it asks first —
+    /// exactly the contract the Windows front end had.
+    /// </remarks>
+    public static bool RequiresConfirmation(string[]? args) =>
+        ParseExplicitCommand(args).Length == 0 && ParseLegacyCommand(args).Length > 0;
+
+    /// <summary>The command named after <c>--cli</c>, or empty when the flag was the last thing on the line.</summary>
+    private static string ParseExplicitCommand(string[]? args)
     {
         if (args == null) return "";
 
@@ -49,6 +118,13 @@ public static class CliTaskRunner
         }
 
         return "";
+    }
+
+    /// <summary>The command a legacy flag names, or empty when the line carries none.</summary>
+    private static string ParseLegacyCommand(string[]? args)
+    {
+        var flag = ParseLegacyFlag(args);
+        return flag.Length > 0 && LegacyFlags.TryGetValue(flag, out var command) ? command : "";
     }
 
     /// <summary>
