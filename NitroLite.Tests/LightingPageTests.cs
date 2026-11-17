@@ -133,6 +133,33 @@ public class LightingPolicyTests
         Assert.Null(LightingPolicy.MigrateLegacyReds(null));
     }
 
+    // The file the re-assert after a resume reads. A keyboard left on the old red has to come back on the new one,
+    // otherwise the fix only lands for someone who re-picks the colour by hand.
+    [Fact]
+    public void TheActiveRgbStateFile_IsMigratedOnLoad()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nitrolite-rgb-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        try
+        {
+            var settingsPath = Path.Combine(dir, "settings.json");
+            File.WriteAllText(ActiveRgbStateStore.PathFor(settingsPath),
+                "{ \"Effect\": \"STATIC\", \"Brightness\": 8, \"Speed\": 4, \"Direction\": 1, " +
+                "\"Color\": \"#E01B1B\", \"LEDs\": [\"#E01B1B\", \"#FF2A55\", \"#00E5FF\", \"#FF1A1A\"] }");
+
+            var loaded = ActiveRgbStateStore.Load(settingsPath);
+
+            Assert.NotNull(loaded);
+            Assert.Equal("#FF0000", loaded!.Color);
+            Assert.Equal(new[] { "#FF0000", "#FF0000", "#00E5FF", "#FF0000" }, loaded.LEDs);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
     [Fact]
     public void Directions_FollowNitroSenseEnum()
     {
