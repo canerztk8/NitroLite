@@ -9,7 +9,7 @@ using NitroLite.Desktop.Views;
 
 namespace NitroLite.Desktop;
 
-public partial class App : Application
+public partial class App : Application, IDisposable
 {
     private AppHost? _host;
     private TrayIconHost? _tray;
@@ -128,6 +128,10 @@ public partial class App : Application
             // A session that ends — sign-out, shutdown, a forced logoff — is not a clean exit, but the fans still have
             // to go back to the firmware. The handler is synchronous because the session does not wait for a task.
             desktop.ShutdownRequested += (_, _) => OnShutdownRequested();
+
+            // The lifetime's own exit event, for a shutdown that never went through the tray menu or a session end.
+            // DisposeHost is idempotent, so the paths that already disposed the host are not affected.
+            desktop.Exit += (_, _) => DisposeHost();
 
             // The two paths that never reach the clean exit: a crash, and a process that is being torn down. Both get
             // a best-effort handback, because a machine left with a fixed fan speed is the one failure worth
@@ -306,6 +310,18 @@ public partial class App : Application
 
         AppLog.Error("Arayüz istisnası sınırı aşıldı", "Uygulama kapatılıyor.");
         e.Handled = false;
+    }
+
+    /// <summary>
+    /// The framework's own teardown hook. <see cref="ExitAsync"/> and the session-ending handler both dispose the
+    /// host already; this covers a lifetime that is shut down without going through either of them.
+    /// </summary>
+    public void Dispose()
+    {
+        DisposeHost();
+
+        // No finalizer on this type or on the host it owns, so there is nothing for the collector to suppress.
+        GC.SuppressFinalize(this);
     }
 
     private void DisposeHost()

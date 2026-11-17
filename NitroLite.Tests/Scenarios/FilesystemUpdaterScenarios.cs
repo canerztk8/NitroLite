@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
 using System.Text;
 using NitroLite.Core;
@@ -29,6 +29,9 @@ public class FilesystemUpdaterScenarios : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     private string Path_(params string[] parts) => Path.Combine(new[] { _root }.Concat(parts).ToArray());

@@ -45,7 +45,7 @@ public class LocalizationSourceCoverageTests
             var line = source.Take(m.Index).Count(c => c == '\n') + 1;
             var where = $"{file}:{line}";
 
-            if (!arg.StartsWith("$", StringComparison.Ordinal))
+            if (!arg.StartsWith('$'))
             {
                 yield return (Unescape(arg[1..^1]), where);
                 continue;

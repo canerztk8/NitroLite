@@ -171,12 +171,18 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
 
             try
             {
-                var text = File.ReadAllText(vdf);
+                var text = BoundedTextFile.ReadAllText(vdf);
                 foreach (System.Text.RegularExpressions.Match match in
                          System.Text.RegularExpressions.Regex.Matches(text, "\"(?:path|\\d+)\"\\s+\"([^\"]+)\""))
                 {
                     var library = match.Groups[1].Value.Replace(@"\\", @"\");
-                    var common = Path.Combine(library, "steamapps", "common");
+
+                    // The value is a path out of a text file the user can edit, so it is validated before it becomes
+                    // a directory probe: a relative path would resolve against the working directory, and a UNC path
+                    // would open an SMB session.
+                    if (!SteamLibraryPaths.TryNormalize(library, out var normalized)) continue;
+
+                    var common = Path.Combine(normalized, "steamapps", "common");
                     if (Directory.Exists(common)) folders.Add(common);
                 }
             }
@@ -206,7 +212,7 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
             {
                 try
                 {
-                    using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file));
+                    using var document = System.Text.Json.JsonDocument.Parse(BoundedTextFile.ReadAllText(file));
                     if (document.RootElement.TryGetProperty("InstallLocation", out var location) &&
                         location.GetString() is { Length: > 0 } path &&
                         Directory.Exists(path))

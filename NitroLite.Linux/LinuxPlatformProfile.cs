@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Linux;
 
@@ -14,6 +14,9 @@ namespace NitroLite.Linux;
 /// </remarks>
 public static class LinuxPlatformProfile
 {
+    /// <summary>The separators a platform_profile choices string is split on.</summary>
+    private static readonly char[] ChoiceSeparators = { ' ', '\t', '\n', '\r' };
+
     /// <summary>Quiet: the fans stay low and the CPU is capped.</summary>
     public const string Quiet = "quiet";
 
@@ -38,7 +41,7 @@ public static class LinuxPlatformProfile
         if (string.IsNullOrWhiteSpace(choices)) return Array.Empty<OperatingMode>();
 
         var modes = new List<OperatingMode>();
-        foreach (var token in choices.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var token in choices.Split(ChoiceSeparators, StringSplitOptions.RemoveEmptyEntries))
         {
             var mode = Parse(token);
             if (mode.HasValue && !modes.Contains(mode.Value)) modes.Add(mode.Value);

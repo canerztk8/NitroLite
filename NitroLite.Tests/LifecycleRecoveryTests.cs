@@ -48,7 +48,7 @@ public class LifecycleRecoveryTests
                 Timestamp = DateTime.UtcNow
             };
 
-            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(state, JsonDefaults.Indented);
             File.WriteAllText(tempFile, json);
 
             Assert.True(File.Exists(tempFile));

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Avalonia;
 using Avalonia.Controls;
 using NitroLite.Core;
@@ -83,7 +83,12 @@ public partial class OsdOverlayWindow : Window
         // Placed before it is shown, never after. Moving a window that is already on screen makes the Windows backend
         // rebuild its composition target, and the overlay then stays invisible: the window is there, topmost and the
         // right size, and nothing is drawn into it. That is the bug this ordering exists for.
-        Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+        //
+        // Assigned only when the corner actually changed. The overlay is re-placed on every telemetry tick, and a
+        // write of the same coordinates is still a move as far as the window manager is concerned: it rebuilt the
+        // composition target once a second for a window that had not gone anywhere.
+        var target = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+        if (Position != target) Position = target;
 
         if (!IsVisible) Show();
     }

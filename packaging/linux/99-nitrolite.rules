@@ -1,4 +1,4 @@
-# NitroLite — Linux sysfs permissions
+﻿# NitroLite — Linux sysfs permissions
 #
 # The Acer hardware attributes are owned by root and created 0644, so a normal user can read them but not write them.
 # Without this rule NitroLite starts in read-only mode: telemetry works, and every control answers "permission denied"
@@ -27,7 +27,11 @@ SUBSYSTEM=="platform", KERNEL=="acer-wmi", TAG+="uaccess"
 # The ACPI platform profile. This one is not a device: it lives under /sys/firmware/acpi/, which udev has no device to
 # tag, so the mode is widened directly when the platform device appears. kernfs supports a mode change on a sysfs
 # attribute, and the write is idempotent, so a second trigger is harmless.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/chmod 0666 /sys/firmware/acpi/platform_profile"
+#
+# 0660 with the nitrolite group, not 0666. The attribute decides the machine's power profile, and a world-writable one
+# let any local user change it. install.sh creates the group and adds you to it; if the group is missing the chgrp
+# fails and the attribute stays root-only, which is the safe direction to fail in.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null; chmod 0660 /sys/firmware/acpi/platform_profile'"
 
 # The laptop's own fans and board sensor. The CPU and GPU die sensors (k10temp, coretemp, amdgpu) are read-only and
 # need no rule.
@@ -55,6 +59,7 @@ SUBSYSTEM=="platform", DRIVERS=="acer-wmi", TAG+="uaccess"
 #        sudo systemctl enable --now power-profiles-daemon
 #
 #   2. Widen it by hand for the current boot:
-#        sudo chmod 0666 /sys/firmware/acpi/platform_profile
+#        sudo chgrp nitrolite /sys/firmware/acpi/platform_profile && sudo chmod 0660 /sys/firmware/acpi/platform_profile
+#      (or 0666 instead of 0660 if you would rather not use the group at all)
 #
 # NitroLite reports which of the two it found, so the settings page says what is missing instead of failing quietly.

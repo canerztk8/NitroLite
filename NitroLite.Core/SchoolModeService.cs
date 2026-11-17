@@ -518,7 +518,7 @@ public sealed class SchoolModeService
                 Directory.CreateDirectory(dir);
             }
 
-            var json = JsonSerializer.Serialize(backup, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(backup, JsonDefaults.Indented);
             AtomicFile.WriteAllText(path, json);
             return true;
         }
@@ -535,7 +535,7 @@ public sealed class SchoolModeService
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
         try
         {
-            return JsonSerializer.Deserialize<SchoolModeBackup>(File.ReadAllText(path));
+            return JsonSerializer.Deserialize<SchoolModeBackup>(BoundedTextFile.ReadAllText(path));
         }
         catch (Exception ex)
         {

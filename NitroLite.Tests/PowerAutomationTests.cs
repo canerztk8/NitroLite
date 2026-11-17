@@ -1,11 +1,11 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using Xunit;
 
 namespace NitroLite.Tests;
 
 public class PowerAutomationTests
 {
-    private class MockDisplayRefreshRateService : IDisplayRefreshRateService
+    private sealed class MockDisplayRefreshRateService : IDisplayRefreshRateService
     {
         public int CurrentHz { get; set; } = 165;
         public int MaxHz { get; set; } = 165;

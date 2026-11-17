@@ -152,6 +152,12 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     /// <summary>The process last seen in front, so one activation is one event.</summary>
     private int _lastProcessId;
 
+    /// <summary>The window handle the cached <see cref="_lastWindow"/> belongs to.</summary>
+    private IntPtr _lastHwnd;
+
+    /// <summary>The last foreground window read, kept so an unchanged handle costs one call instead of six.</summary>
+    private ForegroundWindowInfo? _lastWindow;
+
     private long _quietUntilTicks;
 
     /// <summary>How long the close loop keeps sweeping. Extended by every press, so a burst is one sweep.</summary>
@@ -191,7 +197,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
 
         _foregroundWindow = foregroundWindow
             ?? (foregroundProcessId == null
-                ? ReadForegroundWindow
+                ? () => CachedForegroundWindow(GetForegroundWindow(), ReadForegroundWindow)
                 : () => ForegroundWindowInfo.ForProcess(foregroundProcessId()));
     }
 
@@ -504,17 +510,38 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     // -------------------------------------------------------------- interop
 
     /// <summary>
+    /// The foreground window, re-read only when the handle changed.
+    /// </summary>
+    /// <remarks>
+    /// The poll runs four times a second and the window in front usually does not change between two of them. Reading
+    /// it whole costs a class name, a title, a child enumeration for a dialog and — the expensive one — a
+    /// <see cref="Process.GetProcessById"/> handle. Comparing the handle first turns the common case into a single
+    /// <c>GetForegroundWindow</c> call, which is what stops the watcher from opening thousands of process handles a
+    /// minute for an answer it already had.
+    /// </remarks>
+    internal ForegroundWindowInfo CachedForegroundWindow(IntPtr handle, Func<IntPtr, ForegroundWindowInfo> read)
+    {
+        if (handle == IntPtr.Zero) return ForegroundWindowInfo.None;
+        if (handle == _lastHwnd && _lastWindow is { } cached) return cached;
+
+        var info = read(handle);
+        _lastHwnd = handle;
+        _lastWindow = info;
+        return info;
+    }
+
+    /// <summary>
     /// The foreground window, read once per poll. Every failure answers <see cref="ForegroundWindowInfo.None"/>: a
     /// window that closed between the read and the query is not an error, and a poll that threw would stop the timer.
     /// </summary>
-    private static ForegroundWindowInfo ReadForegroundWindow()
+    private static ForegroundWindowInfo ReadForegroundWindow(IntPtr window)
     {
         try
         {
-            var window = GetForegroundWindow();
             if (window == IntPtr.Zero) return ForegroundWindowInfo.None;
 
-            GetWindowThreadProcessId(window, out uint processId);
+            // The thread id is not needed; the process id is the whole answer.
+            _ = GetWindowThreadProcessId(window, out uint processId);
             if (processId == 0) return ForegroundWindowInfo.None;
 
             var className = ReadClassName(window);

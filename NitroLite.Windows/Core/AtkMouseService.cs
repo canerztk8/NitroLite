@@ -452,19 +452,19 @@ public class AtkMouseService
     [DllImport("hid.dll", SetLastError = true)]
     private static extern bool HidD_FlushQueue(SafeFileHandle hidDeviceObject);
 
-    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr SetupDiGetClassDevs(ref Guid classGuid, string? enumerator, IntPtr hwndParent, uint flags);
 
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern bool SetupDiEnumDeviceInterfaces(IntPtr deviceInfoSet, IntPtr deviceInfoData, ref Guid interfaceClassGuid, uint memberIndex, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData);
 
-    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr deviceInfoSet, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData, IntPtr deviceInterfaceDetailData, uint deviceInterfaceDetailDataSize, ref uint requiredSize, IntPtr deviceInfoData);
 
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern bool SetupDiDestroyDeviceInfoList(IntPtr deviceInfoSet);
 
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern SafeFileHandle CreateFile(string lpFileName, uint dwDesiredAccess, uint dwShareMode, IntPtr lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -482,7 +482,7 @@ public class AtkMouseService
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool CancelIo(SafeFileHandle hFile);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateEvent(IntPtr lpEventAttributes, bool bManualReset, bool bInitialState, string? lpName);
 
     [DllImport("kernel32.dll", SetLastError = true)]

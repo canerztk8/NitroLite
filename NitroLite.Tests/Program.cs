@@ -3,7 +3,7 @@
 
 namespace NitroLite.Tests;
 
-class Program
+sealed class Program
 {
     static async Task<int> Main()
     {
@@ -63,7 +63,7 @@ class Program
                 var d0 = drives[0];
 
                 // Verify Disk 0 (C: drive) is not 0% full
-                if (d0.DriveLetter != "C" && !d0.DriveLetter.Contains("C") && string.IsNullOrEmpty(d0.DriveLetter))
+                if (d0.DriveLetter != "C" && !d0.DriveLetter.Contains('C') && string.IsNullOrEmpty(d0.DriveLetter))
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine($"FAIL: Disk 0 expected DriveLetter 'C', got '{d0.DriveLetter}'");
@@ -89,7 +89,7 @@ class Program
                     var d1 = drives[1];
 
                     // Verify Disk 1 (D: drive)
-                    if (d1.DriveLetter != "D" && !d1.DriveLetter.Contains("D") && string.IsNullOrEmpty(d1.DriveLetter))
+                    if (d1.DriveLetter != "D" && !d1.DriveLetter.Contains('D') && string.IsNullOrEmpty(d1.DriveLetter))
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine($"FAIL: Disk 1 expected DriveLetter 'D', got '{d1.DriveLetter}'");

@@ -130,6 +130,39 @@ $unexpected = Get-ChildItem $stage -Recurse -File | Where-Object {
 }
 if ($unexpected) { throw "Unexpected files in the package: $($unexpected.FullName -join ', ')" }
 
+# ---------------------------------------------------------------------------
+# Optional Authenticode signature.
+#
+# NitroLite ships unsigned by default. A code-signing certificate costs money every year, and requiring one would
+# break the portable and Scoop builds that are the point of the project, so signing is opt-in: set
+# NITROLITE_SIGN_CERT (a path to a .pfx) and, if it has one, NITROLITE_SIGN_PASSWORD. Leave them unset and the
+# package goes out unsigned, which is what every release so far has done.
+#
+# This runs before the archive is built, because signing changes the executable's bytes and therefore the digest of
+# the package that contains it.
+# ---------------------------------------------------------------------------
+$signCert = $env:NITROLITE_SIGN_CERT
+if ($signCert) {
+    if (-not (Test-Path -LiteralPath $signCert)) { throw "NITROLITE_SIGN_CERT does not exist: $signCert" }
+    $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if (-not $signtool) { throw 'NITROLITE_SIGN_CERT is set but signtool.exe is not on PATH.' }
+
+    $signTarget = Join-Path $stage 'NitroLite.Desktop.exe'
+    $signArgs = @('sign', '/fd', 'SHA256', '/f', $signCert, '/tr', 'http://timestamp.digicert.com', '/td', 'SHA256')
+    if ($env:NITROLITE_SIGN_PASSWORD) { $signArgs += @('/p', $env:NITROLITE_SIGN_PASSWORD) }
+    $signArgs += $signTarget
+
+    Write-Host '==> Signing NitroLite.Desktop.exe' -ForegroundColor Cyan
+    & $signtool.Source @signArgs
+    if ($LASTEXITCODE -ne 0) { throw "signtool failed (exit $LASTEXITCODE)" }
+
+    $signed = Get-AuthenticodeSignature -LiteralPath $signTarget
+    if ($signed.Status -ne 'Valid') { throw "The signature did not verify: $($signed.Status)" }
+    Write-Host "    signed by $($signed.SignerCertificate.Subject)" -ForegroundColor Green
+} else {
+    Write-Host '==> Unsigned build (set NITROLITE_SIGN_CERT to sign)' -ForegroundColor DarkYellow
+}
+
 # Compress-Archive stores each entry's timestamp, so two builds of the same source produced
 # two different digests. Pinning the timestamps removes that one source of variance, which is
 # what makes a rebuild comparable at all.
@@ -146,10 +179,19 @@ Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+
+# The checksum file is always produced, signed or not. It is the only thing a user of the portable or Scoop build
+# can verify the download against, and the in-app updater refuses a package whose digest GitHub does not publish —
+# so a release without one is a release nobody can check.
+$sumsPath = Join-Path $artifacts 'SHA256SUMS.txt'
+"$($hash.ToLowerInvariant())  $(Split-Path $zip -Leaf)" |
+    Set-Content -LiteralPath $sumsPath -Encoding ascii
+
 Write-Host ''
 Write-Host "Package : $zip" -ForegroundColor Green
 Write-Host ("Size    : {0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
 Write-Host "SHA-256 : $hash"
+Write-Host "Sums    : $sumsPath"
 Get-ChildItem $stage -Recurse -File | ForEach-Object { "  {0,-45} {1,8:N0} KB" -f $_.FullName.Substring($stage.Length + 1), ($_.Length / 1KB) }
 
 # The manifests below are rewritten with the digest of the package this run just built. That is

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -91,7 +91,7 @@ public sealed class ProfileCatalog
         try
         {
             var path = UserProfilePath;
-            if (File.Exists(path)) user = File.ReadAllText(path);
+            if (File.Exists(path)) user = BoundedTextFile.ReadAllText(path);
         }
         catch (Exception ex)
         {

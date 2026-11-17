@@ -73,9 +73,11 @@ try {
 # 6. Clean System Temp Files
 Write-Host "`n[6/7] Purging system temporary files in C:\Windows\Temp..." -ForegroundColor Yellow
 try {
-    Get-ChildItem -Path "C:\Windows\Temp" -Recurse -Force -ErrorAction SilentlyContinue |
-        Where-Object { -not $_.PSIsContainer } |
-        Remove-Item -Force -ErrorAction SilentlyContinue
+    # Top-level files only, and never through a reparse point. Recursing here followed junctions that any user can
+    # create under C:\Windows\Temp and deleted files elsewhere with administrator rights.
+    Get-ChildItem -LiteralPath (Join-Path $env:windir "Temp") -Force -ErrorAction SilentlyContinue |
+        Where-Object { -not $_.PSIsContainer -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
+        ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop } catch { } }
     Write-Host "  -> [SUCCESS] C:\Windows\Temp cache cleared." -ForegroundColor Green
 } catch {
     Write-Host "  -> [WARNING] Partial clean: $($_.Exception.Message)" -ForegroundColor DarkYellow

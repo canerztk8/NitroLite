@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -133,7 +133,7 @@ public static class Loc
     }
 
     /// <summary>Translates an interpolated text; the arguments are formatted into the translated template.</summary>
-    public static string T(LocInterpolation text) => text.Resolve();
+    public static string T(LocInterpolation text) => text.Resolve(CultureInfo.CurrentCulture);
 
     /// <summary>Like <see cref="T(LocInterpolation)"/>, with the arguments formatted culture-independently ("55.5", never "55,5").</summary>
     public static string TInv(LocInterpolation text) => text.Resolve(CultureInfo.InvariantCulture);
@@ -145,7 +145,7 @@ public static class Loc
     public static string Ps(string source) => T(source).Replace("'", "''");
 
     /// <inheritdoc cref="Ps(string)"/>
-    public static string Ps(LocInterpolation text) => text.Resolve().Replace("'", "''");
+    public static string Ps(LocInterpolation text) => text.Resolve(CultureInfo.CurrentCulture).Replace("'", "''");
 
     /// <summary>Translates <paramref name="source"/> when a translation exists; otherwise null. Used for XAML text.</summary>
     public static string? TryT(string? source)
@@ -221,5 +221,5 @@ public sealed class LocInterpolation
 
     public string Resolve(IFormatProvider? provider = null) => Loc.Format(_template.ToString(), _args, provider);
 
-    public override string ToString() => Resolve();
+    public override string ToString() => Resolve(CultureInfo.CurrentCulture);
 }

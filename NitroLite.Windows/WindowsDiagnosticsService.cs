@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using NitroLite.Core.Hardware;
 
 namespace NitroLite.Windows;
@@ -30,10 +30,17 @@ public sealed class WindowsDiagnosticsService : IDiagnosticsService
 
     public string DataDirectory => AppPaths.DataDirectory;
 
-    public string CreateBundle() => DiagnosticsBundle.Create(
-        AppPaths.DataDirectory,
-        _snapshot(),
-        _capabilities(),
-        AppPaths.GetDataFile("settings.json"),
-        AppLog.LogFilePath);
+    public string CreateBundle()
+    {
+        // The log is buffered, so the last lines are still in memory. Flushing first is what makes the archive carry
+        // the moment the user pressed the button rather than the last time the buffer filled.
+        AppLog.Flush();
+
+        return DiagnosticsBundle.Create(
+            AppPaths.DataDirectory,
+            _snapshot(),
+            _capabilities(),
+            AppPaths.GetDataFile("settings.json"),
+            AppLog.LogFilePath);
+    }
 }

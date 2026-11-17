@@ -344,7 +344,7 @@ public class AdversarialLifecycleAndPersistenceTests
                 IsBacklightOff = true
             };
 
-            var json = JsonSerializer.Serialize(appSettings, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(appSettings, JsonDefaults.Indented);
             File.WriteAllText(settingsPath, json);
 
             // Replicate application startup reload:
@@ -485,7 +485,7 @@ public class AdversarialLifecycleAndPersistenceTests
         Assert.True(settings.IsBacklightOff);
 
         // Verify JSON roundtrip
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(settings, JsonDefaults.Indented);
         var restored = JsonSerializer.Deserialize<AppSettings>(json);
 
         Assert.NotNull(restored);

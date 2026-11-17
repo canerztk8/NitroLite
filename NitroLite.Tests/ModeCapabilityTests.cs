@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using NitroLite.Core;
 using Xunit;
 
@@ -85,7 +85,7 @@ public class ModeCapabilityTests
         if (modes == null) return;
 
         Assert.NotEmpty(modes);
-        Assert.All(modes, m => Assert.True(Enum.IsDefined(typeof(OperatingMode), m)));
+        Assert.All(modes, m => Assert.True(Enum.IsDefined<OperatingMode>(m)));
         Assert.Equal(modes.Distinct().Count(), modes.Count);
     }
 }

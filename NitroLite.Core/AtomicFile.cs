@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 
 namespace NitroLite.Core;
@@ -44,6 +44,10 @@ public static class AtomicFile
                        tmp, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096,
                        FileOptions.WriteThrough))
             {
+                // Set before anything is written, so the content is never readable by another local user even for
+                // the moment the write takes. The move below keeps the mode.
+                RestrictFilePermissions(tmp);
+
                 using (var writer = new StreamWriter(stream, Utf8NoBom, bufferSize: 4096, leaveOpen: true))
                 {
                     writer.Write(contents);
@@ -68,6 +72,23 @@ public static class AtomicFile
                 // The original failure is the one worth reporting.
             }
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Makes a written file owner-only on Linux. The umask leaves a new file at 0644, which is world-readable: the
+    /// settings file holds the user's game library paths and the log holds their machine name.
+    /// </summary>
+    private static void RestrictFilePermissions(string path)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        try
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch
+        {
+            // A file system without Unix permissions cannot express this.
         }
     }
 }

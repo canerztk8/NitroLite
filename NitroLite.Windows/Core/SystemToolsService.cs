@@ -391,11 +391,21 @@ $backupPath = '" + backupPath.Replace("'", "''") + @"'
 if (-not (Test-Path -LiteralPath $backupPath)) { throw '" + Loc.Ps("Optimizasyon yedegi bulunamadi.") + @"' }
 $backup = Get-Content -LiteralPath $backupPath -Raw | ConvertFrom-Json
 
+# The undo record is a file in the user's data folder, so its contents are not trusted. Only the names this tool
+# itself records are acted on, and only with a start type Windows accepts: without that, editing the file would make
+# an elevated script reconfigure any service on the machine.
+$knownServices = 'SysMain', 'ClickToRunSvc', 'Plastic Server 6'
+$knownStartTypes = 'Automatic', 'Manual', 'Disabled', 'Boot', 'System'
+$knownTasks = 'Consolidator', 'UsbCeip'
+$ceipPath = '\Microsoft\Windows\Customer Experience Improvement Program\'
+
 if ($null -ne $backup.services) {
     foreach ($prop in $backup.services.PSObject.Properties) {
+        if ($knownServices -notcontains $prop.Name) { $errs += ($prop.Name + ': ' + 'unknown service'); continue }
         try {
             $startType = [string]$prop.Value
             if ($startType) {
+                if ($knownStartTypes -notcontains $startType) { $errs += ($prop.Name + ': ' + 'unknown start type'); continue }
                 Set-Service -Name $prop.Name -StartupType $startType -ErrorAction Stop
                 if ($startType -eq 'Automatic') { Start-Service -Name $prop.Name -ErrorAction SilentlyContinue }
             }
@@ -419,6 +429,8 @@ if ($null -ne $backup.hags) {
 
 if ($null -ne $backup.tasks) {
     foreach ($t in $backup.tasks) {
+        if ($knownTasks -notcontains [string]$t.name) { $errs += ([string]$t.name + ': ' + 'unknown task'); continue }
+        if ([string]$t.path -ne $ceipPath) { $errs += ([string]$t.name + ': ' + 'unknown task path'); continue }
         try {
             if ([string]$t.state -eq 'Ready') {
                 Enable-ScheduledTask -TaskName $t.name -TaskPath $t.path -ErrorAction Stop | Out-Null

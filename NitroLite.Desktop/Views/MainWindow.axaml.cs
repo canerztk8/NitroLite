@@ -110,6 +110,14 @@ public partial class MainWindow : Window
 
         Opened += async (_, _) => await InitializeOnceAsync();
 
+        // Minimising is a state change, not a visibility change: IsVisible stays true, so nothing else would notice.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property != WindowStateProperty) return;
+            UpdateTelemetryPollingRate();
+            UpdateChartVisibility();
+        };
+
         PositionChanged += (_, _) => CaptureNormalBounds();
         SizeChanged += (_, _) => CaptureNormalBounds();
 
@@ -259,6 +267,7 @@ public partial class MainWindow : Window
     public void RestoreFromTray()
     {
         UpdateTelemetryPollingRate();
+        UpdateChartVisibility();
 
         if (_viewModel != null) _ = ReassertLightingAsync(_viewModel);
     }
@@ -450,6 +459,7 @@ public partial class MainWindow : Window
         Hide();
         TrimMemory();
         UpdateTelemetryPollingRate();
+        UpdateChartVisibility();
     }
 
     private async Task TickAsync()
@@ -485,11 +495,12 @@ public partial class MainWindow : Window
 
         _osd.Apply(_viewModel);
         UpdateTelemetryPollingRate();
+        UpdateChartVisibility();
     }
 
     /// <summary>
-    /// Slows the loop down while the window is hidden. The curve still runs, so the fans still follow the temperature;
-    /// what changes is how often the sensors are read.
+    /// Slows the loop down while the window is hidden or minimised. The curve still runs, so the fans still follow the
+    /// temperature; what changes is how often the sensors are read.
     /// </summary>
     private void UpdateTelemetryPollingRate()
     {
@@ -497,11 +508,29 @@ public partial class MainWindow : Window
         // and that is exactly the case the fast rate exists for.
         var wanted = _viewModel?.OsdEnabled == true
             ? OsdInterval
-            : IsVisible ? VisibleInterval : HiddenInterval;
+            : IsWindowOnScreen ? VisibleInterval : HiddenInterval;
         if (_timer.Interval == wanted) return;
 
         _timer.Interval = wanted;
         AppLog.Info("Telemetri aralığı değişti", $"{wanted.TotalSeconds:F0} sn");
+    }
+
+    /// <summary>
+    /// True when the window is actually on screen: shown and not minimised.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Window.IsVisible"/> alone is not the answer. A minimised window is still visible as far as Avalonia
+    /// is concerned — it is shown, it just has no client area — so the loop kept reading the sensors once a second on
+    /// a machine whose owner had minimised the window to save battery. The chart is skipped for the same reason: it
+    /// walks the whole history and formats nine strings for a window nobody can see.
+    /// </remarks>
+    private bool IsWindowOnScreen => IsVisible && WindowState != WindowState.Minimized;
+
+    /// <summary>Tells the view model whether the chart is worth recomputing, and rebuilds it when it becomes visible.</summary>
+    private void UpdateChartVisibility()
+    {
+        if (_viewModel == null) return;
+        _viewModel.ChartVisible = IsWindowOnScreen;
     }
 
     /// <summary>Remembers the size and position the window has while it is not maximised.</summary>

@@ -212,8 +212,18 @@ public class GameProfile
     /// False when the recorded executable is gone (game uninstalled or moved). A profile without a path is
     /// treated as installed: it was added by hand and there is nothing to check.
     /// </summary>
+    /// <remarks>
+    /// A UNC path is refused without being probed. <c>File.Exists(@"\\host\share\game.exe")</c> opens an SMB session,
+    /// which hands this machine's NTLM hash to whoever answered and blocks the caller until the connection times out;
+    /// the path comes out of a profile file the user can edit, so it is not something to trust with either.
+    /// </remarks>
     [JsonIgnore]
-    public bool IsInstalled => string.IsNullOrWhiteSpace(InstallPath) || File.Exists(InstallPath);
+    public bool IsInstalled =>
+        string.IsNullOrWhiteSpace(InstallPath) || (IsLocalPath(InstallPath) && File.Exists(InstallPath));
+
+    /// <summary>True when <paramref name="path"/> is a local path rather than a UNC share.</summary>
+    public static bool IsLocalPath(string path) =>
+        !path.StartsWith(@"\\", StringComparison.Ordinal) && !path.StartsWith("//", StringComparison.Ordinal);
 }
 
 /// <summary>

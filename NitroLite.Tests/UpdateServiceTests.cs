@@ -23,6 +23,9 @@ public class UpdateServiceTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_root, true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     private string Path_(params string[] parts) => Path.Combine(new[] { _root }.Concat(parts).ToArray());
@@ -34,7 +37,7 @@ public class UpdateServiceTests : IDisposable
         var assetJson = string.Join(",", assets.Select(a =>
         {
             var digest = a.Digest == null ? "" : $",\"digest\":\"{a.Digest}\"";
-            return $"{{\"name\":\"{a.Name}\",\"size\":1234,\"browser_download_url\":\"https://example.test/{a.Name}\"{digest}}}";
+            return $"{{\"name\":\"{a.Name}\",\"size\":1234,\"browser_download_url\":\"https://github.com/canerztk8/NitroLite/releases/download/v1.2.0/{a.Name}\"{digest}}}";
         }));
         var json = $"{{\"tag_name\":\"{tag}\",\"assets\":[{assetJson}]}}";
         return JsonDocument.Parse(json).RootElement.Clone();
@@ -490,8 +493,13 @@ public class UpdateServiceTests : IDisposable
         public void Report(double value) => Values.Add(value);
     }
 
-    private static UpdateInfo InfoFor(string url, long size) =>
-        new(new Version(1, 2, 0), "v1.2.0", "NitroLite-v1.2.0-win-x64.zip", url, null, size);
+    /// <summary>
+    /// The loopback server stands in for GitHub, so the host check is replaced for these three tests. The production
+    /// allowlist is exercised on its own in <c>PerformanceAndHardeningTests</c>; widening it here would mean the
+    /// download path could never be tested without a network.
+    /// </summary>
+    private static Task<string> DownloadFromLoopback(string url, long size, IProgress<double>? progress = null) =>
+        UpdateService.DownloadAsync(url, size, progress, _ => true, CancellationToken.None);
 
     [Fact]
     public async Task DownloadAsync_WritesThePackageAndReportsProgress()
@@ -500,7 +508,7 @@ public class UpdateServiceTests : IDisposable
         using var server = new TinyHttpServer(payload);
         var progress = new CollectingProgress();
 
-        var file = await UpdateService.DownloadAsync(InfoFor(server.Url, payload.Length), progress);
+        var file = await DownloadFromLoopback(server.Url, payload.Length, progress);
         try
         {
             Assert.True(File.Exists(file));
@@ -519,7 +527,7 @@ public class UpdateServiceTests : IDisposable
         using var server = new TinyHttpServer(payload, truncate: true);
 
         var before = Directory.GetFiles(Path.GetTempPath(), "NitroLite-update-*.zip").Length;
-        await Assert.ThrowsAnyAsync<Exception>(() => UpdateService.DownloadAsync(InfoFor(server.Url, payload.Length)));
+        await Assert.ThrowsAnyAsync<Exception>(() => DownloadFromLoopback(server.Url, payload.Length));
         var after = Directory.GetFiles(Path.GetTempPath(), "NitroLite-update-*.zip").Length;
 
         Assert.Equal(before, after);
@@ -535,7 +543,7 @@ public class UpdateServiceTests : IDisposable
         probe.Stop();
 
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            UpdateService.DownloadAsync(InfoFor($"http://127.0.0.1:{port}/pkg.zip", 10)));
+            DownloadFromLoopback($"http://127.0.0.1:{port}/pkg.zip", 10));
     }
 
     [Fact]

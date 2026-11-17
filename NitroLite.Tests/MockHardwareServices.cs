@@ -18,7 +18,7 @@ public class MockAcerAgentClient : AcerAgentClient
         return Task.FromResult(true);
     }
 
-    public override Task<bool> SetFanModeAsync(FanMode mode, int cpuRpm = 0, int gpuRpm = 0)
+    public override Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = 0, int gpuPercent = 0)
     {
         CurrentFanMode = mode;
         return Task.FromResult(true);

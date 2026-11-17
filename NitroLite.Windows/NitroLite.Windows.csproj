@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- net10.0-windows, not net10.0: this assembly is the Windows half of the hardware layer and it is allowed to
@@ -15,6 +15,24 @@
     <!-- The Linux CI restores NitroLite.Desktop, which multi-targets and therefore pulls this project in. Without this
          the restore fails with NETSDK1100 before the net10.0 half is ever reached. It is a no-op on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!--
+      Four analyzer rules are off in this project, each for a reason that is about this code rather than about the
+      rule being wrong.
+
+      CA1305  Every hit is one of two shapes: a `StringBuilder.AppendLine($"…")` in a report builder, where the
+              current culture is what the person reading the report expects, or a `Convert.To*(object)` on a boxed
+              numeric that came out of WMI, where the provider is ignored anyway. The rule stays on in
+              NitroLite.Core, where a culture-sensitive format would reach a file or a comparison.
+      CA1822  "Mark members as static". These are members of a service that is injected and replaced in tests; the
+              instance call is the seam. Making them static would break every call site to save nothing.
+      CA1707  "Remove the underscores from member names". The hits are the ATK protocol constants — VID_ATK,
+              CMD_GET_CURRENT_CONFIG — which are spelled the way the vendor's own header spells them.
+      CA1838  "Avoid StringBuilder parameters for P/Invokes". The two hits are GetWindowText and
+              QueryFullProcessImageName, whose documented signature takes a character buffer; the copy it costs is
+              irrelevant at one call a second.
+    -->
+    <NoWarn>$(NoWarn);CA1305;CA1822;CA1707;CA1838</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

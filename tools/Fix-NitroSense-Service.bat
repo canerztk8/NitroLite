@@ -34,7 +34,10 @@ if defined EXE_PATH (
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo Yonetici yetkisi isteniyor...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    rem The path is handed over in an environment variable rather than spliced into the PowerShell command: a
+    rem folder name containing a single quote would otherwise close the string and the rest would run as code.
+    set "NITROLITE_SELF=%~f0"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath $env:NITROLITE_SELF -Verb RunAs"
     exit /b
 )
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Fix-NitroSense-Service.ps1"

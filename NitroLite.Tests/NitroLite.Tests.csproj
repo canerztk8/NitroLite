@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <GenerateProgramFile>false</GenerateProgramFile>
+    <!-- CA1707: a test name is a sentence, and the underscores are what make a failure readable in the runner's
+         output. CA1861: the constant arrays are inline expected values in asserts, allocated once per test run. -->
+    <NoWarn>$(NoWarn);CA1707;CA1861</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

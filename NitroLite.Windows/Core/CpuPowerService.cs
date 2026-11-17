@@ -656,6 +656,9 @@ public class CpuPowerService : ICpuBoostAccess, IDisposable
     /// </summary>
     public void Dispose()
     {
+        // No finalizer here, but a derived type that adds one would otherwise have to re-implement
+        // IDisposable just to suppress it.
+        GC.SuppressFinalize(this);
         var hanging = _hangingProcess;
         _hangingProcess = null;
         if (hanging == null) return;

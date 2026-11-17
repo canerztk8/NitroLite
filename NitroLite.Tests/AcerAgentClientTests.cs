@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Text.Json;
 using NitroLite.Core;
@@ -91,7 +91,7 @@ public class AcerAgentClientTests
     {
         if (string.IsNullOrWhiteSpace(str)) return false;
         str = str.Trim();
-        if (!str.StartsWith("{") || !str.EndsWith("}")) return false;
+        if (!str.StartsWith('{') || !str.EndsWith('}')) return false;
         try
         {
             using var doc = JsonDocument.Parse(str);

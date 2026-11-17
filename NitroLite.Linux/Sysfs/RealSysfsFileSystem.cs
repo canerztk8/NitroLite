@@ -1,4 +1,5 @@
-using System.IO;
+﻿using System.IO;
+using System.Text;
 
 namespace NitroLite.Linux.Sysfs;
 
@@ -27,13 +28,28 @@ public sealed class RealSysfsFileSystem : ISysfsFileSystem
         catch { return false; }
     }
 
+    /// <summary>
+    /// The most a sysfs attribute may yield. Every real one is a handful of bytes; the cap exists because the path is
+    /// not always a sysfs node — a caller that resolved one from a config file could point at anything, and
+    /// <see cref="File.ReadAllText(string)"/> would read all of it into memory on the telemetry thread.
+    /// </summary>
+    private const int MaxAttributeBytes = 64 * 1024;
+
     public string? ReadAllText(string path)
     {
         try
         {
             if (!File.Exists(path)) return null;
+
             // sysfs attributes are tiny and always end with a newline; trimming keeps every caller from having to.
-            return File.ReadAllText(path).Trim();
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var buffer = new byte[MaxAttributeBytes];
+            int total = 0;
+            int read;
+            while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
+                total += read;
+
+            return Encoding.UTF8.GetString(buffer, 0, total).Trim();
         }
         catch
         {

@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using Xunit;
 
 namespace NitroLite.Tests;
@@ -11,7 +11,7 @@ namespace NitroLite.Tests;
 /// </summary>
 public class AdversarialTelemetryAndPowerStressTests
 {
-    private class MockDisplayService : IDisplayRefreshRateService
+    private sealed class MockDisplayService : IDisplayRefreshRateService
     {
         public int CurrentHz { get; set; } = 165;
         public int MaxHz { get; set; } = 165;

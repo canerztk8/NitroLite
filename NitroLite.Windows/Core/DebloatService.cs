@@ -16,8 +16,15 @@ public class ServiceStatusInfo
     public bool IsDisabled { get; set; }
 }
 
+// CA1001: the only disposable field is a SemaphoreSlim, and SemaphoreSlim allocates a kernel handle only when
+// AvailableWaitHandle is read. Nothing here reads it, so Dispose() would set a flag and release nothing.
+#pragma warning disable CA1001
 public class DebloatService
+#pragma warning restore CA1001
 {
+    /// <summary>The line breaks a command's output is split on.</summary>
+    private static readonly char[] LineBreaks = { '\r', '\n' };
+
     /// <summary>
     /// Services NitroLite itself talks to. Disabling one of these would take the app's own hardware control away:
     /// AASSvc carries the lighting, mode and fan commands over 127.0.0.1:46933, and AcerLightingService drives the
@@ -56,10 +63,10 @@ public class DebloatService
     };
 
     #region Win32 P/Invoke for Service Status
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr OpenSCManager(string? lpMachineName, string? lpDatabaseName, uint dwDesiredAccess);
 
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr OpenService(IntPtr hSCManager, string lpServiceName, uint dwDesiredAccess);
 
     [DllImport("advapi32.dll", SetLastError = true)]
@@ -272,7 +279,7 @@ public class DebloatService
     {
         if (string.IsNullOrWhiteSpace(raw)) return fallback;
         var text = raw.Trim();
-        if (text.StartsWith("@"))
+        if (text.StartsWith('@'))
         {
             int semi = text.LastIndexOf(';');
             text = semi >= 0 && semi < text.Length - 1 ? text[(semi + 1)..].Trim() : fallback;
@@ -388,7 +395,7 @@ public class DebloatService
         }
 
         // 2. Generic line scan: find single-digit state code 1-7 (excluding metadata lines like TYPE, EXIT_CODE, etc.)
-        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = output.Split(LineBreaks, StringSplitOptions.RemoveEmptyEntries);
         foreach (var rawLine in lines)
         {
             var line = rawLine.Trim();
@@ -533,11 +540,10 @@ public class DebloatService
             using var xmlProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = WindowsPaths.SystemTool("schtasks.exe"),
-                Arguments = $"/query /tn \"{taskName}\" /xml",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
-            });
+            }.WithArguments("/query", "/tn", taskName, "/xml"));
             if (xmlProcess != null)
             {
                 var xml = ReadOutputWithTimeout(xmlProcess, 2000);
@@ -552,11 +558,10 @@ public class DebloatService
             using var p = Process.Start(new ProcessStartInfo
             {
                 FileName = WindowsPaths.SystemTool("schtasks.exe"),
-                Arguments = $"/query /tn \"{taskName}\" /fo csv",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
-            });
+            }.WithArguments("/query", "/tn", taskName, "/fo", "csv"));
             if (p != null)
             {
                 var output = ReadOutputWithTimeout(p, 2000);
@@ -603,7 +608,7 @@ public class DebloatService
         {
             if (File.Exists(BackupStateFilePath))
             {
-                var json = File.ReadAllText(BackupStateFilePath);
+                var json = BoundedTextFile.ReadAllText(BackupStateFilePath);
                 var map = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
                 if (map != null) return new Dictionary<string, string>(map, StringComparer.OrdinalIgnoreCase);
             }
@@ -624,7 +629,7 @@ public class DebloatService
             {
                 Directory.CreateDirectory(dir);
             }
-            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(state, JsonDefaults.Indented);
             AtomicFile.WriteAllText(BackupStateFilePath, json);
             return File.Exists(BackupStateFilePath);
         }
@@ -1083,7 +1088,8 @@ public class DebloatService
 
                 foreach (var svc in discoveredServices)
                 {
-                    if (!existingBackup.ContainsKey(svc) || !IsValidStartupType(existingBackup[svc]))
+                    if (!existingBackup.TryGetValue(svc, out var recordedStartType)
+                        || !IsValidStartupType(recordedStartType))
                     {
                         LastError = Loc.T($"İşlem iptal: '{svc}' servisinin yedeğinde başlangıç türü eksik.");
                         return false;
@@ -1265,7 +1271,7 @@ public class DebloatService
     {
         if (string.IsNullOrWhiteSpace(command)) return null;
         var c = command.Trim();
-        if (c.StartsWith("\""))
+        if (c.StartsWith('"'))
         {
             int end = c.IndexOf('"', 1);
             return end > 1 ? c[1..end] : null;

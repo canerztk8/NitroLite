@@ -114,6 +114,17 @@ public class HardwareMonitorService : IDisposable
     private double NvmlRetryDelaySeconds =>
         Math.Min(NvmlBaseRetryDelaySeconds * Math.Pow(2, _nvmlFailureCount), NvmlMaxRetryDelaySeconds);
 
+    /// <summary>
+    /// True for the NVML codes that mean "the device is not there right now" rather than "the query was wrong".
+    /// </summary>
+    /// <remarks>
+    /// <c>NVML_ERROR_NOT_FOUND</c> (6) and <c>NVML_ERROR_GPU_IS_LOST</c> (15) are what a dGPU in D3cold answers, and
+    /// <c>NVML_ERROR_UNINITIALIZED</c> (3) is what it answers after a driver reset. Every one of them is a reason to
+    /// stop asking for a while: each query wakes the card, and a card that is awake is a card that is not saving
+    /// battery.
+    /// </remarks>
+    private static bool IsDeviceUnavailable(int code) => code is 3 or 6 or 15;
+
     private long _prevIdleTime = 0;
     private long _prevKernelTime = 0;
     private long _prevUserTime = 0;
@@ -172,7 +183,8 @@ public class HardwareMonitorService : IDisposable
         _gpuDevice = IntPtr.Zero;
         if (!_ownsNvml) return;
         _ownsNvml = false;
-        try { NvmlShutdown(); } catch { }
+        // The session is being torn down either way; a shutdown that fails has nothing left to clean up.
+        try { _ = NvmlShutdown(); } catch { }
     }
 
     public double GetNativeCpuUsage()
@@ -210,7 +222,7 @@ public class HardwareMonitorService : IDisposable
         try
         {
             var mem = new MEMORYSTATUSEX();
-            mem.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+            mem.dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>();
             if (GlobalMemoryStatusEx(ref mem))
             {
                 double totalMB = Math.Round(mem.ullTotalPhys / (1024.0 * 1024.0), 0);
@@ -277,7 +289,8 @@ public class HardwareMonitorService : IDisposable
         {
             try
             {
-                if (NvmlDeviceGetPowerUsage(_gpuDevice, out uint milliwatts) == 0)
+                int power = NvmlDeviceGetPowerUsage(_gpuDevice, out uint milliwatts);
+                if (power == 0)
                 {
                     data.GpuPowerWatts = Math.Round(milliwatts / 1000.0, 1);
                     data.GpuMetricsAvailable = true;
@@ -289,24 +302,37 @@ public class HardwareMonitorService : IDisposable
                     data.GpuMetricsAvailable = false;
                 }
 
-                if (NvmlDeviceGetMemoryInfo(_gpuDevice, out NvmlMemory mem) == 0)
+                // The card answered "I am not here". Every further query would wake it for an answer that is not
+                // there, so the session is dropped and the retry backoff applies: the next attempt waits instead of
+                // asking again on the next tick, which is what kept a sleeping dGPU out of D3cold for the whole
+                // session.
+                if (IsDeviceUnavailable(power))
                 {
-                    data.VramUsedMB = Math.Round(mem.Used / (1024.0 * 1024.0), 0);
-                    data.VramTotalMB = Math.Round(mem.Total / (1024.0 * 1024.0), 0);
+                    ResetNvmlSession();
+                    _nvmlFailureCount = Math.Min(_nvmlFailureCount + 1, 5);
+                    _lastNvmlRetryAt = _nvmlClock.Elapsed;
                 }
-
-                // Query GPU Graphics Clock (Type 0 = Graphics)
-                if (NvmlDeviceGetClockInfo(_gpuDevice, 0, out uint clockMhz) == 0)
+                else
                 {
-                    data.GpuFrequencyMHz = clockMhz;
-                }
-
-                // If GPU temperature was unpopulated (e.g. AASSvc disconnected), query NVML
-                if (data.GpuTemperature <= 0)
-                {
-                    if (NvmlDeviceGetTemperature(_gpuDevice, 0, out uint tempC) == 0)
+                    if (NvmlDeviceGetMemoryInfo(_gpuDevice, out NvmlMemory mem) == 0)
                     {
-                        data.GpuTemperature = (int)tempC;
+                        data.VramUsedMB = Math.Round(mem.Used / (1024.0 * 1024.0), 0);
+                        data.VramTotalMB = Math.Round(mem.Total / (1024.0 * 1024.0), 0);
+                    }
+
+                    // Query GPU Graphics Clock (Type 0 = Graphics)
+                    if (NvmlDeviceGetClockInfo(_gpuDevice, 0, out uint clockMhz) == 0)
+                    {
+                        data.GpuFrequencyMHz = clockMhz;
+                    }
+
+                    // If GPU temperature was unpopulated (e.g. AASSvc disconnected), query NVML
+                    if (data.GpuTemperature <= 0)
+                    {
+                        if (NvmlDeviceGetTemperature(_gpuDevice, 0, out uint tempC) == 0)
+                        {
+                            data.GpuTemperature = (int)tempC;
+                        }
                     }
                 }
             }
@@ -315,6 +341,8 @@ public class HardwareMonitorService : IDisposable
                 // NVML communication failed (e.g. RTD3 transition). Drop the session so the retry path calls
                 // NvmlInit again rather than reusing a handle the driver has already forgotten.
                 ResetNvmlSession();
+                _nvmlFailureCount = Math.Min(_nvmlFailureCount + 1, 5);
+                _lastNvmlRetryAt = _nvmlClock.Elapsed;
                 data.GpuMetricsAvailable = false;
             }
         }
@@ -374,12 +402,15 @@ public class HardwareMonitorService : IDisposable
 
     public void Dispose()
     {
+        // No finalizer here, but a derived type that adds one would otherwise have to re-implement
+        // IDisposable just to suppress it.
+        GC.SuppressFinalize(this);
         if (_ownsNvml)
         {
             _ownsNvml = false;
             try
             {
-                NvmlShutdown();
+                _ = NvmlShutdown();
             }
             catch { }
             _nvmlInitialized = false;

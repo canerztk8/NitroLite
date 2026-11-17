@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using NitroLite.Core;
 using Xunit;
@@ -176,7 +176,7 @@ public class LocalizationCatalogTests
         try
         {
             Loc.SetLanguage("en");
-            Assert.Equal("50% {0} {1}", Loc.Format("50% {0} {1}", new object?[] { 1 }));
+            Assert.Equal("50% {0} {1}", Loc.Format("50% {0} {1}", new object?[] { 1 }, CultureInfo.InvariantCulture));
             Assert.Equal("", Loc.T(""));
         }
         finally

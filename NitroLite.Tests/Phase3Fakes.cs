@@ -375,7 +375,11 @@ internal static class Phase3Fakes
             }
         });
 
-        public Task<MonitorData?> GetMonitorDataAsync() => Task.FromResult<MonitorData?>(new MonitorData
+        /// <summary>
+        /// The sample the backend answers. Settable so a test can change a reading between two ticks and watch what
+        /// the page does with the change.
+        /// </summary>
+        public MonitorData Sample { get; set; } = new()
         {
             CpuTemperature = 58,
             GpuTemperature = 51,
@@ -383,7 +387,9 @@ internal static class Phase3Fakes
             CpuFanSpeed = 2200,
             GpuFanSpeed = 2150,
             IsFanRpmMeasured = true
-        });
+        };
+
+        public Task<MonitorData?> GetMonitorDataAsync() => Task.FromResult<MonitorData?>(Sample);
 
         public Task<OperatingMode?> GetOperatingModeAsync() => Task.FromResult<OperatingMode?>(OperatingMode.Default);
 

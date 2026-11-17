@@ -174,10 +174,14 @@ public class CareCenterClient
         // The agent uses a self-signed certificate for localhost, so the chain cannot be validated. Pin the
         // certificate on first use instead of accepting anything: another local process that binds 4343 while
         // AcerCCAgent is stopped must not be able to answer for it.
-        ws.Options.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
+        ws.Options.RemoteCertificateValidationCallback = (_, certificate, _, _) =>
         {
             if (certificate == null) return false;
-            if (errors == SslPolicyErrors.None) return true;
+
+            // The pin is checked even when the chain validates. A certificate that chains to a trusted root is not
+            // the same thing as the certificate this machine trusted on first use: a local process that binds 4343
+            // with a valid certificate of its own would otherwise answer for the agent, and the early return on
+            // SslPolicyErrors.None is exactly what let it.
             return IsPinnedCertificate(certificate);
         };
 

@@ -267,7 +267,7 @@ public class RgbProfileService
             {
                 if (File.Exists(_presetsFile))
                 {
-                    var json = File.ReadAllText(_presetsFile);
+                    var json = BoundedTextFile.ReadAllText(_presetsFile);
                     var custom = JsonSerializer.Deserialize<List<RgbPreset>>(json);
                     if (custom != null)
                     {
@@ -330,7 +330,7 @@ public class RgbProfileService
             {
                 custom = _presets.Where(p => !p.IsBuiltIn).ToList();
             }
-            var json = JsonSerializer.Serialize(custom, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(custom, JsonDefaults.Indented);
             AtomicFile.WriteAllText(_presetsFile, json);
             return true;
         }

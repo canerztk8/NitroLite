@@ -370,16 +370,39 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     {
         if (_eventClassNames.Count == 0) return;
 
-        foreach (var className in _eventClassNames)
-        {
-            // WITHIN first: ACPI-WMI events are not pushed, and without the clause the watcher subscribes and then
-            // never fires. Some providers reject the clause outright with "Invalid query", so the plain form is the
-            // fallback rather than the only form — a subscription that never fires still beats no subscription.
-            if (TryStartWatcher(className, EventPollInterval)) continue;
-            if (TryStartWatcher(className, null)) continue;
+        // WITHIN first: ACPI-WMI events are not pushed, and without the clause the watcher subscribes and then never
+        // fires. Some providers reject the clause outright with "Invalid query", so the plain form is the fallback
+        // rather than the only form — a subscription that never fires still beats no subscription.
+        //
+        // One watcher, not one per class. The names are alternatives for the same ACPI device (PNP0C14), so a machine
+        // that registers two of them was paying two polls a second for the whole session: a WITHIN clause makes WMI
+        // read the device on every interval, and the second subscription could only ever report the same press.
+        var chosen = FirstClassThatAccepts(_eventClassNames, className => TryStartWatcher(className, EventPollInterval));
+        if (chosen != null) return;
 
-            AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı", $"{className}: iki sorgu biçimi de reddedildi");
+        chosen = FirstClassThatAccepts(_eventClassNames, className => TryStartWatcher(className, null));
+        if (chosen == null)
+        {
+            AppLog.Warn("Acer WMI olay izleyicisi başlatılamadı",
+                $"{string.Join("', '", _eventClassNames)}: iki sorgu biçimi de reddedildi");
         }
+    }
+
+    /// <summary>
+    /// The first class <paramref name="trySubscribe"/> accepts, or null when it accepts none.
+    /// </summary>
+    /// <remarks>
+    /// A pure loop over the candidates, so the choice can be asserted without a WMI service: the caller passes a
+    /// predicate that records what it was asked and answers for the classes it wants to accept.
+    /// </remarks>
+    internal static string? FirstClassThatAccepts(IReadOnlyList<string> classes, Func<string, bool> trySubscribe)
+    {
+        foreach (var className in classes)
+        {
+            if (trySubscribe(className)) return className;
+        }
+
+        return null;
     }
 
     private bool TryStartWatcher(string className, TimeSpan? within)
@@ -801,7 +824,9 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             uint headerSize = (uint)Marshal.SizeOf<RawInputHeader>();
             uint size = 0;
 
-            GetRawInputData(rawInputHandle, RidInput, IntPtr.Zero, ref size, headerSize);
+            // The first call only asks for the size; its return value is the error code for a query that is
+            // expected to fail with ERROR_INSUFFICIENT_BUFFER.
+            _ = GetRawInputData(rawInputHandle, RidInput, IntPtr.Zero, ref size, headerSize);
             if (size == 0 || size > 4096) return;
 
             IntPtr buffer = Marshal.AllocHGlobal((int)size);
@@ -854,10 +879,12 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         /// </summary>
         private static (ushort Page, ushort Usage) ReadDeviceUsage(IntPtr device)
         {
-            var info = new RawDeviceInfo { cbSize = (uint)Marshal.SizeOf<RawDeviceInfo>() };
-            uint size = info.cbSize;
+            var info = new RawDeviceInfo { cbSize = RidDeviceInfoBytes };
+            uint size = RidDeviceInfoBytes;
 
-            if (!GetRawInputDeviceInfo(device, RidiDeviceInfo, ref info, ref size)) return (0, 0);
+            // The call returns the number of bytes copied, or (UINT)-1 on failure. It used to be declared as a BOOL,
+            // so a successful 32-byte copy read as false and every usage came back as zero.
+            if (GetRawInputDeviceInfo(device, RidiDeviceInfo, ref info, ref size) == uint.MaxValue) return (0, 0);
             if (info.dwType != RimTypeHid) return (0, 0);
 
             return (info.usUsagePage, info.usUsage);
@@ -930,11 +957,19 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             public uint ExtraInformation;
         }
 
+        /// <summary><c>sizeof(RID_DEVICE_INFO)</c> on x64: two DWORDs and a twenty-four byte union.</summary>
+        private const int RidDeviceInfoBytes = 32;
+
         /// <summary>
-        /// <c>RID_DEVICE_INFO</c>, flattened. The union is sixteen bytes for every device type, so the HID members sit
-        /// at the same offset as the mouse and keyboard ones and one struct covers all three.
+        /// <c>RID_DEVICE_INFO</c>, flattened. The union is twenty-four bytes — the keyboard member is the largest — so
+        /// the HID members sit at the same offset as the mouse and keyboard ones and one struct covers all three.
         /// </summary>
-        [StructLayout(LayoutKind.Sequential)]
+        /// <remarks>
+        /// The size is not cosmetic: <c>GetRawInputDeviceInfo</c> refuses the call unless <c>cbSize</c> is exactly
+        /// <c>sizeof(RID_DEVICE_INFO)</c>. The struct used to stop after the HID members at 24 bytes, so the call
+        /// failed with <c>ERROR_INSUFFICIENT_BUFFER</c> every time and the usage page was always reported as zero.
+        /// </remarks>
+        [StructLayout(LayoutKind.Sequential, Size = RidDeviceInfoBytes)]
         private struct RawDeviceInfo
         {
             public uint cbSize;
@@ -1001,7 +1036,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         private static extern uint GetRawInputData(IntPtr rawInput, uint command, IntPtr data, ref uint size, uint headerSize);
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool GetRawInputDeviceInfo(IntPtr device, uint command, ref RawDeviceInfo data, ref uint size);
+        private static extern uint GetRawInputDeviceInfo(IntPtr device, uint command, ref RawDeviceInfo data, ref uint size);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandle(string? moduleName);

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.OpenRgb;
@@ -34,6 +34,9 @@ namespace NitroLite.Linux;
 /// </remarks>
 public sealed class LinuxSysfsHardwareController : IHardwareController, IRescannableBackend, IOpenRgbStatusProvider
 {
+    /// <summary>The four zone colours that mean "off".</summary>
+    private static readonly string[] AllZonesOff = { "#000000", "#000000", "#000000", "#000000" };
+
     /// <summary>The message shown when a write was refused for lack of permission.</summary>
     public const string UdevHint =
         "Yazma izni yok. /sys düğümleri root'a ait; packaging/linux/99-nitrolite.rules dosyasını " +
@@ -507,7 +510,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     }
 
     public Task<bool> TurnOffLightingAsync() =>
-        SetLightingAsync("OFF", 0, 1, 1, "#000000", new[] { "#000000", "#000000", "#000000", "#000000" });
+        SetLightingAsync("OFF", 0, 1, 1, "#000000", AllZonesOff);
 
     /// <summary>
     /// The OpenRGB bridge, for a keyboard whose sysfs attributes are missing or ignored. The four zone colours are

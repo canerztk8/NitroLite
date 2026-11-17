@@ -113,7 +113,7 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
     /// <summary>Internal panel name for the current call; resolved each time so docking/lid changes are followed.</summary>
     private static string? Target => FindInternalPanelDeviceName();
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct DEVMODE
     {
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
@@ -154,10 +154,10 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
         public int dmPanningHeight;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool EnumDisplaySettings(string? lpszDeviceName, int iModeNum, ref DEVMODE lpDevMode);
 
-    [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int ChangeDisplaySettingsEx(string? lpszDeviceName, ref DEVMODE lpDevMode, IntPtr hwnd, uint dwflags, IntPtr lParam);
 
     /// <summary>Current refresh rate of the built-in panel; 0 when no internal panel is active.</summary>

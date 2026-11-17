@@ -362,10 +362,10 @@ public static class AcerWmiProbe
     /// Normalises a GUID for comparison: braces and whitespace removed, upper case. The qualifier is stored as
     /// <c>{7A4DDFE7-...}</c> on some providers and bare on others.
     /// </summary>
-    public static string NormalizeGuid(string? guid) =>
-        string.IsNullOrWhiteSpace(guid)
+    public static string NormalizeGuid(string? value) =>
+        string.IsNullOrWhiteSpace(value)
             ? ""
-            : guid.Trim().Trim('{', '}').Replace(" ", "").ToUpperInvariant();
+            : value.Trim().Trim('{', '}').Replace(" ", "").ToUpperInvariant();
 
     private static readonly Regex VersionPattern = new(
         @"Version\s+([0-9]+(?:\.[0-9]+)*)",

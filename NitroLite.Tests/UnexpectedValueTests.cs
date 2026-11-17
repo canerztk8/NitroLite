@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json.Nodes;
 using NitroLite.Core;
 using Xunit;
@@ -19,6 +19,9 @@ public class UnexpectedValueTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     // ---- settings file: a number that is valid JSON but not a valid setting -------------------------------

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using NitroLite.Core;
 using Xunit;
 
@@ -60,11 +60,11 @@ public class CpuPowerServiceTests
         var service = new CpuPowerService();
 
         Assert.NotNull(service);
-        Assert.True(Enum.IsDefined(typeof(CpuBoostMode), service.CurrentMode), 
+        Assert.True(Enum.IsDefined<CpuBoostMode>(service.CurrentMode), 
             $"CurrentMode '{service.CurrentMode}' must be a valid defined CpuBoostMode.");
     }
 
-    private class TestIsolatedCpuPowerService : CpuPowerService
+    private sealed class TestIsolatedCpuPowerService : CpuPowerService
     {
         public TestIsolatedCpuPowerService() : base(false) { }
     }

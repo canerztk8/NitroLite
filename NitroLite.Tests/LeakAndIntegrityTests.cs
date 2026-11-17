@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -34,6 +35,9 @@ public class LeakAndIntegrityTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_dir, recursive: true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     private string Path_(string name) => Path.Combine(_dir, name);
@@ -287,7 +291,7 @@ public class LeakAndIntegrityTests : IDisposable
         var path = Path_("battery_wear_history.json");
         var start = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var rows = Enumerable.Range(0, BatteryWearHistory.MaxSamples + 100).Select(i =>
-            "{\"utc\":\"" + start.AddDays(i).ToString("yyyy-MM-ddTHH:mm:ssZ") +
+            "{\"utc\":\"" + start.AddDays(i).ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture) +
             "\",\"health\":90,\"wear\":10,\"full_mwh\":50000,\"design_mwh\":54000,\"cycles\":" + i + "}");
         File.WriteAllText(path, "[" + string.Join(",", rows) + "]");
 
@@ -416,7 +420,7 @@ public class LeakAndIntegrityTests : IDisposable
         var line = LinuxKeyboardProtocol.BuildFourZone("WAVE", speed: 0, brightnessLevel: 5, direction: 1, color: "#FF0000");
 
         var fields = line.Split(',');
-        Assert.Equal(LightingLimits.MinSpeed.ToString(), fields[1]);
+        Assert.Equal(LightingLimits.MinSpeed.ToString(CultureInfo.InvariantCulture), fields[1]);
     }
 
     [Fact]
@@ -424,7 +428,7 @@ public class LeakAndIntegrityTests : IDisposable
     {
         var line = LinuxKeyboardProtocol.BuildFourZone("WAVE", speed: 99, brightnessLevel: 5, direction: 1, color: "#FF0000");
 
-        Assert.Equal(LightingLimits.MaxSpeed.ToString(), line.Split(',')[1]);
+        Assert.Equal(LightingLimits.MaxSpeed.ToString(CultureInfo.InvariantCulture), line.Split(',')[1]);
     }
 
     // ---------------------------------------------------------------- DATA-06 / DATA-07 / DATA-08

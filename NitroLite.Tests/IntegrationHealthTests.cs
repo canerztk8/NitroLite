@@ -54,7 +54,7 @@ public class IntegrationHealthTests
         Assert.True(drives.Count >= 1, $"Expected at least 1 drive, got {drives.Count}");
 
         var d0 = drives[0];
-        Assert.True(d0.DriveLetter == "C" || d0.DriveLetter.Contains("C") || !string.IsNullOrEmpty(d0.DriveLetter),
+        Assert.True(d0.DriveLetter == "C" || d0.DriveLetter.Contains('C') || !string.IsNullOrEmpty(d0.DriveLetter),
             $"Disk 0 drive letter expected non-empty, got '{d0.DriveLetter}'");
         Assert.True(d0.TotalCapacityGB > 0.0, $"Disk 0 total capacity must be > 0, got {d0.TotalCapacityGB}");
         Assert.True(d0.UsedCapacityGB >= 0.0, "Disk 0 used capacity must be non-negative");

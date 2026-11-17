@@ -1,4 +1,4 @@
-using NitroLite.Core.Hardware;
+﻿using NitroLite.Core.Hardware;
 
 namespace NitroLite.Core;
 
@@ -74,7 +74,13 @@ public sealed class GameSessionSnapshot
 /// as written: guessing "on battery" would silently downgrade every game on a desktop replacement.
 /// </para>
 /// </remarks>
+// CA1001: the only disposable field is a SemaphoreSlim, and SemaphoreSlim allocates a kernel handle only when
+// AvailableWaitHandle is read. Nothing here reads it, so Dispose() would set a flag and release nothing. Making the
+// class IDisposable would push a using onto every caller — including the tests that build one per assertion — for no
+// resource that is actually held.
+#pragma warning disable CA1001
 public sealed class GameProfileService
+#pragma warning restore CA1001
 {
     /// <summary>
     /// Programs that are always running. A profile for one of them would keep the machine in game mode for the whole
@@ -165,13 +171,20 @@ public sealed class GameProfileService
             {
                 // The session ends when the game is gone, and also when the user switches automatic game mode off
                 // while playing: leaving the override in place would make the switch look broken.
-                if (_settings.AutoGameModeEnabled && IsStillRunning(active)) return GameDetectionResult.Nothing;
+                if (_settings.AutoGameModeEnabled && await IsStillRunningAsync(active).ConfigureAwait(false))
+                    return GameDetectionResult.Nothing;
                 return await EndAsync(active).ConfigureAwait(false);
             }
 
             if (!_settings.AutoGameModeEnabled) return GameDetectionResult.Nothing;
 
-            var match = FindRunningGame();
+            // The process table is not read at all when no profile could match it. A user with no game rules — the
+            // common case — was paying for a full enumeration of every process on the machine, once a second, for an
+            // answer that could only ever be "nothing".
+            var candidates = AutoApplyProfiles();
+            if (candidates.Count == 0) return GameDetectionResult.Nothing;
+
+            var match = await FindRunningGameAsync(candidates).ConfigureAwait(false);
             return match == null ? GameDetectionResult.Nothing : await StartAsync(match.Value.Profile).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -204,9 +217,9 @@ public sealed class GameProfileService
     }
 
     /// <summary>True when the profile's executable is still in the process table.</summary>
-    private bool IsStillRunning(GameProfile profile)
+    private async Task<bool> IsStillRunningAsync(GameProfile profile)
     {
-        foreach (var process in Scan())
+        foreach (var process in await ScanAsync().ConfigureAwait(false))
         {
             if (process.Matches(profile.ExeName)) return true;
         }
@@ -214,18 +227,36 @@ public sealed class GameProfileService
         return false;
     }
 
-    /// <summary>The first configured game that is running, in the order the settings file lists them.</summary>
-    private (GameProfile Profile, RunningProcess Process)? FindRunningGame()
+    /// <summary>
+    /// The profiles that could match a running process, in the order the settings file lists them.
+    /// </summary>
+    /// <remarks>
+    /// Read on the caller's thread, before the scan. The settings list is edited from the UI thread, and the scan runs
+    /// on another one; taking the snapshot first is what keeps the two from touching the same list at once.
+    /// </remarks>
+    private List<GameProfile> AutoApplyProfiles()
     {
-        var processes = Scan();
-        if (processes.Count == 0) return null;
-
+        var candidates = new List<GameProfile>();
         foreach (var profile in _settings.GameProfiles)
         {
             if (profile == null || !profile.AutoApply) continue;
             if (string.IsNullOrWhiteSpace(profile.ExeName)) continue;
             if (IsNonGameExecutable(profile.ExeName)) continue;
+            candidates.Add(profile);
+        }
 
+        return candidates;
+    }
+
+    /// <summary>The first configured game that is running, in the order the settings file lists them.</summary>
+    private async Task<(GameProfile Profile, RunningProcess Process)?> FindRunningGameAsync(
+        IReadOnlyList<GameProfile> candidates)
+    {
+        var processes = await ScanAsync().ConfigureAwait(false);
+        if (processes.Count == 0) return null;
+
+        foreach (var profile in candidates)
+        {
             foreach (var process in processes)
             {
                 if (process.Matches(profile.ExeName)) return (profile, process);
@@ -234,6 +265,16 @@ public sealed class GameProfileService
 
         return null;
     }
+
+    /// <summary>
+    /// The process table, read off the calling thread.
+    /// </summary>
+    /// <remarks>
+    /// The scan opens a handle per process and asks each one for its image path, which is tens of milliseconds on a
+    /// busy machine. It used to run on the UI thread inside the telemetry tick, so every second the window froze for
+    /// as long as the enumeration took.
+    /// </remarks>
+    private Task<IReadOnlyList<RunningProcess>> ScanAsync() => Task.Run(Scan);
 
     private IReadOnlyList<RunningProcess> Scan()
     {

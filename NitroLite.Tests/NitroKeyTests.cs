@@ -407,7 +407,7 @@ public class NitroKeyTests
         listener.Raise("test");
 
         Assert.Equal(1, presses);
-        Assert.Contains("Nitro tuşu algılandı", File.ReadAllText(AppLog.LogFilePath));
+        Assert.Contains("Nitro tuşu algılandı", AppLog.ReadAllText() ?? "");
     }
 
     [Fact]

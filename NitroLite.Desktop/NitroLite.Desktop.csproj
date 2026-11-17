@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- One UI, two backends. net10.0 is the Linux build and sees only NitroLite.Core and NitroLite.Linux; the
@@ -17,6 +17,14 @@
          Every view declares x:DataType, which is also what makes the XAML readable without the view model open. -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+
+    <!--
+      CA1822 is off in this project. It fires on every view-model property that a binding reads — FreeLabel,
+      TemperatureLabel, Languages, UiFonts — because a getter that returns a constant does not touch instance state.
+      Those members have to stay instance members: a compiled binding resolves them on the view model instance, and a
+      static property is not a binding target. The rule is on everywhere else.
+    -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
 
     <!-- The Linux CI restores this project, which evaluates both targets. Without this the restore fails with
          NETSDK1100 before the net10.0 half is ever built. It is a no-op on Windows. -->

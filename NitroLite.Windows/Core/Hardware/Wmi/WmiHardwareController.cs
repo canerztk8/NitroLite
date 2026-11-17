@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
@@ -24,6 +24,9 @@ namespace NitroLite.Core.Hardware.Wmi;
 /// </summary>
 public sealed class WmiHardwareController : IHardwareController
 {
+    /// <summary>The four zone colours that mean "off".</summary>
+    private static readonly string[] AllZonesOff = { "#000000", "#000000", "#000000", "#000000" };
+
     private readonly WmiWorkerLauncher _launcher;
     private readonly ReadBackPolicy _readBack;
     private readonly Func<CapabilitySnapshot?> _capabilities;
@@ -552,7 +555,7 @@ public sealed class WmiHardwareController : IHardwareController
     }
 
     public Task<bool> TurnOffLightingAsync() =>
-        SetLightingAsync("OFF", 0, 1, 1, "#000000", new[] { "#000000", "#000000", "#000000", "#000000" });
+        SetLightingAsync("OFF", 0, 1, 1, "#000000", AllZonesOff);
 
     /// <summary>
     /// Sends one lighting command. The executor runs the whole sequence — poll, arm, four colours, commit — so this

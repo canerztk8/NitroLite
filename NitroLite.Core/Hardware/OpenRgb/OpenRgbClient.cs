@@ -57,6 +57,13 @@ public sealed class OpenRgbClient : IDisposable
     /// <summary>Gap between read-back attempts. OpenRGB applies colours on its own thread.</summary>
     public static readonly TimeSpan ReadBackDelay = TimeSpan.FromMilliseconds(60);
 
+    /// <summary>
+    /// How long one packet read or write may take. A server that accepts the connection and then stops answering
+    /// leaves <c>ReadAsync</c> waiting forever, and the caller is the UI thread of a lighting change: without this the
+    /// whole window freezes on a wedged OpenRGB instead of reporting that the write failed.
+    /// </summary>
+    public static readonly TimeSpan IoTimeout = TimeSpan.FromSeconds(5);
+
     private readonly string _host;
     private readonly int _port;
     private readonly string _clientName;
@@ -292,8 +299,11 @@ public sealed class OpenRgbClient : IDisposable
     {
         var stream = _stream ?? throw new IOException("OpenRGB bağlantısı yok.");
         var packet = OpenRgbProtocol.BuildPacket(deviceIndex, type, payload);
-        await stream.WriteAsync(packet, ct).ConfigureAwait(false);
-        await stream.FlushAsync(ct).ConfigureAwait(false);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(IoTimeout);
+        await stream.WriteAsync(packet, cts.Token).ConfigureAwait(false);
+        await stream.FlushAsync(cts.Token).ConfigureAwait(false);
     }
 
     /// <summary>Reads one packet and returns its payload. A header this client cannot follow ends the connection.</summary>
@@ -301,8 +311,13 @@ public sealed class OpenRgbClient : IDisposable
     {
         var stream = _stream ?? throw new IOException("OpenRGB bağlantısı yok.");
 
+        // One deadline for the whole packet, not one per read: a server that dribbles a byte at a time would
+        // otherwise hold the caller for as long as it liked.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(IoTimeout);
+
         var header = new byte[OpenRgbProtocol.HeaderBytes];
-        if (!await ReadExactlyAsync(stream, header, ct).ConfigureAwait(false)) return null;
+        if (!await ReadExactlyAsync(stream, header, cts.Token).ConfigureAwait(false)) return null;
 
         if (!OpenRgbProtocol.TryParseHeader(header, out _, out _, out int payloadBytes))
         {
@@ -314,7 +329,7 @@ public sealed class OpenRgbClient : IDisposable
         if (payloadBytes == 0) return [];
 
         var payload = new byte[payloadBytes];
-        if (!await ReadExactlyAsync(stream, payload, ct).ConfigureAwait(false)) return null;
+        if (!await ReadExactlyAsync(stream, payload, cts.Token).ConfigureAwait(false)) return null;
         return payload;
     }
 

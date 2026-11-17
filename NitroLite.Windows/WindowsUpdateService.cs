@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -56,7 +56,7 @@ public sealed class WindowsUpdateService : IUpdateService
     {
         if (!IsPackaged) return UpdateInstallResult.Fail(Loc.T("Bu derleme kendini güncelleyemez."));
 
-        if (result.DownloadUrl is not { Length: > 0 } url || !UpdateService.IsSafeHttpsUrl(url))
+        if (result.DownloadUrl is not { Length: > 0 } url || !UpdateService.IsTrustedDownloadUrl(url))
             return UpdateInstallResult.Fail(Loc.T("Sürüm paketi için güvenli bir indirme adresi yok."));
 
         if (string.IsNullOrWhiteSpace(result.Sha256))

@@ -1,0 +1,37 @@
+<Project>
+
+  <!--
+    Shared build settings for every project in the repository.
+
+    The .NET analyzers are on and their warnings are errors. A warning nobody reads is a warning that never gets
+    fixed, and the rules that matter in this codebase are exactly the ones the analyzers are good at: undisposed
+    handles on a 500 ms telemetry loop, a null that reaches a P/Invoke, a culture-sensitive comparison in a path
+    check, and a `Process.Start` whose arguments are spliced into one string.
+
+    EnforceCodeStyleInBuild stays off: the IDE style rules (IDE0001 and friends) are about formatting, and turning
+    them into build errors would fail the build over whitespace.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+
+    <!--
+      Four rules are off, each for a reason that is about this codebase rather than about the rule being wrong.
+
+      CA1805  "Member is explicitly initialized to its default value". The settings model writes `= false` and `= 0`
+              on purpose: the line is the documentation of what the setting means, and a reader of AppSettings should
+              not have to know that a bool defaults to false.
+      CA1716  "Identifier matches a reserved keyword". It fires on `Stop()` and on a parameter named `on`. Renaming
+              either would ripple through every implementation and every call site to satisfy a rule about Visual
+              Basic consumers of a library that has none.
+      CA1863  "Cache a CompositeFormat". It fires on three `string.Format` calls in the telemetry formatter, which
+              runs once a second. The allocation it saves is smaller than the code it adds.
+      CA1859  "Use concrete types". It wants an `IReadOnlySet` parameter widened to `HashSet`. The interface is the
+              better signature and the difference is a virtual call per element.
+    -->
+    <NoWarn>$(NoWarn);CA1805;CA1716;CA1863;CA1859</NoWarn>
+  </PropertyGroup>
+
+</Project>

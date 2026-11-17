@@ -19,6 +19,9 @@ public class SystemToolsServiceTests : IDisposable
         SystemToolsService.ElevatedRunnerSeam = null;
         try { File.Delete(SystemToolsService.OptimizeBackupPath); } catch { }
         try { Directory.Delete(_tempDir, true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>Runs an action with the elevated runner replaced by a capture, and returns the script it built.</summary>

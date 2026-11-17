@@ -63,6 +63,7 @@ public static class AppPaths
         try
         {
             Directory.CreateDirectory(dir);
+            RestrictDirectoryPermissions(dir);
             DataDirectoryError = null;
         }
         catch (Exception ex)
@@ -72,6 +73,28 @@ public static class AppPaths
             DataDirectoryError = $"{dir}: {ex.Message}";
         }
         return dir;
+    }
+
+    /// <summary>
+    /// Makes the data folder private to its owner on Linux.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Directory.CreateDirectory(string)"/> applies the process umask, which is 022 on a default install,
+    /// so the folder came out 0755 and every other local user could read the settings, the log and the battery
+    /// history. Windows needs nothing here: %LOCALAPPDATA% is already per-user and its ACL is inherited.
+    /// </remarks>
+    private static void RestrictDirectoryPermissions(string directory)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        try
+        {
+            File.SetUnixFileMode(
+                directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        catch
+        {
+            // A file system without Unix permissions (a FAT mount, a network share) cannot express this.
+        }
     }
 
     /// <summary>

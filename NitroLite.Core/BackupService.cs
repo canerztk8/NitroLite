@@ -124,7 +124,7 @@ public static class BackupService
             var dir = Path.GetDirectoryName(targetPath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-            var json = JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(document, JsonDefaults.Indented);
             AtomicFile.WriteAllText(targetPath, json);
             return result;
         }
@@ -161,7 +161,7 @@ public static class BackupService
         BackupDocument? document;
         try
         {
-            document = JsonSerializer.Deserialize<BackupDocument>(File.ReadAllText(sourcePath));
+            document = JsonSerializer.Deserialize<BackupDocument>(BoundedTextFile.ReadAllText(sourcePath));
         }
         catch (Exception ex)
         {
@@ -218,7 +218,7 @@ public static class BackupService
         {
             if (File.Exists(settingsPath))
             {
-                AtomicFile.WriteAllText(settingsPath + PreRestoreSuffix, File.ReadAllText(settingsPath));
+                AtomicFile.WriteAllText(settingsPath + PreRestoreSuffix, BoundedTextFile.ReadAllText(settingsPath));
             }
         }
         catch (Exception ex)
@@ -273,7 +273,7 @@ public static class BackupService
 
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            using var doc = JsonDocument.Parse(BoundedTextFile.ReadAllText(path));
             if (doc.RootElement.ValueKind != expected)
             {
                 result.Skipped.Add(Loc.T(label));
@@ -304,7 +304,7 @@ public static class BackupService
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-            var json = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(value, JsonDefaults.Indented);
 
             // Through AtomicFile: the hand-rolled temporary file here wrote straight to disk and left the .tmp
             // behind when the move failed, so a restore that kept failing filled the data folder with copies.

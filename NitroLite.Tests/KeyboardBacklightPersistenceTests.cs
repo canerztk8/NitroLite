@@ -24,7 +24,7 @@ public class KeyboardBacklightPersistenceTests
             }
         };
 
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(settings, JsonDefaults.Indented);
         var deserialized = JsonSerializer.Deserialize<AppSettings>(json);
 
         Assert.NotNull(deserialized);
@@ -53,7 +53,7 @@ public class KeyboardBacklightPersistenceTests
             }
         };
 
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(settings, JsonDefaults.Indented);
         var deserialized = JsonSerializer.Deserialize<AppSettings>(json);
 
         Assert.NotNull(deserialized);
@@ -80,7 +80,7 @@ public class KeyboardBacklightPersistenceTests
                 KeyboardLighting = new LightingConfig { Brightness = 0, Effect = "OFF" }
             };
 
-            var json = JsonSerializer.Serialize(original, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(original, JsonDefaults.Indented);
             File.WriteAllText(tempFile, json);
 
             var readBack = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(tempFile));

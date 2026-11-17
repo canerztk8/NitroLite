@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using NitroLite.Core;
 using Xunit;
 
@@ -22,6 +22,9 @@ public class UpdateRecoveryTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     private string PathOf(string relative) =>

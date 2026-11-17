@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿using System.Buffers;
+using System.Collections.ObjectModel;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
@@ -671,6 +672,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>The window the chart and the mode trace both draw: one minute, matching the sparkline history.</summary>
     private static readonly TimeSpan ChartWindow = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// What ends the version part of a tag: <c>1.2.5-f</c> and <c>1.2.5+abc123</c> both mean 1.2.5 to a user.
+    /// </summary>
+    private static readonly SearchValues<char> VersionSeparators = SearchValues.Create("-+");
+
     // The monitoring page's live readings, filled from the sample the platform monitor enriched.
     private int _cpuCores;
     private double _cpuUsage;
@@ -725,6 +731,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// that is still running.
     /// </remarks>
     private readonly OneShotGate _initialized = new();
+
+    /// <summary>False while the window is hidden or minimised; see <see cref="ChartVisible"/>.</summary>
+    private bool _chartVisible = true;
 
     private FanCurveEvaluator _curveEvaluator;
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
@@ -1262,7 +1271,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(raw)) return "v0.0.0";
 
         // "1.2.5-f" and "1.2.5+abc123" both mean 1.2.5 to a user.
-        var cut = raw.IndexOfAny(new[] { '-', '+' });
+        var cut = raw.AsSpan().IndexOfAny(VersionSeparators);
         return "v" + (cut > 0 ? raw[..cut] : raw);
     }
 
@@ -2034,11 +2043,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// False while the window is hidden or minimised, which is when the chart cannot be seen.
+    /// </summary>
+    /// <remarks>
+    /// The chart is the most expensive thing a tick does: it walks the whole history, formats nine strings and raises
+    /// nine properties. None of that can be read from a window that is not on screen, so the work is skipped and the
+    /// history keeps accumulating. Setting this back to true rebuilds the chart immediately, so the window never comes
+    /// back to a stale one.
+    /// </remarks>
+    public bool ChartVisible
+    {
+        get => _chartVisible;
+        set
+        {
+            if (_chartVisible == value) return;
+            _chartVisible = value;
+            if (value) RefreshChart();
+        }
+    }
+
+    /// <summary>
     /// Recomputes the chart's samples, its range and its four statistics from the history already held. Called on every
     /// tick and whenever the series changes, so the two can never disagree about what is on screen.
     /// </summary>
     private void RefreshChart()
     {
+        // Nothing on screen can show the result, and the next visible tick rebuilds it from the history that kept
+        // growing while the window was away.
+        if (!_chartVisible) return;
+
         var metric = SelectedChartMetric?.Id ?? TelemetryMetrics.CpuTemp;
         var windowStart = DateTime.Now - ChartWindow;
 
@@ -4925,7 +4958,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void ApplyLightingState(LightingConfig lighting)
     {
-        SelectedEffect = Effects.FirstOrDefault(e => e.Id == lighting.Effect.ToUpperInvariant()) ?? SelectedEffect;
+        SelectedEffect = Effects.FirstOrDefault(e => string.Equals(e.Id, lighting.Effect, StringComparison.OrdinalIgnoreCase)) ?? SelectedEffect;
         BrightnessLevel = lighting.Brightness;
         SpeedLevel = lighting.Speed;
         DirectionLevel = lighting.Direction;
@@ -5352,7 +5385,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // one write, not five. The single call below is the one that reaches the keyboard.
         SyncControls(() =>
         {
-            SelectedEffect = Effects.FirstOrDefault(e => e.Id == preset.Effect.ToUpperInvariant()) ?? SelectedEffect;
+            SelectedEffect = Effects.FirstOrDefault(e => string.Equals(e.Id, preset.Effect, StringComparison.OrdinalIgnoreCase)) ?? SelectedEffect;
             BrightnessLevel = preset.Brightness;
             SpeedLevel = preset.Speed;
             DirectionLevel = preset.Direction;

@@ -495,6 +495,9 @@ public class BatteryWatchdogService : IDisposable
 
     public void Dispose()
     {
+        // No finalizer here, but a derived type that adds one would otherwise have to re-implement
+        // IDisposable just to suppress it.
+        GC.SuppressFinalize(this);
         if (_isDisposed) return;
         _isDisposed = true;
 

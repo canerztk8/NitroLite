@@ -60,6 +60,24 @@ fi
 
 echo "Removing NitroLite"
 
+# --prefix is a path the user types, and the next step is `rm -rf` on it. A typo — `--prefix /`, `--prefix /usr` —
+# would take the system with it, so the directory has to look like a NitroLite install before anything is removed:
+# the launcher has to be there and executable, and the path has to be neither a system directory nor one of its
+# ancestors.
+case "$APP_DIR" in
+    /|/bin|/boot|/dev|/etc|/home|/lib|/lib32|/lib64|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var|\
+    /usr/bin|/usr/lib|/usr/lib64|/usr/local|/usr/local/bin|/usr/sbin|/usr/share|/var/lib|/var/tmp)
+        echo "error: refusing to remove '$APP_DIR': that is a system directory, not a NitroLite install." >&2
+        exit 2
+        ;;
+esac
+
+if [ ! -x "$APP_DIR/NitroLite.Desktop" ]; then
+    echo "error: '$APP_DIR' does not look like a NitroLite install (no NitroLite.Desktop in it)." >&2
+    echo "       Nothing was removed. Pass the folder install.sh used, or delete it by hand." >&2
+    exit 2
+fi
+
 # The symlink goes first: removing the directory it points at would leave a dangling command on PATH.
 if [ -L "$BIN_DIR/nitrolite" ] || [ -f "$BIN_DIR/nitrolite" ]; then
     $SUDO rm -f "$BIN_DIR/nitrolite"

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using NitroLite.Core;
 using Xunit;
@@ -24,6 +24,9 @@ public class BatteryWearHistoryTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_dir, recursive: true); } catch { }
+
+        // Nothing here owns a finalizer; the suppression is the shape the analyzer requires.
+        GC.SuppressFinalize(this);
     }
 
     private static BatteryHealthDetails Details(double health, int? cycles = null) => new()

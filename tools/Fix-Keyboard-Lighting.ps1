@@ -10,6 +10,17 @@ if (!(Test-Path -LiteralPath $lightingExe -PathType Leaf)) {
     throw "AcerLightingService.exe surucu deposunda bulunamadi: $lightingExe"
 }
 
+# The path below is written into the service's ImagePath, so this file is what Windows will run as LocalSystem.
+# Verify it is signed by Acer before registering it: a replaced binary in the DriverStore would otherwise become
+# a service that starts with the machine.
+$signature = Get-AuthenticodeSignature -LiteralPath $lightingExe
+if ($signature.Status -ne "Valid") {
+    throw "AcerLightingService.exe imzasi dogrulanamadi ($($signature.Status)): $lightingExe"
+}
+if ($signature.SignerCertificate.Subject -notmatch "O=Acer") {
+    throw "AcerLightingService.exe Acer tarafindan imzalanmamis: $($signature.SignerCertificate.Subject)"
+}
+
 # 1. Stop services
 Write-Host "`n[1/4] Ilgili servisler durduruluyor..." -ForegroundColor Yellow
 Stop-Service -Name "AASSvc" -Force -ErrorAction SilentlyContinue
@@ -38,7 +49,7 @@ $svcAas = Get-Service -Name "AASSvc"
 Write-Host "  AcerLightingService: $($svcLighting.Status) ($($svcLighting.StartType))" -ForegroundColor Green
 Write-Host "  AASSvc: $($svcAas.Status) ($($svcAas.StartType))" -ForegroundColor Green
 
-Set-Content -Path "$PSScriptRoot\lighting_fixed.log" -Value "AcerLightingService: $($svcLighting.Status) ($($svcLighting.StartType))`r`nAASSvc: $($svcAas.Status) ($($svcAas.StartType))`r`nTime: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Encoding utf8
+Set-Content -LiteralPath "$PSScriptRoot\lighting_fixed.log" -Value "AcerLightingService: $($svcLighting.Status) ($($svcLighting.StartType))`r`nAASSvc: $($svcAas.Status) ($($svcAas.StartType))`r`nTime: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Encoding utf8
 
 Write-Host "`n========================================================" -ForegroundColor Cyan
 Write-Host "  ISLEM BASARIYLA TAMAMLANDI! Klavye aydinlatmasi aktif edildi." -ForegroundColor Green

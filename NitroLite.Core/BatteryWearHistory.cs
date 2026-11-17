@@ -220,7 +220,7 @@ public sealed class BatteryWearHistory
 
         try
         {
-            var parsed = JsonSerializer.Deserialize<List<BatteryWearSample>>(File.ReadAllText(path));
+            var parsed = JsonSerializer.Deserialize<List<BatteryWearSample>>(BoundedTextFile.ReadAllText(path));
             // A hand-edited or half-written file must not break the page: unusable rows are dropped, and the rest
             // is sorted so the trend always reads oldest to newest.
             _samples = (parsed ?? new List<BatteryWearSample>())
@@ -271,7 +271,7 @@ public sealed class BatteryWearHistory
 
         try
         {
-            var json = JsonSerializer.Serialize(samples, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(samples, JsonDefaults.Indented);
             AtomicFile.WriteAllText(path, json);
             return true;
         }

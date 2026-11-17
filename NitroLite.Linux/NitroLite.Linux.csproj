@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- Plain net10.0, like NitroLite.Core: this assembly is the Linux half of the hardware layer and must not
@@ -10,6 +10,13 @@
     <AssemblyName>NitroLite.Linux</AssemblyName>
     <Version>1.2.5-f</Version>
     <Authors>NitroLite Team</Authors>
+
+    <!--
+      CA1305 is off here for the same reason as in NitroLite.Windows: every hit is a `StringBuilder.AppendLine($"…")`
+      in the hardware report, where the current culture is what the person reading it expects. The rule stays on in
+      NitroLite.Core.
+    -->
+    <NoWarn>$(NoWarn);CA1305</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

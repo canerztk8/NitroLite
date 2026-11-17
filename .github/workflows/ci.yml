@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 # Every push and every pull request. The Windows job is the gate that has always existed; the Linux job is what
 # keeps the cross-platform half honest, because a change that only compiles on Windows is a change that breaks the
@@ -39,11 +39,14 @@ jobs:
       # The solution build covers every project, but the Windows half of NitroLite.Desktop is the one that ships, so
       # it is also built on its own. A multi-targeted project can build for net10.0 and still fail for
       # net10.0-windows, and that failure would otherwise only appear at release time.
+      #
+      # -warnaserror is belt and braces: Directory.Build.props already sets TreatWarningsAsErrors, and passing it on
+      # the command line means a project that opts out of the shared props still cannot land a warning on main.
       - name: Build
-        run: dotnet build NitroLite.sln -c Release --nologo
+        run: dotnet build NitroLite.sln -c Release --nologo -warnaserror
 
       - name: Build the Windows front end
-        run: dotnet build NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0-windows --nologo
+        run: dotnet build NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0-windows --nologo -warnaserror
 
       - name: Test
         run: dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build --nologo
@@ -73,13 +76,13 @@ jobs:
       # explicitly. Without -f the build would try the Windows half too and fail on a machine with no Windows Desktop
       # targeting pack — which is exactly the failure this job exists to catch, just in the wrong place.
       - name: Build NitroLite.Core
-        run: dotnet build NitroLite.Core/NitroLite.Core.csproj -c Release --nologo
+        run: dotnet build NitroLite.Core/NitroLite.Core.csproj -c Release --nologo -warnaserror
 
       - name: Build NitroLite.Linux
-        run: dotnet build NitroLite.Linux/NitroLite.Linux.csproj -c Release --nologo
+        run: dotnet build NitroLite.Linux/NitroLite.Linux.csproj -c Release --nologo -warnaserror
 
       - name: Build NitroLite.Desktop
-        run: dotnet build NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0 --nologo
+        run: dotnet build NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0 --nologo -warnaserror
 
       - name: Publish the self-contained single-file build
         run: >

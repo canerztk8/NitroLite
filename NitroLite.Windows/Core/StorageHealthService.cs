@@ -63,13 +63,14 @@ public class StorageHealthService
                             if (char.IsLetter(letterChar) && letterChar != '\0')
                             {
                                 string letter = char.ToUpperInvariant(letterChar).ToString();
-                                if (!partitionLetters.ContainsKey(diskNum))
+                                if (!partitionLetters.TryGetValue(diskNum, out var letters))
                                 {
-                                    partitionLetters[diskNum] = new List<string>();
+                                    letters = new List<string>();
+                                    partitionLetters[diskNum] = letters;
                                 }
-                                if (!partitionLetters[diskNum].Contains(letter))
+                                if (!letters.Contains(letter))
                                 {
-                                    partitionLetters[diskNum].Add(letter);
+                                    letters.Add(letter);
                                 }
                             }
                         }
@@ -100,13 +101,14 @@ public class StorageHealthService
                                 if (diskMatch.Success && letterMatch.Success && int.TryParse(diskMatch.Groups[1].Value, out int diskIdx))
                                 {
                                     string let = letterMatch.Groups[1].Value.ToUpperInvariant();
-                                    if (!partitionLetters.ContainsKey(diskIdx))
+                                    if (!partitionLetters.TryGetValue(diskIdx, out var letters))
                                     {
-                                        partitionLetters[diskIdx] = new List<string>();
+                                        letters = new List<string>();
+                                        partitionLetters[diskIdx] = letters;
                                     }
-                                    if (!partitionLetters[diskIdx].Contains(let))
+                                    if (!letters.Contains(let))
                                     {
-                                        partitionLetters[diskIdx].Add(let);
+                                        letters.Add(let);
                                     }
                                 }
                             }

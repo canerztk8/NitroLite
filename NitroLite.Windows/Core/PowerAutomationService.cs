@@ -139,7 +139,7 @@ public class PowerAutomationService : IDisposable
                 SavedRefreshRate = SavedRefreshRateBeforeEco,
                 TimestampUtc = DateTime.UtcNow
             };
-            var json = JsonSerializer.Serialize(state, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(state, JsonDefaults.Indented);
             AtomicFile.WriteAllText(path, json);
         }
         catch (Exception ex)
@@ -160,7 +160,7 @@ public class PowerAutomationService : IDisposable
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
         try
         {
-            var state = JsonSerializer.Deserialize<DcEcoRecoveryState>(File.ReadAllText(path));
+            var state = JsonSerializer.Deserialize<DcEcoRecoveryState>(BoundedTextFile.ReadAllText(path));
             if (state == null) return false;
             if (!state.IsDcEcoActive)
             {
@@ -857,6 +857,9 @@ public class PowerAutomationService : IDisposable
 
     public void Dispose()
     {
+        // No finalizer here, but a derived type that adds one would otherwise have to re-implement
+        // IDisposable just to suppress it.
+        GC.SuppressFinalize(this);
         if (_isDisposed) return;
         _isDisposed = true;
 

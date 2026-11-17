@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using NitroLite.Core;
@@ -150,7 +150,12 @@ public sealed class WindowsProcessScanner : IProcessScanner
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
 
-    [DllImport("kernel32.dll", SetLastError = true)]
+    /// <summary>
+    /// The image path, as Unicode. Without <see cref="CharSet.Unicode"/> the marshaller picks the ANSI entry point,
+    /// and a path with a character outside the current code page comes back truncated or empty — which reads as "this
+    /// process has no path" and silently stops a game profile from matching.
+    /// </summary>
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
 
     [DllImport("kernel32.dll", SetLastError = true)]

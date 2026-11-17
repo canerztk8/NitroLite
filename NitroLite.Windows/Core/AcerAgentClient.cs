@@ -22,6 +22,9 @@ namespace NitroLite.Core;
 /// </summary>
 public class AcerAgentClient : IDisposable
 {
+    /// <summary>The four zone colours that mean "off".</summary>
+    private static readonly string[] AllZonesOff = { "#000000", "#000000", "#000000", "#000000" };
+
     private const string Host = "127.0.0.1";
     private const int Port = 46933;
 
@@ -1037,7 +1040,7 @@ public class AcerAgentClient : IDisposable
 
     public async Task<bool> TurnOffLightingAsync()
     {
-        return await SetLightingAsync("OFF", 0, 1, 1, "#000000", new[] { "#000000", "#000000", "#000000", "#000000" });
+        return await SetLightingAsync("OFF", 0, 1, 1, "#000000", AllZonesOff);
     }
 
     /// <summary>Reads the keyboard 30 s idle-off setting (GET_UPDATED_DATA BACKLIGHT_30S → data.status). Null if unknown.</summary>
@@ -1116,6 +1119,9 @@ public class AcerAgentClient : IDisposable
 
     public void Dispose()
     {
+        // No finalizer here, but a derived type that adds one would otherwise have to re-implement
+        // IDisposable just to suppress it.
+        GC.SuppressFinalize(this);
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
         // Dispose is called on the UI thread during exit, so wait only briefly for an in-flight request.

@@ -116,6 +116,13 @@ command -v update-desktop-database >/dev/null 2>&1 && \
 
 if [ "$INSTALL_UDEV" -eq 1 ] && [ -f "$SHARE_DIR/$RULE_NAME" ]; then
     echo "Installing the udev rule (this is the one step that needs root)..."
+
+    # The rule makes /sys/firmware/acpi/platform_profile group-writable instead of world-writable, so the group has to
+    # exist and the user has to be in it. Both are best effort: a missing group only means the profile attribute stays
+    # root-only, which the app reports as a permission hint rather than failing.
+    sudo groupadd -f nitrolite >/dev/null 2>&1 || true
+    sudo usermod -aG nitrolite "$USER" >/dev/null 2>&1 || true
+
     if sudo install -m 644 "$SHARE_DIR/$RULE_NAME" "/etc/udev/rules.d/$RULE_NAME" \
         && sudo udevadm control --reload-rules \
         && sudo udevadm trigger; then

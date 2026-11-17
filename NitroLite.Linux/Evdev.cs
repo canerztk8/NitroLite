@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using NitroLite.Core;
 
 namespace NitroLite.Linux;
@@ -95,6 +95,25 @@ public sealed class RealEvdevSource : IEvdevSource
     /// <summary>The name prefix of the character devices, as opposed to the legacy <c>event</c>-less nodes.</summary>
     public const string DevicePrefix = "event";
 
+    /// <summary><c>_IOC_READ</c>: the direction bits say the kernel writes the answer back to the caller.</summary>
+    internal const uint IocRead = 2;
+
+    /// <summary>The <c>type</c> byte every evdev ioctl carries: <c>'E'</c>.</summary>
+    internal const byte EvdevMagic = (byte)'E';
+
+    /// <summary>
+    /// The <c>_IOC</c> encoding the kernel expects: direction at bit 30, size at 16, type at 8, number at 0.
+    /// </summary>
+    /// <remarks>
+    /// The type and the number used to be the other way round, so every request named a different ioctl —
+    /// <c>EVIOCGNAME(256)</c> came out as <c>0x81000645</c> instead of <c>0x81004506</c> — and the kernel answered
+    /// <c>ENOTTY</c>. The device name was always empty and no key was ever advertised, which is why the Nitro key
+    /// never worked on Linux. It lives here rather than inside the device so the encoding can be asserted against
+    /// the kernel's own numbers without a device to open.
+    /// </remarks>
+    internal static nuint IoctlRequest(uint number, int size) =>
+        (nuint)((IocRead << 30) | (((uint)size & 0x3FFF) << 16) | ((uint)EvdevMagic << 8) | (number & 0xFF));
+
     public IReadOnlyList<IEvdevDevice> OpenAll()
     {
         var devices = new List<IEvdevDevice>();
@@ -134,8 +153,6 @@ public sealed class RealEvdevSource : IEvdevSource
 
     private sealed class RealEvdevDevice : IEvdevDevice
     {
-        private const uint IocRead = 2;
-        private const byte EvdevMagic = (byte)'E';
         private const uint EvIocGName = 0x06;
         private const uint EvIocGBit = 0x20;
         private const ushort EvKey = 0x01;
@@ -236,8 +253,7 @@ public sealed class RealEvdevSource : IEvdevSource
         }
 
         /// <summary><c>_IOC(_IOC_READ, 'E', nr, size)</c>, which is how every evdev ioctl number is built.</summary>
-        private static nuint Request(uint nr, int size) =>
-            (nuint)((IocRead << 30) | ((uint)size << 16) | (nr << 8) | EvdevMagic);
+        private static nuint Request(uint nr, int size) => IoctlRequest(nr, size);
 
         public int Read(Span<byte> buffer) => _stream.Read(buffer);
 

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -79,11 +79,13 @@ public static class DiagnosticsBundle
         var stamp = (now ?? DateTime.Now).ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var path = Path.Combine(directory, $"{FileNamePrefix}-{stamp}.zip");
 
+        // Both files are scrubbed before they go in. The log is already scrubbed line by line, but a settings file
+        // carries the full path of every game the user added, and a profile folder names its owner.
         var entries = BuildEntries(
             snapshot,
             capabilities,
-            ReadIfExists(settingsPath),
-            ReadIfExists(logPath),
+            Redaction.Scrub(ReadIfExists(settingsPath)),
+            Redaction.Scrub(ReadIfExists(logPath)),
             now);
 
         // Create rather than CreateDirectory-overwrite: a second export in the same second must not silently replace
@@ -119,9 +121,10 @@ public static class DiagnosticsBundle
 
         builder.AppendLine("[System]");
         builder.AppendLine($"OS               : {HardwareReport.WindowsVersionText()}");
-        builder.AppendLine($"Machine          : {Environment.MachineName}");
+        // The machine name is not part of a diagnosis, and the archive is a file a user attaches to a public issue.
+        builder.AppendLine($"Machine          : {Redaction.MachinePlaceholder}");
         builder.AppendLine($"Processors       : {Environment.ProcessorCount}");
-        builder.AppendLine($"Data directory   : {SafeDataDirectory()}");
+        builder.AppendLine($"Data directory   : {Redaction.Scrub(SafeDataDirectory())}");
         var dataError = AppPaths.DataDirectoryError;
         if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {dataError}");
         builder.AppendLine();
@@ -270,7 +273,14 @@ public static class DiagnosticsBundle
         if (string.IsNullOrWhiteSpace(path)) return null;
         try
         {
-            return File.Exists(path) ? File.ReadAllText(path) : null;
+            if (!File.Exists(path)) return null;
+
+            // Shared read: the log is held open by the writer for the life of the process, and File.ReadAllText asks
+            // for FileShare.Read, which refuses a file another handle has open for writing. The export used to come
+            // back with no log at all for that reason.
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
         }
         catch
         {

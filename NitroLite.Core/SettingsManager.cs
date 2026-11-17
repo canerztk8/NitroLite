@@ -97,7 +97,7 @@ public static class SettingsManager
     {
         try
         {
-            var json = File.ReadAllText(path);
+            var json = BoundedTextFile.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(json)) return (null, Loc.T("dosya boş"));
             var parsed = JsonSerializer.Deserialize<AppSettings>(json);
             if (parsed == null) return (null, Loc.T("içerik okunamadı"));
@@ -120,7 +120,7 @@ public static class SettingsManager
             Directory.CreateDirectory(dir);
         }
 
-        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(settings, JsonDefaults.Indented);
 
         // Validate what is about to be written, not what is already on disk. A serialisation bug would otherwise
         // replace a good settings file with an unreadable one and the next launch would start from defaults.
@@ -139,7 +139,7 @@ public static class SettingsManager
                 // Through AtomicFile rather than File.Copy: a copy is not atomic, so a crash halfway through it left
                 // a truncated .bak that the next launch would try to read as the fallback. The content is read first
                 // and written the same way the primary file is.
-                AtomicFile.WriteAllText(backupPath, File.ReadAllText(filePath));
+                AtomicFile.WriteAllText(backupPath, BoundedTextFile.ReadAllText(filePath));
             }
             catch (Exception ex)
             {
@@ -211,7 +211,7 @@ public static class SettingsManager
             if (!File.Exists(path)) return false;
             var fi = new FileInfo(path);
             if (fi.Length == 0) return false;
-            var text = File.ReadAllText(path);
+            var text = BoundedTextFile.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(text)) return false;
             var parsed = JsonSerializer.Deserialize<AppSettings>(text);
             return parsed != null;

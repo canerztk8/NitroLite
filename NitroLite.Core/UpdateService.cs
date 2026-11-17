@@ -83,10 +83,44 @@ public static class UpdateService
     /// the address comes out of a JSON payload and is handed straight to the shell, so anything that is not https
     /// (<c>file:</c>, <c>http:</c>, a bare path, a <c>javascript:</c> URL) must never reach the browser.
     /// </summary>
+    /// <remarks>
+    /// This is the check for a link the user opens. Anything the app itself fetches goes through
+    /// <see cref="IsTrustedDownloadUrl"/> instead, which pins the host as well.
+    /// </remarks>
     public static bool IsSafeHttpsUrl(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttps
         && uri.Host.Length > 0;
+
+    /// <summary>
+    /// The only hosts the updater will fetch from. Exact matches, never suffixes: a suffix check would accept
+    /// <c>evil-github.com</c>, and the point of the list is that a payload cannot steer the download elsewhere.
+    /// </summary>
+    /// <remarks>
+    /// <c>objects.githubusercontent.com</c> and <c>release-assets.githubusercontent.com</c> are here because GitHub
+    /// answers a release download with a redirect to one of them; without them every update would be refused.
+    /// </remarks>
+    public static readonly string[] TrustedHosts =
+    {
+        "github.com",
+        "api.github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com"
+    };
+
+    /// <summary>True when <paramref name="host"/> is one of <see cref="TrustedHosts"/>.</summary>
+    public static bool IsTrustedHost(string? host) =>
+        host is { Length: > 0 } && TrustedHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when <paramref name="url"/> is an absolute https address on a trusted host. Every hop of a download is
+    /// checked against this, including each redirect: a redirect is the one place an address can change after it was
+    /// validated, and the default <see cref="HttpClient"/> follows one to any host at all.
+    /// </summary>
+    public static bool IsTrustedDownloadUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && IsTrustedHost(uri.Host);
 
     /// <summary>
     /// The page the release-notes button opens: the release's own page when GitHub reported a usable one, and the
@@ -124,13 +158,72 @@ public static class UpdateService
 
     private static readonly HttpClient Http = CreateClient();
 
+    /// <summary>Largest package the updater will download. The real one is a few hundred megabytes.</summary>
+    public const long MaxDownloadBytes = 1024L * 1024 * 1024;
+
+    /// <summary>How many redirects one fetch may follow before it is refused.</summary>
+    private const int MaxRedirects = 5;
+
     private static HttpClient CreateClient()
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        // Redirects are followed by hand, because the host has to be checked again at every hop. With the default
+        // handler a redirect from github.com to anywhere at all is followed silently, so the address that was
+        // validated is not the address that gets fetched.
+        var handler = new HttpClientHandler { AllowAutoRedirect = false };
+        var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
         // GitHub rejects an API request without a User-Agent.
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("NitroLite", CurrentVersionText.TrimStart('v')));
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         return client;
+    }
+
+    /// <summary>
+    /// Fetches <paramref name="url"/>, following redirects by hand so the host can be checked again at every hop.
+    /// </summary>
+    private static Task<HttpResponseMessage> SendAsync(
+        string url, HttpCompletionOption completionOption, CancellationToken cancellationToken) =>
+        SendAsync(url, completionOption, IsTrustedDownloadUrl, cancellationToken);
+
+    /// <inheritdoc cref="SendAsync(string, HttpCompletionOption, CancellationToken)"/>
+    /// <param name="isTrusted">
+    /// The host check. The public path passes <see cref="IsTrustedDownloadUrl"/>; the tests pass their own so a
+    /// loopback server can stand in for GitHub without the production allowlist being widened to allow it.
+    /// </param>
+    internal static async Task<HttpResponseMessage> SendAsync(
+        string url, HttpCompletionOption completionOption, Func<string?, bool> isTrusted,
+        CancellationToken cancellationToken)
+    {
+        var current = url;
+        for (var hop = 0; hop <= MaxRedirects; hop++)
+        {
+            if (!isTrusted(current))
+                throw new InvalidOperationException($"Refusing to fetch from an untrusted address: {current}");
+
+            HttpResponseMessage response;
+            var request = new HttpRequestMessage(HttpMethod.Get, current);
+            try
+            {
+                response = await Http.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                request.Dispose();
+            }
+
+            if ((int)response.StatusCode is not (301 or 302 or 303 or 307 or 308)) return response;
+
+            var location = response.Headers.Location;
+            response.Dispose();
+            if (location == null)
+                throw new HttpRequestException("The server answered with a redirect and no location.");
+
+            // A relative Location is resolved against the address that was just checked, so it stays on that host.
+            current = location.IsAbsoluteUri
+                ? location.ToString()
+                : new Uri(new Uri(current, UriKind.Absolute), location).ToString();
+        }
+
+        throw new HttpRequestException($"The server redirected more than {MaxRedirects} times.");
     }
 
     /// <summary>
@@ -140,7 +233,8 @@ public static class UpdateService
     /// </summary>
     public static async Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken = default)
     {
-        using var response = await Http.GetAsync(LatestReleaseApi, cancellationToken).ConfigureAwait(false);
+        using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseContentRead, cancellationToken)
+            .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -173,10 +267,10 @@ public static class UpdateService
                 ? u.GetString() : null;
             if (string.IsNullOrWhiteSpace(url)) continue;
 
-            // The package is downloaded and then executed. Only https is acceptable: a file:// or http:// address
-            // in the payload would either fail outright or fetch something the published digest was never
-            // computed over, and the digest is the only thing standing between the user and a tampered build.
-            if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) continue;
+            // The package is downloaded and then executed. Only https on a GitHub host is acceptable: a file:// or
+            // http:// address in the payload would either fail outright or fetch something the published digest was
+            // never computed over, and the digest is the only thing standing between the user and a tampered build.
+            if (!IsTrustedDownloadUrl(url)) continue;
 
             long size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out var parsedSize) ? parsedSize : 0;
 
@@ -225,17 +319,29 @@ public static class UpdateService
     /// The address and the expected size on their own, for a caller that holds an <see cref="UpdateCheckResult"/>
     /// rather than an <see cref="UpdateInfo"/>. The two are the only fields the download reads.
     /// </remarks>
-    public static async Task<string> DownloadAsync(
-        string url, long sizeBytes, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
+    public static Task<string> DownloadAsync(
+        string url, long sizeBytes, IProgress<double>? progress = null, CancellationToken cancellationToken = default) =>
+        DownloadAsync(url, sizeBytes, progress, IsTrustedDownloadUrl, cancellationToken);
+
+    /// <inheritdoc cref="DownloadAsync(string, long, IProgress{double}?, CancellationToken)"/>
+    internal static async Task<string> DownloadAsync(
+        string url, long sizeBytes, IProgress<double>? progress, Func<string?, bool> isTrusted,
+        CancellationToken cancellationToken)
     {
         var target = Path.Combine(Path.GetTempPath(), $"NitroLite-update-{Guid.NewGuid():N}.zip");
         try
         {
-            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            using var response = await SendAsync(url, HttpCompletionOption.ResponseHeadersRead, isTrusted, cancellationToken)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var total = response.Content.Headers.ContentLength ?? sizeBytes;
+            // A server can declare any length it likes, and the copy loop is what actually fills the disk. Both are
+            // checked: the declared length refuses an obviously oversized package before a byte is written, and the
+            // running total catches a response that lies about it.
+            var declared = response.Content.Headers.ContentLength;
+            if (declared > MaxDownloadBytes) throw TooLarge();
+
+            var total = declared ?? sizeBytes;
             await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
             await using (var destination = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
             {
@@ -244,8 +350,10 @@ public static class UpdateService
                 int read;
                 while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
                 {
-                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
                     copied += read;
+                    if (copied > MaxDownloadBytes) throw TooLarge();
+
+                    await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
                     if (total > 0) progress?.Report(Math.Clamp((double)copied / total, 0, 1));
                 }
             }
@@ -258,6 +366,9 @@ public static class UpdateService
             throw;
         }
     }
+
+    private static InvalidDataException TooLarge() =>
+        new($"The package is larger than {MaxDownloadBytes / (1024 * 1024)} MB.");
 
     /// <summary>SHA-256 of a file, lower-case hex.</summary>
     public static string ComputeSha256(string path)
@@ -329,7 +440,7 @@ public static class UpdateService
         long totalBytes = 0;
         foreach (var entry in archive.Entries)
         {
-            if (entry.FullName.EndsWith("/", StringComparison.Ordinal) || entry.FullName.EndsWith("\\", StringComparison.Ordinal))
+            if (entry.FullName.EndsWith('/') || entry.FullName.EndsWith('\\'))
                 continue;
             if (!entry.FullName.StartsWith(prefix, StringComparison.Ordinal)) continue;
 

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace NitroLite.Core;
 
@@ -36,7 +36,7 @@ public static class ActiveRgbStateStore
         {
             var path = PathFor(settingsPath);
             if (!File.Exists(path)) return null;
-            var json = File.ReadAllText(path);
+            var json = BoundedTextFile.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(json)) return null;
             // Migrated on the way in, so a keyboard left on one of the reds NitroLite used to ship is re-asserted on
             // the red it ships now rather than on a colour the palette no longer offers.

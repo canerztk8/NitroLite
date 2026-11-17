@@ -27,7 +27,7 @@ public class InternalPanelTests
     {
         // Read-only QueryDisplayConfig; on a laptop with the lid open it returns e.g. "\\.\DISPLAY1".
         var name = DisplayRefreshRateService.FindInternalPanelDeviceName();
-        Assert.True(name == null || name.StartsWith(@"\\.\DISPLAY"), $"Unexpected device name '{name}'");
+        Assert.True(name == null || name.StartsWith(@"\\.\DISPLAY", StringComparison.Ordinal), $"Unexpected device name '{name}'");
     }
 }
 

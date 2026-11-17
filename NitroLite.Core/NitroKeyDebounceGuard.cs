@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace NitroLite.Core;
 
@@ -36,7 +36,7 @@ public sealed class NitroKeyDebounceGuard
     /// </param>
     public NitroKeyDebounceGuard(int windowMilliseconds = DefaultWindowMilliseconds, Func<long>? clock = null)
     {
-        if (windowMilliseconds < 0) throw new ArgumentOutOfRangeException(nameof(windowMilliseconds));
+        ArgumentOutOfRangeException.ThrowIfNegative(windowMilliseconds);
 
         WindowMilliseconds = windowMilliseconds;
         _windowTicks = (long)(windowMilliseconds / 1000.0 * Stopwatch.Frequency);
