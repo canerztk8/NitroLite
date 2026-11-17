@@ -2387,7 +2387,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The page has no Apply button, so picking an effect is the write. Without this the list changed the
             // view model and nothing else, and the keyboard stayed in whatever effect it was already in.
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // Picking an effect while the lights are off is the user asking for light: the last lit configuration
+            // comes back with this effect. OFF is the exception, because that is the user asking for dark.
+            if (value != null && !string.Equals(value.Id, "OFF", StringComparison.OrdinalIgnoreCase))
+            {
+                ResumeFromOffForEdit(cfg => cfg.Effect = value.Id);
+            }
+
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2401,7 +2410,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The page has no Apply button, so the slider is the write. The WPF window did the same from
             // SliderBrightness_ValueChanged, through the same kind of pause.
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // Raising the brightness while the lights are off brings the last lit configuration back at this level.
+            // Writing "OFF" with a non-zero brightness is what the firmware reads as "stay off".
+            if (_brightnessLevel > 0) ResumeFromOffForEdit(cfg => cfg.Brightness = _brightnessLevel);
+
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2435,7 +2450,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _primaryColor, value)) return;
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // A colour picked while the lights are off brings the last lit configuration back with it.
+            ResumeFromOffForEdit(cfg =>
+            {
+                cfg.Color = value;
+                cfg.LEDs = new List<string> { value, value, value, value };
+            });
+
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2445,7 +2469,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone1, value)) return;
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
+            ResumeFromOffForEdit(cfg =>
+            {
+                cfg.Effect = "STATIC";
+                cfg.LEDs[0] = value;
+            });
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2455,7 +2487,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone2, value)) return;
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
+            ResumeFromOffForEdit(cfg =>
+            {
+                cfg.Effect = "STATIC";
+                cfg.LEDs[1] = value;
+            });
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2465,7 +2505,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone3, value)) return;
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
+            ResumeFromOffForEdit(cfg =>
+            {
+                cfg.Effect = "STATIC";
+                cfg.LEDs[2] = value;
+            });
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2475,7 +2523,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone4, value)) return;
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+
+            // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
+            ResumeFromOffForEdit(cfg =>
+            {
+                cfg.Effect = "STATIC";
+                cfg.LEDs[3] = value;
+            });
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -4272,6 +4328,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             await ReadStateAsync().ConfigureAwait(true);
 
+            // The user turned the lights off before the last exit. The keyboard's own firmware may have brought the
+            // last profile back on boot, so the stored off state is put back here rather than left to the next time
+            // the window comes forward.
+            if (_settings.IsBacklightOff) await ReassertKeyboardLightingAsync().ConfigureAwait(true);
+
             // A Linux machine whose kernel exposes no Acer node is not an error and not a crash: the window stays
             // usable, the banner explains it, and every control that needs hardware stays hidden.
             if (!_hardware.IsAvailable)
@@ -4436,6 +4497,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var lighting = await _hardware.GetLightingConfigAsync().ConfigureAwait(true);
             if (lighting != null) ApplyLightingState(lighting);
 
+            // The stored off state wins over the keyboard's own reading. The firmware restores the last profile on
+            // some machines, and a page that showed it would be describing a state the user turned off.
+            if (_settings.IsBacklightOff) ApplyLightingState(OffLightingConfig());
+
             var coolBoost = await _hardware.GetCoolBoostAsync().ConfigureAwait(true);
             if (coolBoost is bool cool) CoolBoostOn = cool;
 
@@ -4594,18 +4659,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task ApplyLightingAsync()
     {
-        if (_hardware == null || SelectedEffect is not EffectChoice effect) return;
+        if (_hardware == null || SelectedEffect == null) return;
 
-        var zones = new[] { Zone1, Zone2, Zone3, Zone4 };
-        var config = new LightingConfig
-        {
-            Effect = effect.Id,
-            Brightness = BrightnessLevel,
-            Speed = SpeedLevel,
-            Direction = DirectionLevel,
-            Color = LightingPolicy.NormalizeHex(PrimaryColor, LightingPolicy.DefaultColor),
-            LEDs = zones.Select(z => LightingPolicy.NormalizeHex(z, LightingPolicy.DefaultColor)).ToList()
-        };
+        var config = CurrentLightingConfig();
+        var zones = config.LEDs!.ToArray();
 
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
@@ -4625,9 +4682,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The recovery copy is written only after the firmware accepted the write, so a resume puts back the
             // lighting the keyboard actually had rather than the one the user last clicked.
             ActiveRgbStateStore.Save(_settingsPath, config);
-            _settings.LastActiveLighting = config;
             _settings.KeyboardLighting = config;
-            _settings.IsBacklightOff = false;
+
+            // A brightness of zero is the same state as the "turn off" button, so it has to be stored the same way:
+            // otherwise the next launch reads a lit configuration and puts the lights back on.
+            _settings.IsBacklightOff = LightingPolicy.IsOff(config);
+
+            // The last lit configuration is what raising the brightness after "off" restores, so an off write must
+            // not overwrite it with black.
+            if (!_settings.IsBacklightOff) _settings.LastActiveLighting = config;
             SaveSettings();
         }
         catch (Exception ex)
@@ -4645,10 +4708,79 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null) return;
 
+        // Keep what was lit so raising the brightness or picking an effect can bring it back later.
+        var current = CurrentLightingConfig();
+        if (!LightingPolicy.IsOff(current)) _settings.LastActiveLighting = current;
+
+        var off = OffLightingConfig();
+
         // Same rule as the rest of the page: turning the lights off is visible on the keyboard, so it does not need
         // a banner. A refusal still reaches the log.
-        await RunQuietWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
+        bool ok = await RunQuietWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
+        if (!ok) return;
+
+        // The page shows the state the keyboard is in, so the controls go to "off" as well. Without this the effect
+        // list and the brightness slider kept describing a configuration the keyboard was not running.
+        SyncControls(() => ApplyLightingState(off));
+
+        // "Off" is a preference, not a moment. It is written to the settings file so the next launch knows the
+        // keyboard is meant to stay dark, and the recovery copy is overwritten with the same state: leaving the last
+        // lit configuration there is what made the re-assert after a resume turn the lights back on.
+        _settings.IsBacklightOff = true;
+        _settings.KeyboardLighting = off;
+        ActiveRgbStateStore.Save(_settingsPath, off);
+        SaveSettings();
     }
+
+    /// <summary>The lighting the page's controls describe, in the shape the backend takes.</summary>
+    private LightingConfig CurrentLightingConfig()
+    {
+        var zones = new[] { Zone1, Zone2, Zone3, Zone4 };
+        return new LightingConfig
+        {
+            Effect = SelectedEffect?.Id ?? "STATIC",
+            Brightness = BrightnessLevel,
+            Speed = SpeedLevel,
+            Direction = DirectionLevel,
+            Color = LightingPolicy.NormalizeHex(PrimaryColor, LightingPolicy.DefaultColor),
+            LEDs = zones.Select(z => LightingPolicy.NormalizeHex(z, LightingPolicy.DefaultColor)).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Brings the last lit configuration back when a control is changed while the lights are off, so the change is
+    /// visible instead of being written with brightness zero. <paramref name="edit"/> is applied to the resumed
+    /// configuration, which is then pushed back into the controls.
+    /// </summary>
+    /// <remarks>
+    /// The page shows "off" after a restart with the lights off, and the firmware reads an OFF effect as "stay off"
+    /// whatever the brightness byte says. Without this, raising the brightness or picking an effect from that state
+    /// wrote a command the keyboard ignored, and the lights could only be brought back by picking a different effect
+    /// first.
+    /// </remarks>
+    private void ResumeFromOffForEdit(Action<LightingConfig> edit)
+    {
+        if (!LightingPolicy.IsOff(CurrentLightingConfig())) return;
+
+        var resumed = LightingPolicy.ResumeFromOff(_settings.LastActiveLighting);
+        edit(resumed);
+        SyncControls(() => ApplyLightingState(resumed));
+    }
+
+    /// <summary>
+    /// The configuration that means "the lights are off": the effect the firmware reads as off, brightness zero and
+    /// black zones. Built in one place so the button, the brightness slider and the startup re-assert cannot disagree
+    /// about what "off" is.
+    /// </summary>
+    private static LightingConfig OffLightingConfig() => new()
+    {
+        Effect = "OFF",
+        Brightness = 0,
+        Speed = LightingLimits.MinSpeed,
+        Direction = 1,
+        Color = "#000000",
+        LEDs = new List<string> { "#000000", "#000000", "#000000", "#000000" }
+    };
 
     // ---------------------------------------------------------------- MUX, school mode, profiles, report
 
@@ -4982,10 +5114,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The recovery copy wins over the settings file. <c>active_rgb_state.json</c> is written only after a lighting
     /// write succeeded, so it describes the keyboard; the settings file describes what the user last clicked, which
     /// may be a colour the firmware refused.
+    /// <para>
+    /// A stored "off" is re-asserted as off rather than skipped. The firmware drops the off state after a suspend on
+    /// the same machines it drops a lit one, and re-applying the last lit configuration here is what used to turn the
+    /// lights back on every time the window came forward.
+    /// </para>
     /// </remarks>
     public async Task ReassertKeyboardLightingAsync()
     {
         if (_hardware == null || !LightingAvailable) return;
+
+        if (_settings.IsBacklightOff)
+        {
+            try
+            {
+                await _hardware.TurnOffLightingAsync().ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Klavye aydınlatması kapatılamadı", ex.Message);
+            }
+            return;
+        }
 
         var last = ActiveRgbStateStore.Load(_settingsPath)
                    ?? _settings.LastActiveLighting
@@ -5040,12 +5190,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _writeGate.Release();
         }
     }
-
-    /// <summary>
-    /// Called when the window is hidden to the tray, so the footer explains where the app went instead of leaving the
-    /// last write result on screen as if nothing had happened.
-    /// </summary>
-    public void NotifyHiddenToTray() => Status = Labels.MinimizedToTray;
 
     /// <summary>
     /// Clean exit: end any game session, put the fans back under firmware control, and report whether that worked.

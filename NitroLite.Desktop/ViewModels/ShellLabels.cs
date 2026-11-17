@@ -262,7 +262,6 @@ public sealed class ShellLabels
     public string TrayCleanExit => Loc.T("Temiz Çıkış");
     public string TrayQuickMode => Loc.T("Hızlı mod");
     public string TrayCpuBoost => Loc.T("CPU Boost");
-    public string MinimizedToTray => Loc.T("Arka planda çalışıyor. Kapatmak için sistem tepsisinden Temiz Çıkış'ı kullanın.");
     public string CleanExitDone => Loc.T("Fanlar otomatiğe alındı; çıkılıyor.");
     public string CleanExitPartial => Loc.T("Fanlar otomatiğe alınamadı; yine de çıkılıyor.");
 

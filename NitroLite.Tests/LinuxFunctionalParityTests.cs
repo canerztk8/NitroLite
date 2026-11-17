@@ -983,20 +983,6 @@ public class LinuxFunctionalParityTests
     }
 
     [Fact]
-    public async Task Tray_HidingTheWindowExplainsWhereTheAppWent()
-    {
-        var fs = Nitro16();
-        var settings = new AppSettings();
-        using var controller = Controller(fs, settings);
-        using var vm = new MainViewModel(settings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"));
-        await vm.InitializeAsync();
-
-        vm.NotifyHiddenToTray();
-
-        Assert.Equal(vm.Labels.MinimizedToTray, vm.Status);
-    }
-
-    [Fact]
     public async Task CleanExit_HandsTheFansBackToTheFirmwareAndDisarmsTheCurve()
     {
         var fs = Nitro16();

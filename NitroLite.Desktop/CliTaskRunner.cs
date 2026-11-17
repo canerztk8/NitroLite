@@ -175,6 +175,9 @@ public static class CliTaskRunner
     /// <summary>Re-applies the stored keyboard lighting. The fix for a keyboard that stayed dark after a resume.</summary>
     private static async Task<bool> FixLightingAsync(IHardwareController hardware, AppSettings settings)
     {
+        // The user turned the lights off: "fix" means put the off state back, not the last lit profile.
+        if (settings.IsBacklightOff) return await hardware.TurnOffLightingAsync().ConfigureAwait(false);
+
         var last = settings.LastActiveLighting ?? settings.KeyboardLighting;
         if (last == null) return false;
 

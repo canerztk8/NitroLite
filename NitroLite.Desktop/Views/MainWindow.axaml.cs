@@ -150,10 +150,16 @@ public partial class MainWindow : Window
     /// Raises the banner whenever the view model has something new to say. Only <c>Status</c> matters: every other
     /// property is a reading, and a reading is not an event.
     /// </summary>
+    /// <remarks>
+    /// A message raised while the window is hidden is not shown. The banner would be invisible anyway, and the only
+    /// time the user could see it is the moment the window comes back — which is exactly the stale notification the
+    /// Nitro key used to produce.
+    /// </remarks>
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(MainViewModel.Status)) return;
         if (_viewModel == null || !_viewModel.HasStatus) return;
+        if (!IsVisible) return;
 
         ShowToast(_viewModel.Status, _viewModel.HasToastAction);
     }
@@ -357,6 +363,10 @@ public partial class MainWindow : Window
     /// A close request hides the window and trims the working set. The trim is the point of hiding rather than
     /// minimising: a window that is not on screen should not be holding a hundred megabytes of layout.
     /// </summary>
+    /// <remarks>
+    /// Nothing is reported here. The window is gone, so a banner explaining where it went cannot be read; the only
+    /// time it would be seen is when the window comes back, which is the notification the Nitro key used to raise.
+    /// </remarks>
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         if (AllowClose) return;
@@ -366,7 +376,6 @@ public partial class MainWindow : Window
         Hide();
         TrimMemory();
         UpdateTelemetryPollingRate();
-        _viewModel?.NotifyHiddenToTray();
     }
 
     private async Task TickAsync()
