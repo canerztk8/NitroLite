@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -284,7 +285,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T($"Yedeğe {label} eklenemedi"), $"{path}: {ex.Message}");
+            AppLog.Warn(string.Format(CultureInfo.CurrentCulture, Loc.T("Yedeğe {0} eklenemedi — {1}"), label, $"{path}: {ex.Message}"));
             result.Skipped.Add(Loc.T(label));
             return null;
         }
@@ -313,7 +314,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T($"Yedekten {label} yazılamadı"), $"{path}: {ex.Message}");
+            AppLog.Warn(string.Format(CultureInfo.CurrentCulture, Loc.T("Yedekten {0} yazılamadı — {1}"), label, $"{path}: {ex.Message}"));
             result.Failed.Add(Loc.T(label));
         }
     }

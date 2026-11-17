@@ -1650,5 +1650,7 @@
   "Çıkışta fan modu geri alınamadı": "Çıkışta fan modu geri could not be acquired",
   "Çıkışta çalışma modu geri alınamadı": "Çıkışta çalışma modu geri could not be acquired",
   "Yedeğe {0} eklenemedi": "Could not add {0} to backup",
-  "Yedekten {0} yazılamadı": "Could not write {0} from backup"
+  "Yedeğe {0} eklenemedi — {1}": "Could not add {0} to backup — {1}",
+  "Yedekten {0} yazılamadı": "Could not write {0} from backup",
+  "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}"
 }
