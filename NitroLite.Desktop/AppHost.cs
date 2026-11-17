@@ -126,7 +126,8 @@ public sealed class AppHost : IDisposable
             services.DirectWmi,
             services.RunAtStartup,
             services.NitroKey,
-            services.NitroSense);
+            services.NitroSense,
+            urlOpener: OpenInDefaultBrowser);
 
         // A settings file that had to be discarded is the one startup failure the user has to be told about: the app
         // is running on the backup or on defaults, and the preferences they set may be gone. The message is handed
@@ -138,6 +139,37 @@ public sealed class AppHost : IDisposable
     }
 
     public MainViewModel ViewModel { get; }
+
+    /// <summary>
+    /// Opens a URL through the shell, the way <see cref="MainViewModel"/> expects its injected opener to. Lives here
+    /// rather than as a <c>Process.Start</c> fallback in the view model so a test that forgets to inject an opener can
+    /// never launch a real browser on the developer's machine.
+    /// </summary>
+    private static void OpenInDefaultBrowser(string url)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+                {
+                    UseShellExecute = true,
+                })?.Dispose();
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                System.Diagnostics.Process.Start("xdg-open", url)?.Dispose();
+            }
+            else
+            {
+                AppLog.Warn("Bağlantı açılamadı", $"No browser launch path for this platform: {url}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Bağlantı açılamadı", $"{url}: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// The Nitro-key listener, owned here so the window can subscribe to it and the view model can ask whether the

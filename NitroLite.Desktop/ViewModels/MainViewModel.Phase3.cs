@@ -114,9 +114,8 @@ public sealed partial class MainViewModel
     private readonly INitroSenseWatcher? _nitroSense;
 
     /// <summary>
-    /// Optional URL opener for testing. When null, the default system browser is used via Process.Start.
-    /// When provided, it receives the URL without actually opening a browser, allowing tests to capture
-    /// and verify the URL without side effects.
+    /// URL opener injected by the composition root. When null, OpenUrl logs and does nothing — no shell fallback,
+    /// so a test fixture that forgot a capturer cannot open a real browser on the developer's machine.
     /// </summary>
     private readonly Action<string>? _urlOpener;
 
@@ -1611,6 +1610,12 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <remarks>
+    /// A null <c>_urlOpener</c> does not fall back to the shell. Production always injects one
+    /// (<see cref="AppHost"/>), so the fallback would only ever run under a test whose fixture forgot to pass a
+    /// capturer — and with the test fixtures' <c>example.invalid</c> URLs that used to open a real browser on the
+    /// developer's machine mid-test-run. Logging instead keeps that failure visible and harmless.
+    /// </remarks>
     private void OpenUrl(string url)
     {
         try
@@ -1621,11 +1626,7 @@ public sealed partial class MainViewModel
             }
             else
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = url,
-                    UseShellExecute = true
-                })?.Dispose();
+                AppLog.Warn("Bağlantı açılamadı", $"No URL opener was injected; refusing to launch a browser for {url}");
             }
         }
         catch (Exception ex)
