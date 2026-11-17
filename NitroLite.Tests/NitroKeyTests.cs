@@ -513,6 +513,17 @@ public class NitroKeyTests
     }
 
     [Fact]
+    public void NitroSenseWatcher_CloseForDoesNothingOnceTheWindowIsOver()
+    {
+        // The sweep checks the deadline before it touches a process, so an expired window is a no-op. That is what
+        // keeps a press from leaving a worker running, and what makes this safe to assert on a machine that has
+        // NitroSense installed.
+        using var watcher = new NitroSenseWatcher();
+
+        Assert.False(watcher.CloseFor(TimeSpan.Zero));
+    }
+
+    [Fact]
     public void NitroKeyReplacesNitroSense_DefaultsOffAndPersists()
     {
         // Off by default: it closes a program, so the user has to ask for it.

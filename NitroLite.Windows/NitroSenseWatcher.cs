@@ -37,6 +37,12 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     /// </summary>
     public static readonly TimeSpan CloseCooldown = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// How many times one window may close NitroSense before the loop gives up. The Acer service can relaunch it
+    /// faster than this loop can close it, and a fight the user sees as a flickering window is worse than losing.
+    /// </summary>
+    public const int MaxClosesPerWindow = 3;
+
     private readonly Func<int> _foregroundProcessId;
     private readonly Func<bool>? _shouldReact;
     private readonly Func<int, bool> _isNitroSense;
@@ -50,6 +56,12 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     private int _lastProcessId;
 
     private long _quietUntilTicks;
+
+    /// <summary>How long the close loop keeps sweeping. Extended by every press, so a burst is one sweep.</summary>
+    private long _closeUntilTicks;
+
+    /// <summary>1 while the close loop is running, so repeated presses do not stack workers.</summary>
+    private int _closeLoopRunning;
 
     /// <param name="foregroundProcessId">
     /// The process owning the foreground window. Injectable so the decision can be tested without a desktop.
@@ -148,7 +160,61 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         }
     }
 
-    public bool Close()
+    public bool Close() => CloseCore(log: true);
+
+    public bool CloseFor(TimeSpan window)
+    {
+        long until = Stopwatch.GetTimestamp() + (long)(window.TotalSeconds * Stopwatch.Frequency);
+
+        // Extended rather than restarted: a burst of presses must not stack workers.
+        lock (_gate)
+        {
+            if (until > _closeUntilTicks) _closeUntilTicks = until;
+        }
+
+        if (Interlocked.CompareExchange(ref _closeLoopRunning, 1, 0) != 0) return false;
+
+        try
+        {
+            bool closed = false;
+            int closes = 0;
+
+            while (true)
+            {
+                long deadline;
+                lock (_gate) deadline = _closeUntilTicks;
+
+                if (Stopwatch.GetTimestamp() >= deadline) break;
+
+                if (CloseCore(log: false))
+                {
+                    closed = true;
+                    closes++;
+                }
+
+                // The Acer service can relaunch NitroSense faster than this loop can close it. Three is enough to
+                // prove that is what is happening; more would be a fight the user sees as a flickering window.
+                if (closes >= MaxClosesPerWindow)
+                {
+                    AppLog.Warn("NitroSense tekrar tekrar açılıyor",
+                        $"pencere içinde {closes} kez kapatıldı; Acer servisi yeniden başlatıyor olabilir.");
+                    break;
+                }
+
+                Thread.Sleep(PollMilliseconds);
+            }
+
+            if (closed) AppLog.Info("NitroSense kapatıldı", "Nitro tuşu NitroLite'a yönlendirildi.");
+
+            return closed;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _closeLoopRunning, 0);
+        }
+    }
+
+    private bool CloseCore(bool log)
     {
         bool closed = false;
 
@@ -187,7 +253,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         if (!closed) return false;
 
         SuppressFor(CloseCooldown);
-        AppLog.Info("NitroSense kapatıldı", "Nitro tuşu NitroLite'a yönlendirildi.");
+        if (log) AppLog.Info("NitroSense kapatıldı", "Nitro tuşu NitroLite'a yönlendirildi.");
 
         return true;
     }

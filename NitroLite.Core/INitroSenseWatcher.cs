@@ -1,4 +1,4 @@
-namespace NitroLite.Core;
+﻿namespace NitroLite.Core;
 
 /// <summary>
 /// Notices NitroSense coming to the front, which on an Acer laptop is what the Nitro key does.
@@ -37,4 +37,11 @@ public interface INitroSenseWatcher : IDisposable
     /// the UI thread has to move it off.
     /// </summary>
     bool Close();
+
+    /// <summary>
+    /// Keeps closing NitroSense for the length of the window, because the Acer service launches it a moment after the
+    /// key and a single close races that launch. Returns true when anything was closed. Blocking, so a caller on the
+    /// UI thread has to move it off.
+    /// </summary>
+    bool CloseFor(TimeSpan window);
 }

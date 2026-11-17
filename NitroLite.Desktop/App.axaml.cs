@@ -31,6 +31,12 @@ public partial class App : Application
     /// </summary>
     private const int MaxSurvivedUiExceptions = 5;
 
+    /// <summary>
+    /// How long the NitroSense sweep runs after a key press. Long enough to catch a launch the Acer service delays,
+    /// short enough that a press does not leave a worker running.
+    /// </summary>
+    private static readonly TimeSpan NitroSenseSuppressionWindow = TimeSpan.FromSeconds(4);
+
     private int _survivedUiExceptions;
 
     public override void Initialize()
@@ -123,7 +129,23 @@ public partial class App : Application
     /// setting at press time, which is what makes turning the switch off take effect without a restart.
     /// </summary>
     private void OnNitroKeyPressed(object? sender, EventArgs e) =>
-        Dispatcher.UIThread.Post(() => _nitroGate?.HandlePress());
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_nitroGate?.HandlePress() != true) return;
+
+            // The Acer service launches NitroSense a moment after the key, so a single close races that launch and
+            // the window ends up behind it. The sweep runs for a few seconds, and the window is raised again once it
+            // is done because NitroSense can take the foreground on its way out.
+            if (_host?.ViewModel.NitroKeyReplacesNitroSense != true) return;
+
+            _ = Task.Run(() =>
+            {
+                if (_nitroSense?.CloseFor(NitroSenseSuppressionWindow) == true)
+                {
+                    Dispatcher.UIThread.Post(ShowWindow);
+                }
+            });
+        });
 
     /// <summary>
     /// NitroSense came to the front, which on this model means the Nitro key was pressed.
