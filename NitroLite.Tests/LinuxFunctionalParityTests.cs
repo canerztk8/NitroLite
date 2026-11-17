@@ -657,9 +657,10 @@ public class LinuxFunctionalParityTests
 
         Assert.True(vm.MuxAvailable);
         Assert.Equal(1, vm.SchoolModeColumnSpan);
-        Assert.Equal(2, vm.GpuModes.Count);
+        Assert.Equal(3, vm.GpuModes.Count);
         Assert.Equal(GpuOperatingMode.Optimus, vm.GpuModes[0].Mode);
         Assert.Equal(GpuOperatingMode.DiscreteGpu, vm.GpuModes[1].Mode);
+        Assert.Equal(GpuOperatingMode.Automatic, vm.GpuModes[2].Mode);
 
         vm.SelectedGpuMode = vm.GpuModes[1];
         await RunAsync(vm.ApplyGpuModeCommand);

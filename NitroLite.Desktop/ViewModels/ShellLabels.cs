@@ -123,6 +123,7 @@ public sealed class ShellLabels
     public string GpuMode => Loc.T("GPU modu");
     public string GpuHybrid => Loc.T("Hibrit (Optimus)");
     public string GpuDiscrete => Loc.T("Harici GPU (Discrete)");
+    public string GpuAutomatic => Loc.T("Otomatik Seçim (DDS / Advanced Optimus)");
     public string MuxHint => Loc.T("Geçişten sonra oturumu kapatıp açmanız gerekebilir.");
 
     /// <summary>
@@ -151,7 +152,6 @@ public sealed class ShellLabels
     public string GameMode => Loc.T("Oyun modu");
     public string GameIdle => Loc.T("Oyun yok; kullanıcı ayarları geçerli.");
     public string AutoGameMode => Loc.T("Otomatik oyun modu");
-    public string AutoGameModeHint => Loc.T("Tanımlı bir oyun açıldığında moda ve fan eğrisine geçer, kapandığında geri döner.");
 
     // ---------------------------------------------------------------- game profiles page
     public string GameProfiles => Loc.T("Oyun Profilleri");
@@ -197,13 +197,8 @@ public sealed class ShellLabels
     /// <summary>The switch that decides whether a rule is applied on its own when the game starts.</summary>
     public string GameAutoApply => Loc.T("Bu oyun açılınca profili uygula");
 
-    public string GameAutoApplyHint => Loc.T("Açılışta uygulanır, kapanışta geri alınır");
-
     public string GameAutoApplyTooltip => Loc.T("Yalnızca bu oyun için geçerli. Kapalıysa oyun algılanır ama bu profili kendiliğinden uygulamaz; elle çalıştırılabilir.");
 
-    public string SaveGameProfile => Loc.T("Yapılandırmayı Kaydet");
-
-    public string GameProfileSaved(string name) => Loc.T($"Yapılandırma kaydedildi: {name}");
     public string DeleteProfileTitle => Loc.T("Profili sil");
     public string DeleteProfileConfirm(string name) => Loc.T($"'{name}' profili silinsin mi? Bu işlem geri alınamaz.");
     public string GameSessionRecovered => Loc.T("Yarım kalan oyun oturumu geri alındı; önceki mod ve fan ayarları geri yüklendi.");
@@ -212,17 +207,11 @@ public sealed class ShellLabels
 
     public string MouseCaption => Loc.T("FARE");
     public string MouseProfiles => Loc.T("Fare profili");
-    public string MouseProfilesHint => Loc.T("ATK farenin kendi belleğindeki yapılandırmalar. Değiştirme seçilirse dokunulmaz.");
     public string MousePassive => Loc.T("Değiştirme (Pasif)");
     public string MousePassiveApplied => Loc.T("Fare profili değiştirilmedi.");
     public string MouseProfileApplied(int profile) => Loc.T($"Fare profili uygulandı: Config {profile}");
     public string MouseProfileFailed => Loc.T("Fare profili uygulanamadı; cihaz yanıt vermedi.");
     public string DefaultMouseProfile => Loc.T("Varsayılan Fare Profili");
-
-    /// <summary>Applies the selected game's mouse profile to the hardware right now, without waiting for the game.</summary>
-    public string TestMouseProfile => Loc.T("Dene");
-
-    public string TestMouseProfileHint => Loc.T("Seçili fare profilini donanım üzerinde anında test eder.");
 
     // ---------------------------------------------------------------- fan curve presets
 
@@ -346,8 +335,6 @@ public sealed class ShellLabels
     public string WorkingMode => Loc.T("Çalışma Modu");
 
     public string FanProfile => Loc.T("Fan Profili");
-
-    public string GameFanCurve => Loc.T("Bu oyun için özel fan eğrisi");
 
     // ---------------------------------------------------------------- the five pages
 

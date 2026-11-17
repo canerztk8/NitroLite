@@ -777,7 +777,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private CpuBoostChoice? _selectedGameCpuBoost;
     private FanModeChoice? _selectedGameFanMode;
     private MouseProfileOption? _selectedGameMouseProfile;
-    private bool _gameFanCurveEnabled;
     private bool _gameAutoApply = true;
     private MouseProfileOption? _selectedMouseProfile;
     private string _mouseProfileStatus = "";
@@ -941,10 +940,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ScanGamesCommand = new AsyncCommand(ScanGamesAsync);
         AddGameFromFileCommand = new AsyncCommand(AddGameFromFileAsync);
         DeleteSelectedGameCommand = new AsyncCommand(DeleteSelectedGameAsync);
-        ApplyDefaultMouseProfileCommand = new AsyncCommand(ApplyDefaultMouseProfileAsync);
         CopyDesktopCurveCommand = new RelayCommand(CopyDesktopCurveToGame);
-        SaveGameProfileCommand = new RelayCommand(SaveGameProfile);
-        TestMouseProfileCommand = new AsyncCommand(TestSelectedGameMouseProfileAsync);
         ToastActionCommand = new RelayCommand(RunToastAction);
         ToggleModeTraceCommand = new RelayCommand(() => ModeTraceVisible = !ModeTraceVisible);
         CleanMemoryCommand = new RelayCommand(() => _ = CleanMemoryAsync());
@@ -982,6 +978,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SparklineNowText));
             Raise(nameof(SparklineEmpty));
             Raise(nameof(SystemGameText));
+            Raise(nameof(ShowSystemGameRow));
             Raise(nameof(ActiveZoneText));
             Raise(nameof(ModeBadgeText));
             // The launcher line is a sentence built from these labels, so it is re-raised rather than rebuilt.
@@ -1169,6 +1166,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// rather than the sentence the toast and the game card use.
     /// </summary>
     public string SystemGameText => string.IsNullOrWhiteSpace(_activeGameName) ? "—" : _activeGameName;
+
+    /// <summary>
+    /// True when the rail draws the OYUN row at all. With no game running there is nothing to put there, and a row
+    /// reading "—" is a line the user has to read to learn nothing. The row is the last one in the box, so it appears
+    /// at the bottom the moment a game starts.
+    /// </summary>
+    public bool ShowSystemGameRow => !string.IsNullOrWhiteSpace(_activeGameName);
 
     /// <summary>The version badge beside the wordmark, read from the assembly rather than typed twice.</summary>
     public string VersionText { get; } = ReadVersion();
@@ -3320,7 +3324,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The fan behaviour the selected game switches to.</summary>
+    /// <summary>
+    /// The fan behaviour the selected game switches to. Choosing Özel Eğri is also what turns the game's own curve on,
+    /// so the two cannot disagree: the editor below the picker appears exactly when the curve is the target.
+    /// </summary>
     public FanModeChoice? SelectedGameFanMode
     {
         get => _selectedGameFanMode;
@@ -3328,10 +3335,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (value == null) return;
             if (!Set(ref _selectedGameFanMode, value)) return;
+            Raise(nameof(ShowGameFanCurveEditor));
             if (SelectedGameProfile is not GameProfileRow row) return;
             if (FindProfile(row) is not GameProfile profile) return;
 
             profile.TargetFanMode = value.Mode;
+            profile.TargetFanCurveEnabled = value.Mode == FanMode.Custom;
             SaveSettings();
             BuildGameProfileRows();
         }
@@ -3354,22 +3363,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// True when the selected game runs its own fan curve for the length of its session instead of a fixed fan mode.
+    /// True when the selected game runs its own fan curve for the length of its session. The editor follows the fan
+    /// picker rather than a switch of its own: choosing Özel Eğri is what turns the curve on, so there is no second
+    /// control that can disagree with the picker.
     /// </summary>
-    public bool GameFanCurveEnabled
-    {
-        get => _gameFanCurveEnabled;
-        set
-        {
-            if (!Set(ref _gameFanCurveEnabled, value)) return;
-            if (SelectedGameProfile is not GameProfileRow row) return;
-            if (FindProfile(row) is not GameProfile profile) return;
-
-            profile.TargetFanCurveEnabled = value;
-            SaveSettings();
-            BuildGameProfileRows();
-        }
-    }
+    public bool ShowGameFanCurveEditor => SelectedGameFanMode?.Mode == FanMode.Custom;
 
     /// <summary>Copies the desktop curve onto the selected game, so a game curve starts from a shape the user knows.</summary>
     public RelayCommand CopyDesktopCurveCommand { get; }
@@ -3449,51 +3447,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
     }
 
-    /// <summary>
-    /// Flushes the selected rule to disk and says so. The per-game controls write as they change, so this is the
-    /// receipt rather than the only save: a user who tuned four pickers wants one line that confirms all four landed.
-    /// </summary>
-    public RelayCommand SaveGameProfileCommand { get; }
-
-    private void SaveGameProfile()
-    {
-        if (SelectedGameProfile is not GameProfileRow row) return;
-        if (FindProfile(row) is not GameProfile profile) return;
-
-        profile.TargetFanCurvePoints = GameCurveAnchors
-            .Select(a => new FanCurvePoint(a.TemperatureC, a.Percent))
-            .ToList();
-        SaveSettings();
-        BuildGameProfileRows();
-        GameProfileStatus = Labels.GameProfileSaved(row.DisplayName);
-        Status = GameProfileStatus;
-    }
-
-    /// <summary>
-    /// Applies the selected game's mouse profile to the hardware right now, without waiting for the game to start.
-    /// </summary>
-    /// <remarks>
-    /// The mouse's four configurations are stored in its own memory, so a user who is about to pick one for a game
-    /// wants to feel it under the hand first. This is the same write the game would make, made on demand.
-    /// </remarks>
-    public AsyncCommand TestMouseProfileCommand { get; }
-
-    private async Task TestSelectedGameMouseProfileAsync()
-    {
-        if (_mouseProfiles == null) return;
-        if (SelectedGameMouseProfile is not MouseProfileOption choice) return;
-
-        if (choice.Index <= 0)
-        {
-            MouseProfileStatus = Labels.MousePassiveApplied;
-            return;
-        }
-
-        bool ok = await _mouseProfiles.ApplyProfileAsync(choice.Index).ConfigureAwait(true);
-        MouseProfileStatus = ok ? Labels.MouseProfileApplied(choice.Index) : Labels.MouseProfileFailed;
-        Status = MouseProfileStatus;
-    }
-
     /// <summary>The rule behind a row, matched on the executable name the row carries.</summary>
     private GameProfile? FindProfile(GameProfileRow row) =>
         _settings.GameProfiles.FirstOrDefault(p =>
@@ -3523,7 +3476,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _selectedGameMouseProfile = profile == null
                 ? null
                 : MouseProfileOptions.FirstOrDefault(m => m.Index == profile.TargetAtkMouseProfile);
-            _gameFanCurveEnabled = profile?.TargetFanCurveEnabled ?? false;
             _gameAutoApply = profile?.AutoApply ?? true;
         }
         finally
@@ -3535,7 +3487,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(SelectedGameCpuBoost));
         Raise(nameof(SelectedGameFanMode));
         Raise(nameof(SelectedGameMouseProfile));
-        Raise(nameof(GameFanCurveEnabled));
+        Raise(nameof(ShowGameFanCurveEditor));
         Raise(nameof(GameAutoApply));
 
         // The six sliders follow the selection, so the card never edits one game's curve while naming another.
@@ -3550,10 +3502,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True when a supported mouse answered, which is what shows the FARE row and the mouse card.</summary>
     public bool MouseProfileAvailable => _mouseProfiles?.IsSupported == true;
 
+    /// <summary>
+    /// True when the mouse controls are drawn at all. The integration switch is part of the answer, exactly as it was
+    /// in the WPF window: a user who turned the ATK integration off asked for the mouse controls to go away, not just
+    /// for the writes to stop. Every mouse control on the modes page is gated on this, including the per-game picker.
+    /// </summary>
+    public bool ShowMouseProfileUi => MouseProfileAvailable && _settings.AtkMouseIntegrationEnabled;
+
     /// <summary>The profile the mouse is in, or 0 when it has not said.</summary>
     public int CurrentMouseProfile => _mouseProfiles?.CurrentProfile ?? 0;
 
-    /// <summary>The default profile applied at launch and by the card's Uygula button.</summary>
+    /// <summary>
+    /// The default profile applied at launch. Picking one applies it in the same step: the picker is the action, so a
+    /// separate Uygula button would only be a second click for the same write.
+    /// </summary>
     public MouseProfileOption? SelectedMouseProfile
     {
         get => _selectedMouseProfile;
@@ -3563,6 +3525,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var option in MouseProfileOptions) option.IsSelected = ReferenceEquals(option, value);
             _settings.DefaultAtkMouseProfile = value.Index;
             SaveSettings();
+            _ = ApplyDefaultMouseProfileAsync();
         }
     }
 
@@ -3595,9 +3558,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// the WPF window: a user who turned the ATK integration off asked for the row to go away, not just for the writes
     /// to stop.
     /// </summary>
-    public bool ShowSystemMouseRow => MouseProfileAvailable && _settings.AtkMouseIntegrationEnabled;
-
-    public AsyncCommand ApplyDefaultMouseProfileCommand { get; }
+    public bool ShowSystemMouseRow => ShowMouseProfileUi;
 
     private void BuildMouseProfileChoices()
     {
@@ -3610,12 +3571,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         foreach (var option in MouseProfileOptions) option.IsSelected = ReferenceEquals(option, _selectedMouseProfile);
     }
 
-    /// <summary>A click in the FARE quick menu: the choice is stored and applied in one step.</summary>
-    private void SelectMouseProfile(MouseProfileOption option)
-    {
-        SelectedMouseProfile = option;
-        _ = ApplyDefaultMouseProfileAsync();
-    }
+    /// <summary>A click in the FARE quick menu. The setter stores and applies in one step, so there is nothing to add.</summary>
+    private void SelectMouseProfile(MouseProfileOption option) => SelectedMouseProfile = option;
 
     /// <summary>Applies the chosen default profile to the mouse and reports what happened.</summary>
     private async Task ApplyDefaultMouseProfileAsync()
@@ -3649,6 +3606,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
 
             Raise(nameof(MouseProfileAvailable));
+            Raise(nameof(ShowMouseProfileUi));
             Raise(nameof(ShowSystemMouseRow));
             Raise(nameof(SystemMouseText));
             Raise(nameof(CurrentMouseProfile));
@@ -4774,6 +4732,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _gameStatus = Labels.GameStarted(started.DisplayName);
             _activeGameName = started.DisplayName;
             Raise(nameof(SystemGameText));
+            Raise(nameof(ShowSystemGameRow));
 
             // The record is written before the controls follow, so a crash between here and the game's exit still
             // leaves enough behind to undo the override on the next launch.
@@ -4800,6 +4759,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _gameStatus = Labels.GameEnded(ended.DisplayName);
             _activeGameName = "";
             Raise(nameof(SystemGameText));
+            Raise(nameof(ShowSystemGameRow));
 
             // The session ended cleanly, so there is nothing left to recover on the next launch.
             EndGameSessionRecovery();
@@ -5074,10 +5034,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         NewGameFanMode = GameFanChoices[0];
 
-        // Automatic is not offered: it is a firmware decision (Advanced Optimus), and the backend refuses to write it.
+        // The three modes the firmware knows, which is what NitroSense offers under "GPU Operating". The WMI protocol
+        // encodes all three (Discrete=1, Optimus=2, Automatic=3), so offering two hid a mode the machine can switch to.
         GpuModes.Clear();
         GpuModes.Add(new GpuModeChoice(GpuOperatingMode.Optimus, Labels.GpuHybrid));
         GpuModes.Add(new GpuModeChoice(GpuOperatingMode.DiscreteGpu, Labels.GpuDiscrete));
+        GpuModes.Add(new GpuModeChoice(GpuOperatingMode.Automatic, Labels.GpuAutomatic));
         SelectedGpuMode = GpuModes[0];
 
         BuildModeChoices();

@@ -238,9 +238,12 @@
                   </Button.Flyout>
                 </Button>
 
-                <!-- The active game, or the sentence that says there is none. Trimmed rather than wrapped: a long
-                     process name must not push the rail's own layout around. -->
+                <!-- The active game. The row only exists while a game is running: with none, there is nothing to put
+                     there, and a line reading "—" is a line the user has to read to learn nothing. It is the last row
+                     in the box, so it appears at the bottom the moment a game starts. Trimmed rather than wrapped: a
+                     long process name must not push the rail's own layout around. -->
                 <Button Classes="sidestat" Click="OnSideStatClick" Tag="modes"
+                        IsVisible="{Binding ShowSystemGameRow}"
                         ToolTip.Tip="{Binding Labels.GameProfiles}">
                   <Grid ColumnDefinitions="Auto,*">
                     <TextBlock Text="{Binding Labels.GameCaption}" Classes="caps" />

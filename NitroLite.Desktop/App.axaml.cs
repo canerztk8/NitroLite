@@ -154,8 +154,10 @@ public partial class App : Application
     /// NitroSense came to the front, which on this model means the Nitro key was pressed.
     /// </summary>
     /// <remarks>
-    /// Only acted on when the user asked for it and only while NitroLite is out of the way. A window the user is
-    /// already looking at needs no help, and reacting then would close a NitroSense that was opened on purpose.
+    /// Acted on whenever the user asked for the redirect, whether or not NitroLite is already in front. The earlier
+    /// version skipped the close while the window was visible, which is exactly the case that was reported: with
+    /// NitroLite covering the screen the key opened NitroSense behind it and left it running. "The key opens NitroLite
+    /// and not NitroSense" has to hold in both states, so the only gates left are the two switches.
     /// </remarks>
     private void OnNitroSenseActivated(object? sender, EventArgs e) =>
         Dispatcher.UIThread.Post(() =>
@@ -163,7 +165,6 @@ public partial class App : Application
             if (_host?.ViewModel.NitroKeyEnabled != true) return;
             if (_host.ViewModel.RedirectNitroSenseEnabled != true) return;
             if (_window == null) return;
-            if (_window.IsVisible && _window.WindowState != WindowState.Minimized) return;
 
             // Closing waits on the process, so it does not belong on the UI thread.
             _ = Task.Run(() => _nitroSense?.Close());

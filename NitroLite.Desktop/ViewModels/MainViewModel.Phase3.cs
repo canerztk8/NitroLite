@@ -542,6 +542,7 @@ public sealed partial class MainViewModel
             Raise();
             SaveSettings();
             Raise(nameof(ShowSystemMouseRow));
+            Raise(nameof(ShowMouseProfileUi));
             Raise(nameof(SystemMouseText));
         }
     }

@@ -82,8 +82,8 @@
     Turns the curve on with a flat shape at this percentage, so a fixed fan speed can be measured.
 
 .PARAMETER GameFanCurve
-    Turns the selected game's own fan curve on, so the six in-card anchors are captured instead of the
-    "copy from desktop" row alone. Needs a game profile to be selected, which -Seed can supply.
+    Sets the selected game's fan profile to its last entry (Özel Eğri / Custom), which is what opens the six in-card
+    anchors. Needs a game profile to be selected, which -Seed can supply.
 
 .PARAMETER Settle
     Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
@@ -360,6 +360,33 @@ function Set-SwitchOn([System.Windows.Automation.AutomationElement]$element) {
     return $false
 }
 
+# Expands a ComboBox and selects its last entry. The game fan picker lists Auto, Max and Custom in that order, so the
+# last entry is the one that opens the curve editor — the editor follows the picker, there is no separate switch.
+function Select-LastComboItem([System.Windows.Automation.AutomationElement]$combo) {
+    try {
+        $expand = $combo.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+        $expand.Expand()
+        Start-Sleep -Milliseconds 300
+
+        $items = $combo.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        $last = $null
+        foreach ($i in $items) {
+            if ($i.Current.ControlType -eq [System.Windows.Automation.ControlType]::ListItem) { $last = $i }
+        }
+
+        if (-not $last) { $expand.Collapse(); return $false }
+
+        $last.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        $expand.Collapse()
+        return $true
+    } catch {
+        Write-Host "  combo selection failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        return $false
+    }
+}
+
+
 $failed = 0
 foreach ($pageId in $pages) {
     $idCond = New-Object System.Windows.Automation.PropertyCondition(
@@ -377,16 +404,16 @@ foreach ($pageId in $pages) {
     }
     Start-Sleep -Milliseconds 1400
 
-    # Toggled before scrolling: opening the panel makes the page taller, so the scroll has to see the final layout.
+    # Opened before scrolling: the curve editor makes the page taller, so the scroll has to see the final layout.
     if ($GameFanCurve) {
-        $chkCond = New-Object System.Windows.Automation.PropertyCondition(
-            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ChkGameFanCurve')
-        $chk = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $chkCond)
-        if ($chk) {
-            Set-SwitchOn $chk | Out-Null
+        $fanCond = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'CmbGameFanMode')
+        $fan = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $fanCond)
+        if ($fan) {
+            Select-LastComboItem $fan | Out-Null
             Start-Sleep -Milliseconds 500
         } else {
-            Write-Host "  ChkGameFanCurve not found" -ForegroundColor Yellow
+            Write-Host "  CmbGameFanMode not found" -ForegroundColor Yellow
         }
     }
 

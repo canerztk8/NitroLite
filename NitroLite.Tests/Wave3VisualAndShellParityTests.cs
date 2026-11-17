@@ -537,10 +537,11 @@ public class Wave3VisualAndShellParityTests
         Assert.Contains("'NavLighting'", script, StringComparison.Ordinal);
         Assert.Contains("'NavTools'", script, StringComparison.Ordinal);
 
-        // The game fan curve is a switch the script can turn on, and the switch carries the id it looks for.
+        // The game fan curve editor follows the fan picker, so the script opens it by selecting the picker's last
+        // entry, and the picker carries the id it looks for.
         Assert.Contains("[switch]$GameFanCurve", script, StringComparison.Ordinal);
-        Assert.Contains("ChkGameFanCurve", script, StringComparison.Ordinal);
-        Assert.Contains("AutomationProperties.AutomationId=\"ChkGameFanCurve\"",
+        Assert.Contains("CmbGameFanMode", script, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"CmbGameFanMode\"",
             Markup("DashboardView.axaml"), StringComparison.Ordinal);
     }
 

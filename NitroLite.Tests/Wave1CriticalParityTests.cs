@@ -327,7 +327,7 @@ public class Wave1CriticalParityTests
     }
 
     [Fact]
-    public async Task SaveGameProfile_WritesAllSixPointsIncludingTheMovedAnchor()
+    public async Task GameCurveAnchor_WritesAllSixPointsIncludingTheMovedAnchorWithoutASaveButton()
     {
         var path = TempSettingsPath();
         var settings = new AppSettings
@@ -344,14 +344,14 @@ public class Wave1CriticalParityTests
             {
                 await vm.InitializeAsync();
 
+                // Moving an anchor is the write. There is no save button left to press, so the rule has to be on disk
+                // the moment the slider moves.
                 vm.GameCurveAnchors.Single(a => a.TemperatureC == 70).Percent = 58;
-                vm.SaveGameProfileCommand.Execute(null);
 
                 var points = settings.GameProfiles[0].TargetFanCurvePoints;
                 Assert.NotNull(points);
                 Assert.Equal(6, points!.Count);
                 Assert.Equal(58, points.Single(p => p.TemperatureC == 70).Percent);
-                Assert.Equal(vm.Labels.GameProfileSaved("Counter-Strike 2"), vm.GameProfileStatus);
             }
 
             var reloaded = SettingsManager.LoadSettingsWithFallback(path);

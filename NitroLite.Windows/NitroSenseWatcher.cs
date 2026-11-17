@@ -122,9 +122,10 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
 
     /// <summary>
     /// How long the watcher stays quiet after closing NitroSense. The Acer service can relaunch it, and reacting to
-    /// that would be a loop the user sees as a flickering window.
+    /// that would be a loop the user sees as a flickering window. Short enough that a deliberate second press is not
+    /// swallowed: the relaunch it guards against happens within a tenth of a second, not within seconds.
     /// </summary>
-    public static readonly TimeSpan CloseCooldown = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan CloseCooldown = TimeSpan.FromMilliseconds(1500);
 
     /// <summary>
     /// How many times one window may close the stack before the loop gives up. The Acer service can relaunch it
@@ -243,9 +244,12 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             return;
         }
 
-        _lastProcessId = window.ProcessId;
-
+        // The cooldown is checked before the window is remembered. Remembering it first meant a press that landed
+        // inside the cooldown was dropped for good: the same window stayed in front, matched the dedupe on every later
+        // poll, and NitroSense was never closed. Checking first lets the next poll after the cooldown act on it.
         if (Stopwatch.GetTimestamp() < _quietUntilTicks) return;
+
+        _lastProcessId = window.ProcessId;
 
         // The permission dialog is a window, not the app: one WM_CLOSE is the whole fix, and it is done here because
         // this is where the handle is. The event is still raised, because the press has to bring NitroLite forward
