@@ -591,6 +591,38 @@
       <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
     </Style>
 
+    <!--
+      A destructive button: the same frame as .primary, but the rule and the label are the danger colour, so "delete"
+      never reads like "apply". The wash under the pointer is the danger at 14 %, which keeps the button legible on the
+      cream page and on every dark palette without a second colour. The frame is what carries the meaning: a red label
+      on a flat button reads as a link, and a link is not what a delete is.
+    -->
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.danger /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger:disabled">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
     <!-- A theme card: the screenshot is the button, so the frame is the only chrome it carries. The chosen one is
          framed in the accent; the rest are framed in nothing, which is what makes the choice readable at a glance
          without a tick or a label. -->

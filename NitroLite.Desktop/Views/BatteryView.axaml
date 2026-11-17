@@ -105,6 +105,11 @@
                   <TextBlock Text="?" />
                 </Border>
               </StackPanel>
+              <!-- The state, not just the switch: a switch says what pressing it would do, this says what is true
+                   now, which is the question a user asks when they come back to the page after a reboot. -->
+              <TextBlock Grid.Column="1" Text="{Binding SchoolModeStateText}" FontSize="11" FontWeight="SemiBold"
+                         Margin="10,0,0,0" VerticalAlignment="Center"
+                         Foreground="{DynamicResource TextSecondaryBrush}" />
               <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding SchoolModeOn}"
                             VerticalAlignment="Center" IsEnabled="{Binding SchoolModeAvailable}" />
             </Grid>
@@ -190,12 +195,15 @@
 
           <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
             <TextBlock Classes="rowtitle" Text="{Binding Labels.WearTrend}" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Classes="link" Content="{Binding Labels.ClearHistory}"
+            <Button Grid.Column="1" Classes="danger" Content="{Binding Labels.ClearHistory}"
                     Command="{Binding ClearWearHistoryCommand}" IsVisible="{Binding HasWearHistory}" />
           </Grid>
 
+          <!-- The plot only exists once there are two readings to join. A single sample drawn as a flat line would
+               claim a trend the data does not have, so the summary sentence carries the explanation instead. -->
           <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
-                  Background="{DynamicResource PanelBrush}" CornerRadius="6" Padding="8">
+                  Background="{DynamicResource PanelBrush}" CornerRadius="6" Padding="8"
+                  IsVisible="{Binding ShowWearTrendChart}">
             <controls:WearTrendChart Height="120"
                                      Values="{Binding WearTrendPoints}"
                                      Stroke="{DynamicResource AccentBrush}"

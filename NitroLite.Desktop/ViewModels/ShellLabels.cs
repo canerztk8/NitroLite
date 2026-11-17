@@ -103,7 +103,7 @@ public sealed class ShellLabels
     // ---------------------------------------------------------------- theme and charts
     public string Theme => Loc.T("Tema");
     public string ThemeApplied => Loc.T("Tema seçimi hemen uygulanır.");
-    public string LastMinute => Loc.T("Son 60 saniye");
+    public string LastMinute => Loc.T("Seçili metriğin son 60 saniyesi");
 
     // ---------------------------------------------------------------- sign-in launch
     public string AutoStart => Loc.T("Görev Zamanlayıcı ile UAC'siz otomatik başlatma");
@@ -134,6 +134,13 @@ public sealed class ShellLabels
     // ---------------------------------------------------------------- school mode
     public string SchoolMode => Loc.T("Okul modu");
     public string SchoolModeHint => Loc.T("Pil ömrünü en üst düzeye çıkarır: %40 parlaklık, 60 Hz, CPU Boost kapalı.");
+
+    /// <summary>
+    /// The state beside the School Mode switch. A switch alone says what pressing it would do, not what is true now;
+    /// the WPF page carried the same word inside the checkbox, and it reads correctly in both positions.
+    /// </summary>
+    public string SchoolModeStateOn => Loc.T("Etkin");
+    public string SchoolModeStateOff => Loc.T("Kapalı");
     public string SchoolModeApplied => Loc.T("Okul modu uygulandı.");
     public string SchoolModeDisabled => Loc.T("Okul modu kapatıldı; önceki ayarlar geri yüklendi.");
     public string SchoolModeRefused => Loc.T("Okul modu uygulanamadı: geri alma kaydı yazılamadı.");
@@ -280,8 +287,18 @@ public sealed class ShellLabels
     /// <summary>"Sıcaklık 70 °C → fan %55" for the curve preview line.</summary>
     public string CurvePoint(int temperatureC, int percent) => Loc.T($"Sıcaklık {temperatureC} °C → fan %{percent}");
 
-    /// <summary>"Bölge 1" for a zone colour row.</summary>
-    public string Zone(int index) => Loc.T($"Bölge {index}");
+    /// <summary>
+    /// "Bölge 1 (Sol)" for a zone colour row. The position is part of the name because the deck above the palette is
+    /// four bars in a row: "Bölge 3" alone leaves the user counting from the left to find out which bar it is.
+    /// </summary>
+    public string Zone(int index) => index switch
+    {
+        1 => Loc.T("Bölge 1 (Sol)"),
+        2 => Loc.T("Bölge 2 (Orta Sol)"),
+        3 => Loc.T("Bölge 3 (Orta Sağ)"),
+        4 => Loc.T("Bölge 4 (Sayısal)"),
+        _ => Loc.T($"Bölge {index}")
+    };
 
     // ---------------------------------------------------------------- shell chrome
     //
@@ -304,6 +321,12 @@ public sealed class ShellLabels
     public string Minimize => Loc.T("Küçült");
     public string Maximize => Loc.T("Büyüt");
     public string HideToTray => Loc.T("Tepsiye gizle");
+
+    /// <summary>
+    /// The rail's resize handle. Four transparent pixels have no affordance of their own, so the tooltip is the only
+    /// place the double-click reset is discoverable.
+    /// </summary>
+    public string RailSplitterHint => Loc.T("Kenar çubuğu genişliğini sürükleyerek ayarla; çift tıkla varsayılana döndür");
 
     public string SignaturePrefix => "Made with love by ·";
 
@@ -390,7 +413,7 @@ public sealed class ShellLabels
     public string Temperatures => Loc.T("Sıcaklıklar");
     public string FanSpeeds => Loc.T("Fan Devirleri");
     public string BatteryAndPower => Loc.T("Pil ve Güç");
-    public string TelemetryCharts => Loc.T("60 Saniyelik Telemetri");
+    public string TelemetryCharts => Loc.T("Telemetri Geçmiş Grafiği");
     public string WindowsOnly => Loc.T("Yalnızca Windows");
 
     // ---------------------------------------------------------------- page 3: lighting
@@ -416,19 +439,39 @@ public sealed class ShellLabels
 
     public string Processor => Loc.T("İşlemci");
     public string GraphicsCard => Loc.T("Ekran Kartı");
-    public string SystemMemory => Loc.T("Sistem Belleği");
+
+    /// <summary>
+    /// "Sistem Belleği (RAM)". The parenthetical is the WPF page's own wording, kept because "Sistem Belleği" alone
+    /// reads as a second temperature on a page that already has one.
+    /// </summary>
+    public string SystemMemory => Loc.T("Sistem Belleği (RAM)");
+
     public string SystemTemperature => Loc.T("Sistem Sıcaklığı");
     public string Cores => Loc.T("Çekirdek");
     public string Threads => Loc.T("İş parçacığı");
-    public string Temperature => Loc.T("Sıcaklık");
-    public string PackagePower => Loc.T("Paket Gücü");
-    public string Usage => Loc.T("Kullanım");
-    public string ClockSpeed => Loc.T("Saat Frekansı");
-    public string Vram => Loc.T("VRAM");
+
+    // The row labels carry their colon, as the WPF page wrote them: a label and its figure sit on one line, and the
+    // colon is what makes the figure read as the answer rather than as a second label.
+    public string Temperature => Loc.T("Sıcaklık:");
+    public string PackagePower => Loc.T("Paket Güç Tüketimi:");
+    public string TgpPower => Loc.T("TGP Güç Tüketimi:");
+    public string CpuUsage => Loc.T("İşlemci Kullanımı:");
+    public string GpuUsage => Loc.T("GPU Kullanımı:");
+    public string ClockSpeed => Loc.T("Saat Frekansı:");
+    public string Vram => Loc.T("VRAM Kullanımı:");
+
+    /// <summary>
+    /// The system-temperature badge. The sensor's position is not published by Acer, so the tooltip says exactly that
+    /// rather than borrowing the thermal-floor summary, which answers a different question.
+    /// </summary>
+    public string SysTemperatureHint => Loc.T("Sensörün konumu Acer tarafından belirtilmiyor.");
+
     public string MemoryCleanTitle => Loc.T("Bekleme Belleğini Boşaltma");
     public string MemoryCleanHint => Loc.T("Windows'un bekleme listesindeki önbelleği serbest bırakır; çalışan uygulamalar kapanmaz.");
     public string Cleaning => Loc.T("Boşaltılıyor…");
     public string CleanStandby => Loc.T("Bekleme Belleğini Boşalt");
+    public string GetMemoryCleaner => Loc.T("WinMemoryCleaner'ı indir (ücretsiz, GPL-3.0)");
+    public string GetMemoryCleanerHint => Loc.T("WinMemoryCleaner kurulu değil. Buton, resmi indirme sayfasını açar.");
     public string MemoryCleanToolMissing => Loc.T("Bellek temizleme aracı bulunamadı.");
     public string MemoryCleanElevationRefused => Loc.T("Yönetici izni verilmedi; bekleme belleği boşaltılamadı.");
     public string MemoryCleanFailed => Loc.T("Bekleme belleği boşaltılamadı.");
@@ -446,6 +489,12 @@ public sealed class ShellLabels
     public string ModeTrace => Loc.T("Mod İzleme");
     public string ModeTraceHint => Loc.T("Çalışma modu değişimleri, sıcaklık şeridinin üzerinde işaretlenir.");
     public string ChartEmptyHint => Loc.T("Grafik için henüz yeterli örnek yok; birkaç saniye içinde dolacak.");
+
+    /// <summary>
+    /// The chart's badge. A gap in the trace is not a zero reading, and a user who sees the line dip has to be told
+    /// which of the two it is; the empty-state sentence answers a different question and belongs in the plot itself.
+    /// </summary>
+    public string ChartGapHint => Loc.T("Ölçüm olmayan anlar (ör. ekran kartı uykudayken) grafiğe ve değerlere dahil edilmez.");
 
     // ---------------------------------------------------------------- page 2: the on-screen display
 
@@ -470,8 +519,17 @@ public sealed class ShellLabels
     public string WinKeyLock => Loc.T("WinKey Kilidi");
     public string OpenRgbStatus => Loc.T("OpenRGB durumu");
     public string BacklightTimeoutHint => Loc.T("30 saniye boşta kaldığında aydınlatmayı kapat");
-    public string BrightnessLevel(int level, int max) => Loc.T($"Parlaklık: {level} / {max}");
-    public string SpeedLevel(int level, int max) => Loc.T($"Efekt Hızı: {level} / {max}");
+
+    /// <summary>
+    /// The figure beside the brightness slider. The label on the left already says "Parlaklık", so repeating it here
+    /// would print the word twice on one line; what the right-hand side adds is the number, and — at zero — the fact
+    /// that zero means off rather than dim.
+    /// </summary>
+    public string BrightnessValue(int level, int max) =>
+        level <= 0 ? Loc.T("0 / 9 (Kapalı)") : $"{level} / {max}";
+
+    /// <summary>The figure beside the speed slider, on the same rule as <see cref="BrightnessValue"/>.</summary>
+    public string SpeedValue(int level, int max) => $"{level} / {max}";
 
     // ---------------------------------------------------------------- page 4: the battery and the thermal contract
 
@@ -520,8 +578,8 @@ public sealed class ShellLabels
     public string CellCountFromVoltage(int cells) => Loc.T($"{cells} hücre (gerilimden)");
     public string Battery => Loc.T("Pil");
 
-    public string WearNoSamples => Loc.T("Henüz ölçüm yok");
-    public string WearOneSample => Loc.T("Tek ölçüm var");
+    public string WearNoSamples => Loc.T("Henüz ölçüm yok. NitroLite iki haftada bir ölçüm kaydeder; eğri birkaç ölçümden sonra görünür.");
+    public string WearOneSample => Loc.T("Tek ölçüm var. Eğri için en az iki ölçüm gerekir; NitroLite iki haftada bir ölçüm kaydeder.");
     public string WearFirstSample(string date, double wear) => Loc.T($"İlk ölçüm {date}: %{wear:F1} aşınma");
     public string WearChangeSummary(int days, string change) => Loc.T($"{days} günde {change} puan");
     public string WearNeedsAWeek => Loc.T("Eğilim için en az bir hafta ölçüm gerekir.");
@@ -628,6 +686,7 @@ public sealed class ShellLabels
     public string CheckNow => Loc.T("Şimdi denetle");
     public string Update => Loc.T("Güncelle");
     public string ReleaseNotes => Loc.T("Sürüm Notları");
+    public string ReleaseNotesHint => Loc.T("Bu sürümün GitHub sayfasını tarayıcıda açar");
     public string UpdateCurrent => Loc.T("Sürüm güncel.");
     public string UpdateFound(string version) => Loc.T($"Yeni sürüm: {version}");
     public string UpdateManual => Loc.T("Bu derleme kendini güncelleyemez; sürüm sayfası açıldı.");

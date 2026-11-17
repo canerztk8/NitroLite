@@ -131,9 +131,8 @@
                     Padding="12,7" FontSize="11" Command="{Binding ApplyRgbProfileCommand}" />
             <Button Grid.Column="3" Classes="primary" Content="{Binding Labels.SaveProfile}"
                     Padding="12,7" FontSize="11" Margin="6,0,0,0" Command="{Binding SaveRgbProfileCommand}" />
-            <Button Grid.Column="4" Classes="primary" Content="{Binding Labels.DeleteProfile}"
+            <Button Grid.Column="4" Classes="danger" Content="{Binding Labels.DeleteProfile}"
                     Padding="12,7" FontSize="11" Margin="6,0,0,0"
-                    Foreground="{DynamicResource DangerBrush}"
                     Command="{Binding DeleteRgbProfileCommand}" />
           </Grid>
 

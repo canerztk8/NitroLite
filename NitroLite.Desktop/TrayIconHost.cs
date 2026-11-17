@@ -40,10 +40,16 @@ public sealed class TrayIconHost : IDisposable
     private readonly Dictionary<CpuBoostMode, NativeMenuItem> _boostItems = new();
     private readonly NativeMenuItem _showItem;
     private readonly NativeMenuItem _retryItem;
-    private readonly NativeMenuItem _quickModeItem;
     private readonly NativeMenuItem _boostItem;
     private readonly NativeMenuItem _exitItem;
     private bool _disposed;
+
+    /// <summary>
+    /// When the icon was last pressed. Avalonia's tray icon reports one <c>Clicked</c> per press and has no
+    /// double-click event, so the second press inside <see cref="TrayMenuPolicy.DoubleClickWindow"/> is what counts as
+    /// one. Both paths show the window; the distinction is what lets the host log the gesture the user made.
+    /// </summary>
+    private DateTime _lastClickUtc = DateTime.MinValue;
 
     /// <param name="showWindow">Brings the window back. Called by the icon and by "Pencereyi Göster".</param>
     /// <param name="exit">Runs the clean exit and shuts the application down.</param>
@@ -71,19 +77,21 @@ public sealed class TrayIconHost : IDisposable
 
         _menu.Add(new NativeMenuItemSeparator());
 
-        _quickModeItem = new NativeMenuItem(_viewModel.Labels.TrayQuickMode) { Menu = new NativeMenu() };
+        // The five modes are top-level rows, as the WPF tray listed them. A "Hızlı mod" submenu cost a hover and a
+        // second click for the one thing the tray exists for, and hid the tick until it opened.
         foreach (var mode in _viewModel.QuickModes)
         {
             var item = new NativeMenuItem(_viewModel.QuickModeLabel(mode))
             {
-                ToggleType = NativeMenuItemToggleType.Radio
+                ToggleType = NativeMenuItemToggleType.CheckBox
             };
             item.Click += async (_, _) => await _viewModel.ApplyModeFromTrayAsync(mode).ConfigureAwait(true);
 
-            _quickModeItem.Menu!.Add(item);
+            _menu.Add(item);
             _modeItems[mode] = item;
         }
-        _menu.Add(_quickModeItem);
+
+        _menu.Add(new NativeMenuItemSeparator());
 
         _boostItem = new NativeMenuItem(_viewModel.Labels.TrayCpuBoost) { Menu = new NativeMenu() };
         foreach (var mode in TrayMenuPolicy.BoostModes)
@@ -116,7 +124,7 @@ public sealed class TrayIconHost : IDisposable
             IsVisible = true,
             Icon = LoadIcon()
         };
-        Icon.Clicked += (_, _) => showWindow();
+        Icon.Clicked += (_, _) => OnIconClicked(showWindow);
 
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
@@ -146,7 +154,7 @@ public sealed class TrayIconHost : IDisposable
 
         foreach (var (mode, item) in _modeItems)
         {
-            item.IsChecked = mode == active;
+            item.IsChecked = TrayMenuPolicy.IsModeChecked(mode, active);
 
             // A mode the machine is in stays visible even when its group is hidden: a menu with no marked row would
             // leave the user guessing which mode the machine is running.
@@ -169,6 +177,24 @@ public sealed class TrayIconHost : IDisposable
         _retryItem.IsEnabled = TrayMenuPolicy.EnableRetry(pending, _viewModel.GameActive);
     }
 
+    /// <summary>
+    /// One press of the icon. The window comes back either way; the interval is what tells a double click from two
+    /// single ones, and the log line is the only place the difference is visible.
+    /// </summary>
+    private void OnIconClicked(Action showWindow)
+    {
+        var now = DateTime.UtcNow;
+        var sinceLast = now - _lastClickUtc;
+        _lastClickUtc = now;
+
+        if (TrayMenuPolicy.IsDoubleClick(sinceLast))
+        {
+            AppLog.Info("Tepsi simgesine çift tıklandı", "pencere öne getiriliyor");
+        }
+
+        showWindow();
+    }
+
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         // The whole label object is replaced when the language changes, so every header is rewritten at once.
@@ -181,7 +207,6 @@ public sealed class TrayIconHost : IDisposable
         var labels = _viewModel.Labels;
         _showItem.Header = labels.TrayShow;
         _retryItem.Header = labels.TrayRetryDesktop;
-        _quickModeItem.Header = labels.TrayQuickMode;
         _boostItem.Header = labels.TrayCpuBoost;
         _exitItem.Header = labels.TrayCleanExit;
         Icon.ToolTipText = labels.AppTitle;

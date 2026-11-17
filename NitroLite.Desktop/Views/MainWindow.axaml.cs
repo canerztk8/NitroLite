@@ -239,6 +239,18 @@ public partial class MainWindow : Window
 
     private void OnMaximizeClick(object? sender, RoutedEventArgs e) => ToggleMaximized();
 
+    /// <summary>
+    /// Puts the rail back to its default width. The splitter is four transparent pixels, so a drag that went too far
+    /// has no visible handle to drag back; the double click is the way out, and the tooltip is where it is announced.
+    /// </summary>
+    private void OnRailSplitterDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        vm.SidebarWidth = AppSettings.DefaultSidebarWidth;
+        e.Handled = true;
+    }
+
     /// <summary>Hides to the tray rather than ending the process, so the fan curve keeps running.</summary>
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
 

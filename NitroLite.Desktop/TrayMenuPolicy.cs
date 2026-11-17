@@ -2,12 +2,44 @@ using NitroLite.Core;
 
 namespace NitroLite.Desktop;
 
+/// <summary>One row of the tray menu, in the order it is drawn.</summary>
+public enum TrayRowKind
+{
+    /// <summary>"Göster / Aç".</summary>
+    Show,
+
+    /// <summary>"Masaüstü ayarlarını yeniden dene", drawn only while a restore is pending.</summary>
+    Retry,
+
+    /// <summary>A hairline between groups.</summary>
+    Separator,
+
+    /// <summary>One of the five operating modes, as a top-level row.</summary>
+    Mode,
+
+    /// <summary>The "CPU Boost" submenu.</summary>
+    Boost,
+
+    /// <summary>"Temiz Çıkış".</summary>
+    Exit
+}
+
+/// <summary>One row of the tray menu: what it is, and — for a mode row — which mode it applies.</summary>
+public readonly record struct TrayRow(TrayRowKind Kind, OperatingMode Mode = default);
+
 /// <summary>
 /// The rules the tray menu follows, kept out of <see cref="TrayIconHost"/> so they can be asserted without a display.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The host itself needs a <c>TrayIcon</c>, which needs a platform; the decisions it makes do not. Everything here is
 /// a pure function of what the view model already knows, which is what makes the menu's behaviour testable at all.
+/// </para>
+/// <para>
+/// The modes are top-level rows rather than a "Hızlı mod" submenu. The WPF tray listed them flat, and a submenu costs
+/// a hover and a second click for the one thing the tray exists for; it also hid the tick, because a submenu's rows
+/// are only drawn once it opens.
+/// </para>
 /// </remarks>
 public static class TrayMenuPolicy
 {
@@ -21,6 +53,41 @@ public static class TrayMenuPolicy
         CpuBoostMode.Efficient,
         CpuBoostMode.Aggressive
     };
+
+    /// <summary>
+    /// How long after a press a second one still counts as a double click. The platform reports one <c>Clicked</c>
+    /// event per press and Avalonia's tray icon has no double-click event, so the host derives it from the interval.
+    /// </summary>
+    public static readonly TimeSpan DoubleClickWindow = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// The menu, top to bottom: show, retry, rule, the five modes, rule, boost, rule, exit.
+    /// </summary>
+    /// <remarks>
+    /// The retry row is always in the list and hidden by <see cref="ShowRetry"/> rather than added and removed: a
+    /// <c>NativeMenu</c> that is rebuilt while it is open loses the pointer, and the row's visibility is already the
+    /// thing the sync pass sets.
+    /// </remarks>
+    public static IReadOnlyList<TrayRow> BuildRows(IReadOnlyList<OperatingMode> modes)
+    {
+        ArgumentNullException.ThrowIfNull(modes);
+
+        var rows = new List<TrayRow>(modes.Count + 7)
+        {
+            new(TrayRowKind.Show),
+            new(TrayRowKind.Retry),
+            new(TrayRowKind.Separator)
+        };
+
+        foreach (var mode in modes) rows.Add(new TrayRow(TrayRowKind.Mode, mode));
+
+        rows.Add(new TrayRow(TrayRowKind.Separator));
+        rows.Add(new TrayRow(TrayRowKind.Boost));
+        rows.Add(new TrayRow(TrayRowKind.Separator));
+        rows.Add(new TrayRow(TrayRowKind.Exit));
+
+        return rows;
+    }
 
     /// <summary>
     /// Whether a quick-mode row is drawn at all. A mode the firmware does not advertise is hidden, unless the machine
@@ -38,6 +105,9 @@ public static class TrayMenuPolicy
     /// <summary>The reason a greyed-out row is greyed out, or null when the row is clickable.</summary>
     public static string? ModeToolTip(bool allowed) => allowed ? null : ModePolicy.HighPowerBlockedMessage;
 
+    /// <summary>The tick on the mode the machine is actually in.</summary>
+    public static bool IsModeChecked(OperatingMode mode, OperatingMode? active) => mode == active;
+
     /// <summary>The boost submenu only exists on a machine that can write the boost mode.</summary>
     public static bool ShowBoost(bool available) => available;
 
@@ -48,4 +118,11 @@ public static class TrayMenuPolicy
     public static bool ShowRetry(bool pending) => pending;
 
     public static bool EnableRetry(bool pending, bool gameActive) => pending && !gameActive;
+
+    /// <summary>
+    /// True when a press that arrived <paramref name="sinceLastClick"/> after the previous one is the second half of a
+    /// double click. A negative interval means the clock moved backwards, which is not a double click.
+    /// </summary>
+    public static bool IsDoubleClick(TimeSpan sinceLastClick) =>
+        sinceLastClick >= TimeSpan.Zero && sinceLastClick <= DoubleClickWindow;
 }

@@ -40,6 +40,21 @@ public sealed class MemoryCleanResult
 }
 
 /// <summary>
+/// Where the standby-list helper is published.
+/// </summary>
+/// <remarks>
+/// The URL lives in the platform-independent half because the card that offers the download is in the cross-platform
+/// shell, which cannot see the Windows assembly the tool itself is launched from. One constant, so the two cannot
+/// drift apart and send a user to a page that no longer exists.
+/// </remarks>
+public static class MemoryCleanerTool
+{
+    public const string ProjectUrl = "https://github.com/IgorMundstein/WinMemoryCleaner";
+
+    public const string ReleasesUrl = "https://github.com/IgorMundstein/WinMemoryCleaner/releases/latest";
+}
+
+/// <summary>
 /// Releases the operating system's standby (cached) memory.
 /// </summary>
 /// <remarks>

@@ -948,6 +948,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ToastActionCommand = new RelayCommand(RunToastAction);
         ToggleModeTraceCommand = new RelayCommand(() => ModeTraceVisible = !ModeTraceVisible);
         CleanMemoryCommand = new RelayCommand(() => _ = CleanMemoryAsync());
+        GetMemoryCleanerCommand = new RelayCommand(() => OpenUrl(MemoryCleanerTool.ReleasesUrl));
         CycleOsdCornerCommand = new RelayCommand(CycleOsdCorner);
         ToggleOsdCommand = new RelayCommand(() => OsdEnabled = !OsdEnabled);
         CustomColorCommand = new RelayCommand(OpenCustomColor);
@@ -985,6 +986,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ModeBadgeText));
             // The launcher line is a sentence built from these labels, so it is re-raised rather than rebuilt.
             Raise(nameof(NitroSenseLauncherStateText));
+            Raise(nameof(SchoolModeStateText));
         }
     }
 
@@ -1832,10 +1834,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>"3.2 GB / 8.0 GB", or the placeholder when NVML did not answer.</summary>
+    /// <summary>
+    /// "2331 MB / 8188 MB (%28)", or the placeholder when NVML did not answer.
+    /// </summary>
+    /// <remarks>
+    /// Megabytes rather than gigabytes, and the percentage in the same string: a laptop GPU has 4, 6 or 8 GB, so the
+    /// gigabyte figure rounds away most of the movement a user is watching for, and the bar alone does not say how
+    /// full it is. The WPF page printed gigabytes; the audit found the figure unreadable at this size.
+    /// </remarks>
     public string VramText => VramTotalMb > 0
-        ? $"{VramUsedMb / 1024.0:F1} GB / {VramTotalMb / 1024.0:F1} GB"
-        : "-- GB / -- GB";
+        ? $"{VramUsedMb:F0} MB / {VramTotalMb:F0} MB (%{VramBarPercent:F0})"
+        : "-- MB / -- MB";
 
     public double VramBarPercent => VramTotalMb > 0 ? Math.Clamp(VramUsedMb / VramTotalMb * 100.0, 0, 100) : 0;
 
@@ -1845,7 +1854,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private set
         {
             if (!Set(ref _ramUsage, value)) return;
-            Raise(nameof(RamPercentText));
             Raise(nameof(RamBarPercent));
             Raise(nameof(RamDetailText));
         }
@@ -1861,12 +1869,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>"12.4 GB / 31.2 GB", or the placeholder when the platform did not report the total.</summary>
+    /// <summary>
+    /// "12288 MB / 32768 MB (%38)", or the placeholder when the platform did not report the total.
+    /// </summary>
+    /// <remarks>
+    /// The percentage is part of the figure rather than a second label on the right: the two numbers answer one
+    /// question, and printing them apart made the card read as two unrelated readings.
+    /// </remarks>
     public string RamDetailText => RamTotalMb > 0
-        ? $"{RamTotalMb * (RamUsage / 100.0) / 1024.0:F1} GB / {RamTotalMb / 1024.0:F1} GB"
-        : "-- GB / -- GB";
-
-    public string RamPercentText => RamTotalMb > 0 ? $"{RamUsage:F1} %" : "-- %";
+        ? $"{RamTotalMb * (RamUsage / 100.0):F0} MB / {RamTotalMb:F0} MB (%{RamUsage:F0})"
+        : "-- MB / -- MB";
 
     public double RamBarPercent => RamTotalMb > 0 ? Math.Clamp(RamUsage, 0, 100) : 0;
 
@@ -2120,6 +2132,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     public RelayCommand CleanMemoryCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Opens the helper's download page. Offered beside the clean button rather than only in the failure message: a
+    /// user who has just been told the tool is missing should not have to press the button again to find out where to
+    /// get it.
+    /// </summary>
+    public RelayCommand GetMemoryCleanerCommand { get; private set; } = null!;
 
     /// <summary>
     /// Releases the standby list and reports what happened. The result is described in the card rather than only in a
@@ -2389,10 +2408,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool HasZonePreviewNote => ZonePreviewNote.Length > 0;
 
-    /// <summary>Brightness as "Parlaklık: 5 / 9", so the slider's value is readable without counting ticks.</summary>
-    public string BrightnessLabel => Labels.BrightnessLevel(BrightnessLevel, MaxBrightness);
+    /// <summary>
+    /// Brightness as "5 / 9", or "0 / 9 (Kapalı)" at zero. The word "Parlaklık" is already printed to the left of the
+    /// slider, so repeating it here would print it twice on one line; what the right-hand side adds is the number.
+    /// </summary>
+    public string BrightnessLabel => Labels.BrightnessValue(BrightnessLevel, MaxBrightness);
 
-    public string SpeedLabel => Labels.SpeedLevel(SpeedLevel, MaxSpeed);
+    public string SpeedLabel => Labels.SpeedValue(SpeedLevel, MaxSpeed);
 
     /// <summary>The directions the selected effect accepts. Empty for the seven effects that take none.</summary>
     public ObservableCollection<DirectionChoice> DirectionChoices { get; } = new();
@@ -2799,6 +2821,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _schoolModeOn, value)) return;
+            Raise(nameof(SchoolModeStateText));
             if (_suppressWrite) return;
             _ = SetSchoolModeAsync(value);
         }
@@ -2817,6 +2840,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>False until the switch has been used once, so the page does not carry an empty status line.</summary>
     public bool HasSchoolModeDetail => !string.IsNullOrWhiteSpace(SchoolModeDetail);
+
+    /// <summary>
+    /// "Etkin" or "Kapalı" beside the switch. A switch shows what pressing it would do; this says what is true now,
+    /// which is the question a user asks when they come back to the page after a reboot.
+    /// </summary>
+    public string SchoolModeStateText => SchoolModeOn ? Labels.SchoolModeStateOn : Labels.SchoolModeStateOff;
 
     // ---------------------------------------------------------------- RGB profiles
 

@@ -414,8 +414,7 @@
               <Button Classes="primary" Content="{Binding Labels.AddGameFromFile}" Padding="12,7" FontSize="11"
                       Margin="0,0,6,0" Command="{Binding AddGameFromFileCommand}"
                       IsVisible="{Binding GameScanAvailable}" />
-              <Button Classes="primary" Content="{Binding Labels.DeleteProfile}" Padding="12,7" FontSize="11"
-                      Foreground="{DynamicResource DangerBrush}"
+              <Button Classes="danger" Content="{Binding Labels.DeleteProfile}" Padding="12,7" FontSize="11"
                       Command="{Binding DeleteSelectedGameCommand}" />
             </StackPanel>
           </Grid>
@@ -494,6 +493,7 @@
               <StackPanel Margin="0,10,0,0">
                 <StackPanel Orientation="Horizontal">
                   <ToggleButton Classes="toggle" IsChecked="{Binding GameFanCurveEnabled}"
+                                AutomationProperties.AutomationId="ChkGameFanCurve"
                                 VerticalAlignment="Center" />
                   <TextBlock Classes="hint" Text="{Binding Labels.GameFanCurve}" Margin="8,0,0,0"
                              VerticalAlignment="Center" />

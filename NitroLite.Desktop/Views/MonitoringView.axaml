@@ -57,7 +57,7 @@
                          Margin="0,0,0,6" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.Usage}" />
+              <TextBlock Classes="hint" Text="{Binding Labels.CpuUsage}" />
               <TextBlock Grid.Column="1" Text="{Binding CpuUsageText}" FontSize="11" FontWeight="Bold"
                          HorizontalAlignment="Right" />
             </Grid>
@@ -89,7 +89,7 @@
                          Margin="0,0,0,6" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.PackagePower}" />
+              <TextBlock Classes="hint" Text="{Binding Labels.TgpPower}" />
               <TextBlock Grid.Column="1" Text="{Binding GpuPowerText}" FontSize="11" FontWeight="Bold"
                          HorizontalAlignment="Right" />
             </Grid>
@@ -97,7 +97,7 @@
                          Margin="0,0,0,6" />
 
             <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-              <TextBlock Classes="hint" Text="{Binding Labels.Usage}" />
+              <TextBlock Classes="hint" Text="{Binding Labels.GpuUsage}" />
               <TextBlock Grid.Column="1" Text="{Binding GpuUsageText}" FontSize="11" FontWeight="Bold"
                          HorizontalAlignment="Right" />
             </Grid>
@@ -122,11 +122,7 @@
 
             <StackPanel Grid.Column="0" Margin="0,0,12,0">
               <TextBlock Classes="rowtitle" Text="{Binding Labels.SystemMemory}" />
-              <Grid ColumnDefinitions="*,Auto" Margin="0,6">
-                <TextBlock Text="{Binding RamDetailText}" FontSize="15" FontWeight="Bold" />
-                <TextBlock Grid.Column="1" Text="{Binding RamPercentText}" FontWeight="Bold"
-                           HorizontalAlignment="Right" Foreground="{DynamicResource SuccessBrush}" />
-              </Grid>
+              <TextBlock Text="{Binding RamDetailText}" FontSize="15" FontWeight="Bold" Margin="0,6" />
               <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding RamBarPercent}" />
               <TextBlock Classes="hint" Text="{Binding MemoryInfoText}" Margin="0,6,0,0"
                          IsVisible="{Binding HasMemoryInfo}" />
@@ -135,36 +131,49 @@
             <StackPanel Grid.Column="1" Margin="12,0,0,0">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.SystemTemperature}" VerticalAlignment="Center" />
-                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ThermalFloorSummary}">
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.SysTemperatureHint}">
                   <TextBlock Text="?" />
                 </Border>
               </StackPanel>
+              <!-- No bar under this figure: the sensor's position is unpublished, so a bar would imply a scale the
+                   number does not have. The reading is the whole answer. -->
               <TextBlock Text="{Binding SysTemperatureText}" FontSize="18" FontWeight="Bold" Margin="0,4" />
-              <ProgressBar Height="5" Minimum="0" Maximum="100" Value="{Binding SysTemperature}" />
             </StackPanel>
           </Grid>
 
           <!-- The standby-list cleaner. Hidden on a platform with no standby list rather than shown disabled. -->
           <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0"
                   IsVisible="{Binding MemoryCleanAvailable}">
-            <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{Binding Labels.MemoryCleanTitle}" FontSize="11" FontWeight="Bold"
-                             VerticalAlignment="Center" />
-                  <Border Classes="infobadge" ToolTip.Tip="{Binding Labels.MemoryCleanHint}">
-                    <TextBlock Text="?" />
-                  </Border>
-                  <TextBlock Text="{Binding MemoryCleanStatus}" FontSize="11" FontWeight="Bold"
-                             IsVisible="{Binding HasMemoryCleanStatus}"
-                             Foreground="{DynamicResource TextSecondaryBrush}" />
+            <StackPanel>
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Labels.MemoryCleanTitle}" FontSize="11" FontWeight="Bold"
+                               VerticalAlignment="Center" />
+                    <Border Classes="infobadge" ToolTip.Tip="{Binding Labels.MemoryCleanHint}">
+                      <TextBlock Text="?" />
+                    </Border>
+                    <TextBlock Text="{Binding MemoryCleanStatus}" FontSize="11" FontWeight="Bold"
+                               IsVisible="{Binding HasMemoryCleanStatus}"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </StackPanel>
                 </StackPanel>
-              </StackPanel>
 
-              <Button Grid.Column="1" Classes="primary" Content="{Binding MemoryCleanButtonText}"
-                      Padding="12,7" FontSize="11" VerticalAlignment="Center"
-                      Command="{Binding CleanMemoryCommand}" />
-            </Grid>
+                <Button Grid.Column="1" Classes="primary" Content="{Binding MemoryCleanButtonText}"
+                        Padding="12,7" FontSize="11" VerticalAlignment="Center"
+                        Command="{Binding CleanMemoryCommand}" />
+              </Grid>
+
+              <!-- The helper is a separate GPL-3.0 program, so the card offers its own download page rather than
+                   pretending the button above can work without it. -->
+              <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                <TextBlock Grid.Column="0" Classes="hint" Text="{Binding Labels.GetMemoryCleanerHint}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
+                <Button Grid.Column="1" Classes="link" Content="{Binding Labels.GetMemoryCleaner}"
+                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Command="{Binding GetMemoryCleanerCommand}" />
+              </Grid>
+            </StackPanel>
           </Border>
         </StackPanel>
       </Border>
@@ -177,7 +186,7 @@
             <StackPanel Grid.Column="0" Margin="0,0,16,0">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.TelemetryCharts}" />
-                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ChartEmptyHint}">
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.ChartGapHint}">
                   <TextBlock Text="?" />
                 </Border>
               </StackPanel>

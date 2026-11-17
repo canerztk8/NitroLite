@@ -247,10 +247,11 @@ public class MonitoringPageTests
         Assert.Equal($"{F(61.0, "F1")} %", vm.GpuUsageText);
         Assert.Equal($"{F(88.0, "F1")} W", vm.GpuPowerText);
         Assert.Equal($"{F(2100, "F0")} MHz", vm.GpuFrequencyText);
-        Assert.Equal($"{F(4.0, "F1")} GB / {F(8.0, "F1")} GB", vm.VramText);
+        // Megabytes and the percentage in one figure: a laptop GPU has 4, 6 or 8 GB, so the gigabyte form rounded
+        // away most of the movement the row exists to show.
+        Assert.Equal($"{F(4096, "F0")} MB / {F(8192, "F0")} MB (%{F(50, "F0")})", vm.VramText);
         Assert.Equal(50.0, vm.VramBarPercent, 3);
-        Assert.Equal($"{F(37.5, "F1")} %", vm.RamPercentText);
-        Assert.Equal($"{F(12.0, "F1")} GB / {F(32.0, "F1")} GB", vm.RamDetailText);
+        Assert.Equal($"{F(12288, "F0")} MB / {F(32768, "F0")} MB (%{F(37.5, "F0")})", vm.RamDetailText);
 
         // The overlay's three rows are composed from the same numbers.
         Assert.Contains("62 °C", vm.OsdCpuLine);
@@ -270,8 +271,8 @@ public class MonitoringPageTests
         Assert.Equal(vm.Labels.Gpu, vm.GpuNameText);
         Assert.Equal("-- W", vm.CpuPowerText);
         Assert.Equal("-- GHz", vm.CpuFrequencyText);
-        Assert.Equal("-- GB / -- GB", vm.VramText);
-        Assert.Equal("-- GB / -- GB", vm.RamDetailText);
+        Assert.Equal("-- MB / -- MB", vm.VramText);
+        Assert.Equal("-- MB / -- MB", vm.RamDetailText);
         Assert.False(vm.HasMemoryInfo);
     }
 

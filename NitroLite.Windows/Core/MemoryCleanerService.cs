@@ -41,8 +41,11 @@ public readonly record struct MemoryListSizes(double FreeGigabytes, double Stand
 public class MemoryCleanerService
 {
     public const string ToolFileName = "WinMemoryCleaner.exe";
-    public const string ToolProjectUrl = "https://github.com/IgorMundstein/WinMemoryCleaner";
-    public const string ToolReleasesUrl = "https://github.com/IgorMundstein/WinMemoryCleaner/releases/latest";
+
+    // Both URLs come from the cross-platform constant, so the card that offers the download and the launcher that
+    // looks for the file cannot disagree about where it comes from.
+    public const string ToolProjectUrl = MemoryCleanerTool.ProjectUrl;
+    public const string ToolReleasesUrl = MemoryCleanerTool.ReleasesUrl;
     public const string ToolWingetId = "IgorMundstein.WinMemoryCleaner";
 
     /// <summary>

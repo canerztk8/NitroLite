@@ -42,6 +42,17 @@
                        VerticalAlignment="Center" />
             <TextBlock Text="{Binding VersionText}" FontSize="10" Margin="8,0,0,0"
                        Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+
+            <!-- The update notice, in the header where the WPF window put it: a user who never opens the tools page
+                 still has to be able to see that a release exists and act on it. Both buttons are the same notice,
+                 so the notes never appear without the update they describe. -->
+            <Button x:Name="BtnUpdateNow" Classes="primary" Content="{Binding Labels.Update}"
+                    Margin="10,0,0,0" VerticalAlignment="Center" Padding="8,3" FontSize="10"
+                    IsVisible="{Binding HasPendingUpdate}" Command="{Binding UpdateNowCommand}" />
+            <Button x:Name="BtnReleaseNotes" Classes="primary" Content="{Binding Labels.ReleaseNotes}"
+                    Margin="6,0,0,0" VerticalAlignment="Center" Padding="8,3" FontSize="10"
+                    IsVisible="{Binding UpdateAvailable}" Command="{Binding ReleaseNotesCommand}"
+                    ToolTip.Tip="{Binding Labels.ReleaseNotesHint}" />
           </StackPanel>
 
           <!-- The live figures are printed, not boxed: they sit on the paper like a printed header. -->
@@ -259,9 +270,11 @@
         </Border>
 
         <!-- The rail's resize handle. Four pixels wide and transparent: the cursor is the affordance, as in the WPF
-             window, and a visible bar between the rail and the page would read as a second border. -->
+             window, and a visible bar between the rail and the page would read as a second border. A double click puts
+             the rail back to its default width, which is the only way to undo a drag that went too far. -->
         <GridSplitter Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
-                      Background="Transparent" />
+                      Background="Transparent" ToolTip.Tip="{Binding Labels.RailSplitterHint}"
+                      DoubleTapped="OnRailSplitterDoubleTapped" />
 
         <!-- The page. Only this column scrolls, so the rail and the header stay put. -->
         <Grid Grid.Column="2" RowDefinitions="Auto,*" Margin="26,20,26,0">

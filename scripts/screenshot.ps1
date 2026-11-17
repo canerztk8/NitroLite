@@ -12,6 +12,11 @@
     Pages are addressed by AutomationId, not by their visible label, so the same command works in
     every language: NavModes, NavMonitoring, NavLighting, NavBattery, NavTools.
 
+    The two pages the retired WPF build called NavRgb and NavDebloat are still accepted and mapped onto
+    NavLighting and NavTools, so an old command line keeps working. The nav rows are clicked through
+    whichever UI Automation pattern the running front end exposes: Avalonia's rail is a list of Buttons
+    (InvokePattern) where WPF's was a list of RadioButtons (SelectionItemPattern).
+
     Every capture is downscaled to -MaxWidth (1280px by default) and written as a JPEG, because a
     full-size PNG of a 1325px window is several times larger than anything needed to check layout
     and colour. The output folder is cleared of the previous run's captures first, so a folder never
@@ -76,6 +81,10 @@
 .PARAMETER FanCurveFlat
     Turns the curve on with a flat shape at this percentage, so a fixed fan speed can be measured.
 
+.PARAMETER GameFanCurve
+    Turns the selected game's own fan curve on, so the six in-card anchors are captured instead of the
+    "copy from desktop" row alone. Needs a game profile to be selected, which -Seed can supply.
+
 .PARAMETER Settle
     Extra milliseconds to wait after the window is parked, before the first capture. Use it when a
     value is still being fetched at startup (for example the ATK mouse profile).
@@ -109,6 +118,7 @@ param(
     [ValidateRange(0, 4)][int]$MouseProfile,
     [switch]$FanCurve,
     [ValidateRange(30, 100)][int]$FanCurveFlat,
+    [switch]$GameFanCurve,
     [int]$Settle = 0,
     [string]$Seed = ''
 )
@@ -216,6 +226,14 @@ if ($Format -ne 'png' -and -not $jpegCodec) { throw 'No JPEG encoder is availabl
 
 $pages = if ($All) { @('NavModes', 'NavMonitoring', 'NavLighting', 'NavBattery', 'NavTools') } else { @($Page) }
 
+# The WPF build named the last two pages NavRgb and NavDebloat. Both spellings resolve to the same page, so a
+# command line written against the old build still captures the right tab instead of failing on a missing id.
+$pageAliases = @{
+    'NavRgb'     = 'NavLighting'
+    'NavDebloat' = 'NavTools'
+}
+$pages = @($pages | ForEach-Object { if ($pageAliases.ContainsKey($_)) { $pageAliases[$_] } else { $_ } })
+
 # ---- launch -----------------------------------------------------------------------------------
 $env:NITROLITE_DATA_DIR = $dataDir
 $proc = Start-Process -FilePath $Exe -PassThru
@@ -312,6 +330,36 @@ function Save-Window([IntPtr]$handle, [string]$path) {
     return $ok
 }
 
+# The rail is a list of Buttons in Avalonia and was a list of RadioButtons in WPF, so the two front ends expose
+# different patterns for the same click. Trying both is what lets one script drive either build; GetCurrentPattern
+# throws when the pattern is unsupported, which is the only signal UI Automation gives.
+function Select-Page([System.Windows.Automation.AutomationElement]$element) {
+    try {
+        $element.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        return $true
+    } catch { }
+    try {
+        $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        return $true
+    } catch { }
+    return $false
+}
+
+# The same problem for a switch: Avalonia's ToggleButton and WPF's CheckBox both expose TogglePattern, but a
+# ToggleButton that has been restyled can lose it, so the click is the fallback.
+function Set-SwitchOn([System.Windows.Automation.AutomationElement]$element) {
+    try {
+        $tp = $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+        if ($tp.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) { $tp.Toggle() }
+        return $true
+    } catch { }
+    try {
+        $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        return $true
+    } catch { }
+    return $false
+}
+
 $failed = 0
 foreach ($pageId in $pages) {
     $idCond = New-Object System.Windows.Automation.PropertyCondition(
@@ -322,8 +370,25 @@ foreach ($pageId in $pages) {
         $failed++
         continue
     }
-    $nav.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    if (-not (Select-Page $nav)) {
+        Write-Host "  $pageId : the nav row exposes neither InvokePattern nor SelectionItemPattern" -ForegroundColor Red
+        $failed++
+        continue
+    }
     Start-Sleep -Milliseconds 1400
+
+    # Toggled before scrolling: opening the panel makes the page taller, so the scroll has to see the final layout.
+    if ($GameFanCurve) {
+        $chkCond = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'ChkGameFanCurve')
+        $chk = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $chkCond)
+        if ($chk) {
+            Set-SwitchOn $chk | Out-Null
+            Start-Sleep -Milliseconds 500
+        } else {
+            Write-Host "  ChkGameFanCurve not found" -ForegroundColor Yellow
+        }
+    }
 
     if ($Scrolls -ne 0) {
         $scrollCond = New-Object System.Windows.Automation.PropertyCondition(

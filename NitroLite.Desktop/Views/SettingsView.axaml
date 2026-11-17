@@ -37,7 +37,7 @@
               </Border>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal">
-              <Button Classes="primary" Content="{Binding Labels.DisableServices}" Padding="12,7" FontSize="11"
+              <Button Classes="danger" Content="{Binding Labels.DisableServices}" Padding="12,7" FontSize="11"
                       Command="{Binding DisableServicesCommand}" IsEnabled="{Binding !ServicesBusy}" />
               <Button Classes="primary" Content="{Binding Labels.RestoreServices}" Margin="6,0,0,0"
                       Padding="12,7" FontSize="11" Command="{Binding RestoreServicesCommand}"
@@ -73,7 +73,7 @@
                 <TextBlock Text="{Binding NitroSenseStateText}" />
               </Border>
             </StackPanel>
-            <Button Grid.Column="1" Classes="primary" Content="{Binding Labels.KillNitroSense}" Padding="12,7"
+            <Button Grid.Column="1" Classes="danger" Content="{Binding Labels.KillNitroSense}" Padding="12,7"
                     FontSize="11" Command="{Binding KillNitroSenseCommand}" IsEnabled="{Binding NitroSenseRunning}" />
           </Grid>
 
@@ -117,9 +117,9 @@
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Classes="rowtitle" Text="{Binding Labels.WindowsOptimization}" VerticalAlignment="Center" />
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-              <Button Classes="primary" Content="{Binding Labels.Optimize}" Padding="12,7" FontSize="11"
+              <Button Classes="danger" Content="{Binding Labels.Optimize}" Padding="12,7" FontSize="11"
                       Command="{Binding OptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
-              <Button Classes="primary" Content="{Binding Labels.RestoreOptimize}" Margin="6,0,0,0" Padding="12,7"
+              <Button Classes="danger" Content="{Binding Labels.RestoreOptimize}" Margin="6,0,0,0" Padding="12,7"
                       FontSize="11" Command="{Binding RestoreOptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
             </StackPanel>
           </Grid>
