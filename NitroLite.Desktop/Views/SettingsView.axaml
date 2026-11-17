@@ -220,6 +220,25 @@
             <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding RedirectNitroSenseEnabled}"
                           IsEnabled="{Binding CanRedirectNitroSense}" VerticalAlignment="Center" />
           </Grid>
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
+
+          <!-- The permanent half. The redirect above only works while NitroLite runs, because the press is handled by
+               Acer's own stack; renaming the launcher the Acer hardware service starts is what stops the key opening
+               NitroSense with the app closed. A button rather than a switch: the operation needs elevation and can be
+               refused, so the caption says what the click will do and the state line says what is true now. -->
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSenseLauncherBlockTitle}"
+                       VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.NitroSenseLauncherBlockHint}"
+                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+            <Button Grid.Column="2" Content="{Binding NitroSenseLauncherBlockAction}" Padding="12,7" FontSize="11"
+                    Command="{Binding ToggleNitroSenseLauncherCommand}" IsEnabled="{Binding !ServicesBusy}"
+                    VerticalAlignment="Center" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding NitroSenseLauncherBlockStateText}" Margin="0,6,0,0"
+                     TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 

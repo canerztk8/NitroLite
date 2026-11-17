@@ -134,6 +134,7 @@ public sealed partial class MainViewModel
 
     private IReadOnlyList<AcerServiceRow> _acerServices = Array.Empty<AcerServiceRow>();
     private bool _nitroSenseRunning;
+    private bool _nitroSenseLauncherBlocked;
     private bool _servicesBusy;
     private string _servicesStatus = "";
     private string _repairToolsStatus = "";
@@ -460,6 +461,30 @@ public sealed partial class MainViewModel
 
     public string NitroSenseStateText => _nitroSenseRunning ? Labels.Running : Labels.Stopped;
 
+    /// <summary>
+    /// True when the launcher the Acer hardware service starts on the key press has been renamed away, so the key
+    /// cannot open NitroSense even with NitroLite closed.
+    /// </summary>
+    /// <remarks>
+    /// This is the only answer to "the key still opens NitroSense when the app is not running". The press is handled by
+    /// Acer's own stack — the agent's hardware child process starts the launcher, which resolves the packaged app — so
+    /// there is nothing of ours in the path to intercept it. Renaming the launcher removes the last link, and the
+    /// Acer agent itself is left alone, which is what keeps lighting, fan and mode working.
+    /// </remarks>
+    public bool NitroSenseLauncherBlocked => _nitroSenseLauncherBlocked;
+
+    /// <summary>The button's caption: what the click will do, not what the state is.</summary>
+    public string NitroSenseLauncherBlockAction =>
+        _nitroSenseLauncherBlocked ? Labels.NitroSenseLauncherUnblock : Labels.NitroSenseLauncherBlock;
+
+    /// <summary>What the launcher is doing right now, in the terms the user asked about.</summary>
+    public string NitroSenseLauncherBlockStateText => _nitroSenseLauncherBlocked
+        ? Labels.NitroSenseLauncherBlockedState
+        : Labels.NitroSenseLauncherActiveState;
+
+    /// <summary>True when the launcher row can be offered: there is a service that manages it.</summary>
+    public bool NitroSenseLauncherBlockAvailable => ServicesAvailable;
+
     public string ServicesStatus
     {
         get => _servicesStatus;
@@ -757,6 +782,7 @@ public sealed partial class MainViewModel
     public AsyncCommand DisableServicesCommand { get; private set; } = null!;
     public AsyncCommand RestoreServicesCommand { get; private set; } = null!;
     public AsyncCommand KillNitroSenseCommand { get; private set; } = null!;
+    public AsyncCommand ToggleNitroSenseLauncherCommand { get; private set; } = null!;
     public AsyncCommand FixLightingCommand { get; private set; } = null!;
     public AsyncCommand FixAcerServicesCommand { get; private set; } = null!;
     public AsyncCommand RestoreMuxCommand { get; private set; } = null!;
@@ -789,6 +815,7 @@ public sealed partial class MainViewModel
         DisableServicesCommand = new AsyncCommand(DisableServicesAsync);
         RestoreServicesCommand = new AsyncCommand(RestoreServicesAsync);
         KillNitroSenseCommand = new AsyncCommand(KillNitroSenseAsync);
+        ToggleNitroSenseLauncherCommand = new AsyncCommand(ToggleNitroSenseLauncherAsync);
         FixLightingCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.FixKeyboardLightingAsync, Labels.FixLighting));
         FixAcerServicesCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.FixAcerServicesAsync, Labels.FixAcerServices));
         RestoreMuxCommand = new AsyncCommand(() => RunToolAsync(_systemTools == null ? null : _systemTools.RestoreMuxSwitchAsync, Labels.RestoreMux));
@@ -1069,11 +1096,13 @@ public sealed partial class MainViewModel
 
         try
         {
-            var (statuses, running) = await Task.Run(() =>
-                (_debloat.GetServiceStatuses(), _debloat.IsNitroSenseRunning())).ConfigureAwait(true);
+            var (statuses, running, launcherBlocked) = await Task.Run(() =>
+                (_debloat.GetServiceStatuses(), _debloat.IsNitroSenseRunning(), _debloat.IsNitroSenseLauncherBlocked))
+                .ConfigureAwait(true);
 
             _acerServices = statuses.Select(s => new AcerServiceRow(s)).ToList();
             _nitroSenseRunning = running;
+            _nitroSenseLauncherBlocked = launcherBlocked;
         }
         catch (Exception ex)
         {
@@ -1088,6 +1117,10 @@ public sealed partial class MainViewModel
         Raise(nameof(NitroSenseRunning));
         Raise(nameof(NitroSenseStateText));
         Raise(nameof(NitroSenseLauncherStateText));
+        Raise(nameof(NitroSenseLauncherBlocked));
+        Raise(nameof(NitroSenseLauncherBlockAction));
+        Raise(nameof(NitroSenseLauncherBlockStateText));
+        Raise(nameof(NitroSenseLauncherBlockAvailable));
     }
 
     private async Task DisableServicesAsync()
@@ -1167,6 +1200,44 @@ public sealed partial class MainViewModel
         {
             var result = await _debloat.KillNitroSenseAsync().ConfigureAwait(true);
             ServicesStatus = result.Success ? Labels.NitroSenseClosed : Labels.NitroSenseCloseFailed;
+        }
+        finally
+        {
+            _servicesBusy = false;
+            Raise(nameof(ServicesBusy));
+            await RefreshServicesAsync().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Renames the NitroSense launcher away, or puts it back. This is the switch that keeps the key from opening
+    /// NitroSense while NitroLite is closed, which the foreground watcher cannot do: nothing of ours is running then.
+    /// </summary>
+    private async Task ToggleNitroSenseLauncherAsync()
+    {
+        if (_debloat == null || _servicesBusy) return;
+
+        bool block = !_nitroSenseLauncherBlocked;
+
+        if (_dialogs != null && !await _dialogs.ConfirmAsync(
+                Labels.NitroSenseLauncherBlockTitle,
+                block ? Labels.NitroSenseLauncherBlockConfirm : Labels.NitroSenseLauncherUnblockConfirm)
+                .ConfigureAwait(true))
+        {
+            return;
+        }
+
+        _servicesBusy = true;
+        Raise(nameof(ServicesBusy));
+        try
+        {
+            var result = block
+                ? await _debloat.BlockNitroSenseLauncherAsync().ConfigureAwait(true)
+                : await _debloat.UnblockNitroSenseLauncherAsync().ConfigureAwait(true);
+
+            ServicesStatus = result.Success
+                ? (block ? Labels.NitroSenseLauncherBlockedDone : Labels.NitroSenseLauncherUnblockedDone)
+                : Labels.NitroSenseLauncherBlockFailed(result.Error ?? Labels.UnknownError);
         }
         finally
         {

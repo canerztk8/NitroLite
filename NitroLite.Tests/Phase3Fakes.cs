@@ -170,6 +170,30 @@ internal static class Phase3Fakes
             NitroSenseRunning = false;
             return Task.FromResult(DebloatResult.Ok);
         }
+
+        /// <summary>Whether the launcher is currently renamed away, as the real service reads it from disk.</summary>
+        public bool LauncherBlocked { get; set; }
+
+        /// <summary>What the block call answers. False models a refused elevation prompt.</summary>
+        public bool LauncherBlockResult { get; set; } = true;
+
+        public bool IsNitroSenseLauncherBlocked => LauncherBlocked;
+
+        public Task<DebloatResult> BlockNitroSenseLauncherAsync(CancellationToken cancellationToken = default)
+        {
+            Calls.Add("block-launcher");
+            if (!LauncherBlockResult) return Task.FromResult(DebloatResult.Failed("denied"));
+            LauncherBlocked = true;
+            return Task.FromResult(DebloatResult.Ok);
+        }
+
+        public Task<DebloatResult> UnblockNitroSenseLauncherAsync(CancellationToken cancellationToken = default)
+        {
+            Calls.Add("unblock-launcher");
+            if (!LauncherBlockResult) return Task.FromResult(DebloatResult.Failed("denied"));
+            LauncherBlocked = false;
+            return Task.FromResult(DebloatResult.Ok);
+        }
     }
 
     /// <summary>The repair and optimisation tools, recording every call in order.</summary>

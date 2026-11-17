@@ -91,4 +91,43 @@ public sealed class WindowsDebloatService : IDebloatService
             return Task.FromResult(DebloatResult.Failed(ex.Message));
         }
     }
+
+    public bool IsNitroSenseLauncherBlocked
+    {
+        get
+        {
+            try { return _inner.IsNitroSenseLauncherBlocked; }
+            catch (Exception ex)
+            {
+                AppLog.Warn("NitroSense başlatıcı durumu okunamadı", ex.Message);
+                return false;
+            }
+        }
+    }
+
+    public async Task<DebloatResult> BlockNitroSenseLauncherAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var ok = await _inner.BlockNitroSenseLauncherAsync().ConfigureAwait(false);
+            return ok ? DebloatResult.Ok : DebloatResult.Failed(_inner.LastError);
+        }
+        catch (Exception ex)
+        {
+            return DebloatResult.Failed(ex.Message);
+        }
+    }
+
+    public async Task<DebloatResult> UnblockNitroSenseLauncherAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var ok = await _inner.UnblockNitroSenseLauncherAsync().ConfigureAwait(false);
+            return ok ? DebloatResult.Ok : DebloatResult.Failed(_inner.LastError);
+        }
+        catch (Exception ex)
+        {
+            return DebloatResult.Failed(ex.Message);
+        }
+    }
 }

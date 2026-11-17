@@ -60,4 +60,20 @@ public interface IDebloatService
 
     /// <summary>Closes NitroSense and its helper processes.</summary>
     Task<DebloatResult> KillNitroSenseAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// True when the NitroSense launcher has been renamed away, so the Acer hardware service cannot start NitroSense
+    /// when the Nitro key is pressed — including while NitroLite is not running at all.
+    /// </summary>
+    bool IsNitroSenseLauncherBlocked { get; }
+
+    /// <summary>
+    /// Renames the launcher the Acer hardware service starts on the key press. This is the only way to keep the key
+    /// from opening NitroSense while NitroLite is closed: the press is handled by Acer's own stack, so nothing of ours
+    /// is running to intercept it. Needs elevation, and <see cref="UnblockNitroSenseLauncherAsync"/> puts it back.
+    /// </summary>
+    Task<DebloatResult> BlockNitroSenseLauncherAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Puts the launcher back, so the key opens NitroSense again.</summary>
+    Task<DebloatResult> UnblockNitroSenseLauncherAsync(CancellationToken cancellationToken = default);
 }

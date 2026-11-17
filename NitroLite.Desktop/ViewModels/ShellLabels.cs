@@ -667,6 +667,28 @@ public sealed class ShellLabels
     public string NitroSenseLauncherStopped =>
         Loc.T("NitroSense kapalı; yönlendirme kapalı.");
 
+    // The permanent answer: the Acer hardware service starts the launcher on the key press, so renaming the launcher
+    // is what stops the key opening NitroSense while NitroLite is not running at all.
+    public string NitroSenseLauncherBlockTitle => Loc.T("NitroSense başlatıcısı");
+    public string NitroSenseLauncherBlockHint =>
+        Loc.T("Acer donanım servisinin tuşa basınca NitroSense'i başlatmasını engeller. NitroLite kapalıyken de geçerlidir; yönetici izni ister ve geri alınabilir.");
+    public string NitroSenseLauncherBlock => Loc.T("Kalıcı olarak kapat");
+    public string NitroSenseLauncherUnblock => Loc.T("Geri aç");
+    public string NitroSenseLauncherBlockedState =>
+        Loc.T("Başlatıcı devre dışı: NitroLite kapalıyken de tuş NitroSense'i açamaz.");
+    public string NitroSenseLauncherActiveState =>
+        Loc.T("Başlatıcı etkin: NitroLite kapalıyken tuş NitroSense'i açar.");
+    public string NitroSenseLauncherBlockConfirm =>
+        Loc.T("NitroSense başlatıcısı yeniden adlandırılacak; tuş artık NitroSense'i açamaz. Devam edilsin mi?");
+    public string NitroSenseLauncherUnblockConfirm =>
+        Loc.T("NitroSense başlatıcısı geri konacak; tuş yeniden NitroSense'i açar. Devam edilsin mi?");
+    public string NitroSenseLauncherBlockedDone =>
+        Loc.T("NitroSense başlatıcısı devre dışı bırakıldı; tuş artık NitroSense'i açmaz.");
+    public string NitroSenseLauncherUnblockedDone =>
+        Loc.T("NitroSense başlatıcısı geri açıldı.");
+    public string NitroSenseLauncherBlockFailed(string error) =>
+        Loc.T($"NitroSense başlatıcısı değiştirilemedi: {error}");
+
     // The emergency rollback switch for the hardware layer.
     public string UseDirectWmiBackend => Loc.T("Doğrudan WMI arka ucunu kullan");
     public string UseDirectWmiBackendHint =>

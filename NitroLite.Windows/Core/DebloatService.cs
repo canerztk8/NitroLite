@@ -1357,4 +1357,119 @@ public class DebloatService
         if (IsDisabledTaskState(state)) return false;
         return null;
     }
+
+    // ---------------------------------------------------------------- the Nitro key's launcher
+
+    /// <summary>
+    /// The suffix the launcher is renamed to while it is blocked. A suffix rather than a move to another folder so
+    /// the restore is a rename in place, which cannot fail on a missing directory.
+    /// </summary>
+    public const string LauncherBlockedSuffix = ".nitrolite-disabled";
+
+    /// <summary>
+    /// The executable the Acer hardware service starts when the Nitro key is pressed.
+    /// </summary>
+    /// <remarks>
+    /// The path is not guessed: <c>AcerHardwareService.exe</c> — the child process the Acer agent runs — carries it as
+    /// a literal, next to the PredatorSense, QuickPanel and XSense equivalents. It is the launcher, not the app: the
+    /// launcher resolves the packaged <c>ULICTekInc.NitroSenseforNotebook</c> entry and calls <c>LaunchAsync</c> on it.
+    /// Renaming it is therefore enough to stop the key opening NitroSense, and it leaves the Acer agent — which
+    /// NitroLite needs for lighting, fan and mode — untouched.
+    /// </remarks>
+    public static string DefaultNitroSenseLauncherPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        "NitroSense", "Prerequisites", "NitroSenseLauncher.exe");
+
+    /// <summary>
+    /// The launcher this instance manages. Overridable so a test can point the rename at a temporary folder instead of
+    /// <c>Program Files</c>, which is the only way to exercise the script without an elevation prompt.
+    /// </summary>
+    internal string LauncherPathOverride { get; set; } = "";
+
+    /// <summary>The launcher this instance manages.</summary>
+    public string NitroSenseLauncherPath =>
+        LauncherPathOverride.Length > 0 ? LauncherPathOverride : DefaultNitroSenseLauncherPath;
+
+    /// <summary>True when the launcher is gone and its blocked copy is in its place.</summary>
+    public bool IsNitroSenseLauncherBlocked
+    {
+        get
+        {
+            try
+            {
+                var path = NitroSenseLauncherPath;
+                return !File.Exists(path) && File.Exists(path + LauncherBlockedSuffix);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Renames the launcher away so the Acer hardware service cannot start NitroSense on the key press. This is the
+    /// only thing that keeps working while NitroLite is closed, because the press never reaches us then.
+    /// </summary>
+    public async Task<bool> BlockNitroSenseLauncherAsync()
+    {
+        var path = NitroSenseLauncherPath;
+        var blocked = path + LauncherBlockedSuffix;
+
+        if (!File.Exists(path))
+        {
+            // Already blocked is success; a machine with no NitroSense at all is not an error either.
+            if (IsNitroSenseLauncherBlocked) return true;
+            LastError = Loc.T("NitroSense başlatıcısı bulunamadı.");
+            return false;
+        }
+
+        var errLog = AppPaths.UniqueTempFile("nitrolite_launcher_err", ".log");
+        var script =
+            "$errLog = '" + Loc.Ps(errLog) + "'; " +
+            "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
+            "$ok = $false; " +
+            "try { " +
+            "  if (Test-Path -LiteralPath '" + Loc.Ps(path) + "') { " +
+            "    Rename-Item -LiteralPath '" + Loc.Ps(path) + "' -NewName '" + Loc.Ps(Path.GetFileName(blocked)) + "' -ErrorAction Stop; " +
+            "  }; " +
+            "  if (Test-Path -LiteralPath '" + Loc.Ps(path) + "') { throw '" + Loc.Ps("NitroSense başlatıcısı hâlâ yerinde.") + "' }; " +
+            "  if (-not (Test-Path -LiteralPath '" + Loc.Ps(blocked) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı taşınamadı.") + "' }; " +
+            "  $ok = $true " +
+            "} catch { $_.Exception.Message | Out-File -FilePath $errLog -Encoding utf8 }; " +
+            "if ($ok) { exit 0 } else { exit 1 }";
+
+        return await RunElevatedPowerShellAsync(script, errLog).ConfigureAwait(false);
+    }
+
+    /// <summary>Puts the launcher back, so the key opens NitroSense again.</summary>
+    public async Task<bool> UnblockNitroSenseLauncherAsync()
+    {
+        var path = NitroSenseLauncherPath;
+        var blocked = path + LauncherBlockedSuffix;
+
+        if (!File.Exists(blocked))
+        {
+            // Nothing to put back: either it was never blocked or it is already in place.
+            if (File.Exists(path)) return true;
+            LastError = Loc.T("NitroSense başlatıcısı bulunamadı.");
+            return false;
+        }
+
+        var errLog = AppPaths.UniqueTempFile("nitrolite_launcher_err", ".log");
+        var script =
+            "$errLog = '" + Loc.Ps(errLog) + "'; " +
+            "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
+            "$ok = $false; " +
+            "try { " +
+            "  if (Test-Path -LiteralPath '" + Loc.Ps(blocked) + "') { " +
+            "    Rename-Item -LiteralPath '" + Loc.Ps(blocked) + "' -NewName '" + Loc.Ps(Path.GetFileName(path)) + "' -ErrorAction Stop; " +
+            "  }; " +
+            "  if (-not (Test-Path -LiteralPath '" + Loc.Ps(path) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı geri konamadı.") + "' }; " +
+            "  $ok = $true " +
+            "} catch { $_.Exception.Message | Out-File -FilePath $errLog -Encoding utf8 }; " +
+            "if ($ok) { exit 0 } else { exit 1 }";
+
+        return await RunElevatedPowerShellAsync(script, errLog).ConfigureAwait(false);
+    }
 }

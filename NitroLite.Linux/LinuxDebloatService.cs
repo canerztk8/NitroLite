@@ -28,4 +28,12 @@ public sealed class LinuxDebloatService : IDebloatService
 
     public Task<DebloatResult> KillNitroSenseAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(DebloatResult.Unsupported);
+
+    public bool IsNitroSenseLauncherBlocked => false;
+
+    public Task<DebloatResult> BlockNitroSenseLauncherAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(DebloatResult.Unsupported);
+
+    public Task<DebloatResult> UnblockNitroSenseLauncherAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(DebloatResult.Unsupported);
 }
