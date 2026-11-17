@@ -12,7 +12,7 @@ public class RgbPreset
     public int Speed { get; set; } = 3;
     public int Direction { get; set; } = 1;
     public string Color { get; set; } = "#00E5FF";
-    public List<string> LEDs { get; set; } = new() { "#00E5FF", "#FF2A55", "#00E5FF", "#FF2A55" };
+    public List<string> LEDs { get; set; } = new() { "#00E5FF", "#FF1A1A", "#00E5FF", "#FF1A1A" };
     public bool IsBuiltIn { get; set; } = false;
 
     /// <summary>
@@ -152,7 +152,7 @@ public class RgbProfileService
                 Brightness = 7,
                 Speed = 4,
                 Color = "#00E5FF",
-                LEDs = new() { "#00E5FF", "#FF2A55", "#00E5FF", "#FF2A55" },
+                LEDs = new() { "#00E5FF", "#FF1A1A", "#00E5FF", "#FF1A1A" },
                 IsBuiltIn = true
             });
 
@@ -174,7 +174,7 @@ public class RgbProfileService
                 Brightness = 8,
                 Speed = 4,
                 Color = "#FF3D00",
-                LEDs = new() { "#FF2A55", "#FF6D00", "#FFD600", "#FF2A55" },
+                LEDs = new() { "#FF1A1A", "#FF6D00", "#FFD600", "#FF1A1A" },
                 IsBuiltIn = true
             });
 
@@ -230,8 +230,8 @@ public class RgbProfileService
                 Effect = "BREATHING",
                 Brightness = 8,
                 Speed = 4,
-                Color = "#FF2A55",
-                LEDs = new() { "#FF2A55", "#FF2A55", "#FF2A55", "#FF2A55" },
+                Color = "#FF1A1A",
+                LEDs = new() { "#FF1A1A", "#FF1A1A", "#FF1A1A", "#FF1A1A" },
                 IsBuiltIn = true
             });
 

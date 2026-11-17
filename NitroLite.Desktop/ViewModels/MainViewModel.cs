@@ -1508,8 +1508,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         ColorPalette.Clear();
         // Eight swatches, chosen to be distinguishable on both the cream and the dark palettes and to cover the effects
-        // the firmware ships: a warm red, an amber, a green, a cyan, a blue, a violet, a magenta and white.
-        AddSwatch("#D93829", Loc.T("Mercan kırmızısı"));
+        // the firmware ships: a red, an amber, a green, a cyan, a blue, a violet, a magenta and white.
+        //
+        // The red keeps its green and blue channels low on purpose. A "coral" red — the #D93829 this used to be — is
+        // the same colour on screen, but the keyboard's diffuser mixes the three LEDs, so the green and blue it carries
+        // light the keys up and the red arrives as salmon. On the deck the swatch has to be the colour the keys show.
+        AddSwatch("#E01B1B", Loc.T("Kırmızı"));
         AddSwatch("#F59E0B", Loc.T("Kehribar"));
         AddSwatch("#5F6B3E", Loc.T("Zeytin yeşili"));
         AddSwatch("#22D3EE", Loc.T("Buz mavisi"));

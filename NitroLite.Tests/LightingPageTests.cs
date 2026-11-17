@@ -477,6 +477,45 @@ public class LightingPageTests
         Assert.True(vm.IsZone4Active);
     }
 
+    // ---------------------------------------------------------------- 2b. the reds
+
+    /// <summary>
+    /// Every red the app ships has to arrive on the keyboard as red.
+    /// </summary>
+    /// <remarks>
+    /// The keyboard's diffuser mixes the three LEDs, so a red that carries much green or blue lights the keys up
+    /// salmon or pink: the swatch on screen was red and the keyboard was not. The palette's red was #D93829 — a coral
+    /// with a fifth of its red in blue — and every built-in preset shipped #FF2A55, a crimson with a third of its red
+    /// in blue, which is why the preset called "Kırmızı Nefes" breathed pink. Both channels now stay under a fifth of
+    /// the red one, which is what makes the colour read as red rather than as a washed-out red.
+    /// </remarks>
+    [Fact]
+    public void TheRedsTheAppShips_AreRedNotPink()
+    {
+        using var vm = Create(new StubHardware());
+        var presets = new RgbProfileService().GetPresets();
+
+        var reds = new Dictionary<string, string>
+        {
+            ["the palette's red"] = vm.ColorPalette[0].Hex,
+            ["Kırmızı Nefes"] = presets.Single(p => p.Name == "Kırmızı Nefes").Color,
+            ["Inferno's red zones"] = presets.Single(p => p.Name == "Kırmızı & Turuncu (Inferno)").LEDs[0],
+            ["Cyberpunk's red zones"] = presets.Single(p => p.Name == "Cyberpunk (Cyan & Kırmızı)").LEDs[1]
+        };
+
+        foreach (var (where, hex) in reds)
+        {
+            var (red, green, blue) = Channels(hex);
+            Assert.True(green * 5 <= red, $"{where} is {hex}: green {green} against red {red} reads as salmon");
+            Assert.True(blue * 5 <= red, $"{where} is {hex}: blue {blue} against red {red} reads as pink");
+        }
+    }
+
+    private static (int Red, int Green, int Blue) Channels(string hex) =>
+        (Convert.ToInt32(hex.Substring(1, 2), 16),
+         Convert.ToInt32(hex.Substring(3, 2), 16),
+         Convert.ToInt32(hex.Substring(5, 2), 16));
+
     // ---------------------------------------------------------------- 3. the optional switches
 
     [Fact]
