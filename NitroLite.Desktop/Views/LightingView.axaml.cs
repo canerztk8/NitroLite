@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using NitroLite.Desktop.ViewModels;
 
 namespace NitroLite.Desktop.Views;
@@ -19,5 +20,20 @@ public partial class LightingView : UserControl
         if (!int.TryParse(tag, out int zone)) return;
 
         vm.SelectZoneForPicker(zone);
+    }
+
+    /// <summary>
+    /// The swatch beside the hex box: opens the picker on the active target's colour and writes whatever comes back.
+    /// The dialog is the view's business, so the view model only ever sees the finished <c>#RRGGBB</c>.
+    /// </summary>
+    private async void OnPickColorClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        if (TopLevel.GetTopLevel(this) is not Window owner) return;
+
+        var dialog = new ColorPickerDialog(vm.ActiveColor, vm.Labels.CustomColor);
+        if (!await dialog.ShowDialog<bool>(owner)) return;
+
+        vm.ApplyPickedColor(dialog.PickedHex);
     }
 }

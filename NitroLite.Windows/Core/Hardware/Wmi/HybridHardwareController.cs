@@ -431,20 +431,34 @@ public sealed class HybridHardwareController : IHardwareController
         await (await ResolveAsync().ConfigureAwait(false)).TurnOffLightingAsync().ConfigureAwait(false);
 
     /// <summary>
-    /// The backlight timeout lives on <c>APGeAction</c>, which only the WMI backend can reach. The service socket has
-    /// no such command, so this goes straight to WMI when the direct backend is enabled and falls back to the agent
-    /// (which answers null) otherwise.
+    /// The backlight timeout, from whichever backend actually answers.
     /// </summary>
+    /// <remarks>
+    /// The selector lives on <c>APGeAction</c>, which the WMI backend reaches directly, so that is tried first. But
+    /// "the worker was reachable" is not the same as "the selector answered": on the reference AN16-41 the class is
+    /// registered and <c>GetFunction(0x80001)</c> returns a status this build does not recognise, so the WMI call
+    /// succeeds and yields nothing. Treating that as the answer discarded the Acer service's own reading — which is
+    /// the one that works — and left the switch showing a default the keyboard did not share. A backend that returns
+    /// no value has not answered, so the other one is asked.
+    /// </remarks>
     public async Task<bool?> GetBacklightTimeoutAsync()
     {
         var (reached, value) = await TryWmiAsync(w => w.GetBacklightTimeoutAsync()).ConfigureAwait(false);
-        return reached ? value : await _agent.GetBacklightTimeoutAsync().ConfigureAwait(false);
+        if (reached && value.HasValue) return value;
+
+        return await _agent.GetBacklightTimeoutAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The same rule for the write: a refusal from the selector is not the last word while the service is still there
+    /// to be asked.
+    /// </summary>
     public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
     {
         var (reached, applied) = await TryWmiAsync(w => w.SetBacklightTimeoutAsync(enable30s)).ConfigureAwait(false);
-        return reached ? applied : await _agent.SetBacklightTimeoutAsync(enable30s).ConfigureAwait(false);
+        if (reached && applied) return true;
+
+        return await _agent.SetBacklightTimeoutAsync(enable30s).ConfigureAwait(false);
     }
 
     public async Task<bool?> GetCoolBoostAsync()

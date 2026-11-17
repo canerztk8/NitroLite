@@ -415,8 +415,8 @@ public class LightingPageTests
         Assert.False(vm.HasZonePreviewNote);
         Assert.Equal("", vm.ZonePreviewNote);
 
-        // WAVE, NEON and OFF cycle the keyboard's own colours: the deck shows a rainbow and says why.
-        foreach (var id in new[] { "WAVE", "NEON", "OFF" })
+        // WAVE and NEON cycle the keyboard's own colours: the deck shows a rainbow and says why.
+        foreach (var id in new[] { "WAVE", "NEON" })
         {
             vm.SelectedEffect = Effect(vm, id);
 
@@ -426,6 +426,14 @@ public class LightingPageTests
             Assert.Equal(vm.Labels.ZonePreviewNote, vm.ZonePreviewNote);
             Assert.False(LightingPolicy.EffectUsesColor(id));
         }
+
+        // OFF takes no colour either, but it is not a rainbow: the keyboard is dark, so the deck shows the black the
+        // zones actually hold instead of four coloured bars over a keyboard that is off.
+        vm.SelectedEffect = Effect(vm, "OFF");
+        Assert.True(vm.IsLightingOff);
+        Assert.False(vm.ZoneRainbow);
+        Assert.True(vm.ZoneSolid);
+        Assert.False(vm.HasZonePreviewNote);
 
         // The remaining five take a colour, so the rainbow is not a blanket rule.
         foreach (var id in new[] { "BREATHING", "SHIFTING", "ZOOM", "METEOR", "TWINKLING" })

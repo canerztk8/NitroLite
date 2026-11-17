@@ -445,6 +445,85 @@ public class HalStep6Tests
         Assert.False(await hybrid.AutoStartDirectWmiAsync());
     }
 
+    // ------------------------------------------------------------------ 7. the backlight timeout falls back
+
+    /// <summary>
+    /// The 30-second timeout, when the WMI selector is registered but does not answer.
+    /// </summary>
+    /// <remarks>
+    /// The bug these tests exist for: on the reference AN16-41 <c>APGeAction</c> is present, so the direct backend is
+    /// used, but <c>GetFunction(0x80001)</c> returns a status this build does not recognise. The hybrid treated "the
+    /// worker was reachable" as "the selector answered" and returned the empty result, discarding the Acer service's
+    /// own reading — which is the one that works. The page then showed its default "off" over a firmware timeout that
+    /// was on, and the keyboard went dark after 30 seconds with the switch saying it would not.
+    /// </remarks>
+    [Fact]
+    public async Task BacklightTimeout_WhenTheSelectorDoesNotAnswer_UsesTheService()
+    {
+        var agent = new RecordingController { BackendName = "AASSvc", BacklightTimeout = true };
+        var wmi = new RecordingController { BackendName = "WMI", BacklightTimeout = null };
+        var hybrid = new HybridHardwareController(
+            agent, wmiFactory: () => wmi, serviceHealthy: () => Task.FromResult(false))
+        {
+            IsElevated = () => true
+        };
+
+        Assert.True(await hybrid.GetBacklightTimeoutAsync());
+
+        // Both were asked: the direct backend first, then the service when it had nothing to say.
+        Assert.Equal(1, wmi.TimeoutReads);
+        Assert.Equal(1, agent.TimeoutReads);
+    }
+
+    [Fact]
+    public async Task BacklightTimeout_WhenTheSelectorAnswers_IsPreferred()
+    {
+        var agent = new RecordingController { BackendName = "AASSvc", BacklightTimeout = true };
+        var wmi = new RecordingController { BackendName = "WMI", BacklightTimeout = false };
+        var hybrid = new HybridHardwareController(
+            agent, wmiFactory: () => wmi, serviceHealthy: () => Task.FromResult(false))
+        {
+            IsElevated = () => true
+        };
+
+        // The direct backend is the one that talks to the firmware, so its answer wins when it has one.
+        Assert.False(await hybrid.GetBacklightTimeoutAsync());
+        Assert.Equal(1, wmi.TimeoutReads);
+        Assert.Equal(0, agent.TimeoutReads);
+    }
+
+    [Fact]
+    public async Task BacklightTimeoutWrite_WhenTheSelectorRefuses_UsesTheService()
+    {
+        var agent = new RecordingController { BackendName = "AASSvc", AcceptsTimeoutWrites = true };
+        var wmi = new RecordingController { BackendName = "WMI", AcceptsTimeoutWrites = false };
+        var hybrid = new HybridHardwareController(
+            agent, wmiFactory: () => wmi, serviceHealthy: () => Task.FromResult(false))
+        {
+            IsElevated = () => true
+        };
+
+        Assert.True(await hybrid.SetBacklightTimeoutAsync(false));
+        Assert.Equal(1, wmi.TimeoutWrites);
+        Assert.Equal(1, agent.TimeoutWrites);
+    }
+
+    [Fact]
+    public async Task BacklightTimeoutWrite_WhenTheSelectorAccepts_DoesNotAskTheService()
+    {
+        var agent = new RecordingController { BackendName = "AASSvc" };
+        var wmi = new RecordingController { BackendName = "WMI", AcceptsTimeoutWrites = true };
+        var hybrid = new HybridHardwareController(
+            agent, wmiFactory: () => wmi, serviceHealthy: () => Task.FromResult(false))
+        {
+            IsElevated = () => true
+        };
+
+        Assert.True(await hybrid.SetBacklightTimeoutAsync(false));
+        Assert.Equal(1, wmi.TimeoutWrites);
+        Assert.Equal(0, agent.TimeoutWrites);
+    }
+
     /// <summary>A controller that answers without touching the hardware.</summary>
     private sealed class RecordingController : NitroLite.Core.Hardware.IHardwareController
     {
@@ -465,8 +544,27 @@ public class HalStep6Tests
         public Task<LightingConfig?> GetLightingConfigAsync() => Task.FromResult<LightingConfig?>(null);
         public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction, string primaryColor, string[]? zoneColors) => Task.FromResult(true);
         public Task<bool> TurnOffLightingAsync() => Task.FromResult(true);
-        public Task<bool?> GetBacklightTimeoutAsync() => Task.FromResult<bool?>(false);
-        public Task<bool> SetBacklightTimeoutAsync(bool enable30s) => Task.FromResult(true);
+        /// <summary>Null is a backend that cannot answer, which is what the WMI selector does on the AN16-41.</summary>
+        public bool? BacklightTimeout { get; init; } = false;
+
+        /// <summary>False is a backend whose timeout write is refused.</summary>
+        public bool AcceptsTimeoutWrites { get; init; } = true;
+
+        public int TimeoutWrites { get; private set; }
+
+        public int TimeoutReads { get; private set; }
+
+        public Task<bool?> GetBacklightTimeoutAsync()
+        {
+            TimeoutReads++;
+            return Task.FromResult(BacklightTimeout);
+        }
+
+        public Task<bool> SetBacklightTimeoutAsync(bool enable30s)
+        {
+            TimeoutWrites++;
+            return Task.FromResult(AcceptsTimeoutWrites);
+        }
         public Task<BatteryChargeMode?> GetBatteryChargeModeAsync() => Task.FromResult<BatteryChargeMode?>(BatteryChargeMode.Optimized80);
         public Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode) => Task.FromResult(true);
 

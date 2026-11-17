@@ -325,6 +325,14 @@
       <Setter Property="BorderThickness" Value="2" />
     </Style>
 
+    <!-- The deck is the only way to aim the palette now that the zone buttons are gone, so the bar it is aimed at
+         keeps the same ink frame the pointer draws. Without it the only sign of the selection is the pill's caption,
+         which is a word away from the bar the user just clicked. -->
+    <Style Selector="Border.zone.zoneactive">
+      <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
     <!-- ============================================================ the rail -->
 
     <Style Selector="Button.nav">

@@ -22,9 +22,10 @@
   </UserControl.Resources>
 
   <!--
-    Page 3: the keyboard. The WPF page led with the four-zone deck — the four bars on a darker ground with thin key
-    rows under them, so the block reads as a keyboard rather than as four swatches — then the saved profiles, then the
-    quick palette, then the effect and its two sliders. Same order here.
+    Page 3: the keyboard. The four-zone deck leads — the four bars on a darker ground with thin key rows under them,
+    so the block reads as a keyboard rather than as four swatches — then the quick palette, then the saved profiles,
+    then the effect and its two sliders. The palette sits above the profiles because a colour is the thing a user
+    reaches for first, and a profile is a colour they already saved.
   -->
   <ScrollViewer VerticalScrollBarVisibility="Hidden">
     <StackPanel>
@@ -49,37 +50,45 @@
             <StackPanel>
               <UniformGrid Columns="4">
                 <StackPanel Margin="0,0,6,0">
-                  <Border Classes="zone" Tag="1" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
+                          PointerPressed="OnZonePressed"
                           Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                           IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Tag="1" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
+                          PointerPressed="OnZonePressed"
                           Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone1}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Margin="3,0">
-                  <Border Classes="zone" Tag="2" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
+                          PointerPressed="OnZonePressed"
                           Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                           IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Tag="2" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
+                          PointerPressed="OnZonePressed"
                           Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone2}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Margin="3,0">
-                  <Border Classes="zone" Tag="3" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
+                          PointerPressed="OnZonePressed"
                           Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                           IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Tag="3" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
+                          PointerPressed="OnZonePressed"
                           Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone3}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
                 </StackPanel>
                 <StackPanel Margin="6,0,0,0">
-                  <Border Classes="zone" Tag="4" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
+                          PointerPressed="OnZonePressed"
                           Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                           IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Tag="4" PointerPressed="OnZonePressed"
+                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
+                          PointerPressed="OnZonePressed"
                           Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
                   <TextBlock Classes="caps" Text="{Binding Labels.Zone4}" HorizontalAlignment="Center"
                              Margin="0,6,0,0" />
@@ -109,39 +118,6 @@
         </StackPanel>
       </Border>
 
-      <!-- ============================================================ saved profiles -->
-
-      <Border Classes="card" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Classes="rowtitle" Text="{Binding Labels.RgbProfiles}" Margin="0,0,0,10" />
-
-          <Grid ColumnDefinitions="*,*,Auto,Auto,Auto">
-            <ComboBox ItemsSource="{Binding RgbProfiles}" SelectedItem="{Binding SelectedRgbProfile}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="core:RgbPreset">
-                  <TextBlock Text="{Binding Name}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-
-            <TextBox Grid.Column="1" Margin="10,0" Text="{Binding NewProfileName}"
-                     Watermark="{Binding Labels.ProfileName}" />
-
-            <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.Apply}"
-                    Padding="12,7" FontSize="11" Command="{Binding ApplyRgbProfileCommand}" />
-            <Button Grid.Column="3" Classes="primary" Content="{Binding Labels.SaveProfile}"
-                    Padding="12,7" FontSize="11" Margin="6,0,0,0" Command="{Binding SaveRgbProfileCommand}" />
-            <Button Grid.Column="4" Classes="danger" Content="{Binding Labels.DeleteProfile}"
-                    Padding="12,7" FontSize="11" Margin="6,0,0,0"
-                    Command="{Binding DeleteRgbProfileCommand}" />
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding RgbProfileStatus}" Margin="0,8,0,0"
-                     IsVisible="{Binding HasRgbProfileStatus}" />
-        </StackPanel>
-      </Border>
-
       <!-- ============================================================ the quick palette -->
 
       <Border Classes="card" Margin="0,0,0,16">
@@ -154,11 +130,11 @@
             </Border>
           </StackPanel>
 
-          <StackPanel Orientation="Horizontal" Spacing="8">
+          <StackPanel Orientation="Horizontal" Spacing="12">
             <ItemsControl ItemsSource="{Binding ColorPalette}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="8" />
+                  <StackPanel Orientation="Horizontal" Spacing="12" />
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
@@ -172,27 +148,59 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBox Width="110" Text="{Binding PrimaryColor}" Watermark="#00E5FF" />
+            <!--
+              The picker. The eight swatches are the colours that read well on both palettes; this is every colour
+              there is, and it sits immediately left of the hex box so the two ways of naming a colour are adjacent.
+              It shows the active target's colour, so it doubles as the readout for whichever zone the deck focused.
+              The rule before it is what keeps it from reading as a ninth swatch.
+            -->
+            <Border Width="1" Background="{DynamicResource CardBorderBrush}" Margin="2,2" />
 
-            <Button Classes="primary" Content="{Binding Labels.CustomColor}" Padding="12,7" FontSize="11"
-                    Command="{Binding CustomColorCommand}" />
+            <Button Classes="swatch" Width="28" Height="28" Click="OnPickColorClick"
+                    AutomationProperties.AutomationId="PickColor"
+                    ToolTip.Tip="{Binding Labels.CustomColor}">
+              <Border Width="24" Height="24" CornerRadius="2"
+                      Background="{Binding ActiveColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                      BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="1" />
+            </Button>
+
+            <TextBox Width="110" Text="{Binding ActiveColor}" Watermark="#00E5FF"
+                     AutomationProperties.AutomationId="ActiveColorHex" />
+
             <Button Classes="primary" Content="{Binding Labels.ApplyToAllZones}" Padding="12,7" FontSize="11"
                     Command="{Binding ApplyAllZonesCommand}" />
           </StackPanel>
+        </StackPanel>
+      </Border>
 
-          <!-- Which zone the palette writes to. The four buttons are the same choice the deck above shows. -->
-          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,10,0,0">
-            <Button Classes="seg" Classes.selected="{Binding IsPrimaryZoneActive}"
-                    Command="{Binding SelectPrimaryZoneCommand}" Content="{Binding Labels.PrimaryColor}" />
-            <Button Classes="seg" Classes.selected="{Binding IsZone1Active}"
-                    Command="{Binding SelectZone1Command}" Content="{Binding Labels.Zone1}" />
-            <Button Classes="seg" Classes.selected="{Binding IsZone2Active}"
-                    Command="{Binding SelectZone2Command}" Content="{Binding Labels.Zone2}" />
-            <Button Classes="seg" Classes.selected="{Binding IsZone3Active}"
-                    Command="{Binding SelectZone3Command}" Content="{Binding Labels.Zone3}" />
-            <Button Classes="seg" Classes.selected="{Binding IsZone4Active}"
-                    Command="{Binding SelectZone4Command}" Content="{Binding Labels.Zone4}" />
-          </StackPanel>
+      <!-- ============================================================ saved profiles -->
+
+      <Border Classes="card" Margin="0,0,0,16">
+        <StackPanel>
+          <TextBlock Classes="rowtitle" Text="{Binding Labels.RgbProfiles}" Margin="0,0,0,10" />
+
+          <Grid ColumnDefinitions="*,*,Auto,Auto">
+            <ComboBox ItemsSource="{Binding RgbProfiles}" SelectedItem="{Binding SelectedRgbProfile}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="core:RgbPreset">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBox Grid.Column="1" Margin="10,0" Text="{Binding NewProfileName}"
+                     Watermark="{Binding Labels.ProfileName}" />
+
+            <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.SaveProfile}"
+                    Padding="12,7" FontSize="11" Command="{Binding SaveRgbProfileCommand}" />
+            <Button Grid.Column="3" Classes="danger" Content="{Binding Labels.DeleteProfile}"
+                    Padding="12,7" FontSize="11" Margin="6,0,0,0"
+                    Command="{Binding DeleteRgbProfileCommand}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding RgbProfileStatus}" Margin="0,8,0,0"
+                     IsVisible="{Binding HasRgbProfileStatus}" />
         </StackPanel>
       </Border>
 

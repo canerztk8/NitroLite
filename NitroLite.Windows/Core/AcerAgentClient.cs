@@ -138,6 +138,38 @@ public class AcerAgentClient : IDisposable
     public const int MaxResponseSizeBytes = 1024 * 1024; // 1 MB upper bound to prevent unbounded memory allocation
 
     /// <summary>
+    /// The I/O budget for the 30-second backlight timeout, shorter than the default three seconds.
+    /// </summary>
+    /// <remarks>
+    /// The service on the reference AN16-41 answers the read and never answers the write, so the request runs to its
+    /// timeout. <see cref="_lock"/> is shared with the telemetry poll, which means the whole of that timeout is time
+    /// the temperatures, the fan curve and the overlay spend frozen — three seconds of a stalled page for a write
+    /// that was going to fail anyway. A localhost round trip that is going to answer does so in tens of milliseconds,
+    /// so this bounds the stall to something the user does not feel.
+    /// </remarks>
+    public static readonly TimeSpan BacklightTimeoutIoBudget = TimeSpan.FromMilliseconds(800);
+
+    /// <summary>
+    /// How long a silent backlight timeout write is remembered before the reply is waited for again.
+    /// </summary>
+    /// <remarks>
+    /// Long enough that toggling the switch back and forth does not pay the I/O budget on every click, short enough
+    /// that a service which was restarted, or an EC that was busy at the time, gets another chance without the user
+    /// having to restart the app.
+    /// </remarks>
+    public static readonly TimeSpan BacklightWriteRetryAfter = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// When the service last failed to answer the backlight timeout write, or null when it has not.
+    /// </summary>
+    /// <remarks>
+    /// This is the one request on the socket the reference AN16-41's service applies without ever answering, so every
+    /// attempt runs to the full I/O budget with <see cref="_lock"/> held. Remembering the silence turns the second
+    /// toggle from a wait into a send, and the read-back still confirms the write landed.
+    /// </remarks>
+    private TimeSpan? _backlightWriteRefusedAt;
+
+    /// <summary>
     /// Incremental brace scanner kept for compatibility. Returns true once a complete top-level object has been seen.
     /// </summary>
     public static bool TryScanJsonCompleteness(byte[] buffer, int offset, int length, ref int openBraceCount, ref bool inString, ref bool isEscaped, ref bool hasStartedJson)
@@ -311,19 +343,54 @@ public class AcerAgentClient : IDisposable
         return string.Equals(request, expectedRequest, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<string?> SendRawAsync(uint packetId, object payload, string expectedRequest)
+    /// <summary>Frames one request: the magic, the packet id, then the UTF-8 JSON payload.</summary>
+    private static byte[] BuildPacket(uint packetId, object payload)
+    {
+        var jsonBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+        var packet = new byte[Magic.Length + 4 + jsonBytes.Length];
+        Buffer.BlockCopy(Magic, 0, packet, 0, Magic.Length);
+        BitConverter.GetBytes(packetId).CopyTo(packet, Magic.Length);
+        Buffer.BlockCopy(jsonBytes, 0, packet, Magic.Length + 4, jsonBytes.Length);
+        return packet;
+    }
+
+    /// <summary>
+    /// Writes one packet and does not wait for its answer.
+    /// </summary>
+    /// <remarks>
+    /// For the one request the reference AN16-41's service applies to the EC without ever answering. The reply, if it
+    /// ever arrives, is drained and dropped by the next request — <see cref="IsResponseFor"/> already treats a message
+    /// that does not match the request in flight as stale.
+    /// </remarks>
+    private async Task<bool> SendWithoutReplyAsync(uint packetId, object payload)
+    {
+        if (IsDisposed || _stream == null) return false;
+
+        try
+        {
+            using var ioCts = new CancellationTokenSource(BacklightTimeoutIoBudget);
+            await _stream.WriteAsync(BuildPacket(packetId, payload), ioCts.Token);
+            await _stream.FlushAsync(ioCts.Token);
+            return true;
+        }
+        catch
+        {
+            Disconnect();
+            ResetConnectBackoff();
+            return false;
+        }
+    }
+
+    private async Task<string?> SendRawAsync(uint packetId, object payload, string expectedRequest,
+        TimeSpan? timeout = null)
     {
         if (IsDisposed || _stream == null) return null;
 
         try
         {
-            var jsonBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
-            var packet = new byte[Magic.Length + 4 + jsonBytes.Length];
-            Buffer.BlockCopy(Magic, 0, packet, 0, Magic.Length);
-            BitConverter.GetBytes(packetId).CopyTo(packet, Magic.Length);
-            Buffer.BlockCopy(jsonBytes, 0, packet, Magic.Length + 4, jsonBytes.Length);
+            var packet = BuildPacket(packetId, payload);
 
-            using var ioCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var ioCts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(3));
 
             // Events that arrived while idle are still in the buffer; publish them before the new request.
             string? queued;
@@ -376,12 +443,13 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    private Task<string?> SendFunctionAsync(uint packetId, string function, object? parameter = null)
+    private Task<string?> SendFunctionAsync(uint packetId, string function, object? parameter = null,
+        TimeSpan? timeout = null)
     {
         object payload = parameter == null
             ? new { Function = function }
             : new { Function = function, Parameter = parameter };
-        return SendRawAsync(packetId, payload, function);
+        return SendRawAsync(packetId, payload, function, timeout);
     }
 
     /// <summary>
@@ -979,7 +1047,8 @@ public class AcerAgentClient : IDisposable
         try
         {
             if (!await EnsureConnectedInternalAsync()) return null;
-            var resp = await SendFunctionAsync(PacketGetUpdatedData, "BACKLIGHT_30S");
+            var resp = await SendFunctionAsync(PacketGetUpdatedData, "BACKLIGHT_30S",
+                timeout: BacklightTimeoutIoBudget);
             var status = GetSuccessData(resp)?["status"]?.GetValue<int>();
             return status.HasValue ? status.Value == 1 : null;
         }
@@ -995,15 +1064,37 @@ public class AcerAgentClient : IDisposable
 
     public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
     {
+        // The service on the reference AN16-41 applies this write to the EC and never answers it. Once that is known
+        // the packet is still sent — the keyboard does change — but the reply is not waited for: waiting is time the
+        // user spends looking at a frozen machine, and the read-back is what confirms the write anyway. The memory
+        // expires, so a restarted service is asked properly again.
+        bool knownSilent = _backlightWriteRefusedAt is { } refusedAt &&
+                           _connectClock.Elapsed - refusedAt < BacklightWriteRetryAfter;
+
         await _lock.WaitAsync();
         try
         {
             if (!await EnsureConnectedInternalAsync()) return false;
-            var resp = await SendFunctionAsync(PacketSetDeviceData, "BACKLIGHT_30S", new { status = enable30s ? 1 : 0 });
-            return IsSuccessResult(resp);
+
+            if (knownSilent)
+            {
+                return await SendWithoutReplyAsync(PacketSetDeviceData, new
+                {
+                    Function = "BACKLIGHT_30S",
+                    Parameter = new { status = enable30s ? 1 : 0 }
+                }).ConfigureAwait(false);
+            }
+
+            var resp = await SendFunctionAsync(PacketSetDeviceData, "BACKLIGHT_30S",
+                new { status = enable30s ? 1 : 0 }, BacklightTimeoutIoBudget);
+            if (IsSuccessResult(resp)) return true;
+
+            _backlightWriteRefusedAt = _connectClock.Elapsed;
+            return false;
         }
         catch
         {
+            _backlightWriteRefusedAt = _connectClock.Elapsed;
             return false;
         }
         finally

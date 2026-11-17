@@ -327,6 +327,13 @@ public class AppSettings
     public bool IsBacklightOff { get; set; } = false;
     public string? SelectedRgbPreset { get; set; }
 
+    /// <summary>
+    /// The 30-second keyboard timeout the user last chose, or null when they never touched the switch. The firmware
+    /// keeps its own copy and the read that mirrors it can fail — the elevated helper is not connected yet when the
+    /// window opens — so the stored choice is what the page puts back on the keyboard when nothing answers.
+    /// </summary>
+    public bool? BacklightTimeoutEnabled { get; set; }
+
     [JsonPropertyName("last_operating_mode")]
     public OperatingMode? LastOperatingMode { get; set; }
 

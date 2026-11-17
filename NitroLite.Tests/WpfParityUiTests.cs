@@ -377,20 +377,6 @@ public class WpfParityUiTests
     }
 
     [Fact]
-    public void ZoneCommands_MoveTheActiveTarget()
-    {
-        var (vm, controller) = Create(Nitro16());
-        using var _ = vm;
-        using var __ = controller;
-
-        vm.SelectZone3Command.Execute(null);
-        Assert.Equal(3, vm.ActiveZone);
-
-        vm.SelectPrimaryZoneCommand.Execute(null);
-        Assert.Equal(0, vm.ActiveZone);
-    }
-
-    [Fact]
     public void SwatchClick_WritesIntoTheActiveZone()
     {
         var (vm, controller) = Create(Nitro16());

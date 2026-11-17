@@ -141,7 +141,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 ["batteryLimit"] = battery != null,
                 ["keyboardLighting"] = keyboardLighting,
                 ["coolBoost"] = apge != null,
-                ["backlightTimeout"] = apge != null,
+                // The class being registered is not the same as the selector answering. On the reference AN16-41
+                // APGeAction is present but GetFunction(0x80001) returns a status this build does not recognise, so a
+                // switch built on the class alone showed "off" over a firmware timeout that was still on — and could
+                // neither read nor write it. Asking the selector is what makes the capability mean something.
+                ["backlightTimeout"] = apge != null && GetBacklightTimeout().Ok,
                 ["lcdOverdrive"] = registry.LcdOverdriveSupport is > 0,
                 ["winKeyLock"] = gaming != null,
                 ["supportedModes"] = supportedModes,

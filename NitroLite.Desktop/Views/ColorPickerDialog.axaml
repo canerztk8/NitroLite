@@ -1,0 +1,104 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NitroLite.Desktop.Views.ColorPickerDialog"
+        Width="392"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        SystemDecorations="None"
+        Background="Transparent">
+
+  <!--
+    The colour picker the palette's last swatch opens.
+
+    Drawn from primitives rather than assembled from Avalonia's ColorPicker package. That package's spectrum is square
+    by design and its hue slider paints its gradient from a bitmap generated at property-change time, so a slider whose
+    properties are all set in XAML is laid out after the last change and keeps a blank grey track. Both are the wrong
+    shape for a 328px card, and neither can be themed to the warm-cream palette. Two rectangles and a gradient bar are
+    less code than the workarounds, and they match the rest of the app.
+
+    The window is transparent and the card inside it carries the border, the same shell as the confirmation dialog, so
+    the corner radius is real rather than a rectangle with a rounded picture on it.
+  -->
+  <Border Background="{DynamicResource CardBrush}"
+          BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
+          CornerRadius="8" Padding="20,18,20,16" Margin="12">
+    <StackPanel>
+
+      <TextBlock x:Name="TitleText" FontSize="13.5" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" TextWrapping="Wrap" />
+
+      <!--
+        Saturation across, value down. The hue is painted into the left-to-right gradient in code, so this rectangle
+        only has to carry the white-to-hue wash and the black shade over it.
+      -->
+      <Border x:Name="SvArea" Height="150" Margin="0,12,0,0" CornerRadius="4"
+              ClipToBounds="True" Cursor="Cross" Background="Transparent"
+              PointerPressed="OnSvPointerPressed"
+              PointerMoved="OnSvPointerMoved"
+              PointerReleased="OnSvPointerReleased">
+        <Panel>
+          <Rectangle x:Name="SvHueLayer" />
+          <Rectangle>
+            <Rectangle.Fill>
+              <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                <GradientStop Offset="0" Color="#00000000" />
+                <GradientStop Offset="1" Color="#FF000000" />
+              </LinearGradientBrush>
+            </Rectangle.Fill>
+          </Rectangle>
+          <!-- The ring is two ellipses: a dark one under a white one, so the marker stays visible on white and on
+               black alike. -->
+          <Canvas IsHitTestVisible="False">
+            <Ellipse x:Name="SvMarkerRing" Width="15" Height="15" StrokeThickness="1" Stroke="#59000000" />
+            <Ellipse x:Name="SvMarker" Width="13" Height="13" StrokeThickness="2" Stroke="White" />
+          </Canvas>
+        </Panel>
+      </Border>
+
+      <!--
+        The hue bar. The marker overhangs the track, so it lives in a canvas above it rather than inside the clipped
+        border; the pointer handlers sit on the panel so the whole 18px height is a hit target.
+      -->
+      <Panel x:Name="HueTrack" Height="18" Margin="0,14,0,0" Cursor="Hand" Background="Transparent"
+             PointerPressed="OnHuePointerPressed"
+             PointerMoved="OnHuePointerMoved"
+             PointerReleased="OnHuePointerReleased">
+        <Border Height="14" VerticalAlignment="Center" CornerRadius="7" ClipToBounds="True">
+          <Border.Background>
+            <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
+              <GradientStop Offset="0" Color="#FFFF0000" />
+              <GradientStop Offset="0.1667" Color="#FFFFFF00" />
+              <GradientStop Offset="0.3333" Color="#FF00FF00" />
+              <GradientStop Offset="0.5" Color="#FF00FFFF" />
+              <GradientStop Offset="0.6667" Color="#FF0000FF" />
+              <GradientStop Offset="0.8333" Color="#FFFF00FF" />
+              <GradientStop Offset="1" Color="#FFFF0000" />
+            </LinearGradientBrush>
+          </Border.Background>
+        </Border>
+        <Canvas IsHitTestVisible="False">
+          <Border x:Name="HueMarker" Width="4" Height="18" CornerRadius="2"
+                  Background="White" BorderBrush="#59000000" BorderThickness="1" />
+        </Canvas>
+      </Panel>
+
+      <!-- The colour itself beside the hex it is written as: the swatch is what the eye checks, the box is what the
+           keyboard is actually sent. -->
+      <Grid ColumnDefinitions="Auto,*" Margin="0,14,0,0">
+        <Border x:Name="PreviewSwatch" Width="56" Height="30" CornerRadius="2"
+                BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+        <TextBox Grid.Column="1" x:Name="HexBox" Margin="10,0,0,0" Watermark="#00E5FF"
+                 AutomationProperties.AutomationId="PickerHex" />
+      </Grid>
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button x:Name="CancelButton" Classes="primary" Padding="16,7" FontSize="11"
+                Margin="0,0,8,0" Click="OnCancelClick" />
+        <Button x:Name="ApplyButton" Classes="primary" Padding="16,7" FontSize="11" Click="OnApplyClick"
+                AutomationProperties.AutomationId="PickerApply" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

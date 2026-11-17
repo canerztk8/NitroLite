@@ -117,8 +117,80 @@ public class LightingApplyWiringTests
     }
 
     [Fact]
-    public async Task SwatchClick_AppliesToTheDevice()
+    public async Task PickedColor_AppliesToTheDevice()
     {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        // The picker window has no Apply of its own beyond its own button: the colour it returns is the write.
+        vm.ApplyPickedColor("#123456");
+
+        var write = await NextWriteAsync(hardware);
+        Assert.Contains("|#123456|", write);
+    }
+
+    [Fact]
+    public async Task PickedColor_GoesToTheZoneTheDeckHasFocused()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        // The zone buttons under the palette are gone, so the deck is the only way to aim the picker. A colour picked
+        // while zone 2 is focused has to land on zone 2, not on the primary colour.
+        vm.SelectZoneForPicker(2);
+        vm.ApplyPickedColor("#123456");
+
+        var write = await NextWriteAsync(hardware);
+        Assert.EndsWith("|#00E5FF,#123456,#00E5FF,#00E5FF", write);
+    }
+
+    [Fact]
+    public async Task ActiveColor_FollowsTheDeck()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        vm.Zone3 = "#00FF00";
+        vm.SelectZoneForPicker(3);
+
+        // The hex box and the picker both read this, so it has to be the focused zone's colour rather than the
+        // primary one — otherwise the box would show a colour the next edit would not write.
+        Assert.Equal("#00FF00", vm.ActiveColor);
+    }
+
+    [Fact]
+    public async Task SelectedRgbProfile_AppliesWithoutAnApplyButton()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        // The card's Apply button is gone: choosing a profile is the write, the same way choosing an effect is. The
+        // first read already selected the first preset, so a different one is what counts as a choice.
+        Assert.True(vm.RgbProfiles.Count > 1);
+        var preset = vm.RgbProfiles[1];
+        vm.SelectedRgbProfile = preset;
+
+        var write = await NextWriteAsync(hardware);
+        Assert.False(string.IsNullOrEmpty(write));
+        Assert.Equal(preset.Name, vm.SelectedRgbProfile?.Name);
+    }
+
+    [Fact]
+    public async Task ReloadingTheProfiles_DoesNotWriteToTheDevice()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = Create(hardware);
+
+        // The first read selects a profile so the card is not blank. That selection is not the user picking one, and
+        // it must not bounce out as a write — the same rule the rest of the page follows.
+        await vm.InitializeAsync();
+        await Task.Delay(600);
+
+        Assert.Empty(hardware.LightingWrites);
+    }
+
+    [Fact]
+    public async Task SwatchClick_AppliesToTheDevice()    {
         var hardware = new Phase3Fakes.StubHardware();
         using var vm = await ReadyAsync(hardware);
 
@@ -182,5 +254,97 @@ public class LightingApplyWiringTests
         await Task.Delay(600);
 
         Assert.Empty(hardware.LightingWrites);
+    }
+
+    // ---------------------------------------------------------------- the profile list follows the editor
+
+    [Fact]
+    public async Task ApplyAllZones_TakesThePrimaryColourWithIt()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        // The deck is pointed at zone 2, so the colour being spread is that zone's and not the primary one. The
+        // firmware's STATIC mode takes one colour and the payload carries both fields, so leaving the primary behind
+        // is what made "apply to all zones" land as a colour the page was not showing.
+        vm.SelectZoneForPicker(2);
+        vm.ActiveColor = "#123456";
+        await NextWriteAsync(hardware);
+        hardware.LightingWrites.Clear();
+
+        vm.ApplyAllZonesCommand.Execute(null);
+
+        var write = await NextWriteAsync(hardware);
+        Assert.Contains("|#123456|", write);
+        Assert.EndsWith("|#123456,#123456,#123456,#123456", write);
+        Assert.Equal("#123456", vm.PrimaryColor);
+    }
+
+    [Fact]
+    public async Task EditingAColourByHand_MovesTheProfileListToCustom()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        // Start from a real preset, so what the assertion catches is the edit and not the initial state: a fresh
+        // settings file has no stored preset, and the editor then holds whatever the keyboard was running.
+        var preset = vm.RgbProfiles[1];
+        vm.SelectedRgbProfile = preset;
+        await NextWriteAsync(hardware);
+        Assert.Equal(preset.Name, vm.SelectedRgbProfile?.Name);
+
+        // The list is a statement about where the colours came from. Once one is set by hand it no longer came from
+        // the preset that was selected, and leaving that preset selected is what made the page look like the profile
+        // was fighting the picker.
+        vm.ApplyPickedColor("#123456");
+
+        Assert.Equal(vm.CustomProfile.Name, vm.SelectedRgbProfile?.Name);
+    }
+
+    [Fact]
+    public async Task SelectingTheCustomEntry_WritesNothing()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        vm.SelectedRgbProfile = vm.CustomProfile;
+        await Task.Delay(600);
+
+        // It is a label, not a preset: there is nothing to apply.
+        Assert.Empty(hardware.LightingWrites);
+    }
+
+    [Fact]
+    public async Task ApplyingAPreset_LeavesThatPresetSelected()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        var preset = vm.RgbProfiles[1];
+        vm.SelectedRgbProfile = preset;
+        await NextWriteAsync(hardware);
+
+        // Filling the editor from a preset is not the user editing anything, so the selection must survive it.
+        Assert.Equal(preset.Name, vm.SelectedRgbProfile?.Name);
+    }
+
+    [Fact]
+    public async Task TurningTheLightsOff_ShowsBlackZones()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        vm.TurnOffLightingCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Contains("OFF"), SettleMilliseconds);
+
+        // The deck shows the state the keyboard is in. A rainbow over a keyboard that is off is the page describing
+        // an effect that is not running.
+        Assert.True(vm.IsLightingOff);
+        Assert.False(vm.ZoneRainbow);
+        Assert.True(vm.ZoneSolid);
+        Assert.Equal("#000000", vm.Zone1);
+        Assert.Equal("#000000", vm.Zone2);
+        Assert.Equal("#000000", vm.Zone3);
+        Assert.Equal("#000000", vm.Zone4);
     }
 }

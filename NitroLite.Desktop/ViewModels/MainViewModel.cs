@@ -766,6 +766,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _schoolModeOn;
     private string _schoolModeDetail = "";
     private RgbPreset? _selectedRgbProfile;
+    private bool _suppressProfileApply;
     private string _newProfileName = "";
     private string _rgbProfileStatus = "";
     private bool _gameActive;
@@ -961,7 +962,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         GetMemoryCleanerCommand = new RelayCommand(() => OpenUrl(MemoryCleanerTool.ReleasesUrl));
         CycleOsdCornerCommand = new RelayCommand(CycleOsdCorner);
         ToggleOsdCommand = new RelayCommand(() => OsdEnabled = !OsdEnabled);
-        CustomColorCommand = new RelayCommand(OpenCustomColor);
         ApplyAllZonesCommand = new RelayCommand(ApplyAllZones);
         BuildPhase3Commands();
     }
@@ -1069,6 +1069,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(IsLightingPage));
             Raise(nameof(IsBatteryPage));
             Raise(nameof(IsToolsPage));
+
+            // The 30-second timeout is read again here rather than only at startup: the elevated helper is not
+            // connected yet when the window opens, so the boot read can come back empty and leave the switch on a
+            // default the keyboard does not share.
+            if (IsLightingPage) _ = RefreshBacklightTimeoutAsync();
         }
     }
 
@@ -1486,8 +1491,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public string ActiveZoneText => ActiveZone == 0 ? Labels.PrimaryColor : Labels.Zone(ActiveZone);
 
-    // One flag per target, so the five pills can each paint themselves without a converter that would have to know
-    // which pill it was asked about.
+    // One flag per target, so a caller can ask which one the palette writes to without comparing numbers.
     public bool IsPrimaryZoneActive => ActiveZone == 0;
     public bool IsZone1Active => ActiveZone == 1;
     public bool IsZone2Active => ActiveZone == 2;
@@ -1499,12 +1503,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => _selectedSwatch;
         private set => Set(ref _selectedSwatch, value);
     }
-
-    public RelayCommand SelectPrimaryZoneCommand { get; private set; } = null!;
-    public RelayCommand SelectZone1Command { get; private set; } = null!;
-    public RelayCommand SelectZone2Command { get; private set; } = null!;
-    public RelayCommand SelectZone3Command { get; private set; } = null!;
-    public RelayCommand SelectZone4Command { get; private set; } = null!;
 
     private void BuildColorPalette()
     {
@@ -1520,11 +1518,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AddSwatch("#EC4899", Loc.T("Macenta"));
         AddSwatch("#F8FAFC", Loc.T("Beyaz"));
 
-        SelectPrimaryZoneCommand = new RelayCommand(() => ActiveZone = 0);
-        SelectZone1Command = new RelayCommand(() => ActiveZone = 1);
-        SelectZone2Command = new RelayCommand(() => ActiveZone = 2);
-        SelectZone3Command = new RelayCommand(() => ActiveZone = 3);
-        SelectZone4Command = new RelayCommand(() => ActiveZone = 4);
         ToggleSparklineBandCommand = new RelayCommand(() => SparklineBandVisible = !SparklineBandVisible);
         SyncSwatchSelection();
     }
@@ -1549,14 +1542,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Marks the swatch that matches the colour the active target already holds.</summary>
     private void SyncSwatchSelection()
     {
-        var current = ActiveZone switch
-        {
-            1 => Zone1,
-            2 => Zone2,
-            3 => Zone3,
-            4 => Zone4,
-            _ => PrimaryColor
-        };
+        var current = ActiveColor;
 
         foreach (var swatch in ColorPalette)
         {
@@ -2380,6 +2366,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _selectedEffect, value)) return;
             BuildDirectionChoices();
+            Raise(nameof(IsLightingOff));
             Raise(nameof(ZoneRainbow));
             Raise(nameof(ZoneSolid));
             Raise(nameof(ZonePreviewNote));
@@ -2388,6 +2375,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The page has no Apply button, so picking an effect is the write. Without this the list changed the
             // view model and nothing else, and the keyboard stayed in whatever effect it was already in.
             if (_suppressWrite) return;
+
+            // OFF is the user asking for dark, not for a different look, so it leaves the profile where it was.
+            if (value != null && !string.Equals(value.Id, "OFF", StringComparison.OrdinalIgnoreCase))
+            {
+                MarkProfileCustom();
+            }
 
             // Picking an effect while the lights are off is the user asking for light: the last lit configuration
             // comes back with this effect. OFF is the exception, because that is the user asking for dark.
@@ -2407,10 +2400,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _brightnessLevel, Math.Clamp(value, 0, LightingLimits.MaxBrightnessLevel))) return;
             Raise(nameof(BrightnessLabel));
+            Raise(nameof(IsLightingOff));
+            Raise(nameof(ZoneRainbow));
+            Raise(nameof(ZoneSolid));
 
             // The page has no Apply button, so the slider is the write. The WPF window did the same from
             // SliderBrightness_ValueChanged, through the same kind of pause.
             if (_suppressWrite) return;
+
+            MarkProfileCustom();
 
             // Raising the brightness while the lights are off brings the last lit configuration back at this level.
             // Writing "OFF" with a non-zero brightness is what the firmware reads as "stay off".
@@ -2430,7 +2428,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _speedLevel, Math.Clamp(value, LightingLimits.MinSpeed, LightingLimits.MaxSpeed))) return;
             Raise(nameof(SpeedLabel));
 
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+            MarkProfileCustom();
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2440,7 +2440,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _directionLevel, Math.Clamp(value, 1, LightingLimits.MaxDirection))) return;
-            if (!_suppressWrite) _lightingDebounce.Run(ApplyLightingAsync);
+            if (_suppressWrite) return;
+            MarkProfileCustom();
+            _lightingDebounce.Run(ApplyLightingAsync);
         }
     }
 
@@ -2450,7 +2452,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _primaryColor, value)) return;
+            Raise(nameof(ActiveColor));
             if (_suppressWrite) return;
+
+            MarkProfileCustom();
 
             // A colour picked while the lights are off brings the last lit configuration back with it.
             ResumeFromOffForEdit(cfg =>
@@ -2469,7 +2474,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone1, value)) return;
+            Raise(nameof(ActiveColor));
             if (_suppressWrite) return;
+
+            MarkProfileCustom();
 
             // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
             ResumeFromOffForEdit(cfg =>
@@ -2487,7 +2495,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone2, value)) return;
+            Raise(nameof(ActiveColor));
             if (_suppressWrite) return;
+
+            MarkProfileCustom();
 
             // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
             ResumeFromOffForEdit(cfg =>
@@ -2505,7 +2516,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone3, value)) return;
+            Raise(nameof(ActiveColor));
             if (_suppressWrite) return;
+
+            MarkProfileCustom();
 
             // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
             ResumeFromOffForEdit(cfg =>
@@ -2523,7 +2537,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone4, value)) return;
+            Raise(nameof(ActiveColor));
             if (_suppressWrite) return;
+
+            MarkProfileCustom();
 
             // Zone colours only exist in STATIC, so a zone picked while the lights are off comes back as one.
             ResumeFromOffForEdit(cfg =>
@@ -2544,10 +2561,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public int MaxDirection => LightingLimits.MaxDirection;
 
     /// <summary>
+    /// True when the page is describing a keyboard that is dark. Read from the same policy the write uses, so the deck
+    /// and the firmware cannot disagree about what "off" means.
+    /// </summary>
+    public bool IsLightingOff => LightingPolicy.IsOff(CurrentLightingConfig());
+
+    /// <summary>
     /// True when the selected effect paints the keyboard's own colours, so the four zone bars show a rainbow instead of
     /// a colour the effect will ignore. Read from the policy rather than from a list here, so the two cannot drift.
     /// </summary>
-    public bool ZoneRainbow => SelectedEffect != null && !LightingPolicy.EffectUsesColor(SelectedEffect.Id);
+    /// <remarks>
+    /// OFF is excluded even though it takes no colour: the rainbow is a statement that the effect will paint over the
+    /// zones, and a keyboard that is off paints nothing. Leaving it in is what kept the deck showing four coloured bars
+    /// over a keyboard the page had just turned black.
+    /// </remarks>
+    public bool ZoneRainbow =>
+        !IsLightingOff && SelectedEffect != null && !LightingPolicy.EffectUsesColor(SelectedEffect.Id);
 
     /// <summary>The inverse of <see cref="ZoneRainbow"/>, so the deck can show one bar or the other without a converter.</summary>
     public bool ZoneSolid => !ZoneRainbow;
@@ -2599,16 +2628,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(ZonePickerOpen));
     }
 
-    public RelayCommand CustomColorCommand { get; private set; } = null!;
     public RelayCommand ApplyAllZonesCommand { get; private set; } = null!;
 
     /// <summary>
-    /// Spreads the colour the palette last wrote over all four zones. The per-zone picker cannot do this in one click,
-    /// and one colour for the whole keyboard is the common case.
+    /// The colour the active target holds. The palette, the hex box and the picker all read and write this one, so a
+    /// click on the deck moves all three to the same zone instead of leaving the hex box on the primary colour.
     /// </summary>
+    public string ActiveColor
+    {
+        get => ActiveZone switch
+        {
+            1 => Zone1,
+            2 => Zone2,
+            3 => Zone3,
+            4 => Zone4,
+            _ => PrimaryColor
+        };
+        set
+        {
+            switch (ActiveZone)
+            {
+                case 1: Zone1 = value; break;
+                case 2: Zone2 = value; break;
+                case 3: Zone3 = value; break;
+                case 4: Zone4 = value; break;
+                default: PrimaryColor = value; break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spreads the active target's colour over all four zones. The per-zone picker cannot do this in one click, and
+    /// one colour for the whole keyboard is the common case.
+    /// </summary>
+    /// <remarks>
+    /// The primary colour goes with them. The firmware's STATIC mode takes one colour and the payload carries both
+    /// fields, so leaving the primary on its old value is what made "apply to all zones" land as a colour the page was
+    /// not showing: the deck said one thing and the keyboard did another.
+    /// </remarks>
     private void ApplyAllZones()
     {
-        var color = LightingPolicy.NormalizeHex(PrimaryColor, LightingPolicy.DefaultColor);
+        var color = LightingPolicy.NormalizeHex(ActiveColor, LightingPolicy.DefaultColor);
+        PrimaryColor = color;
         Zone1 = color;
         Zone2 = color;
         Zone3 = color;
@@ -2616,14 +2677,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Points the palette at the primary colour and opens it. The hex box beside the swatches is the custom picker:
-    /// Avalonia ships no colour dialog, and a hand-rolled one would be a second place to get hex validation wrong.
+    /// Writes a colour chosen in the picker window into whichever target the deck has focused. The window itself is
+    /// the view's business — this is the one line of it the view model needs, so the hex validation stays here.
     /// </summary>
-    private void OpenCustomColor()
+    public void ApplyPickedColor(string hex)
     {
-        ActiveZone = 0;
-        ZonePickerOpen = true;
-        Raise(nameof(ZonePickerOpen));
+        ActiveColor = LightingPolicy.NormalizeHex(hex, LightingPolicy.DefaultColor);
+        SyncSwatchSelection();
     }
 
     /// <summary>
@@ -2786,8 +2846,112 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _backlightTimeoutOn, value)) return;
-            if (!_suppressWrite) _ = RunWriteAsync(() => _hardware!.SetBacklightTimeoutAsync(value), Labels.BacklightTimeout);
+            if (_suppressWrite) return;
+            _ = WriteBacklightTimeoutAsync(value, quiet: false);
         }
+    }
+
+    /// <summary>
+    /// Writes the 30-second timeout and then reads it back.
+    /// </summary>
+    /// <remarks>
+    /// The firmware answers "accepted" for a write it may not have applied, and a switch that keeps a state the
+    /// keyboard never took is worse than one that snaps back: the page would promise the light stays on while the
+    /// keyboard goes dark 30 seconds later. The read-back is what turns that promise into a fact, and a refusal is
+    /// reported in the status line instead of being swallowed.
+    /// <para>
+    /// The opposite failure exists too, and it is the one the reference AN16-41 shows: the service applies the write
+    /// to the EC and never sends a reply, so the write reports a timeout over a keyboard that did change. The
+    /// read-back is what tells the two apart, which is why it runs whether the write said yes or no.
+    /// </para>
+    /// <para>
+    /// <paramref name="revertOnFailure"/> is false for the write the page makes on its own behalf when the hardware
+    /// cannot be asked. Nobody touched the switch in that case, so snapping it to the opposite state would be the page
+    /// arguing with itself; the switch is left showing the choice it just tried to make true.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> WriteBacklightTimeoutAsync(bool enable, bool quiet, bool revertOnFailure = true)
+    {
+        if (_hardware == null) return false;
+
+        bool ok = quiet
+            ? await RunQuietWriteAsync(() => _hardware.SetBacklightTimeoutAsync(enable), Labels.BacklightTimeout)
+                .ConfigureAwait(true)
+            : await RunWriteAsync(() => _hardware.SetBacklightTimeoutAsync(enable), Labels.BacklightTimeout)
+                .ConfigureAwait(true);
+
+        // The read-back decides, not the write's own answer. On the reference AN16-41 the service applies
+        // BACKLIGHT_30S to the EC and never sends a reply, so the write times out over a keyboard that did change.
+        // Reverting the switch over that timeout is what made the user toggle again — and every toggle is another
+        // EC write, which is the one-second stall they feel. A backend that cannot answer the read at all falls back
+        // to the write's own answer, which is the behaviour every other switch on the page has.
+        var state = await _hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
+        bool applied = state is bool actual ? actual == enable : ok;
+
+        if (!applied)
+        {
+            if (revertOnFailure) RevertBacklightTimeout(enable);
+            if (!quiet) Status = $"{Labels.WriteFailed}: {Labels.BacklightTimeout}";
+            return false;
+        }
+
+        // The write reported a failure the read-back contradicted, so the banner RunWriteAsync raised is wrong.
+        if (!ok && !quiet) Status = $"{Labels.Applied}: {Labels.BacklightTimeout}";
+
+        // The switch follows what was written, not what was asked for. The two differ on the re-assert path, where
+        // the stored choice is put back on the keyboard without the user having touched anything.
+        _suppressWrite = true;
+        try { BacklightTimeoutOn = enable; }
+        finally { _suppressWrite = false; }
+
+        _settings.BacklightTimeoutEnabled = enable;
+        SaveSettings();
+        return true;
+    }
+
+    /// <summary>Puts the switch back where it was, without the write the setter would otherwise start.</summary>
+    private void RevertBacklightTimeout(bool attempted)
+    {
+        _suppressWrite = true;
+        try { BacklightTimeoutOn = !attempted; }
+        finally { _suppressWrite = false; }
+    }
+
+    /// <summary>
+    /// Reads the 30-second timeout and puts the switch on what the keyboard actually holds.
+    /// </summary>
+    /// <remarks>
+    /// The startup read races the elevated helper: the window opens before the worker has connected, the read falls
+    /// through to the Acer service, and a machine that runs on direct WMI has no service to answer. The switch then
+    /// kept its default "off" while the firmware's timeout was still on, and the keyboard went dark after 30 seconds
+    /// with the page saying it would not. Reading again when the page is opened is what closes that gap.
+    /// <para>
+    /// When nothing answers — which is the case on the reference AN16-41, where <c>APGeAction</c> is registered but the
+    /// backlight selector returns a status this build does not recognise — the switch cannot be filled from the
+    /// hardware at all. The choice it shows is then the only statement of intent there is, and the only way to make
+    /// that choice true is to write it. Leaving it unwritten is precisely the reported bug: a switch reading "off"
+    /// over a firmware timeout that is still on.
+    /// </para>
+    /// </remarks>
+    public async Task RefreshBacklightTimeoutAsync()
+    {
+        if (_hardware == null || !BacklightTimeoutAvailable) return;
+
+        var state = await _hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
+        if (state is bool on)
+        {
+            _suppressWrite = true;
+            try { BacklightTimeoutOn = on; }
+            finally { _suppressWrite = false; }
+
+            _settings.BacklightTimeoutEnabled = on;
+            SaveSettings();
+            return;
+        }
+
+        // Never touched means the switch is showing its default, and that default is what the page is claiming.
+        var choice = _settings.BacklightTimeoutEnabled ?? _backlightTimeoutOn;
+        await WriteBacklightTimeoutAsync(choice, quiet: true, revertOnFailure: false).ConfigureAwait(true);
     }
 
     public bool WinKeyLockAvailable => _capabilities.WinKeyLock;
@@ -2995,12 +3159,34 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     // ---------------------------------------------------------------- RGB profiles
 
+    /// <summary>The name the profile list shows when the editor holds a hand-set colour rather than a saved preset.</summary>
+    private const string CustomProfileName = "Özel";
+
     public ObservableCollection<RgbPreset> RgbProfiles { get; } = new();
+
+    /// <summary>
+    /// The entry the profile list shows when the editor holds a colour the user set by hand.
+    /// </summary>
+    /// <remarks>
+    /// The list is a statement about where the current colours came from. Once a colour, an effect or a slider is
+    /// edited by hand they no longer came from the preset that was selected, and leaving that preset selected is what
+    /// made the page look like the profile was fighting the picker. Selecting this entry writes nothing, and it is
+    /// never saved to disk: it is a label, not a preset.
+    /// </remarks>
+    public RgbPreset CustomProfile { get; } = new() { Name = CustomProfileName, IsBuiltIn = true };
 
     public RgbPreset? SelectedRgbProfile
     {
         get => _selectedRgbProfile;
-        set => Set(ref _selectedRgbProfile, value);
+        set
+        {
+            if (!Set(ref _selectedRgbProfile, value)) return;
+
+            // The card has no Apply button: picking a profile is the write, the same way picking an effect or a
+            // colour is. The guard covers the reloads that set this property themselves.
+            if (_suppressProfileApply || value == null) return;
+            _ = ApplyRgbProfileAsync();
+        }
     }
 
     /// <summary>The name typed into the save box. Empty means "nothing to save yet".</summary>
@@ -4866,15 +5052,58 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Reloads the preset list, keeping the selection when the preset still exists.</summary>
+    /// <remarks>
+    /// The whole rebuild runs with the apply guard on, not just the final selection. A <c>ComboBox</c> selects the
+    /// first item as its list is filled, and that selection is not the user picking a profile — without the guard it
+    /// applied a preset over whatever the keyboard was running every time the list was reloaded.
+    /// </remarks>
     private void RefreshRgbProfiles()
     {
-        var previous = SelectedRgbProfile?.Name;
+        var previous = SelectedRgbProfile?.Name ?? _settings.SelectedRgbPreset;
 
-        RgbProfiles.Clear();
-        foreach (var preset in _rgbProfiles.GetPresets()) RgbProfiles.Add(preset);
+        _suppressProfileApply = true;
+        try
+        {
+            RgbProfiles.Clear();
+            foreach (var preset in _rgbProfiles.GetPresets()) RgbProfiles.Add(preset);
+            RgbProfiles.Add(CustomProfile);
 
-        SelectedRgbProfile = RgbProfiles.FirstOrDefault(p => p.Name == previous) ?? RgbProfiles.FirstOrDefault();
+            // Nothing matched means the editor is holding a colour no preset describes, which is what the custom
+            // entry is for. Falling back to the first preset would claim a provenance the colours do not have.
+            SelectedRgbProfile = RgbProfiles.FirstOrDefault(p => p.Name == previous) ?? CustomProfile;
+        }
+        finally
+        {
+            _suppressProfileApply = false;
+        }
+
         Raise(nameof(RgbProfileLoadError));
+    }
+
+    /// <summary>
+    /// Moves the selection without writing it. A reload is not the user picking a profile, and the card applies on
+    /// selection now, so the two have to be told apart.
+    /// </summary>
+    private void SelectRgbProfileSilently(RgbPreset? preset)
+    {
+        _suppressProfileApply = true;
+        try { SelectedRgbProfile = preset; }
+        finally { _suppressProfileApply = false; }
+    }
+
+    /// <summary>
+    /// Moves the profile list to the custom entry, without writing anything.
+    /// </summary>
+    /// <remarks>
+    /// Called from every control that edits the lighting by hand. The guard is the same one the writes use: applying a
+    /// preset fills those controls itself, and that is not the user editing anything.
+    /// </remarks>
+    private void MarkProfileCustom()
+    {
+        if (_suppressWrite || _suppressProfileApply) return;
+        if (SelectedRgbProfile?.Name == CustomProfileName) return;
+
+        SelectRgbProfileSilently(CustomProfile);
     }
 
     /// <summary>
@@ -4884,6 +5113,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task ApplyRgbProfileAsync()
     {
         if (SelectedRgbProfile is not RgbPreset preset) return;
+
+        // The custom entry is a label, not a preset: selecting it says "these colours came from the picker", and
+        // there is nothing to write.
+        if (preset.Name == CustomProfileName) return;
 
         // The editor is filled with the write guard on: each of these setters is a write of its own, and a preset is
         // one write, not five. The single call below is the one that reaches the keyboard.
