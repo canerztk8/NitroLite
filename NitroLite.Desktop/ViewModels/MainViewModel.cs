@@ -781,9 +781,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private MouseProfileOption? _selectedMouseProfile;
     private string _mouseProfileStatus = "";
 
-    // The fan-curve presets and the pending MUX mode.
+    // The fan-curve presets, the pending MUX mode and the sentence under the MUX row.
     private CurvePresetChoice? _selectedCurvePreset;
     private GpuOperatingMode? _pendingGpuMode;
+    private string _gpuModeNote = "";
 
     // The rail width and the toast's optional action.
     private double _sidebarWidth;
@@ -3689,23 +3690,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _pendingGpuMode, value)) return;
             Raise(nameof(ShowPendingGpuModeBadge));
-            Raise(nameof(GpuModeNote));
-            Raise(nameof(HasGpuModeNote));
         }
     }
 
     /// <summary>True when the card shows the "restart to apply" badge.</summary>
     public bool ShowPendingGpuModeBadge => _pendingGpuMode != null;
 
-    /// <summary>The sentence under the MUX row: the reboot warning, or nothing when no switch is pending.</summary>
-    public string GpuModeNote => _pendingGpuMode switch
+    /// <summary>
+    /// The sentence under the MUX row: the restart warning for a staged switch, the reason for a refused one, or
+    /// nothing. It is stored rather than derived from <see cref="PendingGpuMode"/> because a refusal has no pending
+    /// mode to derive from and still has to say something.
+    /// </summary>
+    public string GpuModeNote
     {
-        GpuOperatingMode.DiscreteGpu => Labels.GpuPendingDiscrete,
-        GpuOperatingMode.Optimus => Labels.GpuPendingHybrid,
-        _ => ""
-    };
+        get => _gpuModeNote;
+        private set
+        {
+            if (!Set(ref _gpuModeNote, value)) return;
+            Raise(nameof(HasGpuModeNote));
+        }
+    }
 
-    public bool HasGpuModeNote => !string.IsNullOrWhiteSpace(GpuModeNote);
+    public bool HasGpuModeNote => !string.IsNullOrWhiteSpace(_gpuModeNote);
 
     // ---------------------------------------------------------------- desktop restore
 
@@ -4555,11 +4561,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || SelectedGpuMode is not GpuModeChoice choice) return;
 
-        await RunWriteAsync(() => _hardware.SetGpuModeAsync(choice.Mode), Labels.GpuMode).ConfigureAwait(true);
+        bool ok = await RunWriteAsync(() => _hardware.SetGpuModeAsync(choice.Mode), Labels.GpuMode).ConfigureAwait(true);
 
-        // A MUX switch is a firmware setting that only takes effect on the next boot, so the card has to say so
-        // rather than leaving the user to wonder why the GPU did not change.
+        // A MUX write is staged, never applied: the firmware reads the setting on the next boot. The note is what
+        // makes the status line true, and a refusal has to clear the badge rather than leave a restart warning for a
+        // switch that was never written.
+        if (!ok)
+        {
+            PendingGpuMode = null;
+            GpuModeNote = choice.Mode == GpuOperatingMode.Automatic ? Labels.GpuAutomaticNotWritable : "";
+            return;
+        }
+
         PendingGpuMode = choice.Mode;
+        GpuModeNote = choice.Mode switch
+        {
+            GpuOperatingMode.DiscreteGpu => Labels.GpuPendingDiscrete,
+            GpuOperatingMode.Optimus => Labels.GpuPendingHybrid,
+            GpuOperatingMode.Automatic => Labels.GpuPendingAutomatic,
+            _ => ""
+        };
+
+        // The write landed, but the firmware only reads it at POST. "Uygulandı" would be a claim the machine has not
+        // made yet, and it is the one the user is left to reconcile with NitroSense asking for a restart.
+        Status = Labels.GpuModeStaged;
     }
 
     /// <summary>
@@ -4943,20 +4968,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// Runs one write behind the gate and turns the result into a status line. A refusal is not an exception: the
-    /// backend reports "the firmware said no" as false, and the user needs to see which control it was.
+    /// backend reports "the firmware said no" as false, and the user needs to see which control it was. The result is
+    /// returned as well, because a caller that has state to update — the pending MUX mode, for one — must not do it
+    /// for a write that never landed.
     /// </summary>
-    private async Task RunWriteAsync(Func<Task<bool>> write, string what)
+    private async Task<bool> RunWriteAsync(Func<Task<bool>> write, string what)
     {
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
             bool ok = await write().ConfigureAwait(true);
             Status = ok ? $"{Labels.Applied}: {what}" : $"{Labels.WriteFailed}: {what}";
+            return ok;
         }
         catch (Exception ex)
         {
             AppLog.Warn("Donanım yazımı başarısız", $"{what}: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {what}";
+            return false;
         }
         finally
         {

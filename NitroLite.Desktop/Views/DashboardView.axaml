@@ -325,10 +325,12 @@
                      IsVisible="{Binding !MuxAvailable}" />
 
           <!-- A MUX write only takes effect after a reboot, so the card says so and keeps saying so until the
-               machine has restarted. A silent write would look like a switch that does nothing. -->
+               machine has restarted. A silent write would look like a switch that does nothing. The badge is bound
+               separately from the note because a refused write has something to say and nothing to restart for. -->
           <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsVisible="{Binding HasGpuModeNote}">
             <Border Classes="badge" Background="{DynamicResource AccentSoftBrush}"
-                    BorderBrush="{DynamicResource AccentBrush}" Margin="0,0,8,0">
+                    BorderBrush="{DynamicResource AccentBrush}" Margin="0,0,8,0"
+                    IsVisible="{Binding ShowPendingGpuModeBadge}">
               <TextBlock Classes="caps" Text="{Binding Labels.RebootRequired}"
                          Foreground="{DynamicResource AccentBrush}" />
             </Border>

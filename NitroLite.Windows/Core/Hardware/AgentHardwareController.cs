@@ -125,8 +125,23 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
 
     public Task<GpuOperatingMode?> GetGpuModeAsync() => _agent.GetGpuModeAsync();
 
-    public Task<bool> SetGpuModeAsync(GpuOperatingMode mode) =>
-        WriteAsync(() => _agent.SetGpuModeAsync(mode));
+    /// <summary>
+    /// Writes the MUX mode, but only one the firmware advertises. The service answers "success" to a mode it does
+    /// not have, so the capability bitmask is the only thing that separates a staged switch from a no-op that still
+    /// reads as applied. The direct-WMI backend has always checked it; this one did not, which is how a third mode
+    /// could report "applied" on a machine whose firmware never took it.
+    /// </summary>
+    public async Task<bool> SetGpuModeAsync(GpuOperatingMode mode)
+    {
+        var mask = await _agent.GetGpuModeCapabilityAsync().ConfigureAwait(false);
+        if (mask is int bits && bits > 0 && !AcerRegistrySnapshot.IsGpuModeSupported(bits, mode))
+        {
+            AppLog.Warn("MUX yazımı reddedildi", $"mod {mode} yetenek bitmaskesinde yok ({bits})");
+            return false;
+        }
+
+        return await WriteAsync(() => _agent.SetGpuModeAsync(mode)).ConfigureAwait(false);
+    }
 
     public Task<int?> GetGpuModeCapabilityAsync() => _agent.GetGpuModeCapabilityAsync();
 

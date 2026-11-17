@@ -221,6 +221,20 @@ public sealed class ShellLabels
 
     public string GpuPendingDiscrete => Loc.T("Harici GPU seçildi. Değişiklik yeniden başlatmadan sonra etkin olur.");
     public string GpuPendingHybrid => Loc.T("Hibrit mod seçildi. Değişiklik yeniden başlatmadan sonra etkin olur.");
+    public string GpuPendingAutomatic => Loc.T("Otomatik seçim kaydedildi. Değişiklik yeniden başlatmadan sonra etkin olur.");
+
+    /// <summary>
+    /// Shown under the MUX row when the backend refused the mode. Automatic is the one that gets refused: the Linux
+    /// module has no third state, and a Windows machine whose capability bitmask omits it has no third state either.
+    /// The sentence names the two modes that do work rather than leaving the user to guess which one to pick.
+    /// </summary>
+    public string GpuAutomaticNotWritable => Loc.T("Otomatik seçim bu cihazda yazılamıyor; firmware bu modu kendisi yönetiyor. Hibrit veya Harici GPU seçin.");
+
+    /// <summary>
+    /// The status line after a MUX write. "Uygulandı" is the wrong word for a setting the firmware only reads at
+    /// POST, and it is what made a staged switch look like one that had already happened.
+    /// </summary>
+    public string GpuModeStaged => Loc.T("GPU modu kaydedildi; yeniden başlatınca etkin olur.");
     public string GpuPendingBadge => Loc.T("YENİDEN BAŞLAT");
     public string DesktopRestoreDone => Loc.T("Masaüstü ayarları yeniden uygulandı.");
     public string DesktopRestoreFailed => Loc.T("Masaüstü ayarları hâlâ uygulanamıyor.");

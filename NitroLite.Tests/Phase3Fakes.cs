@@ -338,7 +338,16 @@ internal static class Phase3Fakes
 
         public Task<GpuOperatingMode?> GetGpuModeAsync() => Task.FromResult<GpuOperatingMode?>(null);
 
-        public Task<bool> SetGpuModeAsync(GpuOperatingMode mode) => Task.FromResult(true);
+        /// <summary>What the MUX write answers. False models a backend that refuses the mode.</summary>
+        public bool GpuWriteResult { get; set; } = true;
+
+        public List<GpuOperatingMode> GpuWrites { get; } = new();
+
+        public Task<bool> SetGpuModeAsync(GpuOperatingMode mode)
+        {
+            GpuWrites.Add(mode);
+            return Task.FromResult(GpuWriteResult);
+        }
 
         public Task<int?> GetGpuModeCapabilityAsync() => Task.FromResult<int?>(null);
 
