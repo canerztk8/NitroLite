@@ -331,4 +331,60 @@ public class LocalizationCatalogTests
             Loc.SetLanguage(original);
         }
     }
+
+    /// <summary>
+    /// The three call sites whose template no catalogue carried, so every language fell back to the Turkish source:
+    /// the partial-restore message, the Linux "not a game" warning (the catalogue only had the Windows <c>.exe</c>
+    /// variant) and the Care Center read-back message, whose key was missing its closing parenthesis.
+    /// </summary>
+    private static readonly string[] CallSiteTemplates =
+    {
+        "Yedek kısmen geri yüklendi; yazılamayan bölümler: {0}",
+        "'{0}' bir oyun değil ve sürekli çalıştığı için oyun modunu kalıcı olarak açık tutar.",
+        "Care Center ayarı doğrulanamadı (okunan: {0})."
+    };
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("de")]
+    [InlineData("es")]
+    [InlineData("ru")]
+    [InlineData("pt")]
+    [InlineData("hi")]
+    [InlineData("id")]
+    public void EveryCallSiteTemplateIsTranslatedInEveryCatalogue(string code)
+    {
+        var original = Loc.Language;
+        try
+        {
+            Loc.SetLanguage(code);
+            var catalogue = Loc.LoadCatalog(code);
+            foreach (var template in CallSiteTemplates)
+            {
+                Assert.True(catalogue.TryGetValue(template, out var translated),
+                    $"{code} has no entry for the call-site template: {template}");
+                Assert.False(string.IsNullOrWhiteSpace(translated), $"{code} has an empty value for: {template}");
+                Assert.NotEqual(template, translated);
+                Assert.Equal(Placeholders(template), Placeholders(translated!));
+
+                // The lookup the call site performs has to land on the translation, not on the Turkish source.
+                Assert.Equal(translated, Loc.Lookup(template));
+            }
+        }
+        finally
+        {
+            Loc.SetLanguage(original);
+        }
+    }
+
+    [Fact]
+    public void TheTruncatedCareCenterKeyIsGone()
+    {
+        // The key used to stop at "{0}" with no closing parenthesis, so the call site's "...{0})." never matched it.
+        const string truncated = "Care Center ayarı doğrulanamadı (okunan: {0}";
+        foreach (var code in new[] { "en", "de", "es", "ru", "pt", "hi", "id" })
+        {
+            Assert.False(Loc.LoadCatalog(code).ContainsKey(truncated), $"{code} still carries the truncated key");
+        }
+    }
 }
