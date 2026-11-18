@@ -10,6 +10,7 @@ machine, so the window is drawn in the same face on Windows, on Linux and on a m
 | Files | `Quicksand-Regular.ttf`, `Quicksand-SemiBold.ttf`, `Quicksand-Bold.ttf` |
 | Licence | SIL Open Font License, Version 1.1 (reproduced below) |
 | Reserved font name | "Quicksand" |
+| Copyright | Copyright 2011 The Quicksand Project Authors (https://github.com/andrew-paglinawan/QuicksandFamily), with Reserved Font Name "Quicksand". |
 
 ## Why the two licences do not conflict
 

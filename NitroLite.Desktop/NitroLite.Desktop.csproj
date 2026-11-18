@@ -111,11 +111,12 @@
          a WindowIcon, which is loaded through AssetLoader from avares://. -->
     <AvaloniaResource Include="app.ico" Link="Assets\app.ico" />
 
-    <!-- The bundled typeface: Quicksand, in the three weights the type scale actually uses — Regular for body text,
-         SemiBold for titles and labels, Bold for the OSD. Carried inside the assembly rather than looked up on the
-         machine, so the window is drawn in the same face on Windows and on Linux and on a machine that has installed
-         nothing. An AvaloniaResource because Avalonia resolves an embedded family through avares://, the same route
-         the icons take. -->
+    <!-- The bundled typefaces: Quicksand, Exo 2, Oxanium, Rubik, JetBrains Mono and Rajdhani, each in the three
+         weights the type scale actually uses — Regular for body text, SemiBold for titles and labels, Bold for the
+         numbers. Carried inside the assembly rather than looked up on the machine, so the window is drawn in the
+         same face on Windows and on Linux and on a machine that has installed nothing. An AvaloniaResource because
+         Avalonia resolves an embedded family through avares://, the same route the icons take. The wildcard picks
+         up every .ttf in the folder, so adding a face is dropping its three files here. -->
     <AvaloniaResource Include="Assets\Fonts\*.ttf" />
 
     <!-- The OFL requires the licence to travel with the font. Copied next to the executable rather than embedded,

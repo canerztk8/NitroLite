@@ -823,6 +823,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private LocLanguage? _selectedLanguage;
     private ThemeChoice? _selectedTheme;
     private UiFontChoice? _selectedUiFont;
+
+    /// <summary>The machine's display language, read on first use; see <see cref="SystemLanguage"/>.</summary>
+    private string? _systemLanguage;
     private string _udevCommand = "";
     private bool _needsUdevRule;
 
@@ -4360,6 +4363,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Labels = new ShellLabels();
             // The theme names are catalogue keys like every other label, so the picker is rebuilt with the window.
             BuildThemeChoices();
+            // Moving into or out of Hindi adds or removes the Devanagari face from the typeface picker.
+            Raise(nameof(UiFonts));
             Status = Labels.LanguageRestartHint;
         }
     }
@@ -4467,7 +4472,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The typefaces the settings page offers. Built from <see cref="UiFontCatalog"/> rather than written into the
     /// XAML, so adding a face is one entry in the catalogue.
     /// </summary>
-    public IReadOnlyList<UiFontChoice> UiFonts => UiFontCatalog.All;
+    /// <remarks>
+    /// A face drawn for one script is offered only to a reader of that script, and the machine's own display language
+    /// counts as well as the interface language: a Hindi Windows with the interface in English is still a Hindi
+    /// reader. The face already in effect is always in the list, because a picker whose selected item is missing from
+    /// its items draws blank.
+    /// </remarks>
+    public IReadOnlyList<UiFontChoice> UiFonts =>
+        UiFontCatalog.VisibleFor(Loc.Language, SystemLanguage, _selectedUiFont?.Id);
+
+    /// <summary>
+    /// The machine's display language, read once. <see cref="Loc.DetectSystemLanguage"/> asks the current UI culture,
+    /// which does not change while the process runs, and the font list is rebuilt on every language change.
+    /// </summary>
+    private string SystemLanguage => _systemLanguage ??= Loc.DetectSystemLanguage();
 
     /// <summary>
     /// The chosen typeface. Applying it is immediate — the window repaints from the swapped resource — and the choice

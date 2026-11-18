@@ -1,4 +1,7 @@
-Copyright 2011 The Quicksand Project Authors (https://github.com/andrew-paglinawan/QuicksandFamily), with Reserved Font Name “Quicksand”.
+The six typefaces NitroLite embeds are each licensed under the SIL Open Font License, Version 1.1.
+The licence text is identical for all of them and is reproduced once, below. The copyright line that
+belongs to each face is in its own notice under third-party/<Family>/NOTICE.md, and every one of those
+notices is reproduced together with this text in THIRD-PARTY-NOTICES.md in the published package.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

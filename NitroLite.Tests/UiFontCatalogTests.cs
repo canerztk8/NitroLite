@@ -8,7 +8,7 @@ using Xunit;
 namespace NitroLite.Tests;
 
 /// <summary>
-/// The typeface picker: six faces, every one of them able to draw all eight UI languages.
+/// The typeface picker: eleven faces, every one of them able to draw all eight UI languages.
 /// </summary>
 /// <remarks>
 /// The risk this guards is not cosmetic. A face that carries only Latin leaves a Hindi user with empty boxes, and a
@@ -21,11 +21,69 @@ public class UiFontCatalogTests
         Path.Combine(Path.GetTempPath(), $"nitrolite-font-{Guid.NewGuid():N}.json");
 
     [Fact]
-    public void SixFacesAreOffered()
+    public void ElevenFacesAreOffered()
     {
-        Assert.Equal(6, UiFontCatalog.All.Count);
-        Assert.Equal(6, UiFontCatalog.All.Select(f => f.Id).Distinct().Count());
-        Assert.Equal(6, UiFontCatalog.All.Select(f => f.DisplayName).Distinct().Count());
+        Assert.Equal(11, UiFontCatalog.All.Count);
+        Assert.Equal(11, UiFontCatalog.All.Select(f => f.Id).Distinct().Count());
+        Assert.Equal(11, UiFontCatalog.All.Select(f => f.DisplayName).Distinct().Count());
+    }
+
+    [Fact]
+    public void TheDevanagariFaceIsOfferedOnlyToAHindiReader()
+    {
+        // The rule the settings page follows: a face drawn for one script is offered to a reader of that script, and
+        // either language counts — a Hindi Windows with the interface in English is still a Hindi reader.
+        Assert.DoesNotContain(UiFontCatalog.VisibleFor("en", "en"), f => f.Id == "rajdhani");
+        Assert.Equal(UiFontCatalog.All.Count - 1, UiFontCatalog.VisibleFor("en", "en").Count);
+
+        Assert.Contains(UiFontCatalog.VisibleFor("hi", "en"), f => f.Id == "rajdhani");
+        Assert.Contains(UiFontCatalog.VisibleFor("en", "hi"), f => f.Id == "rajdhani");
+        Assert.Contains(UiFontCatalog.VisibleFor("HI", "EN"), f => f.Id == "rajdhani");
+
+        // Every other face is offered to everyone, whatever the language.
+        foreach (var face in UiFontCatalog.All.Where(f => f.Id != "rajdhani"))
+        {
+            Assert.Contains(UiFontCatalog.VisibleFor("en", "en"), f => f.Id == face.Id);
+        }
+    }
+
+    [Fact]
+    public void TheFaceInEffectStaysInTheListWhenTheReaderLeavesItsScript()
+    {
+        // A picker whose SelectedItem is not among its items draws blank, and the window is still in that face. The
+        // reader can see what is applied and change it; nothing is swapped behind their back.
+        var visible = UiFontCatalog.VisibleFor("en", "en", currentId: "rajdhani");
+
+        Assert.Contains(visible, f => f.Id == "rajdhani");
+        Assert.Equal(UiFontCatalog.All.Count, visible.Count);
+    }
+
+    [Fact]
+    public void EveryBundledFaceHasItsFilesOnDisk()
+    {
+        // The avares URI names a folder, not a file: a face whose .ttf never reached Assets/Fonts resolves to nothing
+        // at runtime and the window silently falls back to the system font. The files are checked here instead.
+        var fonts = Path.Combine(RepoRoot(), "NitroLite.Desktop", "Assets", "Fonts");
+
+        foreach (var face in UiFontCatalog.All.Where(f => f.Stack.StartsWith("avares://", System.StringComparison.Ordinal)))
+        {
+            var family = face.Stack.Split(',')[0].Split('#')[1];
+            var files = Directory.GetFiles(fonts, family + "-*.ttf");
+
+            Assert.True(files.Length >= 3, $"{face.DisplayName} has {files.Length} files in Assets/Fonts, expected 3");
+        }
+    }
+
+    [Fact]
+    public void EveryBundledFaceNamesAFamilyThatIsNotTheDefault()
+    {
+        // Two faces sharing a family name would draw the same glyphs under two labels, which is a picker that lies.
+        var families = UiFontCatalog.All
+            .Where(f => f.Stack.StartsWith("avares://", System.StringComparison.Ordinal))
+            .Select(f => f.Stack.Split(',')[0].Split('#')[1])
+            .ToList();
+
+        Assert.Equal(families.Count, families.Distinct().Count());
     }
 
     [Fact]
@@ -155,6 +213,17 @@ public class UiFontCatalogTests
 
         Assert.Null(settings.UiFont);
         Assert.Equal(UiFontCatalog.DefaultId, UiFontCatalog.Resolve(settings.UiFont).Id);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "NitroLite.sln")))
+        {
+            dir = dir.Parent;
+        }
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     private sealed class RecordingApplier : IThemeApplier
