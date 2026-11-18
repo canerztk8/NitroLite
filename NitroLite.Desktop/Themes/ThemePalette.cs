@@ -93,6 +93,10 @@ public sealed class ThemePalette
         AppTheme.SlateSteel => SlateSteel,
         AppTheme.AmberConsole => AmberConsole,
         AppTheme.NordFrost => NordFrost,
+        AppTheme.CleanWhite => CleanWhite,
+        AppTheme.Forest => Forest,
+        AppTheme.NeonStreet => NeonStreet,
+        AppTheme.HighContrast => HighContrast,
         _ => Dark
     };
 
@@ -309,5 +313,110 @@ public sealed class ThemePalette
         Warning = Color.Parse("#EBCB8B"),
         Danger = Color.Parse("#BF616A"),
         ChartFill = Color.Parse("#1A88C0D0")
+    };
+
+    /// <summary>Neutral daylight white with a blue accent: the light palette for a bright room.</summary>
+    /// <remarks>
+    /// The second light palette, and the one that is not warm. WarmCream is paper; this is a whiteboard. The card is
+    /// pure white against a very slightly grey page, so the cards read as raised without a shadow, and the rule is
+    /// dark enough to clear the 1.45:1 floor the tests hold every palette to.
+    /// </remarks>
+    public static ThemePalette CleanWhite { get; } = new()
+    {
+        Page = Color.Parse("#F6F7F9"),
+        Card = Color.Parse("#FFFFFF"),
+        CardHover = Color.Parse("#EEF1F5"),
+        Panel = Color.Parse("#E9EDF2"),
+        Rail = Color.Parse("#F0F2F6"),
+        CardBorder = Color.Parse("#C2CBD7"),
+        CardBorderStrong = Color.Parse("#A7B3C2"),
+        TextPrimary = Color.Parse("#111827"),
+        TextSecondary = Color.Parse("#44505F"),
+        TextMuted = Color.Parse("#5F6B7A"),
+        Accent = Color.Parse("#2563EB"),
+        OnAccent = Color.Parse("#FFFFFF"),
+        Success = Color.Parse("#15803D"),
+        Warning = Color.Parse("#B45309"),
+        Danger = Color.Parse("#B91C1C"),
+        ChartFill = Color.Parse("#1A2563EB")
+    };
+
+    /// <summary>Deep green-black with an emerald accent.</summary>
+    /// <remarks>
+    /// The green the set was missing. The surfaces carry a green cast rather than being neutral grey, so the accent
+    /// reads as part of the palette instead of a stripe laid over it, and the emerald clears 9:1 on the page — the
+    /// strongest accent of the dark palettes.
+    /// </remarks>
+    public static ThemePalette Forest { get; } = new()
+    {
+        Page = Color.Parse("#0A1310"),
+        Card = Color.Parse("#111E19"),
+        CardHover = Color.Parse("#172A22"),
+        Panel = Color.Parse("#0D1814"),
+        Rail = Color.Parse("#0C1613"),
+        CardBorder = Color.Parse("#2A4038"),
+        CardBorderStrong = Color.Parse("#3C5A4D"),
+        TextPrimary = Color.Parse("#E6F2EC"),
+        TextSecondary = Color.Parse("#A8C4B6"),
+        TextMuted = Color.Parse("#7E9C8D"),
+        Accent = Color.Parse("#34D399"),
+        OnAccent = Color.Parse("#0A1310"),
+        Success = Color.Parse("#4ADE80"),
+        Warning = Color.Parse("#FBBF24"),
+        Danger = Color.Parse("#F87171"),
+        ChartFill = Color.Parse("#1A34D399")
+    };
+
+    /// <summary>Near-black with a cyan accent, for a machine that lives under a keyboard light.</summary>
+    /// <remarks>
+    /// The one palette with a cool accent on a blue-black page. The surfaces are darker than SlateSteel's and the
+    /// accent is cyan rather than ice-blue, which is what keeps the two apart at a glance: SlateSteel is a desk
+    /// palette, this one is a lit keyboard.
+    /// </remarks>
+    public static ThemePalette NeonStreet { get; } = new()
+    {
+        Page = Color.Parse("#08080F"),
+        Card = Color.Parse("#101019"),
+        CardHover = Color.Parse("#181826"),
+        Panel = Color.Parse("#0B0B14"),
+        Rail = Color.Parse("#0A0A11"),
+        CardBorder = Color.Parse("#33334F"),
+        CardBorderStrong = Color.Parse("#3F3F63"),
+        TextPrimary = Color.Parse("#F0F0FF"),
+        TextSecondary = Color.Parse("#A9A9D0"),
+        TextMuted = Color.Parse("#7E7EA8"),
+        Accent = Color.Parse("#22D3EE"),
+        OnAccent = Color.Parse("#08080F"),
+        Success = Color.Parse("#4ADE80"),
+        Warning = Color.Parse("#FDE047"),
+        Danger = Color.Parse("#F472B6"),
+        ChartFill = Color.Parse("#1A22D3EE")
+    };
+
+    /// <summary>Pure black, pure white ink and a yellow accent: the palette for a screen read at a glance.</summary>
+    /// <remarks>
+    /// Not a mood, a measurement. Every pair here is pushed as far apart as the sRGB cube allows: white ink on a
+    /// near-black card is 19.4:1, the rule is 3:1 against the page rather than the 1.45:1 the other palettes settle
+    /// for, and the yellow accent is 14.7:1. A reader who needs the window legible from across a room, or who has
+    /// the display at 30 % brightness, gets the same information as everyone else.
+    /// </remarks>
+    public static ThemePalette HighContrast { get; } = new()
+    {
+        Page = Color.Parse("#000000"),
+        Card = Color.Parse("#0D0D0D"),
+        CardHover = Color.Parse("#1A1A1A"),
+        Panel = Color.Parse("#050505"),
+        Rail = Color.Parse("#030303"),
+        CardBorder = Color.Parse("#5A5A5A"),
+        CardBorderStrong = Color.Parse("#8A8A8A"),
+        TextPrimary = Color.Parse("#FFFFFF"),
+        TextSecondary = Color.Parse("#E0E0E0"),
+        TextMuted = Color.Parse("#B8B8B8"),
+        Accent = Color.Parse("#FFD400"),
+        OnAccent = Color.Parse("#000000"),
+        Success = Color.Parse("#00E676"),
+        Warning = Color.Parse("#FFB300"),
+        Danger = Color.Parse("#FF5252"),
+        ChartFill = Color.Parse("#1AFFD400")
     };
 }

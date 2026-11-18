@@ -64,7 +64,19 @@ public enum AppTheme
     AmberConsole = 5,
 
     /// <summary>Nord's polar-night greys with a glacier-turquoise accent.</summary>
-    NordFrost = 6
+    NordFrost = 6,
+
+    /// <summary>Neutral daylight white with a blue accent: the light palette for a bright room.</summary>
+    CleanWhite = 7,
+
+    /// <summary>Deep green-black with an emerald accent.</summary>
+    Forest = 8,
+
+    /// <summary>Near-black with a cyan accent, for a machine that lives under a keyboard light.</summary>
+    NeonStreet = 9,
+
+    /// <summary>Pure black, pure white ink and a yellow accent: the palette for a screen read at a glance.</summary>
+    HighContrast = 10
 }
 
 public class MonitorData

@@ -31,7 +31,7 @@ public class UnexpectedValueTests : IDisposable
     {
         var settings = new AppSettings
         {
-            Theme = (AppTheme)7,
+            Theme = (AppTheme)99,
             LastOperatingMode = (OperatingMode)99,
             DcPowerMode = (DcPowerProfilePreference)5
         };
@@ -111,7 +111,7 @@ public class UnexpectedValueTests : IDisposable
         var path = Path.Combine(_dir, "settings.json");
         File.WriteAllText(path, """
             {
-              "theme": 7,
+              "theme": 99,
               "last_operating_mode": 99,
               "dc_power_mode": 5,
               "osd_corner": 9,

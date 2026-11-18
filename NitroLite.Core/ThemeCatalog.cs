@@ -22,7 +22,11 @@ public static class ThemeCatalog
         AppTheme.MidnightOled,
         AppTheme.SlateSteel,
         AppTheme.AmberConsole,
-        AppTheme.NordFrost
+        AppTheme.NordFrost,
+        AppTheme.CleanWhite,
+        AppTheme.Forest,
+        AppTheme.NeonStreet,
+        AppTheme.HighContrast
     };
 
     /// <summary>
@@ -35,7 +39,10 @@ public static class ThemeCatalog
         AppTheme.MidnightOled,
         AppTheme.SlateSteel,
         AppTheme.AmberConsole,
-        AppTheme.NordFrost
+        AppTheme.NordFrost,
+        AppTheme.Forest,
+        AppTheme.NeonStreet,
+        AppTheme.HighContrast
     };
 
     /// <summary>True when <paramref name="theme"/> is one of the dark-based palettes.</summary>
@@ -60,6 +67,10 @@ public static class ThemeCatalog
         AppTheme.SlateSteel => "Soğuk Antrasit",
         AppTheme.AmberConsole => "Kehribar Konsol",
         AppTheme.NordFrost => "Kuzey Buzulu",
+        AppTheme.CleanWhite => "Temiz Beyaz",
+        AppTheme.Forest => "Orman",
+        AppTheme.NeonStreet => "Neon Sokak",
+        AppTheme.HighContrast => "Yüksek Karşıtlık",
         _ => "Sıcak Krem"
     };
 

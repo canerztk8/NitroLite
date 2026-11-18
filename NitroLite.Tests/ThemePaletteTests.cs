@@ -207,7 +207,11 @@ public class ThemePaletteTests
     [InlineData(AppTheme.SlateSteel, true)]
     [InlineData(AppTheme.AmberConsole, true)]
     [InlineData(AppTheme.NordFrost, true)]
+    [InlineData(AppTheme.Forest, true)]
+    [InlineData(AppTheme.NeonStreet, true)]
+    [InlineData(AppTheme.HighContrast, true)]
     [InlineData(AppTheme.WarmCream, false)]
+    [InlineData(AppTheme.CleanWhite, false)]
     public void IsDarkTheme_ClassifiesEveryConcretePalette(AppTheme theme, bool expected)
     {
         Assert.Equal(expected, ThemeCatalog.IsDarkTheme(theme));
@@ -227,6 +231,10 @@ public class ThemePaletteTests
     [InlineData("SlateSteel", true)]
     [InlineData("AmberConsole", true)]
     [InlineData("NordFrost", true)]
+    [InlineData("Forest", true)]
+    [InlineData("NeonStreet", true)]
+    [InlineData("HighContrast", true)]
+    [InlineData("CleanWhite", false)]
     [InlineData("Light", false)]
     [InlineData("System", false)]
     [InlineData("Nonsense", false)]
@@ -254,6 +262,35 @@ public class ThemePaletteTests
         {
             Assert.True(seen.Add(ThemePalette.For(theme)), $"{theme} shares a palette with another theme");
         }
+    }
+
+    [Fact]
+    public void EveryPaletteIsVisuallyDistinctFromEveryOther()
+    {
+        // Two palettes whose page, card and accent all match are one palette with two names, and the picker offers a
+        // choice that changes nothing. The five swatch colours are what the card shows, so they are what is compared.
+        var seen = new Dictionary<string, AppTheme>(StringComparer.Ordinal);
+
+        foreach (var theme in ConcreteThemes)
+        {
+            var key = string.Join("|", ThemePalette.SwatchHexes(theme));
+            Assert.False(seen.TryGetValue(key, out var other),
+                $"{theme} shows the same five swatches as {other}");
+            seen[key] = theme;
+        }
+    }
+
+    [Fact]
+    public void TheHighContrastPaletteClearsTheFloorsByAWideMargin()
+    {
+        // The palette exists for a reader who needs the window legible at a glance, so it is held to more than the
+        // minimum every other palette meets: 7:1 body text (AAA) and 3:1 for the rule rather than 1.45:1.
+        var c = Colours(AppTheme.HighContrast);
+
+        Assert.True(Contrast(c["TextPrimary"], c["Card"]) >= 7.0);
+        Assert.True(Contrast(c["CardBorder"], c["Page"]) >= 3.0);
+        Assert.True(Contrast(c["TextMuted"], c["Card"]) >= 4.5);
+        Assert.True(Contrast(c["Accent"], c["Page"]) >= 7.0);
     }
 
     [Fact]
@@ -295,10 +332,19 @@ public class ThemePaletteTests
     [InlineData("AmberConsole", AppTheme.AmberConsole)]
     [InlineData("NordFrost", AppTheme.NordFrost)]
     [InlineData("nordfrost", AppTheme.NordFrost)]
+    [InlineData("CleanWhite", AppTheme.CleanWhite)]
+    [InlineData("Forest", AppTheme.Forest)]
+    [InlineData("NeonStreet", AppTheme.NeonStreet)]
+    [InlineData("HighContrast", AppTheme.HighContrast)]
+    [InlineData("highcontrast", AppTheme.HighContrast)]
     [InlineData("0", AppTheme.WarmCream)]
     [InlineData("1", AppTheme.Dark)]
     [InlineData("2", AppTheme.System)]
     [InlineData("6", AppTheme.NordFrost)]
+    [InlineData("7", AppTheme.CleanWhite)]
+    [InlineData("8", AppTheme.Forest)]
+    [InlineData("9", AppTheme.NeonStreet)]
+    [InlineData("10", AppTheme.HighContrast)]
     public void TryParse_AcceptsNamesAndLegacyNumbers(string stored, AppTheme expected)
     {
         Assert.True(ThemeCatalog.TryParse(stored, out var theme));

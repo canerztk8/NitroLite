@@ -295,11 +295,11 @@ public class Wave2ParityTests
     }
 
     // =============================================================================================================
-    // 3. The theme cards: six palettes, one click.
+    // 3. The theme cards: ten palettes, one click.
     // =============================================================================================================
 
     [Fact]
-    public void ThemeCards_RenderAllSixPalettesAndSwitchTheme()
+    public void ThemeCards_RenderEveryPaletteAndSwitchTheme()
     {
         var applier = new RecordingThemeApplier();
         var settings = new AppSettings();
@@ -313,10 +313,10 @@ public class Wave2ParityTests
             Assert.Equal(ThemeCatalog.All.Count, vm.ThemeCards.Count);
             Assert.Equal(ThemeCatalog.All, vm.ThemeCards.Select(c => c.Theme));
 
-            // The six concrete palettes each carry five swatches. "System" is a preference, not a palette: it shows
+            // The ten concrete palettes each carry five swatches. "System" is a preference, not a palette: it shows
             // whatever it resolves to, so it is not counted here.
             var concrete = vm.ThemeCards.Where(c => c.Theme != AppTheme.System).ToList();
-            Assert.Equal(6, concrete.Count);
+            Assert.Equal(10, concrete.Count);
 
             foreach (var card in concrete)
             {
