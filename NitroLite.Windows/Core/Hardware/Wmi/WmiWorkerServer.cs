@@ -285,7 +285,12 @@ public sealed class WmiWorkerServer : IDisposable
                         CpuFanRpm = ReadSensorId(request.Args, "cpuFanRpmSensor", AcerWmiProtocol.SensorCpuFanSpeed),
                         Sys1Temp = ReadSensorId(request.Args, "sys1TempSensor", AcerWmiProtocol.SensorSystemTemperature),
                         GpuFanRpm = ReadSensorId(request.Args, "gpuFanRpmSensor", AcerWmiProtocol.SensorGpuFanSpeed),
-                        GpuTemp = ReadSensorId(request.Args, "gpuTempSensor", AcerWmiProtocol.SensorGpuTemperature)
+                        GpuTemp = ReadSensorId(request.Args, "gpuTempSensor", AcerWmiProtocol.SensorGpuTemperature),
+
+                        // Absent means "not confirmed", which is the answer that keeps the percentage fallback in
+                        // the reply. An older caller that sends no flag therefore still gets everything it used to.
+                        TachometerConfirmed =
+                            TryReadBool(request.Args, "tachometerConfirmed", out var confirmed) && confirmed
                     };
 
                     return WmiWorkerResponse.FromResult(_executor.ReadTelemetry(query));

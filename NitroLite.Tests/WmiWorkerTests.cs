@@ -572,6 +572,34 @@ public class WmiWorkerTests
         Assert.Equal(WmiOperationResult.CodeNotSupported, response.ErrorCode);
     }
 
+    [Fact]
+    public async Task Pipe_TelemetryWithoutTheFlag_KeepsThePercentageFallback()
+    {
+        using var session = await PipeSession.StartAsync();
+
+        var response = await session.Client.SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
+        {
+            ["cpuTempSensor"] = 1
+        });
+
+        Assert.True(response.Ok);
+        Assert.False(session.Executor.LastSensorQuery!.TachometerConfirmed);
+    }
+
+    [Fact]
+    public async Task Pipe_TelemetryWithAConfirmedTachometer_TellsTheExecutorToSkipTheFallback()
+    {
+        using var session = await PipeSession.StartAsync();
+
+        var response = await session.Client.SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
+        {
+            ["tachometerConfirmed"] = true
+        });
+
+        Assert.True(response.Ok);
+        Assert.True(session.Executor.LastSensorQuery!.TachometerConfirmed);
+    }
+
     // ---------------------------------------------------------------- job object and watchdog
 
     [Fact]

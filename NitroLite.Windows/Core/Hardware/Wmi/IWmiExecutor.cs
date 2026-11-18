@@ -67,6 +67,12 @@ public sealed record SensorQuery
     public byte GpuFanRpm { get; init; } = AcerWmiProtocol.SensorGpuFanSpeed;
     public byte GpuTemp { get; init; } = AcerWmiProtocol.SensorGpuTemperature;
 
+    /// <summary>
+    /// Whether the caller has already confirmed this machine's tachometer. When it has, and both fans answer, the
+    /// percentage fallback is not read: it is two firmware round trips per sample for a value the caller discards.
+    /// </summary>
+    public bool TachometerConfirmed { get; init; }
+
     /// <summary>The firmware-wide enum, used when no profile has been matched.</summary>
     public static SensorQuery Default { get; } = new();
 

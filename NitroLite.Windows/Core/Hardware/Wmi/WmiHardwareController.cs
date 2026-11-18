@@ -197,20 +197,25 @@ public sealed class WmiHardwareController : IHardwareController
             _discoveredSensors = await ProbeSensorsAsync(layout).ConfigureAwait(false);
         }
 
+        var tachometerConfirmed = layout.Verified || _discoveredSensors != null;
+
         var response = await SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
         {
             ["cpuTempSensor"] = layout.CpuTempSensor,
             ["cpuFanRpmSensor"] = layout.CpuFanRpmSensor,
             ["sys1TempSensor"] = layout.Sys1TempSensor,
             ["gpuFanRpmSensor"] = layout.GpuFanRpmSensor,
-            ["gpuTempSensor"] = layout.GpuTempSensor
+            ["gpuTempSensor"] = layout.GpuTempSensor,
+
+            // Told to the worker so it can skip the percentage fallback it would otherwise read on every sample.
+            ["tachometerConfirmed"] = tachometerConfirmed
         }).ConfigureAwait(false);
 
         if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
 
         return BuildMonitorData(
             data, layout, snapshot?.MaxCpuFanRpm ?? 0, snapshot?.MaxGpuFanRpm ?? 0,
-            tachometerConfirmed: layout.Verified || _discoveredSensors != null);
+            tachometerConfirmed: tachometerConfirmed);
     }
 
     /// <summary>

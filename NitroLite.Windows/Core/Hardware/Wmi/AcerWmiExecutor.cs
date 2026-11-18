@@ -192,18 +192,14 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     }
                 };
 
-                AppendFanSpeed(data, gaming, "cpu", AcerWmiProtocol.FanIdCpu);
-                AppendFanSpeed(data, gaming, "gpu", AcerWmiProtocol.FanIdGpu);
-
-                var mode = InvokeGetter(gaming, "GetGamingMiscSetting", AcerWmiProtocol.MiscIndexPlatformProfile);
-                if (mode.HasValue)
+                // The percentage is the fallback for a machine whose tachometer did not answer, and the caller reads
+                // it only in that case. When the tachometer is confirmed and both fans reported, reading it is two
+                // firmware round trips per sample for a number nobody looks at.
+                if (!query.TachometerConfirmed || !BothTachometersAnswered(data))
                 {
-                    data["operatingModeStatus"] = AcerWmiProtocol.DecodeStatus(mode.Value);
-                    var decoded = AcerWmiProtocol.DecodeOperatingMode(mode.Value);
-                    if (decoded.HasValue) data["operatingMode"] = decoded.Value.ToString();
+                    AppendFanSpeed(data, gaming, "cpu", AcerWmiProtocol.FanIdCpu);
+                    AppendFanSpeed(data, gaming, "gpu", AcerWmiProtocol.FanIdGpu);
                 }
-
-                AppendFanBehavior(data, gaming);
 
                 return WmiOperationResult.Success(data);
             }
@@ -1125,18 +1121,29 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     }
 
     /// <summary>
-    /// Reads both fan behaviours in one call. The bitmap has to name both fans: the getter only fills in the fields
-    /// whose bit was set, so asking with <c>0x00</c> answers status <c>0x02</c> and no modes at all.
+    /// Whether both tachometers answered a speed this build believes. It mirrors the gate
+    /// <see cref="WmiHardwareController.BuildMonitorData"/> applies before it trusts a measured speed, so the
+    /// percentage fallback is skipped exactly when that gate would have discarded it.
     /// </summary>
-    private static void AppendFanBehavior(JsonObject data, ManagementObject gaming)
-    {
-        var behavior = InvokeGetter(gaming, "GetGamingFanBehavior", AcerWmiProtocol.FanBitmapBoth);
-        if (!behavior.HasValue) return;
+    private static bool BothTachometersAnswered(JsonObject data) =>
+        data["sensors"] is JsonObject sensors &&
+        AnsweredRpm(sensors, SensorDiscovery.CpuFanRpm) &&
+        AnsweredRpm(sensors, SensorDiscovery.GpuFanRpm);
 
-        var (status, cpu, gpu) = AcerWmiProtocol.DecodeFanBehavior(behavior.Value);
-        data["fanBehaviorStatus"] = status;
-        data["cpuFanMode"] = cpu.ToString();
-        data["gpuFanMode"] = gpu.ToString();
+    private static bool AnsweredRpm(JsonObject sensors, string key)
+    {
+        if (sensors[key] is not JsonObject node) return false;
+
+        try
+        {
+            return node["status"]?.GetValue<int>() == AcerWmiProtocol.StatusOk &&
+                   node["value"]?.GetValue<int>() is int rpm &&
+                   SensorPlausibility.IsPlausibleFanRpm(rpm);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
