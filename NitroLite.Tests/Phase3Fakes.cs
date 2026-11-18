@@ -421,7 +421,10 @@ internal static class Phase3Fakes
 
         public Task<int?> GetGpuModeCapabilityAsync() => Task.FromResult<int?>(null);
 
-        public Task<FanMode?> GetFanModeAsync() => Task.FromResult<FanMode?>(FanMode.Auto);
+        /// <summary>What the backend says the fans are doing. Settable so a test can start in custom mode.</summary>
+        public FanMode ReportedFanMode { get; set; } = FanMode.Auto;
+
+        public Task<FanMode?> GetFanModeAsync() => Task.FromResult<FanMode?>(ReportedFanMode);
 
         public Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
         {

@@ -1,4 +1,4 @@
-{
+﻿{
   "  (dosya bulunamadı)": "  (arquivo não encontrado)",
   " (16 Çekirdek)": " (16 Núcleos)",
   " (Araç kurulu değil)": " (ferramenta não instalada)",
@@ -397,6 +397,7 @@
   "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Relatório de hardware copiado para a área de transferência. Pode colá-lo num problema do GitHub.",
   "Donanım raporu yazılamadı: {0}": "Não foi possível gravar o relatório de hardware: {0}",
   "Donanım taraması henüz tamamlanmadı. Ayarlar sayfasından yeniden tarayabilirsiniz.": "A análise de hardware ainda não terminou. Pode voltar a analisar a partir da página de definições.",
+  "Donanım taranıyor. Denetimler tarama bitince açılır.": "Analisando o hardware. Os controles abrem quando a análise terminar.",
   "Donanım yetenekleri": "Recursos de hardware",
   "Donanım yetenekleri taranamadı: {0}": "Não foi possível analisar os recursos de hardware: {0}",
   "Donanım yetenekleri yeniden tarandı: {0}": "Recursos de hardware analisados novamente: {0}",

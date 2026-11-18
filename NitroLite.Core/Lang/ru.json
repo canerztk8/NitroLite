@@ -1,4 +1,4 @@
-{
+﻿{
   "  (dosya bulunamadı)": "  (файл не найден)",
   " (16 Çekirdek)": " (16 ядер)",
   " (Araç kurulu değil)": " (инструмент не установлен)",
@@ -397,6 +397,7 @@
   "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Отчёт об оборудовании скопирован в буфер обмена. Его можно вставить в задачу GitHub.",
   "Donanım raporu yazılamadı: {0}": "Не удалось записать отчёт об оборудовании: {0}",
   "Donanım taraması henüz tamamlanmadı. Ayarlar sayfasından yeniden tarayabilirsiniz.": "Сканирование оборудования ещё не завершено. Его можно повторить на странице настроек.",
+  "Donanım taranıyor. Denetimler tarama bitince açılır.": "Сканирование оборудования. Элементы управления откроются после завершения сканирования.",
   "Donanım yetenekleri": "Возможности оборудования",
   "Donanım yetenekleri taranamadı: {0}": "Не удалось проверить возможности оборудования: {0}",
   "Donanım yetenekleri yeniden tarandı: {0}": "Возможности оборудования проверены повторно: {0}",

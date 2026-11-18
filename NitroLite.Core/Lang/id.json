@@ -1,4 +1,4 @@
-{
+﻿{
   "  (dosya bulunamadı)": "  (berkas tidak ditemukan)",
   " (16 Çekirdek)": " (16 Inti)",
   " (Araç kurulu değil)": " (alat belum terpasang)",
@@ -397,6 +397,7 @@
   "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Laporan perangkat keras disalin ke papan klip. Anda dapat menempelkannya ke masalah GitHub.",
   "Donanım raporu yazılamadı: {0}": "Laporan perangkat keras tidak dapat ditulis: {0}",
   "Donanım taraması henüz tamamlanmadı. Ayarlar sayfasından yeniden tarayabilirsiniz.": "Pemindaian perangkat keras belum selesai. Anda dapat memindai ulang dari halaman pengaturan.",
+  "Donanım taranıyor. Denetimler tarama bitince açılır.": "Memindai perangkat keras. Kontrol akan terbuka setelah pemindaian selesai.",
   "Donanım yetenekleri": "Kemampuan perangkat keras",
   "Donanım yetenekleri taranamadı: {0}": "Kemampuan perangkat keras tidak dapat dipindai: {0}",
   "Donanım yetenekleri yeniden tarandı: {0}": "Kemampuan perangkat keras dipindai ulang: {0}",

@@ -48,7 +48,8 @@ public sealed record PlatformServices(
     IRunAtStartupService? RunAtStartup,
     INitroKeyListener? NitroKey,
     INitroSenseWatcher? NitroSense,
-    SettingsLoadResult? SettingsLoad);
+    SettingsLoadResult? SettingsLoad,
+    Task ProbeTask);
 
 /// <summary>
 /// The composition root: settings, language, the hardware backend and the view model, wired once at startup.
@@ -78,10 +79,12 @@ public sealed class AppHost : IDisposable
     private readonly INitroKeyListener? _nitroKey;
     private readonly INitroSenseWatcher? _nitroSense;
     private readonly IBatteryHealthService? _batteryHealth;
+    private readonly Task _probeTask;
 
     private AppHost(PlatformServices services, IDialogService? dialogs)
     {
         _hardware = services.Hardware;
+        _probeTask = services.ProbeTask;
         _nitroKey = services.NitroKey;
         _nitroSense = services.NitroSense;
         _batteryHealth = services.BatteryHealth;
@@ -127,7 +130,8 @@ public sealed class AppHost : IDisposable
             services.RunAtStartup,
             services.NitroKey,
             services.NitroSense,
-            urlOpener: OpenInDefaultBrowser);
+            urlOpener: OpenInDefaultBrowser,
+            probeTask: services.ProbeTask);
 
         // A settings file that had to be discarded is the one startup failure the user has to be told about: the app
         // is running on the backup or on defaults, and the preferences they set may be gone. The message is handed
@@ -187,6 +191,16 @@ public sealed class AppHost : IDisposable
     public static AppHost Create(IDialogService? dialogs = null) => new(CreateServices(), dialogs);
 
     /// <summary>
+    /// Completes when the capability probe has run, successfully or not.
+    /// </summary>
+    /// <remarks>
+    /// The probe starts on the thread pool from the composition root, so the window opens without waiting for it. The
+    /// window awaits this before its first hardware read, which is what keeps a slow probe off the UI thread; a test
+    /// awaits it instead of sleeping, which is what makes the hardware matrix deterministic.
+    /// </remarks>
+    public Task WhenReadyAsync() => _probeTask;
+
+    /// <summary>
     /// Builds the platform half only. Used by the window and by the one-shot commands, so a <c>--cli</c> run talks to
     /// exactly the backend the window would.
     /// </summary>
@@ -243,12 +257,16 @@ public sealed class AppHost : IDisposable
         INitroKeyListener? nitroKey = null;
         INitroSenseWatcher? nitroSense = null;
 
+        // Completes when the capability probe has run, or immediately on a platform that has no probe. The window
+        // awaits it before its first hardware read, so a slow probe delays the controls rather than the window.
+        var probeTask = Task.CompletedTask;
+
 #if WINDOWS
         if (OperatingSystem.IsWindows())
         {
             try
             {
-                (hardware, platform, rescan, autoStart, gameProfiles, schoolMode, refreshRate, powerState) =
+                (hardware, platform, rescan, autoStart, gameProfiles, schoolMode, refreshRate, powerState, probeTask) =
                     CreateWindows(settings);
 
                 // The same object school mode writes through, so the segmented control and the state machine can never
@@ -366,7 +384,7 @@ public sealed class AppHost : IDisposable
             settings, settingsPath, hardware, platform, rescan, autoStart, gameProfiles, schoolMode,
             refreshRate, powerState, cpuBoost, gameLibrary, mouseProfiles, monitor, memoryCleaner, openRgb,
             batteryHealth, storageHealth, debloat, systemTools, updates, diagnostics, directWmi, runAtStartup,
-            nitroKey, nitroSense, load);
+            nitroKey, nitroSense, load, probeTask);
     }
 
 #if WINDOWS
@@ -412,33 +430,39 @@ public sealed class AppHost : IDisposable
         GameProfileService GameProfiles,
         SchoolModeService SchoolMode,
         RefreshRateAutomation RefreshRate,
-        Func<(bool OnAc, int? BatteryPercent)> PowerState) CreateWindows(AppSettings settings)
+        Func<(bool OnAc, int? BatteryPercent)> PowerState,
+        Task ProbeTask) CreateWindows(AppSettings settings)
     {
         var identity = HardwareDetector.Current;
         var catalog = ProfileCatalog.Load();
 
-        CapabilitySnapshot? snapshot = null;
-        bool probed = false;
-
-        // The probe runs at most once per session and only when something asks for it: the settings page's tier line,
-        // the hardware report, or the WMI controller's first sensor read.
-        CapabilitySnapshot? Probe()
-        {
-            if (probed) return snapshot;
-            probed = true;
-            try
+        // The probe enumerates root\WMI and reads the registry. On a healthy machine that is tens of milliseconds, but
+        // a machine with a damaged WMI repository answers in tens of seconds, and the old code ran it on whichever
+        // thread first asked — which was the UI thread, on the first hardware read after the window opened. It is
+        // started here instead, on the thread pool, so the window never waits for it. Every caller still goes through
+        // the same Lazy, so the probe runs once and a caller that needs the answer blocks only if it is still going.
+        var probe = new Lazy<CapabilitySnapshot?>(
+            () =>
             {
-                snapshot = CapabilityProbe.TryFromCache(settings, identity, catalog)
-                           ?? CapabilityProbe.Probe(identity, catalog);
-                CapabilityProbe.Store(settings, snapshot);
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.ToString());
-            }
+                try
+                {
+                    var result = CapabilityProbe.TryFromCache(settings, identity, catalog)
+                                 ?? CapabilityProbe.Probe(identity, catalog);
+                    CapabilityProbe.Store(settings, result);
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.ToString());
+                    return null;
+                }
+            },
+            LazyThreadSafetyMode.ExecutionAndPublication);
 
-            return snapshot;
-        }
+        CapabilitySnapshot? Probe() => probe.Value;
+
+        // Started before the window exists, so the cost overlaps Avalonia's own start-up rather than following it.
+        var probeTask = Task.Run(() => _ = probe.Value);
 
         var readBack = new ReadBackPolicy(settings);
         var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe);
@@ -474,7 +498,8 @@ public sealed class AppHost : IDisposable
         // 60 Hz drop can never disagree about whether the charger is plugged in.
         var refreshRate = new RefreshRateAutomation(new DisplayRefreshRateService(), settings);
 
-        return (hybrid, platform, platform, autoStart, gameProfiles, schoolMode, refreshRate, WindowsPowerStatus.Read);
+        return (hybrid, platform, platform, autoStart, gameProfiles, schoolMode, refreshRate, WindowsPowerStatus.Read,
+            probeTask);
     }
 
     /// <summary>

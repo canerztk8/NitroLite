@@ -1,4 +1,4 @@
-{
+﻿{
   "  (dosya bulunamadı)": "  (file not found)",
   " (16 Çekirdek)": " (16 Cores)",
   " (Araç kurulu değil)": " (tool not installed)",
@@ -397,6 +397,7 @@
   "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Hardware report copied to the clipboard. You can paste it into a GitHub issue.",
   "Donanım raporu yazılamadı: {0}": "Could not write the hardware report: {0}",
   "Donanım taraması henüz tamamlanmadı. Ayarlar sayfasından yeniden tarayabilirsiniz.": "The hardware scan has not finished yet. You can rescan from the settings page.",
+  "Donanım taranıyor. Denetimler tarama bitince açılır.": "Scanning the hardware. The controls open when the scan finishes.",
   "Donanım yetenekleri": "Hardware capabilities",
   "Donanım yetenekleri taranamadı: {0}": "Hardware capabilities could not be scanned: {0}",
   "Donanım yetenekleri yeniden tarandı: {0}": "Hardware capabilities rescanned: {0}",

@@ -1,4 +1,4 @@
-{
+﻿{
   "  (dosya bulunamadı)": "  (Datei nicht gefunden)",
   " (16 Çekirdek)": " (16 Kerne)",
   " (Araç kurulu değil)": " (Tool nicht installiert)",
@@ -397,6 +397,7 @@
   "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "Hardwarebericht in die Zwischenablage kopiert. Sie können ihn in ein GitHub-Issue einfügen.",
   "Donanım raporu yazılamadı: {0}": "Hardwarebericht konnte nicht geschrieben werden: {0}",
   "Donanım taraması henüz tamamlanmadı. Ayarlar sayfasından yeniden tarayabilirsiniz.": "Die Hardwareprüfung ist noch nicht abgeschlossen. Sie können sie auf der Einstellungsseite erneut starten.",
+  "Donanım taranıyor. Denetimler tarama bitince açılır.": "Die Hardware wird gescannt. Die Bedienelemente werden nach dem Scan freigegeben.",
   "Donanım yetenekleri": "Hardware-Fähigkeiten",
   "Donanım yetenekleri taranamadı: {0}": "Hardware-Fähigkeiten konnten nicht gescannt werden: {0}",
   "Donanım yetenekleri yeniden tarandı: {0}": "Hardware-Fähigkeiten erneut gescannt: {0}",

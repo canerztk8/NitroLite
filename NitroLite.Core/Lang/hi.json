@@ -1,4 +1,4 @@
-{
+﻿{
   "  (dosya bulunamadı)": "  (फ़ाइल नहीं मिली)",
   " (16 Çekirdek)": " (16 कोर)",
   " (Araç kurulu değil)": " (टूल इंस्टॉल नहीं है)",
@@ -397,6 +397,7 @@
   "Donanım raporu panoya kopyalandı. GitHub sorununa yapıştırabilirsiniz.": "हार्डवेयर रिपोर्ट क्लिपबोर्ड पर कॉपी हो गई। आप इसे GitHub इश्यू में पेस्ट कर सकते हैं।",
   "Donanım raporu yazılamadı: {0}": "हार्डवेयर रिपोर्ट लिखी नहीं जा सकी: {0}",
   "Donanım taraması henüz tamamlanmadı. Ayarlar sayfasından yeniden tarayabilirsiniz.": "हार्डवेयर स्कैन अभी पूरा नहीं हुआ है। आप सेटिंग्स पृष्ठ से फिर से स्कैन कर सकते हैं।",
+  "Donanım taranıyor. Denetimler tarama bitince açılır.": "हार्डवेयर स्कैन हो रहा है। स्कैन पूरा होने पर नियंत्रण खुल जाएंगे।",
   "Donanım yetenekleri": "हार्डवेयर क्षमताएँ",
   "Donanım yetenekleri taranamadı: {0}": "हार्डवेयर क्षमताएँ स्कैन नहीं हो सकीं: {0}",
   "Donanım yetenekleri yeniden tarandı: {0}": "हार्डवेयर क्षमताएँ फिर से स्कैन की गईं: {0}",

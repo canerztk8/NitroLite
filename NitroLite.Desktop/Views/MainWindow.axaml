@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:NitroLite.Desktop.ViewModels"
         xmlns:views="using:NitroLite.Desktop.Views"
@@ -285,23 +285,43 @@
         <!-- The page. Only this column scrolls, so the rail and the header stay put. -->
         <Grid Grid.Column="2" RowDefinitions="Auto,*" Margin="26,20,26,0">
 
-          <!-- Standing note while the backend is unreachable. The toast alone is gone after three seconds, and a
-               window whose every hardware control silently does nothing reads as broken. -->
-          <Border Grid.Row="0" IsVisible="{Binding ShowNoBackendBanner}"
-                  Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
-                  BorderThickness="1" CornerRadius="2" Margin="0,0,0,14">
-            <Grid ColumnDefinitions="3,*">
-              <Border Grid.Column="0" Background="{DynamicResource AccentBrush}" />
-              <StackPanel Grid.Column="1" Margin="12,9,12,10">
-                <TextBlock Text="{Binding Labels.NoBackend}" Classes="caps"
-                           Foreground="{DynamicResource AccentBrush}" />
-                <TextBlock Text="{Binding NoBackendDetail}" FontSize="11" Margin="0,4,0,0"
-                           Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
-              </StackPanel>
-            </Grid>
-          </Border>
+          <StackPanel Grid.Row="0">
 
-          <Grid Grid.Row="1">
+            <!-- The capability probe runs on the thread pool, so the window is up before the list of what this
+                 machine can do is. The page below is disabled until it lands: a control clicked against a list that
+                 has not been read yet would write a value the machine may not have. -->
+            <Border IsVisible="{Binding IsHardwareBusy}"
+                    Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                    BorderThickness="1" CornerRadius="2" Margin="0,0,0,14">
+              <Grid ColumnDefinitions="3,*">
+                <Border Grid.Column="0" Background="{DynamicResource TextSecondaryBrush}" />
+                <StackPanel Grid.Column="1" Margin="12,9,12,10">
+                  <TextBlock Text="{Binding Labels.HardwareScanning}" Classes="caps"
+                             Foreground="{DynamicResource TextSecondaryBrush}" />
+                  <TextBlock Text="{Binding Labels.HardwareScanningDetail}" FontSize="11" Margin="0,4,0,0"
+                             Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <!-- Standing note while the backend is unreachable. The toast alone is gone after three seconds, and a
+                 window whose every hardware control silently does nothing reads as broken. -->
+            <Border IsVisible="{Binding ShowNoBackendBanner}"
+                    Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                    BorderThickness="1" CornerRadius="2" Margin="0,0,0,14">
+              <Grid ColumnDefinitions="3,*">
+                <Border Grid.Column="0" Background="{DynamicResource AccentBrush}" />
+                <StackPanel Grid.Column="1" Margin="12,9,12,10">
+                  <TextBlock Text="{Binding Labels.NoBackend}" Classes="caps"
+                             Foreground="{DynamicResource AccentBrush}" />
+                  <TextBlock Text="{Binding NoBackendDetail}" FontSize="11" Margin="0,4,0,0"
+                             Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </StackPanel>
+
+          <Grid Grid.Row="1" IsEnabled="{Binding IsHardwareReady}">
             <views:DashboardView IsVisible="{Binding IsModesPage}" />
             <views:MonitoringView IsVisible="{Binding IsMonitoringPage}" />
             <views:LightingView IsVisible="{Binding IsLightingPage}" />

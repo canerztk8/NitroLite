@@ -635,6 +635,10 @@ public sealed class ShellLabels
     public string NitroSenseCloseFailed => Loc.T("NitroSense kapatılamadı.");
     public string NoAcerServices => Loc.T("Yüklü Acer arka plan servisi bulunamadı.");
 
+    /// <summary>The banner shown while the capability probe is still running.</summary>
+    public string HardwareScanning => Loc.T("Taranıyor…");
+    public string HardwareScanningDetail => Loc.T("Donanım taranıyor. Denetimler tarama bitince açılır.");
+
     public string RepairTools => Loc.T("Sistem ve Donanım Onarım Araçları");
     public string RepairToolsHint => Loc.T("Servis kayıtlarını ve MUX değerini yeniden yazar; hiçbiri donanım ayarını değiştirmez.");
     public string RepairConfirm => Loc.T("Bu onarım aracı çalıştırılsın mı?");

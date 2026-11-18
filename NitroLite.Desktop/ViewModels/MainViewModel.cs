@@ -767,6 +767,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// anything. <see cref="InitializeAsync"/> clears it once the first read is done.
     /// </summary>
     private bool _suppressWrite = true;
+
+    /// <summary>
+    /// The capability probe the composition root started on the thread pool. Null when the caller built the view model
+    /// without one, which is every test that does not go through <see cref="AppHost"/>.
+    /// </summary>
+    private readonly Task? _probeTask;
+
+    /// <summary>
+    /// True once the probe has finished, so the fan loop and the hardware controls can be trusted with a write.
+    /// </summary>
+    private bool _hardwareReady;
     private bool _refreshing;
     private bool _disposed;
 
@@ -906,7 +917,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         INitroKeyListener? nitroKey = null,
         INitroSenseWatcher? nitroSense = null,
         FanStallWatchdog? fanStall = null,
-        Action<string>? urlOpener = null)
+        Action<string>? urlOpener = null,
+        Task? probeTask = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _hardware = hardware;
@@ -939,6 +951,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _nitroKey = nitroKey;
         _nitroSense = nitroSense;
         _urlOpener = urlOpener;
+        _probeTask = probeTask;
 
         // The watchdog is a dependency rather than a field initialiser so a test can shorten its ten-second sustain
         // window. Production always gets the default one.
@@ -1088,6 +1101,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => _isReady;
         private set => Set(ref _isReady, value);
     }
+
+    /// <summary>
+    /// True while the capability probe is still running. The scanning banner is shown, so a control cannot be clicked
+    /// against a capability list that has not been read yet.
+    /// </summary>
+    public bool IsHardwareBusy => !_hardwareReady;
+
+    /// <summary>
+    /// The same fact the other way round, because the page binds its <c>IsEnabled</c> to it. Two properties rather than
+    /// a negated binding: a binding that silently fails to resolve leaves the page enabled, which is the one outcome
+    /// this pair exists to prevent.
+    /// </summary>
+    public bool IsHardwareReady => _hardwareReady;
 
     /// <summary>
     /// True when there is a backend and it found something to talk to. A Linux machine with no <c>acer-wmi</c> node
@@ -2315,6 +2341,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
 
+        // Nothing is written before the probe has answered. The loop is started again from InitializeAsync once it
+        // has, so a machine that boots in custom mode still gets its curve without the user touching a card.
+        if (!_hardwareReady) return;
+
         if (_hardware != null && SelectedFanMode?.Mode == FanMode.Custom) _curveLoop.Start();
         else _curveLoop.Stop();
     }
@@ -2326,6 +2356,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>The custom-speed sliders only mean something in <see cref="FanMode.Custom"/>.</summary>
     public bool CustomFanVisible => SelectedFanMode?.Mode == FanMode.Custom;
+
+    /// <summary>
+    /// True while the fan curve loop is running. Exposed so the guarantee that it does not start before the capability
+    /// probe has answered can be asserted without a window.
+    /// </summary>
+    public bool FanCurveRunning => _curveLoop.IsRunning;
 
     public int CustomCpuPercent
     {
@@ -4578,6 +4614,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ? Labels.SettingsResetToDefaults
                 : Labels.SettingsRestoredFromBackup;
         }
+
+        // The probe runs on the thread pool from the composition root, so the window is already open by the time this
+        // is reached. Awaiting it here is what keeps the first hardware read off the UI thread while it is still
+        // going: a machine with a damaged WMI repository answers the probe in tens of seconds, and the old code paid
+        // that on the UI thread. A failed probe is not a reason to leave the window read-only, so the exception is
+        // logged and the controls are released anyway.
+        if (_probeTask != null)
+        {
+            try
+            {
+                await _probeTask.ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.Message);
+            }
+        }
+
+        _hardwareReady = true;
+        Raise(nameof(IsHardwareBusy));
+        Raise(nameof(IsHardwareReady));
 
         // The mode cards are filtered by the power source, so the source has to be read before the list is built: a
         // window opened on battery would otherwise offer Turbo and hide Eco until the first telemetry tick.
