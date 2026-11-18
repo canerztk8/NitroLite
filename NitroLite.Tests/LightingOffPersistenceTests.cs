@@ -24,6 +24,13 @@ public class LightingOffPersistenceTests
     private const int SettleMilliseconds = 3000;
 
     /// <summary>
+    /// The recovery copy is a second write after the debounced one, and the whole suite runs in parallel on CI. This
+    /// test asserts the state that ends up on disk, not how fast it gets there, so it gets a budget that survives a
+    /// loaded runner.
+    /// </summary>
+    private const int RecoveryCopyMilliseconds = 15000;
+
+    /// <summary>
     /// A folder of its own per test. <see cref="ActiveRgbStateStore"/> writes beside the settings file, so a shared
     /// temp folder would let one test's recovery copy decide another test's re-assert.
     /// </summary>
@@ -82,9 +89,16 @@ public class LightingOffPersistenceTests
             var hardware = new Phase3Fakes.StubHardware();
             using var vm = await ReadyAsync(hardware, settings, settingsPath);
 
-            // A lit write first, so the recovery copy holds something a re-assert could wrongly put back.
+            // A lit write first, so the recovery copy holds something a re-assert could wrongly put back. The
+            // recovery copy is written after the firmware accepts the write, so waiting for the hardware write alone
+            // read the file before it had been touched — a race the test lost on a slow runner.
             vm.BrightnessLevel = 7;
-            await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, SettleMilliseconds);
+            await Phase3Fakes.WaitUntilAsync(
+                () => hardware.LightingWrites.Count > 0
+                      && ActiveRgbStateStore.Load(settingsPath) is { } lit
+                      && !LightingPolicy.IsOff(lit),
+                RecoveryCopyMilliseconds);
+
             Assert.False(LightingPolicy.IsOff(ActiveRgbStateStore.Load(settingsPath)!));
 
             vm.TurnOffLightingCommand.Execute(null);
@@ -95,7 +109,7 @@ public class LightingOffPersistenceTests
                 () => settings.IsBacklightOff
                       && ActiveRgbStateStore.Load(settingsPath) is { } state
                       && LightingPolicy.IsOff(state),
-                SettleMilliseconds);
+                RecoveryCopyMilliseconds);
 
             var recovery = ActiveRgbStateStore.Load(settingsPath);
             Assert.NotNull(recovery);
