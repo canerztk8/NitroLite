@@ -104,8 +104,28 @@ public static class Loc
 
     }
 
-    /// <summary>Reads an embedded catalogue; empty when the language has none (the source language).</summary>
+    /// <summary>
+    /// Reads an embedded catalogue; empty when the language has none (the source language).
+    /// </summary>
+    /// <remarks>
+    /// Cached, because the catalogues are embedded resources that cannot change while the process runs and
+    /// <see cref="SetLanguage"/> used to re-read and re-parse the English one on every call. The settings page calls
+    /// it once per language change, and the English catalogue is also the fallback every other language reads through,
+    /// so the same file was being deserialized again and again for an answer that never differs.
+    /// </remarks>
     public static IReadOnlyDictionary<string, string> LoadCatalog(string code)
+    {
+        if (CatalogCache.TryGetValue(code, out var cached)) return cached;
+
+        var loaded = ReadCatalog(code);
+        CatalogCache[code] = loaded;
+        return loaded;
+    }
+
+    private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> CatalogCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlyDictionary<string, string> ReadCatalog(string code)
     {
         try
         {
