@@ -52,6 +52,13 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// <summary>One gate for every write, so two callers cannot interleave a write and its read-back.</summary>
     private readonly SemaphoreSlim _writeGate = new(1, 1);
 
+    /// <summary>
+    /// Serialises the hwmon read. The telemetry tick is the only caller today, but the read enumerates
+    /// <c>/sys/class/hwmon</c> and every attribute under it, and two callers arriving at once would do that work twice
+    /// for the same answer. Held for the length of the read — a handful of sysfs attributes — never across a write.
+    /// </summary>
+    private readonly object _readGate = new();
+
     private bool _disposed;
 
     /// <summary>Set once the OpenRGB fallback has been tried, so a machine without it is not probed on every call.</summary>
@@ -170,7 +177,16 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     {
         if (_disposed) return Task.FromResult<MonitorData?>(null);
 
-        var sample = LinuxHwmon.Sample(_caps.Nodes.Hwmon);
+        // Read hwmon again instead of sampling the list the probe captured. That list is a topology decision — which
+        // devices exist and what the kernel calls them — and its values are a snapshot from startup. Sampling the
+        // snapshot is what made this backend report one temperature for the whole session, which in turn left the fan
+        // curve and the thermal floor working from a number that was true once, at launch.
+        LinuxSensorSample sample;
+        lock (_readGate)
+        {
+            sample = LinuxHwmon.Sample(LinuxHwmon.Read(_fs));
+        }
+
         var measured = sample.HasMeasuredFanRpm;
         var (cpuPercent, gpuPercent) = ReadFanPercent();
 

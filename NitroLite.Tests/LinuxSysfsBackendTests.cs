@@ -259,6 +259,48 @@ public class LinuxSysfsBackendTests
     }
 
     [Fact]
+    public async Task Tier1_Telemetry_ReadsTheSensorAgainInsteadOfReplayingTheProbe()
+    {
+        // The probe reads hwmon once to decide what the machine can do. That read must not become the reading the
+        // window shows for the rest of the session: a laptop whose temperature never moves is a laptop whose fan
+        // curve never moves either, and the thermal floor would be computed against a number from startup.
+        var fs = Nitro16Tier1Only();
+        using var controller = Controller(fs);
+
+        var first = await controller.GetMonitorDataAsync();
+        Assert.Equal(63, first!.CpuTemperature);
+        Assert.Equal(2436, first.CpuFanSpeed);
+
+        // The die heats up and the fan spins faster, exactly as sysfs would report it.
+        fs.WithFile("/sys/class/hwmon/hwmon1/temp1_input", "81000\n");
+        fs.WithFile("/sys/class/hwmon/hwmon0/fan1_input", "4100\n");
+
+        var second = await controller.GetMonitorDataAsync();
+
+        Assert.Equal(81, second!.CpuTemperature);
+        Assert.Equal(4100, second.CpuFanSpeed);
+        Assert.True(second.IsFanRpmMeasured);
+    }
+
+    [Fact]
+    public async Task Tier1_Telemetry_FollowsASensorThatDisappears()
+    {
+        // A module unloaded mid-session is not a machine that is 0 °C. The reading has to fall back to "no reading"
+        // rather than keep the last number, or the fan curve would chase a temperature nobody is measuring.
+        var fs = Nitro16Tier1Only();
+        using var controller = Controller(fs);
+
+        Assert.Equal(63, (await controller.GetMonitorDataAsync())!.CpuTemperature);
+
+        fs.WithoutFile("/sys/class/hwmon/hwmon1/temp1_input");
+
+        var after = await controller.GetMonitorDataAsync();
+
+        // The board sensor is the fallback, and it is still there.
+        Assert.Equal(55, after!.CpuTemperature);
+    }
+
+    [Fact]
     public async Task Tier1_NoTachometer_DerivesTheSpeedAndLeavesTheWatchdogInStandby()
     {
         var fs = Nitro16Tier1Only();
