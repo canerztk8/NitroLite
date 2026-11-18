@@ -3,7 +3,7 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)
-[![Tests](https://img.shields.io/badge/Tests-2603-10B981)](#tests)
+[![Tests](https://img.shields.io/badge/Tests-2626-10B981)](#tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -39,15 +39,15 @@ it rather than failing when pressed. See [Without Acer's software](#without-acer
 The window is Avalonia, so the same front end runs on Windows and on Linux. See
 [Linux (experimental)](#linux-experimental).
 
-**Measured footprint** (AN16-41, 1.2.6, the published single-file build, five cold starts): an 18.6 MB download
+**Measured footprint** (AN16-41, 1.2.6, the published single-file build, five cold starts): a 19.4 MB download
 holding a 24 MB exe, the window on screen 3.4 s after launch, about 234 MB working set with the window open and about
 75 MB once it has been in the tray for a few minutes. The gap between those two is the window's own surfaces, which
 Windows trims lazily: a minute after hiding it still reads about 137 MB, and it settles to 75 MB after three. Idle CPU
 is 3.4 % of one core, which is about 0.2 % in Task Manager on a 16-thread machine. Telemetry is read every second
 while the window is on screen, every five seconds in the tray, and every half second while the OSD is up.
 
-**New in 1.2.6:** the Avalonia rewrite, a Linux build, 31 model profiles, the Nitro key, the theme engine and a
-2603-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
+**New in 1.2.6:** the Avalonia rewrite, a Linux build, 31 model profiles, the Nitro key, the theme engine, ten
+palettes, six bundled typefaces and a 2626-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -64,7 +64,7 @@ while the window is on screen, every five seconds in the tray, and every half se
 
 All five pages, in English and in the dark theme, are in [`docs/screenshots`](docs/screenshots). They are captured
 by `scripts/screenshot.ps1` against a throwaway data folder, so they show a fresh install rather than the author's
-settings. The same script captures any of the eight languages and any of the six themes; see
+settings. The same script captures any of the eight languages and any of the ten themes; see
 [Capturing screenshots](#capturing-screenshots).
 
 The tour above is on [YouTube](https://youtu.be/0FmFyp4AykY): 45 seconds, 1080p60, captions burned in. A 5.9 MB
@@ -359,16 +359,59 @@ NitroLite restarts itself in about a second to apply it.
 
 ## Theme
 
-**Settings → Theme** offers **System default** plus six palettes, each shown as a row of five swatches — page, card,
-rule, ink and accent, in the order the palette defines them: the warm-cream "paper" theme, `Dark`, and four dark
-variants — **Midnight OLED** (true black), **Slate Steel** (cold anthracite), **Amber Console** (warm amber) and
-**Nord Frost** (glacier turquoise). All six share one key set and the same paper-and-ink hierarchy; only the
-temperature of the ground and the hue of the accent move. System default follows the Windows app theme, resolved at
-launch. The OSD is dark in every case. Like the language, the theme applies after a quick restart.
+**Settings → Theme** offers **System default** plus ten palettes, each shown as a preview card with a row of five
+swatches — page, card, rule, ink and accent, in the order the palette defines them.
+
+| | Palette | Ground |
+|---|---|---|
+| Light | **Warm Cream** (the default "paper" theme) | warm off-white |
+| Light | **Clean White** | neutral white, cool grey rule |
+| Dark | **Dark** | charcoal |
+| Dark | **Midnight OLED** | true black |
+| Dark | **Slate Steel** | cold anthracite |
+| Dark | **Amber Console** | warm amber |
+| Dark | **Nord Frost** | glacier turquoise |
+| Dark | **Forest** | deep green, moss accent |
+| Dark | **Neon Street** | near-black, magenta accent |
+| Dark | **High Contrast** | black ground, white ink, a 3:1 rule |
+
+All ten share one key set and the same paper-and-ink hierarchy; only the temperature of the ground and the hue of the
+accent move. Every palette is held to the same six contrast floors — body ink on a card at 4.5:1, a card rule against
+the page at 1.45:1, muted ink at 3:1, the accent against the page at 3:1 — so a palette cannot ship unreadable, and a
+test fails if one does. System default follows the Windows app theme, resolved at launch. The OSD is dark in every
+case. Like the language, the theme applies after a quick restart.
 
 <p align="center">
   <img src="docs/screenshots/en-dark-NavModes.jpg" alt="NitroLite in the dark theme" width="100%">
 </p>
+
+## Typeface
+
+**Settings → Typeface** picks the face the whole window is drawn in. Six of the eleven choices travel inside the
+executable, so the window looks the same on a machine that has installed nothing:
+
+| Face | Character | Scripts it carries |
+|---|---|---|
+| **Quicksand** (default) | geometric sans, rounded terminals | Latin, Latin Extended, Vietnamese |
+| **Exo 2** | technical geometric, slightly squared | Latin, Cyrillic |
+| **Oxanium** | squared, HUD-like, the lightest file of the set | Latin |
+| **Rubik** | rounded, low contrast | Latin, Cyrillic |
+| **JetBrains Mono** | monospace, drawn for code | Latin, Cyrillic |
+| **Rajdhani** | condensed, drawn for a HUD | Latin, Devanagari |
+
+The five behind them are the machine's own — Segoe UI, Arial, Verdana, Tahoma and Georgia — for a reader who would
+rather have the system face.
+
+**Rajdhani is offered to Hindi readers only.** It is the one face in the set drawn for Devanagari, and a reader who
+does not have Hindi on screen gains nothing from a condensed HUD face. It appears when the interface language is Hindi
+*or* when the Windows display language is Hindi, so a Hindi reader who set the interface to English still sees it. A
+reader who has already selected it keeps it in the list after switching away, because a picker whose selected item is
+not among its items draws blank.
+
+Every stack ends in the Devanagari fallbacks and a generic family, so a face without Devanagari — Quicksand, for
+instance — falls through to Nirmala UI for Hindi rather than drawing empty boxes. Nothing renders as tofu in any of
+the eight languages. The bundled faces are SIL OFL 1.1 and subset to the ranges the eight catalogues can put on
+screen; the licences travel with the package.
 
 ## Updating
 
@@ -505,7 +548,7 @@ NitroLite.Desktop/                  net10.0 and net10.0-windows — the Avalonia
 ├── ViewModels/                     # MainViewModel and the shell labels
 ├── Controls/                       # SparklineChart, TelemetryChart, WearTrendChart, NitroSlider
 ├── Themes/                         # Palette loading
-└── Assets/Fonts/                   # The bundled typeface and its licence
+└── Assets/Fonts/                   # The six bundled typefaces and their licences
 ```
 
 **Data location:** settings, game profiles, RGB profiles, thermal history, battery wear history and the log live in
@@ -708,7 +751,7 @@ The solution has five projects:
 | `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
 | `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
 | `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2603 tests. |
+| `NitroLite.Tests` | `net10.0-windows` | 2626 tests. |
 
 `NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
 check that keeps the split honest.
@@ -748,7 +791,7 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2603 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+2626 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
@@ -821,9 +864,22 @@ GitHub returns only to the repository owner. Requires the [GitHub CLI](https://c
 
 This project is released under the [MIT License](LICENSE).
 
-The interface is drawn in [Quicksand](https://github.com/andrew-paglinawan/QuicksandFamily), embedded in the
-executable and licensed under the SIL Open Font License 1.1, which travels with the package; see
-`THIRD-PARTY-NOTICES.md`.
+The interface is drawn in six typefaces, all embedded in the executable and all licensed under the SIL Open Font
+License 1.1, which travels with the package:
+
+| Face | Upstream |
+|---|---|
+| Quicksand | [andrew-paglinawan/QuicksandFamily](https://github.com/andrew-paglinawan/QuicksandFamily) |
+| Exo 2 | [google/fonts](https://github.com/google/fonts/tree/main/ofl/exo2) |
+| Oxanium | [google/fonts](https://github.com/google/fonts/tree/main/ofl/oxanium) |
+| Rubik | [google/fonts](https://github.com/google/fonts/tree/main/ofl/rubik) |
+| JetBrains Mono | [JetBrains/JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) |
+| Rajdhani | [google/fonts](https://github.com/google/fonts/tree/main/ofl/rajdhani) |
+
+Each was subset to the character ranges the eight catalogues can put on screen, and each was instanced at three
+weights because Avalonia 11 exposes no variation axis. None of the six carries a Reserved Font Name, so the subset
+keeps the family name. The per-face copyright line and the exact change made are in `third-party/<face>/NOTICE.md`,
+and the combined notice is in `THIRD-PARTY-NOTICES.md`.
 
 The package also contains [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) 3.0.8, which is
 GPL-3.0. It is an unmodified, separate executable that NitroLite only launches as a child process, so the two form an
