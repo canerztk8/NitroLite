@@ -438,31 +438,43 @@ public sealed class AppHost : IDisposable
 
         // The probe enumerates root\WMI and reads the registry. On a healthy machine that is tens of milliseconds, but
         // a machine with a damaged WMI repository answers in tens of seconds, and the old code ran it on whichever
-        // thread first asked — which was the UI thread, on the first hardware read after the window opened. It is
-        // started here instead, on the thread pool, so the window never waits for it. Every caller still goes through
-        // the same Lazy, so the probe runs once and a caller that needs the answer blocks only if it is still going.
-        var probe = new Lazy<CapabilitySnapshot?>(
-            () =>
+        // thread first asked — which was the UI thread, on the first hardware read after the window opened.
+        //
+        // A Task rather than a Lazy, and that is the whole point. A Lazy runs its factory on whichever thread asks
+        // first, so the guarantee "the probe never runs on the UI thread" would have rested on the pool thread winning
+        // a race it is not obliged to win. A Task is started here, before the window exists, and every caller waits
+        // for that one run instead of being able to start one of its own.
+        var probeTask = Task.Run<CapabilitySnapshot?>(() =>
+        {
+            try
             {
-                try
-                {
-                    var result = CapabilityProbe.TryFromCache(settings, identity, catalog)
-                                 ?? CapabilityProbe.Probe(identity, catalog);
-                    CapabilityProbe.Store(settings, result);
-                    return result;
-                }
-                catch (Exception ex)
-                {
-                    AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.ToString());
-                    return null;
-                }
-            },
-            LazyThreadSafetyMode.ExecutionAndPublication);
+                var result = CapabilityProbe.TryFromCache(settings, identity, catalog)
+                             ?? CapabilityProbe.Probe(identity, catalog);
+                CapabilityProbe.Store(settings, result);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.ToString());
+                return null;
+            }
+        });
 
-        CapabilitySnapshot? Probe() => probe.Value;
-
-        // Started before the window exists, so the cost overlaps Avalonia's own start-up rather than following it.
-        var probeTask = Task.Run(() => _ = probe.Value);
+        // A caller that needs the answer blocks until the pool thread has it. The factory catches everything, so the
+        // task cannot fault in practice; the catch is here because a hardware read is not the place to discover that
+        // it did, and a null snapshot is the same answer a failed probe gives.
+        CapabilitySnapshot? Probe()
+        {
+            try
+            {
+                return probeTask.GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.Message);
+                return null;
+            }
+        }
 
         var readBack = new ReadBackPolicy(settings);
         var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe);

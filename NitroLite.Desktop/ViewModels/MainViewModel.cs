@@ -4632,6 +4632,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
+        // The window can be closed while the probe is still running: a fast open and close on a machine whose WMI
+        // repository is damaged is exactly that case, and the probe is the one thing that can take tens of seconds.
+        // Everything below touches services the composition root disposes with the window, so the continuation stops
+        // here rather than running against them.
+        if (_disposed) return;
+
         _hardwareReady = true;
         Raise(nameof(IsHardwareBusy));
         Raise(nameof(IsHardwareReady));
@@ -4739,15 +4745,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // step lists what the probe found. This sits in the finally rather than at the end of the try block so it
             // also runs on the two early returns above: a machine with no Acer nodes still has a battery and still
             // deserves the walkthrough.
-            await InitializePhase3Async().ConfigureAwait(true);
+            //
+            // Skipped when the window was closed while the probe was still running: the services this reads are
+            // disposed with the window, and a continuation that outlived it has nothing left to initialise.
+            if (!_disposed)
+            {
+                await InitializePhase3Async().ConfigureAwait(true);
 
-            // Whatever happened above, the controls must work from now on: a failed initial read is not a reason to
-            // leave the window read-only for the rest of the session.
-            _suppressWrite = false;
+                // Whatever happened above, the controls must work from now on: a failed initial read is not a reason to
+                // leave the window read-only for the rest of the session.
+                _suppressWrite = false;
 
-            // The machine may already be in custom mode when the window opens, in which case the fan loop has to be
-            // running before the first telemetry sample rather than after the user touches a card.
-            SyncFanLoop();
+                // The machine may already be in custom mode when the window opens, in which case the fan loop has to be
+                // running before the first telemetry sample rather than after the user touches a card.
+                SyncFanLoop();
+            }
         }
     }
 

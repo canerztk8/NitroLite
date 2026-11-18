@@ -366,7 +366,17 @@ internal static class Phase3Fakes
 
         public List<string> Writes { get; } = new();
 
-        public Task<bool> EnsureConnectedAsync() => Task.FromResult(true);
+        /// <summary>
+        /// How many times the view model asked the backend to connect. The probe tests use it to prove that a second
+        /// <c>InitializeAsync</c> does not run the first read again.
+        /// </summary>
+        public int ConnectCount { get; private set; }
+
+        public Task<bool> EnsureConnectedAsync()
+        {
+            ConnectCount++;
+            return Task.FromResult(true);
+        }
 
         public Task<HardwareCapabilities> GetCapabilitiesAsync() => Task.FromResult(new HardwareCapabilities
         {
