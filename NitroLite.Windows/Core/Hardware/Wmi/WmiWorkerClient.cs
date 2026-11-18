@@ -60,17 +60,14 @@ public sealed class WmiWorkerClient : IDisposable
         {
             await pipe.ConnectAsync(cts.Token).ConfigureAwait(false);
 
-            await WmiWorkerProtocol.WriteAsync(pipe, WmiWorkerProtocol.Serialize(new WmiWorkerRequest
+            await WmiWorkerProtocol.WriteAsync(pipe, new WmiWorkerRequest
             {
                 Type = WmiWorkerProtocol.TypeHello,
                 Nonce = nonce
-            }), cts.Token).ConfigureAwait(false);
+            }, cts.Token).ConfigureAwait(false);
 
-            var json = await WmiWorkerProtocol.ReadAsync(pipe, cts.Token).ConfigureAwait(false);
-            if (json == null) throw new InvalidOperationException("the worker closed the pipe during the handshake");
-
-            var response = WmiWorkerProtocol.DeserializeResponse(json);
-            if (response == null) throw new InvalidOperationException("the worker sent a malformed handshake reply");
+            var response = await WmiWorkerProtocol.ReadResponseAsync(pipe, cts.Token).ConfigureAwait(false);
+            if (response == null) throw new InvalidOperationException("the worker closed the pipe during the handshake");
 
             // The type is checked as well as the flag: a reply that is not a welcome did not come from a worker that
             // accepted this hello, whatever its "ok" field says.
@@ -112,18 +109,15 @@ public sealed class WmiWorkerClient : IDisposable
         JsonObject? args = null,
         CancellationToken cancellationToken = default)
     {
-        await WmiWorkerProtocol.WriteAsync(_pipe, WmiWorkerProtocol.Serialize(new WmiWorkerRequest
+        await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
         {
             Type = WmiWorkerProtocol.TypeCommand,
             Command = command,
             Args = args
-        }), cancellationToken).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
 
-        var json = await WmiWorkerProtocol.ReadAsync(_pipe, cancellationToken).ConfigureAwait(false);
-        if (json == null) throw new IOException("the worker closed the pipe");
-
-        return WmiWorkerProtocol.DeserializeResponse(json)
-               ?? throw new IOException("the worker sent a malformed reply");
+        return await WmiWorkerProtocol.ReadResponseAsync(_pipe, cancellationToken).ConfigureAwait(false)
+               ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
     }
 
     public void Dispose()

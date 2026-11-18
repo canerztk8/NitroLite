@@ -1,5 +1,6 @@
-using System.IO;
+using System.Buffers;
 using System.Buffers.Binary;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -189,6 +190,12 @@ public static class WmiWorkerProtocol
         WriteIndented = false
     };
 
+    /// <summary>Bytes of the little-endian length that precedes every payload.</summary>
+    private const int FrameHeaderBytes = 4;
+
+    /// <summary>First guess at a frame's size. A telemetry reply is a few hundred bytes; the buffer grows if not.</summary>
+    private const int InitialFrameBytes = 512;
+
     public static string Serialize(WmiWorkerRequest request) => JsonSerializer.Serialize(request, Options);
 
     public static string Serialize(WmiWorkerResponse response) => JsonSerializer.Serialize(response, Options);
@@ -221,9 +228,9 @@ public static class WmiWorkerProtocol
     public static byte[] Frame(string json)
     {
         var payload = Encoding.UTF8.GetBytes(json);
-        var frame = new byte[4 + payload.Length];
-        BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(0, 4), payload.Length);
-        payload.CopyTo(frame, 4);
+        var frame = new byte[FrameHeaderBytes + payload.Length];
+        BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(0, FrameHeaderBytes), payload.Length);
+        payload.CopyTo(frame, FrameHeaderBytes);
         return frame;
     }
 
@@ -236,15 +243,121 @@ public static class WmiWorkerProtocol
     }
 
     /// <summary>
+    /// Writes one request. The JSON is serialized straight into a pooled buffer that already holds room for the
+    /// length prefix, so a message costs one buffer rent and one write instead of a string, a payload array and a
+    /// second array to copy both into.
+    /// </summary>
+    public static Task WriteAsync(Stream stream, WmiWorkerRequest request, CancellationToken cancellationToken = default) =>
+        WriteFrameAsync(stream, request, cancellationToken);
+
+    /// <inheritdoc cref="WriteAsync(Stream, WmiWorkerRequest, CancellationToken)"/>
+    public static Task WriteAsync(Stream stream, WmiWorkerResponse response, CancellationToken cancellationToken = default) =>
+        WriteFrameAsync(stream, response, cancellationToken);
+
+    /// <summary>
     /// Reads one framed message. Returns null when the peer closed the connection or sent a frame that cannot be
     /// trusted (a length outside 1..<see cref="MaxFrameBytes"/>), which the caller treats as a disconnect.
     /// </summary>
     public static async Task<string?> ReadAsync(Stream stream, CancellationToken cancellationToken = default)
     {
-        var header = new byte[4];
+        var frame = await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (frame is null) return null;
+
+        var (buffer, length) = frame.Value;
         try
         {
-            await stream.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
+            return Encoding.UTF8.GetString(buffer, 0, length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Reads one request, deserializing from the frame's bytes rather than from a string. The result keeps a closed
+    /// connection apart from a frame that would not parse, because the worker answers the second with an error and
+    /// keeps serving while the first ends the loop.
+    /// </summary>
+    public static async Task<WmiWorkerReadResult> ReadRequestAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        var frame = await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (frame is null) return new WmiWorkerReadResult(null, Closed: true);
+
+        var (buffer, length) = frame.Value;
+        try
+        {
+            return new WmiWorkerReadResult(
+                JsonSerializer.Deserialize<WmiWorkerRequest>(buffer.AsSpan(0, length), Options),
+                Closed: false);
+        }
+        catch (JsonException)
+        {
+            return new WmiWorkerReadResult(null, Closed: false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Reads one response. Null means the connection closed or the frame would not parse; the client treats both the
+    /// same way, because either one means the elevated path is gone.
+    /// </summary>
+    public static async Task<WmiWorkerResponse?> ReadResponseAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        var frame = await ReadFrameAsync(stream, cancellationToken).ConfigureAwait(false);
+        if (frame is null) return null;
+
+        var (buffer, length) = frame.Value;
+        try
+        {
+            return JsonSerializer.Deserialize<WmiWorkerResponse>(buffer.AsSpan(0, length), Options);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static async Task WriteFrameAsync<T>(Stream stream, T message, CancellationToken cancellationToken)
+    {
+        var buffer = new PooledFrameWriter(InitialFrameBytes);
+        try
+        {
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
+                JsonSerializer.Serialize(writer, message, Options);
+            }
+
+            var frame = buffer.FrameSpan;
+            BinaryPrimitives.WriteInt32LittleEndian(frame, frame.Length - FrameHeaderBytes);
+            await stream.WriteAsync(buffer.Frame, cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            buffer.Return();
+        }
+    }
+
+    /// <summary>
+    /// Reads the length prefix and then exactly that many bytes, both into pooled buffers. The caller owns the
+    /// payload buffer and returns it; the header buffer is returned here.
+    /// </summary>
+    private static async Task<(byte[] Buffer, int Length)?> ReadFrameAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        var header = ArrayPool<byte>.Shared.Rent(FrameHeaderBytes);
+        int length;
+        try
+        {
+            await stream.ReadExactlyAsync(header.AsMemory(0, FrameHeaderBytes), cancellationToken).ConfigureAwait(false);
+            length = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(0, FrameHeaderBytes));
         }
         catch (EndOfStreamException)
         {
@@ -254,25 +367,88 @@ public static class WmiWorkerProtocol
         {
             return null;
         }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(header);
+        }
 
-        var length = BinaryPrimitives.ReadInt32LittleEndian(header);
         if (length <= 0 || length > MaxFrameBytes) return null;
 
-        var payload = new byte[length];
+        var payload = ArrayPool<byte>.Shared.Rent(length);
         try
         {
-            await stream.ReadExactlyAsync(payload, cancellationToken).ConfigureAwait(false);
+            await stream.ReadExactlyAsync(payload.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
         }
         catch (EndOfStreamException)
         {
+            ArrayPool<byte>.Shared.Return(payload);
             return null;
         }
         catch (IOException)
         {
+            ArrayPool<byte>.Shared.Return(payload);
             return null;
         }
 
-        return Encoding.UTF8.GetString(payload);
+        return (payload, length);
+    }
+
+    /// <summary>
+    /// A pooled <see cref="IBufferWriter{T}"/> that starts four bytes in, so the length prefix can be written into the
+    /// same buffer the JSON goes into and the whole frame leaves in one write.
+    /// </summary>
+    private sealed class PooledFrameWriter : IBufferWriter<byte>
+    {
+        private byte[] _buffer;
+        private int _written;
+        private bool _returned;
+
+        public PooledFrameWriter(int initialCapacity)
+        {
+            _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, FrameHeaderBytes));
+            _written = FrameHeaderBytes;
+        }
+
+        /// <summary>The reserved prefix plus everything written after it.</summary>
+        public ReadOnlyMemory<byte> Frame => _buffer.AsMemory(0, _written);
+
+        /// <summary>The same bytes, writable, so the length prefix can be filled in after the JSON is written.</summary>
+        public Span<byte> FrameSpan => _buffer.AsSpan(0, _written);
+
+        public void Advance(int count) => _written += count;
+
+        public Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            Ensure(sizeHint);
+            return _buffer.AsMemory(_written);
+        }
+
+        public Span<byte> GetSpan(int sizeHint = 0)
+        {
+            Ensure(sizeHint);
+            return _buffer.AsSpan(_written);
+        }
+
+        /// <summary>Hands the buffer back. Not <c>Dispose</c>: this type owns no handle, only a rented array.</summary>
+        public void Return()
+        {
+            if (_returned) return;
+            _returned = true;
+            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer = Array.Empty<byte>();
+            _written = 0;
+        }
+
+        private void Ensure(int sizeHint)
+        {
+            if (sizeHint < 1) sizeHint = 1;
+            if (_buffer.Length - _written >= sizeHint) return;
+
+            var next = ArrayPool<byte>.Shared.Rent(Math.Max(_buffer.Length * 2, _written + sizeHint));
+            _buffer.AsSpan(0, _written).CopyTo(next);
+            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer = next;
+        }
     }
 
     /// <summary>
@@ -292,4 +468,14 @@ public static class WmiWorkerProtocol
 
         return diff == 0;
     }
+}
+
+/// <summary>
+/// What one read off the pipe produced. <see cref="Closed"/> and a null <see cref="Request"/> together mean the peer
+/// went away; a null request with <see cref="Closed"/> false means it sent something that is not a request.
+/// </summary>
+public readonly record struct WmiWorkerReadResult(WmiWorkerRequest? Request, bool Closed)
+{
+    /// <summary>The peer sent a frame that is not a request.</summary>
+    public bool Malformed => !Closed && Request is null;
 }

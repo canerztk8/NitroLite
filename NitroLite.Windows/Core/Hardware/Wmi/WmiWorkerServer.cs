@@ -191,20 +191,19 @@ public sealed class WmiWorkerServer : IDisposable
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(HandshakeTimeout);
 
-        string? json;
+        WmiWorkerReadResult read;
         try
         {
-            json = await WmiWorkerProtocol.ReadAsync(pipe, cts.Token).ConfigureAwait(false);
+            read = await WmiWorkerProtocol.ReadRequestAsync(pipe, cts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             return false;
         }
 
-        if (json == null) return false;
+        if (read.Closed) return false;
 
-        var request = WmiWorkerProtocol.DeserializeRequest(json);
-        if (request == null || !string.Equals(request.Type, WmiWorkerProtocol.TypeHello, StringComparison.Ordinal))
+        if (read.Request is not { } request || !string.Equals(request.Type, WmiWorkerProtocol.TypeHello, StringComparison.Ordinal))
         {
             await TryReplyAsync(pipe, WmiWorkerResponse.Failure("handshake_failed", "first message must be a hello"),
                 cancellationToken).ConfigureAwait(false);
@@ -237,22 +236,21 @@ public sealed class WmiWorkerServer : IDisposable
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            string? json;
+            WmiWorkerReadResult read;
             try
             {
-                json = await WmiWorkerProtocol.ReadAsync(pipe, cancellationToken).ConfigureAwait(false);
+                read = await WmiWorkerProtocol.ReadRequestAsync(pipe, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 return;
             }
 
-            if (json == null) return;
+            if (read.Closed) return;
 
-            var request = WmiWorkerProtocol.DeserializeRequest(json);
-            var response = request == null
-                ? WmiWorkerResponse.Failure(WmiOperationResult.CodeInvalidArgument, "malformed request")
-                : Dispatch(request);
+            var response = read.Request is { } request
+                ? Dispatch(request)
+                : WmiWorkerResponse.Failure(WmiOperationResult.CodeInvalidArgument, "malformed request");
 
             if (!await TryReplyAsync(pipe, response, cancellationToken).ConfigureAwait(false)) return;
         }
@@ -547,8 +545,7 @@ public sealed class WmiWorkerServer : IDisposable
     {
         try
         {
-            await WmiWorkerProtocol.WriteAsync(pipe, WmiWorkerProtocol.Serialize(response), cancellationToken)
-                .ConfigureAwait(false);
+            await WmiWorkerProtocol.WriteAsync(pipe, response, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (IOException)
