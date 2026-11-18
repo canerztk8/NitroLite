@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Buffers;
+using System.IO;
 using System.Text;
 
 namespace NitroLite.Linux.Sysfs;
@@ -35,6 +36,12 @@ public sealed class RealSysfsFileSystem : ISysfsFileSystem
     /// </summary>
     private const int MaxAttributeBytes = 64 * 1024;
 
+    /// <summary>
+    /// What a read starts with. A real attribute is a few bytes, so this is the only buffer the telemetry thread
+    /// ever touches; the <see cref="MaxAttributeBytes"/> cap is only paid when the path turns out not to be sysfs.
+    /// </summary>
+    private const int InitialAttributeBytes = 256;
+
     public string? ReadAllText(string path)
     {
         try
@@ -43,18 +50,45 @@ public sealed class RealSysfsFileSystem : ISysfsFileSystem
 
             // sysfs attributes are tiny and always end with a newline; trimming keeps every caller from having to.
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var buffer = new byte[MaxAttributeBytes];
-            int total = 0;
-            int read;
-            while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
-                total += read;
 
-            return Encoding.UTF8.GetString(buffer, 0, total).Trim();
+            var buffer = ArrayPool<byte>.Shared.Rent(InitialAttributeBytes);
+            try
+            {
+                int total = ReadInto(stream, buffer);
+                if (total < buffer.Length || buffer.Length >= MaxAttributeBytes)
+                    return Encoding.UTF8.GetString(buffer, 0, total).Trim();
+
+                // Filled the small buffer: not a sysfs attribute. Start over with the full cap.
+                stream.Seek(0, SeekOrigin.Begin);
+                var large = ArrayPool<byte>.Shared.Rent(MaxAttributeBytes);
+                try
+                {
+                    return Encoding.UTF8.GetString(large, 0, ReadInto(stream, large)).Trim();
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(large);
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
         catch
         {
             return null;
         }
+    }
+
+    private static int ReadInto(Stream stream, byte[] buffer)
+    {
+        int total = 0;
+        int read;
+        while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
+            total += read;
+
+        return total;
     }
 
     public SysfsWriteResult WriteAllText(string path, string value)
