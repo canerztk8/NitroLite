@@ -77,12 +77,6 @@
          a WindowIcon, which is loaded through AssetLoader from avares://. -->
     <AvaloniaResource Include="app.ico" Link="Assets\app.ico" />
 
-    <!-- One screenshot per palette, for the theme cards on the settings page. Carried over from the WPF front end
-         unchanged: they were captured from the English UI, so one set serves all eight languages. An
-         AvaloniaResource rather than an EmbeddedResource because the cards load them through AssetLoader from
-         avares://, the same route the icons take. -->
-    <AvaloniaResource Include="Assets\themes\*.jpg" />
-
     <!-- The bundled typeface: Quicksand, in the three weights the type scale actually uses — Regular for body text,
          SemiBold for titles and labels, Bold for the OSD. Carried inside the assembly rather than looked up on the
          machine, so the window is drawn in the same face on Windows and on Linux and on a machine that has installed

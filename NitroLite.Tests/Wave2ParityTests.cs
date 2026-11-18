@@ -313,8 +313,8 @@ public class Wave2ParityTests
             Assert.Equal(ThemeCatalog.All.Count, vm.ThemeCards.Count);
             Assert.Equal(ThemeCatalog.All, vm.ThemeCards.Select(c => c.Theme));
 
-            // The six concrete palettes each carry a screenshot and five swatches. "System" is a preference, not a
-            // palette: it shows whatever it resolves to, so it is not counted here.
+            // The six concrete palettes each carry five swatches. "System" is a preference, not a palette: it shows
+            // whatever it resolves to, so it is not counted here.
             var concrete = vm.ThemeCards.Where(c => c.Theme != AppTheme.System).ToList();
             Assert.Equal(6, concrete.Count);
 
@@ -325,16 +325,9 @@ public class Wave2ParityTests
                 Assert.False(string.IsNullOrWhiteSpace(card.Label));
             }
 
-            // Every palette has its own screenshot on disk, and the warm-cream one is the file called "light".
-            foreach (var card in concrete)
-            {
-                var asset = Path.Combine(RepoRoot(), "NitroLite.Desktop", "Assets", "themes",
-                    ThemePreviewConverter.AssetName(card.Theme) + ".jpg");
-                Assert.True(File.Exists(asset), $"missing preview for {card.Theme}: {asset}");
-            }
-
-            Assert.Equal("light", ThemePreviewConverter.AssetName(AppTheme.WarmCream));
-            Assert.Equal("midnightoled", ThemePreviewConverter.AssetName(AppTheme.MidnightOled));
+            // The swatches are the whole card, so they have to be five distinct colours: a palette whose page and
+            // card tones collapsed into one would draw a card that says nothing about itself.
+            Assert.All(concrete, card => Assert.Equal(5, card.Swatches.Distinct().Count()));
 
             // The stored preference is what paints a card as chosen.
             Assert.True(vm.ThemeCards.Single(c => c.Theme == AppTheme.WarmCream).IsSelected);
@@ -405,14 +398,28 @@ public class Wave2ParityTests
     }
 
     [Fact]
-    public void ThemeCards_AreRegisteredAsAnAvaloniaResource()
+    public void TheBundledTypefaceIsRegisteredAsAnAvaloniaResource()
     {
-        // A card whose screenshot is not in the assembly shows an empty frame on every machine, and nothing throws.
+        // A face whose files are not in the assembly resolves to nothing, and nothing throws: the window silently
+        // falls back to the system stack and looks exactly as it did before the font was added.
         var csproj = File.ReadAllText(
             Path.Combine(RepoRoot(), "NitroLite.Desktop", "NitroLite.Desktop.csproj"), Encoding.UTF8);
 
-        Assert.Contains("Assets\\themes\\*.jpg", csproj, StringComparison.Ordinal);
+        Assert.Contains("Assets\\Fonts\\*.ttf", csproj, StringComparison.Ordinal);
         Assert.Contains("AvaloniaResource", csproj, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeCards_AreSwatchesOnly()
+    {
+        // The card used to carry a 110px screenshot of the app in that palette. It cost more height than the choice
+        // was worth, so the five swatches are the whole card now — and a picture creeping back in is the regression.
+        var markup = SettingsViewMarkup();
+
+        Assert.Contains("ThemeCards", markup, StringComparison.Ordinal);
+        Assert.Contains("Swatches", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ThemePreviewConverter", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Assets/themes", markup, StringComparison.Ordinal);
     }
 
     // =============================================================================================================

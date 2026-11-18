@@ -482,7 +482,7 @@ NitroLite.Desktop/                  net10.0 and net10.0-windows — the Avalonia
 ├── ViewModels/                     # MainViewModel and the shell labels
 ├── Controls/                       # SparklineChart, TelemetryChart, WearTrendChart, NitroSlider
 ├── Themes/                         # Palette loading
-└── Assets/themes/                  # The six preview cards
+└── Assets/Fonts/                   # The bundled typeface and its licence
 ```
 
 **Data location:** settings, game profiles, RGB profiles, thermal history, battery wear history and the log live in
