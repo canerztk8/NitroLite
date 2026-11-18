@@ -53,8 +53,8 @@ settings. The same script captures any of the eight languages and any of the six
 [Capturing screenshots](#capturing-screenshots).
 
 The tour above is [`docs/video/nitrolite-tour.mp4`](docs/video/nitrolite-tour.mp4): 45 seconds, 1080p60, 5.9 MB,
-captions burned in. GitHub plays it in the browser when you open the file. The full-quality master is attached to
-the [v1.2.6 release](https://github.com/canerztk8/NitroLite/releases/tag/v1.2.6).
+captions burned in. The full-quality master is attached to the
+[v1.2.6 release](https://github.com/canerztk8/NitroLite/releases/tag/v1.2.6).
 
 ---
 
