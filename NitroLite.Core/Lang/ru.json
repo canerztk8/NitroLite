@@ -1631,7 +1631,7 @@
   "Yarım kalan güncelleme kurtarıldı": "Yarım kalan güncelleme kurtarıldı",
   "Yarım kalan oyun oturumu geri alındı": "Yarım kalan oyun oturumu geri alındı",
   "Yedek geri yüklenemedi": "Backup geri yüklenemedi",
-  "Yedek oluşturulamadı": "Backup oluşturulamadı",
+  "Yedek oluşturulamadı": "Не удалось создать резервную копию",
   "Yedek telemetri okunamadı": "Backup telemetri could not be read",
   "Yedek yazılamadı": "Backup could not be written",
   "Yedekten ayarlar yazılamadı": "Backupten ayarlar could not be written",
