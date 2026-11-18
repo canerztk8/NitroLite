@@ -59,6 +59,13 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// </summary>
     private readonly object _readGate = new();
 
+    /// <summary>
+    /// The device list the telemetry tick fills. Kept here rather than allocated per tick because the loop runs for
+    /// the life of the process; <see cref="LinuxHwmon.Read(ISysfsFileSystem, List{LinuxHwmonDevice}, string)"/> clears
+    /// it before filling, so a device that disappeared between two ticks does not linger in the answer.
+    /// </summary>
+    private readonly List<LinuxHwmonDevice> _hwmonBuffer = new();
+
     private bool _disposed;
 
     /// <summary>Set once the OpenRGB fallback has been tried, so a machine without it is not probed on every call.</summary>
@@ -184,7 +191,8 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         LinuxSensorSample sample;
         lock (_readGate)
         {
-            sample = LinuxHwmon.Sample(LinuxHwmon.Read(_fs));
+            LinuxHwmon.Read(_fs, _hwmonBuffer);
+            sample = LinuxHwmon.Sample(_hwmonBuffer);
         }
 
         var measured = sample.HasMeasuredFanRpm;

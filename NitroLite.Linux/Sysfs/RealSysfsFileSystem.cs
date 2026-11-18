@@ -49,7 +49,13 @@ public sealed class RealSysfsFileSystem : ISysfsFileSystem
             if (!File.Exists(path)) return null;
 
             // sysfs attributes are tiny and always end with a newline; trimming keeps every caller from having to.
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            //
+            // bufferSize: 1 is deliberate. The default 4096-byte buffer is allocated per stream, and a sysfs attribute
+            // is read in a single call into the pooled buffer below, so that 4 KB would be rented and thrown away nine
+            // times per telemetry tick. One byte means the stream keeps no buffer of its own and every Read goes
+            // straight to the file descriptor, which is exactly one syscall for the shape of file this reads.
+            using var stream = new FileStream(
+                path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 1, FileOptions.None);
 
             var buffer = ArrayPool<byte>.Shared.Rent(InitialAttributeBytes);
             try
@@ -160,8 +166,12 @@ public sealed class RealSysfsFileSystem : ISysfsFileSystem
         try
         {
             if (!Directory.Exists(path)) return Array.Empty<string>();
+
+            // The names are what the caller wants, and the LINQ form this replaces built three enumerators to get
+            // them. The telemetry loop calls this once per hwmon device per tick, so the loop is worth writing out.
             var entries = Directory.GetFiles(path);
-            var names = entries.Select(Path.GetFileName).Where(n => n != null).Select(n => n!).ToArray();
+            var names = new string[entries.Length];
+            for (var i = 0; i < entries.Length; i++) names[i] = Path.GetFileName(entries[i]);
             Array.Sort(names, StringComparer.Ordinal);
             return names;
         }
