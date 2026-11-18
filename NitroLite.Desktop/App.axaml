@@ -22,8 +22,19 @@
       below reads it with DynamicResource, so a font change repaints every text in the tree without a restart. The
       value here is the default face; the tail of the list is script coverage, not a style choice — the app ships in
       eight languages and Hindi needs a Devanagari face.
+
+      The first entry is not a name but an avares URI: IBM Plex Sans travels inside the assembly, so it is resolved
+      from the folder it was compiled into rather than from the machine's font directory. That is what makes the
+      window look the same on Windows, on Linux, and on a machine that has installed nothing.
     -->
-    <FontFamily x:Key="UiFontFamily">Segoe UI Variable Text, Segoe UI, Ubuntu, Noto Sans, Nirmala UI, Noto Sans Devanagari, sans-serif</FontFamily>
+    <FontFamily x:Key="UiFontFamily">avares://NitroLite.Desktop/Assets/Fonts#IBM Plex Sans, Nirmala UI, Noto Sans Devanagari, sans-serif</FontFamily>
+
+    <!--
+      The figures. A recorded reading is a number in a column, so it is set in a mono face: the digits keep their
+      width as the value changes and the readout does not jitter. IBM Plex Mono is bundled for the same reason the
+      sans is, and the two were drawn as a pair; the rest of the list is what a machine without it falls back to.
+    -->
+    <FontFamily x:Key="MonoFontFamily">avares://NitroLite.Desktop/Assets/Fonts#IBM Plex Mono, Cascadia Mono, Consolas, DejaVu Sans Mono, monospace</FontFamily>
 
     <!-- A 3px ruled track, the filled part in ink, an 8x16 square ink thumb. -->
     <ControlTheme x:Key="NitroSlider" TargetType="Slider">
@@ -114,7 +125,7 @@
 
     <!-- A recorded figure. -->
     <Style Selector="TextBlock.figure">
-      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -122,7 +133,7 @@
 
     <!-- The fan readouts: the same face, two steps up. -->
     <Style Selector="TextBlock.figurebig">
-      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
       <Setter Property="FontSize" Value="20" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
@@ -157,7 +168,7 @@
     </Style>
 
     <Style Selector="TextBlock.mono">
-      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
       <Setter Property="FontSize" Value="11.5" />
       <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />

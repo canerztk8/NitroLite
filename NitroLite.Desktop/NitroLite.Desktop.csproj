@@ -82,6 +82,16 @@
          AvaloniaResource rather than an EmbeddedResource because the cards load them through AssetLoader from
          avares://, the same route the icons take. -->
     <AvaloniaResource Include="Assets\themes\*.jpg" />
+
+    <!-- The bundled typeface: IBM Plex Sans (variable, width and weight) for the UI and IBM Plex Mono for the
+         figures. Carried inside the assembly rather than looked up on the machine, so the window is drawn in the same
+         face on Windows and on Linux and on a machine that has installed nothing. An AvaloniaResource because
+         Avalonia resolves an embedded family through avares://, the same route the icons take. -->
+    <AvaloniaResource Include="Assets\Fonts\*.ttf" />
+
+    <!-- The OFL requires the licence to travel with the font. Copied next to the executable rather than embedded,
+         because a licence nobody can read is not a licence. -->
+    <None Update="Assets\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

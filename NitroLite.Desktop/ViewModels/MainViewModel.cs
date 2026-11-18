@@ -279,7 +279,12 @@ public sealed class ColorSwatch : ObservableObject
 /// <summary>One row of the capability list: a name and whether this machine has it.</summary>
 public sealed record CapabilityRow(string Label, bool Supported){
     /// <summary>The tick or cross the row is drawn with.</summary>
-    public string Glyph => Supported ? "✓" : "✕";
+    /// <remarks>
+    /// Both glyphs are in the bundled face. The cross is U+00D7 rather than U+2715 for that reason: IBM Plex has no
+    /// U+2715, so the row would draw its tick in Plex and its cross in whatever the platform fell back to, and the
+    /// column would be two typefaces wide.
+    /// </remarks>
+    public string Glyph => Supported ? "✓" : "×";
 
     /// <summary>"Destekleniyor" / "Desteklenmiyor", so the row says it in words as well as in a symbol.</summary>
     public string StateText => Supported ? Loc.T("Destekleniyor") : Loc.T("Desteklenmiyor");

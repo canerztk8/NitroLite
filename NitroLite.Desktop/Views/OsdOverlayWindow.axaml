@@ -32,11 +32,11 @@
     <Border BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" CornerRadius="6"
             Padding="12,8">
       <StackPanel Spacing="2">
-        <TextBlock Text="{Binding OsdCpuLine}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+        <TextBlock Text="{Binding OsdCpuLine}" FontFamily="{DynamicResource MonoFontFamily}"
                    FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-        <TextBlock Text="{Binding OsdGpuLine}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+        <TextBlock Text="{Binding OsdGpuLine}" FontFamily="{DynamicResource MonoFontFamily}"
                    FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextPrimaryBrush}" />
-        <TextBlock Text="{Binding OsdRamLine}" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+        <TextBlock Text="{Binding OsdRamLine}" FontFamily="{DynamicResource MonoFontFamily}"
                    FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" />
       </StackPanel>
     </Border>

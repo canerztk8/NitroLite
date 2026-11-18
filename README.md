@@ -795,6 +795,10 @@ GitHub returns only to the repository owner. Requires the [GitHub CLI](https://c
 
 This project is released under the [MIT License](LICENSE).
 
+The interface is drawn in [IBM Plex Sans](https://github.com/IBM/plex) and its figures in IBM Plex Mono. Both are
+embedded in the executable and licensed under the SIL Open Font License 1.1, which travels with the package; see
+`THIRD-PARTY-NOTICES.md`.
+
 The package also contains [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) 3.0.8, which is
 GPL-3.0. It is an unmodified, separate executable that NitroLite only launches as a child process, so the two form an
 aggregate under GPL-3.0 section 5 and NitroLite's own code stays MIT. The package carries the tool's licence, a notice
