@@ -139,8 +139,8 @@ hardware layer learned to describe laptops it has never seen. All of it is in th
 
 ### Packaging
 
-- Scoop and WinGet manifests are regenerated on every release, and the WinGet manifest for this version is in
-  `packaging/winget/manifests/c/canerztk8/NitroLite/1.2.6/`.
+- The Scoop manifest is rewritten from the package on every release, and the WinGet manifest for this version is
+  in `packaging/winget/manifests/c/canerztk8/NitroLite/1.2.6/` with the published SHA-256.
 - `scripts/screenshot.ps1` captures the Avalonia pages, and it no longer needs the user's own NitroLite to be
   closed: it asks for a copy that owns no single-instance slot and runs it against a throwaway data folder.
 
