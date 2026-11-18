@@ -210,11 +210,23 @@ jobs:
         run: |
           $version = '${{ steps.version.outputs.version }}'
           $zip = "artifacts/NitroLite-v$version-win-x64.zip"
-          # --verify-tag refuses to invent a tag that is not on the remote.
-          gh release create "v$version" $zip "$zip.sha256" `
-            --title "NitroLite v$version" `
-            --notes-file release-notes.md `
-            --verify-tag
+          $tag = "v$version"
+          # A re-run of the same tag finds the release already published. Replacing the assets and the notes keeps
+          # the run idempotent instead of failing on "release already exists" and leaving the Linux job unrun.
+          gh release view $tag --json tagName 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $zip "$zip.sha256" --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Could not replace the assets of $tag." }
+            gh release edit $tag --notes-file release-notes.md
+            if ($LASTEXITCODE -ne 0) { throw "Could not update the notes of $tag." }
+          } else {
+            # --verify-tag refuses to invent a tag that is not on the remote.
+            gh release create $tag $zip "$zip.sha256" `
+              --title "NitroLite v$version" `
+              --notes-file release-notes.md `
+              --verify-tag
+            if ($LASTEXITCODE -ne 0) { throw "Could not publish $tag." }
+          }
 
       - name: Summarise
         if: always()
@@ -239,6 +251,9 @@ jobs:
     name: Linux package
     runs-on: ubuntu-latest
     needs: release
+    env:
+      # The steps below run under `set -u`, so an undefined TAG aborts the job before it builds anything.
+      TAG: ${{ github.ref_name }}
     steps:
       - name: Check out the tag
         uses: actions/checkout@v7
