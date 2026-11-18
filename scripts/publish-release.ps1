@@ -76,8 +76,13 @@ Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
         -o $stage --nologo
 }
 
-# Ship only what the app needs.
-Get-ChildItem $stage -Recurse -File | Where-Object { $_.Extension -in '.pdb', '.xml' } | Remove-Item -Force
+# Ship only what the app needs. The single-file publish bundles the runtime, so the three diagnostics libraries below
+# are normally inside NitroLite.exe and this removes nothing; they are named because a publish that is ever switched
+# back to loose files would otherwise ship a crash-dump reader and a symbol reader the app never loads.
+$unused = @('mscordaccore.dll', 'mscordbi.dll', 'Microsoft.DiaSymReader.Native.amd64.dll')
+Get-ChildItem $stage -Recurse -File |
+    Where-Object { $_.Extension -in '.pdb', '.xml' -or $_.Name -in $unused } |
+    Remove-Item -Force
 
 # The one rename that makes in-place updates possible. See the .DESCRIPTION above: the 1.2.x updater, the scheduled
 # task and the Run entry all name NitroLite.exe, and this package has to answer to that name.
