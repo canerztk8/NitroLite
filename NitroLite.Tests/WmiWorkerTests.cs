@@ -615,8 +615,7 @@ public class WmiWorkerTests
             interval: TimeSpan.FromMilliseconds(20),
             isAlive: _ => false);
 
-        var completed = await Task.WhenAny(fired.Task, Task.Delay(TimeSpan.FromSeconds(5)));
-        Assert.Same(fired.Task, completed);
+        await fired.Task.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]

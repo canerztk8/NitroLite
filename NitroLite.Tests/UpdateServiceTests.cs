@@ -40,7 +40,7 @@ public class UpdateServiceTests : IDisposable
             return $"{{\"name\":\"{a.Name}\",\"size\":1234,\"browser_download_url\":\"https://github.com/canerztk8/NitroLite/releases/download/v1.2.0/{a.Name}\"{digest}}}";
         }));
         var json = $"{{\"tag_name\":\"{tag}\",\"assets\":[{assetJson}]}}";
-        return JsonDocument.Parse(json).RootElement.Clone();
+        return JsonElement.Parse(json);
     }
 
     [Fact]
@@ -97,10 +97,10 @@ public class UpdateServiceTests : IDisposable
     [Fact]
     public void ParseRelease_MalformedPayload_IsIgnoredRatherThanThrowing()
     {
-        Assert.Null(UpdateService.ParseRelease(JsonDocument.Parse("{}").RootElement, new Version(1, 0, 0)));
-        Assert.Null(UpdateService.ParseRelease(JsonDocument.Parse("[]").RootElement, new Version(1, 0, 0)));
+        Assert.Null(UpdateService.ParseRelease(JsonElement.Parse("{}"), new Version(1, 0, 0)));
+        Assert.Null(UpdateService.ParseRelease(JsonElement.Parse("[]"), new Version(1, 0, 0)));
         Assert.Null(UpdateService.ParseRelease(
-            JsonDocument.Parse("{\"tag_name\":\"not-a-version\",\"assets\":[]}").RootElement, new Version(1, 0, 0)));
+            JsonElement.Parse("{\"tag_name\":\"not-a-version\",\"assets\":[]}"), new Version(1, 0, 0)));
     }
 
     [Theory]

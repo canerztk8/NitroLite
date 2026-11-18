@@ -784,8 +784,7 @@ public class WmiControllerTests
         child.Kill(entireProcessTree: true);
         child.WaitForExit(10_000);
 
-        var completed = await Task.WhenAny(fired.Task, Task.Delay(TimeSpan.FromSeconds(10)));
-        Assert.Same(fired.Task, completed);
+        await fired.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         // The held handle is signalled now, which is what makes the pid-reuse case safe.
         Assert.False(ParentWatchdog.IsHandleAlive(handle));

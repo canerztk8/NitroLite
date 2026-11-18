@@ -10,7 +10,7 @@ public class CustomFanTests
     public void CustomMode_SendsManualSpeedsForBothFans()
     {
         var json = JsonSerializer.Serialize(AcerAgentClient.BuildFanControlParameter(FanMode.Custom, 60, 75));
-        var root = JsonDocument.Parse(json).RootElement;
+        var root = JsonElement.Parse(json);
         Assert.Equal(2, root.GetProperty("mode").GetInt32());
         var fans = root.GetProperty("custom_fan_data");
         Assert.Equal("CPU", fans[0].GetProperty("fan_name").GetString());
@@ -24,7 +24,7 @@ public class CustomFanTests
     public void AutoMode_MarksFansAutomatic()
     {
         var json = JsonSerializer.Serialize(AcerAgentClient.BuildFanControlParameter(FanMode.Auto, 60, 60));
-        var fans = JsonDocument.Parse(json).RootElement.GetProperty("custom_fan_data");
+        var fans = JsonElement.Parse(json).GetProperty("custom_fan_data");
         Assert.Equal(1, fans[0].GetProperty("fan_custom_auto").GetInt32());
         Assert.Equal(1, fans[1].GetProperty("fan_custom_auto").GetInt32());
     }

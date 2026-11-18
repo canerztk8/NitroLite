@@ -467,10 +467,7 @@ public class FanSafetyTests
         // The old session-end path called GetAwaiter().GetResult() on the UI thread, which blocks the thread the
         // continuation needs. A bounded wait is the whole point: this must finish, not hang.
         var exit = vm.CleanExitAsync();
-        var finished = await Task.WhenAny(exit, Task.Delay(TimeSpan.FromSeconds(5)));
-
-        Assert.Same(exit, finished);
-        await exit;
+        await exit.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]

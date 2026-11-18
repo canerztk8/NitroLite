@@ -207,9 +207,7 @@ public class PowerSchoolModeScenarios
         }
 
         var all = Task.WhenAll(tasks);
-        var finished = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(20)));
-        Assert.Same(all, finished);
-        await all;   // surfaces any exception the storm produced
+        await all.WaitAsync(TimeSpan.FromSeconds(20));   // surfaces any exception the storm produced
 
         Assert.True(service.LastAcStatus, "The last event was the adapter being plugged in, but the service ended on battery.");
         Assert.False(service.IsDcEcoActive, "Eco must not stay on once the adapter is back.");
@@ -231,9 +229,7 @@ public class PowerSchoolModeScenarios
             .ToArray();
 
         var all = Task.WhenAll(tasks);
-        var finished = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(20)));
-        Assert.Same(all, finished);
-        await all;
+        await all.WaitAsync(TimeSpan.FromSeconds(20));
     }
 
     /// <summary>
