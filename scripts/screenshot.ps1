@@ -169,6 +169,8 @@ if (-not $Exe) {
 if (-not (Test-Path $Exe)) { throw "Not found: $Exe" }
 
 # ---- the single-instance mutex is machine-wide, so a running copy has to go --------------------
+# Only a NitroLite.Desktop left over from an earlier run is stopped. The installed NitroLite.exe is left alone:
+# the launch below asks for a copy that owns no slot, so the app the user is running keeps its tray icon.
 $running = Get-Process NitroLite.Desktop -ErrorAction SilentlyContinue
 if ($running) {
     Write-Host "Stopping the running NitroLite.Desktop (the single-instance mutex would swallow the test copy)." -ForegroundColor Yellow
@@ -193,7 +195,7 @@ $themeValue = switch ($Theme) {
     'amberconsole' { 'AmberConsole' }
     'nordfrost' { 'NordFrost' }
 }
-$json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": `"$themeValue`""
+$json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": `"$themeValue`",`r`n  `"onboarding_completed`": true"
 if ($PSBoundParameters.ContainsKey('MouseProfile')) {
     $json += ",`r`n  `"atk_mouse_integration_enabled`": true,`r`n  `"default_atk_mouse_profile`": $MouseProfile"
 }
@@ -235,7 +237,11 @@ $pageAliases = @{
 $pages = @($pages | ForEach-Object { if ($pageAliases.ContainsKey($_)) { $pageAliases[$_] } else { $_ } })
 
 # ---- launch -----------------------------------------------------------------------------------
+# The user's own NitroLite is usually in the tray, and it owns the machine-wide single-instance slot. The
+# harness asks for a copy that owns no slot instead of closing the app the user is running; the throwaway
+# data folder above keeps the two apart.
 $env:NITROLITE_DATA_DIR = $dataDir
+$env:NITROLITE_ALLOW_SECOND_INSTANCE = '1'
 $proc = Start-Process -FilePath $Exe -PassThru
 Write-Host "Started NitroLite (pid $($proc.Id)), data folder $dataDir"
 

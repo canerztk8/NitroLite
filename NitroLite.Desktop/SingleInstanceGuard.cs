@@ -30,17 +30,26 @@ public sealed class SingleInstanceGuard : IDisposable
     /// <summary>The pipe a second launch writes one byte to.</summary>
     public const string PipeName = "NitroLite.SingleInstance.AN16";
 
+    /// <summary>
+    /// Set to <c>1</c> to start without taking the machine's slot. Only <c>scripts/screenshot.ps1</c> uses it: the
+    /// harness runs against a throwaway data folder while the user's own NitroLite sits in the tray, and the guard
+    /// would otherwise make it exit before the first window appears.
+    /// </summary>
+    public const string AllowSecondInstanceVariable = "NITROLITE_ALLOW_SECOND_INSTANCE";
+
     private readonly Mutex? _mutex;
     private readonly FileStream? _lockFile;
     private readonly CancellationTokenSource _stop = new();
+    private readonly bool _standalone;
     private NamedPipeServerStream? _server;
     private Task? _listener;
     private bool _disposed;
 
-    private SingleInstanceGuard(Mutex? mutex, FileStream? lockFile, bool isFirst)
+    private SingleInstanceGuard(Mutex? mutex, FileStream? lockFile, bool isFirst, bool standalone = false)
     {
         _mutex = mutex;
         _lockFile = lockFile;
+        _standalone = standalone;
         IsFirstInstance = isFirst;
     }
 
@@ -56,6 +65,14 @@ public sealed class SingleInstanceGuard : IDisposable
     /// </summary>
     public static SingleInstanceGuard Acquire()
     {
+        // The screenshot harness asks for this explicitly. It is not a way to run two copies by accident: the variable
+        // has to be set by hand, and the harness pairs it with a throwaway data folder so the second copy never reads
+        // or writes the user's settings.
+        if (IsSecondInstanceAllowed())
+        {
+            return new SingleInstanceGuard(null, null, isFirst: true, standalone: true);
+        }
+
         if (OperatingSystem.IsWindows())
         {
             bool refusedByAnotherSession = false;
@@ -106,13 +123,23 @@ public sealed class SingleInstanceGuard : IDisposable
         }
     }
 
+    /// <summary>True when <see cref="AllowSecondInstanceVariable"/> asks for a copy that owns no slot.</summary>
+    private static bool IsSecondInstanceAllowed()
+    {
+        var value = Environment.GetEnvironmentVariable(AllowSecondInstanceVariable);
+        return !string.IsNullOrWhiteSpace(value)
+            && (value.Trim() == "1" || value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// Starts listening for a second launch. Only the first instance calls this; the second one calls
     /// <see cref="SignalExistingInstance"/> and exits.
     /// </summary>
     public void Listen()
     {
-        if (!IsFirstInstance || _listener != null) return;
+        // A standalone copy owns no slot, so it has nothing to listen on: binding the pipe would fail against the
+        // running instance and log a warning for a condition the caller asked for.
+        if (!IsFirstInstance || _standalone || _listener != null) return;
 
         _listener = Task.Run(async () =>
         {

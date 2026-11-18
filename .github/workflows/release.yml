@@ -104,15 +104,42 @@ jobs:
           $fence = "${tick}${tick}${tick}"
           $fencePs = $fence + 'powershell'
 
-          # The changelog is the commit log since the previous tag, so it cannot drift
-          # from what actually shipped.
-          $previous = git describe --tags --abbrev=0 "$env:TAG^" 2>$null
-          if ($LASTEXITCODE -ne 0 -or -not $previous) { $previous = $null }
-          $range = if ($previous) { "$previous..$env:TAG" } else { $env:TAG }
-          # git log returns one string per commit; joining with a space would flatten the
-          # whole changelog into a single line.
-          $changes = (git log $range --no-merges --pretty=format:'- %s (%h)') -join [char]10
-          if (-not $changes) { $changes = '- No commits recorded for this tag.' }
+          # A curated CHANGELOG.md section wins over the raw commit log: the log is a list of
+          # commit subjects, which is not what a user wants to read. The log stays as the
+          # fallback, so a tag without an entry still publishes something true.
+          $changes = $null
+          if (Test-Path 'CHANGELOG.md') {
+            $lines = Get-Content 'CHANGELOG.md' -Encoding UTF8
+            # Built by concatenation: "$" inside a double-quoted pattern is a variable reference.
+            $heading = '^##\s+\[?v?' + [regex]::Escape($version) + '\]?(\s|$)'
+            $start = -1
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+              if ($lines[$i] -match $heading) { $start = $i + 1; break }
+            }
+            if ($start -ge 0) {
+              $body = New-Object System.Collections.Generic.List[string]
+              for ($i = $start; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match '^##\s') { break }
+                $body.Add($lines[$i])
+              }
+              $text = ($body -join [char]10).Trim()
+              if ($text) {
+                $changes = $text
+                Write-Host "Release notes taken from the CHANGELOG.md section for $version."
+              }
+            }
+          }
+
+          if (-not $changes) {
+            Write-Host "No CHANGELOG.md section for $version; falling back to the commit log."
+            $previous = git describe --tags --abbrev=0 "$env:TAG^" 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $previous) { $previous = $null }
+            $range = if ($previous) { "$previous..$env:TAG" } else { $env:TAG }
+            # git log returns one string per commit; joining with a space would flatten the
+            # whole changelog into a single line.
+            $changes = (git log $range --no-merges --pretty=format:'- %s (%h)') -join [char]10
+            if (-not $changes) { $changes = '- No commits recorded for this tag.' }
+          }
 
           $notes = @"
           NitroLite v${version}: a lightweight, open-source replacement for NitroSense on Acer Nitro laptops.
