@@ -1399,6 +1399,7 @@
   "Özel fan hızı": "Custom fan speed",
   "Özel fan hızı: CPU %{0}, GPU %{1}.": "Custom fan speed: CPU {0}%, GPU {1}%.",
   "ölçüldü": "measured",
+  "İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.": "Only one of the two can be on; turning one on turns the other off.",
   "İleri": "Next",
   "İletişim hatası": "Communication error",
   "İlk Kurulum": "First-run setup",

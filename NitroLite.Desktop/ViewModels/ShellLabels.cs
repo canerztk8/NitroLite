@@ -655,6 +655,8 @@ public sealed class ShellLabels
     public string StartupAndIntegration => Loc.T("Başlangıç ve Entegrasyon");
     public string RunAtStartup => Loc.T("Windows açılışında otomatik çalıştır");
     public string RunAtStartupHint => Loc.T("Kullanıcı kaydına yazılır; yönetici izni istemez.");
+    public string StartupExclusiveHint =>
+        Loc.T("İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.");
     public string StartMinimized => Loc.T("Windows açılışında tepside başlat");
     public string StartMinimizedHint => Loc.T("Pencere açılmaz; uygulama doğrudan sistem tepsisinde başlar.");
     public string AtkMouseIntegration => Loc.T("ATK Fare Entegrasyonu");

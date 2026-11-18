@@ -1399,6 +1399,7 @@
   "Özel fan hızı": "कस्टम फैन गति",
   "Özel fan hızı: CPU %{0}, GPU %{1}.": "कस्टम फ़ैन गति: CPU {0}%, GPU {1}%।",
   "ölçüldü": "मापा गया",
+  "İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.": "दोनों में से केवल एक ही चालू हो सकता है; एक चालू करने पर दूसरा बंद हो जाता है।",
   "İleri": "आगे",
   "İletişim hatası": "संचार त्रुटि",
   "İlk Kurulum": "पहली बार सेटअप",

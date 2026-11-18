@@ -545,6 +545,9 @@ public sealed partial class MainViewModel
     /// <summary>True when this platform has an ordinary per-user sign-in entry.</summary>
     public bool RunAtStartupAvailable => _runAtStartup?.IsSupported == true;
 
+    /// <summary>True when this platform offers at least one way to start with the session.</summary>
+    public bool StartupAvailable => RunAtStartupAvailable || AutoStartAvailable;
+
     /// <summary>The plain <c>HKCU\...\Run</c> entry. Turning it on removes the elevated task, and the other way round.</summary>
     public bool RunAtStartupOn
     {

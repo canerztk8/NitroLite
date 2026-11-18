@@ -1399,6 +1399,7 @@
   "Özel fan hızı": "Velocidad personalizada",
   "Özel fan hızı: CPU %{0}, GPU %{1}.": "Velocidad del ventilador personalizada: CPU {0}%, GPU {1}%.",
   "ölçüldü": "medido",
+  "İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.": "Solo una de las dos puede estar activa; al activar una se desactiva la otra.",
   "İleri": "Siguiente",
   "İletişim hatası": "Error de comunicación",
   "İlk Kurulum": "Configuración inicial",

@@ -1399,6 +1399,7 @@
   "Özel fan hızı": "Eigene Lüfterdrehzahl",
   "Özel fan hızı: CPU %{0}, GPU %{1}.": "Benutzerdefinierte Lüfterdrehzahl: CPU {0}%, GPU {1}%.",
   "ölçüldü": "gemessen",
+  "İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.": "Nur eine der beiden Optionen kann aktiv sein; das Einschalten der einen schaltet die andere aus.",
   "İleri": "Weiter",
   "İletişim hatası": "Kommunikationsfehler",
   "İlk Kurulum": "Erste Einrichtung",

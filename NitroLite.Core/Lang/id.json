@@ -1399,6 +1399,7 @@
   "Özel fan hızı": "Kecepatan kipas khusus",
   "Özel fan hızı: CPU %{0}, GPU %{1}.": "Kecepatan fan khusus: CPU {0}%, GPU {1}%.",
   "ölçüldü": "terukur",
+  "İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.": "Hanya salah satu dari keduanya yang dapat aktif; mengaktifkan yang satu mematikan yang lain.",
   "İleri": "Lanjut",
   "İletişim hatası": "Kesalahan komunikasi",
   "İlk Kurulum": "Penyiapan awal",
