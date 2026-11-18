@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <a href="docs/video/nitrolite-tour.mp4"><img src="docs/video/nitrolite-tour-poster.jpg" alt="Play the 45-second tour of NitroLite" width="70%"></a>
+  <a href="https://youtu.be/0FmFyp4AykY"><img src="docs/video/nitrolite-tour-poster.jpg" alt="Play the 45-second tour of NitroLite on YouTube" width="70%"></a>
   <br>
-  <a href="docs/video/nitrolite-tour.mp4"><b>Watch the 45-second tour</b></a> — 1080p60, captions on screen.
+  <a href="https://youtu.be/0FmFyp4AykY"><b>Watch the 45-second tour</b></a> — on YouTube, 1080p60, captions on screen.
 </p>
 
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
@@ -52,9 +52,9 @@ by `scripts/screenshot.ps1` against a throwaway data folder, so they show a fres
 settings. The same script captures any of the eight languages and any of the six themes; see
 [Capturing screenshots](#capturing-screenshots).
 
-The tour above is [`docs/video/nitrolite-tour.mp4`](docs/video/nitrolite-tour.mp4): 45 seconds, 1080p60, 5.9 MB,
-captions burned in. The full-quality master is attached to the
-[v1.2.6 release](https://github.com/canerztk8/NitroLite/releases/tag/v1.2.6).
+The tour above is on [YouTube](https://youtu.be/0FmFyp4AykY): 45 seconds, 1080p60, captions burned in. A 5.9 MB
+copy of the same cut is in [`docs/video`](docs/video) for anyone who would rather not use YouTube, and the
+full-quality master is attached to the [v1.2.6 release](https://github.com/canerztk8/NitroLite/releases/tag/v1.2.6).
 
 ---
 
