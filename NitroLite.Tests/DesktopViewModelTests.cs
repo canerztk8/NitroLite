@@ -858,6 +858,20 @@ public class DesktopViewModelTests
     }
 
     [Fact]
+    public async Task CapabilityList_DoesNotAdvertiseCoolBoostOrLcdOverdrive()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        // Neither feature is part of the app, so the first-run walkthrough must not claim to check for them.
+        Assert.DoesNotContain(vm.CapabilityRows, row => row.Label == Loc.T("CoolBoost"));
+        Assert.DoesNotContain(vm.CapabilityRows, row => row.Label == Loc.T("LCD overdrive"));
+    }
+
+    [Fact]
     public async Task CapabilityList_TheTierIsTranslatedInsteadOfShowingTheRawDiagnostic()
     {
         var (vm, controller) = Create(Nitro16());

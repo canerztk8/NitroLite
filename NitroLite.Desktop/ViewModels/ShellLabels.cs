@@ -290,8 +290,6 @@ public sealed class ShellLabels
     public string CapBatteryLimit => Loc.T("Pil şarj sınırı");
     public string CapKeyboard => Loc.T("Klavye aydınlatma bölgeleri");
     public string CapBacklightTimeout => Loc.T("Arka ışık zaman aşımı");
-    public string CapCoolBoost => Loc.T("CoolBoost");
-    public string CapLcdOverdrive => Loc.T("LCD overdrive");
     public string CapGpuOverclock => Loc.T("GPU hız aşırtma");
 
     // ---------------------------------------------------------------- status

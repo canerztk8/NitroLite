@@ -4532,8 +4532,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CapabilityRows.Add(new CapabilityRow(Labels.CapBatteryLimit, _capabilities.BatteryChargeLimit));
         CapabilityRows.Add(new CapabilityRow(Labels.CapKeyboard, _capabilities.KeyboardLighting));
         CapabilityRows.Add(new CapabilityRow(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapCoolBoost, _capabilities.CoolBoost));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapLcdOverdrive, _capabilities.LcdOverdrive));
     }
 
     // ---------------------------------------------------------------- commands
