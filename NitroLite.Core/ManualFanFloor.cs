@@ -43,8 +43,14 @@ public sealed class ManualFanFloor
     /// write the quiet number the loop would have refused a moment earlier.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// The result is clamped to 0..100 as well as raised. The raise is the point of the class; the clamp is there
+    /// because this is the last function before the number reaches the firmware, and a target that came from a
+    /// hand-edited settings file or a future caller that forgot to clamp would otherwise be written as-is. A fan
+    /// percentage above 100 is not a stronger fan, it is a value the embedded controller has to interpret.
+    /// </remarks>
     public int EffectivePercent(int targetPercent, double temperatureC) =>
-        Math.Max(targetPercent, FloorAt(temperatureC));
+        Math.Clamp(Math.Max(targetPercent, FloorAt(temperatureC)), 0, 100);
 
     /// <summary>
     /// The speed to write now, or null when the fans are already there. A missing or impossible reading never
