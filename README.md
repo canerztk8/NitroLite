@@ -3,8 +3,15 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)
-[![Tests](https://img.shields.io/badge/Tests-2483-10B981)](#tests)
+[![Tests](https://img.shields.io/badge/Tests-2491-10B981)](#tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<p align="center">
+  <a href="https://github.com/canerztk8/NitroLite/releases/latest"><b>Download for Windows</b></a> ·
+  <a href="https://youtu.be/0FmFyp4AykY">45-second demo</a> ·
+  <a href="#compatibility">Model compatibility</a> ·
+  <a href="#install-and-verify">Install</a>
+</p>
 
 <p align="center">
   <img src="docs/screenshots/en-dark-NavModes.jpg" alt="NitroLite: operating modes, fan control, CPU boost and the MUX switch" width="100%">
@@ -16,23 +23,30 @@
   <a href="https://youtu.be/0FmFyp4AykY"><b>Watch the 45-second tour</b></a> — 1080p60, captions on screen.
 </p>
 
-**NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
-**Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It does not ship an Electron shell, and it does not need
-Acer's software to be installed: when `AcerAgentService` is missing it talks to the firmware's own WMI class
-instead. See [Without Acer's software](#without-acers-software).
+**NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops. It was developed on an
+**Acer Nitro 16 AN16-41** (Ryzen 7840HS + RTX 4070) and is not tied to that machine: at startup it reads the model,
+the CPU vendor and what the firmware says the hardware can do, then shows only the controls this laptop actually
+has. See [Compatibility](#compatibility).
 
-It is not tied to the machine it was written on: at startup it reads the model, the CPU vendor and what the
-firmware says the hardware can do, then shows only the controls this laptop actually has. See
-[Compatibility](#compatibility).
+**Acer's software is optional, not a requirement.** With NitroSense installed, NitroLite drives `AcerAgentService`
+and never asks for elevation. Without it, the direct-WMI backend talks to the firmware's own `AcerGamingFunction`
+class instead, at the cost of one UAC prompt per session. Which path a given laptop can take is a property of its
+firmware, not a promise: the direct-WMI backend needs `AcerGamingFunction` to exist, the 80 % charge limit needs
+either `WMID_GUID5` or Acer Care Center, and the MUX switch needs a capability report from the service or
+`dgpu_mode_capability` in the registry. Where none of them answers, the control is disabled with the reason next to
+it rather than failing when pressed. See [Without Acer's software](#without-acers-software).
 
 The window is Avalonia, so the same front end runs on Windows and on Linux. See
 [Linux (experimental)](#linux-experimental).
 
-**Measured footprint** (AN16-41, in the tray, Release build): about 74 MB working set and roughly 0.6 % of one core
-at idle. Telemetry is read every 3 seconds while minimised, and not at all while the window is hidden.
+**Measured footprint** (AN16-41, 1.2.6, the published single-file build): about 80 MB working set in the tray, and
+about 275 MB with the window open — most of that difference is the window's own surfaces, which Windows trims the
+moment it is hidden. Idle CPU is about 4 % of one core in the tray, a quarter of a percent of a 16-thread laptop.
+Telemetry is read every second while the window is on screen, every five seconds in the tray, and every half second
+while the OSD is up.
 
 **New in 1.2.6:** the Avalonia rewrite, a Linux build, 31 model profiles, the Nitro key, the theme engine and a
-2483-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
+2491-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -67,6 +81,10 @@ full-quality master is attached to the [v1.2.6 release](https://github.com/caner
   [Without Acer's software](#without-acers-software).
 - **Fan:** automatic curve, maximum speed, a fixed custom speed (CPU and GPU fan separately, 30–100 %), or a
   **software fan curve** you draw yourself.
+- **What a fan setting can and cannot do.** A higher speed moves more air; it does not guarantee a lower
+  temperature. On a chassis whose cooler is already saturated the reading barely moves, and how far it moves depends
+  on the laptop, the thermal paste and the workload. The curve is a way to trade noise against temperature, not a
+  promise of a number.
 - **Software fan curve:** six points from 40 °C to 90 °C, each mapping a temperature to a fan speed. NitroLite reads
   the CPU temperature every few seconds and moves the fan to the matching speed. A 3 °C hysteresis and a minimum
   dwell time keep it from hunting up and down on a temperature that sits on a step. The curve is drawn as a trace
@@ -128,7 +146,9 @@ full-quality master is attached to the [v1.2.6 release](https://github.com/caner
   and sets Eco mode, automatic fan, 60 Hz, 40 % brightness and the keyboard backlight off. Every value it replaces is
   written to `school_mode_backup.json` before the first change, so turning it off — or relaunching after a crash —
   puts the machine back exactly as it was. While it is on, the automatic AC/battery pass stands down instead of
-  undoing it.
+  undoing it. **No fixed number of extra hours is promised.** The gain depends on what the machine was doing — a
+  GPU-bound game barely moves, an idle browser session moves a lot — so the card reports the settings it changed and
+  the steps that failed, not an estimate it cannot measure.
 
 ### 6b. Standby memory purge
 - Converts the standby list Windows keeps cached into free memory without touching the memory of running programs.
@@ -301,7 +321,9 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
 already uses, or through the firmware's own WMI class, and CPU boost through the Windows power plan. Nothing here
-loads `WinRing0` or any other driver, so Vanguard, FACEIT and EAC have nothing to object to.
+loads `WinRing0` or any other driver, which is the usual reason an anti-cheat refuses to start next to a hardware
+tool. That is a statement about what NitroLite loads, not a guarantee: anti-cheat vendors keep their own allow-lists,
+and a game that blocks unsigned overlays will still block the OSD.
 
 ### If your model is not covered
 
@@ -336,12 +358,12 @@ NitroLite restarts itself in about a second to apply it.
 
 ## Theme
 
-**Settings → Theme** offers **System default** plus six palettes, each shown as a preview card: the warm-cream
-"paper" theme, `Dark`, and four dark variants — **Midnight OLED** (true black), **Slate Steel** (cold anthracite),
-**Amber Console** (warm amber) and **Nord Frost** (glacier turquoise). All six share one key set and the same
-paper-and-ink hierarchy; only the temperature of the ground and the hue of the accent move. System default follows
-the Windows app theme, resolved at launch. The OSD is dark in every case. Like the language, the theme applies after
-a quick restart.
+**Settings → Theme** offers **System default** plus six palettes, each shown as a row of five swatches — page, card,
+rule, ink and accent, in the order the palette defines them: the warm-cream "paper" theme, `Dark`, and four dark
+variants — **Midnight OLED** (true black), **Slate Steel** (cold anthracite), **Amber Console** (warm amber) and
+**Nord Frost** (glacier turquoise). All six share one key set and the same paper-and-ink hierarchy; only the
+temperature of the ground and the hue of the accent move. System default follows the Windows app theme, resolved at
+launch. The OSD is dark in every case. Like the language, the theme applies after a quick restart.
 
 <p align="center">
   <img src="docs/screenshots/en-dark-NavModes.jpg" alt="NitroLite in the dark theme" width="100%">
@@ -685,7 +707,7 @@ The solution has five projects:
 | `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
 | `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
 | `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2483 tests. |
+| `NitroLite.Tests` | `net10.0-windows` | 2491 tests. |
 
 `NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
 check that keeps the split honest.
@@ -722,7 +744,7 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2483 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+2491 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
