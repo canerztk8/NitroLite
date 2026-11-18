@@ -28,11 +28,13 @@ public sealed record UiFontChoice(string Id, string DisplayName, string Stack, s
 /// rounded terminals: warmer than a system dialog, and distinct enough that the window is recognisable at a glance.
 /// </para>
 /// <para>
-/// Five more faces travel in the assembly beside it, all SIL OFL 1.1 and all subset to the ranges the eight
+/// Seven more faces travel in the assembly beside it, all SIL OFL 1.1 and all subset to the ranges the eight
 /// catalogues can put on screen: <b>Exo 2</b> (technical geometric, Cyrillic), <b>Oxanium</b> (squared, the lightest
-/// file of the set), <b>Rubik</b> (rounded, Cyrillic), <b>JetBrains Mono</b> (monospace, Cyrillic) and
-/// <b>Rajdhani</b> (condensed HUD, Devanagari). Each ships as three static instances — Regular, SemiBold, Bold —
-/// because Avalonia 11 exposes no variation axis and would otherwise draw every weight at the file's default.
+/// file of the set), <b>Rubik</b> (rounded, Cyrillic), <b>JetBrains Mono</b> (monospace, Cyrillic),
+/// <b>Rajdhani</b> (condensed HUD, Devanagari), <b>Space Grotesk</b> (retro-futuristic grotesque) and
+/// <b>Chakra Petch</b> (squared techno, cut corners). Each ships as three static instances — Regular, SemiBold,
+/// Bold — because Avalonia 11 exposes no variation axis and would otherwise draw every weight at the file's
+/// default.
 /// </para>
 /// <para>
 /// Quicksand carries Latin, Latin Extended and Vietnamese, which covers Turkish, German, Spanish, Portuguese and
@@ -40,6 +42,7 @@ public sealed record UiFontChoice(string Id, string DisplayName, string Stack, s
 /// the same system faces those two languages were drawn in before the bundled face existed. Nothing renders as empty
 /// boxes; those two languages simply keep the face they had. Exo 2, Rubik and JetBrains Mono do carry Cyrillic, so a
 /// Russian reader who picks one of them gets it in that face; Rajdhani carries Devanagari, so a Hindi reader does.
+/// Space Grotesk and Chakra Petch are Latin-only like Quicksand, so they fall through for the same two languages.
 /// </para>
 /// <para>
 /// The five system faces behind them are the escape hatch, not the design: Segoe UI (the Windows default), Arial (the
@@ -88,6 +91,10 @@ public static class UiFontCatalog
         new UiFontChoice("jetbrains", "JetBrains Mono", $"{BundledFolder}#JetBrainsMono, {ScriptTail}"),
 
         new UiFontChoice("rajdhani", "Rajdhani", $"{BundledFolder}#Rajdhani, {ScriptTail}", DevanagariScript),
+
+        new UiFontChoice("spacegrotesk", "Space Grotesk", $"{BundledFolder}#SpaceGrotesk, {ScriptTail}"),
+
+        new UiFontChoice("chakrapetch", "Chakra Petch", $"{BundledFolder}#ChakraPetch, {ScriptTail}"),
 
         new UiFontChoice("segoe", "Segoe UI",
             $"Segoe UI Variable Text, Segoe UI, Ubuntu, Noto Sans, {ScriptTail}"),

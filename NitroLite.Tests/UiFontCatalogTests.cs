@@ -21,11 +21,11 @@ public class UiFontCatalogTests
         Path.Combine(Path.GetTempPath(), $"nitrolite-font-{Guid.NewGuid():N}.json");
 
     [Fact]
-    public void ElevenFacesAreOffered()
+    public void ThirteenFacesAreOffered()
     {
-        Assert.Equal(11, UiFontCatalog.All.Count);
-        Assert.Equal(11, UiFontCatalog.All.Select(f => f.Id).Distinct().Count());
-        Assert.Equal(11, UiFontCatalog.All.Select(f => f.DisplayName).Distinct().Count());
+        Assert.Equal(13, UiFontCatalog.All.Count);
+        Assert.Equal(13, UiFontCatalog.All.Select(f => f.Id).Distinct().Count());
+        Assert.Equal(13, UiFontCatalog.All.Select(f => f.DisplayName).Distinct().Count());
     }
 
     [Fact]

@@ -120,12 +120,12 @@ if ($actual -ne $WinMemoryCleanerSha256.ToLowerInvariant()) {
 Copy-Item (Join-Path $root 'third-party\WinMemoryCleaner\LICENSE') (Join-Path $wmcDir 'WinMemoryCleaner-LICENSE.txt')
 Copy-Item (Join-Path $root 'third-party\WinMemoryCleaner\NOTICE.md') (Join-Path $stage 'THIRD-PARTY-NOTICES.md')
 
-# The six bundled typefaces are SIL OFL 1.1, which requires the licence to travel with each font. The package's
-# allowlist has no room for six more files, so each font's notice and the shared licence text are appended to
+# The eight bundled typefaces are SIL OFL 1.1, which requires the licence to travel with each font. The package's
+# allowlist has no room for eight more files, so each font's notice and the shared licence text are appended to
 # the notices instead of shipped beside them. The licence is read from the copy that sits next to the fonts,
 # so there is one source of truth for it.
 $notices = Join-Path $stage 'THIRD-PARTY-NOTICES.md'
-foreach ($family in @('Quicksand', 'Exo2', 'Oxanium', 'Rubik', 'JetBrainsMono', 'Rajdhani'))
+foreach ($family in @('Quicksand', 'Exo2', 'Oxanium', 'Rubik', 'JetBrainsMono', 'Rajdhani', 'SpaceGrotesk', 'ChakraPetch'))
 {
     Add-Content -Path $notices -Value "`r`n---`r`n" -Encoding UTF8
     Get-Content (Join-Path $root "third-party\$family\NOTICE.md") | Add-Content -Path $notices -Encoding UTF8
