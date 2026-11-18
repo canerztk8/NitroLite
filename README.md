@@ -10,6 +10,12 @@
   <img src="docs/screenshots/en-dark-NavModes.jpg" alt="NitroLite: operating modes, fan control, CPU boost and the MUX switch" width="100%">
 </p>
 
+<p align="center">
+  <a href="docs/video/nitrolite-tour.mp4"><img src="docs/video/nitrolite-tour-poster.jpg" alt="Play the 45-second tour of NitroLite" width="70%"></a>
+  <br>
+  <a href="docs/video/nitrolite-tour.mp4"><b>Watch the 45-second tour</b></a> — 1080p60, captions on screen.
+</p>
+
 **NitroLite** is a lightweight, open-source replacement for NitroSense on Acer Nitro laptops (developed on an
 **Acer Nitro 16 AN16-41**, Ryzen 7840HS + RTX 4070). It does not ship an Electron shell, and it does not need
 Acer's software to be installed: when `AcerAgentService` is missing it talks to the firmware's own WMI class
@@ -45,6 +51,10 @@ All five pages, in English and in the dark theme, are in [`docs/screenshots`](do
 by `scripts/screenshot.ps1` against a throwaway data folder, so they show a fresh install rather than the author's
 settings. The same script captures any of the eight languages and any of the six themes; see
 [Capturing screenshots](#capturing-screenshots).
+
+The tour above is [`docs/video/nitrolite-tour.mp4`](docs/video/nitrolite-tour.mp4): 45 seconds, 1080p60, 5.9 MB,
+captions burned in. GitHub plays it in the browser when you open the file. The full-quality master is attached to
+the [v1.2.6 release](https://github.com/canerztk8/NitroLite/releases/tag/v1.2.6).
 
 ---
 
