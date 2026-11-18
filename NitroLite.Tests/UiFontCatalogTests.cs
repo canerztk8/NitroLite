@@ -8,7 +8,7 @@ using Xunit;
 namespace NitroLite.Tests;
 
 /// <summary>
-/// The typeface picker: five faces, every one of them able to draw all eight UI languages.
+/// The typeface picker: six faces, every one of them able to draw all eight UI languages.
 /// </summary>
 /// <remarks>
 /// The risk this guards is not cosmetic. A face that carries only Latin leaves a Hindi user with empty boxes, and a
@@ -21,11 +21,42 @@ public class UiFontCatalogTests
         Path.Combine(Path.GetTempPath(), $"nitrolite-font-{Guid.NewGuid():N}.json");
 
     [Fact]
-    public void FiveFacesAreOffered()
+    public void SixFacesAreOffered()
     {
-        Assert.Equal(5, UiFontCatalog.All.Count);
-        Assert.Equal(5, UiFontCatalog.All.Select(f => f.Id).Distinct().Count());
-        Assert.Equal(5, UiFontCatalog.All.Select(f => f.DisplayName).Distinct().Count());
+        Assert.Equal(6, UiFontCatalog.All.Count);
+        Assert.Equal(6, UiFontCatalog.All.Select(f => f.Id).Distinct().Count());
+        Assert.Equal(6, UiFontCatalog.All.Select(f => f.DisplayName).Distinct().Count());
+    }
+
+    [Fact]
+    public void TheDefaultFaceIsTheOneBundledInTheAssembly()
+    {
+        // The default has to be the bundled face, not a system one: it is the only choice that looks the same on
+        // Windows, on Linux and on a machine that has installed nothing. A bare family name here would silently
+        // resolve to nothing, because the face is not installed.
+        var face = UiFontCatalog.All[0];
+
+        Assert.Equal(UiFontCatalog.DefaultId, face.Id);
+        Assert.StartsWith(UiFontCatalog.BundledSans, face.Stack, System.StringComparison.Ordinal);
+        Assert.Contains("Quicksand", face.Stack, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheBundledStackKeepsItsScriptFallbacks()
+    {
+        // Avalonia reads a stack that names an asset folder as a composite family: the folder is the source and every
+        // name after the hash is a member of it. That is what keeps the Devanagari tail alive behind the bundled face
+        // — if the hash swallowed the tail, Hindi would draw empty boxes — so the shape is asserted, not assumed.
+        var family = new Avalonia.Media.FontFamily(UiFontCatalog.All[0].Stack);
+
+        Assert.StartsWith(
+            $"compositefont:{UiFontCatalog.BundledSans}",
+            family.Key?.ToString(),
+            System.StringComparison.Ordinal);
+        Assert.Contains("Quicksand", family.FamilyNames);
+        Assert.Contains("Nirmala UI", family.FamilyNames);
+        Assert.Contains("Noto Sans Devanagari", family.FamilyNames);
+        Assert.Contains("sans-serif", family.FamilyNames);
     }
 
     [Fact]

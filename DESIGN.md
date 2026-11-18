@@ -20,37 +20,37 @@ colors:
   warn-bg: "#F0E2D2"
 typography:
   display:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
+    fontFamily: "Quicksand, sans-serif"
     fontSize: "18px"
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0em"
   title:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
+    fontFamily: "Quicksand, sans-serif"
     fontSize: "14px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0em"
   body:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
+    fontFamily: "Quicksand, sans-serif"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.45
     letterSpacing: "0em"
   label:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
+    fontFamily: "Quicksand, sans-serif"
     fontSize: "11px"
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: "0em"
   hint:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
+    fontFamily: "Quicksand, sans-serif"
     fontSize: "11.5px"
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: "0em"
   micro:
-    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
+    fontFamily: "Quicksand, sans-serif"
     fontSize: "10px"
     fontWeight: 600
     lineHeight: 1.3
@@ -173,17 +173,21 @@ The colours above are the **Light** palette. Five more ship beside it — `Dark`
 
 ## Typography
 
-Two families, a strict division of labour: **recorded figures** in Cascadia Mono (falling back to Consolas, Courier New), **written text** in Segoe UI Variable Text. No custom font is loaded — the lightweight constraint.
+Two families, a strict division of labour: **recorded figures** in Cascadia Mono (falling back to Consolas, Courier New), **written text** in Quicksand. Quicksand is bundled in the assembly (`NitroLite.Desktop/Assets/Fonts/`, SIL Open Font License) and resolved through `avares://`, so the window is drawn in the same face on Windows, on Linux and on a machine that has installed nothing. A system face would make the same screen look like two different products depending on who installed what.
+
+Quicksand is a geometric sans with rounded terminals — warmer than a system dialog, and distinct enough that the window is recognisable at a glance. Three static weights travel with it: Regular for body text, SemiBold for titles and labels, Bold for the OSD. Static instances rather than the variable file, because Avalonia 11 exposes no variation axis and would draw every weight at the file's default instance.
+
+**Quicksand carries no Cyrillic and no Devanagari.** Turkish, German, Spanish, Portuguese, Indonesian and English are fully covered; Russian and Hindi fall through to `Nirmala UI, Noto Sans Devanagari, sans-serif` at the end of the stack, which is the face those two languages were drawn in before the bundled face existed. Nothing renders as empty boxes — those two languages simply keep the face they had. The settings page still offers five system faces as an escape hatch.
 
 | Role | Size | Weight | Family | Use |
 |---|---|---|---|---|
-| display | 18px | SemiBold | Segoe UI | Page title, one per screen |
-| title | 14px | SemiBold | Segoe UI | Section heading |
-| tile | 13px | SemiBold | Segoe UI | Mode tile name |
-| body | 12px | Regular | Segoe UI | Description paragraph |
-| hint | 11.5px | Regular | Segoe UI | The one-line summary under a section heading |
-| label | 11px | Regular / SemiBold | Segoe UI | Field label, button text, state chip, mode tile label |
-| micro | 10px | SemiBold | Segoe UI | Measurement label, "SELECT", axis text |
+| display | 18px | SemiBold | Quicksand | Page title, one per screen |
+| title | 14px | SemiBold | Quicksand | Section heading |
+| tile | 13px | SemiBold | Quicksand | Mode tile name |
+| body | 12px | Regular | Quicksand | Description paragraph |
+| hint | 11.5px | Regular | Quicksand | The one-line summary under a section heading |
+| label | 11px | Regular / SemiBold | Quicksand | Field label, button text, state chip, mode tile label |
+| micro | 10px | SemiBold | Quicksand | Measurement label, "SELECT", axis text |
 | figure | 12–20px | Regular / SemiBold | Cascadia Mono | Every numeric reading, axis value, RPM, °C |
 
 **The hint is one line.** A section heading is followed by at most one line of `hint` in `ink-faint`; anything longer belongs in the `(?)` badge. The heading and the figures lead, the prose recedes — a reader scanning the page should meet numbers, not sentences.

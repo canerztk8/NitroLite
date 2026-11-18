@@ -22,8 +22,13 @@
       below reads it with DynamicResource, so a font change repaints every text in the tree without a restart. The
       value here is the default face; the tail of the list is script coverage, not a style choice — the app ships in
       eight languages and Hindi needs a Devanagari face.
+
+      The first entry is not a name but an avares URI: Quicksand travels inside the assembly, so it is resolved from
+      the folder it was compiled into rather than from the machine's font directory. That is what makes the window
+      look the same on Windows, on Linux, and on a machine that has installed nothing. Quicksand has no Cyrillic, so
+      Russian falls through to the tail — the face it was drawn in before the bundled one existed.
     -->
-    <FontFamily x:Key="UiFontFamily">Segoe UI Variable Text, Segoe UI, Ubuntu, Noto Sans, Nirmala UI, Noto Sans Devanagari, sans-serif</FontFamily>
+    <FontFamily x:Key="UiFontFamily">avares://NitroLite.Desktop/Assets/Fonts#Quicksand, Nirmala UI, Noto Sans Devanagari, sans-serif</FontFamily>
 
     <!-- A 3px ruled track, the filled part in ink, an 8x16 square ink thumb. -->
     <ControlTheme x:Key="NitroSlider" TargetType="Slider">

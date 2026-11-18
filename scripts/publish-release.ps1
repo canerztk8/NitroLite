@@ -114,6 +114,16 @@ if ($actual -ne $WinMemoryCleanerSha256.ToLowerInvariant()) {
 Copy-Item (Join-Path $root 'third-party\WinMemoryCleaner\LICENSE') (Join-Path $wmcDir 'WinMemoryCleaner-LICENSE.txt')
 Copy-Item (Join-Path $root 'third-party\WinMemoryCleaner\NOTICE.md') (Join-Path $stage 'THIRD-PARTY-NOTICES.md')
 
+# The bundled typeface is SIL OFL 1.1, which requires the licence to travel with the font. The package's
+# allowlist has no room for a second file, so the font's notice and the licence text are appended to the
+# notices instead of shipped beside them. The licence is read from the copy that sits next to the fonts, so
+# there is one source of truth for it.
+$notices = Join-Path $stage 'THIRD-PARTY-NOTICES.md'
+Add-Content -Path $notices -Value "`r`n---`r`n" -Encoding UTF8
+Get-Content (Join-Path $root 'third-party\Quicksand\NOTICE.md') | Add-Content -Path $notices -Encoding UTF8
+Add-Content -Path $notices -Value "`r`n---`r`n" -Encoding UTF8
+Get-Content (Join-Path $root 'NitroLite.Desktop\Assets\Fonts\OFL.txt') | Add-Content -Path $notices -Encoding UTF8
+
 # GPL-3.0 section 6(d) wants the Corresponding Source reachable from the same place as the
 # object code, so the upstream source archive travels inside the package. GitHub generates
 # these archives on demand and does not promise byte-stability, so only the shape is checked.
