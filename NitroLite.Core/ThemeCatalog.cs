@@ -26,7 +26,9 @@ public static class ThemeCatalog
         AppTheme.CleanWhite,
         AppTheme.Forest,
         AppTheme.NeonStreet,
-        AppTheme.HighContrast
+        AppTheme.HighContrast,
+        AppTheme.ViceSunset,
+        AppTheme.CyberChrome
     };
 
     /// <summary>
@@ -42,7 +44,9 @@ public static class ThemeCatalog
         AppTheme.NordFrost,
         AppTheme.Forest,
         AppTheme.NeonStreet,
-        AppTheme.HighContrast
+        AppTheme.HighContrast,
+        AppTheme.ViceSunset,
+        AppTheme.CyberChrome
     };
 
     /// <summary>True when <paramref name="theme"/> is one of the dark-based palettes.</summary>
@@ -71,6 +75,8 @@ public static class ThemeCatalog
         AppTheme.Forest => "Orman",
         AppTheme.NeonStreet => "Neon Sokak",
         AppTheme.HighContrast => "Yüksek Karşıtlık",
+        AppTheme.ViceSunset => "Neon Gün Batımı",
+        AppTheme.CyberChrome => "Krom Şehir",
         _ => "Sıcak Krem"
     };
 

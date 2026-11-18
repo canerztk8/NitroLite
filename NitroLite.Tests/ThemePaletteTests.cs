@@ -210,6 +210,8 @@ public class ThemePaletteTests
     [InlineData(AppTheme.Forest, true)]
     [InlineData(AppTheme.NeonStreet, true)]
     [InlineData(AppTheme.HighContrast, true)]
+    [InlineData(AppTheme.ViceSunset, true)]
+    [InlineData(AppTheme.CyberChrome, true)]
     [InlineData(AppTheme.WarmCream, false)]
     [InlineData(AppTheme.CleanWhite, false)]
     public void IsDarkTheme_ClassifiesEveryConcretePalette(AppTheme theme, bool expected)

@@ -76,7 +76,13 @@ public enum AppTheme
     NeonStreet = 9,
 
     /// <summary>Pure black, pure white ink and a yellow accent: the palette for a screen read at a glance.</summary>
-    HighContrast = 10
+    HighContrast = 10,
+
+    /// <summary>Deep violet ground with a hot-pink accent: the sunset palette.</summary>
+    ViceSunset = 11,
+
+    /// <summary>Near-black with a signal-yellow accent and a cyan secondary: the chrome palette.</summary>
+    CyberChrome = 12
 }
 
 public class MonitorData

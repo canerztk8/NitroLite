@@ -316,7 +316,7 @@ public class Wave2ParityTests
             // The ten concrete palettes each carry five swatches. "System" is a preference, not a palette: it shows
             // whatever it resolves to, so it is not counted here.
             var concrete = vm.ThemeCards.Where(c => c.Theme != AppTheme.System).ToList();
-            Assert.Equal(10, concrete.Count);
+            Assert.Equal(12, concrete.Count);
 
             foreach (var card in concrete)
             {

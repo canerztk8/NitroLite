@@ -97,6 +97,8 @@ public sealed class ThemePalette
         AppTheme.Forest => Forest,
         AppTheme.NeonStreet => NeonStreet,
         AppTheme.HighContrast => HighContrast,
+        AppTheme.ViceSunset => ViceSunset,
+        AppTheme.CyberChrome => CyberChrome,
         _ => Dark
     };
 
@@ -418,5 +420,59 @@ public sealed class ThemePalette
         Warning = Color.Parse("#FFB300"),
         Danger = Color.Parse("#FF5252"),
         ChartFill = Color.Parse("#1AFFD400")
+    };
+
+    /// <summary>Deep violet ground with a hot-pink accent: the sunset palette.</summary>
+    /// <remarks>
+    /// The one palette whose ground is a colour rather than a grey. The page is a violet-black, the card a step
+    /// lighter and a step warmer, and the accent is a hot pink that reads at 5.5:1 against the page. The secondary
+    /// ink is a pale lilac rather than a neutral grey, which is what keeps the whole window in one temperature
+    /// instead of putting a grey card on a purple page.
+    /// </remarks>
+    public static ThemePalette ViceSunset { get; } = new()
+    {
+        Page = Color.Parse("#140A22"),
+        Card = Color.Parse("#1E1030"),
+        CardHover = Color.Parse("#2A1742"),
+        Panel = Color.Parse("#180C28"),
+        Rail = Color.Parse("#110820"),
+        CardBorder = Color.Parse("#4A2A6B"),
+        CardBorderStrong = Color.Parse("#6B3E96"),
+        TextPrimary = Color.Parse("#FFF0F8"),
+        TextSecondary = Color.Parse("#D9B8E8"),
+        TextMuted = Color.Parse("#B08CC8"),
+        Accent = Color.Parse("#FF2E88"),
+        OnAccent = Color.Parse("#140A22"),
+        Success = Color.Parse("#3BE8A0"),
+        Warning = Color.Parse("#FFC24B"),
+        Danger = Color.Parse("#FF5252"),
+        ChartFill = Color.Parse("#1AFF2E88")
+    };
+
+    /// <summary>Near-black with a signal-yellow accent: the chrome palette.</summary>
+    /// <remarks>
+    /// The accent is the one colour in the set that is not a hue but a warning: signal yellow on a near-black
+    /// ground, 16.4:1 against the page, so the selected tab and the primary button are the first thing the eye
+    /// lands on. The surfaces are neutral rather than blue-black, which is what keeps it apart from NeonStreet:
+    /// that palette is a lit keyboard, this one is a printed circuit.
+    /// </remarks>
+    public static ThemePalette CyberChrome { get; } = new()
+    {
+        Page = Color.Parse("#0A0A0C"),
+        Card = Color.Parse("#15151A"),
+        CardHover = Color.Parse("#1F1F26"),
+        Panel = Color.Parse("#0D0D10"),
+        Rail = Color.Parse("#08080A"),
+        CardBorder = Color.Parse("#3A3A44"),
+        CardBorderStrong = Color.Parse("#55555F"),
+        TextPrimary = Color.Parse("#F2F2EC"),
+        TextSecondary = Color.Parse("#B8B8B0"),
+        TextMuted = Color.Parse("#8E8E88"),
+        Accent = Color.Parse("#FCEE0A"),
+        OnAccent = Color.Parse("#0A0A0C"),
+        Success = Color.Parse("#00E5A0"),
+        Warning = Color.Parse("#FF9F1C"),
+        Danger = Color.Parse("#FF3B5C"),
+        ChartFill = Color.Parse("#1AFCEE0A")
     };
 }

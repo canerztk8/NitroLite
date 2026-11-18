@@ -30,7 +30,7 @@
 
 .PARAMETER Theme
     warmcream (the default, aliased as light), dark, midnightoled, slatesteel, amberconsole, nordfrost,
-    cleanwhite, forest, neonstreet or highcontrast.
+    cleanwhite, forest, neonstreet, highcontrast, vicesunset or cyberchrome.
 
 .PARAMETER Language
     Language code: en, tr, de, es, ru, pt, hi, id.
@@ -105,7 +105,8 @@ param(
     [string]$Page = 'NavModes',
     [switch]$All,
     [ValidateSet('warmcream', 'light', 'dark', 'midnightoled', 'slatesteel', 'amberconsole', 'nordfrost',
-                 'cleanwhite', 'forest', 'neonstreet', 'highcontrast')][string]$Theme = 'warmcream',
+                 'cleanwhite', 'forest', 'neonstreet', 'highcontrast', 'vicesunset',
+                 'cyberchrome')][string]$Theme = 'warmcream',
     [string]$Language = 'tr',
     [string]$Out = '',
     [int]$MaxWidth = 1280,
@@ -200,6 +201,8 @@ $themeValue = switch ($Theme) {
     'forest' { 'Forest' }
     'neonstreet' { 'NeonStreet' }
     'highcontrast' { 'HighContrast' }
+    'vicesunset' { 'ViceSunset' }
+    'cyberchrome' { 'CyberChrome' }
 }
 $json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": `"$themeValue`",`r`n  `"onboarding_completed`": true"
 if ($PSBoundParameters.ContainsKey('MouseProfile')) {
