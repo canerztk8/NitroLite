@@ -20,17 +20,18 @@ hardware layer learned to describe laptops it has never seen. All of it is in th
   which is what made the Linux build possible at all. The executable is still `NitroLite.exe`, so an existing
   1.2.x install updates in place instead of ending up with two copies.
 - **A real theme engine.** `ThemeCatalog` drives every colour from one key set: two light palettes — the
-  warm-cream paper theme and **Clean White** — and eight dark ones: `Dark`, **Midnight OLED** (true black),
+  warm-cream paper theme and **Clean White** — and ten dark ones: `Dark`, **Midnight OLED** (true black),
   **Slate Steel** (cold anthracite), **Amber Console** (warm amber), **Nord Frost** (glacier turquoise),
-  **Forest** (deep green, moss accent), **Neon Street** (near-black, magenta accent) and **High Contrast**
-  (black ground, white ink, a 3:1 rule). Settings shows a preview card per theme instead of a list of names.
+  **Forest** (deep green, moss accent), **Neon Street** (near-black, magenta accent), **High Contrast**
+  (black ground, white ink, a 3:1 rule), **Neon Sunset** (violet-black, hot-pink accent) and **Chrome City**
+  (near-black, signal-yellow accent). Settings shows a preview card per theme instead of a list of names.
 - **A layout that holds its shape.** Cards, a max-width content column, a navigation rail you can resize, ink
   sliders you can drag by the track, segmented selection controls, and single-click mode cards.
 - **Live charts.** The telemetry graph draws as samples arrive, with mode changes marked on the timeline, so a
   temperature spike can be read against the fan curve that caused it.
-- **Six bundled typefaces.** The interface ships its own font stack, so a machine with an unusual default font
-  no longer changes the layout. Quicksand is the default; Exo 2, Oxanium, Rubik, JetBrains Mono and Rajdhani
-  travel beside it, and five system faces stay as the escape hatch.
+- **Eight bundled typefaces.** The interface ships its own font stack, so a machine with an unusual default
+  font no longer changes the layout. Quicksand is the default; Exo 2, Oxanium, Rubik, JetBrains Mono, Rajdhani,
+  Space Grotesk and Chakra Petch travel beside it, and five system faces stay as the escape hatch.
 - **Tray parity.** The tray menu carries the same modes, fan presets and lighting shortcuts as the window.
   Returning from the tray no longer rebuilds the window.
 - **First-run walkthrough.** Three steps: what the probe found on this machine, which of it is supported, and
@@ -46,11 +47,12 @@ hardware layer learned to describe laptops it has never seen. All of it is in th
 
 ### Typefaces and palettes
 
-- **Five new faces, all SIL OFL 1.1 and all inside the executable.** **Exo 2** (technical geometric, Cyrillic),
-  **Oxanium** (squared, the lightest file of the set), **Rubik** (rounded, Cyrillic), **JetBrains Mono**
-  (monospace, Cyrillic) and **Rajdhani** (condensed HUD, Devanagari). Each ships as three static instances —
-  Regular, SemiBold, Bold — because Avalonia 11 exposes no variation axis and would otherwise draw every
-  weight at the file's default.
+- **Seven new faces, all SIL OFL 1.1 and all inside the executable.** **Exo 2** (technical geometric,
+  Cyrillic), **Oxanium** (squared, the lightest file of the set), **Rubik** (rounded, Cyrillic),
+  **JetBrains Mono** (monospace, Cyrillic), **Rajdhani** (condensed HUD, Devanagari), **Space Grotesk**
+  (retro-futuristic grotesque) and **Chakra Petch** (squared techno, cut corners). Each ships as three static
+  instances — Regular, SemiBold, Bold — because Avalonia 11 exposes no variation axis and would otherwise draw
+  every weight at the file's default.
 - **Rajdhani is offered to Hindi readers only.** It is the one face drawn for Devanagari, and a reader without
   Hindi on screen gains nothing from a condensed HUD face. It appears when the interface language is Hindi *or*
   when the display language is Hindi, so a Hindi reader who set the interface to English still sees it. A reader
@@ -61,13 +63,19 @@ hardware layer learned to describe laptops it has never seen. All of it is in th
   the Hindi interface in each face.
 - **The files were subset, not shipped whole.** Each face was cut to the ranges the eight catalogues can put on
   screen — Latin, Latin Extended, Cyrillic, Devanagari, punctuation, currency, arrows, geometric shapes and
-  the emoji presentation selectors — and instanced at three weights. The six faces together add 1.8 MB to the
-  source tree and **781 KB to the published exe**, because single-file compression absorbs most of it.
+  the emoji presentation selectors — and instanced at three weights. The eight faces together add 2.1 MB to the
+  source tree and **926 KB to the published exe**, because single-file compression absorbs most of it.
 - **No Reserved Font Name.** Each upstream `OFL.txt` was checked before subsetting, so the cut files legally
   keep their family names. The per-face copyright line and the exact change are in `third-party/<face>/NOTICE.md`.
-- **Four new palettes.** **Clean White** (neutral white, cool grey rule), **Forest** (deep green ground, moss
-  accent), **Neon Street** (near-black, magenta accent) and **High Contrast** (black ground, white ink, a 3:1
-  rule and a saturated accent). Ten palettes now, two light and eight dark.
+- **Six new palettes.** **Clean White** (neutral white, cool grey rule), **Forest** (deep green ground, moss
+  accent), **Neon Street** (near-black, magenta accent), **High Contrast** (black ground, white ink, a 3:1 rule
+  and a saturated accent), **Neon Sunset** (violet-black ground, hot-pink accent) and **Chrome City**
+  (near-black ground, signal-yellow accent). Twelve palettes now, two light and ten dark.
+- **A nod, not a tie-in.** Neon Sunset and Chrome City are drawn after two aesthetics rather than two products:
+  the Miami sunset the *Vice City* games are painted in, and the yellow-on-black chrome of the cyberpunk genre.
+  Neither palette is sampled from a game, neither typeface is a game's logo face, and NitroLite is not
+  affiliated with Rockstar Games or CD Projekt Red. The colours are the project's own and the fonts are SIL
+  OFL 1.1, so nothing here is redistributed under someone else's terms.
 - **Every palette is held to the same six contrast floors** — body ink on a card at 4.5:1, a card rule against
   the page at 1.45:1, muted ink at 3:1, the accent against the page at 3:1, and a strong rule stronger than a
   weak one — so a palette cannot ship unreadable. High Contrast clears every floor by a wide margin, and a test
@@ -176,7 +184,7 @@ Measured on the AN16-41 with the published single-file build, before and after t
 
 ### Tests
 
-- **2626 tests**, up from 1826.
+- **2628 tests**, up from 1826.
 - A five-chassis matrix — AN16-41, Predator Helios/Triton, an old Nitro 5, a Nitro V 15 with restricted WMI,
   and an unsupported device — drives every page and command and asserts no unhandled exception and a `--`
   fallback for every missing sensor.
@@ -190,15 +198,15 @@ Measured on the AN16-41 with the published single-file build, before and after t
 - A probe stress suite covers a slow WMI answer, a missing sensor and a window opened and closed mid-probe.
 - Allocation tests pin the Linux telemetry tick, the language switch and the WMI worker framing to their
   measured budgets, so a regression shows up as a failing test rather than as a slower app.
-- A completeness test asserts that all eight catalogues hold the same 1662 keys and that no English row still
+- A completeness test asserts that all eight catalogues hold the same 1664 keys and that no English row still
   carries Turkish letters.
 - A chaos suite covers suspend and resume, 254 concurrent commands against a live telemetry loop, a corrupt
   `profiles.user.json`, an atomic write that leaves no `.tmp` behind, and a `/sys` tree whose `hwmon` indices
   are renumbered underneath the reader.
-- The typeface catalogue is pinned: eleven faces, the Devanagari face offered only to a Hindi reader (interface
-  language or display language), the face in effect staying in the list after the reader leaves its script, and
-  every bundled face's three files present on disk.
-- The palette suite runs every contrast floor against all ten palettes, asserts that no two palettes are
+- The typeface catalogue is pinned: thirteen faces, the Devanagari face offered only to a Hindi reader
+  (interface language or display language), the face in effect staying in the list after the reader leaves its
+  script, and every bundled face's three files present on disk.
+- The palette suite runs every contrast floor against all twelve palettes, asserts that no two palettes are
   visually identical, and asserts that High Contrast clears each floor by a wide margin.
 
 ### Packaging

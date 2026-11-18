@@ -299,7 +299,7 @@ The card used to carry a 200px screenshot of the app in that palette. It was rem
 
 ## Visual verification
 
-A screenshot is the most expensive thing an agent can look at, and a session that walks all ten themes page by page spends its whole image budget on pictures that a unit test could have checked. So:
+A screenshot is the most expensive thing an agent can look at, and a session that walks all twelve themes page by page spends its whole image budget on pictures that a unit test could have checked. So:
 
 > **Görsel doğrulama yaparken bir oturumda toplam en fazla 6 ekran görüntüsü oku; tüm temaları tek tek ekran görüntüsüyle gezmek yerine birim testlerine güven.**
 
