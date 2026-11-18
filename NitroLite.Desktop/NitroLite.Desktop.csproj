@@ -119,8 +119,10 @@
     <AvaloniaResource Include="Assets\Fonts\*.ttf" />
 
     <!-- The OFL requires the licence to travel with the font. Copied next to the executable rather than embedded,
-         because a licence nobody can read is not a licence. -->
-    <None Update="Assets\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+         because a licence nobody can read is not a licence. Kept out of the published package on purpose: the
+         release script appends this same text to THIRD-PARTY-NOTICES.md, and the package's allowlist has no room
+         for a second file, so shipping it twice would fail the release. -->
+    <None Update="Assets\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>
