@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "1.3.0",
+  "version": "1.2.6",
   "description": "Lightweight open-source replacement for NitroSense on Acer Nitro laptops",
   "homepage": "https://github.com/canerztk8/NitroLite",
   "license": "MIT",
@@ -11,8 +11,8 @@
   ],
   "architecture": {
     "64bit": {
-      "url": "https://github.com/canerztk8/NitroLite/releases/download/v1.3.0/NitroLite-v1.3.0-win-x64.zip",
-      "hash": "91fd477a79625ca8f04f6761da94410e75cfe1359c5e96e9754b796a207f11d4"
+      "url": "https://github.com/canerztk8/NitroLite/releases/download/v1.2.6/NitroLite-v1.2.6-win-x64.zip",
+      "hash": "5de9a160fe3c679509e64cd96c9b7ea937f5cf03a9cde2803f4e61120e49e1e5"
     }
   },
   "extract_dir": "NitroLite",
