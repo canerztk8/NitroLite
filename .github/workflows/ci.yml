@@ -90,6 +90,28 @@ jobs:
           -c Release -f net10.0 -r linux-x64 --self-contained true -p:PublishSingleFile=true
           -o staging/NitroLite-linux-x64 --nologo
 
+      # The Windows package is trimmed (scripts/publish-release.ps1 sets PublishTrimmed), the Linux one is not: the
+      # trimmer's output can only be proven by running it, and nothing in this workflow runs a Linux binary. What this
+      # step does prove is that the trim step itself still succeeds for linux-x64 with the roots NitroLite.Desktop
+      # declares, so a change that breaks trimming on Linux fails here instead of on the day someone enables it.
+      #
+      # It is a separate output directory on purpose: the tarball below is built from the untrimmed publish, so a
+      # trimmed binary can never end up in a package nobody has run.
+      - name: Verify the trim step still succeeds for linux-x64
+        run: |
+          set -euo pipefail
+          dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0 -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -o staging/NitroLite-linux-x64-trimcheck --nologo -warnaserror
+
+          test -s staging/NitroLite-linux-x64-trimcheck/NitroLite.Desktop || {
+            echo "::error::the trimmed publish produced no binary"; exit 1; }
+
+          echo "### Trim check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Untrimmed | $(du -h staging/NitroLite-linux-x64/NitroLite.Desktop | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trimmed | $(du -h staging/NitroLite-linux-x64-trimcheck/NitroLite.Desktop | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Assemble the tarball
         run: |
           set -euo pipefail
