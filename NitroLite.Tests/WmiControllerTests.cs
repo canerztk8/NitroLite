@@ -231,7 +231,10 @@ public class WmiControllerTests
     {
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
-            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled),
+            // Directory trust has its own test. On a CI runner the build folder is world-writable, and letting
+            // that decide these tests would make them assert the runner's ACLs instead of the UAC path.
+            isTrustedLocation: _ => true);
 
         var first = await launcher.StartAsync();
         var second = await launcher.StartAsync();
@@ -248,7 +251,10 @@ public class WmiControllerTests
     {
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
-            start: _ => throw new Win32Exception(5));
+            start: _ => throw new Win32Exception(5),
+            // Directory trust has its own test. On a CI runner the build folder is world-writable, and letting
+            // that decide these tests would make them assert the runner's ACLs instead of the UAC path.
+            isTrustedLocation: _ => true);
 
         var result = await launcher.StartAsync();
 
@@ -277,7 +283,10 @@ public class WmiControllerTests
     {
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
-            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled),
+            // Directory trust has its own test. On a CI runner the build folder is world-writable, and letting
+            // that decide these tests would make them assert the runner's ACLs instead of the UAC path.
+            isTrustedLocation: _ => true);
         using var controller = new WmiHardwareController(launcher, new ReadBackPolicy(new AppSettings(), NoDelay));
 
         Assert.False(await controller.EnsureConnectedAsync());
@@ -303,7 +312,10 @@ public class WmiControllerTests
             with { WmiBatteryChargeLimitPresent = false };
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
-            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled),
+            // Directory trust has its own test. On a CI runner the build folder is world-writable, and letting
+            // that decide these tests would make them assert the runner's ACLs instead of the UAC path.
+            isTrustedLocation: _ => true);
         using var controller = new WmiHardwareController(
             launcher, new ReadBackPolicy(new AppSettings(), NoDelay), () => snapshot);
 
@@ -324,7 +336,10 @@ public class WmiControllerTests
             with { WmiBatteryChargeLimitPresent = false };
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
-            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled),
+            // Directory trust has its own test. On a CI runner the build folder is world-writable, and letting
+            // that decide these tests would make them assert the runner's ACLs instead of the UAC path.
+            isTrustedLocation: _ => true);
         using var controller = new WmiHardwareController(
             launcher, new ReadBackPolicy(new AppSettings(), NoDelay), () => snapshot);
 
@@ -342,7 +357,10 @@ public class WmiControllerTests
         var snapshot = SnapshotWith(CapabilitySnapshot.WmiBatteryChargeLimit, HardwareProbeOutcome.Unknown);
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
-            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled));
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled),
+            // Directory trust has its own test. On a CI runner the build folder is world-writable, and letting
+            // that decide these tests would make them assert the runner's ACLs instead of the UAC path.
+            isTrustedLocation: _ => true);
         using var controller = new WmiHardwareController(
             launcher, new ReadBackPolicy(new AppSettings(), NoDelay), () => snapshot);
 

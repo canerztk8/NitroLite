@@ -88,7 +88,14 @@ public class LightingOffPersistenceTests
             Assert.False(LightingPolicy.IsOff(ActiveRgbStateStore.Load(settingsPath)!));
 
             vm.TurnOffLightingCommand.Execute(null);
-            await Phase3Fakes.WaitUntilAsync(() => settings.IsBacklightOff, SettleMilliseconds);
+            // The settings flag and the recovery copy are two writes, and the second one is what a re-assert reads.
+            // Waiting for the flag alone left a window where the file still held the lit state, which is a race the
+            // test lost on a slow runner rather than a bug in the app.
+            await Phase3Fakes.WaitUntilAsync(
+                () => settings.IsBacklightOff
+                      && ActiveRgbStateStore.Load(settingsPath) is { } state
+                      && LightingPolicy.IsOff(state),
+                SettleMilliseconds);
 
             var recovery = ActiveRgbStateStore.Load(settingsPath);
             Assert.NotNull(recovery);
