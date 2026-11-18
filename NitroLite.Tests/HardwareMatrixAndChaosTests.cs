@@ -1108,7 +1108,11 @@ public class HardwareMatrixAndChaosTests
                 "settings: /home/caner/.local/share/NitroLite/settings.json",
                 "serial: 1234567890",
                 "uuid: 0000-1111-2222",
-                "hostname: caners-laptop"
+                "hostname: caners-laptop",
+                // A note is not always produced by the probe: a path can arrive from a settings file or a build
+                // running under WSL, and the report's own rules only know the POSIX shapes.
+                @"backup: C:\Users\caner\AppData\Local\NitroLite\settings.json",
+                "host: " + Environment.MachineName
             }
         };
 
@@ -1119,6 +1123,15 @@ public class HardwareMatrixAndChaosTests
         Assert.DoesNotContain("1234567890", report, StringComparison.Ordinal);
         Assert.DoesNotContain("0000-1111-2222", report, StringComparison.Ordinal);
         Assert.Contains("<redacted>", report, StringComparison.Ordinal);
+
+        // The Windows profile and the machine name are the shared redactor's job, and it runs after the report's own
+        // rules so it can only remove more.
+        Assert.Contains(Redaction.UserPlaceholder, report, StringComparison.Ordinal);
+        if (Environment.MachineName.Length >= 3)
+        {
+            Assert.DoesNotContain(Environment.MachineName, report, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(Redaction.MachinePlaceholder, report, StringComparison.Ordinal);
+        }
 
         // The model-level facts are the point of the report and have to survive the redaction.
         Assert.Contains("AN16-41", report, StringComparison.Ordinal);

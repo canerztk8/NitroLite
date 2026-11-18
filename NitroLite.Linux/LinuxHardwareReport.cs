@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using NitroLite.Core;
 using NitroLite.Core.Hardware;
 
 namespace NitroLite.Linux;
@@ -152,6 +153,13 @@ public static class LinuxHardwareReport
     /// <summary>
     /// Removes anything that identifies a person or a specific unit: home directories and any <c>serial:</c>,
     /// <c>uuid:</c> or <c>hostname:</c> pair that reached the text through a note.
+    /// <para>
+    /// The two rules above are the shapes a Linux probe produces. <see cref="Redaction.Scrub"/> runs last as a
+    /// safety net, because a note is not always produced by the probe: a path can arrive from a settings file, from
+    /// a user's own paste, or from a build running under WSL, and <c>C:\Users\name</c> is not a shape
+    /// <see cref="HomePath"/> recognises. The shared redactor already knows that form and the machine name, and
+    /// running it after the specific rules means it can only remove more, never put anything back.
+    /// </para>
     /// </summary>
     public static string Redact(string? value)
     {
@@ -159,7 +167,7 @@ public static class LinuxHardwareReport
 
         var redacted = HomePath.Replace(value, match => match.Groups["root"].Value + "/<redacted>");
         redacted = UnitIdentifier.Replace(redacted, match => match.Groups[1].Value + ": <redacted>");
-        return redacted;
+        return Redaction.Scrub(redacted);
     }
 
     /// <summary>One line of the report: redacted, and with newlines flattened so a note cannot break the list.</summary>
