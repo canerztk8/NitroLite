@@ -1,10 +1,12 @@
-﻿using Avalonia;
+﻿using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using NitroLite.Core;
 using NitroLite.Desktop.Themes;
+using NitroLite.Desktop.ViewModels;
 using NitroLite.Desktop.Views;
 
 namespace NitroLite.Desktop;
@@ -83,7 +85,12 @@ public partial class App : Application, IDisposable
             if (_nitroSense != null && _nitroSense.IsSupported)
             {
                 _nitroSense.NitroSenseActivated += OnNitroSenseActivated;
-                _nitroSense.Start();
+
+                // The watcher is a 400 ms foreground poll whose only action is the redirect, so it runs only while
+                // the two switches that ask for that redirect are on. The subscription is what makes turning a
+                // switch on take effect without a restart.
+                _host.ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+                SyncNitroSenseWatcher();
             }
 
             _window = new MainWindow { DataContext = _host.ViewModel };
@@ -313,6 +320,28 @@ public partial class App : Application, IDisposable
     }
 
     /// <summary>
+    /// Starts or stops the NitroSense watcher to match the two switches it serves.
+    /// </summary>
+    /// <remarks>
+    /// With either switch off the watcher has nothing to do, and a timer that wakes the CPU two and a half times a
+    /// second to decide that is the kind of idle cost this app exists to avoid. Both setters raise their own name, so
+    /// the switch takes effect the moment it is flipped.
+    /// </remarks>
+    private void SyncNitroSenseWatcher()
+    {
+        if (_nitroSense == null) return;
+
+        if (_host?.ViewModel is { NitroKeyEnabled: true, RedirectNitroSenseEnabled: true }) _nitroSense.Start();
+        else _nitroSense.Stop();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainViewModel.NitroKeyEnabled) or nameof(MainViewModel.RedirectNitroSenseEnabled))
+            SyncNitroSenseWatcher();
+    }
+
+    /// <summary>
     /// The framework's own teardown hook. <see cref="ExitAsync"/> and the session-ending handler both dispose the
     /// host already; this covers a lifetime that is shut down without going through either of them.
     /// </summary>
@@ -330,6 +359,10 @@ public partial class App : Application, IDisposable
         // the host was disposed would write to a disposed gate.
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+
+        // Unsubscribed before the host is disposed: a switch flipped during teardown would otherwise reach a view
+        // model that is already gone.
+        if (_host != null) _host.ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
 
         // Unsubscribed before the host is disposed: the listener's read loop can raise one last event while it is
         // shutting down, and a handler that reached a disposed view model would throw on a background thread.

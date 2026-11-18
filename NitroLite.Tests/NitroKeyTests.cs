@@ -495,6 +495,18 @@ public class NitroKeyTests
     }
 
     [Fact]
+    public void NitroSenseWatcher_StopBeforeStart_IsHarmless()
+    {
+        // The shell stops the watcher whenever a switch is off, including on a launch where it was never started,
+        // and starts it again the moment a switch comes on. Both orders have to be safe.
+        using var watcher = new NitroSenseWatcher(foregroundProcessId: () => 0, isNitroSense: _ => false);
+
+        watcher.Stop();
+        watcher.Stop();
+        watcher.Poll();
+    }
+
+    [Fact]
     public void NitroSenseWatcher_StaysQuietAfterClosing()
     {
         // The Acer service can relaunch NitroSense right after it is closed. Reacting to that would be a loop the
