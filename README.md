@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/015a1f76-01f5-4ba0-aef1-54210e50a714#t=0.5" controls></video>
+  <video src="https://github.com/user-attachments/assets/015a1f76-01f5-4ba0-aef1-54210e50a714" controls></video>
   <br>
   <a href="https://youtu.be/0FmFyp4AykY"><b>Watch the 45-second tour</b></a> — 1080p60, captions on screen. Also on YouTube.
 </p>
