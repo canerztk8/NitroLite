@@ -39,11 +39,10 @@ it rather than failing when pressed. See [Without Acer's software](#without-acer
 The window is Avalonia, so the same front end runs on Windows and on Linux. See
 [Linux (experimental)](#linux-experimental).
 
-**Measured footprint** (AN16-41, 1.2.6, the published single-file build): about 80 MB working set in the tray, and
+**Measured footprint** (AN16-41, 1.2.6, the published single-file build): about 70 MB working set in the tray, and
 about 275 MB with the window open — most of that difference is the window's own surfaces, which Windows trims the
-moment it is hidden. Idle CPU is about 4 % of one core in the tray, a quarter of a percent of a 16-thread laptop.
-Telemetry is read every second while the window is on screen, every five seconds in the tray, and every half second
-while the OSD is up.
+moment it is hidden. Idle CPU is about 0.2 % in Task Manager, which is 4 % of one core. Telemetry is read every
+second while the window is on screen, every five seconds in the tray, and every half second while the OSD is up.
 
 **New in 1.2.6:** the Avalonia rewrite, a Linux build, 31 model profiles, the Nitro key, the theme engine and a
 2491-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
