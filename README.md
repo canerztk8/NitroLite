@@ -3,7 +3,7 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)
-[![Tests](https://img.shields.io/badge/Tests-2491-10B981)](#tests)
+[![Tests](https://img.shields.io/badge/Tests-2500-10B981)](#tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -39,13 +39,14 @@ it rather than failing when pressed. See [Without Acer's software](#without-acer
 The window is Avalonia, so the same front end runs on Windows and on Linux. See
 [Linux (experimental)](#linux-experimental).
 
-**Measured footprint** (AN16-41, 1.2.6, the published single-file build): about 70 MB working set in the tray, and
-about 275 MB with the window open — most of that difference is the window's own surfaces, which Windows trims the
-moment it is hidden. Idle CPU is about 0.2 % in Task Manager, which is 4 % of one core. Telemetry is read every
-second while the window is on screen, every five seconds in the tray, and every half second while the OSD is up.
+**Measured footprint** (AN16-41, 1.2.6, the published single-file build): an 18.6 MB download holding a 24 MB exe,
+about 70 MB working set in the tray, and about 275 MB with the window open — most of that difference is the window's
+own surfaces, which Windows trims the moment it is hidden. Idle CPU is about 0.2 % in Task Manager, which is 4 % of
+one core. Telemetry is read every second while the window is on screen, every five seconds in the tray, and every
+half second while the OSD is up.
 
 **New in 1.2.6:** the Avalonia rewrite, a Linux build, 31 model profiles, the Nitro key, the theme engine and a
-2491-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
+2500-test suite. The full list is in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -706,7 +707,7 @@ The solution has five projects:
 | `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
 | `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
 | `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2491 tests. |
+| `NitroLite.Tests` | `net10.0-windows` | 2500 tests. |
 
 `NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
 check that keeps the split honest.
@@ -718,7 +719,10 @@ powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
 ```
 
 This writes `artifacts\NitroLite-v<version>-win-x64.zip`: a self-contained single-file `NitroLite.exe`, the licence,
-a third-party notice, and `tools\WinMemoryCleaner.exe` with its own licence and source archive. The script pins the
+a third-party notice, and `tools\WinMemoryCleaner.exe` with its own licence and source archive. The publish is trimmed
+(`PublishTrimmed=true`, `TrimMode=partial`): the framework is trimmed, while Avalonia, `System.Management` and the
+NitroLite assemblies are copied whole, because the XAML loader and the WMI COM interop resolve members by name and
+the trimmer cannot see through that. That is what takes the exe from 43 MB to 24 MB. The script pins the
 .NET runtime to the patched version (10.0.14, CVE-2026-111497) and refuses to package a build that does not reference
 it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or tampered asset fails the build. It
 rewrites `packaging\scoop\nitrolite.json` with the new version, URL and digest, and reads the file back to prove it
@@ -743,7 +747,7 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2491 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
+2500 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and concurrency.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj
