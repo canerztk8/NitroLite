@@ -20,43 +20,43 @@ colors:
   warn-bg: "#F0E2D2"
 typography:
   display:
-    fontFamily: "IBM Plex Sans, sans-serif"
+    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "18px"
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0em"
   title:
-    fontFamily: "IBM Plex Sans, sans-serif"
+    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "14px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0em"
   body:
-    fontFamily: "IBM Plex Sans, sans-serif"
+    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.45
     letterSpacing: "0em"
   label:
-    fontFamily: "IBM Plex Sans, sans-serif"
+    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "11px"
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: "0em"
   hint:
-    fontFamily: "IBM Plex Sans, sans-serif"
+    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "11.5px"
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: "0em"
   micro:
-    fontFamily: "IBM Plex Sans, sans-serif"
+    fontFamily: "Segoe UI Variable Text, Segoe UI, sans-serif"
     fontSize: "10px"
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: "0.02em"
   figure:
-    fontFamily: "IBM Plex Mono, monospace"
+    fontFamily: "Cascadia Mono, Consolas, Courier New, monospace"
     fontSize: "12px"
     fontWeight: 400
     lineHeight: 1.3
@@ -173,24 +173,18 @@ The colours above are the **Light** palette. Five more ship beside it — `Dark`
 
 ## Typography
 
-Two families, a strict division of labour: **recorded figures** in IBM Plex Mono, **written text** in IBM Plex Sans. Both are bundled in the assembly (`NitroLite.Desktop/Assets/Fonts/`, SIL Open Font License) and resolved through `avares://`, so the window is drawn in the same face on Windows, on Linux and on a machine that has installed nothing. A system face would make the same screen look like two different products depending on who installed what, which is the one thing a design system cannot afford.
-
-IBM Plex is the register this UI wants: a technical, slightly squared grotesque with a matching mono, drawn as a pair, so a label and the figure beside it belong to the same voice. It reads as an instrument panel, not as a system dialog — which is what the warm-cream paper and the ruled tracks are already saying.
-
-The settings page still offers five system faces — Segoe UI, Arial, Verdana, Tahoma, Georgia — as an escape hatch for a reader who wants one. The bundled pair is the default and the face the design is drawn against. Every stack ends in `Nirmala UI, Noto Sans Devanagari, sans-serif`: the app ships in eight languages, and Hindi needs a Devanagari face that IBM Plex does not carry.
-
-**Glyphs come from the bundled face.** The capability rows draw `✓` and `×` — U+00D7, not U+2715 — because IBM Plex has no U+2715, and a cross that fell back to a system font would put two typefaces in one column.
+Two families, a strict division of labour: **recorded figures** in Cascadia Mono (falling back to Consolas, Courier New), **written text** in Segoe UI Variable Text. No custom font is loaded — the lightweight constraint.
 
 | Role | Size | Weight | Family | Use |
 |---|---|---|---|---|
-| display | 18px | SemiBold | IBM Plex Sans | Page title, one per screen |
-| title | 14px | SemiBold | IBM Plex Sans | Section heading |
-| tile | 13px | SemiBold | IBM Plex Sans | Mode tile name |
-| body | 12px | Regular | IBM Plex Sans | Description paragraph |
-| hint | 11.5px | Regular | IBM Plex Sans | The one-line summary under a section heading |
-| label | 11px | Regular / SemiBold | IBM Plex Sans | Field label, button text, state chip, mode tile label |
-| micro | 10px | SemiBold | IBM Plex Sans | Measurement label, "SELECT", axis text |
-| figure | 12–20px | Regular / SemiBold | IBM Plex Mono | Every numeric reading, axis value, RPM, °C |
+| display | 18px | SemiBold | Segoe UI | Page title, one per screen |
+| title | 14px | SemiBold | Segoe UI | Section heading |
+| tile | 13px | SemiBold | Segoe UI | Mode tile name |
+| body | 12px | Regular | Segoe UI | Description paragraph |
+| hint | 11.5px | Regular | Segoe UI | The one-line summary under a section heading |
+| label | 11px | Regular / SemiBold | Segoe UI | Field label, button text, state chip, mode tile label |
+| micro | 10px | SemiBold | Segoe UI | Measurement label, "SELECT", axis text |
+| figure | 12–20px | Regular / SemiBold | Cascadia Mono | Every numeric reading, axis value, RPM, °C |
 
 **The hint is one line.** A section heading is followed by at most one line of `hint` in `ink-faint`; anything longer belongs in the `(?)` badge. The heading and the figures lead, the prose recedes — a reader scanning the page should meet numbers, not sentences.
 

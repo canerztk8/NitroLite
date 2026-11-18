@@ -849,7 +849,7 @@ public class DesktopViewModelTests
 
         Assert.NotEmpty(vm.CapabilityRows);
         Assert.All(vm.CapabilityRows, row => Assert.False(string.IsNullOrWhiteSpace(row.Label)));
-        Assert.All(vm.CapabilityRows, row => Assert.Contains(row.Glyph, new[] { "✓", "×" }));
+        Assert.All(vm.CapabilityRows, row => Assert.Contains(row.Glyph, new[] { "✓", "✕" }));
 
         var fan = vm.CapabilityRows.Single(r => r.Label == vm.Labels.CapFanControl);
         Assert.True(fan.Supported);
