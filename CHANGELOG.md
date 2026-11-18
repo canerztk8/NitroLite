@@ -123,9 +123,29 @@ hardware layer learned to describe laptops it has never seen. All of it is in th
 - `install.sh` / `uninstall.sh`, a desktop entry, a udev rule that grants the seat user an ACL on exactly the
   Acer attributes, and a `ubuntu-latest` CI job that builds the tarball.
 
+### Performance
+
+Measured on the AN16-41 with the published single-file build, before and after this pass.
+
+- **The Linux telemetry tick stopped allocating.** `LinuxHwmon` reads the `hwmon` tree through spans and a
+  reused device list instead of `OrderBy().Select().ToArray()` per tick, and `RealSysfsFileSystem` opens its
+  files with a one-byte buffer. A tick against a real `/sys` went from **19,232 to 6,656 bytes allocated**.
+- **Switching language stopped re-reading the catalogue.** `Loc` caches each parsed catalogue, so a language
+  change costs **88 bytes instead of 657,804**.
+- **The WMI worker frames through one pooled buffer.** The length prefix, the payload and the read buffer are
+  rented from `ArrayPool` rather than allocated per message: a write went from **432 to 168 bytes**, a read
+  from **896 to 704**. The wire format is unchanged.
+- **The lighting page stopped rebuilding brushes.** `HexToBrushConverter` keeps a bounded cache of 256
+  brushes, so a colour that has been drawn once is not parsed and allocated again.
+- **The capability probe runs off the window's critical path.** The window opens while the WMI/SMBIOS probe is
+  still running, and the hardware controls stay in a "scanning" state until it lands. `WhenReadyAsync()`
+  exposes the probe to tests, so none of them need a `Task.Delay`.
+- **The fan floor clamps its own output.** `ManualFanFloor.EffectivePercent` now returns a value in `0..100`
+  even when the caller hands it a nonsense target, so nothing out of range can reach the firmware.
+
 ### Tests
 
-- **2483 tests**, up from 1826.
+- **2603 tests**, up from 1826.
 - A five-chassis matrix — AN16-41, Predator Helios/Triton, an old Nitro 5, a Nitro V 15 with restricted WMI,
   and an unsupported device — drives every page and command and asserts no unhandled exception and a `--`
   fallback for every missing sensor.
@@ -136,6 +156,14 @@ hardware layer learned to describe laptops it has never seen. All of it is in th
 - `AppSettings.Normalize()`, `FanCurve` and `ManualFanFloor` are fed `NaN`, `Infinity`, `-100` and `500` and
   must clamp to a safe range.
 - URL opening is injectable, so a test no longer launches a browser.
+- A probe stress suite covers a slow WMI answer, a missing sensor and a window opened and closed mid-probe.
+- Allocation tests pin the Linux telemetry tick, the language switch and the WMI worker framing to their
+  measured budgets, so a regression shows up as a failing test rather than as a slower app.
+- A completeness test asserts that all eight catalogues hold the same 1658 keys and that no English row still
+  carries Turkish letters.
+- A chaos suite covers suspend and resume, 254 concurrent commands against a live telemetry loop, a corrupt
+  `profiles.user.json`, an atomic write that leaves no `.tmp` behind, and a `/sys` tree whose `hwmon` indices
+  are renumbered underneath the reader.
 
 ### Packaging
 
