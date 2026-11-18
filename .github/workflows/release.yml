@@ -309,8 +309,11 @@ jobs:
           # A broken script or a missing binary is a broken download, so both are checked before anything is uploaded.
           bash -n "$APP/install.sh"
           bash -n "$APP/uninstall.sh"
-          tar -tzf "$TARBALL" | grep -qx NitroLite-linux-x64/NitroLite.Desktop
-          tar -tzf "$TARBALL" | grep -qx NitroLite-linux-x64/libSkiaSharp.so
+          # Listed into a file first: `tar -tzf ... | grep -q` makes grep exit on the first match, and the SIGPIPE
+          # that gives tar fails the step under `set -o pipefail`.
+          tar -tzf "$TARBALL" > artifacts/contents.txt
+          grep -qx NitroLite-linux-x64/NitroLite.Desktop artifacts/contents.txt
+          grep -qx NitroLite-linux-x64/libSkiaSharp.so artifacts/contents.txt
 
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "$TARBALL.sha256")" >> "$GITHUB_OUTPUT"
