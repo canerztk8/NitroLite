@@ -72,6 +72,7 @@ if (-not $SkipTests) {
 Invoke-Step "NitroLite (self-contained single file, runtime $RuntimeVersion)" {
     dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0-windows -r win-x64 --self-contained true `
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
+        -p:PublishTrimmed=true `
         -p:RuntimeFrameworkVersion=$RuntimeVersion -p:DebugType=none `
         -o $stage --nologo
 }

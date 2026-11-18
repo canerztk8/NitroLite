@@ -43,6 +43,40 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!--
+    Trimming. TrimMode=partial is the only mode this app can ship: the framework is trimmed, but every assembly that
+    has not declared itself trimmable — Avalonia, System.Management and all four NitroLite assemblies — is copied
+    whole. Full mode would remove the reflection Avalonia's XAML loader and System.Management's COM interop depend on,
+    and the failure would be a MissingMethodException at run time rather than a build error.
+  -->
+  <PropertyGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <TrimMode>partial</TrimMode>
+
+    <!-- System.Text.Json's reflection path is what reads settings.json, profiles.user.json and the worker protocol.
+         The trimmer cannot see those types through a generic call, so the switch that keeps the path alive is set
+         explicitly rather than left to the SDK default. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <!-- Rooted so the trimmer keeps every member, not only the ones it can see being called. The XAML loader resolves
+         view-model properties by name, and the WMI executor resolves methods on a dynamic ManagementObject. -->
+    <TrimmerRootAssembly Include="NitroLite.Core" />
+    <TrimmerRootAssembly Include="NitroLite.Desktop" />
+    <TrimmerRootAssembly Include="Avalonia.Controls" />
+    <TrimmerRootAssembly Include="Avalonia.Markup.Xaml" />
+    <TrimmerRootAssembly Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PublishTrimmed)' == 'true' And '$(TargetFramework)' == 'net10.0-windows'">
+    <TrimmerRootAssembly Include="NitroLite.Windows" />
+    <TrimmerRootAssembly Include="System.Management" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PublishTrimmed)' == 'true' And '$(TargetFramework)' == 'net10.0'">
+    <TrimmerRootAssembly Include="NitroLite.Linux" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.23" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.23" />

@@ -34,4 +34,23 @@
     <NoWarn>$(NoWarn);CA1805;CA1716;CA1863;CA1859</NoWarn>
   </PropertyGroup>
 
+  <!--
+    Two trimmer warnings, both about reflection the trimmer cannot follow and neither of which can bite in this build.
+
+    IL2026  Every reflection-based System.Text.Json call — eighteen of them across NitroLite.Core. The warning is about
+            members being removed from the types being serialized.
+    IL2072  The Task Scheduler COM server, activated from the ProgID the registry hands back. The type is not known
+            until run time, so no annotation can satisfy the analyzer.
+    IL2104  The aggregate form of the same thing, raised for Avalonia.DesignerSupport, System.CodeDom and
+            System.Management — three assemblies whose internals are not ours to annotate.
+
+    TrimMode=partial does not trim these assemblies at all — none of them declares itself trimmable — so every member
+    both warnings are about is still there. The suppression is scoped to the trimmed publish, so an ordinary build
+    keeps the analyzer's full attention and a future move to full trimming fails loudly instead of silently shipping a
+    broken serializer or a dead COM call.
+  -->
+  <PropertyGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <NoWarn>$(NoWarn);IL2026;IL2072;IL2104</NoWarn>
+  </PropertyGroup>
+
 </Project>
