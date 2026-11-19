@@ -2858,6 +2858,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// what a user who reaches for a swatch is asking for.
     /// </para>
     /// <para>
+    /// Turning it on brings a dark keyboard back, from the last lit configuration, and moves the profile list to the
+    /// custom entry: a colour nobody can see is not a mode, and the list must not keep claiming a preset the keys are
+    /// not running. A keyboard the user turns off <em>while</em> the mode runs stays off until the mode is switched off
+    /// and on again.
+    /// </para>
+    /// <para>
     /// It costs nothing when it is off — one boolean read per telemetry tick — and when it is on it costs one write per
     /// colour change, at most one every <see cref="ReactiveLighting.MinInterval"/>. No timer, no thread, no polling of
     /// its own: it rides the tick the page already runs.
@@ -2891,10 +2897,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (!Set(ref _reactiveLightingEnabled, value)) return;
 
         _settings.ReactiveLightingEnabled = value;
-        SaveSettings();
 
         if (value)
         {
+            // Asking for a colour the processor picks is asking to see it, so the lights come back if they were off.
+            // Leaving that to the tick does not work: it refuses to paint a keyboard the user turned off, which made
+            // the switch do nothing at all after "Lights Off (Blackout)" or a brightness of zero, and the keyboard
+            // stayed black with the mode apparently on. The resume takes the last lit configuration, so the user gets
+            // their own brightness and effect back rather than a colour at zero.
+            ResumeFromOffForEdit(cfg => cfg.Effect = "STATIC");
+            _settings.IsBacklightOff = false;
+
+            // The colour on the keys is the processor's, not a preset's. The list said "Lights Off (Blackout)" over a
+            // keyboard this mode was about to paint, which read as the profile fighting the switch.
+            MarkProfileCustom();
+
             // The first write should happen on the next tick rather than waiting for the interval to elapse.
             _reactiveThrottle.Reset();
         }
@@ -2904,6 +2921,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = ApplyLightingAsync();
         }
 
+        SaveSettings();
         Raise(nameof(ReactiveLightingColor));
         Raise(nameof(ReactiveLightingNow));
     }
@@ -2919,7 +2937,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // whole feature on the one machine it was written for.
         if (!_reactiveLightingEnabled || _hardware == null) return;
 
-        // A keyboard the user turned off stays off. The mode is a colour, not a way to switch the lights back on.
+        // A keyboard the user turned off stays off. Turning the mode on already brought the lights back, so a dark
+        // keyboard here means the user pressed "turn off" afterwards, and nothing in a colour mode may overrule that.
         if (_settings.IsBacklightOff || BrightnessLevel <= 0) return;
 
         var color = ReactiveLighting.ColorFor(ActiveReactiveStops(), data.CpuTemperature);

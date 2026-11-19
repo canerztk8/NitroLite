@@ -234,7 +234,7 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public async Task AKeyboardTheUserTurnedOff_StaysOff()
+    public async Task TurningItOnWhileTheLightsAreOff_BringsThemBackAndPaints()
     {
         var hardware = new Phase3Fakes.StubHardware();
         hardware.Sample.CpuTemperature = 80;
@@ -244,11 +244,71 @@ public class ReactiveLightingTests
         await vm.InitializeAsync();
 
         vm.ReactiveLightingEnabled = true;
+
+        // Asking for the temperature colour is asking to see it. The switch used to leave the off state in place, the
+        // tick then refused to paint a keyboard the user had turned off, and the mode looked broken: the keyboard
+        // stayed black with the switch visibly on.
+        Assert.False(settings.IsBacklightOff);
+        Assert.True(vm.BrightnessLevel > 0);
+
         await vm.RefreshTelemetryAsync();
         await vm.ReactiveLightingTask;
 
-        // The mode is a colour, not a way to switch the lights back on.
-        Assert.Empty(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
+        var write = Assert.Single(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
+
+        // The resumed brightness, not zero: the firmware ignores a colour written at brightness zero.
+        Assert.StartsWith($"STATIC|{vm.BrightnessLevel}|", write, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TurningItOnAfterTheBlackoutPreset_MovesTheListToTheCustomEntry()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 80;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        // The state from the report: "Lights Off (Blackout)" was the selected profile when the mode was turned on, so
+        // the list kept claiming a preset over colours the processor was choosing.
+        vm.SelectedRgbProfile = vm.RgbProfiles.First(p => string.Equals(p.Effect, "OFF", StringComparison.OrdinalIgnoreCase));
+        Assert.True(vm.IsLightingOff);
+
+        vm.ReactiveLightingEnabled = true;
+
+        Assert.Same(vm.CustomProfile, vm.SelectedRgbProfile);
+        Assert.False(vm.IsLightingOff);
+
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        Assert.Single(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
+    }
+
+    [Fact]
+    public async Task TurningTheLightsOffWhileItRuns_KeepsThemOff()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 80;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        // The mode was on first, and the user turned the keyboard off afterwards: that decision wins, so the colour
+        // stops being written instead of switching the lights back on. Turning the mode off and on again revives it.
+        vm.TurnOffLightingCommand.Execute(null);
+        hardware.LightingWrites.Clear();
+
+        hardware.Sample.CpuTemperature = 92;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        Assert.True(vm.ReactiveLightingEnabled);
+        Assert.Empty(ReactiveWrites(hardware, ReactiveLighting.ColorFor(92)));
     }
 
     [Fact]
