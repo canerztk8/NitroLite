@@ -1,7 +1,9 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Win32.SafeHandles;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
@@ -54,6 +56,14 @@ public sealed class WmiWorkerClient : IDisposable
     private WmiWorkerClient(NamedPipeClientStream pipe) => _pipe = pipe;
 
     /// <summary>
+    /// Asks the kernel which process is serving the other end of the pipe. The answer cannot be forged by the
+    /// process on that end, which is what makes it worth more than the nonce echo.
+    /// </summary>
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
+
+    /// <summary>
     /// Generates the single-use handshake value: 32 cryptographically random bytes as 64 hex characters. 256 bits is
     /// far more than the handshake needs; the point is that guessing it is not a strategy.
     /// </summary>
@@ -70,6 +80,7 @@ public sealed class WmiWorkerClient : IDisposable
         string pipeName,
         string nonce,
         TimeSpan? timeout = null,
+        int? expectedServerProcessId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(pipeName)) throw new ArgumentException("pipe name is required", nameof(pipeName));
@@ -102,6 +113,20 @@ public sealed class WmiWorkerClient : IDisposable
             // is on the other end of the pipe.
             if (!WmiWorkerProtocol.NonceMatches(nonce, response.Nonce))
                 throw new InvalidOperationException("the worker did not echo the handshake value");
+
+            // The nonce proves the peer received this hello. It does not prove the peer is the process that was
+            // started: the pipe name is on the worker's command line, which every process on the machine can read, so
+            // a same-user process can create the pipe first and echo the value back. The kernel knows who is really
+            // serving the pipe, so the answer is asked for rather than inferred from the reply.
+            if (expectedServerProcessId is int expected)
+            {
+                if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out uint server))
+                    throw new InvalidOperationException("the pipe server could not be identified");
+
+                if (server != (uint)expected)
+                    throw new InvalidOperationException(
+                        $"the pipe is served by process {server}, not the helper that was started ({expected})");
+            }
 
             return new WmiWorkerClient(pipe);
         }

@@ -357,7 +357,7 @@ foreach ($s in $idleServices) {
     } catch { $errs += ($s + ': ' + $_.Exception.Message) }
 }
 
-if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }
+" + ElevatedErrorLog.WriteStatement + @"
 ";
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_optimize_pc");
         return new ToolExecutionResult
@@ -439,7 +439,7 @@ if ($null -ne $backup.tasks) {
     }
 }
 
-if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }
+" + ElevatedErrorLog.WriteStatement + @"
 ";
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_restore_optimize");
         if (ok)
@@ -516,7 +516,9 @@ if ($errs.Count -gt 0) { $errs | Out-File -FilePath $errLog -Encoding utf8; exit
         }
 
         string errorLog = AppPaths.UniqueTempFile(prefix + "_err", ".log");
-        string wrappedScript = $"$errLog = '{errorLog.Replace("'", "''")}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; try {{ {script} }} catch {{ $_.Exception.Message | Out-File -FilePath $errLog -Encoding utf8; exit 1 }}";
+        string wrappedScript = ElevatedErrorLog.Function + " " +
+            $"$errLog = '{errorLog.Replace("'", "''")}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
+            $"try {{ {script} }} catch {{ {ElevatedErrorLog.WriteException}; exit 1 }}";
         // -EncodedCommand keeps the multi-line script out of the command line: there are no quoting rules to
         // escape and no character in the script text can break out of the argument.
         var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(wrappedScript));
