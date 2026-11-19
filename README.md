@@ -274,10 +274,9 @@ and a game that blocks unsigned overlays will still block the OSD.
 
 **A model can be added without a new release.** At startup NitroLite fetches the profile table published with this
 project, checks it against the same rules the built-in table has to pass — every record valid, sensible fan ceilings
-and sensor ids, no catch-all — and keeps it next to your own file. The order is: your `profiles.user.json`, then the
-downloaded table, then the one inside the binary. If you are offline, or the download is damaged, nothing changes and
-nothing is reported as an error. Delete `%LOCALAPPDATA%\NitroLite\profiles.remote.json` to go back to the built-in
-table.
+and sensor ids — and keeps it next to your own file. The order is: your `profiles.user.json`, then the downloaded
+table, then the one inside the binary. If you are offline, or the download is damaged, nothing changes and nothing is
+reported as an error. Delete `%LOCALAPPDATA%\NitroLite\profiles.remote.json` to go back to the built-in table.
 
 ### If your model is not covered
 

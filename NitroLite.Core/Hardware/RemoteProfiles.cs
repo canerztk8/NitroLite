@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 
 namespace NitroLite.Core.Hardware;
 
@@ -33,6 +33,12 @@ public sealed record RemoteProfileResult(bool Saved, string Reason, int ProfileC
 /// commands and register reads; a plausible-looking but wrong value is exactly the kind of thing this project refuses
 /// to apply on a guess. So a downloaded document is accepted only when every record passes the embedded table's own
 /// rules, carries at least one profile, and stays inside the plausibility window.
+/// <para>
+/// The published table is the project's own document, so it is allowed the catch-all record the embedded table also
+/// carries. Refusing it would reject every real download, which is what the first live run of this code did; the
+/// protections that matter are the pinned host, the size cap and the plausibility window, and a hand-edited user file
+/// is still held to the stricter rule.
+/// </para>
 /// </para>
 /// </remarks>
 public static class RemoteProfiles

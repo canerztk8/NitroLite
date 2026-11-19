@@ -139,11 +139,15 @@ public sealed class ProfileCatalog
     /// release mixed with half from another is worse than the table this build already carries.
     /// </summary>
     public static bool Validate(string json, out int profileCount, out IReadOnlyList<string> rejections)
-        => Validate(json, isUserFile: true, out profileCount, out rejections);
+        => Validate(json, isUserFile: false, out profileCount, out rejections);
 
     /// <summary>
-    /// The same check with the catch-all rule made explicit: a downloaded table is held to the user-file rule (no
-    /// <c>anyAcer</c>), while the embedded table is allowed the one catch-all it ships with.
+    /// The same check with the catch-all rule made explicit. The published table is the project's own document and is
+    /// allowed the same catch-all the embedded one carries — it is the same file, so banning it there would reject
+    /// every real download. What still separates it from a hand-edited file is everything else: the host, the size
+    /// cap, and the requirement that every record pass and every ceiling and sensor id be plausible. A *user* file is
+    /// held to the stricter rule, because a catch-all written by hand would replace the shipped table for models the
+    /// author does not own.
     /// </summary>
     public static bool Validate(
         string json, bool isUserFile, out int profileCount, out IReadOnlyList<string> rejections)

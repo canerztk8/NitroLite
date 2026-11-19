@@ -209,10 +209,15 @@ collection, is never opened at all, and no page below `0xFF00` may carry a colou
 **The downloaded profile table.** A laptop nobody had at release time can also be supported without a new
 binary: `RemoteProfiles` fetches `NitroLite.Core/Hardware/Profiles/profiles.json` from this repository once
 at startup, validates it as strictly as the embedded table (every record must pass, at least one profile,
-no `anyAcer` catch-all, fan ceilings inside `1000..12000 RPM`, sensor ids inside `0..63`) and writes it
+fan ceilings inside `1000..12000 RPM`, sensor ids inside `0..63`) and writes it
 atomically to `%LocalAppData%\NitroLite\profiles.remote.json`. The catalogue then reads three documents:
 **user > downloaded > embedded**. Offline, rate-limited, behind a proxy that answers HTML, or pointed at a
 renamed repository, the refresh fails silently and the app starts with the table it already had.
+
+The published table is the project's own document — the same file the binary embeds — so it is allowed the
+same `anyAcer` catch-all, and the **user** file keeps the stricter rule that refuses one. The first live run
+of this code got that distinction wrong and rejected the real download for carrying a catch-all; the log
+line (`the downloaded table was rejected (… anyAcer …)`) is what caught it.
 
 **Evidence, and what is still missing.**
 
@@ -223,8 +228,11 @@ renamed repository, the refresh fails silently and the app starts with the table
   are rows in §3 — but **neither machine is in this project's hands**. Nothing in this repository has been
   run against a real ENE controller.
 - **Physical confirmation pending** on the AN16-61 and the ANV16S-41: §6 carries the first step.
-- The live download is not exercised by the test suite (there is no network in CI); the parsing, validation
-  and atomic write are, through `RemoteProfiles.Install`.
+- **The live download was run once, on the reference machine (AN16-41, 2026-11-20).** The log reads
+  `The published profile table replaced the installed copy (32 profiles kept)`, the file landed at
+  `%LocalAppData%\NitroLite\profiles.remote.json` (27,896 bytes), and the rescan it triggers then reported
+  `runtime-verified (2 samples)`. That is one machine on one network; the offline, rate-limited and
+  proxy-answering-HTML paths are unit-tested through `RemoteProfiles.Install`, not observed.
 
 ---
 

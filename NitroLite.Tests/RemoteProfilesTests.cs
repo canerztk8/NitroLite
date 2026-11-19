@@ -88,10 +88,11 @@ public class RemoteProfilesTests
     }
 
     [Fact]
-    public void ACatchAllIsRefusedInADownloadedTable()
+    public void ACatchAllIsAcceptedFromTheProjectButRefusedFromAUserFile()
     {
-        // A hand-edited file cannot replace the shipped default for every model, and a download is held to the same
-        // rule: it is not the owner's machine, so it may not claim to be every machine.
+        // The published table is the same document the binary embeds, and that one carries a catch-all, so refusing it
+        // here would reject every real download. The user file keeps the stricter rule: a hand-written catch-all would
+        // replace the shipped table for models its author does not own.
         const string json = """
         {
           "schemaVersion": 1,
@@ -101,8 +102,12 @@ public class RemoteProfilesTests
         }
         """;
 
-        Assert.False(ProfileCatalog.Validate(json, out _, out var rejections));
-        Assert.Contains(rejections, r => r.Contains("anyAcer", StringComparison.Ordinal));
+        Assert.True(ProfileCatalog.Validate(json, out var count, out var rejections));
+        Assert.Equal(1, count);
+        Assert.Empty(rejections);
+
+        ProfileCatalog.FromJson(null, json, null, out var userRejections);
+        Assert.Contains(userRejections, r => r.Contains("anyAcer", StringComparison.Ordinal));
     }
 
     [Fact]
