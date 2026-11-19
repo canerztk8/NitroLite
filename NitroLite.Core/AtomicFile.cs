@@ -76,6 +76,37 @@ public static class AtomicFile
     }
 
     /// <summary>
+    /// Copies <paramref name="source"/> to <paramref name="destination"/> so the bytes are on the platter before the
+    /// call returns.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="File.Copy(string, string, bool)"/> goes through the operating system's write cache and returns as
+    /// soon as the copy is queued. That is fine for a file nobody renames, and wrong for the one case this exists for:
+    /// the updater copies the new executable to <c>NitroLite.exe.new</c> and then renames it over the live
+    /// <c>NitroLite.exe</c>. A power cut between the rename and the flush leaves the executable with the right name
+    /// and the right length and zeroed content — and because the corrupt file <em>is</em> the executable, the process
+    /// cannot start, so the repair pass that would restore the <c>.old</c> copy never runs. The user's app is dead
+    /// until they rename the backup back by hand.
+    /// <para>
+    /// The same two calls <see cref="WriteAllText"/> makes: <see cref="FileOptions.WriteThrough"/> bypasses the
+    /// operating system's cache, and <see cref="FileStream.Flush(bool)"/> pushes what is left out of the file
+    /// system's own buffer.
+    /// </para>
+    /// </remarks>
+    public static void CopyDurable(string source, string destination)
+    {
+        using var input = new FileStream(
+            source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.SequentialScan);
+
+        using var output = new FileStream(
+            destination, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920,
+            FileOptions.WriteThrough);
+
+        input.CopyTo(output, 81920);
+        output.Flush(flushToDisk: true);
+    }
+
+    /// <summary>
     /// Makes a written file owner-only on Linux. The umask leaves a new file at 0644, which is world-readable: the
     /// settings file holds the user's game library paths and the log holds their machine name.
     /// </summary>

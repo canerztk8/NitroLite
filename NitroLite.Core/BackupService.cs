@@ -215,16 +215,36 @@ public static class BackupService
         // startup, so a user who picked the wrong backup would otherwise have no way back. A failure here is logged
         // and the restore still goes ahead: refusing to restore because the safety copy could not be made would be a
         // worse answer than restoring without one.
+        //
+        // Stamped, not a fixed ".pre-restore". The fixed name was overwritten by the second restore, and the second
+        // restore is the ordinary reaction to a first one the user regretted — so the settings they actually had
+        // before the first restore existed nowhere on disk. The same applies to the RGB presets below, which had no
+        // safety copy at all.
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
         try
         {
             if (File.Exists(settingsPath))
             {
-                AtomicFile.WriteAllText(settingsPath + PreRestoreSuffix, BoundedTextFile.ReadAllText(settingsPath));
+                AtomicFile.WriteAllText(
+                    $"{settingsPath}{PreRestoreSuffix}-{stamp}", BoundedTextFile.ReadAllText(settingsPath));
             }
         }
         catch (Exception ex)
         {
             AppLog.Warn("The safety backup before the restore could not be written", $"{settingsPath}: {ex.Message}");
+        }
+
+        try
+        {
+            if (File.Exists(rgbPresetsPath))
+            {
+                AtomicFile.WriteAllText(
+                    $"{rgbPresetsPath}{PreRestoreSuffix}-{stamp}", BoundedTextFile.ReadAllText(rgbPresetsPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The RGB presets could not be set aside before the restore", $"{rgbPresetsPath}: {ex.Message}");
         }
 
         try

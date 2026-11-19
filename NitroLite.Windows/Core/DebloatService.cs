@@ -1074,15 +1074,15 @@ public class DebloatService
                     existingBackup["Task:NitroSenseLauncher"] = taskState;
                 }
 
-                // Abort service shutdown if backup state cannot be written
-                if (!SaveBackupState(existingBackup))
-                {
-                    LastError = Loc.T($"İşlem iptal: servis yedeği diske yazılamadı. {LastError}").Trim();
-                    return false;
-                }
-
-                // Completeness verification:
+                // Completeness verification, BEFORE the file is written:
                 // Ensure that any discovered/installed service has complete backup (both startup type and running status)
+                //
+                // The order is the whole point. This loop used to run after SaveBackupState, so a service whose live
+                // state could not be read — OpenService denied, or an `sc query` in a display language the parser does
+                // not know — left an incomplete file on disk and then aborted. The next attempt saw a file that
+                // "exists and has at least one valid start type", took the else branch below, and that branch only
+                // validates the services the file already mentions. The missing one was never noticed again, and the
+                // restore script's fallback then stopped a service that had been Running and never started it back.
                 var discoveredServices = new HashSet<string>(currentTypes.Keys, StringComparer.OrdinalIgnoreCase);
                 discoveredServices.UnionWith(currentStatuses.Keys);
 
@@ -1099,6 +1099,13 @@ public class DebloatService
                         LastError = Loc.T($"İşlem iptal: '{svc}' servisinin yedeğinde çalışma durumu eksik.");
                         return false;
                     }
+                }
+
+                // Abort service shutdown if backup state cannot be written
+                if (!SaveBackupState(existingBackup))
+                {
+                    LastError = Loc.T($"İşlem iptal: servis yedeği diske yazılamadı. {LastError}").Trim();
+                    return false;
                 }
             }
             else
