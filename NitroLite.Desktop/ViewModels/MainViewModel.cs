@@ -704,6 +704,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private DirectionChoice? _selectedDirection;
     private bool _winKeyLockOn;
 
+    // The reactive keyboard: whether the colour follows the temperature, the colour last written, and the throttle
+    // that keeps the embedded controller out of the telemetry loop.
+    private bool _reactiveLightingEnabled;
+    private string _reactiveLightingColor = ReactiveLighting.ColdColor;
+    private readonly ReactiveLightingThrottle _reactiveThrottle = new();
+
     // The on-screen display: whether it is drawn, which corner, and which display.
     private bool _osdEnabled;
     private int _osdCorner;
@@ -998,6 +1004,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         BuildColorPalette();
         BuildChartMetrics();
         BuildDirectionChoices();
+        _reactiveLightingEnabled = settings.ReactiveLightingEnabled;
         _osdEnabled = settings.OsdEnabled;
         _osdCorner = Math.Clamp(settings.OsdCorner, 0, 3);
         _osdMonitor = Math.Max(0, settings.OsdMonitor);
@@ -2688,6 +2695,132 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     public bool LightingAvailable => _capabilities.KeyboardLighting;
+
+    // ---------------------------------------------------------------- reactive lighting
+
+    /// <summary>
+    /// Whether the keyboard colour follows the processor's temperature.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The mode is an overlay, not a saved colour: it writes straight to the keyboard and never touches
+    /// <see cref="AppSettings.KeyboardLighting"/>, so turning it off puts the user's own colour back instead of the last
+    /// shade of orange the processor happened to be. A manual apply from the page wins and turns the mode off, which is
+    /// what a user who reaches for a swatch is asking for.
+    /// </para>
+    /// <para>
+    /// It costs nothing when it is off — one boolean read per telemetry tick — and when it is on it costs one write per
+    /// colour change, at most one every <see cref="ReactiveLighting.MinInterval"/>. No timer, no thread, no polling of
+    /// its own: it rides the tick the page already runs.
+    /// </para>
+    /// </remarks>
+    public bool ReactiveLightingEnabled
+    {
+        get => _reactiveLightingEnabled;
+        set => SetReactiveLighting(value, restore: true);
+    }
+
+    /// <summary>The colour the keyboard is running, as <c>#RRGGBB</c>. The card's swatch reads this.</summary>
+    public string ReactiveLightingColor => _reactiveLightingColor;
+
+    /// <summary>
+    /// The write the last tick started, so a test can await it instead of sleeping.
+    /// </summary>
+    /// <remarks>
+    /// The tick cannot await the write — it runs on the UI thread and a WMI write is tens of milliseconds — so the
+    /// handover is kept here. It is also what proves a failing write is swallowed rather than left to fault an
+    /// unobserved task.
+    /// </remarks>
+    public Task ReactiveLightingTask { get; private set; } = Task.CompletedTask;
+
+    /// <summary>True when the card is worth showing: the machine has a keyboard the app can paint.</summary>
+    public bool ReactiveLightingAvailable => LightingAvailable;
+
+    /// <summary>The live reading beside the swatch, so the colour has a number next to it.</summary>
+    /// <remarks>"CPU" and "°C" are the same in all eight languages, so this line needs no catalogue entry.</remarks>
+    public string ReactiveLightingNow => $"CPU {CpuTemperature:F0} °C";
+
+    private void SetReactiveLighting(bool value, bool restore)
+    {
+        if (!Set(ref _reactiveLightingEnabled, value)) return;
+
+        _settings.ReactiveLightingEnabled = value;
+        SaveSettings();
+
+        if (value)
+        {
+            // The first write should happen on the next tick rather than waiting for the interval to elapse.
+            _reactiveThrottle.Reset();
+        }
+        else if (restore)
+        {
+            // Put the user's own colour back. The controls still hold it, so this is the same write the page makes.
+            _ = ApplyLightingAsync();
+        }
+
+        Raise(nameof(ReactiveLightingColor));
+        Raise(nameof(ReactiveLightingNow));
+    }
+
+    /// <summary>
+    /// One telemetry sample's worth of reactive lighting: compute the colour, and write it only if it is worth writing.
+    /// </summary>
+    private void TickReactiveLighting(MonitorData data)
+    {
+        if (!_reactiveLightingEnabled || _hardware == null || !LightingAvailable) return;
+
+        // A keyboard the user turned off stays off. The mode is a colour, not a way to switch the lights back on.
+        if (_settings.IsBacklightOff || BrightnessLevel <= 0) return;
+
+        var color = ReactiveLighting.ColorFor(data.CpuTemperature);
+        if (!_reactiveThrottle.TryBeginWrite(color, DateTime.UtcNow)) return;
+
+        ReactiveLightingTask = WriteReactiveLightingAsync(color);
+    }
+
+    /// <summary>
+    /// Writes one reactive colour to every zone.
+    /// </summary>
+    /// <remarks>
+    /// The hardware call is off the UI thread: a WMI write is tens of milliseconds, and this runs while a game is in the
+    /// foreground, which is exactly where a stutter would be noticed. The state updates come back to the UI thread.
+    /// </remarks>
+    private async Task WriteReactiveLightingAsync(string color)
+    {
+        var hardware = _hardware;
+        if (hardware == null) return;
+
+        var brightness = BrightnessLevel;
+        var speed = SpeedLevel;
+        var direction = SelectedDirection?.Direction ?? 1;
+        var zones = new[] { color, color, color, color };
+
+        await _writeGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            var ok = await Task.Run(() => hardware.SetLightingAsync("STATIC", brightness, speed, direction, color, zones))
+                .ConfigureAwait(true);
+
+            if (!ok)
+            {
+                // A refusal is logged once per colour, not once per tick: the throttle has already recorded the write,
+                // so a keyboard that cannot take the colour does not fill the log with the same line.
+                AppLog.Warn(Loc.T("Sıcaklığa göre renk yazılamadı"), color);
+                return;
+            }
+
+            _reactiveLightingColor = color;
+            Raise(nameof(ReactiveLightingColor));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(Loc.T("Sıcaklığa göre renk yazılamadı"), ex.Message);
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
 
     // The slider ranges come from the protocol constants rather than from numbers typed into the XAML, so a change to
     // the sysfs contract cannot leave the UI offering a level the kernel will reject.
@@ -4901,6 +5034,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // watchdog, which needs the same sample the page is showing.
             ObserveFanStall(data);
 
+            // The reactive keyboard rides this tick rather than owning a timer: one boolean read when the mode is off,
+            // and at most one write per colour change when it is on.
+            Raise(nameof(ReactiveLightingNow));
+            TickReactiveLighting(data);
+
             // Game detection runs on the same tick as telemetry, every other second: a /proc scan is cheap but not
             // free, and a game that starts is not going to be missed by a one-second delay.
             if (++_tick % 2 == 0) await PollGameAsync().ConfigureAwait(true);
@@ -5248,6 +5386,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task ApplyLightingAsync()
     {
         if (_hardware == null || SelectedEffect == null) return;
+
+        // A manual apply wins over the reactive mode: someone who reaches for a swatch is asking for that colour, not
+        // for the temperature's. The mode is turned off without a restore, because this write is the restore.
+        if (_reactiveLightingEnabled) SetReactiveLighting(false, restore: false);
 
         var config = CurrentLightingConfig();
         var zones = config.LEDs!.ToArray();

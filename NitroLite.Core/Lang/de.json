@@ -1665,5 +1665,8 @@
   "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
   "Yeniden başlatma başlatılamadı": "Der Neustart konnte nicht gestartet werden",
   "Yeniden başlatma isteği gönderilemedi": "Die Neustartanforderung konnte nicht gesendet werden",
-  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Zum Neustart wurde keine ausführbare Datei gefunden"
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Zum Neustart wurde keine ausführbare Datei gefunden",
+  "Sıcaklığa göre renk": "Farbe nach Temperatur",
+  "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "Die Tastatur wechselt mit der CPU-Temperatur von Blau nach Rot. Unter 45 °C bleibt sie stehen, und eine Farbe wird nur geschrieben, wenn sie sich deutlich ändert.",
+  "Sıcaklığa göre renk yazılamadı": "Die Temperaturfarbe konnte nicht geschrieben werden"
 }

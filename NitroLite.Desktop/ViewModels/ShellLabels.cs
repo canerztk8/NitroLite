@@ -535,6 +535,10 @@ public sealed class ShellLabels
     public string OpenRgbStatus => Loc.T("OpenRGB durumu");
     public string BacklightTimeoutHint => Loc.T("30 saniye boşta kaldığında aydınlatmayı kapat");
 
+    /// <summary>The reactive keyboard card: the title, and the one line that explains what it does.</summary>
+    public string ReactiveLighting => Loc.T("Sıcaklığa göre renk");
+    public string ReactiveLightingHint => Loc.T("Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.");
+
     /// <summary>
     /// The figure beside the brightness slider. The label on the left already says "Parlaklık", so repeating it here
     /// would print the word twice on one line; what the right-hand side adds is the number, and — at zero — the fact

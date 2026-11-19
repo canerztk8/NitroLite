@@ -368,6 +368,18 @@ public class AppSettings
     /// </summary>
     public bool? BacklightTimeoutEnabled { get; set; }
 
+    /// <summary>
+    /// Whether the keyboard colour follows the processor's temperature instead of the colour the page holds.
+    /// </summary>
+    /// <remarks>
+    /// Persisted, because it is a preference and not a moment: someone who set the keyboard to follow the temperature
+    /// wants it to still do that after a reboot. The colour it writes is deliberately not persisted — the static
+    /// configuration stays in <see cref="KeyboardLighting"/>, so turning the mode off puts the user's own colour back
+    /// rather than the last shade of orange the processor happened to be.
+    /// </remarks>
+    [JsonPropertyName("reactive_lighting_enabled")]
+    public bool ReactiveLightingEnabled { get; set; } = false;
+
     [JsonPropertyName("last_operating_mode")]
     public OperatingMode? LastOperatingMode { get; set; }
 

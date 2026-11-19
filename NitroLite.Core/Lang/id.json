@@ -1665,5 +1665,8 @@
   "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
   "Yeniden başlatma başlatılamadı": "Mulai ulang tidak dapat dimulai",
   "Yeniden başlatma isteği gönderilemedi": "Permintaan mulai ulang tidak dapat dikirim",
-  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Tidak ada berkas yang dapat dijalankan untuk memulai ulang"
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Tidak ada berkas yang dapat dijalankan untuk memulai ulang",
+  "Sıcaklığa göre renk": "Warna mengikuti suhu",
+  "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "Keyboard berubah dari biru ke merah mengikuti suhu CPU. Di bawah 45 °C warnanya tetap, dan warna hanya ditulis saat berubah cukup jelas.",
+  "Sıcaklığa göre renk yazılamadı": "Warna suhu tidak dapat ditulis"
 }

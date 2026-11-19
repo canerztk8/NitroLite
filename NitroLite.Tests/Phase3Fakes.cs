@@ -378,7 +378,11 @@ internal static class Phase3Fakes
             return Task.FromResult(true);
         }
 
-        public Task<HardwareCapabilities> GetCapabilitiesAsync() => Task.FromResult(new HardwareCapabilities
+        /// <summary>
+        /// What the backend says the machine can do. Settable so a test can describe a machine without a keyboard, a
+        /// fan or a charge limit without writing a second stub.
+        /// </summary>
+        public HardwareCapabilities Capabilities { get; set; } = new()
         {
             Backend = "Test",
             ServiceAvailable = true,
@@ -390,7 +394,9 @@ internal static class Phase3Fakes
             {
                 OperatingMode.Quiet, OperatingMode.Default, OperatingMode.Extreme, OperatingMode.Turbo
             }
-        });
+        };
+
+        public Task<HardwareCapabilities> GetCapabilitiesAsync() => Task.FromResult(Capabilities);
 
         /// <summary>
         /// The sample the backend answers. Settable so a test can change a reading between two ticks and watch what

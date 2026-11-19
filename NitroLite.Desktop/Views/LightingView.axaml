@@ -256,6 +256,34 @@
         </StackPanel>
       </Border>
 
+      <!-- ============================================================ the reactive keyboard -->
+
+      <!--
+        The colour that follows the processor. It is a mode, not a colour: the swatch shows what the keyboard is running
+        right now, and the number beside it is the reading that produced it. The card is hidden on a machine whose
+        keyboard the app cannot paint, because a switch that does nothing is worse than no switch.
+      -->
+      <Border Classes="card" Margin="0,0,0,16" IsVisible="{Binding ReactiveLightingAvailable}">
+        <StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
+            <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
+                          VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
+                     TextWrapping="Wrap" />
+
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
+                      IsVisible="{Binding ReactiveLightingEnabled}">
+            <Border Width="26" Height="26" CornerRadius="2"
+                    Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                    BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+            <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ the extra switches -->
 
       <Border Classes="card" IsVisible="{Binding ShowExtrasCard}">

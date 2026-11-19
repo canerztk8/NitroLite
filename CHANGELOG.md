@@ -10,9 +10,26 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
-Three things about the settings page that people kept tripping over.
+Two controls that were hard to read, and a keyboard that follows the processor.
+
+### Added
+
+- **The keyboard can follow the CPU temperature.** A new switch on the Lighting page paints every zone from a
+  four-stop ramp — ice blue at 45 °C, mint at 60, amber at 72, red at 90 — and holds the ends instead of going dark
+  at idle or inventing a colour hotter than red. It is an overlay rather than a saved colour: it writes straight to
+  the hardware and never touches the stored lighting, so switching it off puts the user's own colour back, and
+  picking a colour by hand switches it off. The reading is rounded to 3 °C and a colour is written at most once
+  every three seconds, so the embedded controller sees a handful of writes an hour instead of one per telemetry
+  tick. The card only appears on machines whose keyboard the app can already paint, and a keyboard the user has
+  switched off stays off. Eight languages.
 
 ### Changed
+
+- **The OSD switch lost its dot and kept its contrast.** The small filled dot beside the label was meant to repeat
+  the on state, but at 11 px it read as a bullet in the text, so the accent fill is the only signal now. Hovering a
+  switch that is on used to lift the fill towards white, which left the dark label on a washed-out ground; the
+  hover now draws an outline in the contrast colour and leaves the fill and the type exactly as legible as they
+  were.
 
 - **Changing the language restarts NitroLite.** The catalogues are read through a static and the tray menu, the
   window title and the overlay are built once at startup, so swapping the labels in place left half the shell in the

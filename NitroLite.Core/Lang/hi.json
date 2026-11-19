@@ -1665,5 +1665,8 @@
   "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
   "Yeniden başlatma başlatılamadı": "पुनः आरंभ शुरू नहीं किया जा सका",
   "Yeniden başlatma isteği gönderilemedi": "पुनः आरंभ का अनुरोध भेजा नहीं जा सका",
-  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "पुनः आरंभ करने के लिए कोई निष्पादन योग्य फ़ाइल नहीं मिली"
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "पुनः आरंभ करने के लिए कोई निष्पादन योग्य फ़ाइल नहीं मिली",
+  "Sıcaklığa göre renk": "तापमान के अनुसार रंग",
+  "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "कीबोर्ड CPU तापमान के साथ नीले से लाल रंग में बदलता है। 45 °C से नीचे यह स्थिर रहता है, और रंग केवल तभी लिखा जाता है जब वह स्पष्ट रूप से बदले।",
+  "Sıcaklığa göre renk yazılamadı": "तापमान के अनुसार रंग लिखा नहीं जा सका"
 }

@@ -1665,5 +1665,8 @@
   "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
   "Yeniden başlatma başlatılamadı": "Не удалось запустить перезапуск",
   "Yeniden başlatma isteği gönderilemedi": "Не удалось отправить запрос на перезапуск",
-  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Не найден исполняемый файл для перезапуска"
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Не найден исполняемый файл для перезапуска",
+  "Sıcaklığa göre renk": "Цвет по температуре",
+  "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "Клавиатура меняет цвет с синего на красный в зависимости от температуры процессора. Ниже 45 °C цвет не меняется, и запись происходит только при заметном изменении.",
+  "Sıcaklığa göre renk yazılamadı": "Не удалось записать цвет по температуре"
 }

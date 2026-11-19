@@ -1665,5 +1665,8 @@
   "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
   "Yeniden başlatma başlatılamadı": "The restart could not be started",
   "Yeniden başlatma isteği gönderilemedi": "The restart request could not be sent",
-  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "No executable was found to restart"
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "No executable was found to restart",
+  "Sıcaklığa göre renk": "Colour follows temperature",
+  "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "The keyboard moves from blue to red with the CPU temperature. It holds below 45 °C, and a colour is written only when it changes noticeably.",
+  "Sıcaklığa göre renk yazılamadı": "The temperature colour could not be written"
 }
