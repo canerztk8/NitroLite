@@ -752,7 +752,7 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2743 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
+2891 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
 concurrency.
 
 ```powershell
@@ -760,8 +760,9 @@ dotnet test NitroLite.Tests/NitroLite.Tests.csproj
 ```
 
 - The tests use their own temporary data folder (`NITROLITE_DATA_DIR`) and never touch your real settings.
-- Four tests that change the real system (changing a connected mouse's profile, power plan changes, the live charge
-  limit probe, the live CPU power service) are skipped by default. To run them:
+- Six tests are skipped by default: four that change the real system (changing a connected mouse's profile, power
+  plan changes, the live charge limit probe, the live CPU power service) and two that need a real release package in
+  `artifacts/`. To run the first four:
 
 ```powershell
 $env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj

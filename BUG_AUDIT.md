@@ -163,6 +163,9 @@ being touched. Suspected issues that turned out to be unreachable are listed in
 | RACE-03 | ORTA | the write gate was disposed while a step could still be inside it | `566154e` |
 | RACE-04 | ORTA | the log writer was dropped outside the lock that guards it | `566154e` |
 | HW-06 | ORTA | a dead temperature sensor froze the fans at the last speed the curve wrote | `566154e` |
+| HW-07 | ORTA | an unverified profile locked the custom fan curve even while real temperatures arrived | `7010e99` |
+| HW-08 | ORTA | the four-zone colour had one transport, and on the 2025 boards that transport answers success without changing anything | `34f7922` |
+| BUG-03 | ORTA | the remote profile refresh applied the user-file catch-all ban to the project's own published table, so every real download would have been rejected | `d5ed527` |
 
 ### 2.2 SEC-01 — the elevated logon task could be pointed at a user-writable directory
 
@@ -569,6 +572,19 @@ So the publish, the single-file bundling, the runtime pin and the packaged binar
 work. **The trimmed package was not produced on this host** and is recorded as not
 verified here.
 
+The same command was re-run on the merged `main` (`34f7922`, 2026-11-19 23:45) to check that the
+round-two changes did not break packaging. It fails at the same place and for the same reason — the
+ILLink task ships as a .NET app pinned to `10.0.14`, and this host carries `10.0.11`/`10.0.12`:
+
+```
+Microsoft.NET.ILLink.targets(150,5): error MSB6006: "dotnet.exe" exited with code -2147450730
+Microsoft.NET.ILLink.targets(103,5): error NETSDK1144: Optimizing assemblies for size failed.
+NitroLite (self-contained single file, runtime 10.0.14) failed (exit 1)
+```
+
+Nothing in the tree changed; GitHub's Windows job does carry the matching runtime and its packaging job
+is green on both merged PRs, which is the evidence that the trimmed path itself still works.
+
 ### 4.3 A packaging bug found by running it
 
 The script deleted the previous package *before* it knew the new one could be built:
@@ -712,6 +728,20 @@ shutdown path. That path was exercised separately in §2.8f.
 | issue round | `CpuClockFallbackTests` | 5 passed, 0 failed; the fallback reads 3801 MHz on this machine |
 | issue round | filtered `CapabilityVisibilityTests` / `HalStep9Tests` / `CpuClockFallbackTests` | 67 passed, 0 failed |
 | issue round | full suite | 2761 passed, 0 failed, 6 skipped |
+| round two | PR #6 merged to `main` | `7010e99` — runtime verification, USB HID table, GitHub compatibility report |
+| round two | Release build | 0 warnings, 0 errors |
+| round two | full suite | 2834 passed, 0 failed, 6 skipped |
+| round two | CI on PR #6 | Windows **pass**, Linux **pass** |
+| round two | PR #7 merged to `main` | `34f7922` — `WMI -> HID` fallback, ENE KB5130 frame, downloaded profile table |
+| round two | Release build | 0 warnings, 0 errors |
+| round two | full suite | 2891 passed, 0 failed, 6 skipped (57 new) |
+| round two | CI on PR #7 | Windows **pass**, Linux **pass** |
+| round two | app started the normal way | `The published profile table replaced the installed copy (32 profiles kept)`; then `runtime-verified (2 samples)` |
+| round two | remote table on disk | `%LocalAppData%\NitroLite\profiles.remote.json`, 27 896 bytes, 32 profiles |
+| round two | `--hardware-report` | new `Keyboard lighting` table renders; `(not used yet)` before a write |
+| round two | BUG-03 found by the live run and fixed | `d5ed527`, full suite re-run: 2891 passed |
+| round two | feature branch deleted, remote pruned | `main` is the only branch, local and remote |
+| round two | endurance | not repeated, at the owner's instruction; phase 5's 180.0 min stands for `31cd54b` (§8.3) |
 
 ---
 
@@ -732,7 +762,7 @@ hardware stays **test pending**.
 | I-03 | "MUX Switch doesn't read current mode and switching doesn't apply" left no trace in the log | `GetGpuModeAsync` returned `null` and `SetGpuModeAsync` returned `false` when the worker refused `ReadDeviceState`, both silently. The reporter's log has no MUX line at all, so the failure could not be triaged | both now log the worker's own `errorCode`/`error` text (`MUX mode could not be read`, `MUX write was not attempted`), and an undecodable answer logs the raw word | **fixed; the underlying refusal is test pending** |
 | I-04 | The capability summary said no battery charge limit and no backlight timeout, while NitroSense controlled both | the summary drew a cross for every false flag. `IPlatformSnapshot.NegativeAnswersAreConclusive` is `false` on Windows and its own documentation says such an answer "is reported as unknown"; the code ignored it | `CapabilityRow` has a third state — `?` and `Bilinmiyor` — and only a conclusive platform draws a cross. Colour classes are driven by `Ok`/`No` so an unknown row is not painted as a missing feature | **fixed and tested** |
 | I-05 | The battery card was hidden on a machine where Care Center holds the charge limit | `WmiHardwareController` can only reach `WMID_GUID5`; this model does not register it. The probe already reported the capability as supported through Care Center, so two parts of the app disagreed | `HybridHardwareController` asks Care Center for the mode, the write and the capability when the direct-WMI path cannot serve them | **test pending** — needs the machine |
-| I-06 | Per-zone keyboard colour changes in the app only; "Write failed" | the firmware accepts `SetGamingRgbKb` (status 0) and the read-back does not match, three times, until `ReadBackPolicy` disables the capability for the session. The reporter's log shows the disable and the fallback | **none.** No payload was guessed: the correct zone payload for this firmware is unknown | **test pending** — device required |
+| I-06 | Per-zone keyboard colour changes in the app only; "Write failed" | the firmware accepts `SetGamingRgbKb` (status 0) and the read-back does not match, three times, until `ReadBackPolicy` disables the capability for the session. The reporter's log shows the disable and the fallback | the WMI path is unchanged and still tried first; when it does not take the write, the documented ENE HID frame is sent instead and the working transport is remembered (§8.1, HW-08) | **code + tests, physical confirmation pending** — no payload was guessed, but no ENE controller is here either |
 | I-07 | Windows-key lock does nothing | `SetWinKeyLock` is documented in the code as unverifiable; there is no firmware getter | **none** | **test pending** — device required |
 | I-08 | `The exit state could not be written: Call from invalid thread` | the shutdown status notification cannot cross to the UI thread; the code already catches it and writes the marker that matters first | **none** — cosmetic, and the marker is written | n/a |
 
@@ -778,4 +808,58 @@ of the AN16-61's backend.
   touched in this round: the changes add a P/Invoke inside an existing enrich call, a log line on a
   failure path, and a delegate call in the hybrid controller. Phase 5's 180-minute result still applies
   to the code it ran on, and to this round only insofar as nothing in the polling loop changed.
+
+---
+
+## 8. Round two — universal compatibility (2026-11-20)
+
+Two branches, both merged to `main`, both green before the merge:
+
+| PR | Merge commit | What it carries |
+| --- | --- | --- |
+| [#6](https://github.com/canerztk8/NitroLite/pull/6) | `7010e99` | runtime sensor verification, the USB HID collection table in the hardware report, the one-click GitHub compatibility report |
+| [#7](https://github.com/canerztk8/NitroLite/pull/7) | `34f7922` | the `WMI -> HID` keyboard colour fallback, the documented ENE KB5130 frame, the downloaded profile table |
+
+### 8.1 New findings, and what closed them
+
+| ID | Severity | Area | Fixed in |
+| --- | --- | --- | --- |
+| HW-07 | ORTA | every model except the reference unit had its custom fan curve locked, because `Verified` is a static per-profile fact and nothing a session measures could change it — even while real temperatures and tachometers arrived every second | `7010e99` — `RuntimeSensorVerification`, two consecutive samples 1.5 s apart inside `15..115 °C` / `0..10000 RPM`, no sentinel, layout confirmed by the live probe; the 85/90/95 °C floors and the dead-sensor hand-back are untouched |
+| HW-08 | ORTA | the four-zone colour had exactly one transport. On the 2025 boards the firmware answers `0` and the LEDs do not move, which the read-back policy correctly reads as a broken capability and disables for the session | `34f7922` — one documented HID attempt after a WMI write that did not take, cached per `Model|BIOS`; nothing is guessed for a controller without a published frame |
+| BUG-03 | ORTA | the first live run of the remote profile refresh fetched the real published table and rejected it, because the user-file `anyAcer` ban was applied to the project's own document — which is the same file the binary embeds, so the feature could never have worked | `d5ed527` — the downloaded table is validated with the shipped rule, the hand-edited user file keeps the stricter one |
+
+BUG-03 is the reason the live run exists in this audit at all. Unit tests proved the parser, the bounds
+and the atomic write; only starting the application against the real URL showed that the *rule* was
+wrong. The log line is quoted in `ACER_COMPATIBILITY.md` §1.7.
+
+### 8.2 Evidence
+
+| Check | Command / source | Result |
+| --- | --- | --- |
+| Release build | `dotnet build NitroLite.sln -c Release --nologo -warnaserror` | 0 warnings, 0 errors — before and after every group, and on the merged `main` |
+| Full suite, PR #6 | `dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build` | **2834 passed, 0 failed, 6 skipped** |
+| Full suite, PR #7 | same | **2891 passed, 0 failed, 6 skipped**, 3 m 24 s (57 new tests: `KeyboardLightingTransportTests`, `HidLightingFilterTests`, `RemoteProfilesTests`) |
+| CI, PR #6 and #7 | GitHub Actions | Windows build+tests **pass**, Linux build+package **pass** |
+| The HID frame, byte for byte | `HidLightingFilterTests` | `A4 21 02 64 04 01 FF 00 00 0F 00` for one colour; four masks for four colours; no report can carry `01`, `03`, `06`, `08` or `0C` |
+| The input collection is never opened | `HidLightingFilterTests` | page `0x01` refused for every usage, including `0x01/0x06`; no page below `0xFF00` may carry a colour |
+| The download, live | app started the normal way, `nitrolite.log` | `The published profile table replaced the installed copy (32 profiles kept)`; file `profiles.remote.json`, 27 896 bytes; the rescan it triggers then logged `runtime-verified (2 samples)` |
+| The download, rejected and offline paths | `RemoteProfilesTests` | corrupt JSON, wrong schema, empty table, impossible ceiling, out-of-enum sensor id, and a user-file catch-all all refused; a rejected download leaves the previous file byte-identical |
+| Report surface | `NitroLite.Desktop.exe --hardware-report` | new `Keyboard lighting` table prints `(not used yet)` before any write, and the remembered transport after one |
+| Packaging, re-run on merged `main` | `scripts/publish-release.ps1 -SkipTests` | same environmental failure as §4.2 — ILLink needs the `10.0.14` runtime, this host has `10.0.11`/`10.0.12`; GitHub's packaging job is green on both PRs |
+
+### 8.3 Still open after this round
+
+- **Nothing was written to an ENE controller.** The protocol is documented and confirmed on a `PHN16S-71`
+  and an `ANV16S-41` by the project that reverse-engineered it; no such machine is here. Marked *physical
+  confirmation pending* in `ACER_COMPATIBILITY.md` §1.7 and §6, and not claimed as fixed.
+- **ITE / Sonix / Chicony** backlights are recognised and reported, never written: no frame layout for
+  their Acer lighting is published, and this audit does not guess hardware payloads.
+- **The AN16-61 items that need that machine** (MUX read/write, Windows-key lock, Care Center battery
+  path) stay test pending. Round two did not change them; it changed what the report says about them.
+- **The 180-minute endurance run was not repeated for round two, at the owner's instruction.** Phase 5's
+  run stands for the code it ran on (`31cd54b`). What round two adds to the polling loop is one
+  `Task.Run` per session (the profile fetch, once, bounded at 15 s and affecting no timer), a P/Invoke
+  inside an existing enrichment call, and a HID probe that runs only after a WMI lighting write fails.
+  That is a smaller surface than phase 5's, not a larger one — but it is an argument, not a measurement,
+  and it is recorded as such.
 

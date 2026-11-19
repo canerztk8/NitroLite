@@ -266,7 +266,7 @@ there is no official source to prefer.
 | **AN16-41** | Nitro 16 | ✅ | ✅ | ✅ | — | BIOS V1.27, Win 11 26300 | **physical** | **verified** — reference machine |
 | AN16-42 | Nitro 16 | ✅ | ✅ | ✅ | — | — | S1 (LS#85) | profile, sensors unverified |
 | AN16-43 | Nitro 16 | ✅ | ✅ | ✅ | ✅ | — | S1 (LS#17), S2 (#59) | profile, sensors unverified |
-| AN16-61 | Nitro 16 | — | — | — | — | BIOS V1.53, Win 10.0.26300 | **physical** (§1.5) | profile, **partly verified** — fans, modes and sensors work; clock, MUX read/write, zone RGB and Win-key lock open (§3.2) |
+| AN16-61 | Nitro 16 | — | — | — | — | BIOS V1.53, Win 10.0.26300 | **physical** (§1.5) | profile, **partly verified** — fans, modes and sensors work; zone RGB now has an HID path (§1.7, physical confirmation pending); clock, MUX read/write and Win-key lock open (§3.2) |
 | AN17-41 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#99) | **no profile** — see §4 |
 | AN17-42 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#64) | profile, sensors unverified |
 | AN17-51 | Nitro 17 | — | — | — | — | — | none | profile, **test pending** |
