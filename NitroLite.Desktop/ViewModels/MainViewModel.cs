@@ -953,6 +953,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// True once the probe has finished, so the fan loop and the hardware controls can be trusted with a write.
     /// </summary>
     private bool _hardwareReady;
+
+    /// <summary>Set once the published profile table has been checked, so a re-init never fetches it twice.</summary>
+    private bool _remoteProfilesChecked;
     private bool _refreshing;
     private bool _disposed;
 
@@ -5506,7 +5509,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 // The machine may already be in custom mode when the window opens, in which case the fan loop has to be
                 // running before the first telemetry sample rather than after the user touches a card.
                 SyncFanLoop();
+
+                // Last, and in the background: a profile table published after this build shipped lets a laptop nobody
+                // had at release time work without a new binary. It never blocks the window, and being offline is not
+                // an event.
+                if (!_remoteProfilesChecked)
+                {
+                    _remoteProfilesChecked = true;
+                    _ = RefreshRemoteProfilesAsync();
+                }
             }
+        }
+    }
+
+    /// <summary>
+    /// Fetches the published profile table and, when it replaced something, re-probes so the new table is the one in
+    /// use for the rest of the session. Runs on the window's own context so the rescan raises its notifications there.
+    /// </summary>
+    private async Task RefreshRemoteProfilesAsync()
+    {
+        try
+        {
+            var result = await Task.Run(() => RemoteProfiles.RefreshAsync()).ConfigureAwait(true);
+            if (_disposed) return;
+
+            AppLog.Info("Published profiles", result.Saved
+                ? $"The published profile table replaced the installed copy ({result.Reason})."
+                : $"The published profile table was not used: {result.Reason}.");
+
+            if (!result.Saved || _hardware == null || _rescan == null) return;
+            await RescanAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The published profile table could not be checked", ex.Message);
         }
     }
 

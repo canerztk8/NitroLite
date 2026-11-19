@@ -460,7 +460,6 @@ public sealed class AppHost : IDisposable
         Task ProbeTask) CreateWindows(AppSettings settings)
     {
         var identity = HardwareDetector.Current;
-        var catalog = ProfileCatalog.Load();
 
         // The probe enumerates root\WMI and reads the registry. On a healthy machine that is tens of milliseconds, but
         // a machine with a damaged WMI repository answers in tens of seconds, and the old code ran it on whichever
@@ -474,6 +473,10 @@ public sealed class AppHost : IDisposable
         {
             try
             {
+                // Read here rather than once at startup: the published table is downloaded in the background, and a
+                // rescan after it lands has to see it without a restart. Parsing forty profiles is cheap next to the
+                // WMI walk this thread is already doing.
+                var catalog = ProfileCatalog.Load();
                 var result = CapabilityProbe.TryFromCache(settings, identity, catalog)
                              ?? CapabilityProbe.Probe(identity, catalog);
                 CapabilityProbe.Store(settings, result);
@@ -511,7 +514,10 @@ public sealed class AppHost : IDisposable
         var hybrid = new HybridHardwareController(
             agent,
             wmiFactory: () => wmi,
-            useDirectWmi: () => settings.UseDirectWmiBackend);
+            useDirectWmi: () => settings.UseDirectWmiBackend,
+            // The vendor HID controller is the transport the 2025 boards moved their backlight to. It is probed
+            // only when a WMI lighting write did not take, and it stays read-only until a documented frame exists.
+            hidLighting: NitroLite.Windows.Core.Hardware.Lighting.HidLightingDevices.FindWriter);
 
         // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI
         // backend up immediately when the Acer service is not answering, so the user never sees a UAC prompt:

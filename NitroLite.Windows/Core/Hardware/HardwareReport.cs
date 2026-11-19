@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -147,6 +147,7 @@ public static class HardwareReport
 
         AppendRuntimeSensorSection(sb, context?.SensorTrust);
         AppendUsbHidSection(sb, context?.UsbHid);
+        AppendKeyboardLightingSection(sb, context?.KeyboardLighting);
 
         sb.AppendLine("This file contains no serial number, user name, file path or log content.");
         return sb.ToString();
@@ -277,6 +278,7 @@ public static class HardwareReport
         sb.AppendLine();
 
         if (context != null) AppendUsbHidTable(sb, context.UsbHid);
+        if (context != null) AppendKeyboardLightingTable(sb, context.KeyboardLighting);
 
         sb.AppendLine("| Read-back policy | Session failures | State |");
         sb.AppendLine("| --- | --- | --- |");
@@ -667,6 +669,50 @@ public static class HardwareReport
                 sb.AppendLine($"| {Escape(device.Vendor)} | 0x{device.VendorId:X4}:0x{device.ProductId:X4} "
                               + $"| 0x{device.UsagePage:X4} | 0x{device.Usage:X4} | {Escape(device.Category)} |");
             }
+        }
+
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// The keyboard-lighting transports. A machine whose WMI lighting calls answer success without changing the
+    /// colour is lit by a separate controller, and this table is what says which one answered — or that none did.
+    /// </summary>
+    private static void AppendKeyboardLightingTable(StringBuilder sb, IReadOnlyList<string> lines)
+    {
+        sb.AppendLine("| Keyboard lighting | Transport |");
+        sb.AppendLine("| --- | --- |");
+        if (lines.Count == 0)
+        {
+            sb.AppendLine("| (not used yet) | - |");
+        }
+        else
+        {
+            foreach (var line in lines)
+            {
+                var separator = line.IndexOf(": ", StringComparison.Ordinal);
+                var machine = separator > 0 ? line[..separator] : line;
+                var transport = separator > 0 ? line[(separator + 2)..] : "-";
+                sb.AppendLine($"| {Escape(machine)} | {Escape(transport)} |");
+            }
+        }
+
+        sb.AppendLine();
+    }
+
+    /// <summary>The same transport facts, one per line.</summary>
+    private static void AppendKeyboardLightingSection(StringBuilder sb, IReadOnlyList<string>? lines)
+    {
+        if (lines == null) return;
+
+        sb.AppendLine("KEYBOARD LIGHTING");
+        if (lines.Count == 0)
+        {
+            sb.AppendLine("  (not used yet)");
+        }
+        else
+        {
+            foreach (var line in lines) sb.AppendLine($"  {line}");
         }
 
         sb.AppendLine();

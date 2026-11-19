@@ -168,6 +168,74 @@ impossible on a machine that is plainly answering.
 
 ---
 
+### 1.7 The keyboard colour moves to HID when WMI lies (2026-11-20)
+
+The AN16-61 report carried a log that ended the argument about the keyboard:
+
+```
+[2026-11-19 20:06:42] WARN The direct WMI capability was disabled for this session:
+wmi.keyboardLighting: read-back did not match in 3 attempts (the worker refused the write)
+```
+
+The WMI methods answer status `0` — success — and the LEDs do not move. NitroLite's read-back policy then
+does exactly what it was built to do: three attempts, three mismatches, capability off for the session. The
+user is left with a lighting tab that says *Write failed* while NitroSense sets colours on the same keyboard.
+
+The cause is documented hardware. The 2025-era Nitro and Predator boards moved the backlight onto a separate
+ENE controller, and the colour is written with an **HID feature report**, not a WMI method:
+
+| Field | Value |
+| --- | --- |
+| controller | ENE **KB5130**, USB `0x0CF2:0x5130` |
+| transport | HID **feature** report, 11 bytes (`HidD_SetFeature`; not `WriteFile`, which reaches output reports) |
+| frame | `A4 21 mode brightness speed direction R G B mask 00` |
+| mode bytes sent | `0x02` static, `0x04` breathing, `0x05` neon, `0x07` wave/shifting, `0x09` zoom |
+| mode bytes **never** sent | `0x01`, `0x03`, `0x06`, `0x08`, `0x0C` — the identifiers this protocol also names for firmware work and for "black" |
+| zones | mask `0x01` / `0x02` / `0x04` / `0x08`, `0x0F` for all four at once |
+
+Source: S7. There is no Acer manual for any of this, and none is claimed.
+
+**Transport selection.** `KeyboardLightingRouter` (`NitroLite.Core/Hardware/Lighting`) keeps the WMI path
+first — it is still correct on every older model — and tries HID once when a WMI write does not take.
+Whichever answered is remembered per `Model|BIOS`, so the next colour change does not pay for three failing
+round trips. `--hardware-report` prints the remembered choice, and the rescan button forgets it.
+
+**What is recognised and not written.** ITE (`0x048D`), Sonix (`0x0C45`) and Chicony (`0x04F2`) controllers
+exist behind Acer keyboards and are listed so a report can name the one a machine has. No frame layout for
+their Acer lighting is published, so they are **report-only**: `CanWrite` is false and nothing is sent. The
+same rule covers every standard HID page — a report addressed to page `0x01`, the keyboard's own input
+collection, is never opened at all, and no page below `0xFF00` may carry a colour.
+
+**The downloaded profile table.** A laptop nobody had at release time can also be supported without a new
+binary: `RemoteProfiles` fetches `NitroLite.Core/Hardware/Profiles/profiles.json` from this repository once
+at startup, validates it as strictly as the embedded table (every record must pass, at least one profile,
+fan ceilings inside `1000..12000 RPM`, sensor ids inside `0..63`) and writes it
+atomically to `%LocalAppData%\NitroLite\profiles.remote.json`. The catalogue then reads three documents:
+**user > downloaded > embedded**. Offline, rate-limited, behind a proxy that answers HTML, or pointed at a
+renamed repository, the refresh fails silently and the app starts with the table it already had.
+
+The published table is the project's own document — the same file the binary embeds — so it is allowed the
+same `anyAcer` catch-all, and the **user** file keeps the stricter rule that refuses one. The first live run
+of this code got that distinction wrong and rejected the real download for carrying a catch-all; the log
+line (`the downloaded table was rejected (… anyAcer …)`) is what caught it.
+
+**Evidence, and what is still missing.**
+
+- 57 new unit tests: the WMI-to-HID fallback and the `Model|BIOS` cache (`KeyboardLightingTransportTests`),
+  the frame bytes and the filtering rule (`HidLightingFilterTests`), and remote validation, rejection and
+  merge priority (`RemoteProfilesTests`). `dotnet build -warnaserror` is 0 warnings / 0 errors.
+- The protocol is documented and confirmed on two machines by its author (`PHN16S-71`, `ANV16S-41`) — both
+  are rows in §3 — but **neither machine is in this project's hands**. Nothing in this repository has been
+  run against a real ENE controller.
+- **Physical confirmation pending** on the AN16-61 and the ANV16S-41: §6 carries the first step.
+- **The live download was run once, on the reference machine (AN16-41, 2026-11-20).** The log reads
+  `The published profile table replaced the installed copy (32 profiles kept)`, the file landed at
+  `%LocalAppData%\NitroLite\profiles.remote.json` (27,896 bytes), and the rescan it triggers then reported
+  `runtime-verified (2 samples)`. That is one machine on one network; the offline, rate-limited and
+  proxy-answering-HTML paths are unit-tested through `RemoteProfiles.Install`, not observed.
+
+---
+
 ## 2. Sources
 
 All read-only. No package was installed, no driver was loaded, no firmware was written.
@@ -180,6 +248,7 @@ All read-only. No package was installed, no driver was loaded, no firmware was w
 | S4 | [`0x7375646F/Linuwu-Sense`](https://github.com/0x7375646F/Linuwu-Sense) and [`PXDiv/Div-Linuwu-Sense`](https://github.com/PXDiv/Div-Linuwu-Sense) | the reverse-engineered NitroSense/PredatorSense method set NitroLite's WMI layer mirrors |
 | S5 | [Arch Wiki, Laptop/Acer](https://wiki.archlinux.org/title/Laptop/Acer) | model-code cross-check |
 | S6 | [platform-driver-x86: ANV15-51 quirk patch](https://ratatoskr.run/platform-driver-x86/2026/07/17338142/t) | ANV15-51 on BIOS V1.60 needs a quirk; recorded as a caveat |
+| S7 | [`shwetankg07/kbrgb` `PROTOCOL.md`](https://github.com/shwetankg07/kbrgb) | the ENE KB5130 eleven-byte HID feature report (§1.7). Reverse-engineered by that project and verified by its author on a `PHN16S-71`; the same document records a confirmation on an `ANV16S-41` |
 
 S1 is the primary source for the four-zone RGB and `fan_speed` columns. It is a community table, not
 Acer documentation: it records what owners reported against the reverse-engineered methods, which is
@@ -365,7 +434,7 @@ Recorded so the next reader does not "fix" these back.
 | Physical verification of any model other than AN16-41 / AN16-61 | **test pending** — no device | run `--hardware-report` on the machine and compare the sensor answers with §1.2 |
 | AN16-61 CPU clock, at the panel | **code fixed, UI unconfirmed** — the fallback is unit-tested on the reference unit, not seen on an AN16-61 | open the dashboard on an AN16-61 and check the clock is not `-- GHz` |
 | AN16-61 MUX write | **test pending** — the write path is now logged, not fixed | reproduce the switch and send the new `MUX write was not attempted` / `MUX mode could not be read` line |
-| AN16-61 per-zone keyboard colour | **test pending** — the correct `SetGamingRgbKb` payload is unknown for this firmware | capture the worker reply and a read-back on the machine; do not guess a payload |
+| AN16-61 per-zone keyboard colour | **code + tests, physical confirmation pending** — WMI is tried first and the ENE HID frame takes over when it does not take (§1.7) | on the machine, set four different zone colours and check the report says `hid`; then check the LEDs match |
 | AN16-61 Windows-key lock | **test pending** — no firmware getter exists, so a working write cannot be told from a no-op | needs the machine and a key-by-key check |
 | AN16-61 battery charge limit through Care Center | **test pending** — the fallback is written and compiles, nothing more | on the machine, check the battery card appears and the mode reads back |
 | AN16-61 custom fan curve | **code + tests, physical confirmation pending** — the curve is no longer gated on a static profile measurement (§1.6) | open the fan page after ~2 s of telemetry on the machine; the report should read `runtime-verified (2 samples)` |
@@ -374,3 +443,6 @@ Recorded so the next reader does not "fix" these back.
 | PH16-72 / PHN16S-71 fan control | **source says ❌** | needs a machine; until then the UI may offer fan control that does nothing |
 | AN515-58 battery limiter on BIOS V2.19 | **source says accepted, no effect** | needs a machine on that BIOS |
 | Per-key RGB keyboards | **not supported by design** | a separate method set; out of scope for the four-zone path |
+| ANV16S-41 four-zone colour over HID | **test pending** — the model is in the table and the protocol is confirmed on it by S7, not by this project | same check as the AN16-61 row, on a unit of that model |
+| ITE / Sonix / Chicony keyboard lighting | **no documented frame** — recognised, reported, never written | find a published frame or a capture from one of those machines before changing anything |
+| Downloaded profile table, live | **code + tests, live fetch unconfirmed** — validation and the atomic write are unit-tested; the fetch is not | on a network, check the log line `Published profiles` and that a model only the published table names matches after the rescan |

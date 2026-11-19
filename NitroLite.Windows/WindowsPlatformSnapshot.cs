@@ -1,7 +1,9 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Lighting;
 using NitroLite.Core.Hardware.Wmi;
 using NitroLite.Windows.Core.Hardware;
+using NitroLite.Windows.Core.Hardware.Lighting;
 
 namespace NitroLite.Windows;
 
@@ -109,7 +111,13 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
         // The USB HID walk is this platform's own knowledge, so it is merged here rather than asked of the caller: a
         // caller that only has a sensor session still gets the keyboard controller ids in its report.
         var extras = context ?? HardwareReportContext.Empty;
-        extras = extras with { UsbHid = extras.UsbHid.Count > 0 ? extras.UsbHid : UsbHidInventory.Read() };
+        extras = extras with
+        {
+            UsbHid = extras.UsbHid.Count > 0 ? extras.UsbHid : UsbHidInventory.Read(),
+            KeyboardLighting = extras.KeyboardLighting.Count > 0
+                ? extras.KeyboardLighting
+                : DescribeKeyboardLighting()
+        };
 
         return HardwareReport.BuildMarkdown(
             probe,
@@ -122,7 +130,28 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
             extras);
     }
 
-    void IRescannableBackend.ResetReadBackCounters() => _readBack.ResetAll();
+    /// <summary>
+    /// What the lighting transports learned this session: the remembered choice per <c>Model|BIOS</c>, and what the
+    /// HID probe saw when it found no controller it is allowed to write to.
+    /// </summary>
+    private static IReadOnlyList<string> DescribeKeyboardLighting()
+    {
+        var lines = new List<string>(KeyboardLightingRuntime.Router.Describe());
+        var probe = HidLightingDevices.LastProbeDetail;
+        if (!string.IsNullOrWhiteSpace(probe)) lines.Add($"probe: {probe}");
+        return lines;
+    }
+
+    void IRescannableBackend.ResetReadBackCounters()
+    {
+        _readBack.ResetAll();
+
+        // A rescan is the user saying "try again", and the lighting transports are part of that: the HID probe runs
+        // again and the remembered WMI-or-HID choice is dropped, so a keyboard that came back after a driver
+        // reinstall is found again.
+        HidLightingDevices.ResetCache();
+        KeyboardLightingRuntime.Router.Reset();
+    }
 
     IPlatformSnapshot IRescannableBackend.Snapshot => this;
 

@@ -80,6 +80,12 @@ public sealed class ProfileCatalog
     public static string UserProfilePath => AppPaths.GetDataFile("profiles.user.json");
 
     /// <summary>
+    /// Path of the downloaded table. It sits between the user file and the embedded one: it is newer than what this
+    /// build was released with, but the person at the keyboard still overrules both.
+    /// </summary>
+    public static string RemoteProfilePath => AppPaths.GetDataFile("profiles.remote.json");
+
+    /// <summary>
     /// Loads the embedded table and, when present, the user file. Never throws: a missing or broken file leaves the
     /// embedded table in place, which is the state a fresh install is in.
     /// </summary>
@@ -87,18 +93,24 @@ public sealed class ProfileCatalog
     {
         var rejections = new List<string>();
         var embedded = ReadEmbeddedJson();
-        string? user = null;
+        var user = ReadOptional(UserProfilePath, "profiles.user.json", rejections);
+        var remote = ReadOptional(RemoteProfilePath, "profiles.remote.json", rejections);
+
+        return Build(embedded, user, remote, rejections);
+    }
+
+    /// <summary>Reads an optional profile file. A failure is recorded and treated as "no file".</summary>
+    private static string? ReadOptional(string path, string fileName, List<string> rejections)
+    {
         try
         {
-            var path = UserProfilePath;
-            if (File.Exists(path)) user = BoundedTextFile.ReadAllText(path);
+            return File.Exists(path) ? BoundedTextFile.ReadAllText(path) : null;
         }
         catch (Exception ex)
         {
-            rejections.Add($"profiles.user.json okunamadı: {ex.GetType().Name}");
+            rejections.Add($"{fileName} okunamadı: {ex.GetType().Name}");
+            return null;
         }
-
-        return Build(embedded, user, rejections);
     }
 
     /// <summary>
@@ -106,14 +118,100 @@ public sealed class ProfileCatalog
     /// tested without touching the file system or the assembly.
     /// </summary>
     public static ProfileCatalog FromJson(string? embeddedJson, string? userJson, out IReadOnlyList<string> rejections)
+        => FromJson(embeddedJson, userJson, null, out rejections);
+
+    /// <summary>
+    /// The same, with the downloaded table in the middle: user first, then remote, then embedded. A tie is won by
+    /// whichever document was parsed first, which is why the order of the three blocks below is the priority order.
+    /// </summary>
+    public static ProfileCatalog FromJson(
+        string? embeddedJson, string? userJson, string? remoteJson, out IReadOnlyList<string> rejections)
     {
         var collected = new List<string>();
-        var catalog = Build(embeddedJson, userJson, collected);
+        var catalog = Build(embeddedJson, userJson, remoteJson, collected);
         rejections = collected;
         return catalog;
     }
 
+    /// <summary>
+    /// Checks a whole document on its own, without merging it into a catalogue. The remote refresh uses this: a
+    /// download is either entirely acceptable or it is not written to disk at all, because half a table from one
+    /// release mixed with half from another is worse than the table this build already carries.
+    /// </summary>
+    public static bool Validate(string json, out int profileCount, out IReadOnlyList<string> rejections)
+        => Validate(json, isUserFile: false, out profileCount, out rejections);
+
+    /// <summary>
+    /// The same check with the catch-all rule made explicit. The published table is the project's own document and is
+    /// allowed the same catch-all the embedded one carries — it is the same file, so banning it there would reject
+    /// every real download. What still separates it from a hand-edited file is everything else: the host, the size
+    /// cap, and the requirement that every record pass and every ceiling and sensor id be plausible. A *user* file is
+    /// held to the stricter rule, because a catch-all written by hand would replace the shipped table for models the
+    /// author does not own.
+    /// </summary>
+    public static bool Validate(
+        string json, bool isUserFile, out int profileCount, out IReadOnlyList<string> rejections)
+    {
+        var collected = new List<string>();
+        var defaultSensors = SensorLayout.Default;
+        var fileName = isUserFile ? "profiles.remote.json" : "profiles.json";
+        var parsed = ParseDocument(json, fileName, isUserFile, collected, ref defaultSensors);
+        profileCount = parsed.Count;
+
+        foreach (var profile in parsed)
+        {
+            var problem = DescribeImplausible(profile);
+            if (problem != null) collected.Add($"{fileName}: {profile.Id}: {problem}");
+        }
+
+        if (parsed.Count == 0 && collected.Count == 0)
+            collected.Add($"{fileName}: hiç profil yok");
+
+        rejections = collected;
+        return collected.Count == 0 && parsed.Count > 0;
+    }
+
+    /// <summary>Lowest ceiling a profile may declare. Below this a fan command could never reach any speed.</summary>
+    private const int MinimumFanCeiling = 1000;
+
+    /// <summary>Highest ceiling a profile may declare, the same window the sensor plausibility check uses.</summary>
+    private const int MaximumFanCeiling = 12000;
+
+    /// <summary>Highest sensor id the firmware enum is known to reach.</summary>
+    private const int MaximumSensorId = 63;
+
+    /// <summary>
+    /// Why a parsed profile is not plausible, or null when it is. A downloaded table can name a fan ceiling or a
+    /// sensor id that no machine has; those are the fields a wrong value would turn into a fan command or a reading
+    /// from the wrong register, so they are bounded before the file is kept.
+    /// </summary>
+    private static string? DescribeImplausible(ModelProfile profile)
+    {
+        if (profile.MaxCpuFanRpm is < MinimumFanCeiling or > MaximumFanCeiling)
+            return $"fan ceiling {profile.MaxCpuFanRpm} RPM is outside {MinimumFanCeiling}..{MaximumFanCeiling}";
+
+        if (profile.MaxGpuFanRpm is < MinimumFanCeiling or > MaximumFanCeiling)
+            return $"fan ceiling {profile.MaxGpuFanRpm} RPM is outside {MinimumFanCeiling}..{MaximumFanCeiling}";
+
+        var sensors = profile.Sensors;
+        foreach (var id in new[]
+                 {
+                     sensors.CpuTempSensor, sensors.GpuTempSensor, sensors.Sys1TempSensor,
+                     sensors.CpuFanRpmSensor, sensors.GpuFanRpmSensor
+                 })
+        {
+            if (id < 0 || id > MaximumSensorId)
+                return $"sensor id {id} is outside 0..{MaximumSensorId}";
+        }
+
+        return null;
+    }
+
     private static ProfileCatalog Build(string? embeddedJson, string? userJson, List<string> rejections)
+        => Build(embeddedJson, userJson, null, rejections);
+
+    private static ProfileCatalog Build(
+        string? embeddedJson, string? userJson, string? remoteJson, List<string> rejections)
     {
         var defaultSensors = SensorLayout.Default;
         var profiles = new List<ModelProfile>();
@@ -123,6 +221,14 @@ public sealed class ProfileCatalog
         if (!string.IsNullOrWhiteSpace(userJson))
         {
             var parsed = ParseDocument(userJson!, "profiles.user.json", isUserFile: true, rejections, ref defaultSensors);
+            profiles.AddRange(parsed);
+        }
+
+        // The downloaded table is newer than the embedded one but older than anything the user wrote.
+        if (!string.IsNullOrWhiteSpace(remoteJson))
+        {
+            var parsed = ParseDocument(
+                remoteJson!, "profiles.remote.json", isUserFile: true, rejections, ref defaultSensors);
             profiles.AddRange(parsed);
         }
 
