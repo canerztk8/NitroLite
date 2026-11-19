@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace NitroLite.Core;
@@ -28,7 +28,9 @@ public static class ThemeCatalog
         AppTheme.NeonStreet,
         AppTheme.HighContrast,
         AppTheme.ViceSunset,
-        AppTheme.CyberChrome
+        AppTheme.CyberChrome,
+        AppTheme.RoseQuartz,
+        AppTheme.Navy
     };
 
     /// <summary>
@@ -46,7 +48,8 @@ public static class ThemeCatalog
         AppTheme.NeonStreet,
         AppTheme.HighContrast,
         AppTheme.ViceSunset,
-        AppTheme.CyberChrome
+        AppTheme.CyberChrome,
+        AppTheme.Navy
     };
 
     /// <summary>True when <paramref name="theme"/> is one of the dark-based palettes.</summary>
@@ -77,6 +80,8 @@ public static class ThemeCatalog
         AppTheme.HighContrast => "Yüksek Karşıtlık",
         AppTheme.ViceSunset => "Neon Gün Batımı",
         AppTheme.CyberChrome => "Krom Şehir",
+        AppTheme.RoseQuartz => "Gül Kurusu",
+        AppTheme.Navy => "Lacivert",
         _ => "Sıcak Krem"
     };
 

@@ -106,7 +106,7 @@ param(
     [switch]$All,
     [ValidateSet('warmcream', 'light', 'dark', 'midnightoled', 'slatesteel', 'amberconsole', 'nordfrost',
                  'cleanwhite', 'forest', 'neonstreet', 'highcontrast', 'vicesunset',
-                 'cyberchrome')][string]$Theme = 'warmcream',
+                 'cyberchrome', 'rosequartz', 'navy')][string]$Theme = 'warmcream',
     [string]$Language = 'tr',
     [string]$Out = '',
     [int]$MaxWidth = 1280,
@@ -203,6 +203,8 @@ $themeValue = switch ($Theme) {
     'highcontrast' { 'HighContrast' }
     'vicesunset' { 'ViceSunset' }
     'cyberchrome' { 'CyberChrome' }
+    'rosequartz' { 'RoseQuartz' }
+    'navy' { 'Navy' }
 }
 $json = "{`r`n  `"language`": `"$Language`",`r`n  `"theme`": `"$themeValue`",`r`n  `"onboarding_completed`": true"
 if ($PSBoundParameters.ContainsKey('MouseProfile')) {

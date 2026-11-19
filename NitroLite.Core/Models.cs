@@ -82,7 +82,13 @@ public enum AppTheme
     ViceSunset = 11,
 
     /// <summary>Near-black with a signal-yellow accent and a cyan secondary: the chrome palette.</summary>
-    CyberChrome = 12
+    CyberChrome = 12,
+
+    /// <summary>Rose-tinted paper with a plum accent: the only light palette that is not neutral.</summary>
+    RoseQuartz = 13,
+
+    /// <summary>Deep navy with a brass accent: the only cool ground carrying a warm accent.</summary>
+    Navy = 14
 }
 
 public class MonitorData

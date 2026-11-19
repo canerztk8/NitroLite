@@ -99,6 +99,8 @@ public sealed class ThemePalette
         AppTheme.HighContrast => HighContrast,
         AppTheme.ViceSunset => ViceSunset,
         AppTheme.CyberChrome => CyberChrome,
+        AppTheme.RoseQuartz => RoseQuartz,
+        AppTheme.Navy => Navy,
         _ => Dark
     };
 
@@ -474,5 +476,60 @@ public sealed class ThemePalette
         Warning = Color.Parse("#FF9F1C"),
         Danger = Color.Parse("#FF3B5C"),
         ChartFill = Color.Parse("#1AFCEE0A")
+    };
+
+    /// <summary>Rose-tinted paper with a plum accent: the light palette that is not neutral.</summary>
+    /// <remarks>
+    /// The third light palette, and the only one with a colour cast of its own. WarmCream is paper and CleanWhite is a
+    /// whiteboard; this one is a rose-grey stock, so the page carries a hue rather than a temperature. The accent is a
+    /// deep plum rather than the brick red WarmCream uses, which is what keeps the two apart in the picker: a reader
+    /// comparing the swatches sees a pink page and a plum rule against a beige page and a red one.
+    /// </remarks>
+    public static ThemePalette RoseQuartz { get; } = new()
+    {
+        Page = Color.Parse("#F7EAEF"),
+        Card = Color.Parse("#FFFAFC"),
+        CardHover = Color.Parse("#F4E2E9"),
+        Panel = Color.Parse("#F0DEE5"),
+        Rail = Color.Parse("#F3E6EC"),
+        CardBorder = Color.Parse("#D2AEBD"),
+        CardBorderStrong = Color.Parse("#BC8C9D"),
+        TextPrimary = Color.Parse("#2A1620"),
+        TextSecondary = Color.Parse("#5E3F4B"),
+        TextMuted = Color.Parse("#7C5A66"),
+        Accent = Color.Parse("#9E2B5C"),
+        OnAccent = Color.Parse("#FFFFFF"),
+        Success = Color.Parse("#2F7D4F"),
+        Warning = Color.Parse("#9A5B12"),
+        Danger = Color.Parse("#A81E3C"),
+        ChartFill = Color.Parse("#1A9E2B5C")
+    };
+
+    /// <summary>Deep navy with a brass accent: the one cool ground carrying a warm accent.</summary>
+    /// <remarks>
+    /// Every other palette keeps its accent in the same temperature family as its ground — a blue page gets a blue
+    /// accent, a warm page a warm one. This one deliberately does not: the surfaces are an indigo-leaning navy and the
+    /// accent is brass, so the selected tab and the primary button read as a lit lamp on a dark blue desk. The navy is
+    /// pushed towards indigo rather than SlateSteel's cyan-blue, which is what stops the two reading as one palette at
+    /// two brightnesses.
+    /// </remarks>
+    public static ThemePalette Navy { get; } = new()
+    {
+        Page = Color.Parse("#0A0F2E"),
+        Card = Color.Parse("#121A45"),
+        CardHover = Color.Parse("#1A2459"),
+        Panel = Color.Parse("#0D1338"),
+        Rail = Color.Parse("#0B1132"),
+        CardBorder = Color.Parse("#2A3570"),
+        CardBorderStrong = Color.Parse("#3B4A93"),
+        TextPrimary = Color.Parse("#EDEFFA"),
+        TextSecondary = Color.Parse("#B4BCE0"),
+        TextMuted = Color.Parse("#8B95C4"),
+        Accent = Color.Parse("#F5C542"),
+        OnAccent = Color.Parse("#0A0F2E"),
+        Success = Color.Parse("#4ADE80"),
+        Warning = Color.Parse("#FBBF24"),
+        Danger = Color.Parse("#F87171"),
+        ChartFill = Color.Parse("#1AF5C542")
     };
 }

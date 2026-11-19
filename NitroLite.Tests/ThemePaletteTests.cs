@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text;
 using System.Text.Json;
 using Avalonia.Media;
@@ -212,8 +212,10 @@ public class ThemePaletteTests
     [InlineData(AppTheme.HighContrast, true)]
     [InlineData(AppTheme.ViceSunset, true)]
     [InlineData(AppTheme.CyberChrome, true)]
+    [InlineData(AppTheme.Navy, true)]
     [InlineData(AppTheme.WarmCream, false)]
     [InlineData(AppTheme.CleanWhite, false)]
+    [InlineData(AppTheme.RoseQuartz, false)]
     public void IsDarkTheme_ClassifiesEveryConcretePalette(AppTheme theme, bool expected)
     {
         Assert.Equal(expected, ThemeCatalog.IsDarkTheme(theme));
