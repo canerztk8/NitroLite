@@ -446,7 +446,54 @@ correct. They are recorded so the next pass does not spend time on them again.
 
 ---
 
-## 3. Running log
+## 3. Cleanup — what was removed, and what was deliberately kept
+
+Phase 4. Every candidate below was checked against the build, the tests, CI, the
+packaging scripts and the release flow before it was touched. "Nothing calls it"
+was treated as a starting point, not as proof: each removal also had to survive a
+search for reflection, JSON binding, `nameof`, doc-comment `<see cref>` and
+target-typed `new(...)`.
+
+### 3.1 Removed
+
+| Item | Evidence it was dead | Why removing it is safe |
+| --- | --- | --- |
+| `NitroLite.slnx` | 25-byte `<Solution></Solution>` stub, added once in `b7cf9db` and never edited | It was not a solution at all, and its only effect was to break the documented entry point: `dotnet build` at the repo root failed with `MSB1011: Specify which project or solution file to use`. After the removal the same command builds: 0 warnings, 0 errors. CI, `scripts/publish-release.ps1` and the README all name `NitroLite.sln` or a `.csproj` explicitly, so nothing depended on the stub. |
+| `NitroLite.Windows/Core/DeviceCapabilityProbe.cs` | `grep -rn "DeviceCapabilityProbe"` over every `.cs`, `.axaml`, `.json` and `.md` returns the declaration only. No reflection, no `typeof`, no test. | Its one method, `ProbeAsync(AcerAgentClient)`, had no caller. See §3.3 for the gap this leaves. |
+| `NitroLite.Windows/Core/UserActivity.cs` | `grep -rn "UserActivity"` / `"LastInputTick"` / `"GetLastInputInfo"` returns the file itself. | Its own doc comment says "the ATK profile retry uses this"; that retry no longer exists. Nothing else reads the last-input tick. |
+| `ThermalStatusLevel`, `ThermalStabilityTrend` (`NitroLite.Core/Models.cs`) | No reference in any project or test; no serializer names them; `thermal_health.json` is only a `.gitignore` entry, nothing reads or writes it. | A model with no producer and no consumer. |
+| `TelemetryFormatter.FormatThermalSlope`, `FormatStabilityScore` | Only their own declarations; no test asserts them. | They formatted the two fields of the type removed above. |
+| `.audit/` (gitignore entry) | The directory holds this audit's build and test logs and is untracked. | It was showing up in `git status` on every run. Ignoring it keeps the working tree honest without deleting the evidence. |
+
+Removal was verified the same way as every other group: `dotnet build NitroLite.sln
+-c Release -warnaserror` → 0 warnings, 0 errors, and the full suite → **2753 passed,
+0 failed, 4 skipped**, identical to the run before the deletion.
+
+### 3.2 Deliberately kept
+
+| Item | Why it stays |
+| --- | --- |
+| `unsupportedMethods` in `profiles.json` and `ModelProfile` | Nothing reads it, which makes it look dead — but `ProfileCatalog` validates user profiles against an allow-list of known keys. Dropping the key would make an existing `profiles.user.json` that carries it fail validation. A dead field is cheaper than rejecting a user's file. |
+| `CleanExitMarker`, `ModeSwitchKey` | Referenced only by tests. They are tested behaviour that the app does not yet call, so deleting them would delete tests and a design decision rather than dead weight. Recorded in §3.3 instead. |
+| `TestDisplayRefreshRateServiceStub`, `TestScreenBrightnessService` | Test doubles that live in the Windows assembly because the tests need the same `internal` surface. Moving them is a refactor, not a cleanup. |
+| `scripts/research/` (24 files) | The record of how the Acer WMI surface was reverse-engineered, and the source for `ACER_COMPATIBILITY.md`. Two of the `verify_*` scripts assert "201 tests" and would fail today; they are stale documentation, not build inputs, and deleting them would lose provenance. |
+| `autonomous-cleanup.ps1` | A generic agent-workflow template the author committed on purpose. It is not app code and not referenced by anything, but it is the author's process, not dead product code. |
+| `tools/lighting_fixed.log` | Untracked and already covered by `*.log`. A 101-byte debug capture from 2026-11-05. Left in place: it is not in the repository, and untracked files are the user's. |
+| `artifacts/` (2.0 GB, 0 tracked files) | Gitignored, and it is the documented output directory for `scripts/publish-release.ps1` and both workflows. It also holds the only local copy of `NitroLite-v1.2.7-win-x64.zip`. Reproducible, but not mine to delete. |
+| `docs/video/nitrolite-tour.mp4`, `trailer/` media | 48.6 MB of tracked files in total, most of it the trailer project and the README's demo video. Both are referenced and both are the author's. |
+
+### 3.3 Found while cleaning, not fixed
+
+| Item | State |
+| --- | --- |
+| The diagnostics bundle never carries live capabilities | `WindowsDiagnosticsService` is constructed with no arguments at `AppHost.cs:319`, so its `_capabilities` falls back to `() => new DeviceCapabilities()`. `hardware-report.txt` and `capabilities.json` inside the bundle therefore describe an empty device. `DeviceCapabilityProbe` was written to fill exactly this and was never called; it has been removed rather than left as a decoy. Wiring it needs an async capability read at bundle time — `CreateBundle()` is synchronous and is called from the UI thread, so a `GetAwaiter().GetResult()` there would be a deadlock risk. Left as open work with the evidence recorded. |
+| `CleanExitMarker` is not wired | `MarkRunning()` and `MarkCleanExit()` have no production caller, so `PreviousRunWasUnclean()` can never report anything. The crash-recovery feature it was written for does not exist yet. |
+| Dead public methods | `GameLibraryRules.IsPathCompatible`, `ModePolicy.FanDisplayName`, `UpdateService.StartInstalled`, `AppHost.WhenReadyAsync`, `HardwareReport.WriteToDirectory`, `DebloatService.IsNitroSenseLauncherEnabled`, `SystemToolsService.FindDriverStoreFolder`, `Loc.AppendLiteral`, `DirectoryTrust.IsWorldWritable` (referenced only from `<see cref>` in its own file). Each has zero call sites, but each is public API surface and removing it is a product decision rather than a cleanup. Listed here so the next pass does not have to rediscover them. |
+
+---
+
+## 4. Running log
+
 
 | When | What | Result |
 | --- | --- | --- |
@@ -479,3 +526,8 @@ correct. They are recorded so the next pass does not spend time on them again.
 | group 5 | Release build | 0 warnings, 0 errors |
 | group 5 | `FanSafetyTests` | 39 passed, 0 failed |
 | group 5 | full suite | 2753 passed, 0 failed, 4 skipped |
+| group 6 | dead code removed: `NitroLite.slnx`, `DeviceCapabilityProbe`, `UserActivity`, `ThermalStabilityTrend`, `ThermalStatusLevel`, `FormatThermalSlope`, `FormatStabilityScore` | see §3.1 |
+| group 6 | bare `dotnet build` before the removal | `MSB1011: Specify which project or solution file to use` |
+| group 6 | bare `dotnet build` after the removal | 0 warnings, 0 errors |
+| group 6 | Release build | 0 warnings, 0 errors |
+| group 6 | full suite | 2753 passed, 0 failed, 4 skipped |

@@ -287,21 +287,4 @@ public static class TelemetryFormatter
         if (!temp.HasValue || temp.Value <= 0) return defaultText;
         return $"{Math.Round(temp.Value):F0} °C";
     }
-
-    /// <summary>
-    /// Formats degradation slope per day (e.g. "+0.001 °C/W/gün").
-    /// </summary>
-    public static string FormatThermalSlope(double slope)
-    {
-        string sign = slope >= 0 ? "+" : "";
-        return string.Format(CultureInfo.InvariantCulture, Loc.T("{0}{1:F3} °C/W/gün"), sign, slope);
-    }
-
-    /// <summary>
-    /// Formats stability score percentage (e.g. "%98.7").
-    /// </summary>
-    public static string FormatStabilityScore(double score)
-    {
-        return string.Format(CultureInfo.InvariantCulture, "%{0:F1}", score);
-    }
 }

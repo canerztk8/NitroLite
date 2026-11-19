@@ -1,4 +1,4 @@
-## Build and Output directories
+﻿## Build and Output directories
 [Bb]in/
 [Oo]bj/
 [Tt]est[Rr]esults/
@@ -51,3 +51,6 @@ active_game_session.json
 .agents/
 .impeccable/
 .codex/
+
+## Audit run logs (build/test output captured while hardening; not part of the product)
+.audit/

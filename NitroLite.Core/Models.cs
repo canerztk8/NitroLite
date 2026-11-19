@@ -300,27 +300,6 @@ public static class GameProfileDefaults
     };
 }
 
-public enum ThermalStatusLevel
-{
-    Excellent,
-    Good,
-    Degraded,
-    Critical
-}
-
-public class ThermalStabilityTrend
-{
-    public int DaysCount { get; set; }
-    public double StabilityScorePercent { get; set; }
-    public double DegradationSlopePerDay { get; set; }
-    public string StatusText { get; set; } = string.Empty;
-    public ThermalStatusLevel StatusLevel { get; set; }
-    public double CurrentRatio { get; set; }
-    public double BaselineRatio { get; set; }
-    public double AverageRatio { get; set; }
-    public double CoefficientOfVariation { get; set; }
-}
-
 /// <summary>
 /// One capability answer as it is written to the settings file. The outcome is stored by name rather than by number
 /// so a reordered enum cannot turn "access denied" into "supported" on the next launch.
