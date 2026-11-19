@@ -935,5 +935,44 @@
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+
+    <!-- ============================================================ the collapsible card header -->
+
+    <!--
+      A card whose body folds. The header is a ToggleButton rather than an Expander because the Expander's own template
+      brings a Fluent frame, a Fluent chevron and a Fluent padding, all three of which would have to be overridden to
+      look like the rest of the window. A toggle with no chrome is the same behaviour with none of that: the whole row
+      is the switch, and the chevron is the only thing it adds.
+    -->
+    <Style Selector="ToggleButton.sectionhead">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="ToggleButton.sectionhead /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToggleButton.sectionhead:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToggleButton.sectionhead:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- The two chevrons are two glyphs rather than one rotated one: a rotate transform on a 11px glyph is a
+         sub-pixel render on every theme, and swapping the character is exact. -->
+    <Style Selector="TextBlock.chevron">
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="10,0,0,0" />
+    </Style>
   </Application.Styles>
 </Application>

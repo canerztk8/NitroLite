@@ -3160,6 +3160,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _autoStartOn, value)) return;
+
+            // Turning the elevated entry on also puts the app in the tray. The entry exists so the window does not
+            // appear at sign-in, and a user who has to find a second switch to get that has been given half a feature.
+            // The flag lives in the registered command line, so it is set before the entry is written.
+            if (value && !_settings.StartMinimized) StartMinimizedOn = true;
+
             if (!_suppressWrite) _ = ApplyAutoStartAsync(value);
         }
     }
@@ -4538,13 +4544,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public string DataFolder => AppPaths.DataDirectory;
 
+    /// <summary>
+    /// What the probe could not read, in its own words.
+    /// </summary>
+    /// <remarks>
+    /// Kept on the view model because it is the probe's answer and the hardware report quotes it, but no longer drawn:
+    /// the settings page used to end with a "Notes" card that printed this, which was a developer's diagnostic in a
+    /// user's window. The support card took that slot.
+    /// </remarks>
     public IReadOnlyList<string> Notes => _platform?.Notes ?? Array.Empty<string>();
-
-    /// <summary>True when the probe had something to say. The Notes card is hidden rather than shown empty.</summary>
-    public bool HasNotes => Notes.Count > 0;
-
-    /// <summary>The probe notes as one block, so the page needs no item template for a list of strings.</summary>
-    public string NotesText => string.Join(Environment.NewLine, Notes);
 
     public bool NeedsUdevRule
     {
@@ -4727,7 +4735,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SchoolModeColumnSpan));
             Raise(nameof(CapabilitySummaryText));
             Raise(nameof(TierDisplay));
-            Raise(nameof(HasNotes));
             BuildCapabilityRows();
 
             await ReadStateAsync().ConfigureAwait(true);
@@ -5976,7 +5983,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(SchoolModeColumnSpan));
         Raise(nameof(HardwareReportText));
         Raise(nameof(TierDisplay));
-        Raise(nameof(HasNotes));
         BuildCapabilityRows();
 
         await ReadStateAsync().ConfigureAwait(true);

@@ -92,7 +92,6 @@ public sealed class ShellLabels
     public string CapabilitySummary => Loc.T("Yetenek özeti");
     public string Language => Loc.T("Dil");
     public string DataFolder => Loc.T("Veri klasörü");
-    public string Notes => Loc.T("Notlar");
     public string Rescan => Loc.T("Yeniden tara");
     public string UdevNeeded => Loc.T("udev kuralı gerekli");
     public string UdevInstruction => Loc.T("sysfs düğümlerine yazmak için udev kuralını kurun:");
@@ -104,13 +103,11 @@ public sealed class ShellLabels
     public string Theme => Loc.T("Tema");
     public string ThemeApplied => Loc.T("Tema seçimi hemen uygulanır.");
     public string UiFont => Loc.T("Yazı tipi");
-    public string UiFontHint => Loc.T("Arayüzün tamamı bu yazı tipiyle çizilir. Her seçenek Türkçe, Rusça ve Hintçe dahil sekiz dili de kapsar.");
     public string FontApplied => Loc.T("Yazı tipi hemen uygulanır.");
     public string LastMinute => Loc.T("Seçili metriğin son 60 saniyesi");
 
     // ---------------------------------------------------------------- sign-in launch
     public string AutoStart => Loc.T("Görev Zamanlayıcı ile UAC'siz otomatik başlatma");
-    public string AutoStartHint => Loc.T("Oturum açılışında yükseltilmiş olarak, soru sorulmadan başlar.");
     public string AutoStartEnabled => Loc.T("Otomatik başlatma açıldı.");
     public string AutoStartDisabled => Loc.T("Otomatik başlatma kapatıldı.");
     public string AutoStartFailed => Loc.T("Otomatik başlatma değiştirilemedi.");
@@ -341,6 +338,7 @@ public sealed class ShellLabels
     /// </summary>
     public string Minimize => Loc.T("Küçült");
     public string Maximize => Loc.T("Büyüt");
+    public string ResizeHint => Loc.T("Sürükleyerek boyutlandır");
     public string HideToTray => Loc.T("Tepsiye gizle");
 
     /// <summary>
@@ -382,7 +380,6 @@ public sealed class ShellLabels
     public string LightingPageTitle => Loc.T("Klavye RGB Aydınlatma Kontrolü");
     public string BatteryPageTitle => Loc.T("Pil Şarj Sınırı ve Sağlığı");
     public string ToolsPageTitle => Loc.T("Sistem Servisleri ve Başlangıç Ayarları");
-    public string ToolsPageSubtitle => Loc.T("Arka plan servisleri, onarım araçları ve başlangıç davranışı");
 
     // ---------------------------------------------------------------- page 1: modes and fans
 
@@ -617,6 +614,7 @@ public sealed class ShellLabels
 
     public string Running => Loc.T("Çalışıyor");
     public string Stopped => Loc.T("Durdu");
+    public string AcerHardware => Loc.T("Acer arka planı ve sistem donanımı");
     public string AcerServices => Loc.T("Acer arka plan servisleri");
     public string AcerServicesHint => Loc.T("NitroLite'ın kullanmadığı güncelleme ve telemetri servisleri. Acer ajanı ve aydınlatma servisi korunur.");
     public string DisableServices => Loc.T("Devre Dışı Bırak");
@@ -639,7 +637,7 @@ public sealed class ShellLabels
     public string HardwareScanning => Loc.T("Taranıyor…");
     public string HardwareScanningDetail => Loc.T("Donanım taranıyor. Denetimler tarama bitince açılır.");
 
-    public string RepairTools => Loc.T("Sistem ve Donanım Onarım Araçları");
+    public string RepairToolsGroup => Loc.T("Onarım araçları");
     public string RepairToolsHint => Loc.T("Servis kayıtlarını ve MUX değerini yeniden yazar; hiçbiri donanım ayarını değiştirmez.");
     public string RepairConfirm => Loc.T("Bu onarım aracı çalıştırılsın mı?");
     public string RepairRunning => Loc.T("Onarım çalışıyor…");
@@ -658,13 +656,11 @@ public sealed class ShellLabels
 
     public string StartupAndIntegration => Loc.T("Başlangıç ve Entegrasyon");
     public string RunAtStartup => Loc.T("Windows açılışında otomatik çalıştır");
-    public string RunAtStartupHint => Loc.T("Kullanıcı kaydına yazılır; yönetici izni istemez.");
-    public string StartupExclusiveHint =>
-        Loc.T("İkisinden yalnızca biri açık olabilir; biri açılınca diğeri kapanır.");
     public string StartMinimized => Loc.T("Windows açılışında tepside başlat");
-    public string StartMinimizedHint => Loc.T("Pencere açılmaz; uygulama doğrudan sistem tepsisinde başlar.");
     public string AtkMouseIntegration => Loc.T("ATK Fare Entegrasyonu");
-    public string AtkMouseIntegrationHint => Loc.T("Kapalıyken fare profili satırı ve kartları gizlenir.");
+
+    /// <summary>The one word the startup card adds to a row, in brackets after its title.</summary>
+    public string Recommended => Loc.T("(önerilen)");
 
     // The Nitro key. One switch, no shortcut to record: the button is physical and has one meaning.
     public string NitroKey => Loc.T("Nitro tuşu");
@@ -677,8 +673,7 @@ public sealed class ShellLabels
     public string RedirectNitroSenseHint =>
         Loc.T("Açıkken NitroSense penceresi ve izin uyarısı kapatılır, tuş NitroLite'ı öne getirir.");
 
-    // What the launcher is doing right now, in one line under the NitroSense row.
-    public string NitroSenseLauncherState => Loc.T("Başlatıcı durumu");
+    // What the launcher is doing right now, folded into the Nitro key's tooltip.
     public string NitroSenseLauncherNoKey =>
         Loc.T("Bu makinede Nitro tuşu yok; yönlendirme devre dışı.");
     public string NitroSenseLauncherRedirecting =>
@@ -721,12 +716,11 @@ public sealed class ShellLabels
 
     // The bottom card: language and theme, where the WPF page kept them.
     public string NitroLiteSettings => Loc.T("NitroLite Ayarları");
-    public string NitroLiteSettingsHint =>
-        Loc.T("Dil ve tema. Seçim anında uygulanır, NitroLite yeniden başlamaz.");
-    public string ThemeCardsHint =>
-        Loc.T("Bir karta tıklayın; palet anında uygulanır.");
 
     public string UpdatesAndDiagnostics => Loc.T("Güncelleme, Teşhis ve Yedekleme");
+
+    /// <summary>The heading over the report and bundle buttons, which used to be a third unlabelled row.</summary>
+    public string DiagnosticsGroup => Loc.T("Teşhis ve rapor");
     public string AutoUpdateCheck => Loc.T("Güncellemeleri otomatik denetle");
     public string Version => Loc.T("Sürüm");
     public string CheckNow => Loc.T("Şimdi denetle");
@@ -765,6 +759,19 @@ public sealed class ShellLabels
     public string BackupRestoreFailed => Loc.T("Yedek geri yüklenemedi.");
     public string BackupRestoreFailedDetail(string error) => Loc.T($"Yedek geri yüklenemedi: {error}");
     public string LinkFailed(string error) => Loc.T($"Bağlantı açılamadı: {error}");
+
+    // ---------------------------------------------------------------- the support card
+
+    // The last card on the page. It replaced a "Notes" block that printed the probe's own diagnostics, which was a
+    // developer's note in a user's window; this one says who wrote the app and what it cost, which is the only thing
+    // that belongs at the bottom of a settings page.
+    public string Support => Loc.T("Destek");
+    // One literal, not a concatenation: the catalogue-coverage test reads the argument of Loc.T, and a split string
+    // would be scanned as its first fragment and reported as a key no catalogue carries.
+    public string SupportBody => Loc.T("NitroLite tek kişilik bir öğrenci projesi. Bu projeye 100 doların üzerinde para ve yüzlerce saat harcadım; her sürümü kendi makinemde tek tek denedim. İşinize yaradıysa bir kahve ısmarlayabilirsiniz.");
+    public string SupportKofi => Loc.T("Ko-fi'de destekle");
+    public string SupportGitHub => Loc.T("GitHub'da yıldızla");
+    public string SupportSponsors => Loc.T("GitHub Sponsors onay sürecinde.");
 
     // ---------------------------------------------------------------- the first-run walkthrough
 

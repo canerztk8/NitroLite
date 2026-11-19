@@ -146,6 +146,11 @@ public sealed partial class MainViewModel
     private string _repairToolsStatus = "";
     private bool _toolsBusy;
 
+    // Both cards open closed. The state is per session rather than persisted: a user who opens the service list once
+    // to look at it does not want it open on every launch afterwards.
+    private bool _acerSectionExpanded;
+    private bool _startupSectionExpanded;
+
     // ---------------------------------------------------------------- update, diagnostics, backup
 
     private UpdateCheckResult? _pendingUpdate;
@@ -470,6 +475,58 @@ public sealed partial class MainViewModel
 
     public bool ServicesAvailable => _debloat?.IsSupported == true;
 
+    /// <summary>
+    /// True when the merged Acer card has anything to show: the service list, the repair tools, or the key.
+    /// </summary>
+    /// <remarks>
+    /// The three used to be three cards, so each could hide on its own. One card means one visibility rule, and a
+    /// machine that has only one of the three still gets the card rather than an empty frame.
+    /// </remarks>
+    public bool AcerHardwareAvailable => ServicesAvailable || RepairToolsAvailable || NitroKeyAvailable;
+
+    /// <summary>
+    /// The merged card's (?) text: what the service list does, then what the repair buttons do.
+    /// </summary>
+    /// <remarks>
+    /// Two tooltips became one when the cards merged. The two sentences are still the two catalogue entries they always
+    /// were, so every language keeps its own wording and neither had to be retranslated.
+    /// </remarks>
+    public string AcerHardwareHint => Labels.AcerServicesHint + "\n\n" + Labels.RepairToolsHint;
+
+    /// <summary>
+    /// The Nitro key's (?) text: the three switches explained, then what the launcher is doing right now.
+    /// </summary>
+    /// <remarks>
+    /// The rows themselves carry no prose any more — a settings page with a paragraph under every switch is a page
+    /// nobody reads. The explanations are all still here, one hover away, and the last line is live: it is the same
+    /// derived state the page used to print under the NitroSense row.
+    /// </remarks>
+    public string NitroKeyHelp => string.Join(
+        "\n\n",
+        Labels.NitroKeyHint,
+        Labels.RedirectNitroSenseHint,
+        Labels.NitroSenseLauncherBlockHint,
+        NitroSenseLauncherStateText);
+
+    // ---------------------------------------------------------------- the collapsible cards
+
+    /// <summary>
+    /// Whether the merged Acer card is open. Closed by default: the list is long and most visits are for something
+    /// else, so the page opens as a short stack of headings rather than a wall of rows.
+    /// </summary>
+    public bool AcerSectionExpanded
+    {
+        get => _acerSectionExpanded;
+        set => Set(ref _acerSectionExpanded, value);
+    }
+
+    /// <summary>Whether the startup card is open. Closed by default, for the same reason.</summary>
+    public bool StartupSectionExpanded
+    {
+        get => _startupSectionExpanded;
+        set => Set(ref _startupSectionExpanded, value);
+    }
+
     public IReadOnlyList<AcerServiceRow> AcerServices => _acerServices;
 
     public bool HasAcerServices => _acerServices.Count > 0;
@@ -547,6 +604,17 @@ public sealed partial class MainViewModel
 
     /// <summary>True when this platform offers at least one way to start with the session.</summary>
     public bool StartupAvailable => RunAtStartupAvailable || AutoStartAvailable;
+
+    /// <summary>
+    /// True when the plain sign-in entry is the only way to start with the session, so its row is worth a line.
+    /// </summary>
+    /// <remarks>
+    /// On Windows the elevated Task Scheduler entry is strictly better — it starts without a UAC prompt and it can start
+    /// in the tray — so offering both was two switches for one decision, and the page now shows only the better one.
+    /// Linux has no elevated entry at all (<c>AppHost</c> wires <c>LinuxRunAtStartupService</c> and leaves the other
+    /// null), so there the plain entry is the whole feature and hiding it would remove autostart entirely.
+    /// </remarks>
+    public bool ShowRunAtStartupRow => RunAtStartupAvailable && !AutoStartAvailable;
 
     /// <summary>The plain <c>HKCU\...\Run</c> entry. Turning it on removes the elevated task, and the other way round.</summary>
     public bool RunAtStartupOn
@@ -814,6 +882,11 @@ public sealed partial class MainViewModel
     public AsyncCommand CheckUpdatesCommand { get; private set; } = null!;
     public AsyncCommand UpdateNowCommand { get; private set; } = null!;
     public RelayCommand ReleaseNotesCommand { get; private set; } = null!;
+
+    /// <summary>The two buttons on the support card. Both are plain links, so neither needs a busy state.</summary>
+    public RelayCommand SupportKofiCommand { get; private set; } = null!;
+
+    public RelayCommand SupportGitHubCommand { get; private set; } = null!;
     public RelayCommand ReportBugCommand { get; private set; } = null!;
     public RelayCommand OpenLogsCommand { get; private set; } = null!;
     public AsyncCommand ExportHardwareReportCommand { get; private set; } = null!;
@@ -847,6 +920,8 @@ public sealed partial class MainViewModel
         CheckUpdatesCommand = new AsyncCommand(() => CheckForUpdatesAsync(silent: false));
         UpdateNowCommand = new AsyncCommand(UpdateNowAsync);
         ReleaseNotesCommand = new RelayCommand(OpenReleaseNotes);
+        SupportKofiCommand = new RelayCommand(() => OpenUrl(SupportLinks.Kofi));
+        SupportGitHubCommand = new RelayCommand(() => OpenUrl(SupportLinks.Repository));
         ReportBugCommand = new RelayCommand(ReportBug);
         OpenLogsCommand = new RelayCommand(OpenLogsFolder);
         ExportHardwareReportCommand = new AsyncCommand(ExportHardwareReportAsync);

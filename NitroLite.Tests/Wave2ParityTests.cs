@@ -265,9 +265,10 @@ public class Wave2ParityTests
         Assert.Contains("RedirectNitroSenseEnabled", markup, StringComparison.Ordinal);
         Assert.Contains("CanRedirectNitroSense", markup, StringComparison.Ordinal);
 
-        // The two rows the audit found missing.
+        // The two rows the audit found missing. The launcher's live state moved from a line under the NitroSense row
+        // into the Nitro key's (?) badge, so the markup names the badge and the view model carries the state.
         Assert.Contains("UseDirectWmiBackend", markup, StringComparison.Ordinal);
-        Assert.Contains("NitroSenseLauncherStateText", markup, StringComparison.Ordinal);
+        Assert.Contains("NitroKeyHelp", markup, StringComparison.Ordinal);
 
         // The theme picker is the card grid, not a combo box.
         Assert.Contains("ThemeCards", markup, StringComparison.Ordinal);

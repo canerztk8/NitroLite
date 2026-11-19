@@ -814,7 +814,7 @@ public class DesktopViewModelTests
     }
 
     [Fact]
-    public async Task EmptyContainers_TheNotesCardOnlyShowsWhenTheProbeHadSomethingToSay()
+    public async Task EmptyContainers_TheProbeReportsWhatItCouldNotRead()
     {
         var (healthy, healthyController) = Create(Nitro16());
         using var _ = healthy;
@@ -822,9 +822,8 @@ public class DesktopViewModelTests
 
         await healthy.InitializeAsync();
 
-        // Every node answered, so there is nothing to warn about and the card stays out of the layout.
+        // Every node answered, so there is nothing to warn about.
         Assert.Empty(healthy.Notes);
-        Assert.False(healthy.HasNotes);
 
         var (bare, bareController) = Create(new InMemorySysfsFileSystem());
         using var ___ = bare;
@@ -832,8 +831,9 @@ public class DesktopViewModelTests
 
         await bare.InitializeAsync();
 
+        // The notes are no longer drawn — the settings page ends with the support card — but the probe's answer is
+        // still the view model's, and the hardware report quotes it.
         Assert.NotEmpty(bare.Notes);
-        Assert.True(bare.HasNotes);
     }
 
     // ---------------------------------------------------------------- 11. the capability list

@@ -361,6 +361,16 @@
     </Grid>
   </Border>
 
+  <!-- The resize grip. The window draws its own chrome, so there is no frame to grab; this is the frame. It is a
+       Border rather than a Button because it must not take focus or answer the keyboard, and it is 14px because that
+       is the smallest square a pointer can find without aiming. -->
+  <Border x:Name="ResizeGrip" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+          Margin="0,0,3,3" Background="Transparent" Cursor="BottomRightCorner"
+          PointerPressed="OnResizeGripPressed" ToolTip.Tip="{Binding Labels.ResizeHint}">
+    <Path Data="M 13,1 L 1,13 M 13,6 L 6,13 M 13,11 L 11,13"
+          Stroke="{DynamicResource TextMutedBrush}" StrokeThickness="1" Opacity="0.55" />
+  </Border>
+
   <!-- The first-run walkthrough sits above the shell, not beside it: the window behind it stays visible so the user
        can see what is being configured. -->
   <views:OnboardingOverlay IsVisible="{Binding ShowOnboarding}" />

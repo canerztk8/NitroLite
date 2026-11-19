@@ -257,6 +257,10 @@ public class NitroSenseLauncherBlockTests
         Assert.Contains("ToggleNitroSenseLauncherCommand", markup, StringComparison.Ordinal);
         Assert.Contains("NitroSenseLauncherBlockAction", markup, StringComparison.Ordinal);
         Assert.Contains("NitroSenseLauncherBlockStateText", markup, StringComparison.Ordinal);
-        Assert.Contains("NitroSenseLauncherBlockHint", markup, StringComparison.Ordinal);
+
+        // The explanation is no longer a paragraph under the row: it is one of the four lines in the group's (?)
+        // badge, which the view model assembles. The markup therefore names the badge, and the badge's text is
+        // asserted on the view model instead.
+        Assert.Contains("NitroKeyHelp", markup, StringComparison.Ordinal);
     }
 }

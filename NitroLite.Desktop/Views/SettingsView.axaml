@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:core="using:NitroLite.Core"
@@ -8,14 +8,18 @@
              x:DataType="vm:MainViewModel">
 
   <!--
-    Page 5: the services and the tools. A title and one line of prose, then a stack of cards whose header row carries
-    the name, an optional (?) badge and the action on the right, with hairline rules between the rows inside.
+    Page 5: the services and the tools. A title, then a stack of cards whose header row carries the name, an optional
+    (?) badge and the action on the right, with hairline rules between the rows inside.
 
-    The cards are ordered by what a user comes here for: Acer's background services, the repair tools, how the app
-    starts, the Nitro key, the report and backup actions, the device summary, and finally NitroLite's own appearance
-    settings. Two things that used to carry a card each are folded in instead of given a heading of their own: the
-    elevated sign-in entry sits beside the ordinary one it excludes, and the hardware report sits with the other
-    report actions. The walkthrough link moved into the page header, where a one-time action belongs.
+    Two of the cards fold. The Acer card is the longest thing in the app — a service list, three repair buttons, the
+    NitroSense controls and the Nitro key — and it is also the card most visits do not need, so it opens closed and the
+    page reads as a short stack of headings. The startup card folds for the same reason: three switches that are set
+    once and then never touched again.
+
+    The prose is gone. Every row that used to carry a sentence under it now carries the sentence in the (?) badge of the
+    group it belongs to, which is where a reader who wants it will look and where a reader who does not will never see
+    it. The one exception is the elevated sign-in row, whose "(recommended)" is a decision aid rather than an
+    explanation.
 
     The game profile editor is deliberately not here. It lives on the modes page, where the mode and fan pickers it
     writes to are, and a second copy on this page meant two places to keep in step and two places for a user to look.
@@ -24,235 +28,215 @@
     <StackPanel>
 
       <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,14">
-        <StackPanel>
-          <TextBlock Classes="pagetitle" Text="{Binding Labels.ToolsPageTitle}" />
-          <TextBlock Classes="hint" Text="{Binding Labels.ToolsPageSubtitle}" Margin="0,4,0,0" />
-        </StackPanel>
+        <TextBlock Classes="pagetitle" Text="{Binding Labels.ToolsPageTitle}" VerticalAlignment="Center" />
         <!-- A one-time action, so it is a link in the header rather than a card of its own. -->
         <Button Grid.Column="1" Classes="link" Content="{Binding Labels.OnboardingReopen}"
-                Command="{Binding ReopenOnboardingCommand}" VerticalAlignment="Bottom" Margin="16,0,0,0" />
+                Command="{Binding ReopenOnboardingCommand}" VerticalAlignment="Center" Margin="16,0,0,0" />
       </Grid>
 
-      <!-- ============================================================ Acer background services -->
+      <!-- ============================================================ Acer background and system hardware -->
 
-      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding ServicesAvailable}">
+      <!-- One card for the machine's own plumbing: the services, the repair tools and the key all answer "what is this
+           laptop doing behind the window", and three cards for that was three headings for one subject. -->
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding AcerHardwareAvailable}">
         <StackPanel>
-          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
+          <ToggleButton Classes="sectionhead" IsChecked="{Binding AcerSectionExpanded, Mode=TwoWay}">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
               <TextBlock Classes="cardicon" Text="&#xE9F5;" Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock Classes="section" Text="{Binding Labels.AcerServices}" />
-              <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.AcerServicesHint}">
+              <TextBlock Grid.Column="1" Classes="section" Text="{Binding Labels.AcerHardware}" />
+              <Border Grid.Column="2" Classes="infobadge" Margin="6,0,0,0"
+                      ToolTip.Tip="{Binding AcerHardwareHint}">
                 <TextBlock Text="?" />
               </Border>
-            </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
-              <Button Classes="danger" Content="{Binding Labels.DisableServices}" Padding="12,7" FontSize="11"
-                      Command="{Binding DisableServicesCommand}" IsEnabled="{Binding !ServicesBusy}" />
-              <Button Classes="primary" Content="{Binding Labels.RestoreServices}" Margin="6,0,0,0"
-                      Padding="12,7" FontSize="11" Command="{Binding RestoreServicesCommand}"
-                      IsEnabled="{Binding !ServicesBusy}" />
-            </StackPanel>
-          </Grid>
+              <TextBlock Grid.Column="3" Classes="chevron" Text="&#xE70D;"
+                         IsVisible="{Binding !AcerSectionExpanded}" />
+              <TextBlock Grid.Column="3" Classes="chevron" Text="&#xE70E;"
+                         IsVisible="{Binding AcerSectionExpanded}" />
+            </Grid>
+          </ToggleButton>
 
-          <ItemsControl ItemsSource="{Binding AcerServices}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:AcerServiceRow">
-                <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="0,6">
-                  <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel>
-                      <TextBlock Classes="rowtitle" Text="{Binding Label}" />
-                      <TextBlock Classes="mono" Text="{Binding Name}" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Classes="hint" Text="{Binding StateText}"
-                               VerticalAlignment="Center" />
-                  </Grid>
+          <StackPanel IsVisible="{Binding AcerSectionExpanded}" Margin="0,12,0,0">
+
+            <!-- the services -->
+            <StackPanel IsVisible="{Binding ServicesAvailable}">
+              <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                <TextBlock Classes="caps" Text="{Binding Labels.AcerServices}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                  <Button Classes="danger" Content="{Binding Labels.DisableServices}" Padding="12,7" FontSize="11"
+                          Command="{Binding DisableServicesCommand}" IsEnabled="{Binding !ServicesBusy}" />
+                  <Button Classes="primary" Content="{Binding Labels.RestoreServices}" Margin="6,0,0,0"
+                          Padding="12,7" FontSize="11" Command="{Binding RestoreServicesCommand}"
+                          IsEnabled="{Binding !ServicesBusy}" />
+                </StackPanel>
+              </Grid>
+
+              <ItemsControl ItemsSource="{Binding AcerServices}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:AcerServiceRow">
+                    <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="0,6">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="rowtitle" Text="{Binding Label}" />
+                        <TextBlock Grid.Column="1" Classes="hint" Text="{Binding StateText}"
+                                   VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Classes="hint" Text="{Binding Labels.NoAcerServices}" IsVisible="{Binding HasNoAcerServices}" />
+
+              <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,8" />
+
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSense}" VerticalAlignment="Center" />
+                  <Border Classes="pill" Margin="8,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding NitroSenseStateText}" />
+                  </Border>
+                </StackPanel>
+                <Button Grid.Column="1" Classes="danger" Content="{Binding Labels.KillNitroSense}" Padding="12,7"
+                        FontSize="11" Command="{Binding KillNitroSenseCommand}" IsEnabled="{Binding NitroSenseRunning}" />
+              </Grid>
+
+              <TextBlock Classes="hint" Text="{Binding ServicesStatus}" Margin="0,8,0,0"
+                         IsVisible="{Binding HasServicesStatus}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- the repair tools -->
+            <StackPanel IsVisible="{Binding RepairToolsAvailable}">
+              <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10"
+                      IsVisible="{Binding ServicesAvailable}" />
+
+              <TextBlock Classes="caps" Text="{Binding Labels.RepairToolsGroup}" Margin="0,0,0,6" />
+
+              <WrapPanel>
+                <Button Classes="primary" Content="{Binding Labels.FixLighting}" Margin="0,0,6,6" Padding="12,7"
+                        FontSize="11" Command="{Binding FixLightingCommand}" IsEnabled="{Binding !ToolsBusy}" />
+                <Button Classes="primary" Content="{Binding Labels.FixAcerServices}" Margin="0,0,6,6" Padding="12,7"
+                        FontSize="11" Command="{Binding FixAcerServicesCommand}" IsEnabled="{Binding !ToolsBusy}" />
+                <Button Classes="primary" Content="{Binding Labels.RestoreMux}" Margin="0,0,6,6" Padding="12,7"
+                        FontSize="11" Command="{Binding RestoreMuxCommand}" IsEnabled="{Binding !ToolsBusy}" />
+              </WrapPanel>
+
+              <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.WindowsOptimization}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                  <Button Classes="danger" Content="{Binding Labels.Optimize}" Padding="12,7" FontSize="11"
+                          Command="{Binding OptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
+                  <Button Classes="danger" Content="{Binding Labels.RestoreOptimize}" Margin="6,0,0,0" Padding="12,7"
+                          FontSize="11" Command="{Binding RestoreOptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="hint" Text="{Binding RepairToolsStatus}" Margin="0,8,0,0"
+                         IsVisible="{Binding HasRepairToolsStatus}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- the Nitro key -->
+            <!-- One switch, and only on a machine that has the button. There is no shortcut to record: the key is
+                 physical and has one meaning, so a key-binding editor here would be a different feature wearing the
+                 same name. The three explanations live in the (?) badge; the only line the group prints is the
+                 launcher's state, which is the one thing a user cannot work out by looking at the switches. -->
+            <StackPanel IsVisible="{Binding NitroKeyAvailable}">
+              <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10" />
+
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                <TextBlock Classes="caps" Text="{Binding Labels.NitroKey}" />
+                <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding NitroKeyHelp}">
+                  <TextBlock Text="?" />
                 </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+              </StackPanel>
 
-          <TextBlock Classes="hint" Text="{Binding Labels.NoAcerServices}" IsVisible="{Binding HasNoAcerServices}" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroKeyToggle}" VerticalAlignment="Center" />
+                <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding NitroKeyEnabled}"
+                              VerticalAlignment="Center" />
+              </Grid>
 
-          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,8" />
+              <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.RedirectNitroSense}" VerticalAlignment="Center" />
+                <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding RedirectNitroSenseEnabled}"
+                              IsEnabled="{Binding CanRedirectNitroSense}" VerticalAlignment="Center" />
+              </Grid>
 
-          <Grid ColumnDefinitions="*,Auto">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSense}" VerticalAlignment="Center" />
-              <Border Classes="pill" Margin="8,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="{Binding NitroSenseStateText}" />
-              </Border>
+              <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSenseLauncherBlockTitle}"
+                           VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="{Binding NitroSenseLauncherBlockAction}" Padding="12,7" FontSize="11"
+                        Command="{Binding ToggleNitroSenseLauncherCommand}" IsEnabled="{Binding !ServicesBusy}"
+                        VerticalAlignment="Center" />
+              </Grid>
+
+              <TextBlock Classes="hint" Text="{Binding NitroSenseLauncherBlockStateText}" Margin="0,6,0,0"
+                         TextWrapping="Wrap" />
             </StackPanel>
-            <Button Grid.Column="1" Classes="danger" Content="{Binding Labels.KillNitroSense}" Padding="12,7"
-                    FontSize="11" Command="{Binding KillNitroSenseCommand}" IsEnabled="{Binding NitroSenseRunning}" />
-          </Grid>
-
-          <!-- What the launcher is doing right now, in one line. The pill says whether the process is up, this says
-               what that means for the key. -->
-          <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
-            <TextBlock Classes="caps" Text="{Binding Labels.NitroSenseLauncherState}" VerticalAlignment="Top"
-                       Margin="0,1,10,0" />
-            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding NitroSenseLauncherStateText}"
-                       TextWrapping="Wrap" />
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding ServicesStatus}" Margin="0,8,0,0"
-                     IsVisible="{Binding HasServicesStatus}" TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ repair and optimisation tools -->
-
-      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding RepairToolsAvailable}">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Classes="cardicon" Text="&#xE90F;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.RepairTools}" />
-            <Border Classes="infobadge" Margin="6,0,0,0" ToolTip.Tip="{Binding Labels.RepairToolsHint}">
-              <TextBlock Text="?" />
-            </Border>
           </StackPanel>
-
-          <WrapPanel>
-            <Button Classes="primary" Content="{Binding Labels.FixLighting}" Margin="0,0,6,6" Padding="12,7"
-                    FontSize="11" Command="{Binding FixLightingCommand}" IsEnabled="{Binding !ToolsBusy}" />
-            <Button Classes="primary" Content="{Binding Labels.FixAcerServices}" Margin="0,0,6,6" Padding="12,7"
-                    FontSize="11" Command="{Binding FixAcerServicesCommand}" IsEnabled="{Binding !ToolsBusy}" />
-            <Button Classes="primary" Content="{Binding Labels.RestoreMux}" Margin="0,0,6,6" Padding="12,7"
-                    FontSize="11" Command="{Binding RestoreMuxCommand}" IsEnabled="{Binding !ToolsBusy}" />
-          </WrapPanel>
-
-          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,6,0,8" />
-
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.WindowsOptimization}" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-              <Button Classes="danger" Content="{Binding Labels.Optimize}" Padding="12,7" FontSize="11"
-                      Command="{Binding OptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
-              <Button Classes="danger" Content="{Binding Labels.RestoreOptimize}" Margin="6,0,0,0" Padding="12,7"
-                      FontSize="11" Command="{Binding RestoreOptimizeCommand}" IsEnabled="{Binding !ToolsBusy}" />
-            </StackPanel>
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding RepairToolsStatus}" Margin="0,8,0,0"
-                     IsVisible="{Binding HasRepairToolsStatus}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
       <!-- ============================================================ how the app starts -->
 
-      <!-- One card for one decision. The two sign-in entries exclude each other, so they sit together with the line
-           that says so, instead of in two cards a reader has to compare. -->
-      <Border Classes="card" Margin="0,0,0,14">
+      <!-- One card for one decision, and one switch for it: the elevated entry is strictly better than the plain one on
+           Windows, so only the elevated one is offered there. Linux has no elevated entry, so the plain one is the whole
+           feature and keeps its row. -->
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding StartupAvailable}">
         <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Classes="cardicon" Text="&#xE7E8;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.StartupAndIntegration}" />
-          </StackPanel>
+          <ToggleButton Classes="sectionhead" IsChecked="{Binding StartupSectionExpanded, Mode=TwoWay}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Classes="cardicon" Text="&#xE7E8;" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <TextBlock Grid.Column="1" Classes="section" Text="{Binding Labels.StartupAndIntegration}" />
+              <TextBlock Grid.Column="2" Classes="chevron" Text="&#xE70D;"
+                         IsVisible="{Binding !StartupSectionExpanded}" />
+              <TextBlock Grid.Column="2" Classes="chevron" Text="&#xE70E;"
+                         IsVisible="{Binding StartupSectionExpanded}" />
+            </Grid>
+          </ToggleButton>
 
-          <StackPanel IsVisible="{Binding StartupAvailable}">
-            <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding RunAtStartupAvailable}">
+          <StackPanel IsVisible="{Binding StartupSectionExpanded}" Margin="0,12,0,0">
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowRunAtStartupRow}">
               <TextBlock Classes="rowtitle" Text="{Binding Labels.RunAtStartup}" VerticalAlignment="Center" />
-              <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.RunAtStartupHint}" Margin="10,0,0,0"
-                         VerticalAlignment="Center" TextWrapping="Wrap" />
-              <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding RunAtStartupOn}"
+              <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding RunAtStartupOn}"
                             VerticalAlignment="Center" />
             </Grid>
 
-            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0" IsVisible="{Binding AutoStartAvailable}">
-              <TextBlock Classes="rowtitle" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center" />
-              <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.AutoStartHint}" Margin="10,0,0,0"
-                         VerticalAlignment="Center" TextWrapping="Wrap" />
-              <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AutoStartOn}"
+            <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding AutoStartAvailable}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center" />
+                <TextBlock Classes="hint" Text="{Binding Labels.Recommended}" Margin="6,0,0,0"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+              <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding AutoStartOn}"
                             VerticalAlignment="Center" />
             </Grid>
-
-            <TextBlock Classes="hint" Text="{Binding Labels.StartupExclusiveHint}" Margin="0,6,0,0"
-                       TextWrapping="Wrap" />
 
             <TextBlock Classes="hint" Text="{Binding AutoStartStatus}" Margin="0,4,0,0"
                        IsVisible="{Binding HasAutoStartStatus}" TextWrapping="Wrap" />
 
             <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10" />
+
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.StartMinimized}" VerticalAlignment="Center" />
+              <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding StartMinimizedOn}"
+                            VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
+
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.AtkMouseIntegration}" VerticalAlignment="Center" />
+              <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding AtkMouseIntegrationOn}"
+                            VerticalAlignment="Center" />
+            </Grid>
           </StackPanel>
-
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.StartMinimized}" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.StartMinimizedHint}" Margin="10,0,0,0"
-                       VerticalAlignment="Center" TextWrapping="Wrap" />
-            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding StartMinimizedOn}"
-                          VerticalAlignment="Center" />
-          </Grid>
-
-          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
-
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.AtkMouseIntegration}" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.AtkMouseIntegrationHint}"
-                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
-            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AtkMouseIntegrationOn}"
-                          VerticalAlignment="Center" />
-          </Grid>
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ the Nitro key -->
-
-      <!-- One switch, and only on a machine that has the button. There is no shortcut to record: the key is physical
-           and has one meaning, so a key-binding editor here would be a different feature wearing the same name. -->
-      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding NitroKeyAvailable}">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Classes="cardicon" Text="&#xE92E;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.NitroKey}" />
-          </StackPanel>
-
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroKeyToggle}" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.NitroKeyHint}" Margin="10,0,0,0"
-                       VerticalAlignment="Center" TextWrapping="Wrap" />
-            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding NitroKeyEnabled}"
-                          VerticalAlignment="Center" />
-          </Grid>
-
-          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
-
-          <!-- The second half of the same claim. On a model whose button the Acer service stack owns, NitroSense
-               coming forward is the only signal the press produces, so "the key opens NitroLite" is only true if
-               NitroSense is closed on the way. Disabled rather than hidden while the switch above is off: there is
-               nothing to redirect, and a row that vanished would read as a bug. -->
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.RedirectNitroSense}" VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.RedirectNitroSenseHint}"
-                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
-            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding RedirectNitroSenseEnabled}"
-                          IsEnabled="{Binding CanRedirectNitroSense}" VerticalAlignment="Center" />
-          </Grid>
-
-          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
-
-          <!-- The permanent half. The redirect above only works while NitroLite runs, because the press is handled by
-               Acer's own stack; renaming the launcher the Acer hardware service starts is what stops the key opening
-               NitroSense with the app closed. A button rather than a switch: the operation needs elevation and can be
-               refused, so the caption says what the click will do and the state line says what is true now. -->
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroSenseLauncherBlockTitle}"
-                       VerticalAlignment="Center" />
-            <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.NitroSenseLauncherBlockHint}"
-                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
-            <Button Grid.Column="2" Content="{Binding NitroSenseLauncherBlockAction}" Padding="12,7" FontSize="11"
-                    Command="{Binding ToggleNitroSenseLauncherCommand}" IsEnabled="{Binding !ServicesBusy}"
-                    VerticalAlignment="Center" />
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding NitroSenseLauncherBlockStateText}" Margin="0,6,0,0"
-                     TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
       <!-- ============================================================ updates, diagnostics and backup -->
 
-      <!-- The report actions live here rather than in a card of their own: copying the report, saving it and bundling
-           the logs answer the same question, and a card holding one button was a heading for nothing. -->
+      <!-- Three groups under one heading, each with a caption. The buttons used to sit in three unlabelled rows, which
+           is what made the card read as a pile: nothing said which of the eight actions was a report, which was a
+           backup, and which was the update. -->
       <Border Classes="card" Margin="0,0,0,14">
         <StackPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -260,29 +244,29 @@
             <TextBlock Classes="section" Text="{Binding Labels.UpdatesAndDiagnostics}" />
           </StackPanel>
 
-          <StackPanel IsVisible="{Binding UpdateAvailable}">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <TextBlock Classes="rowtitle" Text="{Binding Labels.AutoUpdateCheck}" VerticalAlignment="Center" />
-              <TextBlock Grid.Column="1" Classes="mono" Text="{Binding UpdateVersionText}" Margin="10,0,0,0"
-                         VerticalAlignment="Center" />
-              <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AutoUpdateCheckOn}"
-                            VerticalAlignment="Center" />
-            </Grid>
+          <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding UpdateAvailable}">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.AutoUpdateCheck}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="mono" Text="{Binding UpdateVersionText}" Margin="10,0,0,0"
+                       VerticalAlignment="Center" />
+            <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AutoUpdateCheckOn}"
+                          VerticalAlignment="Center" />
+          </Grid>
 
-            <WrapPanel Margin="0,8,0,0">
-              <Button Classes="primary" Content="{Binding Labels.CheckNow}" Margin="0,0,6,6" Padding="12,7"
-                      FontSize="11" Command="{Binding CheckUpdatesCommand}" />
-              <Button Classes="primary" Content="{Binding UpdateNowText}" Margin="0,0,6,6" Padding="12,7"
-                      FontSize="11" Command="{Binding UpdateNowCommand}" IsVisible="{Binding HasPendingUpdate}" />
-              <Button Classes="primary" Content="{Binding Labels.ReleaseNotes}" Margin="0,0,6,6" Padding="12,7"
-                      FontSize="11" Command="{Binding ReleaseNotesCommand}" />
-            </WrapPanel>
+          <WrapPanel Margin="0,8,0,0">
+            <Button Classes="primary" Content="{Binding Labels.CheckNow}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding CheckUpdatesCommand}" />
+            <Button Classes="primary" Content="{Binding UpdateNowText}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding UpdateNowCommand}" IsVisible="{Binding HasPendingUpdate}" />
+            <Button Classes="primary" Content="{Binding Labels.ReleaseNotes}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding ReleaseNotesCommand}" />
+          </WrapPanel>
 
-            <TextBlock Classes="hint" Text="{Binding UpdateStatus}" IsVisible="{Binding HasUpdateStatus}"
-                       TextWrapping="Wrap" />
+          <TextBlock Classes="hint" Text="{Binding UpdateStatus}" IsVisible="{Binding HasUpdateStatus}"
+                     TextWrapping="Wrap" />
 
-            <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
-          </StackPanel>
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10" />
+
+          <TextBlock Classes="caps" Text="{Binding Labels.DiagnosticsGroup}" Margin="0,0,0,6" />
 
           <WrapPanel>
             <Button Classes="primary" Content="{Binding Labels.ReportBug}" Margin="0,0,6,6" Padding="12,7"
@@ -301,7 +285,12 @@
                     IsVisible="{Binding DiagnosticsAvailable}" />
           </WrapPanel>
 
-          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,6,0,8" />
+          <TextBlock Classes="hint" Text="{Binding DiagnosticsNote}" Margin="0,4,0,0"
+                     IsVisible="{Binding HasDiagnosticsNote}" TextWrapping="Wrap" />
+
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10" />
+
+          <TextBlock Classes="caps" Text="{Binding Labels.Backup}" Margin="0,0,0,6" />
 
           <WrapPanel>
             <Button Classes="primary" Content="{Binding Labels.CreateBackup}" Margin="0,0,6,6" Padding="12,7"
@@ -309,9 +298,6 @@
             <Button Classes="primary" Content="{Binding Labels.RestoreBackup}" Margin="0,0,6,6" Padding="12,7"
                     FontSize="11" Command="{Binding RestoreBackupCommand}" />
           </WrapPanel>
-
-          <TextBlock Classes="hint" Text="{Binding DiagnosticsNote}" Margin="0,4,0,0"
-                     IsVisible="{Binding HasDiagnosticsNote}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
@@ -409,15 +395,15 @@
 
       <!-- ============================================================ NitroLite's own settings -->
 
-      <!-- Language and theme, at the bottom where the WPF page kept them. They are the settings a user changes once
-           and then stops thinking about, so they do not belong above the tools the page exists for. -->
+      <!-- Language and typeface side by side, then the palettes. They are the settings a user changes once and then
+           stops thinking about, so they do not belong above the tools the page exists for. No prose: a picker with a
+           caption and a list is a picker a reader already understands. -->
       <Border Classes="card" Margin="0,0,0,14">
         <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Classes="cardicon" Text="&#xE713;" Foreground="{DynamicResource TextPrimaryBrush}" />
             <TextBlock Classes="section" Text="{Binding Labels.NitroLiteSettings}" />
           </StackPanel>
-          <TextBlock Classes="hint" Text="{Binding Labels.NitroLiteSettingsHint}" Margin="0,0,0,12" />
 
           <Grid ColumnDefinitions="*,*">
             <StackPanel Margin="0,0,12,0">
@@ -430,21 +416,29 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-              <TextBlock Classes="hint" Text="{Binding Labels.LanguageRestartHint}" Margin="0,4,0,0" />
             </StackPanel>
 
+            <!-- Each item is drawn in the face it names, and so is the closed box: the picker is its own preview, and a
+                 font list written in one font tells a reader nothing about the other twelve. -->
             <StackPanel Grid.Column="1">
-              <TextBlock Classes="caps" Text="{Binding Labels.Theme}" Margin="0,0,0,4" />
-              <TextBlock Classes="hint" Text="{Binding Labels.ThemeCardsHint}" TextWrapping="Wrap" />
+              <TextBlock Classes="caps" Text="{Binding Labels.UiFont}" Margin="0,0,0,4" />
+              <ComboBox ItemsSource="{Binding UiFonts}" SelectedItem="{Binding SelectedUiFont}"
+                        HorizontalAlignment="Stretch" FontFamily="{Binding SelectedUiFont.Stack}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="core:UiFontChoice">
+                    <TextBlock Text="{Binding DisplayName}" FontFamily="{Binding Stack}" FontSize="13" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
             </StackPanel>
           </Grid>
 
+          <TextBlock Classes="caps" Text="{Binding Labels.Theme}" Margin="0,14,0,6" />
+
           <!-- One card per palette, built from ThemeCatalog rather than written here, so adding a palette is still
                one enum member and one dictionary. The five swatches are the whole card: page, card, rule, ink and
-               accent, in the order the palette defines them. A screenshot used to sit above them and answered "what
-               does this look like", but it cost 110px of height per card for a picture the swatches already imply,
-               and the picker is a choice between colours, not a gallery. -->
-          <ItemsControl ItemsSource="{Binding ThemeCards}" Margin="0,10,0,0">
+               accent, in the order the palette defines them. -->
+          <ItemsControl ItemsSource="{Binding ThemeCards}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <WrapPanel Orientation="Horizontal" />
@@ -480,34 +474,32 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-
-          <TextBlock Classes="hint" Text="{Binding Labels.ThemeApplied}" Margin="0,2,0,0" />
-
-          <!-- The typeface. Each item is drawn in the face it names, so the picker is its own preview: a font list
-               written in one font tells a reader nothing about the other four. -->
-          <Border BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Margin="0,14,0,0"
-                  Padding="0,12,0,0">
-            <StackPanel>
-              <TextBlock Classes="caps" Text="{Binding Labels.UiFont}" Margin="0,0,0,4" />
-              <ComboBox ItemsSource="{Binding UiFonts}" SelectedItem="{Binding SelectedUiFont}"
-                        HorizontalAlignment="Stretch" MaxWidth="360">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="core:UiFontChoice">
-                    <TextBlock Text="{Binding DisplayName}" FontFamily="{Binding Stack}" FontSize="13" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Classes="hint" Text="{Binding Labels.UiFontHint}" Margin="0,6,0,0" TextWrapping="Wrap" />
-            </StackPanel>
-          </Border>
         </StackPanel>
       </Border>
 
-      <!-- Hidden when the probe had nothing to report, rather than shown as an empty card. -->
-      <Border Classes="card" IsVisible="{Binding HasNotes}">
+      <!-- ============================================================ support -->
+
+      <!-- The last card. It replaced a "Notes" block that printed the probe's own diagnostics, which was a developer's
+           note in a user's window. This one says who wrote the app and what it cost, which is the only thing that
+           belongs at the bottom of a settings page. GitHub Sponsors is named but not linked: the account is not
+           enrolled yet, and a button that opens a 404 is worse than a line that says so. -->
+      <Border Classes="card">
         <StackPanel>
-          <TextBlock Classes="section" Text="{Binding Labels.Notes}" Margin="0,0,0,8" />
-          <TextBlock Classes="hint" Text="{Binding NotesText}" />
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Classes="cardicon" Text="&#xEB51;" Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.Support}" />
+          </StackPanel>
+
+          <TextBlock Classes="body" Text="{Binding Labels.SupportBody}" />
+
+          <WrapPanel Margin="0,10,0,0">
+            <Button Classes="primary" Content="{Binding Labels.SupportKofi}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding SupportKofiCommand}" />
+            <Button Classes="primary" Content="{Binding Labels.SupportGitHub}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding SupportGitHubCommand}" />
+          </WrapPanel>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.SupportSponsors}" Margin="0,2,0,0" />
         </StackPanel>
       </Border>
     </StackPanel>

@@ -349,6 +349,33 @@ public partial class MainWindow : Window
         BeginMoveDrag(e);
     }
 
+    /// <summary>
+    /// Drags the bottom-right corner to resize. The window has no system chrome, so there is no frame to grab: the
+    /// grip is the frame, and <see cref="Window.BeginResizeDrag"/> hands the drag to the platform so the resize is the
+    /// same one a decorated window would do — no layout work of ours, no per-frame callback.
+    /// </summary>
+    private void OnResizeGripPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+
+        BeginResizeDrag(WindowEdge.SouthEast, e);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The grip is only meaningful on a restored window: a maximised one has no corner to drag, and a grip drawn over
+    /// the taskbar edge would be a control that does nothing.
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property == WindowStateProperty)
+        {
+            ResizeGrip.IsVisible = WindowState == WindowState.Normal;
+        }
+    }
+
     private void OnMinimizeClick(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void OnMaximizeClick(object? sender, RoutedEventArgs e) => ToggleMaximized();
