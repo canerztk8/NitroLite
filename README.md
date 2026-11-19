@@ -87,6 +87,11 @@ saturated the reading barely moves. The curve is a way to trade noise against te
 ### Keyboard lighting
 - The zone count and the effect list come from the keyboard itself, so a single-zone model gets the controls it can
   actually use instead of a four-zone picker that does nothing.
+- **Two transports, chosen by trying.** On most models the colour goes through the firmware's WMI method. On the 2025
+  boards that method answers "success" and the LEDs do not move, so NitroLite tries the keyboard's own HID controller
+  once — the documented ENE `KB5130` feature report — remembers which path worked for that `model|BIOS`, and uses it
+  from then on. A controller with no published frame is named in the hardware report and never written to, and the
+  keyboard's normal input collection is never opened.
 - Static, breathing, wave, neon, slide, zoom, meteor and sparkle, plus your own saved profiles.
 - **Every change applies as you make it** — no Apply button. The backlight-off state survives a restart, and a colour
   set by hand marks the profile as Custom so the picker never claims a preset is selected when it is not.
@@ -266,6 +271,13 @@ already uses, or through the firmware's own WMI class, and CPU boost through the
 loads `WinRing0` or any other driver, which is the usual reason an anti-cheat refuses to start next to a hardware
 tool. That is a statement about what NitroLite loads, not a guarantee: anti-cheat vendors keep their own allow-lists,
 and a game that blocks unsigned overlays will still block the OSD.
+
+**A model can be added without a new release.** At startup NitroLite fetches the profile table published with this
+project, checks it against the same rules the built-in table has to pass — every record valid, sensible fan ceilings
+and sensor ids, no catch-all — and keeps it next to your own file. The order is: your `profiles.user.json`, then the
+downloaded table, then the one inside the binary. If you are offline, or the download is damaged, nothing changes and
+nothing is reported as an error. Delete `%LOCALAPPDATA%\NitroLite\profiles.remote.json` to go back to the built-in
+table.
 
 ### If your model is not covered
 

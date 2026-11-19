@@ -1,4 +1,4 @@
-namespace NitroLite.Core.Hardware;
+﻿namespace NitroLite.Core.Hardware;
 
 /// <summary>
 /// The optional extras a hardware report can carry on top of the capability snapshot: what the runtime sensor check
@@ -17,8 +17,14 @@ public sealed record HardwareReportContext
     /// <summary>The USB HID collections found on this machine. Empty when nothing was enumerated.</summary>
     public IReadOnlyList<UsbHidDevice> UsbHid { get; init; } = Array.Empty<UsbHidDevice>();
 
+    /// <summary>
+    /// What the keyboard-lighting transports have learned this session: the remembered WMI-or-HID choice per
+    /// <c>Model|BIOS</c>, and what the HID probe saw. One line each, already worded for the report.
+    /// </summary>
+    public IReadOnlyList<string> KeyboardLighting { get; init; } = Array.Empty<string>();
+
     /// <summary>True when the context carries nothing to add.</summary>
-    public bool IsEmpty => SensorTrust == null && UsbHid.Count == 0;
+    public bool IsEmpty => SensorTrust == null && UsbHid.Count == 0 && KeyboardLighting.Count == 0;
 
     /// <summary>A context with nothing in it.</summary>
     public static HardwareReportContext Empty { get; } = new();
@@ -30,4 +36,8 @@ public sealed record HardwareReportContext
     /// <summary>A context that only carries the sensor session.</summary>
     public static HardwareReportContext ForSensors(RuntimeSensorVerification trust) =>
         new() { SensorTrust = trust };
+
+    /// <summary>A context that only carries the keyboard-lighting transports.</summary>
+    public static HardwareReportContext ForKeyboardLighting(IReadOnlyList<string> lines) =>
+        new() { KeyboardLighting = lines };
 }

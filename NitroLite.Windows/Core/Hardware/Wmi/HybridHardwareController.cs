@@ -1,4 +1,6 @@
-﻿namespace NitroLite.Core.Hardware.Wmi;
+﻿using NitroLite.Core.Hardware.Lighting;
+
+namespace NitroLite.Core.Hardware.Wmi;
 
 /// <summary>
 /// What NitroLite currently wants the hardware to be doing, and why. Supplied by the window, which is the only place
@@ -48,6 +50,12 @@ public sealed class HybridHardwareController : IHardwareController
     private readonly Func<bool> _useDirectWmi;
     private readonly Func<Task<bool>> _serviceHealthy;
 
+    /// <summary>
+    /// The vendor HID lighting probe, or null when this build or this session must not touch HID. The test harness
+    /// passes null so no test can open a real keyboard controller, exactly as it does for the WMI factory.
+    /// </summary>
+    private readonly Func<IHidLightingWriter?>? _hidLighting;
+
     private IHardwareController? _wmi;
     private bool _wmiCreated;
     private bool _disposed;
@@ -65,12 +73,14 @@ public sealed class HybridHardwareController : IHardwareController
         IHardwareController agent,
         Func<IHardwareController?>? wmiFactory = null,
         Func<bool>? useDirectWmi = null,
-        Func<Task<bool>>? serviceHealthy = null)
+        Func<Task<bool>>? serviceHealthy = null,
+        Func<IHidLightingWriter?>? hidLighting = null)
     {
         _agent = agent ?? throw new ArgumentNullException(nameof(agent));
         _wmiFactory = wmiFactory ?? (() => null);
         _useDirectWmi = useDirectWmi ?? (() => true);
         _serviceHealthy = serviceHealthy ?? agent.EnsureConnectedAsync;
+        _hidLighting = hidLighting;
     }
 
     public string BackendName => ActiveBackendName;
@@ -407,20 +417,40 @@ public sealed class HybridHardwareController : IHardwareController
     {
         LastZoneColorsApplied = null;
 
-        if (!_useDirectWmi())
-            return await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
-                .ConfigureAwait(false);
-
-        bool serviceHealthy = await _serviceHealthy().ConfigureAwait(false);
+        // The request in transport-neutral form. The WMI executor and the HID writer both start from this, so a
+        // fallback cannot quietly send a different colour than the one the user picked.
+        var frame = KeyboardLightingFrame.Create(effect, brightness, speed, direction, primaryColor, zoneColors);
         bool wantsZones = WantsZoneColors(zoneColors);
 
-        if (serviceHealthy && !wantsZones)
-            return await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+        if (!_useDirectWmi())
+        {
+            if (await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+                    .ConfigureAwait(false))
+                return true;
+
+            // The service path can fail on these boards too: it is the vendor's own client, and the 2025 hardware
+            // moved the backlight away from the interface it writes to. One HID attempt beats a dead lighting tab.
+            return await ApplyThroughHidAsync(frame, wantsZones, "the Acer service did not apply it")
                 .ConfigureAwait(false);
+        }
+
+        bool serviceHealthy = await _serviceHealthy().ConfigureAwait(false);
+
+        if (serviceHealthy && !wantsZones)
+        {
+            if (await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+                    .ConfigureAwait(false))
+                return true;
+
+            return await ApplyThroughHidAsync(frame, wantsZones, "the Acer service did not apply it")
+                .ConfigureAwait(false);
+        }
 
         // A helper that is already running is used without asking; starting one is only allowed for a write the user
         // asked for, so the boot re-assertion cannot raise a prompt.
         var wmi = _wmi is { IsAvailable: true } ? _wmi : (AllowElevationForLighting ? EnsureWmi() : null);
+        bool hidTried = false;
+
         if (wmi != null && await wmi.EnsureConnectedAsync().ConfigureAwait(false))
         {
             // On a healthy machine the service still owns the effect parameters, so they are written there first and
@@ -431,24 +461,25 @@ public sealed class HybridHardwareController : IHardwareController
                     .ConfigureAwait(false);
             }
 
-            bool applied = await wmi
-                .SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+            var outcome = await ApplyToWmiAsync(
+                    wmi, frame, effect, brightness, speed, direction, primaryColor, zoneColors)
                 .ConfigureAwait(false);
 
-            LastZoneColorsApplied = wantsZones ? applied : null;
-            if (applied)
+            hidTried = outcome.ProbeRan;
+            LastZoneColorsApplied = wantsZones ? outcome.Applied : null;
+
+            if (outcome.Applied)
             {
-                AppLog.Info("Keyboard lighting",
-                    serviceHealthy
+                AppLog.Info("Keyboard lighting", outcome.Transport == KeyboardLightingTransport.Hid
+                    ? $"Direct WMI answered success without changing the colour; it was written through the HID controller instead ({outcome.Detail})."
+                    : serviceHealthy
                         ? "All four zones were written through direct WMI."
                         : "No Acer service; the lighting was written through direct WMI.");
-            }
-            else
-            {
-                AppLog.Warn("Keyboard lighting", "The WMI write was not applied; falling back to the service path.");
+                return true;
             }
 
-            if (applied) return true;
+            AppLog.Warn("Keyboard lighting",
+                $"The WMI write was not applied ({outcome.Detail}); falling back to the service path.");
         }
         else if (wantsZones)
         {
@@ -456,8 +487,82 @@ public sealed class HybridHardwareController : IHardwareController
             AppLog.Warn("Keyboard zone colours", "No direct WMI path; the service will apply a single colour.");
         }
 
-        return await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+        if (await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)
+                .ConfigureAwait(false))
+            return true;
+
+        // Only worth another probe when the pass above did not already look for a controller.
+        if (hidTried) return false;
+
+        return await ApplyThroughHidAsync(frame, wantsZones, "neither the service nor direct WMI applied it")
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sends one frame through direct WMI, and through the vendor HID controller when WMI does not take it.
+    /// <para>
+    /// When this session has no HID probe configured — every test, and any run that must not touch a keyboard
+    /// controller — the WMI answer is the whole answer, exactly as it was before the HID path existed.
+    /// </para>
+    /// </summary>
+    private async Task<KeyboardLightingOutcome> ApplyToWmiAsync(
+        IHardwareController wmi,
+        KeyboardLightingFrame frame,
+        string effect,
+        int brightness,
+        int speed,
+        int direction,
+        string primaryColor,
+        string[]? zoneColors)
+    {
+        async Task<bool> ThroughWmi() => await wmi
+            .SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors).ConfigureAwait(false);
+
+        if (_hidLighting == null)
+        {
+            bool applied = await ThroughWmi().ConfigureAwait(false);
+            return new KeyboardLightingOutcome(
+                applied,
+                applied ? KeyboardLightingTransport.Wmi : KeyboardLightingTransport.Unknown,
+                applied ? "direct WMI" : "the WMI write was not applied",
+                false);
+        }
+
+        var identity = HardwareDetector.Current;
+        return await KeyboardLightingRuntime.Router.ApplyAsync(
+                identity.ModelCode,
+                identity.BiosVersion,
+                frame,
+                ThroughWmi,
+                _hidLighting,
+                writer => AppLog.Info("Keyboard lighting",
+                    $"The colour was written through the HID controller {writer.Description}."))
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The last resort, and the first path on a machine with no direct WMI at all: one HID write, no WMI round trip.
+    /// </summary>
+    private async Task<bool> ApplyThroughHidAsync(KeyboardLightingFrame frame, bool wantsZones, string reason)
+    {
+        if (_hidLighting == null) return false;
+
+        var identity = HardwareDetector.Current;
+        var outcome = await KeyboardLightingRuntime.Router.ApplyAsync(
+                identity.ModelCode,
+                identity.BiosVersion,
+                frame,
+                static () => Task.FromResult(false),
+                _hidLighting,
+                writer => AppLog.Info("Keyboard lighting",
+                    $"The colour was written through the HID controller {writer.Description}."))
+            .ConfigureAwait(false);
+
+        LastZoneColorsApplied = wantsZones ? outcome.Applied : null;
+        if (outcome.Applied) return true;
+
+        AppLog.Warn("Keyboard lighting", $"The hardware write was not applied ({reason}; {outcome.Detail}).");
+        return false;
     }
 
     /// <summary>True when the request carries at least two different zone colours, which is what the service cannot do.</summary>
