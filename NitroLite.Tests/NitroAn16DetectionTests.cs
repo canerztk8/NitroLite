@@ -54,7 +54,7 @@ public class NitroAn16DetectionTests
                     UseShellExecute = false
                 });
             },
-            connect: (_, _, _, _) => throw new InvalidOperationException("stop here"),
+            connect: (_, _, _, _, _) => throw new InvalidOperationException("stop here"),
             isElevated: () => true,
             isTrustedLocation: _ =>
             {

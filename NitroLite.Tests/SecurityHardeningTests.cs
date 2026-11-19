@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
@@ -43,7 +44,7 @@ public class SecurityHardeningTests
                     UseShellExecute = false
                 });
             },
-            connect: (_, nonce, _, _) =>
+            connect: (_, nonce, _, _, _) =>
             {
                 connectedNonce = nonce;
                 throw new InvalidOperationException("stop here");
@@ -455,6 +456,96 @@ public class SecurityHardeningTests
         string after = AppLog.ReadAllText() ?? "";
         string added = after.Length > before.Length ? after[before.Length..] : after;
         Assert.Equal(1, added.Split(exe).Length - 1);
+    }
+
+    [Fact]
+    public async Task AppLog_KeepsEveryLineWhenManyThreadsWriteAtOnce()
+    {
+        // The writer is shared and the lock is the only thing serialising it. A lost line is a line missing from the
+        // report that explains a crash, so the count is asserted rather than "it did not throw": Write swallows its
+        // own exceptions, which means a race shows up as a missing line and nothing else.
+        string marker = "concurrency-" + Guid.NewGuid().ToString("N");
+        const int threads = 8;
+        const int perThread = 50;
+
+        await Task.WhenAll(Enumerable.Range(0, threads).Select(t => Task.Run(() =>
+        {
+            for (int i = 0; i < perThread; i++) AppLog.Info(marker, $"{t}-{i}");
+        })));
+
+        AppLog.Flush();
+
+        // The log rotates at a megabyte, and a rotation moves the earlier lines to .old. Both are read so the count
+        // does not depend on how full the log happened to be when the test started.
+        string text = AppLog.ReadAllText() ?? "";
+        string rotated = AppLog.LogFilePath + ".old";
+        if (File.Exists(rotated)) text += File.ReadAllText(rotated);
+
+        Assert.Equal(threads * perThread, text.Split(marker).Length - 1);
+    }
+
+    [Fact]
+    public async Task WmiWorkerClient_RefusesAPipeServedByAnotherProcess()
+    {
+        // The nonce proves the peer received the hello, not that it is the helper that was started: the pipe name is
+        // on the worker's command line, which every process on the machine can read, so a same-user process can
+        // create the pipe first and echo the value back. The kernel's answer for "who is serving this pipe" cannot
+        // be forged by the process on that end, so it is what decides.
+        string pipeName = "nitrolite-test-" + Guid.NewGuid().ToString("N");
+        string nonce = WmiWorkerClient.GenerateNonce();
+
+        using var server = new NamedPipeServerStream(
+            pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+        var serving = Task.Run(async () =>
+        {
+            await server.WaitForConnectionAsync();
+            var hello = await WmiWorkerProtocol.ReadRequestAsync(server);
+            await WmiWorkerProtocol.WriteAsync(server, new WmiWorkerResponse
+            {
+                Type = WmiWorkerProtocol.TypeWelcome,
+                Ok = true,
+                Nonce = hello.Request?.Nonce ?? ""
+            });
+        });
+
+        // This test process is the server, so any other id is a different process.
+        int otherPid = Environment.ProcessId == 4 ? 5 : 4;
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WmiWorkerClient.ConnectAsync(pipeName, nonce, TimeSpan.FromSeconds(5), otherPid));
+
+        Assert.Contains("not the helper that was started", ex.Message);
+        await serving;
+    }
+
+    [Fact]
+    public async Task WmiWorkerClient_AcceptsAPipeServedByTheProcessItStarted()
+    {
+        // The other half: the check must not refuse the real helper, or the elevated path would never connect.
+        string pipeName = "nitrolite-test-" + Guid.NewGuid().ToString("N");
+        string nonce = WmiWorkerClient.GenerateNonce();
+
+        using var server = new NamedPipeServerStream(
+            pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+        var serving = Task.Run(async () =>
+        {
+            await server.WaitForConnectionAsync();
+            var hello = await WmiWorkerProtocol.ReadRequestAsync(server);
+            await WmiWorkerProtocol.WriteAsync(server, new WmiWorkerResponse
+            {
+                Type = WmiWorkerProtocol.TypeWelcome,
+                Ok = true,
+                Nonce = hello.Request?.Nonce ?? ""
+            });
+        });
+
+        using var client = await WmiWorkerClient.ConnectAsync(
+            pipeName, nonce, TimeSpan.FromSeconds(5), Environment.ProcessId);
+
+        Assert.NotNull(client);
+        await serving;
     }
 
     [Fact]

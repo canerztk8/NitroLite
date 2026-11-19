@@ -74,7 +74,7 @@ public sealed class SchoolModeOutcome
 /// NVMe for very little gain), background services and startup apps (not cleanly reversible).
 /// </para>
 /// </summary>
-public sealed class SchoolModeService
+public sealed class SchoolModeService : IDisposable
 {
     public const int TargetBrightnessPercent = 40;
     public const int TargetRefreshRate = 60;
@@ -551,4 +551,25 @@ public sealed class SchoolModeService
         try { if (File.Exists(path)) File.Delete(path); }
         catch (Exception ex) { AppLog.Warn("The school mode backup could not be deleted", $"{path}: {ex.Message}"); }
     }
+
+    /// <summary>
+    /// Releases the boost backend this service was constructed with.
+    /// </summary>
+    /// <remarks>
+    /// The service is the only owner of that object — the composition root creates one <c>CpuPowerService</c> for
+    /// school mode and a separate one for the view model's boost control, so disposing here cannot pull the control
+    /// out from under the settings page. It matters because the Windows implementation's <c>Dispose</c> is what kills
+    /// a <c>powercfg.exe</c> that did not exit inside its timeout; without this the child outlived the app and every
+    /// later boost write stayed blocked behind it.
+    /// </remarks>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        try { (_cpuBoost as IDisposable)?.Dispose(); }
+        catch (Exception ex) { AppLog.Warn("The boost backend could not be released", ex.Message); }
+    }
+
+    private bool _disposed;
 }

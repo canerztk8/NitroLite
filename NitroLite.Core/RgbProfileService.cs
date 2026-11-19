@@ -301,7 +301,8 @@ public class RgbProfileService
     /// <remarks>
     /// The file is the only copy of the user's own presets. Deleting it would throw away something that may be
     /// repairable by hand, and leaving it in place means the next save overwrites it with the factory list — so it is
-    /// renamed to <c>.bad</c>, which keeps the bytes and lets the next save start from a clean file.
+    /// renamed to a stamped <c>.bad-&lt;utc&gt;</c>, which keeps the bytes and lets the next save start from a clean
+    /// file. The stamp is what makes a second quarantine keep the first copy instead of replacing it.
     /// </remarks>
     private void QuarantineCorruptFile()
     {
@@ -309,8 +310,11 @@ public class RgbProfileService
         {
             if (!File.Exists(_presetsFile)) return;
 
-            var quarantined = _presetsFile + ".bad";
-            File.Move(_presetsFile, quarantined, overwrite: true);
+            // A stamped name, not a fixed ".bad". The fixed name was overwritten by the second quarantine, so the
+            // first — and by then only — copy of the user's presets was destroyed by the very mechanism that exists to
+            // preserve it. A restore that replaces the file and is later damaged is the ordinary way to reach that.
+            var quarantined = $"{_presetsFile}.bad-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}";
+            File.Move(_presetsFile, quarantined, overwrite: false);
             AppLog.Warn("The RGB profile file was set aside", quarantined);
         }
         catch (Exception ex)

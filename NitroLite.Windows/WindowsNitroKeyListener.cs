@@ -218,11 +218,17 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             {
                 watcher.EventArrived -= OnWmiEvent;
                 watcher.Stop();
-                watcher.Dispose();
             }
             catch (Exception ex)
             {
                 AppLog.Warn("The Acer WMI event watcher could not be closed", ex.Message);
+            }
+            finally
+            {
+                // Disposed whether or not Stop() succeeded. A watcher that refused to stop is still a COM object
+                // holding a subscription, and leaving it to the finalizer is what turns one failed shutdown into a
+                // leak that lasts as long as the process.
+                try { watcher.Dispose(); } catch { }
             }
         }
 
@@ -417,7 +423,19 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
             var watcher = new ManagementEventWatcher(scope, query);
             watcher.EventArrived += OnWmiEvent;
-            watcher.Start();
+
+            try
+            {
+                watcher.Start();
+            }
+            catch
+            {
+                // The watcher was created and subscribed before Start() threw. Dropping it here would leave the
+                // subscription and its COM object alive for the life of the process, once for every class tried.
+                watcher.EventArrived -= OnWmiEvent;
+                watcher.Dispose();
+                throw;
+            }
 
             _watchers.Add(watcher);
             AppLog.Info("Nitro key WMI event watcher connected",
@@ -438,9 +456,14 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
     private void OnWmiEvent(object sender, EventArrivedEventArgs e)
     {
+        // The event object is a COM wrapper the handler owns, and it is released on every path — including the two
+        // that return early. The NitroSense watcher fires every 400 ms, so a handler that dropped it would leak one
+        // object per event for as long as the app runs.
+        using var ev = e.NewEvent;
+
         var className = (sender as ManagementEventWatcher)?.Query?.QueryString ?? "?";
-        var instanceName = ReadString(e.NewEvent, "InstanceName");
-        uint code = ReadEventCode(e.NewEvent);
+        var instanceName = ReadString(ev, "InstanceName");
+        uint code = ReadEventCode(ev);
 
         if (NitroKeyEventCodes.Contains(code) && IsAcerInstance(instanceName))
         {
@@ -453,7 +476,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         // ACPI-WMI device on the machine.
         AppLog.Info("Acer WMI event (not the Nitro key)",
             $"class='{className}' instance='{instanceName}' code=0x{code:X2} " +
-            $"data={Convert.ToHexString(ReadEventBytes(e.NewEvent))}");
+            $"data={Convert.ToHexString(ReadEventBytes(ev))}");
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -482,6 +482,125 @@ public class FanSafetyTests
         // This is what ProcessExit and UnhandledException call. It has to come back, whatever the hardware does.
         Assert.True(vm.RestoreFansToAutoBlocking(TimeSpan.FromSeconds(2)));
         Assert.Contains(hardware.FanWrites, w => w.Mode == FanMode.Auto);
+    }
+
+    [Fact]
+    public async Task TheCurveDoesNotActOnAnUnconfirmedTemperature()
+    {
+        // An unlisted model: the profile table does not name it and the live probe did not confirm the sensor ids, so
+        // the reading is a guess about which id answers what. The page still shows it — hiding it would leave every
+        // unlisted machine blank — but the curve must not follow it. A guess that reads the 55 °C system sensor as the
+        // die asks for a third of full speed at 95 °C, and the 95 °C floor never fires because the curve never sees it.
+        var hardware = new StubHardware
+        {
+            Sample = new MonitorData
+            {
+                CpuTemperature = 70,
+                GpuTemperature = 60,
+                CpuFanSpeed = 2400,
+                GpuFanSpeed = 2400,
+                IsFanRpmMeasured = true,
+                IsTemperatureMeasured = false
+            }
+        };
+
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+        vm.CurveEnabled = true;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+
+        // The mode change writes the slider's 50 %. Nothing may follow it: the curve has a 70 °C reading it is not
+        // allowed to act on, so it proposes nothing. 42 % is what the default curve asks for at 70 °C, and it is
+        // below the slider, so a curve that ran would be visible as a second, slower write.
+        await WaitUntilAsync(() => hardware.FanWrites.Count > 0);
+        int writes = hardware.FanWrites.Count;
+        await Task.Delay(2500);
+
+        Assert.Equal(writes, hardware.FanWrites.Count);
+        Assert.DoesNotContain(hardware.FanWrites, w => w.Cpu == 42);
+    }
+
+    [Fact]
+    public async Task TheFansAreHandedBackWhenTheTemperatureDisappears()
+    {
+        // A sensor that stops answering used to leave the fans at the last speed the curve wrote, with nothing left
+        // to change them: the loop is the only writer, and it had nothing to act on. A machine that was cool when the
+        // sensor died then ran at 30 % while the die heated up, and the 95 C floor never fired because there was no
+        // reading to fire it. Auto is the only safe answer to "I no longer know how hot this is".
+        var hardware = new StubHardware
+        {
+            Sample = new MonitorData
+            {
+                CpuTemperature = 70,
+                GpuTemperature = 60,
+                CpuFanSpeed = 2400,
+                GpuFanSpeed = 2400,
+                IsFanRpmMeasured = true
+            }
+        };
+
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+        vm.CurveEnabled = true;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+
+        // The curve writes 42 % at 70 C, which is what the fans are left at when the sensor dies.
+        await WaitUntilAsync(() => hardware.FanWrites.Exists(w => w.Cpu == 42), 4000);
+
+        hardware.Sample = new MonitorData { CpuTemperature = 0, GpuTemperature = 0, IsFanRpmMeasured = false };
+        await vm.RefreshTelemetryAsync();
+
+        await WaitUntilAsync(() => hardware.FanWrites.Exists(w => w.Mode == FanMode.Auto), 4000);
+    }
+
+    [Fact]
+    public async Task TheCurveDoesActOnAConfirmedTemperature()
+    {
+        // The other half of the pair: the flag must not stop the curve on a machine whose ids were confirmed, or the
+        // fix would be "the fan curve never runs".
+        var hardware = new StubHardware
+        {
+            Sample = new MonitorData
+            {
+                CpuTemperature = 70,
+                GpuTemperature = 60,
+                CpuFanSpeed = 2400,
+                GpuFanSpeed = 2400,
+                IsFanRpmMeasured = true,
+                IsTemperatureMeasured = true
+            }
+        };
+
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+        vm.CurveEnabled = true;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+
+        // 42 % is the default curve at 70 °C, below the slider's 50 %, so only the curve can produce it.
+        await WaitUntilAsync(() => hardware.FanWrites.Exists(w => w.Cpu == 42), 4000);
+    }
+
+    [Fact]
+    public async Task NoFixedSpeedIsWrittenAfterTheHandback()
+    {
+        // The hand-back stopped the curve loop and then wrote Auto, and relied on the stop alone to keep a fixed speed
+        // from landing afterwards. It cannot: Stop cancels without waiting, and a step that had already passed its
+        // mode check and was queued on the write gate acquires the gate the moment the hand-back releases it. The
+        // machine then exits with the EC holding a fixed speed and no program left to change it.
+        var hardware = new StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+        await WaitUntilAsync(() => hardware.FanWrites.Count > 0);
+
+        Assert.True(vm.RestoreFansToAutoBlocking(TimeSpan.FromSeconds(5)));
+
+        // Give a step that was already in flight every chance to land after the Auto write.
+        await Task.Delay(2500);
+
+        var last = hardware.FanWrites[^1];
+        Assert.Equal(FanMode.Auto, last.Mode);
+        Assert.DoesNotContain(hardware.FanWrites.SkipWhile(w => w.Mode != FanMode.Auto), w => w.Mode == FanMode.Custom);
     }
 
     [Fact]

@@ -1,0 +1,708 @@
+﻿# NitroLite — Bug and Resource-Leak Audit
+
+Working branch: `audit/hardening-2026-10` (branched from `main` at `66ce36c`).
+Nothing in this document is a claim about a test that was not run. Every result
+below names the command that produced it and the log file it was written to.
+
+---
+
+## 0. Scope and method
+
+The audit follows the twelve risk classes of the `security-leak-hunter` skill:
+privilege and IPC, injection and traversal, hardware and thermal safety, network
+and deserialization, information disclosure, unmanaged leaks, managed leaks,
+concurrency, atomic writes, polling cost, build hardening, and test design.
+
+A finding is only recorded when it carries a file path and a line number and is
+reachable in the shipped application. A suspected issue that turned out to be
+unreachable is recorded as such rather than deleted, so the next reader does not
+re-investigate it.
+
+Severity: `KRITIK` / `YUKSEK` / `ORTA` / `DUSUK`.
+
+---
+
+## 1. Baseline, before any change
+
+Recorded on the device at hand, before a single line was edited.
+
+### 1.1 Environment
+
+| Fact | Value |
+| --- | --- |
+| OS | Microsoft Windows 11 Home, 10.0.26300 |
+| .NET SDK | 10.0.401 |
+| Runtime | Microsoft.NETCore.App 10.0.12 |
+| Host | `CZTRK` |
+
+### 1.2 Device identity (read-only, from the app's own report)
+
+Produced by `NitroLite.Desktop.exe --hardware-report`, which only reads.
+
+| Fact | Value |
+| --- | --- |
+| Manufacturer | Acer |
+| Model | Nitro AN16-41 |
+| Model code | AN16-41 |
+| Family | Acer Nitro 16 |
+| Board | Sierra_PEH |
+| BIOS | INSYDE Corp. 1.27 |
+| CPU vendor | Amd |
+| Matched profile | `nitro-16-an16-41` (embedded, `verified: true`) |
+
+This is the reference machine the embedded profile was measured on, so the
+profile match is a measurement and not a name guess.
+
+### 1.3 Build
+
+```
+dotnet build NitroLite.sln -c Release --nologo -warnaserror
+```
+
+| Result | Value |
+| --- | --- |
+| Exit code | 0 |
+| Warnings | 0 |
+| Errors | 0 |
+| Duration | 13.35 s |
+| Log | `.audit/baseline-build.log` |
+
+`Directory.Build.props` sets `TreatWarningsAsErrors` and
+`AnalysisLevel=latest-recommended`, so a clean build here means the .NET
+analyzers are clean too, not merely the compiler.
+
+### 1.4 Tests
+
+```
+dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build --nologo
+```
+
+| Result | Value |
+| --- | --- |
+| Exit code | 0 |
+| Passed | 2743 |
+| Failed | 0 |
+| Skipped | 4 |
+| Total | 2747 |
+| Duration | 3 m 15 s |
+| Log | `.audit/baseline-test.log` |
+
+The four skips are the live-hardware tests, which require
+`NITROLITE_ENABLE_LIVE_HARDWARE_TESTS=1` and a machine with the Acer service
+answering:
+
+- `SchoolModeServiceTests.EverySchoolModeSetting_ExistsInTheActiveScheme_AndAcceptsAWrite`
+- `VerifiedDefectsRegressionTests.Defect5_AtkMouseService_SwitchProfile_SafeExecution`
+- `BatteryChargeLimitProbeTests.LiveProbe_AgreesWithTheInterfacesItCanSee`
+- `CpuPowerServiceTests.ServiceInitialization_InstantiatesAndQueriesCurrentMode`
+
+They are recorded as **not run**, not as passed.
+
+### 1.5 Hardware backend state on this device
+
+From the same read-only report:
+
+| Capability | Outcome | Detail |
+| --- | --- | --- |
+| `wmi.gamingFunction` | AccessDenied | dynamic class, instance needs elevation |
+| `wmi.batteryChargeLimit` | Supported | Acer Care Center (`AcerCCAgentSvis` running) |
+| `mux.switch` | Supported | `dgpu_mode_capability=7` |
+| `keyboard.zones` | Supported | 4 zones |
+| `gpu.overclock` | Supported | `GPU_OC_Support=1` |
+| `panel.overdrive` | Supported | `LCD_Overdrive_support=1` |
+
+Backend state: `active AASSvc; AASSvc not connected; direct WMI not started`.
+
+Consequence for this audit: the Acer service is not answering and the direct-WMI
+path needs elevation, so **every hardware write on this machine is unavailable
+without a UAC prompt**. The audit therefore runs read-only against the hardware,
+which is what the goal asks for anyway. A feature that cannot be exercised
+without elevation is marked *test pending*, never *passed*.
+
+---
+
+## 2. Findings
+
+Findings are added here as they are proven, in the order they were verified.
+Each carries the reproduction step or measurement that showed it, the fix, and
+the re-check that confirmed the fix.
+
+Six read-only audit agents swept the tree: `managed-leaks`, `unmanaged-leaks`,
+`concurrency`, `data-integrity`, `hardware-safety`, `security-ipc`. Everything
+below is a finding one of them produced **and** that was reproduced here before
+being touched. Suspected issues that turned out to be unreachable are listed in
+§2.9 rather than deleted, so the next reader does not re-investigate them.
+
+### 2.1 Summary
+
+| ID | Severity | Area | Fixed in |
+| --- | --- | --- | --- |
+| SEC-01 | KRITIK | elevated logon task registered against an untrusted path | `0e9c191` |
+| RACE-01 | YUKSEK | pipe framing corruption between the fan loop and the UI tick | `0e9c191` |
+| BUG-01 | YUKSEK | the telemetry poll started the elevated worker, raising UAC on first tick | `0e9c191` |
+| LEAK-01..06 | ORTA | managed objects never disposed at shutdown | `0e9c191` |
+| DATA-06 | ORTA | an unrotatable log grew without bound | `0e9c191` |
+| SEC-04 | DUSUK | a raw error string reached the diagnostics bundle unscrubbed | `0e9c191` |
+| DATA-01 | YUKSEK | a power cut could leave a zero-content `NitroLite.exe` | `8ead4d0` |
+| DATA-02/03 | ORTA | pre-restore safety copies overwrote each other; RGB presets had none | `8ead4d0` |
+| DATA-04 | ORTA | the debloat backup was saved before the completeness loop | `8ead4d0` |
+| DATA-05 | ORTA | a failed diagnostics bundle deleted the previous archive | `8ead4d0` |
+| DATA-07 | ORTA | a corrupt RGB preset file was quarantined under a fixed name | `8ead4d0` |
+| HW-01 | YUKSEK | a fixed fan speed could be written after the shutdown hand-back | group 3 |
+| HW-02 | ORTA | a fan write was confirmed by reading the mode, not the speed | group 3 |
+| HW-03 | ORTA | a refused fan write left the firmware in Custom mode | group 3 |
+| HW-04 | YUKSEK | the fan curve acted on an unconfirmed temperature layout | group 3 |
+| HW-05 | ORTA | the hand-back used `Stop()`, which does not wait for the loop | group 3 |
+| SEC-02 | YUKSEK | the elevated error log could be redirected through a planted hardlink | `071cf45` |
+| SEC-03 | ORTA | the pipe handshake echoed a nonce instead of identifying the server | `071cf45` |
+| BUG-02 | ORTA | one transient WMI failure disabled the battery limit and CoolBoost for the session | `566154e` |
+| LEAK-01 | ORTA | an adopted COM object was dropped without being disposed when a lookup failed | `566154e` |
+| LEAK-02/03/04 | ORTA | the Nitro-key watcher leaked on a failed start, a failed stop, and every event | `566154e` |
+| LEAK-05 | DUSUK | the probe task was abandoned on timeout without its exception being observed | `566154e` |
+| RACE-02 | ORTA | `_suppressWrite` held across eight awaits discarded a click and reverted it | `566154e` |
+| RACE-03 | ORTA | the write gate was disposed while a step could still be inside it | `566154e` |
+| RACE-04 | ORTA | the log writer was dropped outside the lock that guards it | `566154e` |
+| HW-06 | ORTA | a dead temperature sensor froze the fans at the last speed the curve wrote | `566154e` |
+
+### 2.2 SEC-01 — the elevated logon task could be pointed at a user-writable directory
+
+**KRITIK.** `NitroLite.Windows/Core/ElevatedStartupService.cs`.
+
+The service registers a logon task with `HighestAvailable` so the WMI worker can
+start elevated without a prompt. It refused paths under `%TEMP%` and `Downloads`
+by name, but nothing else. `C:\WinTools` — a directory the drive root grants
+`Authenticated Users` modify on a default Windows install — passed that test, so
+a local user could drop an executable there, let the task register against it,
+and get code running as administrator at the next logon.
+
+*Fix:* the same `DirectoryTrust.IsExecutableTrusted(exePath)` predicate
+`WmiWorkerLauncher` already used is now applied before the task is registered.
+
+*Re-check:* build 0/0; the existing `ElevatedStartupService` tests pass; the app
+starts and the worker connects (`--wmi-worker connected` in the log).
+
+### 2.3 RACE-01 — two threads shared one pipe without a lock
+
+**YUKSEK.** `NitroLite.Windows/Core/Hardware/Wmi/WmiWorkerClient.cs`.
+
+`SendAsync` wrote a request and then read the reply with no mutual exclusion. The
+fan loop (1.5 s) and the UI telemetry tick (1 s) both call it, so a write from one
+could be answered by the other's read: the fan loop would parse a telemetry reply
+as a fan result and the UI would show a fan result as a temperature.
+
+*Fix:* a `SemaphoreSlim _exchange = new(1, 1)` held across write **and** read.
+`Dispose` deliberately does not dispose it — a holder may still be inside.
+
+*Re-check:* full suite green; the app ran with both loops active and the log shows
+no framing error.
+
+### 2.4 BUG-01 — the telemetry poll raised a UAC prompt
+
+**YUKSEK.** `NitroLite.Desktop/ViewModels/MainViewModel.cs`,
+`NitroLite.Windows/Core/Hardware/Wmi/HybridHardwareController.cs`,
+`NitroLite.Core/Hardware/IHardwareController.cs`.
+
+The poll called `GetMonitorDataAsync`, which resolves the backend and therefore
+*starts* the elevated worker. On a default machine that is a UAC prompt one second
+after launch, before the user has asked for anything.
+
+*Fix:* a default interface method `GetTelemetryAsync()` that falls back to
+`GetMonitorDataAsync()`; `HybridHardwareController` overrides it to read whatever
+backend is already attached and never resolve a new one. The poll calls it.
+
+*Re-check:* the app starts with `direct WMI not started` in the report and the
+worker only appears once a fan or mode write needs it.
+
+### 2.5 LEAK-01..06 — objects that were never disposed
+
+**ORTA.** `NitroLite.Desktop/AppHost.cs`, `App.axaml.cs`,
+`Views/MainWindow.axaml.cs`, `NitroLite.Core/SchoolModeService.cs`.
+
+`AppHost.Dispose` released four of the services it owned; `_nitroSense`,
+`_schoolMode`, `_cpuBoost` and `_monitor` were dropped on the floor.
+`SchoolModeService` held a `_cpuBoost` it never disposed and was not
+`IDisposable`. `App.axaml.cs` only tore `_nitroSense` down inside the
+`if (_nitroKey != null)` branch, so a machine without the Nitro key leaked it.
+`MainWindow` subscribed `OsdChanged` with a lambda, which cannot be unsubscribed.
+Two `Process.Start` results were never disposed.
+
+*Fix:* `SchoolModeService : IDisposable` with a `_disposed` guard; `AppHost`
+disposes all eight; the `_nitroSense` teardown moved out of the branch; the tray
+icon is removed from `TrayIcon.GetIcons(this)` before dispose;
+`Dispatcher.UIThread.UnhandledException -= OnUiException`; `OsdChanged` became a
+named handler unsubscribed in `Closed`; `Process.Start(...)?.Dispose()` on both
+signature-link paths. `ShutdownHandbackTimeout` raised 2 s → 5 s so the hand-back
+has room on a slow machine.
+
+*Re-check:* the app starts, runs, and exits with no `ObjectDisposedException` in
+the log.
+
+### 2.6 DATA-01..07 — writes that could lose data
+
+**YUKSEK / ORTA.** `NitroLite.Core/AtomicFile.cs`, `UpdateService.cs`,
+`BackupService.cs`, `RgbProfileService.cs`,
+`NitroLite.Windows/Core/DebloatService.cs`, `DiagnosticsBundle.cs`.
+
+- **DATA-01** `UpdateService` copied the new executable with `File.Copy`. A power
+  cut between the rename and the flush leaves a correctly named, correctly sized,
+  zero-content `NitroLite.exe` — and the repair pass can never run, because the
+  corrupt file *is* the executable. *Fix:* `AtomicFile.CopyDurable`, which opens
+  with `FileOptions.WriteThrough` and calls `Flush(flushToDisk: true)`.
+- **DATA-02/03** `BackupService` wrote its pre-restore copies to a fixed name, so
+  restoring twice kept only the second. RGB presets got no safety copy at all.
+  *Fix:* `{path}{PreRestoreSuffix}-{yyyyMMdd-HHmmss-fff}`, and the RGB presets are
+  copied too.
+- **DATA-04** `DebloatService` saved its backup state *before* the completeness
+  loop, so a crash mid-loop recorded a backup that was never finished. *Fix:* the
+  loop moved above `SaveBackupState`.
+- **DATA-05** `DiagnosticsBundle.Create` deleted the partial zip on failure — but
+  on the first failure `stream` was still null and the delete removed the
+  *previous* archive. *Fix:* wrapped in try/catch, and the delete only runs when
+  `stream != null`. An existing test caught the first attempt at this.
+- **DATA-06** `AppLog.RotateIfNeeded` returned `false` on every path, so the
+  caller's "did it rotate?" guard was dead and an unrotatable log grew without
+  bound. *Fix:* `return true` in the catch.
+- **DATA-07** `RgbProfileService` quarantined a corrupt preset file under a fixed
+  `.bad` name, so a second corruption overwrote the first. *Fix:*
+  `{_presetsFile}.bad-{yyyyMMdd-HHmmss-fff}` with `overwrite: false`.
+
+*Re-check:* two new tests (`RgbProfileService_QuarantiningTwice_KeepsBothCopies`,
+`BackupService_RestoringTwice_KeepsTheSettingsFromBeforeTheFirstRestore`) plus the
+updated corrupt-file test; suite 2745 passed, 0 failed.
+
+### 2.7 HW-01..05 — fan writes that could outlive the loop that owns them
+
+**YUKSEK / ORTA.** `NitroLite.Desktop/ViewModels/MainViewModel.cs`,
+`NitroLite.Core/Models.cs`,
+`NitroLite.Windows/Core/Hardware/Wmi/WmiHardwareController.cs`.
+
+- **HW-01** `RestoreFansToAutoAsync` called `_curveLoop.Stop()`, which signals but
+  does not wait. A step already past the mode check could reach the write gate
+  *after* the hand-back wrote `Auto` and put a fixed speed back over the
+  firmware's own control, with no loop left to correct it. *Fix:* a
+  `_handingBackFans` flag set before the stop, `StopAndWait(1 s)`, and the flag
+  re-checked **inside** the gate in `WriteFanPercentAsync`.
+- **HW-02** `SetFanModeAsync(Custom)` confirmed the write by reading the *mode*
+  back and comparing it to `Custom`. The firmware accepts the mode and ignores the
+  speed, so a refused speed looked applied. *Fix:* read `cpuFanPercent` back and
+  accept within `FanPercentReadBackTolerance = 2`.
+- **HW-03** when the fan method was `DisabledForSession` or `PermanentlyDisabled`,
+  the controller returned without writing anything, leaving the firmware in
+  whatever mode the last successful call set. *Fix:* write `FanMode.Auto` through
+  `ReadBackPolicy.FanBehavior`.
+- **HW-04** the curve followed `CpuTemperature` even when the sensor layout was
+  unconfirmed — a guess about which id answers what. A guess that reads the 55 °C
+  system sensor as the die asks for a third of full speed at 95 °C, and the 95 °C
+  floor never fires because the curve never sees 95 °C. *Fix:*
+  `MonitorData.IsTemperatureMeasured` (defaults **true**, so nothing changes for a
+  confirmed machine); `BuildMonitorData` sets it from `temperaturesConfirmed`
+  while still publishing the temperatures, so the page is not blank;
+  `StepFanAsync` returns early and logs once per session.
+- **HW-05** the hand-back gate wait had no timeout. *Fix:* `FanHandbackGateTimeout`
+  and `FanHandbackLoopTimeout` at 1 s each, with the flag cleared on every failure
+  path.
+
+*Re-check:* `FanSafetyTests` 38/38. The two new tests were mutation-checked: with
+the `_temperatureConfirmed` guard replaced by `if (_temperatureConfirmed && false) { }`
+the unconfirmed test fails with `Expected: 1, Actual: 2` (the curve wrote a second
+time), and passes with the guard restored. On the physical machine the fan card
+was switched to Custom and back to Automatic through UI Automation: the log shows
+`Applied: Fan mode` both times and the fan fell from 4529 RPM to 2516 RPM.
+
+### 2.8 Compatibility data corrected on evidence
+
+`NitroLite.Core/Hardware/Profiles/profiles.json`. Nine `fourZoneKeyboard` values
+contradicted the cited source. The field is a report tie-breaker only — nothing on
+Windows reads it — so correcting it cannot change what is written to any machine.
+Full table, sources and the reasoning for every value left alone:
+`ACER_COMPATIBILITY.md` §4 and §5.
+
+### 2.8a SEC-02 — the elevated error log could be redirected through a planted hardlink
+
+**YUKSEK.** `NitroLite.Windows/Core/SystemToolsService.cs`,
+`NitroLite.Windows/Core/DebloatService.cs`, `NitroLite.Windows/Core/ElevatedErrorLog.cs`.
+
+The elevated PowerShell wrote its error message to a file in `%TEMP%`, and that path is inside the base64 command
+line. A command line is readable by every process on the machine, so a same-user process could learn the path and
+create an NTFS hardlink there pointing at a file it wanted overwritten — and `Out-File` would write through that
+link with administrator rights. The path being unguessable did not help: it was not guessed, it was read.
+
+*Repro, measured:* a hardlink `link.log` pointing at `target.txt` holding `ORIGINAL CONTENT`. Running the old code
+path (`'PWNED BY THE ATTACKER' | Out-File -FilePath link.log`) replaced the target's contents. Running
+`Write-NitroLiteError link.log 'PWNED BY THE ATTACKER'` left `target.txt` untouched, and a fresh path was written
+normally.
+
+*Fix:* every elevated script now carries `Write-NitroLiteError`, which opens with `FileMode.CreateNew`. A hardlink
+means the path already exists, so the open fails and nothing is written. The `Remove-Item` the scripts already did
+is kept, but it is not what makes this safe — the attacker can recreate the link after it, and only the
+`CreateNew` open refuses.
+
+*Re-check:* a new test parses every generated script with the PowerShell parser, so a snippet that reads correctly
+in C# but is not valid PowerShell fails in the suite instead of on a user's machine.
+
+### 2.8b SEC-03 — the handshake echoed a nonce instead of identifying the server
+
+**ORTA.** `NitroLite.Windows/Core/Hardware/Wmi/WmiWorkerClient.cs`, `WmiWorkerLauncher.cs`.
+
+The nonce echo proved the peer *received* the hello, not that it was the helper that was started. The pipe name is
+on the worker's command line, so a same-user process could create the pipe first and echo the value back — and the
+window would then trust that process's answers, including the temperatures the fan curve acts on.
+
+*Fix:* `GetNamedPipeServerProcessId` asks the kernel who is serving the pipe, and the answer is compared with the
+process the launcher started. The process on that end cannot forge it.
+
+*Re-check:* two new tests. A server that is the test process is refused when a different pid is expected
+(`"not the helper that was started"`), and accepted when its own pid is expected.
+
+### 2.8c BUG-02 — one transient WMI failure disabled two features for the session
+
+**ORTA.** `NitroLite.Windows/Core/Hardware/Wmi/AcerWmiExecutor.cs`.
+
+`EnsureBattery` and `EnsureApge` set `_batteryLookupDone` / `_apgeLookupDone` *before* the lookup. A throw from
+`scope.Connect()` therefore left the flag set, and every later call returned null immediately: the battery charge
+limit and CoolBoost stayed disabled for the rest of the session because of one bad moment.
+
+*Fix:* the flag is set only after the enumeration finishes, which is the only thing that is actually an answer. A
+throw leaves it clear so the next call tries again.
+
+*Re-check:* build and full suite. No automated test covers this path — it needs a real WMI failure, and the class
+has no seam for one. Recorded as verified by inspection, not by test.
+
+### 2.8d LEAK-01..05 — COM objects released on every path
+
+**ORTA / DUSUK.** `AcerWmiExecutor.cs`, `WindowsNitroKeyListener.cs`, `AcerWmiProbe.cs`.
+
+- **LEAK-01** the catch blocks in `EnsureGaming`, `EnsureBattery` and `EnsureApge` cleared the cached instance
+  without disposing it. Narrow — the enumeration has to fail halfway — but the adopted COM object is still ours.
+- **LEAK-02** `TryStartWatcher` created and subscribed a `ManagementEventWatcher` before `Start()` could throw,
+  and dropped it. One leaked watcher per class tried.
+- **LEAK-03** `Stop()` skipped `Dispose()` when `Stop()` itself threw.
+- **LEAK-04** `OnWmiEvent` never disposed `e.NewEvent`. The NitroSense watcher fires every 400 ms, so this was one
+  object per event for as long as the app ran.
+- **LEAK-05** `AcerWmiProbe.ReadWithTimeout` abandoned the probe task on timeout without observing it, so a
+  provider that failed after the timeout surfaced later as an unobserved task exception.
+
+*Fix:* dispose before clearing in the three catches; `try`/`finally` around the watcher start and stop;
+`using var ev = e.NewEvent` in the handler; a fault-only continuation that observes the abandoned task.
+
+*Re-check:* build and full suite. The watcher paths need a real ACPI-WMI event class, so they are verified by
+inspection.
+
+### 2.8e RACE-02/03/04 — three races that lost a click, a write, or a log line
+
+**ORTA.** `MainViewModel.cs`, `NitroLite.Core/AppLog.cs`.
+
+- **RACE-02** `ReadStateAsync` held `_suppressWrite` across eight awaits. A click that landed during them was
+  silently discarded by the setters and then reverted by the value the read had already fetched — the card moved
+  back under the user's finger. *Fix:* every read happens first, and the values are applied afterwards with no
+  await between them, so the suppressed window is synchronous.
+- **RACE-03** `Dispose` called `_writeGate.Dispose()` after a bounded `StopAndWait`, so a step stuck in a WMI call
+  could still be inside the gate and its `Release` would throw `ObjectDisposedException` out of a `finally` on a
+  background thread. *Fix:* the gate is no longer disposed. A `SemaphoreSlim` only needs disposal when
+  `AvailableWaitHandle` was used, and this one never is.
+- **RACE-04** `AppLog.Write` called `DropWriter()` outside the lock, so a failed write could dispose the shared
+  writer while another thread was inside the lock writing to it. *Fix:* taken under the same lock. The catch runs
+  after the lock block has unwound, so this cannot deadlock.
+
+*Re-check:* a new test writes 400 lines from 8 threads and asserts every one lands, reading the rotated file too
+so the count does not depend on how full the log was. It guards the lock discipline rather than RACE-04 itself:
+the trigger for that one is a write failure, which a test cannot produce.
+
+### 2.8f HW-06 — a dead sensor froze the fans at the last speed
+
+**ORTA.** `MainViewModel.cs`.
+
+`StepFanAsync` returned without writing when the temperature was unusable. The loop is the only thing that would
+ever change the fans again, so they stayed at whatever speed the curve last wrote: a machine that was cool when
+the sensor died ran at 30 % while the die heated up, and the 95 °C floor never fired because there was no reading
+to fire it.
+
+*Fix:* the loop hands the fans back to the firmware once, through the same bounded gate the shutdown hand-back
+uses, and reflects it in the card.
+
+*Re-check:* a new test drives the curve to 42 % at 70 °C, then makes the sensor read 0, and asserts an `Auto` write
+arrives. The first version of this fix was caught by an existing test —
+`TheManualSliderWritesTheFloorAndKeepsTheStoredTarget` failed because the hand-back fired on the zero temperature
+of a machine that had not read its sensors yet. That is why the `_hadTemperatureReading` guard exists: "no reading
+yet" is not "the sensor died".
+
+### 2.9 Ruled out — do not re-investigate
+
+Each of these was suspected by an agent and then shown unreachable or already
+correct. They are recorded so the next pass does not spend time on them again.
+
+| Suspect | Why it is not a finding |
+| --- | --- |
+| `PowerAutomationService` | never constructed in production |
+| `GameStarted` / `GameEnded` | no production subscribers |
+| `ReconcileAsync` | never called |
+| named-pipe ACL | correct `PipeSecurity` with a Medium integrity label |
+| single-instance lock file | per-user directory, `0700` |
+| `Process.Start` injection | every argument is a constant, a GUID, or in `ArgumentList` |
+| ZipSlip in the diagnostics bundle | allowlist plus `GetFullPath` containment |
+| HTTPS / digest verification | certificate pinned, SHA-256 mandatory |
+| fan percentage below 30 | clamped at six layers |
+| lighting ranges | clamped at every boundary |
+
+---
+
+## 3. Cleanup — what was removed, and what was deliberately kept
+
+Phase 4. Every candidate below was checked against the build, the tests, CI, the
+packaging scripts and the release flow before it was touched. "Nothing calls it"
+was treated as a starting point, not as proof: each removal also had to survive a
+search for reflection, JSON binding, `nameof`, doc-comment `<see cref>` and
+target-typed `new(...)`.
+
+### 3.1 Removed
+
+| Item | Evidence it was dead | Why removing it is safe |
+| --- | --- | --- |
+| `NitroLite.slnx` | 25-byte `<Solution></Solution>` stub, added once in `b7cf9db` and never edited | It was not a solution at all, and its only effect was to break the documented entry point: `dotnet build` at the repo root failed with `MSB1011: Specify which project or solution file to use`. After the removal the same command builds: 0 warnings, 0 errors. CI, `scripts/publish-release.ps1` and the README all name `NitroLite.sln` or a `.csproj` explicitly, so nothing depended on the stub. |
+| `NitroLite.Windows/Core/DeviceCapabilityProbe.cs` | `grep -rn "DeviceCapabilityProbe"` over every `.cs`, `.axaml`, `.json` and `.md` returns the declaration only. No reflection, no `typeof`, no test. | Its one method, `ProbeAsync(AcerAgentClient)`, had no caller. See §3.3 for the gap this leaves. |
+| `NitroLite.Windows/Core/UserActivity.cs` | `grep -rn "UserActivity"` / `"LastInputTick"` / `"GetLastInputInfo"` returns the file itself. | Its own doc comment says "the ATK profile retry uses this"; that retry no longer exists. Nothing else reads the last-input tick. |
+| `ThermalStatusLevel`, `ThermalStabilityTrend` (`NitroLite.Core/Models.cs`) | No reference in any project or test; no serializer names them; `thermal_health.json` is only a `.gitignore` entry, nothing reads or writes it. | A model with no producer and no consumer. |
+| `TelemetryFormatter.FormatThermalSlope`, `FormatStabilityScore` | Only their own declarations; no test asserts them. | They formatted the two fields of the type removed above. |
+| `.audit/` (gitignore entry) | The directory holds this audit's build and test logs and is untracked. | It was showing up in `git status` on every run. Ignoring it keeps the working tree honest without deleting the evidence. |
+
+Removal was verified the same way as every other group: `dotnet build NitroLite.sln
+-c Release -warnaserror` → 0 warnings, 0 errors, and the full suite → **2753 passed,
+0 failed, 4 skipped**, identical to the run before the deletion.
+
+### 3.2 Deliberately kept
+
+| Item | Why it stays |
+| --- | --- |
+| `unsupportedMethods` in `profiles.json` and `ModelProfile` | Nothing reads it, which makes it look dead — but `ProfileCatalog` validates user profiles against an allow-list of known keys. Dropping the key would make an existing `profiles.user.json` that carries it fail validation. A dead field is cheaper than rejecting a user's file. |
+| `CleanExitMarker`, `ModeSwitchKey` | Referenced only by tests. They are tested behaviour that the app does not yet call, so deleting them would delete tests and a design decision rather than dead weight. Recorded in §3.3 instead. |
+| `TestDisplayRefreshRateServiceStub`, `TestScreenBrightnessService` | Test doubles that live in the Windows assembly because the tests need the same `internal` surface. Moving them is a refactor, not a cleanup. |
+| `scripts/research/` (24 files) | The record of how the Acer WMI surface was reverse-engineered, and the source for `ACER_COMPATIBILITY.md`. Two of the `verify_*` scripts assert "201 tests" and would fail today; they are stale documentation, not build inputs, and deleting them would lose provenance. |
+| `autonomous-cleanup.ps1` | A generic agent-workflow template the author committed on purpose. It is not app code and not referenced by anything, but it is the author's process, not dead product code. |
+| `tools/lighting_fixed.log` | Untracked and already covered by `*.log`. A 101-byte debug capture from 2026-11-05. Left in place: it is not in the repository, and untracked files are the user's. |
+| `artifacts/` (2.0 GB, 0 tracked files) | Gitignored, and it is the documented output directory for `scripts/publish-release.ps1` and both workflows. It also holds the only local copy of `NitroLite-v1.2.7-win-x64.zip`. Reproducible, but not mine to delete. |
+| `docs/video/nitrolite-tour.mp4`, `trailer/` media | 48.6 MB of tracked files in total, most of it the trailer project and the README's demo video. Both are referenced and both are the author's. |
+
+### 3.3 Found while cleaning, not fixed
+
+| Item | State |
+| --- | --- |
+| The diagnostics bundle never carries live capabilities | `WindowsDiagnosticsService` is constructed with no arguments at `AppHost.cs:319`, so its `_capabilities` falls back to `() => new DeviceCapabilities()`. `hardware-report.txt` and `capabilities.json` inside the bundle therefore describe an empty device. `DeviceCapabilityProbe` was written to fill exactly this and was never called; it has been removed rather than left as a decoy. Wiring it needs an async capability read at bundle time — `CreateBundle()` is synchronous and is called from the UI thread, so a `GetAwaiter().GetResult()` there would be a deadlock risk. Left as open work with the evidence recorded. |
+| `CleanExitMarker` is not wired | `MarkRunning()` and `MarkCleanExit()` have no production caller, so `PreviousRunWasUnclean()` can never report anything. The crash-recovery feature it was written for does not exist yet. |
+| Dead public methods | `GameLibraryRules.IsPathCompatible`, `ModePolicy.FanDisplayName`, `UpdateService.StartInstalled`, `AppHost.WhenReadyAsync`, `HardwareReport.WriteToDirectory`, `DebloatService.IsNitroSenseLauncherEnabled`, `SystemToolsService.FindDriverStoreFolder`, `Loc.AppendLiteral`, `DirectoryTrust.IsWorldWritable` (referenced only from `<see cref>` in its own file). Each has zero call sites, but each is public API surface and removing it is a product decision rather than a cleanup. Listed here so the next pass does not have to rediscover them. |
+
+---
+
+## 4. Final build, tests and packaging
+
+Phase 5. The code was frozen at `18f4159`; the only later commits are `31cd54b`
+(`scripts/publish-release.ps1`, not compiled) and `2e2b033` (documentation). The suite was
+re-run on the final HEAD to confirm that.
+
+### 4.1 Build and tests
+
+| Step | Command | Result |
+| --- | --- | --- |
+| Release build | `dotnet build NitroLite.sln -c Release --nologo -warnaserror` | 0 warnings, 0 errors |
+| Bare build | `dotnet build -c Release --nologo -warnaserror` | 0 warnings, 0 errors — this failed with `MSB1011` before `NitroLite.slnx` was removed |
+| Full suite | `dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build --nologo` | **2753 passed, 0 failed, 4 skipped**, 3 m 23 s |
+| Full suite, re-run on the final HEAD `2e2b033` | same command | **2751 passed, 0 failed, 6 skipped**, 3 m 32 s |
+
+The skip count moved from 4 to 6 between those two runs, and the reason matters:
+
+| Skipped test | Why |
+| --- | --- |
+| `BatteryChargeLimitProbeTests.LiveProbe_AgreesWithTheInterfacesItCanSee` | needs `NITROLITE_ENABLE_LIVE_HARDWARE_TESTS=1` |
+| `CpuPowerServiceTests.ServiceInitialization_InstantiatesAndQueriesCurrentMode` | same |
+| `SchoolModeServiceTests.EverySchoolModeSetting_ExistsInTheActiveScheme_AndAcceptsAWrite` | same |
+| `VerifiedDefectsRegressionTests.Defect5_AtkMouseService_SwitchProfile_SafeExecution` | same |
+| `UpdateServiceTests.ExtractToStaging_AcceptsTheRealReleasePackage` | no release package in `artifacts/` |
+| `UpdateServiceTests.FullUpdateFlow_TakesTheRealPackageIntoAnEmptyInstallFolder` | same |
+
+The last two ran in the first suite, against the 1.2.7 package that was in `artifacts/`.
+The packaging run in §4.2 deleted that package and could not build a replacement on this
+host, so the two tests now skip. That is the bug fixed in §4.3, seen from the other side:
+the script took the last good package with it. They are recorded as **not run**, not as
+passed, and the package was deliberately not hand-assembled to make them run again —
+`ReleasePackageFactAttribute` exists to test the archive the release script actually
+produced, and a hand-built zip would defeat the point.
+
+### 4.2 Packaging
+
+`scripts/publish-release.ps1 -SkipTests` was run. It **failed**, and the failure is
+environmental rather than a defect in the tree:
+
+```
+You must install or update .NET to run this application.
+  App: ...\microsoft.net.illink.tasks.0.14	ools
+et\illink.dll
+  Framework: 'Microsoft.NETCore.App', version '10.0.14-servicing.26522.126' (x64)
+  The following frameworks were found: 3.1.32, 8.0.13, 10.0.11, 10.0.12
+error MSB6006: "dotnet.exe" exited with code -2147450730
+error NETSDK1144: Optimizing assemblies for size failed.
+```
+
+The script pins `RuntimeFrameworkVersion=10.0.14` on purpose — the comment in it says
+10.0.14 fixes CVE-2026-111497 and that the SDK's bundled 10.0.12 is affected. The
+ILLink task that `PublishTrimmed=true` invokes is itself a .NET app, and it needs the
+10.0.14 runtime to *run* on the build host. This machine has 10.0.11 and 10.0.12, so
+the trimmer cannot start. Nothing in the tree can fix that; the host needs the
+runtime, or the build has to happen on CI.
+
+To separate "the packaging path is broken" from "this host lacks a runtime", the same
+publish was run with the pin kept and only the trimmer switched off:
+
+```
+dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0-windows   -r win-x64 --self-contained true -p:PublishSingleFile=true   -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true   -p:PublishTrimmed=false -p:RuntimeFrameworkVersion=10.0.14 -p:DebugType=none   -o artifacts/audit-publish --nologo
+```
+
+That produced a single 50,523,264-byte `NitroLite.Desktop.exe`, and the packaged
+binary answers `--hardware-report` correctly:
+
+```
+| NitroLite | v1.2.8 |
+| Runtime | .NET 10.0.14 |
+| Model | Nitro AN16-41 |
+| Matched | nitro-16-an16-41 (embedded) |
+```
+
+So the publish, the single-file bundling, the runtime pin and the packaged binary all
+work. **The trimmed package was not produced on this host** and is recorded as not
+verified here.
+
+### 4.3 A packaging bug found by running it
+
+The script deleted the previous package *before* it knew the new one could be built:
+
+```powershell
+Get-ChildItem $artifacts -Force | Where-Object { $_.Name -like 'NitroLite*' } | Remove-Item -Recurse -Force
+```
+
+The failed run above took `artifacts/NitroLite-v1.2.7-win-x64.zip` with it, so a
+build that fails leaves the folder with no package at all. Fixed: the up-front delete
+now clears only the staging *directories*, and the previous zip is removed just
+before `Compress-Archive`, after everything that can fail has succeeded. The script
+still parses (`[Parser]::ParseFile` → no errors).
+
+---
+
+## 5. Endurance run
+
+Phase 5. One local script, `.audit/endurance.ps1`, one application instance, no restart.
+
+### 5.1 Setup
+
+| Item | Value |
+| --- | --- |
+| Script | `.audit/endurance.ps1` (gitignored; a local harness, not product code) |
+| Log | `.audit/endurance-180.log`, one timestamped line per event |
+| Binary | `NitroLite.Desktop/bin/Release/net10.0-windows/NitroLite.Desktop.exe`, built from `31cd54b` |
+| Start | 2026-11-19 17:36:22 |
+| End | 2026-11-19 20:36:30 |
+| Target | 180 min, sample every 5 min, flow replay every 15 min |
+| Hardware | read-only throughout: the replayed flows only navigate between pages, which makes the app read telemetry. No fan, mode, lighting or battery write was issued. |
+
+The script starts the app, waits for the main window, then loops. Every 20 s it checks that the
+process is still alive and that `git rev-parse HEAD` has not changed; a change means the app code
+moved underneath the test, so the elapsed clock resets. Every 5 min it records working set, private
+bytes, handle count, thread count and CPU. Every 15 min it replays the five main pages through UI
+Automation and reads the app log for new `[ERROR]`/`[FATAL]` lines. A crash, a missing window or an
+exit before the deadline is written as a failure.
+
+### 5.2 Result
+
+**PASS.** One instance for the whole run, no crash, no hang, no early exit, and no `[FAIL]` line. The
+log carries exactly one `[WARN]`, the script's own note that it ended the run with `Stop-Process -Force`.
+
+| Metric | First sample (t=0) | Last sample (t=176.7) | Peak | Mean |
+| --- | --- | --- | --- | --- |
+| Working set | 198.4 MB | 295.5 MB | 295.5 MB | — |
+| Private bytes | 163.4 MB | 238.4 MB | 238.4 MB | — |
+| Handles | 1207 | 1196 | 1282 | — |
+| Threads | 101 | 91 | 101 | — |
+| CPU | 1.17 % | 0.39 % | 1.17 % | 0.25 % |
+
+36 samples, 11 flow replays, every replay found 5 of 5 nav buttons. The script's own closing lines:
+
+```
+2026-11-19 20:36:30 [INFO] run ended after 180.0 min of a 180 min target
+2026-11-19 20:36:30 [INFO] TREND working set 198.4MB -> 295.5MB (+97.1MB); private 163.4MB -> 238.4MB (+75.0MB); handles 1207 -> 1196 (-11); threads 101 -> 91
+2026-11-19 20:36:30 [INFO] PEAK working set 295.5MB; peak handles 1282; mean cpu 0.25%
+2026-11-19 20:36:30 [WARN] stopping pid 21924 with Stop-Process -Force; the exit is forced, not a clean shutdown
+2026-11-19 20:36:33 [INFO] RESULT: PASS - 180.0 min with one instance, no crash, no hang, no early exit
+```
+
+### 5.3 The trend, read honestly
+
+The working set is **not** flat from zero: it climbs from 198 MB to about 273 MB over the first
+30 minutes and then holds. That first climb is the app warming up — JIT, the first visit to each
+page, the telemetry caches filling — and it is bounded, which is what matters. After t=30 min the
+working set stays inside a 22.8 MB band (272.7–295.5 MB) for the remaining two and a half hours. The
+last 12 MB of that band arrives between t=151 and t=161, right after a flow replay, and then holds:
+the final three samples are 295.1, 295.5 and 295.5 MB. A leak would keep climbing through those; this
+does not.
+
+The handle count is the sharper test, because a leaked handle is what a long run exposes first. It
+**falls** over the run: 1207 at t=0, a peak of 1282 in the first five minutes, then 1166–1203 for the
+rest, ending at 1196 — eleven fewer than it started with. A leak would trend up monotonically; this
+does not. Threads fall from 101 to 91 and stay there. CPU averages 0.25 % with a 1.17 % peak, which is
+the idle cost of a tray app polling telemetry.
+
+The run ended with `Stop-Process -Force`, so the exit was forced and is not evidence of a clean
+shutdown path. That path was exercised separately in §2.8f.
+
+---
+
+## 6. Running log
+
+
+
+
+| When | What | Result |
+| --- | --- | --- |
+| baseline | `git status` inspected | 3 modified + 1 untracked file under `trailer/`, all preserved |
+| baseline | branch `audit/hardening-2026-10` created | user changes carried over untouched |
+| baseline | Release build | 0 warnings, 0 errors |
+| baseline | test suite | 2743 passed, 0 failed, 4 skipped |
+| baseline | `--hardware-report` | device confirmed as Nitro AN16-41, profile `nitro-16-an16-41` verified |
+| group 1 | SEC-01, RACE-01, BUG-01, LEAK-01..06, DATA-06, SEC-04 fixed | commit `0e9c191` |
+| group 1 | Release build | 0 warnings, 0 errors |
+| group 1 | test suite | 2743 passed, 0 failed, 4 skipped |
+| group 1 | app launched, worker connected, exited with its parent | no error in `nitrolite.log` |
+| group 2 | DATA-01..05, DATA-07 fixed | commit `8ead4d0` |
+| group 2 | Release build | 0 warnings, 0 errors |
+| group 2 | test suite | 2745 passed, 0 failed, 4 skipped |
+| group 3 | HW-01..05 fixed | uncommitted at the time of writing |
+| group 3 | Release build | 0 warnings, 0 errors |
+| group 3 | `FanSafetyTests` | 38 passed, 0 failed |
+| group 3 | mutation check on HW-04 | guard removed → test fails `Expected: 1, Actual: 2`; guard restored → passes |
+| group 3 | app launched normally, fan card → Custom → Automatic via UI Automation | `Applied: Fan mode` twice; fan 4529 RPM → 2516 RPM |
+| group 3 | tray Exit path | **not exercised** — the tray icon is in the Windows overflow and could not be driven through UI Automation on this host. The hand-back write itself was exercised by the Automatic click above. |
+| group 3 | `profiles.json` `fourZoneKeyboard` corrected on evidence | 9 values; see `ACER_COMPATIBILITY.md` §4 |
+| group 3 | profile tests (`EveryShippedProfileIsWellFormed`, `CapabilityProbeTests`, `KeyboardCapabilityTests`) | 67 passed, 0 failed |
+| group 3 | `--hardware-report` after the profile change | unchanged: `nitro-16-an16-41 (embedded)`, same sensor layout |
+| group 4 | SEC-02, SEC-03 fixed | commit `071cf45` |
+| group 4 | hardlink repro measured | old `Out-File` overwrote the target; `Write-NitroLiteError` did not |
+| group 4 | Release build | 0 warnings, 0 errors |
+| group 4 | full suite | 2752 passed, 0 failed, 4 skipped |
+| group 5 | BUG-02, LEAK-01..05, RACE-02/03/04, HW-06 fixed | commit `566154e` |
+| group 5 | Release build | 0 warnings, 0 errors |
+| group 5 | `FanSafetyTests` | 39 passed, 0 failed |
+| group 5 | full suite | 2753 passed, 0 failed, 4 skipped |
+| group 6 | dead code removed: `NitroLite.slnx`, `DeviceCapabilityProbe`, `UserActivity`, `ThermalStabilityTrend`, `ThermalStatusLevel`, `FormatThermalSlope`, `FormatStabilityScore` | see §3.1 |
+| group 6 | bare `dotnet build` before the removal | `MSB1011: Specify which project or solution file to use` |
+| group 6 | bare `dotnet build` after the removal | 0 warnings, 0 errors |
+| group 6 | Release build | 0 warnings, 0 errors |
+| group 6 | full suite | 2753 passed, 0 failed, 4 skipped |
+| group 7 | `scripts/publish-release.ps1 -SkipTests` | **failed**: the ILLink task needs the 10.0.14 runtime, this host has 10.0.11/10.0.12 |
+| group 7 | same publish with `PublishTrimmed=false`, pin kept | single 50,523,264-byte exe; `--hardware-report` reports `Runtime .NET 10.0.14`, `nitro-16-an16-41 (embedded)` |
+| group 7 | trimmed package | **not produced on this host** — recorded as not verified, not as passed |
+| group 7 | packaging bug fixed | the previous zip is no longer deleted before the new one is built |
+| endurance | `.audit/endurance.ps1 -Minutes 180 -SampleMinutes 5 -FlowMinutes 15` started | 2026-11-19 17:36:22, pid 21924, HEAD `31cd54b` |
+| endurance | 36 samples, 11 flow replays | every replay found 5 of 5 nav buttons; 0 `[FAIL]` |
+| endurance | run ended | 2026-11-19 20:36:30, **180.0 min**, `RESULT: PASS` |
+| endurance | trend | ws 198.4 -> 295.5 MB, private 163.4 -> 238.4 MB, handles 1207 -> **1196**, threads 101 -> 91, mean cpu 0.25 % |
+| endurance | exit | forced with `Stop-Process -Force`; recorded as forced, not as a clean shutdown |
+| final | Release build on `2e2b033` | 0 warnings, 0 errors |
+| final | full suite on `2e2b033` | 2751 passed, 0 failed, 6 skipped — the 2 extra skips are the release-package tests, see §4.1 |
+| final | branch pushed | `audit/hardening-2026-10` -> origin, 10 commits |
+| final | draft PR opened | https://github.com/canerztk8/NitroLite/pull/4 |

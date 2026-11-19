@@ -138,7 +138,12 @@ public static class AppLog
         {
             // Logging must never throw. A full disk is the common case here, and the answer to it is to drop the
             // line rather than to fail the operation that was being logged.
-            DropWriter();
+            //
+            // Taken under the same lock as the write. The writer is shared, and disposing it while another thread is
+            // inside the lock writing to it turns one failed line into an ObjectDisposedException on a different
+            // thread. The lock is not held here — the catch runs after the lock block has unwound — so this cannot
+            // deadlock.
+            lock (Gate) DropWriter();
         }
     }
 
@@ -160,8 +165,11 @@ public static class AppLog
         }
         catch
         {
-            // A file that cannot be rotated is still a file that can be appended to.
-            return false;
+            // The rotation failed, so the caller must drop this line. Appending instead is what the old code did, and
+            // it is the wrong answer: the file is already past the cap, the move fails on every subsequent line, and
+            // the log grows without bound — on a full disk that is what stops the settings from saving. A dropped log
+            // line costs a diagnosis; an unbounded log costs the user their preferences.
+            return true;
         }
     }
 

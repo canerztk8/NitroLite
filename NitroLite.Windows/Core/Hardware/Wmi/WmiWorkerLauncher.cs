@@ -51,7 +51,7 @@ public sealed class WmiWorkerLauncher : IDisposable
 
     private readonly string _executablePath;
     private readonly Func<ProcessStartInfo, Process?> _start;
-    private readonly Func<string, string, TimeSpan, CancellationToken, Task<WmiWorkerClient>> _connect;
+    private readonly Func<string, string, int?, TimeSpan, CancellationToken, Task<WmiWorkerClient>> _connect;
     private readonly Func<bool> _isElevated;
     private readonly Func<string, bool> _isTrustedLocation;
     private readonly JobObjectGuard? _job;
@@ -73,13 +73,13 @@ public sealed class WmiWorkerLauncher : IDisposable
     public WmiWorkerLauncher(
         string? executablePath = null,
         Func<ProcessStartInfo, Process?>? start = null,
-        Func<string, string, TimeSpan, CancellationToken, Task<WmiWorkerClient>>? connect = null,
+        Func<string, string, int?, TimeSpan, CancellationToken, Task<WmiWorkerClient>>? connect = null,
         Func<bool>? isElevated = null,
         Func<string, bool>? isTrustedLocation = null)
     {
         _executablePath = executablePath ?? Environment.ProcessPath ?? "NitroLite.exe";
         _start = start ?? (psi => Process.Start(psi));
-        _connect = connect ?? ((pipe, nonce, timeout, ct) => WmiWorkerClient.ConnectAsync(pipe, nonce, timeout, ct));
+        _connect = connect ?? ((pipe, nonce, pid, timeout, ct) => WmiWorkerClient.ConnectAsync(pipe, nonce, timeout, pid, ct));
         _isElevated = isElevated ?? MemoryCleanerService.IsRunningAsAdministrator;
         _isTrustedLocation = isTrustedLocation ?? IsTrustedHelperLocation;
         _job = JobObjectGuard.Create();
@@ -238,7 +238,7 @@ public sealed class WmiWorkerLauncher : IDisposable
 
             try
             {
-                var client = await _connect(pipeName, nonce, ConnectTimeout, cancellationToken).ConfigureAwait(false);
+                var client = await _connect(pipeName, nonce, process.Id, ConnectTimeout, cancellationToken).ConfigureAwait(false);
                 Refusal = WmiWorkerRefusal.None;
                 LastError = "";
                 AppLog.Info("--wmi-worker connected", $"pipe='{pipeName}' pid={process.Id}");

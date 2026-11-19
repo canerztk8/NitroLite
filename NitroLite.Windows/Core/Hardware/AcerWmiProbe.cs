@@ -248,6 +248,16 @@ public static class AcerWmiProbe
         {
             var task = Task.Run(Read);
             if (task.Wait(timeout)) return task.Result;
+
+            // The probe is abandoned, not cancelled: WMI has no cancellation, so the call keeps running on its
+            // thread-pool thread until the provider answers or the process ends. Its exception is observed here so a
+            // provider that fails after the timeout does not surface later as an unobserved task exception.
+            _ = task.ContinueWith(
+                t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
             return new AcerWmiProbeResult { TimedOut = true, CallError = "probe timed out" };
         }
         catch (AggregateException ex)

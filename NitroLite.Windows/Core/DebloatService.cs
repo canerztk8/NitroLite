@@ -676,7 +676,8 @@ public class DebloatService
                                  "} catch { $errs += ('Task:NitroSenseLauncher: ' + $_.Exception.Message) }; ";
         }
 
-        return $"$errLog = '{logEscaped}'; " +
+        return ElevatedErrorLog.Function + " " +
+            $"$errLog = '{logEscaped}'; " +
                "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
                $"$errs = @(); $svcs = @({svcs}); " +
                "foreach ($s in $svcs) { " +
@@ -694,7 +695,7 @@ public class DebloatService
                "  } " +
                "}; " +
                taskDisableSnippet +
-               "if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }";
+               ElevatedErrorLog.WriteStatement;
     }
 
     // Source text, kept as constants so the PowerShell builder and the tests can compare against it; the public
@@ -715,6 +716,7 @@ public class DebloatService
         errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
         var logEscaped = errorLogPath.Replace("'", "''");
         var sb = new System.Text.StringBuilder();
+        sb.Append(ElevatedErrorLog.Function + " ");
         sb.Append($"$errLog = '{logEscaped}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
         sb.Append("$errs = @(); ");
         foreach (var s in Tier1Services)
@@ -732,7 +734,7 @@ public class DebloatService
             sb.Append($"$errs += ('{s}: ' + $_.Exception.Message); ");
             sb.Append("}; ");
         }
-        sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
+        sb.Append(ElevatedErrorLog.WriteStatement);
         return sb.ToString();
     }
 
@@ -773,13 +775,14 @@ public class DebloatService
         backupState ??= LoadBackupState();
 
         var sb = new System.Text.StringBuilder();
+        sb.Append(ElevatedErrorLog.Function + " ");
         sb.Append($"$errLog = '{logEscaped}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
         sb.Append("$errs = @(); ");
 
         if (backupState == null || backupState.Count == 0 || !(Tier1Services.Any(s => backupState.ContainsKey(s) && !string.IsNullOrWhiteSpace(backupState[s])) || (backupState.TryGetValue("Task:NitroSenseLauncher", out var onlyTask) && (IsActiveTaskState(onlyTask) || IsDisabledTaskState(onlyTask)))))
         {
             sb.Append("$errs += '" + Loc.Ps(NoBackupSource) + "'; ");
-            sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
+            sb.Append(ElevatedErrorLog.WriteStatement);
             return sb.ToString();
         }
 
@@ -871,7 +874,7 @@ public class DebloatService
             }
         }
 
-        sb.Append("if ($errs.Count -gt 0) { $errs -join \"`n\" | Out-File -FilePath $errLog -Encoding utf8; exit 1 } else { exit 0 }");
+        sb.Append(ElevatedErrorLog.WriteStatement);
 
         return sb.ToString();
     }
@@ -1074,15 +1077,15 @@ public class DebloatService
                     existingBackup["Task:NitroSenseLauncher"] = taskState;
                 }
 
-                // Abort service shutdown if backup state cannot be written
-                if (!SaveBackupState(existingBackup))
-                {
-                    LastError = Loc.T($"İşlem iptal: servis yedeği diske yazılamadı. {LastError}").Trim();
-                    return false;
-                }
-
-                // Completeness verification:
+                // Completeness verification, BEFORE the file is written:
                 // Ensure that any discovered/installed service has complete backup (both startup type and running status)
+                //
+                // The order is the whole point. This loop used to run after SaveBackupState, so a service whose live
+                // state could not be read — OpenService denied, or an `sc query` in a display language the parser does
+                // not know — left an incomplete file on disk and then aborted. The next attempt saw a file that
+                // "exists and has at least one valid start type", took the else branch below, and that branch only
+                // validates the services the file already mentions. The missing one was never noticed again, and the
+                // restore script's fallback then stopped a service that had been Running and never started it back.
                 var discoveredServices = new HashSet<string>(currentTypes.Keys, StringComparer.OrdinalIgnoreCase);
                 discoveredServices.UnionWith(currentStatuses.Keys);
 
@@ -1099,6 +1102,13 @@ public class DebloatService
                         LastError = Loc.T($"İşlem iptal: '{svc}' servisinin yedeğinde çalışma durumu eksik.");
                         return false;
                     }
+                }
+
+                // Abort service shutdown if backup state cannot be written
+                if (!SaveBackupState(existingBackup))
+                {
+                    LastError = Loc.T($"İşlem iptal: servis yedeği diske yazılamadı. {LastError}").Trim();
+                    return false;
                 }
             }
             else
@@ -1432,6 +1442,7 @@ public class DebloatService
 
         var errLog = AppPaths.UniqueTempFile("nitrolite_launcher_err", ".log");
         var script =
+            ElevatedErrorLog.Function + " " +
             "$errLog = '" + Loc.Ps(errLog) + "'; " +
             "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
             "$ok = $false; " +
@@ -1442,7 +1453,7 @@ public class DebloatService
             "  if (Test-Path -LiteralPath '" + Loc.Ps(path) + "') { throw '" + Loc.Ps("NitroSense başlatıcısı hâlâ yerinde.") + "' }; " +
             "  if (-not (Test-Path -LiteralPath '" + Loc.Ps(blocked) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı taşınamadı.") + "' }; " +
             "  $ok = $true " +
-            "} catch { $_.Exception.Message | Out-File -FilePath $errLog -Encoding utf8 }; " +
+            "} catch { " + ElevatedErrorLog.WriteException + " }; " +
             "if ($ok) { exit 0 } else { exit 1 }";
 
         return await RunElevatedPowerShellAsync(script, errLog).ConfigureAwait(false);
@@ -1464,6 +1475,7 @@ public class DebloatService
 
         var errLog = AppPaths.UniqueTempFile("nitrolite_launcher_err", ".log");
         var script =
+            ElevatedErrorLog.Function + " " +
             "$errLog = '" + Loc.Ps(errLog) + "'; " +
             "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
             "$ok = $false; " +
@@ -1473,7 +1485,7 @@ public class DebloatService
             "  }; " +
             "  if (-not (Test-Path -LiteralPath '" + Loc.Ps(path) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı geri konamadı.") + "' }; " +
             "  $ok = $true " +
-            "} catch { $_.Exception.Message | Out-File -FilePath $errLog -Encoding utf8 }; " +
+            "} catch { " + ElevatedErrorLog.WriteException + " }; " +
             "if ($ok) { exit 0 } else { exit 1 }";
 
         return await RunElevatedPowerShellAsync(script, errLog).ConfigureAwait(false);

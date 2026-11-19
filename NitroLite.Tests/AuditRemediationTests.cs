@@ -66,11 +66,72 @@ public class AuditRemediationTests
         Assert.Contains("$errLog", debloatScript);
         Assert.Contains("$errs", debloatScript);
         Assert.Contains("exit 1", debloatScript);
-        Assert.Contains("Out-File", debloatScript);
+
+        // The error is written through the CreateNew helper, not Out-File. The path is in the base64 command line,
+        // which every process can read, so a same-user process can plant an NTFS hardlink there and Out-File would
+        // write through it with administrator rights. CreateNew refuses a path that already exists, which a hardlink
+        // always does.
+        Assert.Contains("Write-NitroLiteError", debloatScript);
+        Assert.DoesNotContain("Out-File -FilePath $errLog", debloatScript);
+        Assert.Contains("FileMode]::CreateNew", debloatScript);
 
         Assert.Contains("$errLog", restoreScript);
         Assert.Contains("$errs", restoreScript);
         Assert.Contains("exit 1", restoreScript);
+        Assert.Contains("Write-NitroLiteError", restoreScript);
+        Assert.DoesNotContain("Out-File -FilePath $errLog", restoreScript);
+    }
+
+    [Fact]
+    public void DebloatService_GeneratedScripts_ParseAsPowerShell()
+    {
+        // The scripts are built by string concatenation, so a snippet that reads correctly in C# can still be
+        // invalid PowerShell — and the failure would only show up on a user's machine, as an elevated script that
+        // exits without doing anything. Parsing is the cheapest way to catch that here: it compiles the text without
+        // running a single command.
+        if (!OperatingSystem.IsWindows()) return;
+
+        var debloat = new DebloatService();
+        var scripts = new Dictionary<string, string>
+        {
+            ["debloat"] = debloat.GenerateDebloatScript(),
+            ["restore"] = debloat.GenerateRestoreScript(),
+            ["factory-restore"] = debloat.GenerateFactoryRestoreScript()
+        };
+
+        foreach (var (name, script) in scripts)
+        {
+            string path = Path.Combine(Path.GetTempPath(), $"nitrolite-parse-{name}-{Guid.NewGuid():N}.ps1");
+            File.WriteAllText(path, script);
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                psi.ArgumentList.Add("-NoProfile");
+                psi.ArgumentList.Add("-NonInteractive");
+                psi.ArgumentList.Add("-Command");
+                psi.ArgumentList.Add(
+                    "$e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile('" +
+                    path.Replace("'", "''") + "', [ref]$null, [ref]$e); " +
+                    "if ($e) { $e | ForEach-Object { $_.Message }; exit 1 } else { exit 0 }");
+
+                using var p = System.Diagnostics.Process.Start(psi)!;
+                string stderr = p.StandardError.ReadToEnd();
+                p.WaitForExit(30000);
+
+                Assert.True(p.ExitCode == 0, $"{name} is not valid PowerShell: {stderr}");
+            }
+            finally
+            {
+                try { File.Delete(path); } catch { }
+            }
+        }
     }
 
     // =========================================================================

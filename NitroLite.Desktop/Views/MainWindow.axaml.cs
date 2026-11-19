@@ -134,7 +134,17 @@ public partial class MainWindow : Window
             _toastTimer.Stop();
             _railSaveTimer.Stop();
             if (_railColumn != null) _railColumn.PropertyChanged -= OnRailColumnChanged;
-            if (_viewModel != null) _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            if (_viewModel != null)
+            {
+                _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+
+                // The overlay subscription is removed here for the same reason the one above is: the view model
+                // outlives the window, so a handler left on it keeps the whole visual tree reachable after the window
+                // is closed. The lambda was anonymous, which is why it could not be removed before — it is a named
+                // method now.
+                _viewModel.OsdChanged -= OnOsdChanged;
+            }
+
             _osd?.Close();
             _osd = null;
         };
@@ -223,7 +233,7 @@ public partial class MainWindow : Window
             // The overlay is a second window bound to the same view model, so the two can never disagree about a
             // reading. It is created here rather than in the XAML because it must not be a child of this window.
             _osd = new OsdOverlayWindow { DataContext = _viewModel };
-            _viewModel.OsdChanged += (_, _) => ApplyOsd();
+            _viewModel.OsdChanged += OnOsdChanged;
             ApplyOsd();
 
             _timer.Start();
@@ -496,11 +506,11 @@ public partial class MainWindow : Window
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
                 {
                     UseShellExecute = true,
-                });
+                })?.Dispose();
             }
             else if (OperatingSystem.IsLinux())
             {
-                System.Diagnostics.Process.Start("xdg-open", url);
+                System.Diagnostics.Process.Start("xdg-open", url)?.Dispose();
             }
         }
         catch (Exception)
@@ -554,6 +564,9 @@ public partial class MainWindow : Window
             AppLog.Error("The telemetry loop failed", ex.ToString());
         }
     }
+
+    /// <summary>Shows, hides or moves the overlay to match the view model.</summary>
+    private void OnOsdChanged(object? sender, EventArgs e) => ApplyOsd();
 
     /// <summary>Shows, hides or moves the overlay to match the view model.</summary>
     private void ApplyOsd()

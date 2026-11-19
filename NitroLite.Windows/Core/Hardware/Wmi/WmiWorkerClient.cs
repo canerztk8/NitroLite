@@ -1,7 +1,9 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Win32.SafeHandles;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
@@ -29,7 +31,37 @@ public sealed class WmiWorkerClient : IDisposable
     private readonly NamedPipeClientStream _pipe;
     private bool _disposed;
 
+    /// <summary>
+    /// Serialises one request/response pair on the pipe.
+    /// </summary>
+    /// <remarks>
+    /// The wire format is a length prefix followed by a payload, and a pipe is a byte stream, not a message queue. Two
+    /// callers that write and read concurrently therefore do not merely race for an answer — they corrupt the framing:
+    /// reader A consumes the four-byte header, reader B consumes the first four bytes of A's payload as its own
+    /// header, and the length it decodes is whatever those bytes happen to be.
+    /// <para>
+    /// This is reachable in the shipped app. The fan curve steps on its own thread while the telemetry timer ticks on
+    /// the UI thread, and the controller gates only its writes — the read path calls <c>SendAsync</c> directly. The
+    /// consequence is either a bogus length that fails the frame check and tears the connection down, or two callers
+    /// each receiving the other's reply: a fan-speed write confirmed by a telemetry frame, and a telemetry read that
+    /// reports zero RPM because it parsed a write acknowledgement.
+    /// </para>
+    /// <para>
+    /// The gate belongs here rather than in the controller because this is the only place that knows a request and
+    /// its answer are one indivisible exchange.
+    /// </para>
+    /// </remarks>
+    private readonly SemaphoreSlim _exchange = new(1, 1);
+
     private WmiWorkerClient(NamedPipeClientStream pipe) => _pipe = pipe;
+
+    /// <summary>
+    /// Asks the kernel which process is serving the other end of the pipe. The answer cannot be forged by the
+    /// process on that end, which is what makes it worth more than the nonce echo.
+    /// </summary>
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
 
     /// <summary>
     /// Generates the single-use handshake value: 32 cryptographically random bytes as 64 hex characters. 256 bits is
@@ -48,6 +80,7 @@ public sealed class WmiWorkerClient : IDisposable
         string pipeName,
         string nonce,
         TimeSpan? timeout = null,
+        int? expectedServerProcessId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(pipeName)) throw new ArgumentException("pipe name is required", nameof(pipeName));
@@ -81,6 +114,20 @@ public sealed class WmiWorkerClient : IDisposable
             if (!WmiWorkerProtocol.NonceMatches(nonce, response.Nonce))
                 throw new InvalidOperationException("the worker did not echo the handshake value");
 
+            // The nonce proves the peer received this hello. It does not prove the peer is the process that was
+            // started: the pipe name is on the worker's command line, which every process on the machine can read, so
+            // a same-user process can create the pipe first and echo the value back. The kernel knows who is really
+            // serving the pipe, so the answer is asked for rather than inferred from the reply.
+            if (expectedServerProcessId is int expected)
+            {
+                if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out uint server))
+                    throw new InvalidOperationException("the pipe server could not be identified");
+
+                if (server != (uint)expected)
+                    throw new InvalidOperationException(
+                        $"the pipe is served by process {server}, not the helper that was started ({expected})");
+            }
+
             return new WmiWorkerClient(pipe);
         }
         catch (OperationCanceledException)
@@ -109,15 +156,25 @@ public sealed class WmiWorkerClient : IDisposable
         JsonObject? args = null,
         CancellationToken cancellationToken = default)
     {
-        await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
+        // One exchange at a time: the write and the read that answers it are a single unit on a byte stream. See
+        // _exchange for what happens without this.
+        await _exchange.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            Type = WmiWorkerProtocol.TypeCommand,
-            Command = command,
-            Args = args
-        }, cancellationToken).ConfigureAwait(false);
+            await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
+            {
+                Type = WmiWorkerProtocol.TypeCommand,
+                Command = command,
+                Args = args
+            }, cancellationToken).ConfigureAwait(false);
 
-        return await WmiWorkerProtocol.ReadResponseAsync(_pipe, cancellationToken).ConfigureAwait(false)
-               ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
+            return await WmiWorkerProtocol.ReadResponseAsync(_pipe, cancellationToken).ConfigureAwait(false)
+                   ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
+        }
+        finally
+        {
+            _exchange.Release();
+        }
     }
 
     public void Dispose()
@@ -125,5 +182,9 @@ public sealed class WmiWorkerClient : IDisposable
         if (_disposed) return;
         _disposed = true;
         try { _pipe.Dispose(); } catch { }
+
+        // Not disposed: a caller may still be inside SendAsync holding it, and disposing a SemaphoreSlim underneath a
+        // waiter throws ObjectDisposedException on a background thread. It holds no unmanaged resource unless
+        // AvailableWaitHandle is read, which this class never does.
     }
 }

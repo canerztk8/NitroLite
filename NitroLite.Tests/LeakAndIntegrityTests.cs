@@ -191,11 +191,33 @@ public class LeakAndIntegrityTests : IDisposable
 
         var service = new RgbProfileService(path);
 
-        Assert.True(File.Exists(path + ".bad"), "the unreadable file must be kept, not deleted");
+        var quarantined = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "rgb_presets.json.bad-*"));
         Assert.False(File.Exists(path));
-        Assert.Equal("{ this is not json", File.ReadAllText(path + ".bad"));
+        Assert.Equal("{ this is not json", File.ReadAllText(quarantined));
         Assert.NotNull(service.LoadError);
         Assert.Contains(service.GetPresets(), p => p.IsBuiltIn);
+    }
+
+    [Fact]
+    public void RgbProfileService_QuarantiningTwice_KeepsBothCopies()
+    {
+        // The quarantine used a fixed ".bad" name and moved with overwrite: true, so the second quarantine destroyed
+        // the first — and by then only — copy of the user's presets. The ordinary way to reach that is a restore that
+        // replaces the file and is later damaged, which is exactly the case the quarantine exists for.
+        var path = Path_("rgb_presets.json");
+
+        File.WriteAllText(path, "{ first corrupt copy");
+        _ = new RgbProfileService(path);
+
+        File.WriteAllText(path, "{ second corrupt copy");
+        _ = new RgbProfileService(path);
+
+        var quarantined = Directory.GetFiles(Path.GetDirectoryName(path)!, "rgb_presets.json.bad-*");
+        Assert.Equal(2, quarantined.Length);
+
+        var contents = quarantined.Select(File.ReadAllText).ToList();
+        Assert.Contains("{ first corrupt copy", contents);
+        Assert.Contains("{ second corrupt copy", contents);
     }
 
     [Fact]
@@ -334,9 +356,33 @@ public class LeakAndIntegrityTests : IDisposable
         Assert.NotNull(result.Error);
 
         // The settings that were in use before the restore are still on disk next to the file.
-        var preRestore = settingsPath + BackupService.PreRestoreSuffix;
-        Assert.True(File.Exists(preRestore), "a restore must leave the settings it replaced");
+        var preRestore = Assert.Single(
+            Directory.GetFiles(Path.GetDirectoryName(settingsPath)!, Path.GetFileName(settingsPath) + BackupService.PreRestoreSuffix + "-*"));
         Assert.Contains("de", File.ReadAllText(preRestore), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BackupService_RestoringTwice_KeepsTheSettingsFromBeforeTheFirstRestore()
+    {
+        // The safety copy used a fixed name, so the second restore overwrote the first — and the second restore is
+        // the ordinary reaction to a first one the user regretted. The settings they actually had before the first
+        // restore then existed nowhere on disk.
+        var settingsPath = Path_("settings.json");
+        var backupPath = Path_("backup.json");
+
+        File.WriteAllText(settingsPath, """{"language":"de"}""");
+        Assert.True(BackupService.Create(backupPath, new AppSettings { Language = "es" },
+            gameProfilesPath: null, rgbPresetsPath: null, appVersion: "test").Success);
+
+        Assert.True(BackupService.Restore(backupPath, settingsPath, null, null).Success);
+        Assert.True(BackupService.Restore(backupPath, settingsPath, null, null).Success);
+
+        var copies = Directory.GetFiles(
+            Path.GetDirectoryName(settingsPath)!,
+            Path.GetFileName(settingsPath) + BackupService.PreRestoreSuffix + "-*");
+
+        Assert.Equal(2, copies.Length);
+        Assert.Contains(copies, copy => File.ReadAllText(copy).Contains("de", StringComparison.Ordinal));
     }
 
     // ---------------------------------------------------------------- DATA-04 / DATA-17

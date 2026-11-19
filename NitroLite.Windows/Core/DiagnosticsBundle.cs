@@ -90,16 +90,40 @@ public static class DiagnosticsBundle
 
         // Create rather than CreateDirectory-overwrite: a second export in the same second must not silently replace
         // the first one, because the user may already have attached it to a report.
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
-        foreach (var entry in entries)
+        //
+        // The archive is deleted if anything fails after it was created. A half-written zip carries the right name, so
+        // the user attaches it to a bug report and the maintainer receives something that will not open — worse than
+        // no file at all. The disposal can itself throw while writing the central directory, which is why the delete
+        // has a catch of its own and the original exception is the one that propagates.
+        //
+        // The delete is gated on the stream having been opened. FileMode.CreateNew throws when the name is already
+        // taken, and deleting on that path would destroy the earlier archive that CreateNew exists to protect.
+        FileStream? stream = null;
+        try
         {
-            var zipEntry = archive.CreateEntry(entry.Name, CompressionLevel.Optimal);
-            using var writer = new StreamWriter(zipEntry.Open(), new UTF8Encoding(false));
-            writer.Write(entry.Content);
-        }
+            stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            using (stream)
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+            {
+                foreach (var entry in entries)
+                {
+                    var zipEntry = archive.CreateEntry(entry.Name, CompressionLevel.Optimal);
+                    using var writer = new StreamWriter(zipEntry.Open(), new UTF8Encoding(false));
+                    writer.Write(entry.Content);
+                }
+            }
 
-        return path;
+            return path;
+        }
+        catch
+        {
+            if (stream != null)
+            {
+                try { File.Delete(path); } catch { }
+            }
+
+            throw;
+        }
     }
 
     /// <summary>Short system summary: what the app is, where it runs, and what it could see.</summary>
@@ -125,8 +149,10 @@ public static class DiagnosticsBundle
         builder.AppendLine($"Machine          : {Redaction.MachinePlaceholder}");
         builder.AppendLine($"Processors       : {Environment.ProcessorCount}");
         builder.AppendLine($"Data directory   : {Redaction.Scrub(SafeDataDirectory())}");
+        // Scrubbed for the same reason the line above is: the message is built from the data directory's full path,
+        // which carries the Windows user name, and this archive is a file a user attaches to a public issue.
         var dataError = AppPaths.DataDirectoryError;
-        if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {dataError}");
+        if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {Redaction.Scrub(dataError)}");
         builder.AppendLine();
 
         builder.AppendLine("[Capabilities]");

@@ -56,7 +56,12 @@ function Invoke-Step([string]$title, [scriptblock]$block) {
 # (release-notes-v1.2.3.md) that a rebuild must not destroy, so the delete is narrowed to
 # the files this script produces instead of taking the whole folder.
 New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
-Get-ChildItem $artifacts -Force | Where-Object { $_.Name -like 'NitroLite*' } | Remove-Item -Recurse -Force
+# Only the staging folders are cleared here. The previous package is left in place until the new one is about to be
+# written: a publish that fails — a missing runtime for the linker, a digest mismatch on the bundled tool — used to
+# take the last good package with it and leave the folder with nothing to fall back on.
+Get-ChildItem $artifacts -Force |
+    Where-Object { $_.PSIsContainer -and $_.Name -like 'NitroLite*' } |
+    Remove-Item -Recurse -Force
 # Always publish from a clean win-x64 build: an incremental build once kept a stale g.resources without app.ico,
 # and the packaged window then failed to open. (The normal Release build folder is left alone.)
 foreach ($p in 'NitroLite.Desktop\obj\Release\net10.0-windows\win-x64', 'NitroLite.Desktop\bin\Release\net10.0-windows\win-x64') {
@@ -204,6 +209,12 @@ if ($signCert) {
 # build's. The warning below fires when this run cannot match the workflow.
 $epoch = [datetime]::new(2000, 1, 1, 0, 0, 0, [DateTimeKind]::Utc)
 Get-ChildItem $stage -Recurse | ForEach-Object { $_.LastWriteTimeUtc = $epoch }
+
+# The previous package goes only now, with the new one about to be written. Everything that can fail has already
+# succeeded by this point, so a failed run leaves the last good zip where it was.
+Get-ChildItem $artifacts -Force -File |
+    Where-Object { $_.Name -like 'NitroLite-v*-win-x64.zip' } |
+    Remove-Item -Force
 
 Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

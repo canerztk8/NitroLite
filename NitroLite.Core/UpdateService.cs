@@ -526,7 +526,11 @@ public static class UpdateService
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 var pending = destination + ".new";
                 TryDelete(pending);
-                File.Copy(source, pending, overwrite: true);
+
+                // Durable, not File.Copy: the commit below renames this file over the live one, and a copy that is
+                // still sitting in the write cache when the rename lands leaves a correctly named, correctly sized,
+                // zero-content executable. See AtomicFile.CopyDurable for why that is unrecoverable here.
+                AtomicFile.CopyDurable(source, pending);
                 prepared.Add((pending, destination));
             }
         }
