@@ -1,4 +1,4 @@
-{
+﻿{
   "schemaVersion": 1,
   "profiles": [
     {
@@ -85,9 +85,8 @@
         "gpu": 5600
       },
       "muxSwitch": false,
-      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. Sensor ids are the firmware-wide enum and are not measured on this model. unverified: no community report has confirmed this record yet."
+      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. The five codes disagree, so fourZoneKeyboard is deliberately absent rather than false: acer-wmi-linuwu reports four-zone RGB working on AN515-55 and AN515-58, not working on AN515-57, and says nothing about AN515-54 or AN515-56. Sensor ids are the firmware-wide enum and are not measured on this model. unverified: no community report has confirmed this record yet."
     },
     {
       "id": "nitro-v-15-anv15-51",
@@ -338,9 +337,9 @@
         "gpu": 5400
       },
       "muxSwitch": false,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Nine-byte GetGamingKBBacklight answer, unlike the fifteen-byte one on the AN16-41; the decoder reads the common eight-byte prefix either way. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Nine-byte GetGamingKBBacklight answer, unlike the fifteen-byte one on the AN16-41; the decoder reads the common eight-byte prefix either way. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "nitro-5-an515-45",
@@ -507,9 +506,9 @@
         "gpu": 5800
       },
       "muxSwitch": false,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Four-zone keyboard. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Four-zone keyboard. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-300-ph315-52",
@@ -620,9 +619,9 @@
         "gpu": 6600
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Predator Helios 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Predator Helios 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-18-ph18-71",
@@ -648,9 +647,9 @@
         "gpu": 6600
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "18-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "18-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-18-ph18-73",
@@ -676,9 +675,9 @@
         "gpu": 6600
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "18-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "18-inch Predator. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-neo-16-phn16-72",
@@ -732,9 +731,9 @@
         "gpu": 6600
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Predator Helios Neo 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Predator Helios Neo 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-neo-16-phn16s-71",
@@ -760,9 +759,9 @@
         "gpu": 6600
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Predator Helios Neo 16 S. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Predator Helios Neo 16 S. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-triton-phin16-71",
@@ -872,9 +871,9 @@
         "gpu": 6400
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Predator Triton 17. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Predator Triton 17. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "acer-gaming-default",
