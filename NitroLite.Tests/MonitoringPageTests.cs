@@ -478,7 +478,7 @@ public class MonitoringPageTests
     }
 
     private static string Read(params string[] parts) =>
-        File.ReadAllText(Path.Combine(RepoRoot(), Path.Combine(parts)));
+        File.ReadAllText(Path.Combine(parts.Prepend(RepoRoot()).ToArray()));
 
     [Fact]
     public void OsdToggle_ShowsWhetherTheOverlayIsOn()

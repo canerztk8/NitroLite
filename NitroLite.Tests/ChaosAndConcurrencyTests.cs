@@ -224,10 +224,11 @@ public class ChaosAndConcurrencyTests
         };
 
         var all = Task.WhenAll(work);
-        var finished = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(60)));
 
-        Assert.Same(all, finished);
-        await all;
+        // The bound for a run that hangs, and the same 60 seconds as before. WaitAsync is what keeps this honest: the
+        // old Task.WhenAny over a Task.Delay left that timer running for the rest of the process once the work had
+        // finished (CA2027), and this suite runs thousands of tests in one process.
+        await all.WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Empty(failures);
 

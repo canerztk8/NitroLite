@@ -33,7 +33,7 @@ public class LanguageRestartAndSupportTests
     }
 
     private static string Read(params string[] parts) =>
-        File.ReadAllText(Path.Combine(RepoRoot(), Path.Combine(parts)));
+        File.ReadAllText(Path.Combine(parts.Prepend(RepoRoot()).ToArray()));
 
     private static string TempSettingsPath() =>
         Path.Combine(Path.GetTempPath(), $"nitrolite_restart_{Guid.NewGuid():N}.json");
