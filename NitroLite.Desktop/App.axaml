@@ -626,6 +626,56 @@
       <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
     </Style>
 
+    <!--
+      A framed button that is also a switch: the OSD toggle. Off it is the same frame as .primary, so it reads as a
+      button and not as a label; on it fills with the palette's accent and takes the accent's own contrast colour for
+      the type. That is the whole state signal, and it works in all eight palettes because both colours come from the
+      palette rather than from a literal. The dot in the markup repeats it for anyone who cannot separate the two
+      fills at a glance.
+    -->
+    <Style Selector="Button.primary.on">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary.on /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary.on:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary.on:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+
+    <!-- The type inside the toggle follows the fill, so the label never ends up accent-on-accent. -->
+    <Style Selector="Button.primary TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary.on TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+
+    <!-- The state dot: hollow while off, solid while on. -->
+    <Style Selector="Border.statedot">
+      <Setter Property="Width" Value="7" />
+      <Setter Property="Height" Value="7" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.statedot.on">
+      <Setter Property="Background" Value="{DynamicResource OnAccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
     </Style>

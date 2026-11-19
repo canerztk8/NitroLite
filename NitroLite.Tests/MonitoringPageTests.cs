@@ -462,4 +462,68 @@ public class MonitoringPageTests
         Assert.True(linux.MemoryCleanAvailable);
         Assert.False(linux.MemoryCleanToolDownloadVisible);
     }
+
+    // ---------------------------------------------------------------- 5. the overlay toggle's state
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "NitroLite.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir!.FullName;
+    }
+
+    private static string Read(params string[] parts) =>
+        File.ReadAllText(Path.Combine(RepoRoot(), Path.Combine(parts)));
+
+    [Fact]
+    public void OsdToggle_ShowsWhetherTheOverlayIsOn()
+    {
+        var markup = Read("NitroLite.Desktop", "Views", "MonitoringView.axaml");
+
+        var start = markup.IndexOf("ToggleOsdCommand", StringComparison.Ordinal);
+        Assert.True(start > 0, "the monitoring page has no OSD toggle");
+
+        // The button is the switch, so its own state has to be on it. Before this it looked identical on and off and
+        // the only way to tell was to look at the corner of the screen.
+        var button = markup[markup.LastIndexOf("<Button", start, StringComparison.Ordinal)..];
+        button = button[..button.IndexOf("</Button>", StringComparison.Ordinal)];
+
+        Assert.Contains("Classes.on=\"{Binding OsdEnabled}\"", button, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"statedot\"", button, StringComparison.Ordinal);
+        Assert.Contains("Labels.Osd", button, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OsdToggle_OnStateComesFromThePalette()
+    {
+        var markup = Read("NitroLite.Desktop", "App.axaml");
+
+        // Both colours come from the palette, so the on state is legible in all eight themes instead of being a
+        // literal that only works on the cream page.
+        Assert.Contains("Selector=\"Button.primary.on\"", markup, StringComparison.Ordinal);
+        Assert.Contains("Selector=\"Border.statedot.on\"", markup, StringComparison.Ordinal);
+
+        var start = markup.IndexOf("Selector=\"Button.primary.on\"", StringComparison.Ordinal);
+        var end = markup.IndexOf("</Style>", start, StringComparison.Ordinal);
+        var block = markup[start..end];
+
+        Assert.Contains("AccentBrush", block, StringComparison.Ordinal);
+        Assert.Contains("OnAccentBrush", block, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OsdToggle_TheDotFollowsTheSameFlag()
+    {
+        var markup = Read("NitroLite.Desktop", "Views", "MonitoringView.axaml");
+
+        // Two bindings to one flag: the fill and the dot. A dot bound to something else would be a second source of
+        // truth for the same question.
+        var count = markup.Split("Classes.on=\"{Binding OsdEnabled}\"").Length - 1;
+        Assert.Equal(2, count);
+    }
 }

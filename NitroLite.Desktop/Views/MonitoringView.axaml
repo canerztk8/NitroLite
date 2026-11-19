@@ -19,8 +19,18 @@
                    Margin="0,0,16,0" VerticalAlignment="Center" />
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
-          <Button Classes="primary" Content="{Binding Labels.Osd}" Padding="12,7" FontSize="11"
-                  Command="{Binding ToggleOsdCommand}" ToolTip.Tip="{Binding Labels.OsdHint}" />
+          <!-- The toggle carries its own state: the frame fills with the accent while the overlay is drawn, and the
+               dot goes solid. Before this the button looked identical on and off, so the only way to tell was to look
+               at the corner of the screen. -->
+          <Button Classes="primary" Classes.on="{Binding OsdEnabled}" Padding="12,7" FontSize="11"
+                  Command="{Binding ToggleOsdCommand}" ToolTip.Tip="{Binding Labels.OsdHint}"
+                  AutomationProperties.AutomationId="OsdToggle"
+                  AutomationProperties.Name="{Binding OsdToggleText}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Border Classes="statedot" Classes.on="{Binding OsdEnabled}" />
+              <TextBlock Text="{Binding Labels.Osd}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
           <Button Classes="primary" Content="{Binding Labels.ChangePosition}" Padding="10,7" FontSize="11"
                   Command="{Binding CycleOsdCornerCommand}" />
         </StackPanel>
