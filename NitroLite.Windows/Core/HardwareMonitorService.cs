@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Runtime.InteropServices;
+using NitroLite.Core.Hardware;
 
 namespace NitroLite.Core;
 
@@ -124,6 +125,15 @@ public class HardwareMonitorService : IDisposable
     // A monotonic clock, not DateTime.UtcNow: an NTP correction or a manual clock change would otherwise make the
     // backoff fire early (a burst of NVML calls) or stall for hours.
     private readonly System.Diagnostics.Stopwatch _nvmlClock = System.Diagnostics.Stopwatch.StartNew();
+
+    /// <summary>
+    /// The PDH thermal zone is opened, collected and closed per probe, which costs a few milliseconds; a probe per
+    /// telemetry tick would be wasteful for a value that moves by a degree or two a second.
+    /// </summary>
+    private static readonly TimeSpan ThermalProbeInterval = TimeSpan.FromSeconds(5);
+
+    private TimeSpan _lastThermalProbeAt = TimeSpan.MinValue;
+    private double? _lastThermalCelsius;
     private TimeSpan _lastNvmlRetryAt = TimeSpan.MinValue;
     private int _nvmlFailureCount;
 
@@ -446,7 +456,40 @@ public class HardwareMonitorService : IDisposable
         if (data.CpuFrequencyMHz <= 0)
         {
             data.CpuFrequencyMHz = GetNativeCpuFrequencyMhz();
+            data.Provenance["cpu-clock"] = data.CpuFrequencyMHz > 0 ? "CallNtPowerInformation" : "unavailable";
         }
+        else
+        {
+            data.Provenance["cpu-clock"] = "firmware";
+        }
+
+        // 3b. CPU temperature through Windows when the firmware had nothing to say.
+        //
+        // This is the AN16-61 case and every unprofiled model like it: the sensor ids come from a firmware-wide enum,
+        // and a machine whose layout has not been read publishes 0 (or a sentinel) for the CPU die. The ACPI thermal
+        // zone is a real measurement from the platform driver, it needs no kernel driver of ours, and it is what makes
+        // a fan curve possible on a laptop NitroLite has never seen. The window check is the same one the firmware
+        // readings go through — a fallback is not allowed to be less plausible than the primary source.
+        data.Provenance["cpu-temp"] = SensorPlausibility.IsPlausibleTemperature(data.CpuTemperature)
+            ? "firmware"
+            : "unavailable";
+
+        if (!SensorPlausibility.IsPlausibleTemperature(data.CpuTemperature))
+        {
+            var thermal = ThermalZoneCelsius();
+            if (thermal is { } celsius)
+            {
+                data.CpuTemperature = (int)Math.Round(celsius, MidpointRounding.AwayFromZero);
+                data.Provenance["cpu-temp"] = "PDH thermal zone";
+            }
+        }
+
+        data.Provenance["gpu-temp"] = SensorPlausibility.IsPlausibleTemperature(data.GpuTemperature)
+            ? (data.GpuMetricsAvailable ? "firmware + NVML" : "firmware")
+            : "unavailable";
+        data.Provenance["vram"] = data.VramTotalMB > 0 ? "NVML" : "unavailable";
+        data.Provenance["gpu-power"] = data.GpuMetricsAvailable ? "NVML" : "unavailable";
+        data.Provenance["cpu-power"] = "estimate";
 
         // 4. CPU Package Power (Watts) — an estimate, not a measurement.
         // AASSvc does not report CPU power and reading the MSR would need a kernel driver, which this project does
@@ -469,6 +512,23 @@ public class HardwareMonitorService : IDisposable
         {
             data.CpuPowerWatts = 8.5;
         }
+    }
+
+    /// <summary>
+    /// The ACPI thermal zone in Celsius, cached for <see cref="ThermalProbeInterval"/>. Null when this machine has no
+    /// zone the counter can read, which is the honest answer on a desktop board with no thermal zone at all.
+    /// </summary>
+    private double? ThermalZoneCelsius()
+    {
+        if (_lastThermalProbeAt != TimeSpan.MinValue
+            && (_nvmlClock.Elapsed - _lastThermalProbeAt) < ThermalProbeInterval)
+        {
+            return _lastThermalCelsius;
+        }
+
+        _lastThermalProbeAt = _nvmlClock.Elapsed;
+        _lastThermalCelsius = WindowsTelemetryFallbacks.CpuTemperatureCelsius();
+        return _lastThermalCelsius;
     }
 
     /// <summary>Reference clock for the CPU power estimate when Windows did not report the processor's rating.</summary>

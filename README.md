@@ -1,4 +1,4 @@
-# NitroLite
+﻿# NitroLite
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
@@ -752,8 +752,8 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2891 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
-concurrency.
+2909 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values,
+concurrency, and the read-back rule that decides whether a hardware write may be called applied.
 
 ```powershell
 dotnet test NitroLite.Tests/NitroLite.Tests.csproj

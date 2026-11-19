@@ -1682,5 +1682,6 @@
   "Sıcaklığa göre renk yazılamadı": "तापमान के अनुसार रंग लिखा नहीं जा सका",
   "Raporu GitHub'da paylaş": "GitHub पर अनुकूलता रिपोर्ट करें",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "हार्डवेयर रिपोर्ट क्लिपबोर्ड पर कॉपी की गई; GitHub पर नया इश्यू खोला गया।",
-  "Uyumluluk raporu paylaşılamadı: {0}": "अनुकूलता रिपोर्ट साझा नहीं की जा सकी: {0}"
+  "Uyumluluk raporu paylaşılamadı: {0}": "अनुकूलता रिपोर्ट साझा नहीं की जा सकी: {0}",
+  "Doğrulanamayan denetimler: {0}": "असत्यापित नियंत्रण: {0}"
 }

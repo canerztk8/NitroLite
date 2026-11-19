@@ -276,6 +276,12 @@ public sealed class ShellLabels
 
     public string CompatibilityReportFailed(string error) => Loc.T($"Uyumluluk raporu paylaşılamadı: {error}");
 
+    /// <summary>
+    /// The inline hint under a control this session could not confirm. The control names come from the hardware report
+    /// vocabulary, so they stay English in every language — they are the same words the issue will be triaged with.
+    /// </summary>
+    public string VerificationHint(string controls) => Loc.T($"Doğrulanamayan denetimler: {controls}");
+
     // ---------------------------------------------------------------- tray
     public string TrayShow => Loc.T("Pencereyi Göster");
     public string TrayCleanExit => Loc.T("Temiz Çıkış");

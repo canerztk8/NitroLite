@@ -1682,5 +1682,6 @@
   "Sıcaklığa göre renk yazılamadı": "Não foi possível escrever a cor por temperatura",
   "Raporu GitHub'da paylaş": "Relatar compatibilidade no GitHub",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Relatório de hardware copiado para a área de transferência; uma nova issue no GitHub foi aberta.",
-  "Uyumluluk raporu paylaşılamadı: {0}": "Não foi possível compartilhar o relatório de compatibilidade: {0}"
+  "Uyumluluk raporu paylaşılamadı: {0}": "Não foi possível compartilhar o relatório de compatibilidade: {0}",
+  "Doğrulanamayan denetimler: {0}": "Controles não verificados: {0}"
 }

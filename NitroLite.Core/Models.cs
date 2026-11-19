@@ -145,6 +145,15 @@ public class MonitorData
     public bool GpuMetricsAvailable { get; set; }
 
     /// <summary>
+    /// Where each reading in this sample came from, keyed by a short metric name (<c>cpu-temp</c>, <c>cpu-clock</c>,
+    /// <c>vram</c>, …). Diagnostics only: the hardware report prints it, so a reading of zero can be traced to the
+    /// layer that failed instead of being guessed at. Never serialized — it is not part of the payload Acer's service
+    /// speaks.
+    /// </summary>
+    [JsonIgnore]
+    public IDictionary<string, string> Provenance { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// True when <see cref="CpuFanSpeed"/> and <see cref="GpuFanSpeed"/> are tachometer readings the hardware
     /// actually reported. False means they were derived from a fan percentage and a model ceiling, or that nothing
     /// measured the fans at all.
