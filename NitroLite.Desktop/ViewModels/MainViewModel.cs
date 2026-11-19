@@ -4371,9 +4371,55 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             BuildThemeChoices();
             // Moving into or out of Hindi adds or removes the Devanagari face from the typeface picker.
             Raise(nameof(UiFonts));
-            Status = Labels.LanguageRestartHint;
+            Status = Labels.LanguageRestarting;
+            RestartTask = RestartForLanguageAsync();
         }
     }
+
+    /// <summary>
+    /// Restarts the process so the new language reaches the parts of the shell that are built once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The catalogues are read through a static, and the tray menu, the window title and the OSD are constructed at
+    /// startup. Swapping the labels in place therefore leaves half the shell in the old language, which is worse than
+    /// a short restart: the user sees a window that is half translated and has no way to finish the job.
+    /// </para>
+    /// <para>
+    /// The request is a delegate rather than a <c>Process.Start</c> here, so the view model stays free of process
+    /// handling and a test can assert that the request was made without spawning anything. It is null in a test and
+    /// in any host that cannot restart, and the status line still tells the user what happened.
+    /// </para>
+    /// </remarks>
+    private async Task RestartForLanguageAsync()
+    {
+        if (RestartRequest == null) return;
+
+        try
+        {
+            await RestartRequest().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(Loc.T("Yeniden başlatma isteği gönderilemedi"), ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Restarts the process. Set by the shell once the window exists; null in a test, where a restart would be a
+    /// process the suite cannot see.
+    /// </summary>
+    public Func<Task>? RestartRequest { get; set; }
+
+    /// <summary>
+    /// The restart the last language change asked for.
+    /// </summary>
+    /// <remarks>
+    /// The setter cannot await, so the handover runs in the background. Keeping the task here means a test can await
+    /// it instead of sleeping, and it is the one place that proves a failing restart is swallowed rather than left to
+    /// fault an unobserved task.
+    /// </remarks>
+    public Task RestartTask { get; private set; } = Task.CompletedTask;
 
     // ---------------------------------------------------------------- theme
 

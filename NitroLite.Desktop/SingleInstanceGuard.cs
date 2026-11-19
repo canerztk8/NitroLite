@@ -123,6 +123,33 @@ public sealed class SingleInstanceGuard : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes the machine's slot, waiting for a copy that is on its way out.
+    /// </summary>
+    /// <remarks>
+    /// Only the restart path uses this. A restart starts the replacement <em>before</em> the old process has let go of
+    /// the slot — starting it afterwards would mean nothing is left to start it — so the first few attempts are
+    /// expected to fail. The wait is bounded: a copy that never lets go is a copy that is still running, and the
+    /// caller falls back to signalling it rather than leaving a second window on the desktop.
+    /// </remarks>
+    public static SingleInstanceGuard AcquireWhenFree(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+
+        while (true)
+        {
+            var guard = Acquire();
+            if (guard.IsFirstInstance) return guard;
+
+            guard.Dispose();
+            if (DateTime.UtcNow >= deadline) return new SingleInstanceGuard(null, null, isFirst: false);
+
+            // Short enough that the window appears the moment the old one is gone, long enough that the loop is not a
+            // spin. The old process spends most of its exit handing the fans back, which is bounded at two seconds.
+            Thread.Sleep(120);
+        }
+    }
+
     /// <summary>True when <see cref="AllowSecondInstanceVariable"/> asks for a copy that owns no slot.</summary>
     private static bool IsSecondInstanceAllowed()
     {

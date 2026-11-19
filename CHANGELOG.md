@@ -8,6 +8,29 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
+## [Unreleased]
+
+Three things about the settings page that people kept tripping over.
+
+### Changed
+
+- **Changing the language restarts NitroLite.** The catalogues are read through a static and the tray menu, the
+  window title and the overlay are built once at startup, so swapping the labels in place left half the shell in the
+  old language. The app now starts a replacement copy with `--restart` — which waits for the single-instance slot
+  instead of treating the wait as a duplicate launch — and then leaves through the same clean exit the tray uses, so
+  the fans are handed back exactly once. If the replacement cannot be started, the app stays open and says so.
+- **The mouse wheel no longer edits a closed picker.** Avalonia's `ComboBox` steps its selection on the wheel even
+  when the drop-down is shut, so scrolling the settings page past the language or font picker silently changed the
+  setting. One tunnel handler on the window now takes the wheel before the control sees it and gives the delta to the
+  page, so the page scrolls and the value stays put. An open drop-down keeps the wheel.
+- **The support card wears Ko-fi's own button.** The plain framed button is now the blue `Support me on Ko-fi` pill
+  people already recognise, with the cup drawn as a `Path` so nothing is fetched at runtime. It keeps the brand blue
+  in every theme, which is the one place in the app that ignores the palette on purpose.
+- **The support sentence invites instead of instructing.** "If it's useful to you you can buy me a coffee" read like
+  an order dressed as a favour. It now says what the project cost, that it stays free and MIT-licensed either way,
+  and that a coffee is one way to say thanks while a star or a bug report counts just as much. Rewritten in all
+  eight languages.
+
 ## [1.2.7] - 2026-11-19
 
 A settings page rebuilt around what people actually change, eight more palettes, seven more typefaces, and a

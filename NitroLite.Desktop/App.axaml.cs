@@ -66,6 +66,12 @@ public partial class App : Application, IDisposable
             // because the window does not exist yet.
             _host = AppHost.Create(new AvaloniaDialogService(() => _window));
 
+            // A language change is the one setting that cannot be applied to a live window: the catalogues are read
+            // through a static, and half the shell — the tray menu, the window title, the OSD — is built once. The
+            // shell restarts itself instead, and the replacement is started here rather than in the view model so the
+            // view model stays free of process handling and a test can assert the request without spawning one.
+            _host.ViewModel.RestartRequest = () => RestartAsync(desktop);
+
             // The laptop's own Nitro key. Started before the window is built so the settings row's support check is
             // already answered when the binding first reads it, and subscribed before Start so a press during startup
             // is not lost. The gate reads the setting at press time, which is what makes turning the switch off take
@@ -210,6 +216,56 @@ public partial class App : Application, IDisposable
             _ = Task.Run(() => _nitroSense?.Close());
             ShowWindow();
         });
+
+    /// <summary>
+    /// Starts a replacement copy and then exits through the clean path, so the fans are handed back exactly once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The order is the whole trick. The replacement is started first because a process cannot start its successor
+    /// after it has gone; it is given <see cref="Program.RestartArgument"/> so it waits for the single-instance slot
+    /// instead of treating the wait as a duplicate launch. If the start fails — a folder that has been deleted, a
+    /// policy that refuses the launch — the app stays open and says so, because exiting would leave the user with
+    /// nothing.
+    /// </para>
+    /// <para>
+    /// The exit is the same <see cref="ExitAsync"/> the tray menu uses, so the fan handback, the tray icon and the
+    /// host disposal all run once and in the order they already run in.
+    /// </para>
+    /// </remarks>
+    private async Task RestartAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        if (_exiting) return;
+
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exe))
+        {
+            AppLog.Warn(Loc.T("Yeniden başlatma için çalıştırılabilir dosya bulunamadı"));
+            return;
+        }
+
+        try
+        {
+            using var started = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                Arguments = Program.RestartArgument,
+                UseShellExecute = true
+            });
+
+            if (started == null)
+            {
+                AppLog.Warn(Loc.T("Yeniden başlatma başlatılamadı"));
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(Loc.T("Yeniden başlatma başlatılamadı"), ex.Message);
+            return;
+        }
+
+        await ExitAsync(desktop).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// The only path that ends the process. The fans are handed back to the firmware first: a machine left with a

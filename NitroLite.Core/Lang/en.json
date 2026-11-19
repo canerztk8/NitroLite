@@ -365,7 +365,7 @@
   "Deşarj İşlemini Başlat": "Start Discharge",
   "Deşarjı Durdur": "Stop Discharge",
   "Dil": "Language",
-  "Dil değişikliği hemen uygulanır.": "The language change applies immediately.",
+  "Dil değişti; NitroLite yeni dille yeniden açılıyor.": "Language changed. NitroLite is reopening in the new language.",
   "Dil değişikliği için NitroLite yeniden başlatılıyor…": "Restarting NitroLite for the language change…",
   "Dil, tema, güncelleme ve geri bildirim": "Language, theme, updates and feedback",
   "Dinamik aydınlatma efektleri ve donanım profilleri.": "Dynamic lighting effects and hardware profiles.",
@@ -683,7 +683,7 @@
   "Klavye servisi onarılamadı: {0}": "The keyboard service could not be repaired: {0}",
   "Klavye ışığı": "Keyboard backlight",
   "Klavye ışığı geri yüklenemedi": "The keyboard backlight could not be restored",
-  "Ko-fi'de destekle": "Support on Ko-fi",
+  "Ko-fi'de bana destek ol": "Support me on Ko-fi",
   "Komut 30 saniyede tamamlanmadı.": "The command did not finish within 30 seconds.",
   "Komut başarısız: {0}": "Command failed: {0}",
   "Komutu kopyala": "Copy command",
@@ -781,7 +781,7 @@
   "NitroLite başlatılamadı ve kapatılacak.\n\n{0}\n\nAyrıntılar: {1}": "NitroLite could not start and will close.\n\n{0}\n\nDetails: {1}",
   "NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın.": "NitroLite is running from a temporary folder. Extract the zip to a permanent folder first, then turn on autostart.",
   "NitroLite hata bildirimi": "NitroLite bug report",
-  "NitroLite tek kişilik bir öğrenci projesi. Bu projeye 100 doların üzerinde para ve yüzlerce saat harcadım; her sürümü kendi makinemde tek tek denedim. İşinize yaradıysa bir kahve ısmarlayabilirsiniz.": "NitroLite is a one-person student project. It has cost me over $100 and hundreds of hours, and every release was tested on my own machine. If it is useful to you, you can buy me a coffee.",
+  "NitroLite tek bir öğrencinin projesi: 100 doların üzerinde cepten harcama, yüzlerce saat emek ve her sürüm kendi dizüstü bilgisayarımda denendi. Her hâlükârda ücretsiz ve MIT lisanslı kalacak. Zamanınızdan bir şey kurtardıysa bir kahve güzel bir teşekkür olur; bir yıldız ya da hata bildirimi de en az onun kadar değerli.": "NitroLite is one student's project: more than $100 out of pocket, hundreds of hours, and every release tried on my own laptop. It stays free and MIT-licensed either way. If it saved you some time, a coffee is a lovely way to say thanks — and a star or a bug report helps just as much.",
   "NitroLite yedeği (*.json)|*.json|Tüm dosyalar (*.*)|*.*": "NitroLite backup (*.json)|*.json|All files (*.*)|*.*",
   "NitroLite yedeğini kaydet": "Save NitroLite backup",
   "NitroLite yedeğini seç": "Choose a NitroLite backup",
@@ -1662,5 +1662,8 @@
   "Yedeğe {0} eklenemedi": "Could not add {0} to backup",
   "Yedeğe {0} eklenemedi — {1}": "Could not add {0} to backup — {1}",
   "Yedekten {0} yazılamadı": "Could not write {0} from backup",
-  "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}"
+  "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
+  "Yeniden başlatma başlatılamadı": "The restart could not be started",
+  "Yeniden başlatma isteği gönderilemedi": "The restart request could not be sent",
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "No executable was found to restart"
 }

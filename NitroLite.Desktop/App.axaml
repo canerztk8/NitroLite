@@ -631,6 +631,35 @@
     </Style>
 
     <!--
+      The Ko-fi button. Ko-fi's own widget is a solid blue pill with a white cup and white type, and people recognise
+      that shape before they read the label, so this one keeps the brand blue in every theme instead of following the
+      palette. It is the only button in the app that ignores the theme, which is the point: it is a third-party mark,
+      not a piece of our chrome. The cup is drawn as a Path in the markup, so nothing is fetched at runtime.
+    -->
+    <Style Selector="Button.kofi">
+      <Setter Property="Background" Value="#29ABE0" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.kofi /template/ ContentPresenter">
+      <Setter Property="Background" Value="#29ABE0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <Style Selector="Button.kofi:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1E96C6" />
+    </Style>
+
+    <Style Selector="Button.kofi:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#187FA9" />
+    </Style>
+
+    <!--
       A destructive button: the same frame as .primary, but the rule and the label are the danger colour, so "delete"
       never reads like "apply". The wash under the pointer is the danger at 14 %, which keeps the button legible on the
       cream page and on every dark palette without a second colour. The frame is what carries the meaning: a red label

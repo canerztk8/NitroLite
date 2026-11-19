@@ -97,7 +97,7 @@ public sealed class ShellLabels
     public string UdevInstruction => Loc.T("sysfs düğümlerine yazmak için udev kuralını kurun:");
     public string CopyCommand => Loc.T("Komutu kopyala");
     public string Copied => Loc.T("Kopyalandı");
-    public string LanguageRestartHint => Loc.T("Dil değişikliği hemen uygulanır.");
+    public string LanguageRestarting => Loc.T("Dil değişti; NitroLite yeni dille yeniden açılıyor.");
 
     // ---------------------------------------------------------------- theme and charts
     public string Theme => Loc.T("Tema");
@@ -768,8 +768,8 @@ public sealed class ShellLabels
     public string Support => Loc.T("Destek");
     // One literal, not a concatenation: the catalogue-coverage test reads the argument of Loc.T, and a split string
     // would be scanned as its first fragment and reported as a key no catalogue carries.
-    public string SupportBody => Loc.T("NitroLite tek kişilik bir öğrenci projesi. Bu projeye 100 doların üzerinde para ve yüzlerce saat harcadım; her sürümü kendi makinemde tek tek denedim. İşinize yaradıysa bir kahve ısmarlayabilirsiniz.");
-    public string SupportKofi => Loc.T("Ko-fi'de destekle");
+    public string SupportBody => Loc.T("NitroLite tek bir öğrencinin projesi: 100 doların üzerinde cepten harcama, yüzlerce saat emek ve her sürüm kendi dizüstü bilgisayarımda denendi. Her hâlükârda ücretsiz ve MIT lisanslı kalacak. Zamanınızdan bir şey kurtardıysa bir kahve güzel bir teşekkür olur; bir yıldız ya da hata bildirimi de en az onun kadar değerli.");
+    public string SupportKofi => Loc.T("Ko-fi'de bana destek ol");
     public string SupportGitHub => Loc.T("GitHub'da yıldızla");
     public string SupportSponsors => Loc.T("GitHub Sponsors onay sürecinde.");
 

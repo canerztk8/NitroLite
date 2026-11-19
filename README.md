@@ -359,7 +359,7 @@ telemetry: the whole thing is MIT-licensed and stays that way.
 If NitroLite saved you from NitroSense, or from buying a tool that does less, you can put something back:
 
 <p align="center">
-  <a href="https://ko-fi.com/cztrk"><b>☕ Buy me a coffee on Ko-fi</b></a>
+  <a href="https://ko-fi.com/cztrk"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support me on Ko-fi" height="36"></a>
 </p>
 
 A GitHub Sponsors page is in the works; the account is not enrolled yet, so the Ko-fi link above is the one that

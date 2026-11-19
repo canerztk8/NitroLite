@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using NitroLite.Core;
 using NitroLite.Desktop.ViewModels;
 
@@ -110,6 +111,11 @@ public partial class MainWindow : Window
 
         Opened += async (_, _) => await InitializeOnceAsync();
 
+        // A closed ComboBox steps its selection when the wheel turns over it, so scrolling the settings page past the
+        // language or font picker silently changed the setting. The tunnel handler takes the wheel before the control
+        // sees it and gives the delta to the page instead.
+        AddHandler(PointerWheelChangedEvent, OnPreviewWheel, RoutingStrategies.Tunnel);
+
         // Minimising is a state change, not a visibility change: IsVisible stays true, so nothing else would notice.
         PropertyChanged += (_, e) =>
         {
@@ -132,6 +138,40 @@ public partial class MainWindow : Window
             _osd?.Close();
             _osd = null;
         };
+    }
+
+    /// <summary>
+    /// Keeps the wheel from changing the selection of a closed <see cref="ComboBox"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Avalonia's <see cref="ComboBox"/> steps its selection on the wheel even when the drop-down is shut, so a page
+    /// scroll that happened to pass over the language or font picker changed the setting. That is a bad trade in a
+    /// settings page: the user asked to move the page, not to switch the app's language.
+    /// </para>
+    /// <para>
+    /// The event is taken in the tunnel phase, before the combo box sees it, and the delta is handed to the nearest
+    /// <see cref="ScrollViewer"/> so the page still scrolls by the amount the wheel turned. An open drop-down keeps the
+    /// wheel: there the wheel is scrolling the list, which is exactly what the user asked for.
+    /// </para>
+    /// </remarks>
+    private void OnPreviewWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (e.Source is not Visual source) return;
+
+        var combo = source.FindAncestorOfType<ComboBox>(includeSelf: true);
+        if (combo is not { IsDropDownOpen: false }) return;
+
+        e.Handled = true;
+
+        var scroller = source.FindAncestorOfType<ScrollViewer>(includeSelf: true);
+        if (scroller == null) return;
+
+        // One notch is 60 px, which is what the platform's own scroll feels like. The offset is clamped to the
+        // scroller's own range so a wheel at the top or the bottom does nothing instead of overshooting.
+        var max = Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height);
+        var y = Math.Clamp(scroller.Offset.Y - (e.Delta.Y * 60), 0, max);
+        scroller.Offset = new Vector(scroller.Offset.X, y);
     }
 
     /// <summary>

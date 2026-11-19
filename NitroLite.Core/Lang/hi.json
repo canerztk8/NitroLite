@@ -365,7 +365,7 @@
   "Deşarj İşlemini Başlat": "डिस्चार्ज शुरू करें",
   "Deşarjı Durdur": "डिस्चार्ज रोकें",
   "Dil": "भाषा",
-  "Dil değişikliği hemen uygulanır.": "भाषा परिवर्तन तुरंत लागू होता है।",
+  "Dil değişti; NitroLite yeni dille yeniden açılıyor.": "भाषा बदल गई। NitroLite नई भाषा में फिर से खुल रहा है।",
   "Dil değişikliği için NitroLite yeniden başlatılıyor…": "भाषा बदलने के लिए NitroLite पुनः आरंभ हो रहा है…",
   "Dil, tema, güncelleme ve geri bildirim": "भाषा, थीम, अपडेट और फ़ीडबैक",
   "Dinamik aydınlatma efektleri ve donanım profilleri.": "गतिशील लाइटिंग प्रभाव और हार्डवेयर प्रोफ़ाइल।",
@@ -683,7 +683,7 @@
   "Klavye servisi onarılamadı: {0}": "कीबोर्ड सेवा की मरम्मत नहीं हो सकी: {0}",
   "Klavye ışığı": "कीबोर्ड बैकलाइट",
   "Klavye ışığı geri yüklenemedi": "कीबोर्ड बैकलाइट बहाल नहीं हो सकी",
-  "Ko-fi'de destekle": "Ko-fi पर सहयोग करें",
+  "Ko-fi'de bana destek ol": "Ko-fi पर मेरा सहयोग करें",
   "Komut 30 saniyede tamamlanmadı.": "कमांड 30 सेकंड में पूरा नहीं हुआ।",
   "Komut başarısız: {0}": "कमांड विफल: {0}",
   "Komutu kopyala": "कमांड कॉपी करें",
@@ -781,7 +781,7 @@
   "NitroLite başlatılamadı ve kapatılacak.\n\n{0}\n\nAyrıntılar: {1}": "NitroLite शुरू नहीं हो सका और बंद हो जाएगा।\n\n{0}\n\nविवरण: {1}",
   "NitroLite geçici bir klasörden çalışıyor. Önce zip'i kalıcı bir klasöre çıkarın, sonra otomatik başlatmayı açın.": "NitroLite एक अस्थायी फ़ोल्डर से चल रहा है। पहले zip को किसी स्थायी फ़ोल्डर में निकालें, फिर ऑटोस्टार्ट चालू करें।",
   "NitroLite hata bildirimi": "NitroLite बग रिपोर्ट",
-  "NitroLite tek kişilik bir öğrenci projesi. Bu projeye 100 doların üzerinde para ve yüzlerce saat harcadım; her sürümü kendi makinemde tek tek denedim. İşinize yaradıysa bir kahve ısmarlayabilirsiniz.": "NitroLite एक व्यक्ति का छात्र प्रोजेक्ट है। इसमें मेरे 100 डॉलर से अधिक और सैकड़ों घंटे लगे हैं, और हर रिलीज़ मैंने अपनी मशीन पर जाँची है। अगर यह आपके काम आए, तो आप मुझे एक कॉफ़ी पिला सकते हैं।",
+  "NitroLite tek bir öğrencinin projesi: 100 doların üzerinde cepten harcama, yüzlerce saat emek ve her sürüm kendi dizüstü bilgisayarımda denendi. Her hâlükârda ücretsiz ve MIT lisanslı kalacak. Zamanınızdan bir şey kurtardıysa bir kahve güzel bir teşekkür olur; bir yıldız ya da hata bildirimi de en az onun kadar değerli.": "NitroLite एक ही छात्र का प्रोजेक्ट है: 100 डॉलर से अधिक अपनी जेब से, सैकड़ों घंटे, और हर रिलीज़ अपने ही लैपटॉप पर आज़माई गई। यह हर हाल में मुफ़्त और MIT लाइसेंस के साथ रहेगा। अगर इससे आपका कुछ समय बचा है, तो एक कॉफ़ी धन्यवाद कहने का अच्छा तरीका है — और एक स्टार या बग रिपोर्ट भी उतनी ही मदद करती है।",
   "NitroLite yedeği (*.json)|*.json|Tüm dosyalar (*.*)|*.*": "NitroLite बैकअप (*.json)|*.json|सभी फ़ाइलें (*.*)|*.*",
   "NitroLite yedeğini kaydet": "NitroLite बैकअप सहेजें",
   "NitroLite yedeğini seç": "NitroLite बैकअप चुनें",
@@ -1662,5 +1662,8 @@
   "Yedeğe {0} eklenemedi": "Could not add {0} to backup",
   "Yedeğe {0} eklenemedi — {1}": "Could not add {0} to backup — {1}",
   "Yedekten {0} yazılamadı": "Could not write {0} from backup",
-  "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}"
+  "Yedekten {0} yazılamadı — {1}": "Could not write {0} from backup — {1}",
+  "Yeniden başlatma başlatılamadı": "पुनः आरंभ शुरू नहीं किया जा सका",
+  "Yeniden başlatma isteği gönderilemedi": "पुनः आरंभ का अनुरोध भेजा नहीं जा सका",
+  "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "पुनः आरंभ करने के लिए कोई निष्पादन योग्य फ़ाइल नहीं मिली"
 }

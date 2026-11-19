@@ -25,6 +25,15 @@ namespace NitroLite.Desktop;
 /// </remarks>
 internal static class Program
 {
+    /// <summary>
+    /// The flag the shell passes to the copy it starts when the user changes the language.
+    /// </summary>
+    /// <remarks>
+    /// It changes one thing: the single-instance slot is waited for instead of being treated as a duplicate launch.
+    /// Everything else about the launch is the same, so a restart lands in the same window with the same settings.
+    /// </remarks>
+    public const string RestartArgument = "--restart";
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -59,9 +68,20 @@ internal static class Program
 
         // One NitroLite per desktop. A second launch brings the first one forward instead of opening a second window
         // with a second telemetry loop and a second fan curve writing to the same fans.
-        using var guard = SingleInstanceGuard.Acquire();
+        //
+        // A restart is the one launch that arrives while the slot is still held: the old process starts this one and
+        // only then begins its own exit, because a process cannot start its replacement after it is gone. So this
+        // path waits for the slot instead of treating the wait as a duplicate launch.
+        var restarting = args.Any(a => string.Equals(a, RestartArgument, StringComparison.OrdinalIgnoreCase));
+
+        using var guard = restarting
+            ? SingleInstanceGuard.AcquireWhenFree(TimeSpan.FromSeconds(20))
+            : SingleInstanceGuard.Acquire();
+
         if (!guard.IsFirstInstance)
         {
+            // A restart that never got the slot means the old copy is still alive and healthy. Bringing it forward is
+            // the honest answer: the user asked for a window, and there is one.
             SingleInstanceGuard.SignalExistingInstance();
             return 0;
         }
