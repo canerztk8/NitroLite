@@ -65,7 +65,11 @@ public interface IPlatformSnapshot
     /// The privacy-safe Markdown report: no serial number, machine UUID, user name, file path or log content. Built on
     /// demand rather than cached, because the probe state can change after a rescan.
     /// </summary>
-    string BuildHardwareReport();
+    /// <param name="context">
+    /// What the session adds to the report: the runtime sensor verification and nothing else, because the USB HID
+    /// enumeration belongs to the platform. Null keeps the report exactly as it was before the two sections existed.
+    /// </param>
+    string BuildHardwareReport(HardwareReportContext? context = null);
 }
 
 /// <summary>

@@ -48,7 +48,7 @@ public static class HardwareReport
     };
 
     /// <summary>Builds the plain-text report. Never throws: a failed section is reported as unavailable.</summary>
-    public static string BuildText(DeviceCapabilities? capabilities = null)
+    public static string BuildText(DeviceCapabilities? capabilities = null, HardwareReportContext? context = null)
     {
         var identity = HardwareDetector.Current;
         var hardware = HardwareInfoService.Get();
@@ -145,6 +145,9 @@ public static class HardwareReport
         AppendProbeSection(sb, probe);
         sb.AppendLine();
 
+        AppendRuntimeSensorSection(sb, context?.SensorTrust);
+        AppendUsbHidSection(sb, context?.UsbHid);
+
         sb.AppendLine("This file contains no serial number, user name, file path or log content.");
         return sb.ToString();
     }
@@ -171,7 +174,8 @@ public static class HardwareReport
         SensorLayout? discoveredSensors = null,
         bool sensorProbeRan = false,
         DeviceIdentity? identity = null,
-        string? backend = null)
+        string? backend = null,
+        HardwareReportContext? context = null)
     {
         identity ??= HardwareDetector.Current;
         var sb = new StringBuilder();
@@ -265,9 +269,14 @@ public static class HardwareReport
             ? discoveredSensors != null ? "ran, confirmed" : "ran, rejected"
             : "not run");
         if (discoveredSensors != null) AppendRow(sb, "Discovered layout", DescribeLayout(discoveredSensors));
+        AppendRow(sb, "Runtime verification", context?.SensorTrust?.Describe() ?? "not run (no live backend)");
+        if (context?.SensorTrust?.RuntimeVerified == true)
+            AppendRow(sb, "Runtime window", RuntimeSensorVerification.DescribeWindow());
         AppendRow(sb, "Fan ceiling", $"CPU {probe.MaxCpuFanRpm} / GPU {probe.MaxGpuFanRpm} RPM");
         AppendRow(sb, "Plausibility window", SensorPlausibility.Describe());
         sb.AppendLine();
+
+        if (context != null) AppendUsbHidTable(sb, context.UsbHid);
 
         sb.AppendLine("| Read-back policy | Session failures | State |");
         sb.AppendLine("| --- | --- | --- |");
@@ -637,6 +646,59 @@ public static class HardwareReport
 
         var live = DebloatService.QueryServiceStatusDirect(name) ?? "Stopped";
         return (startType, live);
+    }
+
+    /// <summary>
+    /// The USB HID table. A machine that answers no WMI lighting call is usually lit by one of these controllers
+    /// instead, and the ids are what say which — read from the device, never written to it.
+    /// </summary>
+    private static void AppendUsbHidTable(StringBuilder sb, IReadOnlyList<UsbHidDevice> devices)
+    {
+        sb.AppendLine("| USB HID | VID:PID | UsagePage | Usage | Class |");
+        sb.AppendLine("| --- | --- | --- | --- | --- |");
+        if (devices.Count == 0)
+        {
+            sb.AppendLine("| (none found) | - | - | - | - |");
+        }
+        else
+        {
+            foreach (var device in devices)
+            {
+                sb.AppendLine($"| {Escape(device.Vendor)} | 0x{device.VendorId:X4}:0x{device.ProductId:X4} "
+                              + $"| 0x{device.UsagePage:X4} | 0x{device.Usage:X4} | {Escape(device.Category)} |");
+            }
+        }
+
+        sb.AppendLine();
+    }
+
+    /// <summary>The runtime sensor check, when a live backend has been feeding one.</summary>
+    private static void AppendRuntimeSensorSection(StringBuilder sb, RuntimeSensorVerification? trust)
+    {
+        if (trust == null) return;
+
+        sb.AppendLine("RUNTIME SENSOR CHECK");
+        AppendField(sb, "State", trust.Describe());
+        AppendField(sb, "Window", RuntimeSensorVerification.DescribeWindow());
+        sb.AppendLine();
+    }
+
+    /// <summary>The USB HID collections, one per line. Absent when nothing enumerated them.</summary>
+    private static void AppendUsbHidSection(StringBuilder sb, IReadOnlyList<UsbHidDevice>? devices)
+    {
+        if (devices == null) return;
+
+        sb.AppendLine("USB HID");
+        if (devices.Count == 0)
+        {
+            sb.AppendLine("  (none found)");
+        }
+        else
+        {
+            foreach (var device in devices) sb.AppendLine($"  {device.Describe()}");
+        }
+
+        sb.AppendLine();
     }
 
     private static void AppendField(StringBuilder sb, string label, string value)

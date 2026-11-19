@@ -1679,5 +1679,8 @@
   "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Não foi encontrado nenhum executável para reiniciar",
   "Sıcaklığa göre renk": "Cor conforme a temperatura",
   "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "O teclado passa de azul a vermelho com a temperatura da CPU. Abaixo de 45 °C fica fixo, e uma cor só é escrita quando muda de forma perceptível.",
-  "Sıcaklığa göre renk yazılamadı": "Não foi possível escrever a cor por temperatura"
+  "Sıcaklığa göre renk yazılamadı": "Não foi possível escrever a cor por temperatura",
+  "Raporu GitHub'da paylaş": "Relatar compatibilidade no GitHub",
+  "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Relatório de hardware copiado para a área de transferência; uma nova issue no GitHub foi aberta.",
+  "Uyumluluk raporu paylaşılamadı: {0}": "Não foi possível compartilhar o relatório de compatibilidade: {0}"
 }

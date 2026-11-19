@@ -67,7 +67,7 @@ public class RetireLegacyWpfTests
         public bool NeedsUdevRule { get; init; }
         public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
         public bool NegativeAnswersAreConclusive { get; init; }
-        public string BuildHardwareReport() => "";
+        public string BuildHardwareReport(HardwareReportContext? context = null) => "";
     }
 
     /// <summary>A panel whose rate the test can read back, and whose driver can be told to refuse.</summary>

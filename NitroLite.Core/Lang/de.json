@@ -1679,5 +1679,8 @@
   "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Zum Neustart wurde keine ausführbare Datei gefunden",
   "Sıcaklığa göre renk": "Farbe nach Temperatur",
   "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "Die Tastatur wechselt mit der CPU-Temperatur von Blau nach Rot. Unter 45 °C bleibt sie stehen, und eine Farbe wird nur geschrieben, wenn sie sich deutlich ändert.",
-  "Sıcaklığa göre renk yazılamadı": "Die Temperaturfarbe konnte nicht geschrieben werden"
+  "Sıcaklığa göre renk yazılamadı": "Die Temperaturfarbe konnte nicht geschrieben werden",
+  "Raporu GitHub'da paylaş": "Kompatibilität auf GitHub melden",
+  "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Hardwarebericht in die Zwischenablage kopiert; ein neues GitHub-Issue wurde geöffnet.",
+  "Uyumluluk raporu paylaşılamadı: {0}": "Der Kompatibilitätsbericht konnte nicht geteilt werden: {0}"
 }

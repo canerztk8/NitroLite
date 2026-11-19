@@ -271,9 +271,17 @@ and a game that blocks unsigned overlays will still block the OSD.
 
 **Settings → Export hardware report** writes `hardware-report-<timestamp>.txt` and `.json` into the data folder
 and opens it. The report lists the model code, BIOS, Acer service states, the keyboard report, the operating
-modes, the GPU mode capability and whether the Acer WMI class answers. Attach it to a GitHub issue: it is the
-difference between "the fan slider does nothing" and a fix. It contains no serial number, user name, file path or
-log content — every line goes through the same redactor the log uses.
+modes, the GPU mode capability and whether the Acer WMI class answers. It also lists the USB HID collections the
+machine exposes — the ITE (`0x048D`), Sonix (`0x0C45`) and Chicony controllers a backlight is often wired to when
+no Acer class admits to driving it — and the sensor verdict the fan curve ran under, `runtime-verified` or
+`unverified`. Attach it to a GitHub issue: it is the difference between "the fan slider does nothing" and a fix.
+It contains no serial number, user name, file path or log content — every line goes through the same redactor the
+log uses.
+
+**Settings → Report compatibility on GitHub** does both steps at once: it copies the report to the clipboard and
+opens a new issue with `[Compatibility] <model> (<board>)` as the title and the report as the body. If the report
+is longer than a URL can safely carry, the body is cut and the note says so — the full report is already on your
+clipboard, ready to paste over it.
 
 The same report is available without the window: `NitroLite.exe --hardware-report` (add `--json` for JSON, or
 `--out <folder>` to write both files).
@@ -515,7 +523,8 @@ filled in. You see the text before anything is sent, and you can edit it. No use
 added. Next to it, **Open log folder** takes you to the log if you want to paste an excerpt yourself,
 **Create diagnostics bundle** collects the log, the settings and the hardware report into one folder, and
 **Export hardware report** writes the capability report described under [Compatibility](#compatibility) — attach
-it when the problem is about a feature that is missing or does nothing on your model.
+it when the problem is about a feature that is missing or does nothing on your model, or press
+**Report compatibility on GitHub**, which copies the same report and opens the issue with it already filled in.
 
 ## Linux (experimental)
 

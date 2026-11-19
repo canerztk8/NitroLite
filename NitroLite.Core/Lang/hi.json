@@ -1679,5 +1679,8 @@
   "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "पुनः आरंभ करने के लिए कोई निष्पादन योग्य फ़ाइल नहीं मिली",
   "Sıcaklığa göre renk": "तापमान के अनुसार रंग",
   "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "कीबोर्ड CPU तापमान के साथ नीले से लाल रंग में बदलता है। 45 °C से नीचे यह स्थिर रहता है, और रंग केवल तभी लिखा जाता है जब वह स्पष्ट रूप से बदले।",
-  "Sıcaklığa göre renk yazılamadı": "तापमान के अनुसार रंग लिखा नहीं जा सका"
+  "Sıcaklığa göre renk yazılamadı": "तापमान के अनुसार रंग लिखा नहीं जा सका",
+  "Raporu GitHub'da paylaş": "GitHub पर अनुकूलता रिपोर्ट करें",
+  "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "हार्डवेयर रिपोर्ट क्लिपबोर्ड पर कॉपी की गई; GitHub पर नया इश्यू खोला गया।",
+  "Uyumluluk raporu paylaşılamadı: {0}": "अनुकूलता रिपोर्ट साझा नहीं की जा सकी: {0}"
 }
