@@ -29,6 +29,7 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
     private readonly Func<string> _backendName;
     private readonly ReadBackPolicy _readBack;
     private readonly Func<WmiHardwareController?>? _wmi;
+    private readonly Func<string>? _backendDetail;
 
     /// <summary>
     /// <paramref name="probe"/> supplies the capability snapshot and <paramref name="backendName"/> the name of the
@@ -40,13 +41,15 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
         Func<CapabilitySnapshot?> probe,
         Func<string> backendName,
         ReadBackPolicy readBack,
-        Func<WmiHardwareController?>? wmi = null)
+        Func<WmiHardwareController?>? wmi = null,
+        Func<string>? backendDetail = null)
     {
         Identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
         _backendName = backendName ?? throw new ArgumentNullException(nameof(backendName));
         _readBack = readBack ?? throw new ArgumentNullException(nameof(readBack));
         _wmi = wmi;
+        _backendDetail = backendDetail;
     }
 
     public DeviceIdentity Identity { get; }
@@ -107,7 +110,8 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
             _readBack,
             wmi?.DiscoveredSensors,
             wmi?.SensorProbeRan == true,
-            Identity);
+            Identity,
+            _backendDetail?.Invoke());
     }
 
     void IRescannableBackend.ResetReadBackCounters() => _readBack.ResetAll();

@@ -23,8 +23,20 @@ public sealed class WindowsDirectWmiControl : IDirectWmiControl
     {
         get
         {
-            if (_hybrid.UserDeclinedElevation) return Loc.T("Yönetici izni verilmedi; Acer servisi kullanılıyor");
-            return IsAvailable ? Loc.T("Doğrudan WMI bağlı") : Loc.T("Acer servisi kullanılıyor");
+            if (IsAvailable) return Loc.T("Doğrudan WMI bağlı");
+
+            // This row used to say "the Acer service is in use" whenever the helper was not connected, including on a
+            // machine where the service answered nothing at all. On the AN16-61 report that sentence was the reason
+            // the app looked healthy while every page was empty, so a refusal now says what was refused and why.
+            return _hybrid.DirectWmiRefusal switch
+            {
+                WmiWorkerRefusal.UserDeclined => Loc.T("Yönetici izni verilmedi; Acer servisi kullanılıyor"),
+                WmiWorkerRefusal.UntrustedLocation => Loc.T(
+                    "Klasör güvenli değil: NitroLite'ı yönetici olarak başlatın ya da Program Files'a kurun."),
+                WmiWorkerRefusal.StartFailed or WmiWorkerRefusal.HandshakeFailed => Loc.T(
+                    "Doğrudan WMI başlatılamadı"),
+                _ => Loc.T("Acer servisi kullanılıyor")
+            };
         }
     }
 

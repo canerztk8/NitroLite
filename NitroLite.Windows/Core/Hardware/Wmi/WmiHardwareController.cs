@@ -75,6 +75,9 @@ public sealed class WmiHardwareController : IHardwareController
     /// <summary>Why the last connection attempt failed, for the settings page and the log.</summary>
     public string LastError => _launcher.LastError;
 
+    /// <summary>Which kind of failure that is, so the window can say it in the user's language.</summary>
+    public WmiWorkerRefusal Refusal => _launcher.Refusal;
+
     /// <summary>The read-back policy, so the settings page can reset its counters.</summary>
     public ReadBackPolicy ReadBack => _readBack;
 
@@ -325,8 +328,8 @@ public sealed class WmiHardwareController : IHardwareController
 
         var result = await ApplyAsync(
             ReadBackPolicy.OperatingMode,
-            write: async () => (await SendAsync(WmiWorkerCommand.SetOperatingMode,
-                new JsonObject { ["mode"] = (int)mode }).ConfigureAwait(false))?.Ok == true,
+            write: () => WriteOrThrowAsync(WmiWorkerCommand.SetOperatingMode,
+                new JsonObject { ["mode"] = (int)mode }),
             readBack: GetOperatingModeAsync,
             matches: observed => observed == mode).ConfigureAwait(false);
 
@@ -377,8 +380,8 @@ public sealed class WmiHardwareController : IHardwareController
 
             var result = await _readBack.ApplyAsync(
                 ReadBackPolicy.MuxMode,
-                write: async () => (await SendAsync(WmiWorkerCommand.SetMuxMode,
-                    new JsonObject { ["mode"] = (int)mode }).ConfigureAwait(false))?.Ok == true,
+                write: () => WriteOrThrowAsync(WmiWorkerCommand.SetMuxMode,
+                    new JsonObject { ["mode"] = (int)mode }),
                 readBack: GetGpuModeAsync,
                 matches: observed => observed == mode).ConfigureAwait(false);
 
@@ -410,11 +413,11 @@ public sealed class WmiHardwareController : IHardwareController
 
             var speed = await ApplyAsync(
                 ReadBackPolicy.FanSpeed,
-                write: async () => (await SendAsync(WmiWorkerCommand.SetFanSpeed, new JsonObject
+                write: () => WriteOrThrowAsync(WmiWorkerCommand.SetFanSpeed, new JsonObject
                 {
                     ["cpuPercent"] = cpu,
                     ["gpuPercent"] = gpu
-                }).ConfigureAwait(false))?.Ok == true,
+                }),
                 readBack: GetFanModeAsync,
                 matches: observed => observed == FanMode.Custom).ConfigureAwait(false);
 
@@ -423,11 +426,11 @@ public sealed class WmiHardwareController : IHardwareController
 
         var behaviour = await ApplyAsync(
             ReadBackPolicy.FanBehavior,
-            write: async () => (await SendAsync(WmiWorkerCommand.SetFanBehavior, new JsonObject
+            write: () => WriteOrThrowAsync(WmiWorkerCommand.SetFanBehavior, new JsonObject
             {
                 ["cpu"] = (int)mode,
                 ["gpu"] = (int)mode
-            }).ConfigureAwait(false))?.Ok == true,
+            }),
             readBack: GetFanModeAsync,
             matches: observed => observed == mode).ConfigureAwait(false);
 
@@ -542,8 +545,16 @@ public sealed class WmiHardwareController : IHardwareController
         if (isOff)
         {
             // Turning the lights off is not verified by colour: a firmware that keeps the last colour in its getter
-            // would fail the read-back and disable the capability for a write that worked.
-            return await WriteLightingAsync(request).ConfigureAwait(false);
+            // would fail the read-back and disable the capability for a write that worked. There is no policy under
+            // this path, so a missing transport is answered here instead of being counted against anything.
+            try
+            {
+                return await WriteLightingAsync(request).ConfigureAwait(false);
+            }
+            catch (WmiTransportUnavailableException)
+            {
+                return false;
+            }
         }
 
         var scaled = AcerWmiProtocol.ScaleColor(
@@ -584,7 +595,8 @@ public sealed class WmiHardwareController : IHardwareController
             ["zones"] = zones
         }).ConfigureAwait(false);
 
-        if (response is not { Ok: true }) return false;
+        if (response is null) throw new WmiTransportUnavailableException(_launcher.LastError);
+        if (!response.Ok) return false;
 
         if (response.Data is JsonObject data && ReadNullableBool(data, "commitApplied") == false)
         {
@@ -711,8 +723,8 @@ public sealed class WmiHardwareController : IHardwareController
 
         var result = await ApplyAsync(
             ReadBackPolicy.BatteryLimit,
-            write: async () => (await SendAsync(WmiWorkerCommand.SetBatteryLimit,
-                new JsonObject { ["mode"] = (int)mode }).ConfigureAwait(false))?.Ok == true,
+            write: () => WriteOrThrowAsync(WmiWorkerCommand.SetBatteryLimit,
+                new JsonObject { ["mode"] = (int)mode }),
             readBack: GetBatteryChargeModeAsync,
             matches: observed => observed == mode).ConfigureAwait(false);
 
@@ -749,6 +761,22 @@ public sealed class WmiHardwareController : IHardwareController
     {
         var response = await SendAsync(WmiWorkerCommand.ReadDeviceState).ConfigureAwait(false);
         return response is { Ok: true } ? response.Data as JsonObject : null;
+    }
+
+    /// <summary>
+    /// One write for the read-back policy: true when the worker accepted it, false when the worker was there and
+    /// refused it, and <see cref="WmiTransportUnavailableException"/> when there was no worker to ask.
+    /// <para>
+    /// The distinction is the whole reason this method exists instead of a <c>?.Ok == true</c> at each call site. A
+    /// missing transport used to read as a refused write, which the policy counts as a failed session — three of
+    /// those switch the capability off for good, for a firmware fault that never happened.
+    /// </para>
+    /// </summary>
+    private async Task<bool> WriteOrThrowAsync(WmiWorkerCommand command, JsonObject? args = null)
+    {
+        var response = await SendAsync(command, args).ConfigureAwait(false);
+        if (response is null) throw new WmiTransportUnavailableException(_launcher.LastError);
+        return response.Ok;
     }
 
     /// <summary>

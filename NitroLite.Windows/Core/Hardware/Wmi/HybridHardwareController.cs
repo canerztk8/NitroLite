@@ -78,6 +78,30 @@ public sealed class HybridHardwareController : IHardwareController
     /// <summary>Which backend the last resolution chose. Shown in the hardware report and the settings page.</summary>
     public string ActiveBackendName => _activeIsWmi ? "WMI" : _agent.BackendName;
 
+    /// <summary>
+    /// One English line for the hardware report: which path is answering, and what the other one is doing about it.
+    /// <para>
+    /// The report is the thing a user pastes into an issue, and the AN16-61 report had to be reconstructed from a log
+    /// because it did not say this. "Nothing detected" is answered by these three facts — is the service connected, is
+    /// the helper running, and if not, why not — so they travel with the report instead of being inferred from it.
+    /// </para>
+    /// </summary>
+    public string DescribeBackend()
+    {
+        var service = _agent.IsAvailable ? "AASSvc connected" : "AASSvc not connected";
+
+        var direct = DirectWmiRefusal switch
+        {
+            WmiWorkerRefusal.UserDeclined => "refused: elevation declined",
+            WmiWorkerRefusal.UntrustedLocation => "refused: install folder is writable by other accounts",
+            WmiWorkerRefusal.StartFailed => "failed to start",
+            WmiWorkerRefusal.HandshakeFailed => "handshake failed",
+            _ => DirectWmi?.IsAvailable == true ? "running" : "not started"
+        };
+
+        return $"active {ActiveBackendName}; {service}; direct WMI {direct}";
+    }
+
     private bool _activeIsWmi;
 
     /// <summary>
@@ -103,6 +127,12 @@ public sealed class HybridHardwareController : IHardwareController
 
     /// <summary>True when the direct-WMI backend exists and the user has declined its elevation prompt.</summary>
     public bool UserDeclinedElevation => _wmi is WmiHardwareController wmi && wmi.UserDeclinedElevation;
+
+    /// <summary>
+    /// Why the direct-WMI backend is not running, when it is not. <see cref="WmiWorkerRefusal.None"/> means nobody has
+    /// asked for it yet, which is not a failure and must not be reported as one.
+    /// </summary>
+    public WmiWorkerRefusal DirectWmiRefusal => (_wmi as WmiHardwareController)?.Refusal ?? WmiWorkerRefusal.None;
 
     /// <summary>The read-back policy of the direct-WMI backend, when it exists. Null otherwise.</summary>
     public ReadBackPolicy? ReadBack => (_wmi as WmiHardwareController)?.ReadBack;

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -314,6 +314,7 @@ public class SecurityHardeningTests
                 started = true;
                 return null;
             },
+            isElevated: () => false,
             isTrustedLocation: _ => false);
 
         Assert.Null(await launcher.StartAsync());
@@ -442,6 +443,7 @@ public class SecurityHardeningTests
         using var launcher = new WmiWorkerLauncher(
             executablePath: exe,
             start: _ => null,
+            isElevated: () => false,
             isTrustedLocation: _ => { checks++; return false; });
 
         Assert.Null(await launcher.StartAsync());

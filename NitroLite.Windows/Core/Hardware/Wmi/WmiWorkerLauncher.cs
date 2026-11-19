@@ -5,6 +5,28 @@ using System.IO;
 namespace NitroLite.Core.Hardware.Wmi;
 
 /// <summary>
+/// Why the helper was not started. The log carries the English detail in <see cref="WmiWorkerLauncher.LastError"/>;
+/// this is what lets the window say the reason in the user's language instead of pasting that detail into a sentence.
+/// </summary>
+public enum WmiWorkerRefusal
+{
+    /// <summary>Nothing has been refused. Either the helper is running or nobody has asked for it yet.</summary>
+    None,
+
+    /// <summary>The user said no to the UAC prompt earlier in this session.</summary>
+    UserDeclined,
+
+    /// <summary>The executable sits where another local account could replace it, and the launch would elevate.</summary>
+    UntrustedLocation,
+
+    /// <summary>The process could not be started at all.</summary>
+    StartFailed,
+
+    /// <summary>The helper started but the pipe handshake did not complete.</summary>
+    HandshakeFailed
+}
+
+/// <summary>
 /// Starts the elevated <c>--wmi-worker</c> helper, at most once per session, and only when the user asked for it.
 /// <para>
 /// The window runs <c>asInvoker</c> and stays that way. Elevation is requested at the moment a hardware write is
@@ -75,6 +97,12 @@ public sealed class WmiWorkerLauncher : IDisposable
     /// <summary>Why the last attempt failed, for the log and the settings page. Empty after a success.</summary>
     public string LastError { get; private set; } = "";
 
+    /// <summary>
+    /// Which kind of failure <see cref="LastError"/> describes, so a localised status line can name it without
+    /// parsing an English sentence.
+    /// </summary>
+    public WmiWorkerRefusal Refusal { get; private set; }
+
     /// <summary>How many times a helper was started. Used by the tests and the log.</summary>
     public int Attempts { get; private set; }
 
@@ -122,17 +150,32 @@ public sealed class WmiWorkerLauncher : IDisposable
         if (_disposed) return null;
         if (UserDeclined)
         {
+            Refusal = WmiWorkerRefusal.UserDeclined;
             LastError = "the user declined elevation earlier in this session";
             return null;
         }
 
+        // An already-elevated parent passes its token to the child, so asking for runas would raise a prompt for a
+        // privilege the process already holds. That is the whole point of the optional Task Scheduler entry: the
+        // user answers UAC once, at the moment they turn it on, and never again.
+        bool needsPrompt = !IsElevated;
+
+        // The folder check guards privilege that is about to be *granted*, and only the runas launch grants any:
+        // the helper would start with an administrator token that the user just handed to whatever file happens to
+        // be at that path. A helper started by an already-elevated parent inherits the token the process is running
+        // under; refusing it protects nothing the user has not already given away, and it took away the one recovery
+        // a user has. The AN16-61 report is the measurement: NitroLite was installed under C:\WinTools, every launch
+        // was refused, and "restart it as administrator" changed nothing because the refusal came before the
+        // elevation question was even asked.
+        //
         // The connection is asked for again on every hardware read, so a refusal that is re-evaluated and re-logged
         // each time turned one line into a warning every second and buried the rest of the report it appeared in.
         // The path is refused once; the reason stays in LastError for the settings page.
-        if (_locationRefused || !_isTrustedLocation(_executablePath))
+        if (needsPrompt && (_locationRefused || !_isTrustedLocation(_executablePath)))
         {
+            Refusal = WmiWorkerRefusal.UntrustedLocation;
             LastError = "the helper executable sits in a folder any local account can write to; "
-                        + "move NitroLite under your own profile or into Program Files and start it again";
+                        + "start NitroLite as administrator, or move it under your own profile or into Program Files";
             if (!_locationRefused)
             {
                 _locationRefused = true;
@@ -146,10 +189,6 @@ public sealed class WmiWorkerLauncher : IDisposable
 
         var pipeName = "nitrolite-wmi-" + Guid.NewGuid().ToString("N");
         var nonce = WmiWorkerClient.GenerateNonce();
-        // An already-elevated parent passes its token to the child, so asking for runas would raise a prompt for a
-        // privilege the process already holds. That is the whole point of the optional Task Scheduler entry: the
-        // user answers UAC once, at the moment they turn it on, and never again.
-        bool needsPrompt = !IsElevated;
 
         var startInfo = new ProcessStartInfo(_executablePath, BuildArguments(pipeName, Environment.ProcessId))
         {
@@ -169,6 +208,7 @@ public sealed class WmiWorkerLauncher : IDisposable
         catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
         {
             UserDeclined = true;
+            Refusal = WmiWorkerRefusal.UserDeclined;
             LastError = "the user declined the elevation prompt";
             AppLog.Info("Administrator permission was not granted for direct WMI",
                 "The user chose No in the UAC prompt; it will not be asked again this session.");
@@ -176,6 +216,7 @@ public sealed class WmiWorkerLauncher : IDisposable
         }
         catch (Exception ex)
         {
+            Refusal = WmiWorkerRefusal.StartFailed;
             LastError = $"{ex.GetType().Name}: {ex.Message}";
             AppLog.Warn("--wmi-worker could not be started", LastError);
             return null;
@@ -183,6 +224,7 @@ public sealed class WmiWorkerLauncher : IDisposable
 
         if (process == null)
         {
+            Refusal = WmiWorkerRefusal.StartFailed;
             LastError = "the helper process did not start";
             return null;
         }
@@ -197,12 +239,14 @@ public sealed class WmiWorkerLauncher : IDisposable
             try
             {
                 var client = await _connect(pipeName, nonce, ConnectTimeout, cancellationToken).ConfigureAwait(false);
+                Refusal = WmiWorkerRefusal.None;
                 LastError = "";
                 AppLog.Info("--wmi-worker connected", $"pipe='{pipeName}' pid={process.Id}");
                 return client;
             }
             catch (Exception ex)
             {
+                Refusal = WmiWorkerRefusal.HandshakeFailed;
                 LastError = $"{ex.GetType().Name}: {ex.Message}";
                 AppLog.Warn("--wmi-worker handshake failed", LastError);
                 try { process.Kill(entireProcessTree: true); } catch { }

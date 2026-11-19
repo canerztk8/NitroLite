@@ -3,7 +3,7 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)
-[![Tests](https://img.shields.io/badge/Tests-2699-10B981)](#tests)
+[![Tests](https://img.shields.io/badge/Tests-2743-10B981)](#tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -258,7 +258,7 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 
 Two things decide whether the direct-WMI fallback can take over, and both are worth checking when a machine reports "nothing detected":
 
-- **The install folder must be trusted.** The elevated WMI worker is only launched from an executable no other local account can replace. Anything under your own profile (`%LOCALAPPDATA%\NitroLite`, a portable or Scoop folder) and anything in `C:\Program Files` qualifies. A folder you created directly under a drive root (`C:\WinTools`) does **not**: the drive root grants `Authenticated Users` modify to everything created beneath it, so the files in that folder are replaceable by any local account, and the worker refuses to start from there. The log says so once, with the path, and the fan and mode rows keep pointing at the Acer service.
+- **The install folder must be trusted.** The elevated WMI worker is only launched from an executable no other local account can replace. Anything under your own profile (`%LOCALAPPDATA%\NitroLite`, a portable or Scoop folder) and anything in `C:\Program Files` qualifies. A folder you created directly under a drive root (`C:\WinTools`) does **not**: the drive root grants `Authenticated Users` modify to everything created beneath it, so the files in that folder are replaceable by any local account, and the worker refuses to start from there **when it would have to ask for elevation**. That is the only case the rule is about: a helper started by a NitroLite that is already running as administrator inherits that token, so nothing is granted that the process did not hold already — which is why **Run as administrator**, or the Task Scheduler entry, makes fan and mode control work from `C:\WinTools` as well. Without either, the log says so once, with the path, the settings row names the refusal, and the fan and mode rows keep pointing at the Acer service.
 - **The `AcerGamingFunction` WMI class must be registered.** On models where Acer ships only the service, the service path is the only path; NitroLite then needs `AASSvc` running.
 
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
@@ -694,7 +694,7 @@ The solution has five projects:
 | `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
 | `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
 | `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2699 tests. |
+| `NitroLite.Tests` | `net10.0-windows` | 2743 tests. |
 
 `NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
 check that keeps the split honest.
@@ -732,7 +732,7 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2699 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
+2743 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
 concurrency.
 
 ```powershell

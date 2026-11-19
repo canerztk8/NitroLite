@@ -170,7 +170,8 @@ public static class HardwareReport
         ReadBackPolicy? readBack = null,
         SensorLayout? discoveredSensors = null,
         bool sensorProbeRan = false,
-        DeviceIdentity? identity = null)
+        DeviceIdentity? identity = null,
+        string? backend = null)
     {
         identity ??= HardwareDetector.Current;
         var sb = new StringBuilder();
@@ -203,6 +204,17 @@ public static class HardwareReport
         AppendRow(sb, "Cache key", probe.CacheKey);
         AppendRow(sb, "Notes", probe.ProfileNotes);
         sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(backend))
+        {
+            // Which path answers, and why the other one does not. A report that says "nothing detected" without this
+            // cannot be triaged: the same symptom is a service that is silent, a helper that was refused, or a machine
+            // whose firmware has neither, and only the backend line tells them apart.
+            sb.AppendLine("| Backend | |");
+            sb.AppendLine("| --- | --- |");
+            AppendRow(sb, "State", backend);
+            sb.AppendLine();
+        }
 
         sb.AppendLine("| Capability | Outcome | Detail |");
         sb.AppendLine("| --- | --- | --- |");

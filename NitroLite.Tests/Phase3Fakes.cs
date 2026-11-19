@@ -362,7 +362,11 @@ internal static class Phase3Fakes
     {
         public string BackendName => "Test";
 
-        public bool IsAvailable => true;
+        /// <summary>
+        /// What this backend reports. Settable so a test can describe a machine whose backend object exists but has
+        /// never opened a transport, which is the state every Windows launch starts in.
+        /// </summary>
+        public bool IsAvailable { get; set; } = true;
 
         public List<string> Writes { get; } = new();
 

@@ -66,6 +66,32 @@ that reads in English.
 
 ### Fixed
 
+- **A Nitro AN16-61 with NitroSense working detected nothing.** Three refusals stacked up and each hid the next.
+  NitroLite was installed under `C:\WinTools`, where the drive root's inherited `Authenticated Users: Modify` makes
+  the executable replaceable by any local account, so the elevated helper was refused as an untrusted location — and
+  it was refused *before* the elevation question, which is why restarting the app as administrator changed nothing.
+  Acer's service accepted the connection and answered the `VERSION` greeting with nothing at all, which the client
+  read as "there is no service" although NitroSense on the same machine talks to it, and NitroSense never sends that
+  greeting either. With both backends gone every page stayed empty, and the settings row still said the Acer service
+  was in use.
+
+  The folder check now guards only the launch that would *raise* a privilege: an executable started by an
+  already-elevated NitroLite inherits a token the process already holds, so refusing it protected nothing and took
+  away the one recovery the user had. An unelevated launch from the same folder is refused exactly as before. The
+  greeting is a hint rather than a gate: when `VERSION` is not answered the client asks the question it actually
+  depends on — one read-only `GET_MONITOR_DATA` — and keeps that answer for the telemetry poll that was going to ask
+  it a moment later, so a service that skips the greeting is used and a genuinely silent one is still reported
+  unhealthy and backed off. The row that used to say "the Acer service is in use" now names the refusal instead
+  (untrusted folder, permission declined, did not start), in the user's language. And the reason a report carries is
+  now in the log: the replies to both handshake packets, on one line, once per failure streak.
+
+  The streak itself was broken, which is why the log had a warning every second rather than one: a failed request
+  cleared the failure counter on its way out, so every attempt looked like the first and the delay never grew past a
+  second. A dropped socket now only clears the *wait* — the counter keeps counting — so a service that accepts and
+  says nothing is retried after 1, 2, 4, 8, 16 and then 30 seconds, and it gets one line in the log instead of sixty.
+  The hardware report gained a **Backend** row for the same reason: which path answers, and why the other one does
+  not, is now part of what a user pastes into an issue instead of something a maintainer reconstructs from a log.
+
 - **A hand-picked colour no longer comes back as "Lights Off (Blackout)".** Changing a colour by hand left the stored
   preset name in the settings file, and the next rebuild of the profile list matched that name and put the preset in
   the box — so the page claimed the keyboard was running a profile it no longer was, sometimes a blackout. A hand

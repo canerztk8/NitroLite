@@ -25,8 +25,11 @@ public class AcerAgentClient : IDisposable
     /// <summary>The four zone colours that mean "off".</summary>
     private static readonly string[] AllZonesOff = { "#000000", "#000000", "#000000", "#000000" };
 
-    private const string Host = "127.0.0.1";
-    private const int Port = 46933;
+    private const string DefaultHost = "127.0.0.1";
+    private const int DefaultPort = 46933;
+
+    private readonly string _host;
+    private readonly int _port;
 
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("ACER");
 
@@ -43,6 +46,54 @@ public class AcerAgentClient : IDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private TcpClient? _client;
     private NetworkStream? _stream;
+
+    /// <summary>
+    /// The answer to the read that proved the service usable when the greeting was not. The first telemetry poll asks
+    /// the identical question, so keeping the answer turns the fallback from "one extra round trip on every connect"
+    /// into "the poll that was going to happen anyway". Consumed once, under <see cref="_lock"/>.
+    /// </summary>
+    private string? _prefetchedMonitorResponse;
+
+    /// <summary>
+    /// True once the fallback has been described in the log. The greeting is answered differently by different AASSvc
+    /// builds, so one line saying which one this is worth a place in the log of the machine it happens on — once, not
+    /// on every reconnect.
+    /// </summary>
+    private bool _greetingFallbackLogged;
+
+    /// <summary>
+    /// How long the greeting may take before the real read decides. Shorter than a normal request on purpose: it is a
+    /// question the app does not depend on the answer to, and the user is waiting behind it.
+    /// </summary>
+    private TimeSpan _handshakeTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>How long the socket may take to open.</summary>
+    private TimeSpan _connectTimeout = TimeSpan.FromSeconds(3);
+
+    /// <summary>How long one ordinary request may take. Injectable for the same reason as the two above.</summary>
+    private TimeSpan _requestTimeout = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// The loopback service the app talks to. Sets nothing: the socket opens on first use.
+    /// <para>
+    /// <paramref name="host"/> and <paramref name="port"/> exist for the tests, which stand a fake service on an
+    /// ephemeral port and drive the two greeting shapes the fleet actually has. Nothing in the product passes them.
+    /// </para>
+    /// </summary>
+    public AcerAgentClient() : this(DefaultHost, DefaultPort)
+    {
+    }
+
+    /// <summary>The one constructor, with the transport and its budgets injectable for the tests.</summary>
+    internal AcerAgentClient(string host, int port, TimeSpan? connectTimeout = null,
+        TimeSpan? handshakeTimeout = null, TimeSpan? requestTimeout = null)
+    {
+        _host = host;
+        _port = port;
+        if (connectTimeout is { } connect) _connectTimeout = connect;
+        if (handshakeTimeout is { } handshake) _handshakeTimeout = handshake;
+        if (requestTimeout is { } request) _requestTimeout = request;
+    }
 
     // Bytes received but not yet consumed (may hold events or the start of the next message).
     private readonly MemoryStream _pending = new();
@@ -61,6 +112,7 @@ public class AcerAgentClient : IDisposable
         try { _client?.Dispose(); } catch { }
         _stream = null;
         _client = null;
+        _prefetchedMonitorResponse = null;
         // Dispose() may already have released the buffer; clearing it then would throw.
         try { _pending.SetLength(0); } catch (ObjectDisposedException) { }
     }
@@ -93,29 +145,67 @@ public class AcerAgentClient : IDisposable
 
         try
         {
-            _client = new TcpClient();
-            using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await _client.ConnectAsync(Host, Port, connectCts.Token);
-            _stream = _client.GetStream();
-
-            // Handshake: the service answers VERSION with result "0".
-            var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" }, "VERSION");
-            if (!IsSuccessResult(initResp))
+            if (!await OpenSocketAsync().ConfigureAwait(false))
             {
-                Disconnect();
                 RegisterConnectFailure();
-
-                // Once per streak, next to the "could not connect" line RegisterConnectFailure writes for the same
-                // failure: together they say what the service answered and that the retry is backing off. Logging
-                // this on every attempt put one warning per second in the log of the machine it was reported on.
-                if (_consecutiveConnectFailures == 1)
-                    AppLog.Warn("The AcerAgentService handshake was refused", $"VERSION response: {initResp ?? "(empty)"}");
-
                 return false;
             }
 
-            ResetConnectBackoff();
-            return true;
+            // The greeting is a hint, never a gate. AASSvc builds do not agree on it: the reference AN16-41 answers
+            // VERSION with result "0", and the AN16-61 report is a machine whose service is demonstrably alive —
+            // NitroSense drives it — yet answers VERSION with nothing at all. Reading that silence as "there is no
+            // service" was half of why that machine detected nothing: the other half was the refused WMI fallback,
+            // and with both gone the app had no backend whatsoever. NitroSense itself never sends this packet.
+            var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" }, "VERSION",
+                _handshakeTimeout).ConfigureAwait(false);
+            if (IsSuccessResult(initResp))
+            {
+                ResetConnectBackoff();
+                return true;
+            }
+
+            // Ask the question the app actually depends on, and treat the answer as the handshake. GET_MONITOR_DATA
+            // is read-only — no EC write, nothing to undo — and it is the call the dashboard makes a moment later, so
+            // the reply is kept for that poll instead of being thrown away.
+            //
+            // A greeting that timed out disconnected the socket on its way out (SendRawAsync never leaves late bytes
+            // to be mistaken for the next answer), so the fallback needs its own connection.
+            if (_stream == null && !await OpenSocketAsync().ConfigureAwait(false))
+            {
+                RegisterConnectFailure();
+                return false;
+            }
+
+            var probeResp = await SendRawAsync(PacketGetMonitorData, new { }, "GET_MONITOR_DATA").ConfigureAwait(false);
+            if (IsSuccessResult(probeResp))
+            {
+                _prefetchedMonitorResponse = probeResp;
+                ResetConnectBackoff();
+
+                if (!_greetingFallbackLogged)
+                {
+                    _greetingFallbackLogged = true;
+                    AppLog.Info("The AcerAgentService does not answer the VERSION handshake",
+                        $"It does answer GET_MONITOR_DATA, so the service is in use. VERSION reply: {DescribeReply(initResp)}");
+                }
+
+                return true;
+            }
+
+            Disconnect();
+            RegisterConnectFailure();
+
+            // Once per streak, next to the "could not connect" line RegisterConnectFailure writes for the same
+            // failure: together they say what the service answered and that the retry is backing off. Logging this on
+            // every attempt put one warning per second in the log of the machine it was reported on. The replies are
+            // included because they are the only evidence a report carries about why the service is silent.
+            if (_consecutiveConnectFailures == 1)
+            {
+                AppLog.Warn("The AcerAgentService did not answer",
+                    $"VERSION reply: {DescribeReply(initResp)}; GET_MONITOR_DATA reply: {DescribeReply(probeResp)}");
+            }
+
+            return false;
         }
         catch
         {
@@ -125,12 +215,59 @@ public class AcerAgentClient : IDisposable
         }
     }
 
-    /// <summary>Clears the reconnect backoff after a successful connect or a connection that was alive.</summary>
+    /// <summary>
+    /// Opens the socket. Separate from the handshake because the fallback needs a second one: a greeting that ran to
+    /// its timeout takes the connection down with it.
+    /// </summary>
+    private async Task<bool> OpenSocketAsync()
+    {
+        TcpClient? client = null;
+        try
+        {
+            client = new TcpClient();
+            using var connectCts = new CancellationTokenSource(_connectTimeout);
+            await client.ConnectAsync(_host, _port, connectCts.Token).ConfigureAwait(false);
+            _client = client;
+            _stream = client.GetStream();
+            return true;
+        }
+        catch
+        {
+            try { client?.Dispose(); } catch { }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// What the service said, for the log: <c>(no reply)</c> when it said nothing, otherwise the reply on one line and
+    /// cut to a length that keeps a log readable. Only ever called for a reply that was not a success, so this is an
+    /// error object rather than a telemetry payload.
+    /// </summary>
+    internal static string DescribeReply(string? reply)
+    {
+        if (string.IsNullOrWhiteSpace(reply)) return "(no reply)";
+
+        var flat = string.Join(' ', reply.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return flat.Length <= 160 ? flat : flat[..157] + "...";
+    }
+
+    /// <summary>Clears the failure streak and the reconnect delay. Only a successful connect gets to do this.</summary>
     private void ResetConnectBackoff()
     {
         _consecutiveConnectFailures = 0;
         _nextConnectAttemptAt = TimeSpan.MinValue;
     }
+
+    /// <summary>
+    /// Lets the next request try again at once, without pretending the service answered.
+    /// <para>
+    /// A socket that was alive and then dropped should not sit behind the 30-second delay that belongs to a service
+    /// that is not there. What it must not do is clear the failure streak: doing that turned a service which accepts
+    /// the connection and then says nothing into a "first failure" on every attempt — one warning per second in the
+    /// AN16-61 report, and a backoff that never grew past one second, because the streak was reset before it could.
+    /// </para>
+    /// </summary>
+    private void AllowImmediateReconnect() => _nextConnectAttemptAt = TimeSpan.MinValue;
 
     /// <summary>Grows the delay between connect attempts: 1, 2, 4, 8, 16, then 30 seconds.</summary>
     private void RegisterConnectFailure()
@@ -141,7 +278,7 @@ public class AcerAgentClient : IDisposable
 
         // Only the first failure of a streak: AASSvc being absent is normal and must not fill the log.
         if (_consecutiveConnectFailures == 1)
-            AppLog.Warn("Could not connect to AcerAgentService", $"{Host}:{Port} - retrying with backoff.");
+            AppLog.Warn("Could not connect to AcerAgentService", $"{_host}:{_port} - retrying with backoff.");
     }
 
     public const int MaxResponseSizeBytes = 1024 * 1024; // 1 MB upper bound to prevent unbounded memory allocation
@@ -385,7 +522,7 @@ public class AcerAgentClient : IDisposable
         catch
         {
             Disconnect();
-            ResetConnectBackoff();
+            AllowImmediateReconnect();
             return false;
         }
     }
@@ -399,7 +536,7 @@ public class AcerAgentClient : IDisposable
         {
             var packet = BuildPacket(packetId, payload);
 
-            using var ioCts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(3));
+            using var ioCts = new CancellationTokenSource(timeout ?? _requestTimeout);
 
             // Events that arrived while idle are still in the buffer; publish them before the new request.
             string? queued;
@@ -428,14 +565,14 @@ public class AcerAgentClient : IDisposable
                 {
                     // The connection was alive, so the next request should try to reconnect immediately.
                     Disconnect();
-                    ResetConnectBackoff();
+                    AllowImmediateReconnect();
                     return null;
                 }
 
                 if (_pending.Length + read > MaxResponseSizeBytes)
                 {
                     Disconnect();
-                    ResetConnectBackoff();
+                    AllowImmediateReconnect();
                     return null;
                 }
 
@@ -447,7 +584,7 @@ public class AcerAgentClient : IDisposable
         {
             // On timeout or I/O error, disconnect so late bytes cannot be mistaken for the next response.
             Disconnect();
-            ResetConnectBackoff();
+            AllowImmediateReconnect();
             return null;
         }
     }
@@ -500,7 +637,11 @@ public class AcerAgentClient : IDisposable
         {
             if (!await EnsureConnectedInternalAsync()) return null;
 
-            var resp = await SendRawAsync(PacketGetMonitorData, new { }, "GET_MONITOR_DATA");
+            // A connection made through the fallback already has this request's answer: that read is what proved
+            // the service usable. Asking again would spend a round trip to learn what is already known.
+            string? resp = _prefetchedMonitorResponse;
+            _prefetchedMonitorResponse = null;
+            resp ??= await SendRawAsync(PacketGetMonitorData, new { }, "GET_MONITOR_DATA").ConfigureAwait(false);
             return ParseMonitorData(GetSuccessData(resp));
         }
         catch

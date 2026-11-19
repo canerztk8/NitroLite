@@ -40,11 +40,14 @@ public sealed record ReadBackResult
 
     public static ReadBackResult AlreadyDisabled() => new() { Skipped = true, Error = "capability is disabled" };
 
-    public static ReadBackResult NoTransport() => new()
+    /// <summary>No transport, with the reason the launcher gave when it had one.</summary>
+    public static ReadBackResult NoTransport(string? reason = null) => new()
     {
         Skipped = true,
         TransportMissing = true,
-        Error = "no WMI transport: the elevated worker is not running"
+        Error = string.IsNullOrWhiteSpace(reason)
+            ? "no WMI transport: the elevated worker is not running"
+            : reason
     };
 }
 
@@ -190,6 +193,12 @@ public sealed class ReadBackPolicy
                         ? $"read-back returned {observed.Value}, which is not the value that was written"
                         : "read-back returned nothing";
                 }
+            }
+            catch (WmiTransportUnavailableException ex)
+            {
+                // Nothing reached the hardware, so there is no firmware answer to judge and no session to count.
+                // This is the branch that keeps a machine without a backend from disabling its own features.
+                return ReadBackResult.NoTransport(ex.Message);
             }
             catch (Exception ex)
             {

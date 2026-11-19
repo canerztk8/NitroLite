@@ -504,7 +504,8 @@ public sealed class AppHost : IDisposable
         });
 
         var platform = new WindowsPlatformSnapshot(
-            identity, Probe, () => hybrid.ActiveBackendName, readBack, () => wmi);
+            identity, Probe, () => hybrid.ActiveBackendName, readBack, () => wmi,
+            backendDetail: () => hybrid.DescribeBackend());
 
         // Game detection over the Windows process table. The power state is supplied so a Turbo profile is clamped to
         // Balanced on battery instead of being written and silently refused by the firmware.
@@ -516,7 +517,7 @@ public sealed class AppHost : IDisposable
         var schoolMode = CreateWindowsSchoolMode(settings, hybrid);
 
         AppLog.Info("The Windows hardware backend was attached",
-            $"{identity.ModelCode} · wmi={(settings.UseDirectWmiBackend ? "etkin" : "yedek")}");
+            $"{identity.ModelCode} · direct WMI {(settings.UseDirectWmiBackend ? "enabled" : "fallback only")}");
 
         // The Task Scheduler entry is the only way to start elevated without a UAC prompt, and it is what makes the
         // direct-WMI path usable at sign-in.
