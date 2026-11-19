@@ -48,6 +48,14 @@ Two controls that were hard to read, and a keyboard that follows the processor.
   and that a coffee is one way to say thanks while a star or a bug report counts just as much. Rewritten in all
   eight languages.
 
+### Fixed
+
+- **The temperature card is on the page.** It was written behind the keyboard-lighting capability flag, and that flag
+  comes from a WMI probe that opens an instance of `AcerGamingFunction` and needs elevation — without it the probe
+  answers "no keyboard" on a machine whose keyboard the write path paints perfectly. On the reference AN16-41 the
+  feature existed and could not be found. The card now sits at the top of the Lighting page, above the colours it
+  overrides, and is not gated on the flag.
+
 ## [1.2.7] - 2026-11-19
 
 A settings page rebuilt around what people actually change, eight more palettes, seven more typefaces, and a

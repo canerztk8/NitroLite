@@ -185,7 +185,6 @@ public class ReactiveLightingTests
         await vm.InitializeAsync();
 
         Assert.False(vm.ReactiveLightingEnabled);
-        Assert.True(vm.ReactiveLightingAvailable);
 
         await vm.RefreshTelemetryAsync();
         await vm.ReactiveLightingTask;
@@ -253,7 +252,7 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public async Task AMachineWithNoKeyboardLighting_IsNeverWritten()
+    public async Task ACapabilityFlagThatSaysNoKeyboard_DoesNotStopTheWrite()
     {
         var hardware = new Phase3Fakes.StubHardware();
         hardware.Sample.CpuTemperature = 80;
@@ -268,14 +267,15 @@ public class ReactiveLightingTests
         using var vm = Create(hardware);
         await vm.InitializeAsync();
 
-        Assert.False(vm.ReactiveLightingAvailable);
-
+        // The flag comes from the WMI capability probe, which opens an instance of AcerGamingFunction and needs
+        // elevation. Without it the probe answers "no keyboard" on a machine whose keyboard the write path paints
+        // perfectly - the reference AN16-41 does exactly that - so the mode must not be gated on it. Gating it hid the
+        // whole card on the one machine it was written for.
         vm.ReactiveLightingEnabled = true;
         await vm.RefreshTelemetryAsync();
         await vm.ReactiveLightingTask;
 
-        // A machine whose keyboard the app cannot paint must not be asked to paint it.
-        Assert.Empty(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
+        Assert.Single(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
     }
 
     [Fact]
@@ -326,13 +326,38 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public void TheCardIsHiddenWithoutAKeyboard()
+    public void TheCardIsAlwaysOnThePage()
     {
         var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
 
         Assert.Contains("Labels.ReactiveLighting", markup, StringComparison.Ordinal);
         Assert.Contains("ReactiveLightingEnabled", markup, StringComparison.Ordinal);
-        Assert.Contains("IsVisible=\"{Binding ReactiveLightingAvailable}\"", markup, StringComparison.Ordinal);
+
+        // The card is not hidden behind a capability flag. It was, and the flag answered "no keyboard" on the machine
+        // this was written on, so the feature existed and could not be found.
+        var start = markup.IndexOf("Labels.ReactiveLighting", StringComparison.Ordinal);
+        var card = markup[markup.LastIndexOf("<Border", start, StringComparison.Ordinal)..];
+        card = card[..(card.IndexOf('>') + 1)];
+
+        Assert.DoesNotContain("IsVisible", card, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCardComesBeforeTheColourControls()
+    {
+        var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
+
+        // The mode overrides every colour under it, so it has to be the first card on the page. It was written below the
+        // effect sliders first, and the one person who went looking for it could not find it without scrolling.
+        var card = markup.IndexOf("Labels.ReactiveLighting", StringComparison.Ordinal);
+        var deck = markup.IndexOf("Labels.ZonePreview", StringComparison.Ordinal);
+        var palette = markup.IndexOf("Labels.ColorPalette", StringComparison.Ordinal);
+
+        Assert.True(card > 0, "the lighting page has no reactive card");
+        Assert.True(deck > 0, "the lighting page has no zone deck");
+        Assert.True(card < deck, "the reactive card is below the zone deck");
+        Assert.True(palette > 0, "the lighting page has no palette");
+        Assert.True(card < palette, "the reactive card is below the palette");
     }
 
     private static string RepoRoot()

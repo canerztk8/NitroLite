@@ -2733,9 +2733,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     public Task ReactiveLightingTask { get; private set; } = Task.CompletedTask;
 
-    /// <summary>True when the card is worth showing: the machine has a keyboard the app can paint.</summary>
-    public bool ReactiveLightingAvailable => LightingAvailable;
-
     /// <summary>The live reading beside the swatch, so the colour has a number next to it.</summary>
     /// <remarks>"CPU" and "°C" are the same in all eight languages, so this line needs no catalogue entry.</remarks>
     public string ReactiveLightingNow => $"CPU {CpuTemperature:F0} °C";
@@ -2767,7 +2764,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private void TickReactiveLighting(MonitorData data)
     {
-        if (!_reactiveLightingEnabled || _hardware == null || !LightingAvailable) return;
+        // Not gated on LightingAvailable: that flag comes from the WMI capability probe, which opens an instance of
+        // AcerGamingFunction and needs elevation. Without it the probe answers "no keyboard" on a machine whose
+        // keyboard the write path paints perfectly - the reference AN16-41 does exactly that - so gating on it hid the
+        // whole feature on the one machine it was written for.
+        if (!_reactiveLightingEnabled || _hardware == null) return;
 
         // A keyboard the user turned off stays off. The mode is a colour, not a way to switch the lights back on.
         if (_settings.IsBacklightOff || BrightnessLevel <= 0) return;
