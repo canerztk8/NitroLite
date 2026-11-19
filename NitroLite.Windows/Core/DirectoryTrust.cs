@@ -80,8 +80,12 @@ public static class DirectoryTrust
     /// <summary>
     /// The subset that matters on a <em>directory</em>: rights that let a principal remove or replace files that
     /// already exist in it. <see cref="FileSystemRights.WriteData"/> on a directory only means "create new files",
-    /// which cannot overwrite an existing executable, so it is deliberately excluded here — that exclusion is what
-    /// keeps a portable install directly under a drive root (e.g. <c>C:\WinTools</c>) working.
+    /// which cannot overwrite an existing executable, so it is deliberately excluded here.
+    /// <para>
+    /// That exclusion does not make a drive-root install trusted, and must not be read as if it did: a file created
+    /// in such a folder inherits <c>Modify</c> from the drive root itself, which <see cref="ReplacingRights"/> does
+    /// read on the file. It only keeps the folder's own "create" grant from being counted a second time.
+    /// </para>
     /// </summary>
     private const FileSystemRights ReplacingChildRights =
         FileSystemRights.DeleteSubdirectoriesAndFiles |
@@ -100,12 +104,19 @@ public static class DirectoryTrust
     /// True when the executable itself is safe to launch with an administrator token: no principal wider than the
     /// signed-in user may modify, delete or replace <em>this file</em>.
     /// <para>
-    /// This is deliberately a file-level check, not the directory-level <see cref="IsWorldWritable"/>. A folder that
-    /// lets <c>Users</c> <em>create</em> files (the default ACL on a folder directly under a drive root, e.g.
-    /// <c>C:\WinTools</c>) still does not let another account overwrite a file the signed-in user created there —
-    /// that needs <c>Delete</c> on the file or <c>DeleteSubdirectoriesAndFiles</c> on the folder, neither of which the
-    /// default inheritance grants. Refusing on directory writability alone therefore rejected every portable install
-    /// outside the profile and Program Files, and on those machines the elevated WMI worker never started at all.
+    /// This is deliberately a file-level check, not the directory-level <see cref="IsWorldWritable"/>: what decides
+    /// the answer is the right a wider principal actually holds, and reading it from the file covers the ones the
+    /// file inherits from its folder as well as the ones written on the folder itself. Reading only the folder used
+    /// to refuse every portable install that was not under the profile or Program Files, which on those machines
+    /// meant the elevated WMI worker never started at all.
+    /// </para>
+    /// <para>
+    /// A portable install under the profile is trusted because no other local account can write there, and Program
+    /// Files is trusted because writing there needs an administrator. A folder created directly under a drive root
+    /// (for example <c>C:\WinTools</c>) is refused on a stock Windows: the drive root grants <c>Authenticated
+    /// Users</c> modify to everything created beneath it, so the files in that folder are replaceable by any local
+    /// account between this check and the launch of the elevated helper. The refusal message and the README say so,
+    /// and send the user to a location where the answer is yes.
     /// </para>
     /// <para>
     /// False only when a wider principal verifiably holds a replacing right on the file or on its folder. When

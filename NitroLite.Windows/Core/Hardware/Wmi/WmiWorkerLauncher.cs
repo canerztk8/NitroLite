@@ -36,6 +36,13 @@ public sealed class WmiWorkerLauncher : IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// True once the executable's location has been refused. The answer cannot change while this process runs — the
+    /// file does not move — so the second attempt only has to remember it instead of reading the ACLs again and
+    /// printing the same warning on every telemetry tick.
+    /// </summary>
+    private bool _locationRefused;
+
+    /// <summary>
     /// <paramref name="start"/> and <paramref name="connect"/> are injectable so the UAC-cancelled path can be tested
     /// without a UAC prompt and the pipe path without an elevated process. <paramref name="isElevated"/> decides
     /// whether the helper needs a prompt at all, and <paramref name="isTrustedLocation"/> decides whether the
@@ -85,12 +92,14 @@ public sealed class WmiWorkerLauncher : IDisposable
         $"--wmi-worker --pipe \"{pipeName}\" --parent-pid {parentProcessId}";
 
     /// <summary>
-    /// True when the helper executable itself cannot be replaced by a principal wider than the signed-in user.
-    /// A portable or Scoop install lives under the profile and stays trusted, and so does a folder directly under
-    /// a drive root (e.g. <c>C:\WinTools</c>): its default ACL lets <c>Users</c> create files there but not overwrite
-    /// one the signed-in user created, which is what <see cref="DirectoryTrust.IsExecutableTrusted"/> checks.
-    /// A copy whose file or parent folder grants delete/modify to <c>Users</c>/<c>Everyone</c> is refused, because
-    /// any local account could swap the binary between this check and the launch.
+    /// True when the helper executable cannot be replaced by a principal wider than the signed-in user: anything
+    /// under the profile, and Program Files, which only an administrator can write to.
+    /// <para>
+    /// A folder created directly under a drive root (<c>C:\WinTools</c>) is <em>not</em> trusted on a stock Windows.
+    /// The drive root grants <c>Authenticated Users</c> modify to everything created beneath it, so a file in such a
+    /// folder is writable — and replaceable — by any local account. The README and the refusal message therefore
+    /// send the user to the profile or to Program Files, where that grant does not apply.
+    /// </para>
     /// </summary>
     public static bool IsTrustedHelperLocation(string executablePath)
     {
@@ -117,11 +126,19 @@ public sealed class WmiWorkerLauncher : IDisposable
             return null;
         }
 
-        if (!_isTrustedLocation(_executablePath))
+        // The connection is asked for again on every hardware read, so a refusal that is re-evaluated and re-logged
+        // each time turned one line into a warning every second and buried the rest of the report it appeared in.
+        // The path is refused once; the reason stays in LastError for the settings page.
+        if (_locationRefused || !_isTrustedLocation(_executablePath))
         {
             LastError = "the helper executable sits in a folder any local account can write to; "
                         + "move NitroLite under your own profile or into Program Files and start it again";
-            AppLog.Warn("--wmi-worker was not started", $"{LastError}: {_executablePath}");
+            if (!_locationRefused)
+            {
+                _locationRefused = true;
+                AppLog.Warn("--wmi-worker was not started", $"{LastError}: {_executablePath}");
+            }
+
             return null;
         }
 

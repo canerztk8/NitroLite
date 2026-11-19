@@ -377,9 +377,10 @@ public class SecurityHardeningTests
     [Fact]
     public void IsExecutableTrusted_AnExistingFileTheUserCreatedIsTrusted()
     {
-        // A folder directly under a drive root (C:\WinTools and friends) lets Users *create* files by default but
-        // not overwrite one the signed-in user created; that install must keep working, which is exactly the
-        // case the old directory-level IsWorldWritable check got wrong.
+        // What this models is a file the signed-in user created in a folder outside the profile whose ACL hands the
+        // creator full control of its own files (the ProgramData default): nothing wider than the user can replace it,
+        // so the answer is yes. It is deliberately not the C:\WinTools case — see the drive-root test below, where the
+        // inherited Authenticated Users:Modify makes that install refused.
         string dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "NitroLiteTrustTest-" + Guid.NewGuid().ToString("N"));
@@ -395,6 +396,63 @@ public class SecurityHardeningTests
         {
             try { File.Delete(exe); Directory.Delete(dir); } catch { }
         }
+    }
+
+    [Fact]
+    public void IsExecutableTrusted_RefusesAFolderCreatedDirectlyUnderADriveRoot()
+    {
+        // The install path from the AN16-61 report: a folder created directly under C:\. On a stock Windows the drive
+        // root carries "Authenticated Users:(OI)(CI)(IO)(M)", so every file created beneath it inherits Modify and any
+        // local account can replace the binary. The test builds that inherited right explicitly rather than writing to
+        // C:\, because a test may not touch the drive root.
+        string dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "NitroLiteTrustTest-" + Guid.NewGuid().ToString("N"));
+        string exe = Path.Combine(dir, "NitroLite.exe");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(exe, "MZ");
+
+            var fileSecurity = new FileInfo(exe).GetAccessControl(AccessControlSections.Access);
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.AuthenticatedUserSid, null),
+                FileSystemRights.Modify,
+                AccessControlType.Allow));
+            new FileInfo(exe).SetAccessControl(fileSecurity);
+
+            Assert.False(DirectoryTrust.IsExecutableTrusted(exe));
+            Assert.False(WmiWorkerLauncher.IsTrustedHelperLocation(exe));
+        }
+        finally
+        {
+            try { File.Delete(exe); Directory.Delete(dir); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Launcher_LogsARefusedLocationOnceAndDoesNotRecheckItEveryTick()
+    {
+        // The launcher is asked again on every hardware read. Re-evaluating the ACLs and printing the same warning
+        // each time is what turned the AN16-61 report into a page of identical lines, so the refusal is remembered.
+        int checks = 0;
+        string exe = Path.Combine(@"C:\ProgramData\NitroLite-" + Guid.NewGuid().ToString("N"), "NitroLite.exe");
+        string before = AppLog.ReadAllText() ?? "";
+
+        using var launcher = new WmiWorkerLauncher(
+            executablePath: exe,
+            start: _ => null,
+            isTrustedLocation: _ => { checks++; return false; });
+
+        Assert.Null(await launcher.StartAsync());
+        Assert.Null(await launcher.StartAsync());
+        Assert.Equal(1, checks);
+        Assert.Equal(0, launcher.Attempts);
+        Assert.Contains("any local account", launcher.LastError, StringComparison.OrdinalIgnoreCase);
+
+        string after = AppLog.ReadAllText() ?? "";
+        string added = after.Length > before.Length ? after[before.Length..] : after;
+        Assert.Equal(1, added.Split(exe).Length - 1);
     }
 
     [Fact]

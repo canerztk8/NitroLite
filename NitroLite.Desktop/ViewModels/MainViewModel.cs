@@ -6577,8 +6577,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            // A status line nobody is going to read is not worth failing the exit over.
-            AppLog.Warn("The exit state could not be written", ex.Message);
+            // A status line nobody is going to read is not worth failing the exit over. The value itself is already
+            // set at this point; what throws is the notification, because the exit ran on a pool thread and the window
+            // that is bound to it belongs to the UI thread ("call from invalid thread"). Reported as information: a
+            // warning at the end of a shutdown log reads like the exit failed, and it did not.
+            AppLog.Info("The exit state could not be written", ex.Message);
         }
     }
 

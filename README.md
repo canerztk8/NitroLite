@@ -258,7 +258,7 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 
 Two things decide whether the direct-WMI fallback can take over, and both are worth checking when a machine reports "nothing detected":
 
-- **The install folder must be trusted.** The elevated WMI worker is only launched from an executable no other local account can replace. A file whose ACL grants `Users`/`Everyone` delete or modify is refused. A portable folder directly under a drive root (`C:\WinTools`) is fine — its default ACL lets others *create* files but not overwrite yours — and so is anything under your own profile.
+- **The install folder must be trusted.** The elevated WMI worker is only launched from an executable no other local account can replace. Anything under your own profile (`%LOCALAPPDATA%\NitroLite`, a portable or Scoop folder) and anything in `C:\Program Files` qualifies. A folder you created directly under a drive root (`C:\WinTools`) does **not**: the drive root grants `Authenticated Users` modify to everything created beneath it, so the files in that folder are replaceable by any local account, and the worker refuses to start from there. The log says so once, with the path, and the fan and mode rows keep pointing at the Acer service.
 - **The `AcerGamingFunction` WMI class must be registered.** On models where Acer ships only the service, the service path is the only path; NitroLite then needs `AASSvc` running.
 
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense

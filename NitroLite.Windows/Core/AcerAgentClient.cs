@@ -102,9 +102,15 @@ public class AcerAgentClient : IDisposable
             var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" }, "VERSION");
             if (!IsSuccessResult(initResp))
             {
-                AppLog.Warn("The AcerAgentService handshake was refused", $"VERSION response: {initResp ?? "(empty)"}");
                 Disconnect();
                 RegisterConnectFailure();
+
+                // Once per streak, next to the "could not connect" line RegisterConnectFailure writes for the same
+                // failure: together they say what the service answered and that the retry is backing off. Logging
+                // this on every attempt put one warning per second in the log of the machine it was reported on.
+                if (_consecutiveConnectFailures == 1)
+                    AppLog.Warn("The AcerAgentService handshake was refused", $"VERSION response: {initResp ?? "(empty)"}");
+
                 return false;
             }
 
