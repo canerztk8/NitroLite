@@ -1,5 +1,6 @@
 ﻿using Avalonia;
 using NitroLite.Core;
+using NitroLite.Core.Hardware;
 
 #if WINDOWS
 using NitroLite.Core.Hardware.Wmi;
@@ -146,7 +147,9 @@ internal static class Program
         try
         {
             var services = AppHost.CreateServices();
-            var report = services.Platform?.BuildHardwareReport();
+            var trust = SampleSensorsForReport(services.Hardware);
+            var report = services.Platform?.BuildHardwareReport(
+                trust == null ? null : HardwareReportContext.ForSensors(trust));
             if (string.IsNullOrWhiteSpace(report))
             {
                 Console.Error.WriteLine(Loc.T("Donanım raporu bu makinede oluşturulamadı."));
@@ -161,6 +164,44 @@ internal static class Program
             AppLog.Error("The hardware report could not be printed", ex.ToString());
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Two telemetry samples about 1.6 s apart, read-only, so <c>--hardware-report</c> can print
+    /// <c>runtime-verified</c> instead of saying a machine that answers perfectly is unverified.
+    /// </summary>
+    /// <remarks>
+    /// The window is the same one the window uses at runtime, through the same object, so the CLI and the app cannot
+    /// disagree about a machine. No write is issued and nothing is elevated: a backend that is not up answers null and
+    /// the report says so.
+    /// </remarks>
+    private static RuntimeSensorVerification? SampleSensorsForReport(IHardwareController? hardware)
+    {
+        // Null rather than an empty session: "the check did not run because no backend was up" and "the check ran and
+        // the machine never answered" are different findings, and the report shows them with different words.
+        if (hardware == null) return null;
+
+        var trust = new RuntimeSensorVerification();
+
+        try
+        {
+            if (!hardware.IsAvailable) return null;
+
+            for (int attempt = 0; attempt < RuntimeSensorVerification.RequiredSamples + 1; attempt++)
+            {
+                var sample = hardware.GetTelemetryAsync().GetAwaiter().GetResult();
+                trust.Observe(sample, DateTime.UtcNow, sample?.IsTemperatureMeasured == true);
+                if (trust.RuntimeVerified) break;
+
+                Thread.Sleep(TimeSpan.FromMilliseconds(1600));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The runtime sensor check could not be run for the report", ex.Message);
+        }
+
+        return trust;
     }
 
     /// <summary>

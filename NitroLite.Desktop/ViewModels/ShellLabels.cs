@@ -271,6 +271,10 @@ public sealed class ShellLabels
     public string HardwareReportHint => Loc.T("Seri numarası, UUID, kullanıcı adı ve kişisel dosya yolu içermez.");
     public string CopyReport => Loc.T("Raporu kopyala");
     public string ReportCopied => Loc.T("Donanım raporu panoya kopyalandı.");
+    public string ReportCompatibility => Loc.T("Raporu GitHub'da paylaş");
+    public string CompatibilityReportOpened => Loc.T("Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.");
+
+    public string CompatibilityReportFailed(string error) => Loc.T($"Uyumluluk raporu paylaşılamadı: {error}");
 
     // ---------------------------------------------------------------- tray
     public string TrayShow => Loc.T("Pencereyi Göster");

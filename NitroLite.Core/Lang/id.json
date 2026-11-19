@@ -1679,5 +1679,8 @@
   "Yeniden başlatma için çalıştırılabilir dosya bulunamadı": "Tidak ada berkas yang dapat dijalankan untuk memulai ulang",
   "Sıcaklığa göre renk": "Warna mengikuti suhu",
   "Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.": "Keyboard berubah dari biru ke merah mengikuti suhu CPU. Di bawah 45 °C warnanya tetap, dan warna hanya ditulis saat berubah cukup jelas.",
-  "Sıcaklığa göre renk yazılamadı": "Warna suhu tidak dapat ditulis"
+  "Sıcaklığa göre renk yazılamadı": "Warna suhu tidak dapat ditulis",
+  "Raporu GitHub'da paylaş": "Laporkan kompatibilitas di GitHub",
+  "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Laporan perangkat keras disalin ke papan klip; isu GitHub baru telah dibuka.",
+  "Uyumluluk raporu paylaşılamadı: {0}": "Laporan kompatibilitas tidak dapat dibagikan: {0}"
 }

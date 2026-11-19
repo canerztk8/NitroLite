@@ -132,8 +132,39 @@ wmi.keyboardLighting: read-back did not match in 3 attempts (the worker refused 
 
 So the firmware accepted `SetGamingRgbKb` (status 0) and then answered a read-back that did not match,
 three times, until `ReadBackPolicy` switched the capability off for the session. That is the correct
-reaction to a write that did not take; the defect is the payload, not the policy. No new payload was
-written here — §6 keeps it open as a device-required item.
+### 1.6 Runtime sensor verification: a machine can earn the curve (2026-11-20)
+
+The HW-04 fix left a gap the AN16-61 report exposed. `SensorLayout.Verified` answers *"did anyone measure
+these sensor ids on this model?"*, and on every model except the reference unit the answer is no. A machine
+that answers a real die temperature and a real tachometer every second therefore still had its custom fan
+curve locked — which is why the AN16-61 owner could not use a curve at all, even though the fan and mode
+writes work perfectly on that model.
+
+`RuntimeSensorVerification` (`NitroLite.Core/Hardware`) adds the weaker question a session can answer by
+itself: two consecutive telemetry samples at least 1.5 s apart, both temperatures inside `15..115 °C`, both
+fans inside `0..10000 RPM`, no documented sentinel, and the sensor ids anchored — by a measured profile or
+by the live probe this session. When that passes, the curve runs for the session.
+
+| What it changes | What it does not change |
+| --- | --- |
+| the write gate becomes `profile.Verified || session.RuntimeVerified` | the 85 / 90 / 95 °C floors, which still read the live value |
+| `--hardware-report` prints `runtime-verified (n samples)` or `unverified (…)` in the Sensors table | any profile's `verified` flag or any sensor id mapping |
+| one log line per session when it promotes | HW-06, the dead-sensor hand-back, which still owns a lost reading |
+
+The window is deliberately narrower than `SensorPlausibility` (`1..130 °C`, `0..12000 RPM`): plausibility
+decides whether a number may be *shown*, this decides whether the fans may *act* on it. A refused sample
+restarts the run; a too-soon sample does not, because a one-second poll would otherwise make promotion
+impossible on a machine that is plainly answering.
+
+**Evidence, and what is still missing.**
+
+- Unit tests (`RuntimeVerificationTests`, 20 cases): promotion on two in-window samples, and refusal on each
+  sentinel (`0xFFFF`, `0x7FFF`, `0x8000`, `0xDEAD`, `0xBEEF`), on static zeros, on out-of-window temperatures
+  and fans, without a layout confirmation, and on a second sample that arrives too soon. Promotion is also
+  pinned as one-way for the session.
+- Reference unit (AN16-41): the profile is `verified: true`, so this path is never the one that decides there.
+- **AN16-61: physical confirmation pending.** Nothing here writes hardware differently on that model; what
+  changes is whether the fan page offers a curve. First step is in §6.
 
 ---
 
@@ -337,6 +368,7 @@ Recorded so the next reader does not "fix" these back.
 | AN16-61 per-zone keyboard colour | **test pending** — the correct `SetGamingRgbKb` payload is unknown for this firmware | capture the worker reply and a read-back on the machine; do not guess a payload |
 | AN16-61 Windows-key lock | **test pending** — no firmware getter exists, so a working write cannot be told from a no-op | needs the machine and a key-by-key check |
 | AN16-61 battery charge limit through Care Center | **test pending** — the fallback is written and compiles, nothing more | on the machine, check the battery card appears and the mode reads back |
+| AN16-61 custom fan curve | **code + tests, physical confirmation pending** — the curve is no longer gated on a static profile measurement (§1.6) | open the fan page after ~2 s of telemetry on the machine; the report should read `runtime-verified (2 samples)` |
 | The eight model codes in §4.1 | **test pending** | add the profile once a machine confirms its sensor ids |
 | `PHIN16-71` / `PHIN16S-71` code validity | **unconfirmed** | check Acer's regional model lists; delete or correct |
 | PH16-72 / PHN16S-71 fan control | **source says ❌** | needs a machine; until then the UI may offer fan control that does nothing |

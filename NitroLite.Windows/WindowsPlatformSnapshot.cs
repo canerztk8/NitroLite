@@ -1,6 +1,7 @@
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Wmi;
+using NitroLite.Windows.Core.Hardware;
 
 namespace NitroLite.Windows;
 
@@ -98,12 +99,18 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
     /// The privacy-safe Markdown report. Built from what the backend has already answered: it never raises the
     /// elevation prompt, because a diagnostics button must not be the thing that shows a UAC dialog.
     /// </summary>
-    public string BuildHardwareReport()
+    public string BuildHardwareReport(HardwareReportContext? context = null)
     {
         var probe = _probe();
         if (probe == null) return "";
 
         var wmi = _wmi?.Invoke();
+
+        // The USB HID walk is this platform's own knowledge, so it is merged here rather than asked of the caller: a
+        // caller that only has a sensor session still gets the keyboard controller ids in its report.
+        var extras = context ?? HardwareReportContext.Empty;
+        extras = extras with { UsbHid = extras.UsbHid.Count > 0 ? extras.UsbHid : UsbHidInventory.Read() };
+
         return HardwareReport.BuildMarkdown(
             probe,
             null,
@@ -111,7 +118,8 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
             wmi?.DiscoveredSensors,
             wmi?.SensorProbeRan == true,
             Identity,
-            _backendDetail?.Invoke());
+            _backendDetail?.Invoke(),
+            extras);
     }
 
     void IRescannableBackend.ResetReadBackCounters() => _readBack.ResetAll();

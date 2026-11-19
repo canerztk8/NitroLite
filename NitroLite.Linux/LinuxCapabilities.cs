@@ -95,5 +95,10 @@ public sealed record LinuxCapabilities : IPlatformSnapshot
     /// The privacy-safe Markdown report: DMI, the acer-wmi and Linuwu-Sense nodes, hwmon and the udev state. No serial
     /// number, machine UUID, user name or personal file path, which is what makes it safe to paste into an issue.
     /// </summary>
-    public string BuildHardwareReport() => LinuxHardwareReport.Build(this);
+    /// <remarks>
+    /// The context is ignored: the Linux report is built from sysfs and DMI alone, and the sensor ids there are read
+    /// from the driver's own files rather than from a probe that has to be trusted. Accepting the parameter keeps one
+    /// interface instead of a Windows-only overload.
+    /// </remarks>
+    public string BuildHardwareReport(HardwareReportContext? context = null) => LinuxHardwareReport.Build(this);
 }

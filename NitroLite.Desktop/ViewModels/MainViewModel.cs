@@ -982,6 +982,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     private volatile bool _temperatureConfirmed = true;
 
+    /// <summary>
+    /// The session's runtime sensor verification: the second way a layout becomes trusted, for a machine whose profile
+    /// carries no measurement.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="_temperatureConfirmed"/> answers "did somebody confirm the sensor ids on this model?". On most models
+    /// nobody did, which left the fan curve locked on a laptop that answers with a real die temperature every second.
+    /// This adds the weaker question the session can answer by itself: has this machine produced consecutive readings
+    /// that behave like a machine? The two are OR-ed at the write gate and nothing else changes — the thermal floors
+    /// and the dead-sensor hand-back still run on the live reading, not on either flag.
+    /// </remarks>
+    private readonly RuntimeSensorVerification _sensorTrust = new();
+
+    /// <summary>True once the promotion has been logged, so the log carries it once per session rather than per tick.</summary>
+    private bool _sensorTrustLogged;
+
     /// <summary>Telemetry ticks since the window opened. Game detection runs on every other one.</summary>
     private int _tick;
 
@@ -1240,6 +1256,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveRgbProfileCommand = new RelayCommand(SaveRgbProfile);
         DeleteRgbProfileCommand = new RelayCommand(DeleteRgbProfile, () => CanDeleteRgbProfile);
         CopyHardwareReportCommand = new RelayCommand(CopyHardwareReport);
+        ReportCompatibilityCommand = new RelayCommand(ReportCompatibility);
         ScanGamesCommand = new AsyncCommand(ScanGamesAsync);
         AddGameFromFileCommand = new AsyncCommand(AddGameFromFileAsync);
         DeleteSelectedGameCommand = new AsyncCommand(DeleteSelectedGameAsync);
@@ -4990,7 +5007,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The privacy-safe Markdown report. Built on demand rather than cached: it is a few hundred bytes of string work
     /// and the probe state can change after a rescan.
     /// </summary>
-    public string HardwareReportText => _platform?.BuildHardwareReport() ?? "";
+    public string HardwareReportText =>
+        _platform?.BuildHardwareReport(HardwareReportContext.ForSensors(_sensorTrust)) ?? "";
 
     public bool HardwareReportAvailable => _platform != null;
 
@@ -5311,6 +5329,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public RelayCommand DeleteRgbProfileCommand { get; }
     public RelayCommand CopyHardwareReportCommand { get; }
 
+    /// <summary>Copies the report and opens a prefilled compatibility issue in the browser.</summary>
+    public RelayCommand ReportCompatibilityCommand { get; }
+
     // ---------------------------------------------------------------- lifecycle
 
     /// <summary>
@@ -5534,6 +5555,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // unconfirmed sensor layout is a guess about which id answers what, and a curve that follows a guess can
             // ask for a third of full speed while the die is at 95 °C. The page keeps the number, the curve does not.
             _temperatureConfirmed = data.IsTemperatureMeasured;
+
+            // The live check runs on every sample, including the ones that will be refused: the refusal is what the
+            // report prints, and a machine that answers nothing has to be visible as one. A promotion is logged once,
+            // because it changes what the fans are allowed to do and the log is where that has to be reviewable.
+            _sensorTrust.Observe(data, DateTime.UtcNow, data.IsTemperatureMeasured);
+            if (_sensorTrust.RuntimeVerified && !_sensorTrustLogged)
+            {
+                _sensorTrustLogged = true;
+                AppLog.Info("The fan curve was unlocked by the live sensors", _sensorTrust.Describe());
+            }
+
             CpuFanRpm = data.CpuFanSpeed;
             GpuFanRpm = data.GpuFanSpeed;
             FanRpmMeasured = data.IsFanRpmMeasured;
@@ -5685,7 +5717,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // An unconfirmed layout is a guess about which id answers what, and a guess that reads the 55 °C system
         // sensor as the die asks for a third of full speed at 95 °C — with the 95 °C floor never firing, because the
         // curve never sees 95 °C. The page still shows the reading; the curve leaves the fans alone.
-        if (!_temperatureConfirmed)
+        // Either the ids were confirmed statically, or this session has watched the machine answer like a machine for
+        // long enough. Both are the same permission; neither relaxes the floors below, which read the live value.
+        if (!_temperatureConfirmed && !_sensorTrust.RuntimeVerified)
         {
             WarnTemperatureUnconfirmedOnce();
             return;
@@ -6496,6 +6530,51 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         ClipboardService.SetText(report);
         Status = Labels.ReportCopied;
+    }
+
+    /// <summary>
+    /// The one-click compatibility report: the sanitised report goes on the clipboard, and the browser opens a new
+    /// issue with the title and the report already in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two steps, in this order. The clipboard first, because the URL body is cut when the report does not fit and the
+    /// note left in the issue tells the user to paste what is on the clipboard — a paste that raced the copy would
+    /// paste the previous clipboard and nothing would say so.
+    /// </para>
+    /// <para>
+    /// The title and the body come from public SMBIOS strings and the report itself. Nothing is added here, so this
+    /// button cannot be the place a machine's serial number leaves the machine.
+    /// </para>
+    /// </remarks>
+    private void ReportCompatibility()
+    {
+        var report = HardwareReportText;
+        if (string.IsNullOrEmpty(report))
+        {
+            Status = Labels.NoBackend;
+            return;
+        }
+
+        try
+        {
+            var identity = _platform?.Identity;
+            var model = string.IsNullOrWhiteSpace(identity?.ModelCode) ? identity?.Model : identity?.ModelCode;
+            var board = identity?.BoardProduct;
+
+            var url = CompatibilityReportUrl.Build(model, board, report);
+
+            ClipboardService.SetText(report);
+            OpenUrl(url);
+
+            Status = Labels.CompatibilityReportOpened;
+            AppLog.Info("A compatibility report was prepared",
+                $"{CompatibilityReportUrl.BuildTitle(model, board)} · {CompatibilityReportUrl.DescribeLength(url)}");
+        }
+        catch (Exception ex)
+        {
+            Status = Labels.CompatibilityReportFailed(ex.Message);
+        }
     }
 
     // ---------------------------------------------------------------- game detection

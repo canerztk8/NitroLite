@@ -280,6 +280,10 @@
             <Button Classes="primary" Content="{Binding Labels.ExportReport}" Margin="0,0,6,6" Padding="12,7"
                     FontSize="11" Command="{Binding ExportHardwareReportCommand}"
                     IsVisible="{Binding HardwareReportAvailable}" />
+            <Button Classes="primary" Content="{Binding Labels.ReportCompatibility}" Margin="0,0,6,6" Padding="12,7"
+                    FontSize="11" Command="{Binding ReportCompatibilityCommand}"
+                    ToolTip.Tip="{Binding Labels.HardwareReportHint}"
+                    IsVisible="{Binding HardwareReportAvailable}" />
             <Button Classes="primary" Content="{Binding Labels.CreateBundle}" Margin="0,0,6,6" Padding="12,7"
                     FontSize="11" Command="{Binding CreateDiagnosticsCommand}"
                     IsVisible="{Binding DiagnosticsAvailable}" />
