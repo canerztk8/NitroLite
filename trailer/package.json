@@ -1,0 +1,26 @@
+{
+  "name": "nitrolite-trailer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NitroLite 2-minute trailer: real screen recordings, real logo, one NCS track.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts NitroLiteEpic out/nitrolite-2min-epic.mp4",
+    "render:master": "remotion render src/index.ts NitroLiteMaster out/nitrolite-master-trailer.mp4",
+    "still": "remotion still src/index.ts NitroLiteEpic out/still.png",
+    "typecheck": "tsc --noEmit",
+    "record": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/record-clips.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/encode-clips.ps1"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.539",
+    "@remotion/google-fonts": "4.0.539",
+    "@remotion/media-utils": "4.0.539",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "remotion": "4.0.539"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "typescript": "5.9.3"
+  }
+}
