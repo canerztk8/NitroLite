@@ -25,6 +25,18 @@ public sealed record HardwareCapabilities
     /// <summary>A GPU mode switch exists and reports a capability value.</summary>
     public bool MuxSwitch { get; init; }
 
+    /// <summary>
+    /// The live <c>GetGamingMiscSetting(0x09)</c> answer: true when this machine's firmware says the MUX can be
+    /// switched over WMI, false when it answered something else, null when no backend has read it.
+    /// <para>
+    /// Kept apart from <see cref="MuxSwitch"/> because the two answer different questions. The capability comes from
+    /// the registry, which is the Acer agent's opinion, and it is available without elevation. This one is the
+    /// firmware answering about itself, and it needs the elevated worker — which is why the hardware report used to
+    /// say "not read (needs elevation)" on a session that was already elevated: nothing carried the answer back.
+    /// </para>
+    /// </summary>
+    public bool? MuxSwitchOverWmi { get; init; }
+
     /// <summary>The battery charge limit can be read and written.</summary>
     public bool BatteryChargeLimit { get; init; }
 

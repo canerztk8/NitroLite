@@ -83,6 +83,58 @@ prompt. On a default Windows install the same path raises a UAC prompt. This is 
 test machine, not of the application, and it is why the worker appeared with no prompt during the
 audit.
 
+### 1.5 A second physical unit: the AN16-61 report (2026-11-19)
+
+The first machine in this table other than the reference unit is an **AN16-61** whose owner filed a
+report against v1.2.8. Everything below is their hardware, recorded as they reported it; it is kept in
+its own subsection because §1.1–§1.4 describe the reference unit and the two must not be averaged.
+
+| Field | Reported value | How it was read |
+| --- | --- | --- |
+| Manufacturer / model | `Acer` / `Nitro AN16-61` | the app's own hardware report |
+| Model code | `AN16-61` | SMBIOS |
+| Board product | `EV9_SKF` | SMBIOS |
+| BIOS | `INSYDE Corp. 1.53` | SMBIOS |
+| Windows | `10.0.26300` (x64) | `Environment.OSVersion` |
+| .NET | `10.0.14` | runtime description |
+| CPU vendor | `Amd` | SMBIOS |
+| Profile matched | `nitro-16-an16-61 (embedded)`, cache key `AN16-61\|1.53` | profile table |
+| Backend | `active WMI; AASSvc not connected; direct WMI running` | hardware report |
+| Acer Care Center | `AcerCCAgentSvis` running | service probe |
+
+**Per-feature outcome, as reported** (this is the important column: it is not what the sources say,
+it is what the machine did):
+
+| Feature | Reported behaviour | State |
+| --- | --- | --- |
+| Fan control | works | **confirmed working** on this model |
+| Operating mode | works | **confirmed working** on this model |
+| Sensor temperatures | plausible | **confirmed working** on this model |
+| CPU clock | shows `-- GHz` in the dashboard | **confirmed broken** in v1.2.8 — fixed in this branch, see §3.2 |
+| MUX current mode | not read; panel was on Optimus | **confirmed broken** in v1.2.8 |
+| MUX write | "does not apply the setting", full reboot, no hibernation/fast startup | **confirmed broken** in v1.2.8 |
+| Battery charge limit | works through NitroSense; NitroLite's capability summary said unsupported | **contradiction** — the limit works on this hardware; the summary was wrong |
+| Backlight timeout | works through NitroSense (later disabled in BIOS); summary said unsupported | **contradiction**, same cause |
+| Keyboard backlight off | works | **confirmed working** |
+| Keyboard effect/mode write | turns the backlight back on with the previous setting (static white) | **mode write applies, effect does not change** |
+| Keyboard per-zone colour | changes in the app only; occasional "Write failed" | **confirmed broken** — the write is accepted and has no effect |
+| Windows-key lock | "does nothing" | **confirmed no effect** on this model |
+| `AcerGenericEvent` event watcher | refused with an interval, connects without one | works on the fallback |
+
+The two lines that make the keyboard failure diagnosable are in the owner's log:
+
+```
+Keyboard lighting: No Acer service; the lighting was written through direct WMI.
+...
+The direct WMI capability was disabled for this session:
+wmi.keyboardLighting: read-back did not match in 3 attempts (the worker refused the write)
+```
+
+So the firmware accepted `SetGamingRgbKb` (status 0) and then answered a read-back that did not match,
+three times, until `ReadBackPolicy` switched the capability off for the session. That is the correct
+reaction to a write that did not take; the defect is the payload, not the policy. No new payload was
+written here — §6 keeps it open as a device-required item.
+
 ---
 
 ## 2. Sources
@@ -114,7 +166,7 @@ there is no official source to prefer.
 | **AN16-41** | Nitro 16 | ✅ | ✅ | ✅ | — | BIOS V1.27, Win 11 26300 | **physical** | **verified** — reference machine |
 | AN16-42 | Nitro 16 | ✅ | ✅ | ✅ | — | — | S1 (LS#85) | profile, sensors unverified |
 | AN16-43 | Nitro 16 | ✅ | ✅ | ✅ | ✅ | — | S1 (LS#17), S2 (#59) | profile, sensors unverified |
-| AN16-61 | Nitro 16 | — | — | — | — | — | none | profile, **test pending** |
+| AN16-61 | Nitro 16 | — | — | — | — | BIOS V1.53, Win 10.0.26300 | **physical** (§1.5) | profile, **partly verified** — fans, modes and sensors work; clock, MUX read/write, zone RGB and Win-key lock open (§3.2) |
 | AN17-41 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#99) | **no profile** — see §4 |
 | AN17-42 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#64) | profile, sensors unverified |
 | AN17-51 | Nitro 17 | — | — | — | — | — | none | profile, **test pending** |
@@ -172,6 +224,28 @@ hardware changed":
   keyboard is lit.
 - **ANV15-51, BIOS V1.60** needs a platform-driver quirk (S6); the same firmware generation may
   behave differently on other BIOS revisions.
+
+### 3.2 What the AN16-61 report changed in the code
+
+Physical evidence first, source evidence second — and here there is only physical evidence, because no
+published source describes this model. Each row names the code change and how it was verified without a
+second machine.
+
+| Finding | Evidence it was real | Change | Verified by |
+| --- | --- | --- | --- |
+| CPU clock never read: the dashboard shows `-- GHz` on a machine with no Acer service | `CpuFrequencyMHz` was filled only from `CPU_FREQUENCY` in an AASsvc reply (`AcerAgentClient.cs:677`); nothing else ever wrote it | `HardwareMonitorService.GetNativeCpuFrequencyMhz()` asks Windows through `CallNtPowerInformation(ProcessorInformation)`, and `EnrichMonitorData` fills a zero clock before the power estimate uses it | `CpuClockFallbackTests`, 5 tests, run on the reference unit: 3801 MHz reported |
+| MUX: the report said `GetGamingMiscSetting(0x09) MUX — not read (needs elevation)` **on an elevated session** | `CapabilityProbe.Probe(identity, catalog, schema)` always passed `wmiMuxSignal: null`; no production caller ever passed one | the worker's `wmiMuxSwitch` now travels in `HardwareCapabilities.MuxSwitchOverWmi` and the report reads it | `Report_ShowsTheLiveMuxSelector_EvenThoughTheProbeRanBeforeTheWorker` |
+| MUX: a write that does nothing left no trace at all | `SetGpuModeAsync` returned `false` when the worker refused `ReadDeviceState`, with no log line; `GetGpuModeAsync` returned `null` the same way | both now log the worker's own refusal text | code review; needs the AN16-61 machine to see the log line |
+| Capability summary claimed no battery charge limit and no backlight timeout | the summary drew a cross for every false flag, although `NegativeAnswersAreConclusive` is **false** on Windows and the platform contract says an unreachable capability must be shown as unknown | `CapabilityRow` gained a third state (a question mark and "Bilinmiyor") and only a conclusive platform may draw a cross | `CapabilityRow_ShowsAQuestionMark_ForAnAnswerNobodyGave` and two siblings |
+| Battery charge limit hidden while Care Center controls it | `WmiHardwareController` can only reach `WMID_GUID5`, which this model does not register; the limit lives in Care Center | `HybridHardwareController` now asks Care Center for the mode and the write when the direct-WMI path cannot serve them, and reports the capability when that read succeeds | needs the AN16-61 machine — **test pending** |
+| Keyboard per-zone colour: accepted, no effect | three read-back mismatches in the owner's log, then `ReadBackPolicy` disabled `wmi.keyboardLighting` for the session | **none** — no payload was guessed. The correct `SetGamingRgbKb` payload for this firmware is unknown | **test pending**, device required |
+| Windows-key lock does nothing | `SetWinKeyLock` is documented as unverifiable: there is no firmware getter, so "written" cannot be checked | **none** | **test pending**, device required |
+| `AcerGenericEvent` watcher refused with an interval, connects without one | owner's log, twice per launch | **none** — the fallback works, and the interval form is not used anywhere else | n/a |
+| `The exit state could not be written: Call from invalid thread` at shutdown | owner's log, both sessions | **none** — already explained in the code: the status notification cannot cross to the UI thread at shutdown, and the marker write that matters happens before it | n/a |
+
+The two open hardware items are deliberately not fixed by inference. A zone-RGB payload written on a
+guess either does nothing (the current state) or sets a colour the user did not ask for, and a
+Win-key lock has no read-back to tell the difference. Both need one run on an AN16-61.
 
 ---
 
@@ -257,7 +331,12 @@ Recorded so the next reader does not "fix" these back.
 
 | Item | State | First step |
 | --- | --- | --- |
-| Physical verification of any model other than AN16-41 | **test pending** — no device | run `--hardware-report` on the machine and compare the sensor answers with §1.2 |
+| Physical verification of any model other than AN16-41 / AN16-61 | **test pending** — no device | run `--hardware-report` on the machine and compare the sensor answers with §1.2 |
+| AN16-61 CPU clock, at the panel | **code fixed, UI unconfirmed** — the fallback is unit-tested on the reference unit, not seen on an AN16-61 | open the dashboard on an AN16-61 and check the clock is not `-- GHz` |
+| AN16-61 MUX write | **test pending** — the write path is now logged, not fixed | reproduce the switch and send the new `MUX write was not attempted` / `MUX mode could not be read` line |
+| AN16-61 per-zone keyboard colour | **test pending** — the correct `SetGamingRgbKb` payload is unknown for this firmware | capture the worker reply and a read-back on the machine; do not guess a payload |
+| AN16-61 Windows-key lock | **test pending** — no firmware getter exists, so a working write cannot be told from a no-op | needs the machine and a key-by-key check |
+| AN16-61 battery charge limit through Care Center | **test pending** — the fallback is written and compiles, nothing more | on the machine, check the battery card appears and the mode reads back |
 | The eight model codes in §4.1 | **test pending** | add the profile once a machine confirms its sensor ids |
 | `PHIN16-71` / `PHIN16S-71` code validity | **unconfirmed** | check Acer's regional model lists; delete or correct |
 | PH16-72 / PHN16S-71 fan control | **source says ❌** | needs a machine; until then the UI may offer fan control that does nothing |

@@ -344,8 +344,8 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:CapabilityRow">
                 <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,3">
-                  <TextBlock Classes="capglyph" Classes.ok="{Binding Supported}"
-                             Classes.no="{Binding !Supported}" Text="{Binding Glyph}" />
+                  <TextBlock Classes="capglyph" Classes.ok="{Binding Ok}"
+                             Classes.no="{Binding No}" Text="{Binding Glyph}" />
                   <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Label}" Margin="8,0,0,0" />
                   <TextBlock Grid.Column="2" Classes="hint" Text="{Binding StateText}" />
                 </Grid>
