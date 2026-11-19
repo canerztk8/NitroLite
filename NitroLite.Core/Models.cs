@@ -158,6 +158,30 @@ public class MonitorData
     public bool IsFanRpmMeasured { get; set; }
 
     /// <summary>
+    /// True when the sensor ids behind <see cref="CpuTemperature"/> were confirmed on this machine — by the profile
+    /// table naming the model, or by the live probe answering plausibly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The reading is still shown when this is false: an unlisted model's temperatures are useful, and hiding them
+    /// would leave the page blank on every machine the table does not name. What the flag decides is whether the
+    /// <em>fan curve</em> may act on the number.
+    /// </para>
+    /// <para>
+    /// It must not. The curve follows <see cref="CpuTemperature"/>, so a machine whose sensor id 1 answers the 55 °C
+    /// system sensor instead of the die asks for roughly a third of full speed while the die is at 95 °C — and the
+    /// 95 °C full-speed floor never fires, because the curve never sees 95 °C. A wrong reading on a page is a wrong
+    /// number; a wrong reading in the curve is a hot machine with quiet fans.
+    /// </para>
+    /// <para>
+    /// Defaults to true so every construction that predates the flag keeps its behaviour: the flag is set to false
+    /// only by the one backend that knows it is guessing.
+    /// </para>
+    /// </remarks>
+    [JsonIgnore]
+    public bool IsTemperatureMeasured { get; set; } = true;
+
+    /// <summary>
     /// The processor's marketing name, filled by the platform monitor rather than by the Acer backend: the firmware
     /// answers sensors, not model strings. Empty when nothing could read it, and the page then shows its own label.
     /// </summary>

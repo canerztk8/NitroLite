@@ -27,6 +27,16 @@ public sealed class WmiHardwareController : IHardwareController
     /// <summary>The four zone colours that mean "off".</summary>
     private static readonly string[] AllZonesOff = { "#000000", "#000000", "#000000", "#000000" };
 
+    /// <summary>
+    /// How far the percentage the EC reports may sit from the one that was written and still count as applied.
+    /// </summary>
+    /// <remarks>
+    /// Two points, not zero. The firmware quantises a percentage into its own PWM steps, so a 60 % request can read
+    /// back as 59 or 61 on a machine that accepted it. A tolerance of zero would report those as failures, and three
+    /// failures disable the capability for the session — which is the opposite of what the read-back exists for.
+    /// </remarks>
+    private const int FanPercentReadBackTolerance = 2;
+
     private readonly WmiWorkerLauncher _launcher;
     private readonly ReadBackPolicy _readBack;
     private readonly Func<CapabilitySnapshot?> _capabilities;
@@ -275,11 +285,20 @@ public sealed class WmiHardwareController : IHardwareController
         int? gpuRpm = layout.Supported ? PlausibleRpm(ReadSensorValue(sensors, SensorDiscovery.GpuFanRpm)) : null;
         bool measured = (tachometerConfirmed ?? layout.Verified) && cpuRpm.HasValue && gpuRpm.HasValue;
 
+        // The temperatures are still published on an unverified layout — an unlisted model's readings are useful, and
+        // hiding them would leave the page blank on every machine the table does not name. What the flag carries is
+        // the fact that nobody has confirmed which sensor id answers what, so the fan curve must not act on the
+        // number: a machine whose id 1 answers the 55 °C system sensor instead of the die would ask for a third of
+        // full speed at 95 °C, and the 95 °C floor would never fire because the curve never sees 95 °C.
+        bool temperaturesConfirmed = tachometerConfirmed ?? layout.Verified;
+
         return new MonitorData
         {
             CpuTemperature = layout.Supported ? PlausibleTemperature(ReadSensorValue(sensors, SensorDiscovery.CpuTemp)) : 0,
             GpuTemperature = layout.Supported ? PlausibleTemperature(ReadSensorValue(sensors, SensorDiscovery.GpuTemp)) : 0,
             SysTemperature = layout.Supported ? PlausibleTemperature(ReadSensorValue(sensors, SensorDiscovery.Sys1Temp)) : 0,
+
+            IsTemperatureMeasured = temperaturesConfirmed,
 
             CpuFanSpeed = measured ? cpuRpm!.Value : DeriveRpm(ReadInt(data, "cpuFanPercent") ?? 0, maxCpuFanRpm),
             GpuFanSpeed = measured ? gpuRpm!.Value : DeriveRpm(ReadInt(data, "gpuFanPercent") ?? 0, maxGpuFanRpm),
@@ -404,6 +423,22 @@ public sealed class WmiHardwareController : IHardwareController
         return ParseEnum<FanMode>(state, "cpuFanMode");
     }
 
+    /// <summary>
+    /// The percentage the EC is actually holding for the CPU fan, or null when the firmware did not answer.
+    /// </summary>
+    /// <remarks>
+    /// This is the value a custom-speed write has to be verified against. The mode byte answers a different question:
+    /// <c>cpuFanMode</c> comes from <c>GetGamingFanBehavior</c> and says "the fans are in manual mode", not "the fans
+    /// are at the speed I asked for". A write the EC clamped or silently dropped still leaves the mode byte saying
+    /// Custom, so verifying against it reports a refused write as applied — and the caller then records the speed as
+    /// committed and never proposes it again, which is how the 95 °C full-speed floor stops being re-sent.
+    /// </remarks>
+    public async Task<int?> GetFanPercentAsync()
+    {
+        var state = await ReadDeviceStateAsync().ConfigureAwait(false);
+        return ReadNullableInt(state, "cpuFanPercent");
+    }
+
     public async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
     {
         if (mode == FanMode.Custom)
@@ -418,8 +453,32 @@ public sealed class WmiHardwareController : IHardwareController
                     ["cpuPercent"] = cpu,
                     ["gpuPercent"] = gpu
                 }),
-                readBack: GetFanModeAsync,
-                matches: observed => observed == FanMode.Custom).ConfigureAwait(false);
+
+                // The percentage, not the mode byte. See GetFanPercentAsync for why the mode byte is the wrong
+                // question, and why answering it wrongly is a thermal problem rather than a cosmetic one.
+                readBack: GetFanPercentAsync,
+                matches: observed => Math.Abs(observed - cpu) <= FanPercentReadBackTolerance).ConfigureAwait(false);
+
+            // A capability that has just been switched off will refuse every later write, so the fans stay at
+            // whatever the last accepted write left them at — for the rest of the session, and after three sessions
+            // permanently. The curve still computes the 85/90/95 °C floor, but the only function that can put it in
+            // the EC is now a no-op. Handing the fans back to the firmware is the one action that is still available
+            // and the only one that leaves the machine safe.
+            if (speed.DisabledForSession || speed.PermanentlyDisabled)
+            {
+                AppLog.Warn("The fan speed control was disabled; handing the fans back to the firmware",
+                    $"{speed.Error} (session={speed.DisabledForSession}, permanent={speed.PermanentlyDisabled})");
+
+                await ApplyAsync(
+                    ReadBackPolicy.FanBehavior,
+                    write: () => WriteOrThrowAsync(WmiWorkerCommand.SetFanBehavior, new JsonObject
+                    {
+                        ["cpu"] = (int)FanMode.Auto,
+                        ["gpu"] = (int)FanMode.Auto
+                    }),
+                    readBack: GetFanModeAsync,
+                    matches: observed => observed == FanMode.Auto).ConfigureAwait(false);
+            }
 
             return speed.Applied;
         }
@@ -835,6 +894,27 @@ public sealed class WmiHardwareController : IHardwareController
         {
             var node = data[key];
             return node == null ? null : node.GetValue<bool>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// An integer that is absent when the worker did not report it, so "missing" is not read as zero.
+    /// </summary>
+    /// <remarks>
+    /// The distinction matters for the fan percentage: zero is a real answer the firmware can give, and a read-back
+    /// that turned "the worker did not say" into 0 would compare a 60 % write against 0 and report a failure that
+    /// never happened.
+    /// </remarks>
+    private static int? ReadNullableInt(JsonObject? data, string key)
+    {
+        try
+        {
+            var node = data?[key];
+            return node == null ? null : node.GetValue<int>();
         }
         catch
         {

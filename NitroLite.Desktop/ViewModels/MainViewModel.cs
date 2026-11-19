@@ -724,6 +724,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private static readonly TimeSpan WriteGateTimeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// How long the fan hand-back waits for the curve loop's step in flight before writing Auto anyway.
+    /// </summary>
+    /// <remarks>
+    /// Shorter than <see cref="WriteGateTimeout"/> on purpose. The hand-back's own gate wait is bounded by
+    /// <see cref="FanHandbackGateTimeout"/>, and the caller's outer bound has to be larger than the sum of the two —
+    /// otherwise a contended gate consumes the whole budget and the Auto write is never reached, which is the exact
+    /// failure the hand-back exists to prevent.
+    /// </remarks>
+    private static readonly TimeSpan FanHandbackLoopTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// How long the fan hand-back waits for the write gate. Deliberately shorter than
+    /// <see cref="WriteGateTimeout"/>: see <see cref="FanHandbackLoopTimeout"/>.
+    /// </summary>
+    private static readonly TimeSpan FanHandbackGateTimeout = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// The three sliders that write to the machine. A drag raises a change per pixel, and each change would otherwise
     /// be a settings file write and a firmware call; the pause collapses the burst into one of each.
     /// </summary>
@@ -920,6 +937,32 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _hardwareReady;
     private bool _refreshing;
     private bool _disposed;
+
+    /// <summary>
+    /// True from the moment the fan hand-back starts until it finishes.
+    /// </summary>
+    /// <remarks>
+    /// The hand-back stops the curve loop and then writes Auto, and it used to rely on the stop alone to keep a fixed
+    /// speed from landing afterwards. It cannot: <see cref="FanCurveLoop.Stop"/> cancels without waiting, and a step
+    /// that had already passed its mode check and was queued on the write gate acquires the gate the moment the
+    /// hand-back releases it. <see cref="SelectedFanMode"/> is still Custom at that point — it is moved to Auto only
+    /// after the Auto write returns — so the step's own check does not catch it either. The machine then exits with
+    /// the EC holding a fixed speed and no program left to change it.
+    /// <para>
+    /// This flag is what the write path checks inside the gate, where the answer cannot go stale.
+    /// </para>
+    /// </remarks>
+    private volatile bool _handingBackFans;
+
+    /// <summary>
+    /// True when the sensor ids behind <see cref="CpuTemperature"/> were confirmed on this machine.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to true so a backend that does not report the flag — the Acer service, Linux sysfs, a test stub —
+    /// keeps driving the curve exactly as before. Only the direct-WMI backend clears it, and only when its profile
+    /// table does not name the model and the live probe did not confirm the ids.
+    /// </remarks>
+    private volatile bool _temperatureConfirmed = true;
 
     /// <summary>Telemetry ticks since the window opened. Game detection runs on every other one.</summary>
     private int _tick;
@@ -5461,6 +5504,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             CpuTemperature = data.CpuTemperature;
             GpuTemperature = data.GpuTemperature;
             SysTemperature = data.SysTemperature;
+
+            // The reading is shown either way; what this decides is whether the fan curve may act on it. An
+            // unconfirmed sensor layout is a guess about which id answers what, and a curve that follows a guess can
+            // ask for a third of full speed while the die is at 95 °C. The page keeps the number, the curve does not.
+            _temperatureConfirmed = data.IsTemperatureMeasured;
             CpuFanRpm = data.CpuFanSpeed;
             GpuFanRpm = data.GpuFanSpeed;
             FanRpmMeasured = data.IsFanRpmMeasured;
@@ -5594,6 +5642,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         int temperature = CpuTemperature;
         if (temperature <= 0) return;
 
+        // The curve follows the temperature, so it may only follow a temperature whose sensor ids were confirmed.
+        // An unconfirmed layout is a guess about which id answers what, and a guess that reads the 55 °C system
+        // sensor as the die asks for a third of full speed at 95 °C — with the 95 °C floor never firing, because the
+        // curve never sees 95 °C. The page still shows the reading; the curve leaves the fans alone.
+        if (!_temperatureConfirmed)
+        {
+            WarnTemperatureUnconfirmedOnce();
+            return;
+        }
+
         var now = DateTime.UtcNow;
 
         if (CurveEnabled)
@@ -5614,6 +5672,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Logs the unconfirmed-sensor refusal once per session, not once per 1.5 s step.
+    /// </summary>
+    /// <remarks>
+    /// The step runs on the fan loop's own clock, so an unconditional log line here would be forty lines a minute
+    /// saying the same thing — which is how a log stops being read.
+    /// </remarks>
+    private void WarnTemperatureUnconfirmedOnce()
+    {
+        if (_warnedTemperatureUnconfirmed) return;
+        _warnedTemperatureUnconfirmed = true;
+
+        AppLog.Warn("The fan curve is not running",
+            "the sensor ids for this model are unconfirmed, so the temperature is shown but not acted on");
+    }
+
+    private bool _warnedTemperatureUnconfirmed;
+
+    /// <summary>
     /// Writes one fixed speed to both fans and records it only when the firmware accepted it. The commit is a
     /// callback rather than a value because the two callers track different state.
     /// </summary>
@@ -5622,6 +5698,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            // Re-checked inside the gate, not only at the top of the step. The check at the top of StepFanAsync runs
+            // before the gate wait, so a step that passed it and was descheduled can arrive here after the mode was
+            // switched away from Custom — or after the shutdown hand-back wrote Auto. Writing then would put a fixed
+            // speed back over the firmware's own control with no loop left to correct it.
+            if (_disposed || _handingBackFans || SelectedFanMode?.Mode != FanMode.Custom) return;
+
             bool ok = await _hardware!.SetFanModeAsync(FanMode.Custom, percent, percent).ConfigureAwait(false);
             if (ok)
             {
@@ -6507,16 +6589,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null) return true;
 
+        // Set before the loop is stopped, so a step already queued on the gate sees it. Cleared only if the hand-back
+        // fails, because a failed hand-back leaves the curve armed and the loop has to be able to run again.
+        _handingBackFans = true;
+
         // The loop has to stop before the handback, or its next step would write a fixed speed straight back over
-        // the Auto write and the machine would exit with the fans pinned.
-        _curveLoop.Stop();
+        // the Auto write and the machine would exit with the fans pinned. StopAndWait, not Stop: Stop cancels without
+        // waiting, so a step already inside the gate would still be running when the Auto write went out.
+        _curveLoop.StopAndWait(FanHandbackLoopTimeout);
 
         bool ok;
         try
         {
-            if (!await _writeGate.WaitAsync(WriteGateTimeout).ConfigureAwait(false))
+            if (!await _writeGate.WaitAsync(FanHandbackGateTimeout).ConfigureAwait(false))
             {
                 AppLog.Warn("The fans could not be set to automatic", "the write gate timed out");
+                _handingBackFans = false;
                 return false;
             }
 
@@ -6532,6 +6620,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             AppLog.Warn("The fans could not be set to automatic", ex.Message);
+            _handingBackFans = false;
             return false;
         }
 
@@ -6540,6 +6629,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The firmware refused. The settings file is left alone: the curve is still armed as far as the machine
             // is concerned, and a file that said otherwise would be a lie the next launch acts on.
             AppLog.Warn("The fans could not be set to automatic", "the hardware write was refused");
+            _handingBackFans = false;
             return false;
         }
 

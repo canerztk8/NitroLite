@@ -41,9 +41,15 @@ public partial class App : Application, IDisposable
 
     /// <summary>
     /// How long a shutdown path waits for the fans to be handed back. Bounded because the alternative is a machine
-    /// that will not finish shutting down: the handback is worth two seconds, not an indefinite wait.
+    /// that will not finish shutting down: the handback is worth a few seconds, not an indefinite wait.
     /// </summary>
-    private static readonly TimeSpan ShutdownHandbackTimeout = TimeSpan.FromSeconds(2);
+    /// <remarks>
+    /// Strictly larger than the sum of the hand-back's own two bounds — the curve loop's step in flight and the write
+    /// gate — which are one second each. It used to equal the gate wait alone, so a contended gate consumed the whole
+    /// budget and the Auto write was never reached: the machine exited with the EC still holding a fixed speed, which
+    /// is the one failure these handlers exist to prevent.
+    /// </remarks>
+    private static readonly TimeSpan ShutdownHandbackTimeout = TimeSpan.FromSeconds(5);
 
     private int _survivedUiExceptions;
 
