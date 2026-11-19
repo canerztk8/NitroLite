@@ -1,4 +1,4 @@
-# NitroLite — Bug and Resource-Leak Audit
+﻿# NitroLite — Bug and Resource-Leak Audit
 
 Working branch: `audit/hardening-2026-10` (branched from `main` at `66ce36c`).
 Nothing in this document is a claim about a test that was not run. Every result
@@ -153,6 +153,16 @@ being touched. Suspected issues that turned out to be unreachable are listed in
 | HW-03 | ORTA | a refused fan write left the firmware in Custom mode | group 3 |
 | HW-04 | YUKSEK | the fan curve acted on an unconfirmed temperature layout | group 3 |
 | HW-05 | ORTA | the hand-back used `Stop()`, which does not wait for the loop | group 3 |
+| SEC-02 | YUKSEK | the elevated error log could be redirected through a planted hardlink | `071cf45` |
+| SEC-03 | ORTA | the pipe handshake echoed a nonce instead of identifying the server | `071cf45` |
+| BUG-02 | ORTA | one transient WMI failure disabled the battery limit and CoolBoost for the session | `566154e` |
+| LEAK-01 | ORTA | an adopted COM object was dropped without being disposed when a lookup failed | `566154e` |
+| LEAK-02/03/04 | ORTA | the Nitro-key watcher leaked on a failed start, a failed stop, and every event | `566154e` |
+| LEAK-05 | DUSUK | the probe task was abandoned on timeout without its exception being observed | `566154e` |
+| RACE-02 | ORTA | `_suppressWrite` held across eight awaits discarded a click and reverted it | `566154e` |
+| RACE-03 | ORTA | the write gate was disposed while a step could still be inside it | `566154e` |
+| RACE-04 | ORTA | the log writer was dropped outside the lock that guards it | `566154e` |
+| HW-06 | ORTA | a dead temperature sensor froze the fans at the last speed the curve wrote | `566154e` |
 
 ### 2.2 SEC-01 — the elevated logon task could be pointed at a user-writable directory
 
@@ -307,6 +317,115 @@ Windows reads it — so correcting it cannot change what is written to any machi
 Full table, sources and the reasoning for every value left alone:
 `ACER_COMPATIBILITY.md` §4 and §5.
 
+### 2.8a SEC-02 — the elevated error log could be redirected through a planted hardlink
+
+**YUKSEK.** `NitroLite.Windows/Core/SystemToolsService.cs`,
+`NitroLite.Windows/Core/DebloatService.cs`, `NitroLite.Windows/Core/ElevatedErrorLog.cs`.
+
+The elevated PowerShell wrote its error message to a file in `%TEMP%`, and that path is inside the base64 command
+line. A command line is readable by every process on the machine, so a same-user process could learn the path and
+create an NTFS hardlink there pointing at a file it wanted overwritten — and `Out-File` would write through that
+link with administrator rights. The path being unguessable did not help: it was not guessed, it was read.
+
+*Repro, measured:* a hardlink `link.log` pointing at `target.txt` holding `ORIGINAL CONTENT`. Running the old code
+path (`'PWNED BY THE ATTACKER' | Out-File -FilePath link.log`) replaced the target's contents. Running
+`Write-NitroLiteError link.log 'PWNED BY THE ATTACKER'` left `target.txt` untouched, and a fresh path was written
+normally.
+
+*Fix:* every elevated script now carries `Write-NitroLiteError`, which opens with `FileMode.CreateNew`. A hardlink
+means the path already exists, so the open fails and nothing is written. The `Remove-Item` the scripts already did
+is kept, but it is not what makes this safe — the attacker can recreate the link after it, and only the
+`CreateNew` open refuses.
+
+*Re-check:* a new test parses every generated script with the PowerShell parser, so a snippet that reads correctly
+in C# but is not valid PowerShell fails in the suite instead of on a user's machine.
+
+### 2.8b SEC-03 — the handshake echoed a nonce instead of identifying the server
+
+**ORTA.** `NitroLite.Windows/Core/Hardware/Wmi/WmiWorkerClient.cs`, `WmiWorkerLauncher.cs`.
+
+The nonce echo proved the peer *received* the hello, not that it was the helper that was started. The pipe name is
+on the worker's command line, so a same-user process could create the pipe first and echo the value back — and the
+window would then trust that process's answers, including the temperatures the fan curve acts on.
+
+*Fix:* `GetNamedPipeServerProcessId` asks the kernel who is serving the pipe, and the answer is compared with the
+process the launcher started. The process on that end cannot forge it.
+
+*Re-check:* two new tests. A server that is the test process is refused when a different pid is expected
+(`"not the helper that was started"`), and accepted when its own pid is expected.
+
+### 2.8c BUG-02 — one transient WMI failure disabled two features for the session
+
+**ORTA.** `NitroLite.Windows/Core/Hardware/Wmi/AcerWmiExecutor.cs`.
+
+`EnsureBattery` and `EnsureApge` set `_batteryLookupDone` / `_apgeLookupDone` *before* the lookup. A throw from
+`scope.Connect()` therefore left the flag set, and every later call returned null immediately: the battery charge
+limit and CoolBoost stayed disabled for the rest of the session because of one bad moment.
+
+*Fix:* the flag is set only after the enumeration finishes, which is the only thing that is actually an answer. A
+throw leaves it clear so the next call tries again.
+
+*Re-check:* build and full suite. No automated test covers this path — it needs a real WMI failure, and the class
+has no seam for one. Recorded as verified by inspection, not by test.
+
+### 2.8d LEAK-01..05 — COM objects released on every path
+
+**ORTA / DUSUK.** `AcerWmiExecutor.cs`, `WindowsNitroKeyListener.cs`, `AcerWmiProbe.cs`.
+
+- **LEAK-01** the catch blocks in `EnsureGaming`, `EnsureBattery` and `EnsureApge` cleared the cached instance
+  without disposing it. Narrow — the enumeration has to fail halfway — but the adopted COM object is still ours.
+- **LEAK-02** `TryStartWatcher` created and subscribed a `ManagementEventWatcher` before `Start()` could throw,
+  and dropped it. One leaked watcher per class tried.
+- **LEAK-03** `Stop()` skipped `Dispose()` when `Stop()` itself threw.
+- **LEAK-04** `OnWmiEvent` never disposed `e.NewEvent`. The NitroSense watcher fires every 400 ms, so this was one
+  object per event for as long as the app ran.
+- **LEAK-05** `AcerWmiProbe.ReadWithTimeout` abandoned the probe task on timeout without observing it, so a
+  provider that failed after the timeout surfaced later as an unobserved task exception.
+
+*Fix:* dispose before clearing in the three catches; `try`/`finally` around the watcher start and stop;
+`using var ev = e.NewEvent` in the handler; a fault-only continuation that observes the abandoned task.
+
+*Re-check:* build and full suite. The watcher paths need a real ACPI-WMI event class, so they are verified by
+inspection.
+
+### 2.8e RACE-02/03/04 — three races that lost a click, a write, or a log line
+
+**ORTA.** `MainViewModel.cs`, `NitroLite.Core/AppLog.cs`.
+
+- **RACE-02** `ReadStateAsync` held `_suppressWrite` across eight awaits. A click that landed during them was
+  silently discarded by the setters and then reverted by the value the read had already fetched — the card moved
+  back under the user's finger. *Fix:* every read happens first, and the values are applied afterwards with no
+  await between them, so the suppressed window is synchronous.
+- **RACE-03** `Dispose` called `_writeGate.Dispose()` after a bounded `StopAndWait`, so a step stuck in a WMI call
+  could still be inside the gate and its `Release` would throw `ObjectDisposedException` out of a `finally` on a
+  background thread. *Fix:* the gate is no longer disposed. A `SemaphoreSlim` only needs disposal when
+  `AvailableWaitHandle` was used, and this one never is.
+- **RACE-04** `AppLog.Write` called `DropWriter()` outside the lock, so a failed write could dispose the shared
+  writer while another thread was inside the lock writing to it. *Fix:* taken under the same lock. The catch runs
+  after the lock block has unwound, so this cannot deadlock.
+
+*Re-check:* a new test writes 400 lines from 8 threads and asserts every one lands, reading the rotated file too
+so the count does not depend on how full the log was. It guards the lock discipline rather than RACE-04 itself:
+the trigger for that one is a write failure, which a test cannot produce.
+
+### 2.8f HW-06 — a dead sensor froze the fans at the last speed
+
+**ORTA.** `MainViewModel.cs`.
+
+`StepFanAsync` returned without writing when the temperature was unusable. The loop is the only thing that would
+ever change the fans again, so they stayed at whatever speed the curve last wrote: a machine that was cool when
+the sensor died ran at 30 % while the die heated up, and the 95 °C floor never fired because there was no reading
+to fire it.
+
+*Fix:* the loop hands the fans back to the firmware once, through the same bounded gate the shutdown hand-back
+uses, and reflects it in the card.
+
+*Re-check:* a new test drives the curve to 42 % at 70 °C, then makes the sensor read 0, and asserts an `Auto` write
+arrives. The first version of this fix was caught by an existing test —
+`TheManualSliderWritesTheFloorAndKeepsTheStoredTarget` failed because the hand-back fired on the zero temperature
+of a machine that had not read its sensors yet. That is why the `_hadTemperatureReading` guard exists: "no reading
+yet" is not "the sensor died".
+
 ### 2.9 Ruled out — do not re-investigate
 
 Each of these was suspected by an agent and then shown unreachable or already
@@ -352,3 +471,11 @@ correct. They are recorded so the next pass does not spend time on them again.
 | group 3 | `profiles.json` `fourZoneKeyboard` corrected on evidence | 9 values; see `ACER_COMPATIBILITY.md` §4 |
 | group 3 | profile tests (`EveryShippedProfileIsWellFormed`, `CapabilityProbeTests`, `KeyboardCapabilityTests`) | 67 passed, 0 failed |
 | group 3 | `--hardware-report` after the profile change | unchanged: `nitro-16-an16-41 (embedded)`, same sensor layout |
+| group 4 | SEC-02, SEC-03 fixed | commit `071cf45` |
+| group 4 | hardlink repro measured | old `Out-File` overwrote the target; `Write-NitroLiteError` did not |
+| group 4 | Release build | 0 warnings, 0 errors |
+| group 4 | full suite | 2752 passed, 0 failed, 4 skipped |
+| group 5 | BUG-02, LEAK-01..05, RACE-02/03/04, HW-06 fixed | commit `566154e` |
+| group 5 | Release build | 0 warnings, 0 errors |
+| group 5 | `FanSafetyTests` | 39 passed, 0 failed |
+| group 5 | full suite | 2753 passed, 0 failed, 4 skipped |
