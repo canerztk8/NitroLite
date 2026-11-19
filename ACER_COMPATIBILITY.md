@@ -1,4 +1,4 @@
-# NitroLite — Acer Nitro and Predator compatibility
+﻿# NitroLite — Acer Nitro and Predator compatibility
 
 What NitroLite claims about each Acer model, where the claim comes from, and whether it has been
 checked on a real machine. Two kinds of evidence are kept apart throughout:
@@ -55,7 +55,28 @@ from the Linux driver:
 Keyboard colour is written through `SetGamingRgbKb` with a non-zero zone mask. `SetGamingKBBacklight`
 rejects every payload tried on this machine.
 
-### 1.3 Elevation on this machine
+### 1.3 The packaged binary answers the same way
+
+The single-file package built during this audit was run with `--hardware-report` and compared with
+the development build. Same device, same profile, same sensor layout:
+
+```
+| NitroLite | v1.2.8 |
+| Runtime | .NET 10.0.14 |
+| Model | Nitro AN16-41 |
+| Model code | AN16-41 |
+| Board | Sierra_PEH |
+| BIOS | INSYDE Corp. 1.27 |
+| Matched | nitro-16-an16-41 (embedded) |
+| Cache key | AN16-41|1.27 |
+```
+
+The runtime line matters for compatibility work: the package pins `RuntimeFrameworkVersion=10.0.14`
+because 10.0.12 carries CVE-2026-111497, and the packaged binary reports the pinned version, so the
+pin survives the single-file bundling. The profile match is unchanged by packaging, which is what
+this check was for.
+
+### 1.4 Elevation on this machine
 
 `ConsentPromptBehaviorAdmin=0` on this host, so the elevated WMI worker starts without a visible
 prompt. On a default Windows install the same path raises a UAC prompt. This is a property of the

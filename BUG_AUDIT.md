@@ -567,7 +567,75 @@ still parses (`[Parser]::ParseFile` → no errors).
 
 ---
 
-## 5. Running log
+## 5. Endurance run
+
+Phase 5. One local script, `.audit/endurance.ps1`, one application instance, no restart.
+
+### 5.1 Setup
+
+| Item | Value |
+| --- | --- |
+| Script | `.audit/endurance.ps1` (gitignored; a local harness, not product code) |
+| Log | `.audit/endurance-180.log`, one timestamped line per event |
+| Binary | `NitroLite.Desktop/bin/Release/net10.0-windows/NitroLite.Desktop.exe`, built from `31cd54b` |
+| Start | 2026-11-19 17:36:22 |
+| End | 2026-11-19 20:36:30 |
+| Target | 180 min, sample every 5 min, flow replay every 15 min |
+| Hardware | read-only throughout: the replayed flows only navigate between pages, which makes the app read telemetry. No fan, mode, lighting or battery write was issued. |
+
+The script starts the app, waits for the main window, then loops. Every 20 s it checks that the
+process is still alive and that `git rev-parse HEAD` has not changed; a change means the app code
+moved underneath the test, so the elapsed clock resets. Every 5 min it records working set, private
+bytes, handle count, thread count and CPU. Every 15 min it replays the five main pages through UI
+Automation and reads the app log for new `[ERROR]`/`[FATAL]` lines. A crash, a missing window or an
+exit before the deadline is written as a failure.
+
+### 5.2 Result
+
+**PASS.** One instance for the whole run, no crash, no hang, no early exit, and no `[FAIL]` line. The
+log carries exactly one `[WARN]`, the script's own note that it ended the run with `Stop-Process -Force`.
+
+| Metric | First sample (t=0) | Last sample (t=176.7) | Peak | Mean |
+| --- | --- | --- | --- | --- |
+| Working set | 198.4 MB | 295.5 MB | 295.5 MB | — |
+| Private bytes | 163.4 MB | 238.4 MB | 238.4 MB | — |
+| Handles | 1207 | 1196 | 1282 | — |
+| Threads | 101 | 91 | 101 | — |
+| CPU | 1.17 % | 0.39 % | 1.17 % | 0.25 % |
+
+36 samples, 11 flow replays, every replay found 5 of 5 nav buttons. The script's own closing lines:
+
+```
+2026-11-19 20:36:30 [INFO] run ended after 180.0 min of a 180 min target
+2026-11-19 20:36:30 [INFO] TREND working set 198.4MB -> 295.5MB (+97.1MB); private 163.4MB -> 238.4MB (+75.0MB); handles 1207 -> 1196 (-11); threads 101 -> 91
+2026-11-19 20:36:30 [INFO] PEAK working set 295.5MB; peak handles 1282; mean cpu 0.25%
+2026-11-19 20:36:30 [WARN] stopping pid 21924 with Stop-Process -Force; the exit is forced, not a clean shutdown
+2026-11-19 20:36:33 [INFO] RESULT: PASS - 180.0 min with one instance, no crash, no hang, no early exit
+```
+
+### 5.3 The trend, read honestly
+
+The working set is **not** flat from zero: it climbs from 198 MB to about 273 MB over the first
+30 minutes and then holds. That first climb is the app warming up — JIT, the first visit to each
+page, the telemetry caches filling — and it is bounded, which is what matters. After t=30 min the
+working set stays inside a 22.8 MB band (272.7–295.5 MB) for the remaining two and a half hours. The
+last 12 MB of that band arrives between t=151 and t=161, right after a flow replay, and then holds:
+the final three samples are 295.1, 295.5 and 295.5 MB. A leak would keep climbing through those; this
+does not.
+
+The handle count is the sharper test, because a leaked handle is what a long run exposes first. It
+**falls** over the run: 1207 at t=0, a peak of 1282 in the first five minutes, then 1166–1203 for the
+rest, ending at 1196 — eleven fewer than it started with. A leak would trend up monotonically; this
+does not. Threads fall from 101 to 91 and stay there. CPU averages 0.25 % with a 1.17 % peak, which is
+the idle cost of a tray app polling telemetry.
+
+The run ended with `Stop-Process -Force`, so the exit was forced and is not evidence of a clean
+shutdown path. That path was exercised separately in §2.8f.
+
+---
+
+## 6. Running log
+
 
 
 
@@ -611,3 +679,8 @@ still parses (`[Parser]::ParseFile` → no errors).
 | group 7 | same publish with `PublishTrimmed=false`, pin kept | single 50,523,264-byte exe; `--hardware-report` reports `Runtime .NET 10.0.14`, `nitro-16-an16-41 (embedded)` |
 | group 7 | trimmed package | **not produced on this host** — recorded as not verified, not as passed |
 | group 7 | packaging bug fixed | the previous zip is no longer deleted before the new one is built |
+| endurance | `.audit/endurance.ps1 -Minutes 180 -SampleMinutes 5 -FlowMinutes 15` started | 2026-11-19 17:36:22, pid 21924, HEAD `31cd54b` |
+| endurance | 36 samples, 11 flow replays | every replay found 5 of 5 nav buttons; 0 `[FAIL]` |
+| endurance | run ended | 2026-11-19 20:36:30, **180.0 min**, `RESULT: PASS` |
+| endurance | trend | ws 198.4 -> 295.5 MB, private 163.4 -> 238.4 MB, handles 1207 -> **1196**, threads 101 -> 91, mean cpu 0.25 % |
+| endurance | exit | forced with `Stop-Process -Force`; recorded as forced, not as a clean shutdown |
