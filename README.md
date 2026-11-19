@@ -3,7 +3,7 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)
-[![Tests](https://img.shields.io/badge/Tests-2652-10B981)](#tests)
+[![Tests](https://img.shields.io/badge/Tests-2698-10B981)](#tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
@@ -11,6 +11,14 @@
   <a href="https://youtu.be/0FmFyp4AykY">45-second demo</a> ·
   <a href="#compatibility">Model compatibility</a> ·
   <a href="#install">Install</a>
+</p>
+
+<p align="center">
+  <a href="https://ko-fi.com/cztrk"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support me on Ko-fi" height="32"></a>
+</p>
+
+<p align="center">
+  <sub>One student, no company: <b>over $100 out of pocket</b> and <b>hundreds of hours</b> so far. Free and MIT-licensed either way.</sub>
 </p>
 
 <p align="center">
@@ -81,6 +89,10 @@ saturated the reading barely moves. The curve is a way to trade noise against te
 - Static, breathing, wave, neon, slide, zoom, meteor and sparkle, plus your own saved profiles.
 - **Every change applies as you make it** — no Apply button. The backlight-off state survives a restart, and a colour
   set by hand marks the profile as Custom so the picker never claims a preset is selected when it is not.
+- **A colour that follows the processor**, if you want one: ice blue at 45 °C, mint at 60, amber at 72, red at 90,
+  holding the ends rather than going dark at idle. It is an overlay, not a saved colour — switching it off puts your
+  own colour back, and picking a colour by hand switches it off. The reading is rounded to 3 °C and written at most
+  once every three seconds, so it costs the keyboard a handful of writes an hour, not one per telemetry tick.
 
 ### Battery
 - **80 % charge limit**, set through Acer Care Center or the firmware and read back to confirm. On a laptop with
@@ -672,7 +684,7 @@ The solution has five projects:
 | `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
 | `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
 | `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2652 tests. |
+| `NitroLite.Tests` | `net10.0-windows` | 2698 tests. |
 
 `NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
 check that keeps the split honest.
@@ -710,7 +722,7 @@ push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests
 
 ## Tests
 
-2652 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
+2698 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values and
 concurrency.
 
 ```powershell
