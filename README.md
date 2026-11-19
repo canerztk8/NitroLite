@@ -29,7 +29,7 @@ controls your laptop actually has. See [Compatibility](#compatibility).
 administrator rights. If it is not, NitroLite talks to the firmware directly instead, at the cost of one UAC prompt
 per session. Details in [Without Acer's software](#without-acers-software).
 
-**It is light.** About a 19.5 MB download holding a 24 MB exe, roughly 70 MB of RAM while it sits in the tray, and
+**It is light.** About a 19.7 MB download holding a 24 MB exe, roughly 70 MB of RAM while it sits in the tray, and
 about 0.2 % of one core at idle. No Electron, no background service, no kernel driver, no telemetry.
 
 ---

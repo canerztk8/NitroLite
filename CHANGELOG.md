@@ -88,7 +88,7 @@ through to Nirmala UI for Hindi rather than drawing empty boxes.
 - **The release is trimmed.** `PublishTrimmed=true` with `TrimMode=partial`: the framework is trimmed, while
   Avalonia, `System.Management` and the NitroLite assemblies are copied whole, because the XAML loader and the WMI
   COM interop resolve members by name. That is what takes the exe from 43 MB to 24 MB, and the download from
-  44.6 MB to 19.5 MB. The published 1.2.6 asset predated this change; 1.2.7 is the first release that ships it.
+  44.6 MB to 19.7 MB. The published 1.2.6 asset predated this change; 1.2.7 is the first release that ships it.
 - **Linux telemetry reads the sensor again.** `LinuxHwmon` was replaying the values the probe had cached, so a
   temperature that moved after startup never reached the window. It now reads `temp1_input` and the fan node on
   every tick, under the same lock the writer takes.
