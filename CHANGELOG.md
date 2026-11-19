@@ -8,10 +8,12 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
-## [Unreleased]
+## [1.2.8] - 2026-11-19
 
-Two controls that were hard to read, a keyboard that follows the processor — with ramps the user can shape — and a log
-that reads in English.
+An AN16-61 that detected nothing — three refusals stacked in front of its hardware, and a warning every second
+that hid the reason. The refusals are gone, and the one that remains now says which it is. Beside that: a
+keyboard that follows the processor with ramps the user can shape, a fan curve that applies as it is drawn, and
+log lines that read in English whatever the window is showing. 14 commits since 1.2.7.
 
 ### Added
 
