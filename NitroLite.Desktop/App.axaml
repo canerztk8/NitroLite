@@ -630,8 +630,12 @@
       A framed button that is also a switch: the OSD toggle. Off it is the same frame as .primary, so it reads as a
       button and not as a label; on it fills with the palette's accent and takes the accent's own contrast colour for
       the type. That is the whole state signal, and it works in all eight palettes because both colours come from the
-      palette rather than from a literal. The dot in the markup repeats it for anyone who cannot separate the two
-      fills at a glance.
+      palette rather than from a literal.
+
+      The hover does not touch the fill. AccentHover is the accent lifted towards white, which on a bright accent leaves
+      dark type on a washed-out ground — the one state where the label stopped being readable. A hovered switch instead
+      draws its own outline in the contrast colour: the fill and the type stay exactly as legible as they were, and the
+      button still answers the pointer.
     -->
     <Style Selector="Button.primary.on">
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
@@ -643,37 +647,21 @@
       <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     </Style>
 
+    <Style Selector="Button.primary.on:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource OnAccentBrush}" />
+    </Style>
+
     <Style Selector="Button.primary.on:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary.on:pressed">
+      <Setter Property="BorderBrush" Value="{DynamicResource OnAccentBrush}" />
     </Style>
 
     <Style Selector="Button.primary.on:pressed /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
-    </Style>
-
-    <!-- The type inside the toggle follows the fill, so the label never ends up accent-on-accent. -->
-    <Style Selector="Button.primary TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-    </Style>
-
-    <Style Selector="Button.primary.on TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
-    </Style>
-
-    <!-- The state dot: hollow while off, solid while on. -->
-    <Style Selector="Border.statedot">
-      <Setter Property="Width" Value="7" />
-      <Setter Property="Height" Value="7" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-
-    <Style Selector="Border.statedot.on">
-      <Setter Property="Background" Value="{DynamicResource OnAccentBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource OnAccentBrush}" />
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Opacity" Value="0.9" />
     </Style>
 
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">

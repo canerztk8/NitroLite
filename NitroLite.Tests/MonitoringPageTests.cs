@@ -490,12 +490,16 @@ public class MonitoringPageTests
 
         // The button is the switch, so its own state has to be on it. Before this it looked identical on and off and
         // the only way to tell was to look at the corner of the screen.
+        // The element is self-closing, so the end is the first "/>" after the command rather than a closing tag.
         var button = markup[markup.LastIndexOf("<Button", start, StringComparison.Ordinal)..];
-        button = button[..button.IndexOf("</Button>", StringComparison.Ordinal)];
+        button = button[..(button.IndexOf("/>", StringComparison.Ordinal) + 2)];
 
         Assert.Contains("Classes.on=\"{Binding OsdEnabled}\"", button, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"statedot\"", button, StringComparison.Ordinal);
         Assert.Contains("Labels.Osd", button, StringComparison.Ordinal);
+
+        // The fill is the whole signal. A dot beside the label was tried and taken out again: at 11px it read as a
+        // bullet in the text rather than as a state, and the accent fill already says it.
+        Assert.DoesNotContain("statedot", button, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -506,7 +510,9 @@ public class MonitoringPageTests
         // Both colours come from the palette, so the on state is legible in all eight themes instead of being a
         // literal that only works on the cream page.
         Assert.Contains("Selector=\"Button.primary.on\"", markup, StringComparison.Ordinal);
-        Assert.Contains("Selector=\"Border.statedot.on\"", markup, StringComparison.Ordinal);
+
+        // There is no second signal any more: the dot beside the label was taken out, so the fill is the state.
+        Assert.DoesNotContain("statedot", markup, StringComparison.Ordinal);
 
         var start = markup.IndexOf("Selector=\"Button.primary.on\"", StringComparison.Ordinal);
         var end = markup.IndexOf("</Style>", start, StringComparison.Ordinal);
@@ -517,13 +523,20 @@ public class MonitoringPageTests
     }
 
     [Fact]
-    public void OsdToggle_TheDotFollowsTheSameFlag()
+    public void OsdToggle_HoverKeepsTheFillAndTheType()
     {
-        var markup = Read("NitroLite.Desktop", "Views", "MonitoringView.axaml");
+        var markup = Read("NitroLite.Desktop", "App.axaml");
 
-        // Two bindings to one flag: the fill and the dot. A dot bound to something else would be a second source of
-        // truth for the same question.
-        var count = markup.Split("Classes.on=\"{Binding OsdEnabled}\"").Length - 1;
-        Assert.Equal(2, count);
+        // AccentHover is the accent lifted towards white. On a bright accent that leaves dark type on a washed-out
+        // ground, which is the one state where the label stopped being readable, so the hovered switch keeps its fill
+        // and draws an outline in the contrast colour instead.
+        var start = markup.IndexOf("Selector=\"Button.primary.on:pointerover\"", StringComparison.Ordinal);
+        Assert.True(start > 0, "the on state has no hover rule");
+
+        var end = markup.IndexOf("</Style>", start, StringComparison.Ordinal);
+        var block = markup[start..end];
+
+        Assert.Contains("OnAccentBrush", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("AccentHoverBrush", block, StringComparison.Ordinal);
     }
 }
