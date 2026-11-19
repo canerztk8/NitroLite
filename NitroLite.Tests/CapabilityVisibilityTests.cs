@@ -6,6 +6,7 @@ using System.Linq;
 using NitroLite;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Desktop.ViewModels;
 using Xunit;
 
 namespace NitroLite.Tests;
@@ -212,5 +213,41 @@ public class CapabilityVisibilityTests
         {
             try { Directory.Delete(directory, true); } catch { }
         }
+    }
+
+    // The capability list on the settings page and the onboarding card is drawn from CapabilityRow, and it used to
+    // have two states: a tick or a cross. On Windows a false answer means "nothing is open yet", not "the machine
+    // lacks this" — the platform contract says so in as many words — so an unreachable capability must be a third
+    // state rather than a cross. An Acer Nitro AN16-61 was told it had no battery charge limit and no backlight
+    // timeout while NitroSense controlled both, and this is where that sentence came from.
+
+    [Fact]
+    public void CapabilityRow_ShowsAQuestionMark_ForAnAnswerNobodyGave()
+    {
+        var row = new CapabilityRow("Battery limit", Supported: false, Unknown: true);
+
+        Assert.Equal("?", row.Glyph);
+        Assert.False(row.Ok);
+        Assert.False(row.No);
+    }
+
+    [Fact]
+    public void CapabilityRow_KeepsTheCross_ForAConfirmedNo()
+    {
+        var row = new CapabilityRow("Battery limit", Supported: false);
+
+        Assert.Equal("✕", row.Glyph);
+        Assert.False(row.Ok);
+        Assert.True(row.No);
+    }
+
+    [Fact]
+    public void CapabilityRow_TicksAConfirmedYes()
+    {
+        var row = new CapabilityRow("Battery limit", Supported: true);
+
+        Assert.Equal("✓", row.Glyph);
+        Assert.True(row.Ok);
+        Assert.False(row.No);
     }
 }

@@ -134,6 +134,7 @@ public sealed class WmiHardwareController : IHardwareController
             FanControl = ReadBool(data, "fanControl"),
             OperatingModeControl = ReadBool(data, "operatingMode"),
             MuxSwitch = ReadBool(data, "muxSwitch"),
+            MuxSwitchOverWmi = ReadNullableBool(data, "wmiMuxSwitch"),
             BatteryChargeLimit = ReadBool(data, "batteryLimit"),
             KeyboardLighting = ReadBool(data, "keyboardLighting"),
             BacklightTimeout = ReadBool(data, "backlightTimeout"),
@@ -359,8 +360,53 @@ public sealed class WmiHardwareController : IHardwareController
 
     public async Task<GpuOperatingMode?> GetGpuModeAsync()
     {
-        var state = await ReadDeviceStateAsync().ConfigureAwait(false);
-        return ParseEnum<GpuOperatingMode>(state, "muxMode");
+        var (state, refusal) = await ReadDeviceStateWithReasonAsync().ConfigureAwait(false);
+
+        if (state == null)
+        {
+            // A MUX card with no mode and no explanation is what an AN16-61 report showed: the panel said the
+            // switch was supported and offered no current mode. The worker knows why — it names the class or the
+            // selector that failed — and that sentence is the only thing a maintainer can act on.
+            AppLog.Warn("The MUX mode could not be read", refusal);
+            return null;
+        }
+
+        if (!TryReadUlong(state, "muxRaw", out var raw))
+        {
+            AppLog.Warn("The MUX mode could not be read",
+                $"the device state carries no GetGamingMiscSetting(0x02) answer ({DescribeRaw(state)})");
+            return null;
+        }
+
+        var decoded = ParseEnum<GpuOperatingMode>(state, "muxMode");
+        if (decoded == null)
+        {
+            // The firmware answered something this build does not map. Say what it was rather than showing nothing:
+            // the raw word is how a new numbering gets recognised.
+            AppLog.Warn("The MUX mode was not recognised",
+                $"GetGamingMiscSetting(0x02) answered 0x{raw:X4}; expected the high byte to be 1..3");
+        }
+
+        return decoded;
+    }
+
+    /// <summary>
+    /// The worker's own words for a refused command, or a note that there was no worker to ask, so a capability that
+    /// silently did nothing at least leaves a line in the log.
+    /// </summary>
+    private string DescribeWorkerRefusal(WmiWorkerResponse? response)
+    {
+        if (response == null)
+        {
+            var detail = _launcher.LastError;
+            return string.IsNullOrWhiteSpace(detail)
+                ? "the worker did not answer"
+                : $"the worker did not answer: {detail}";
+        }
+
+        var code = string.IsNullOrWhiteSpace(response.ErrorCode) ? "" : $"[{response.ErrorCode}] ";
+        var error = string.IsNullOrWhiteSpace(response.Error) ? "no detail" : response.Error;
+        return $"{code}{error}";
     }
 
     /// <summary>
@@ -387,8 +433,15 @@ public sealed class WmiHardwareController : IHardwareController
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var state = await ReadDeviceStateAsync().ConfigureAwait(false);
-            if (state == null) return false;
+            var (state, refusal) = await ReadDeviceStateWithReasonAsync().ConfigureAwait(false);
+            if (state == null)
+            {
+                // Returning false here without a word was the whole of the AN16-61 "switching to discrete GPU does
+                // not apply the setting" report: a click, no reboot prompt, no message, and nothing in the log.
+                AppLog.Warn("The MUX write was not attempted",
+                    $"the worker could not read the current mode: {refusal}");
+                return false;
+            }
 
             if (!TryReadUlong(state, "muxRaw", out var raw) || !IsMuxValueInRange(raw))
             {
@@ -818,8 +871,20 @@ public sealed class WmiHardwareController : IHardwareController
 
     private async Task<JsonObject?> ReadDeviceStateAsync()
     {
+        var (state, _) = await ReadDeviceStateWithReasonAsync().ConfigureAwait(false);
+        return state;
+    }
+
+    /// <summary>
+    /// The same read, plus the worker's own explanation when it refused. Kept beside
+    /// <see cref="ReadDeviceStateAsync"/> rather than replacing it because most callers have nothing useful to add to
+    /// a log line — but the MUX does, since its failure is otherwise a control that does nothing.
+    /// </summary>
+    private async Task<(JsonObject? State, string Refusal)> ReadDeviceStateWithReasonAsync()
+    {
         var response = await SendAsync(WmiWorkerCommand.ReadDeviceState).ConfigureAwait(false);
-        return response is { Ok: true } ? response.Data as JsonObject : null;
+        if (response is { Ok: true } && response.Data is JsonObject data) return (data, "");
+        return (null, DescribeWorkerRefusal(response));
     }
 
     /// <summary>

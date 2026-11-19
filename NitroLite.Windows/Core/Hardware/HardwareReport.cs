@@ -243,12 +243,7 @@ public static class HardwareReport
 
         sb.AppendLine("| Live selector | Answer |");
         sb.AppendLine("| --- | --- |");
-        AppendRow(sb, "GetGamingMiscSetting(0x09) MUX", probe.WmiMuxSignal switch
-        {
-            true => "3 (switchable over WMI)",
-            false => "not 3",
-            null => "not read (needs elevation)"
-        });
+        AppendRow(sb, "GetGamingMiscSetting(0x09) MUX", MuxSelectorText(capabilities, probe));
         AppendRow(sb, "GetGamingMiscSetting(0x0A) modes", capabilities?.SupportedModeMask is ulong mask
             ? $"0x{mask:X4} -> {FormatModes(capabilities.SupportedOperatingModes)}"
             : "not read (needs elevation)");
@@ -302,6 +297,24 @@ public static class HardwareReport
 
         sb.AppendLine("_No serial number, machine UUID, user name, file path or log content is included._");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The live <c>0x09</c> answer as a row value. The capability snapshot only carries one when a worker had already
+    /// read it before the probe ran, which is never — the probe runs at launch — so the live capabilities are the
+    /// real source and the snapshot is the fallback for a report rebuilt from a stored snapshot.
+    /// </summary>
+    private static string MuxSelectorText(HardwareCapabilities? capabilities, CapabilitySnapshot probe)
+    {
+        bool? signal = capabilities?.MuxSwitchOverWmi ?? probe.WmiMuxSignal;
+        return signal switch
+        {
+            true => "3 (switchable over WMI)",
+            false => "not 3",
+            null => capabilities == null
+                ? "not read (needs elevation)"
+                : "not read (the worker did not report it)"
+        };
     }
 
     /// <summary>One Markdown table row, skipped entirely when the value is empty so the table has no blank cells.</summary>

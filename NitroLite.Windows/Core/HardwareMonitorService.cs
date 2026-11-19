@@ -95,6 +95,28 @@ public class HardwareMonitorService : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetSystemTimes(out long lpIdleTime, out long lpKernelTime, out long lpUserTime);
 
+    /// <summary>
+    /// What <c>CallNtPowerInformation</c> writes for one logical processor when asked for
+    /// <c>ProcessorInformation</c>. The layout is fixed by <c>powrprof.h</c> and has not changed since Windows 2000.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESSOR_POWER_INFORMATION
+    {
+        public uint Number;
+        public uint MaxMhz;
+        public uint CurrentMhz;
+        public uint MhzLimit;
+        public uint MaxIdleState;
+        public uint CurrentIdleState;
+    }
+
+    /// <summary>The <c>POWER_INFORMATION_LEVEL</c> that answers the per-core clocks.</summary>
+    private const int ProcessorInformation = 11;
+
+    [DllImport("powrprof.dll", SetLastError = false)]
+    private static extern uint CallNtPowerInformation(
+        int informationLevel, IntPtr inputBuffer, uint inputBufferLength, IntPtr outputBuffer, uint outputBufferLength);
+
     private bool _nvmlInitialized = false;
     private bool _ownsNvml;
     private readonly bool _allowNvml;
@@ -217,8 +239,59 @@ public class HardwareMonitorService : IDisposable
         return _lastCpuUsage;
     }
 
-    public void ApplyNativeRamFallback(MonitorData data)
+    /// <summary>
+    /// The average current clock across the logical processors, in MHz, or 0 when Windows will not answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists because the Acer service was the only source of a clock reading, and on a machine where that
+    /// service is not installed the monitoring page showed <c>-- GHz</c> forever. The Acer Nitro AN16-61 report that
+    /// prompted this is exactly that machine: fans and modes work over direct WMI, and the clock was blank.
+    /// </para>
+    /// <para>
+    /// <c>CallNtPowerInformation(ProcessorInformation)</c> is the documented way to ask for the running clock without
+    /// a driver and without the Acer stack. It writes one <c>PROCESSOR_POWER_INFORMATION</c> per logical processor and
+    /// returns 0 on success; anything else is treated as "no answer" rather than as a clock of zero.
+    /// </para>
+    /// </remarks>
+    public static double GetNativeCpuFrequencyMhz()
     {
+        int count = Environment.ProcessorCount;
+        if (count <= 0) return 0;
+
+        int stride = Marshal.SizeOf<PROCESSOR_POWER_INFORMATION>();
+        IntPtr buffer = IntPtr.Zero;
+        try
+        {
+            buffer = Marshal.AllocHGlobal(stride * count);
+            uint status = CallNtPowerInformation(ProcessorInformation, IntPtr.Zero, 0, buffer, (uint)(stride * count));
+            if (status != 0) return 0;
+
+            // Sum only the cores that answered a non-zero clock. A parked core reports 0, and averaging the parked
+            // ones in would drag the number down to whatever fraction of the die happened to be awake.
+            double total = 0;
+            int answered = 0;
+            for (int i = 0; i < count; i++)
+            {
+                var info = Marshal.PtrToStructure<PROCESSOR_POWER_INFORMATION>(IntPtr.Add(buffer, i * stride));
+                if (info.CurrentMhz == 0) continue;
+                total += info.CurrentMhz;
+                answered++;
+            }
+
+            return answered == 0 ? 0 : Math.Round(total / answered, 0);
+        }
+        catch
+        {
+            return 0;
+        }
+        finally
+        {
+            if (buffer != IntPtr.Zero) Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    public void ApplyNativeRamFallback(MonitorData data)    {
         try
         {
             var mem = new MEMORYSTATUSEX();
@@ -366,6 +439,13 @@ public class HardwareMonitorService : IDisposable
         if (data.CpuCores <= 0)
         {
             data.CpuCores = Environment.ProcessorCount;
+        }
+
+        // The clock used to come only from the Acer service, so a machine without that service showed "-- GHz" for
+        // as long as it ran. Ask Windows directly before giving up on the reading; the power estimate below uses it.
+        if (data.CpuFrequencyMHz <= 0)
+        {
+            data.CpuFrequencyMHz = GetNativeCpuFrequencyMhz();
         }
 
         // 4. CPU Package Power (Watts) — an estimate, not a measurement.

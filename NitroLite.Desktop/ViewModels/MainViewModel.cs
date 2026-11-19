@@ -277,12 +277,30 @@ public sealed class ColorSwatch : ObservableObject
 }
 
 /// <summary>One row of the capability list: a name and whether this machine has it.</summary>
-public sealed record CapabilityRow(string Label, bool Supported){
-    /// <summary>The tick or cross the row is drawn with.</summary>
-    public string Glyph => Supported ? "✓" : "✕";
+/// <remarks>
+/// Three states, not two. <see cref="IPlatformSnapshot.NegativeAnswersAreConclusive"/> exists because on Windows a
+/// false answer means "nothing is open yet", not "the machine lacks this", and the page is supposed to say so. It did
+/// not: every row the backend could not reach was drawn with a cross and the words "Desteklenmiyor", which is how an
+/// Acer Nitro AN16-61 came to be told it had no battery charge limit and no backlight timeout while NitroSense
+/// controlled both.
+/// </remarks>
+public sealed record CapabilityRow(string Label, bool Supported, bool Unknown = false)
+{
+    /// <summary>The tick, cross or question mark the row is drawn with.</summary>
+    public string Glyph => Unknown ? "?" : Supported ? "✓" : "✕";
 
-    /// <summary>"Destekleniyor" / "Desteklenmiyor", so the row says it in words as well as in a symbol.</summary>
-    public string StateText => Supported ? Loc.T("Destekleniyor") : Loc.T("Desteklenmiyor");
+    /// <summary>
+    /// "Destekleniyor" / "Desteklenmiyor" / "Bilinmiyor", so the row says it in words as well as in a symbol.
+    /// </summary>
+    public string StateText => Unknown
+        ? Loc.T("Bilinmiyor")
+        : Supported ? Loc.T("Destekleniyor") : Loc.T("Desteklenmiyor");
+
+    /// <summary>True only for a confirmed yes, so the tick is not drawn for an answer nobody gave.</summary>
+    public bool Ok => Supported && !Unknown;
+
+    /// <summary>True only for a confirmed no. An unknown row must not borrow the colour of a missing feature.</summary>
+    public bool No => !Supported && !Unknown;
 }
 
 /// <summary>One configured game rule, as the Game Profiles page lists it.</summary>
@@ -5257,13 +5275,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CapabilityRows.Clear();
         if (_hardware == null) return;
 
-        CapabilityRows.Add(new CapabilityRow(Labels.CapFanControl, _capabilities.FanControl));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapOperatingMode, _capabilities.OperatingModeControl));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapMux, _capabilities.MuxSwitch));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapBatteryLimit, _capabilities.BatteryChargeLimit));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapKeyboard, _capabilities.KeyboardLighting));
-        CapabilityRows.Add(new CapabilityRow(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapFanControl, _capabilities.FanControl));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapOperatingMode, _capabilities.OperatingModeControl));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapMux, _capabilities.MuxSwitch));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapBatteryLimit, _capabilities.BatteryChargeLimit));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapKeyboard, _capabilities.KeyboardLighting));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout));
     }
+
+    /// <summary>
+    /// One row, with "could not ask" kept apart from "not there". A no is only drawn as a no on a platform whose
+    /// negatives are conclusive; everywhere else it is the third state the platform contract already asks for.
+    /// </summary>
+    private CapabilityRow CapabilityRowFor(string label, bool supported)
+        => new(label, supported, Unknown: !supported && !NegativeAnswersAreConclusive);
 
     // ---------------------------------------------------------------- commands
 

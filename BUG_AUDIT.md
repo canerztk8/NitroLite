@@ -706,3 +706,76 @@ shutdown path. That path was exercised separately in §2.8f.
 | final | full suite on `2e2b033` | 2751 passed, 0 failed, 6 skipped — the 2 extra skips are the release-package tests, see §4.1 |
 | final | branch pushed | `audit/hardening-2026-10` -> origin, 10 commits |
 | final | draft PR opened | https://github.com/canerztk8/NitroLite/pull/4 |
+
+| issue round | AN16-61 report triaged: 8 findings, I-01..I-05 fixed, I-06..I-08 deliberately open | see §7 |
+| issue round | Release build | 0 warnings, 0 errors |
+| issue round | `CpuClockFallbackTests` | 5 passed, 0 failed; the fallback reads 3801 MHz on this machine |
+| issue round | filtered `CapabilityVisibilityTests` / `HalStep9Tests` / `CpuClockFallbackTests` | 67 passed, 0 failed |
+| issue round | full suite | 2761 passed, 0 failed, 6 skipped |
+
+---
+
+## 7. Follow-up round — the AN16-61 issue report
+
+A user on an **Acer Nitro AN16-61** (`EV9_SKF`, BIOS `INSYDE 1.53`, Windows 10.0.26300, v1.2.8) filed a
+report with eight separate complaints. Their hardware report and log are quoted in
+`ACER_COMPATIBILITY.md` §1.5; this section is the code side.
+
+The unit under test is still the AN16-41, so the rule from phase 3 applies unchanged: a finding is only
+called fixed when a test on this machine proves the code path, and anything that needs the reporter's
+hardware stays **test pending**.
+
+| # | Finding | Where it was | Fix | State |
+| --- | --- | --- | --- | --- |
+| I-01 | The dashboard shows `-- GHz`: the CPU clock is never read | `CpuFrequencyMHz` had exactly one writer, the `CPU_FREQUENCY` field of an AASsvc reply. With no Acer service it stayed 0 forever. | `HardwareMonitorService.GetNativeCpuFrequencyMhz()` reads the running clock from `CallNtPowerInformation(ProcessorInformation)`, and `EnrichMonitorData` applies it when the sample has no clock — before the power estimate reads it, so the estimate stops assuming a ratio of 1.0 | **fixed and tested** |
+| I-02 | The hardware report says `GetGamingMiscSetting(0x09) MUX — not read (needs elevation)` while the session is elevated | `CapabilityProbe.Probe(identity, catalog, schema)` always passed `wmiMuxSignal: null`; the 4-argument overload existed for tests only, and nothing carried the worker's `wmiMuxSwitch` back | new `HardwareCapabilities.MuxSwitchOverWmi`, filled by `WmiHardwareController.GetCapabilitiesAsync` and preferred by `HardwareReport`. "not read (needs elevation)" is now reserved for a session that really has no capabilities at all | **fixed and tested** |
+| I-03 | "MUX Switch doesn't read current mode and switching doesn't apply" left no trace in the log | `GetGpuModeAsync` returned `null` and `SetGpuModeAsync` returned `false` when the worker refused `ReadDeviceState`, both silently. The reporter's log has no MUX line at all, so the failure could not be triaged | both now log the worker's own `errorCode`/`error` text (`MUX mode could not be read`, `MUX write was not attempted`), and an undecodable answer logs the raw word | **fixed; the underlying refusal is test pending** |
+| I-04 | The capability summary said no battery charge limit and no backlight timeout, while NitroSense controlled both | the summary drew a cross for every false flag. `IPlatformSnapshot.NegativeAnswersAreConclusive` is `false` on Windows and its own documentation says such an answer "is reported as unknown"; the code ignored it | `CapabilityRow` has a third state — `?` and `Bilinmiyor` — and only a conclusive platform draws a cross. Colour classes are driven by `Ok`/`No` so an unknown row is not painted as a missing feature | **fixed and tested** |
+| I-05 | The battery card was hidden on a machine where Care Center holds the charge limit | `WmiHardwareController` can only reach `WMID_GUID5`; this model does not register it. The probe already reported the capability as supported through Care Center, so two parts of the app disagreed | `HybridHardwareController` asks Care Center for the mode, the write and the capability when the direct-WMI path cannot serve them | **test pending** — needs the machine |
+| I-06 | Per-zone keyboard colour changes in the app only; "Write failed" | the firmware accepts `SetGamingRgbKb` (status 0) and the read-back does not match, three times, until `ReadBackPolicy` disables the capability for the session. The reporter's log shows the disable and the fallback | **none.** No payload was guessed: the correct zone payload for this firmware is unknown | **test pending** — device required |
+| I-07 | Windows-key lock does nothing | `SetWinKeyLock` is documented in the code as unverifiable; there is no firmware getter | **none** | **test pending** — device required |
+| I-08 | `The exit state could not be written: Call from invalid thread` | the shutdown status notification cannot cross to the UI thread; the code already catches it and writes the marker that matters first | **none** — cosmetic, and the marker is written | n/a |
+
+Two of the eight are honestly left open. A guessed zone payload and a guessed Win-key selector would
+both be hardware writes that cannot be verified on this machine, which is the exact thing phase 3 of
+this audit forbade.
+
+### 7.1 What was measured, not assumed
+
+| Check | Command | Result |
+| --- | --- | --- |
+| The clock fallback answers on real silicon | `dotnet test --filter FullyQualifiedName~CpuClockFallbackTests` | 5 passed, 0 failed; the test prints the measured clock, **3801 MHz** on this machine |
+| The test really pins the fix | mutation: the fill removed from `EnrichMonitorData`, rebuilt | `EnrichMonitorData_FillsTheClock_WhenTheServiceDidNotReportIt` **fails** (1 failed, 4 passed); fill restored → 5 passed. A test that cannot fail proves nothing. |
+| A service reading still wins over the fallback | same run | `EnrichMonitorData_KeepsTheServiceReading` — 3210 MHz survives |
+| The report shows the live MUX selector | `--filter "CapabilityVisibilityTests\|HalStep9Tests\|CpuClockFallbackTests"` | 67 passed, 0 failed — includes the two new report rows |
+| The whole suite still passes | `dotnet test -c Release --no-build` | **2761 passed, 0 failed, 6 skipped** (the 6 are the 4 live-hardware and 2 release-package skips from phase 4; a skip is not a pass) |
+| Release build with warnings as errors | `dotnet build NitroLite.sln -c Release -warnaserror` | 0 warnings, 0 errors |
+
+### 7.2 The application, started the normal way
+
+| Step | Evidence |
+| --- | --- |
+| Launched `NitroLite.Desktop.exe` from the Release build at 21:59:50 | log: `The Windows hardware backend was attached: AN16-41 · direct WMI enabled`, `Acer hardware detected: model='Acer Nitro AN16-41' event classes=2`, `--wmi-worker connected: pid=34160` |
+| Telemetry live, no error lines | UI Automation read the dashboard: CPU 58 °C, GPU 57 °C, FAN 2128 RPM, and the fan card CPU 2128 / GPU 2111 RPM |
+| The settings page bindings compile against the new row shape | `AvaloniaUseCompiledBindingsByDefault=true` in `NitroLite.Desktop.csproj`, so `{Binding Ok}` / `{Binding No}` on `CapabilityRow` are compiled, not resolved at runtime; the build is what proves they exist |
+| Closed | no `NitroLite.Desktop` process left, including the elevated worker |
+| `--hardware-report` on this machine | still prints the live-selector rows as `not read (needs elevation)` — correct, because that CLI path passes no capabilities. The reporter's Markdown report is the other path, and it now reads the worker's answer |
+
+One line in the reporter's log turned out not to be theirs: this machine logs
+`The Acer WMI event watcher was refused: class='AcerGenericEvent' interval=yes: Invalid query` at
+every launch too, then connects with `interval=none`. It is a constant of the event API, not a symptom
+of the AN16-61's backend.
+
+### 7.3 Not verified, and why
+
+- **Nothing on an AN16-61.** The audit machine cannot reproduce a machine with no Acer service, a
+  firmware that ignores the zone payload, or a `WMID_GUID5`-less battery limit. Everything above that
+  touches those paths is marked test pending in `ACER_COMPATIBILITY.md` §6.
+- **The MUX write itself.** The reporter's machine refuses `ReadDeviceState`; this change makes that
+  refusal visible, it does not make the write work. One reader line from their next run decides whether
+  the cause is the class, the selector, or the answer.
+- **The endurance run from phase 5 was not repeated.** No timer, thread or file-handle behaviour was
+  touched in this round: the changes add a P/Invoke inside an existing enrich call, a log line on a
+  failure path, and a delegate call in the hybrid controller. Phase 5's 180-minute result still applies
+  to the code it ran on, and to this round only insofar as nothing in the polling loop changed.
+

@@ -444,6 +444,35 @@ public class HalStep9Tests
     }
 
     [Fact]
+    public void Report_ShowsTheLiveMuxSelector_EvenThoughTheProbeRanBeforeTheWorker()
+    {
+        // The probe runs at launch, before any elevated worker exists, so its own WmiMuxSignal is always null. The
+        // capability snapshot taken later is the only place the 0x09 answer survives, and a report that ignores it
+        // says "not read (needs elevation)" on a session that was already elevated — which is what an AN16-61
+        // reporter saw and had to work around by reading the log.
+        var capabilities = new HardwareCapabilities { Backend = "WMI", ServiceAvailable = true, MuxSwitchOverWmi = true };
+
+        var markdown = HardwareReport.BuildMarkdown(ReportSnapshot(), capabilities, identity: ReportIdentity());
+
+        Assert.Contains("| GetGamingMiscSetting(0x09) MUX | 3 (switchable over WMI) |", markdown);
+        Assert.DoesNotContain("MUX | not read", markdown);
+    }
+
+    [Fact]
+    public void Report_SaysTheWorkerDidNotReportTheMux_WhenItReallyDidNot()
+    {
+        // A worker that answered without a 0x09 value is not the same as no elevation, and the two must not share a
+        // sentence: the first is a firmware answer this build could not decode, the second is a session that never
+        // asked.
+        var capabilities = new HardwareCapabilities { Backend = "WMI", ServiceAvailable = true };
+        var probe = ReportSnapshot() with { WmiMuxSignal = null };
+
+        var markdown = HardwareReport.BuildMarkdown(probe, capabilities, identity: ReportIdentity());
+
+        Assert.Contains("| GetGamingMiscSetting(0x09) MUX | not read (the worker did not report it) |", markdown);
+    }
+
+    [Fact]
     public void Report_ListsEveryReadBackCapability()
     {
         var settings = new AppSettings();

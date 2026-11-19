@@ -296,8 +296,25 @@ public sealed class HybridHardwareController : IHardwareController
     public async Task<bool> EnsureConnectedAsync() => await (await ResolveAsync().ConfigureAwait(false))
         .EnsureConnectedAsync().ConfigureAwait(false);
 
-    public async Task<HardwareCapabilities> GetCapabilitiesAsync() => await (await ResolveAsync().ConfigureAwait(false))
-        .GetCapabilitiesAsync().ConfigureAwait(false);
+    /// <summary>
+    /// The active backend's answer, with the one capability another provider can serve filled in.
+    /// </summary>
+    /// <remarks>
+    /// A capability is a promise that a write will be attempted, so this only upgrades the charge limit when
+    /// <see cref="GetBatteryChargeModeAsync"/> can actually read it — the same call the dashboard's card makes. The
+    /// backlight timeout is not upgraded: AASSvc is the only provider that reads it, and on the machine that reported
+    /// the problem that service is not installed, so the honest answer there stays "could not ask".
+    /// </remarks>
+    public async Task<HardwareCapabilities> GetCapabilitiesAsync()
+    {
+        var capabilities = await (await ResolveAsync().ConfigureAwait(false))
+            .GetCapabilitiesAsync().ConfigureAwait(false);
+
+        if (capabilities.BatteryChargeLimit || !_activeIsWmi) return capabilities;
+
+        var mode = await _agent.GetBatteryChargeModeAsync().ConfigureAwait(false);
+        return mode.HasValue ? capabilities with { BatteryChargeLimit = true } : capabilities;
+    }
 
     public async Task<MonitorData?> GetMonitorDataAsync() => await (await ResolveAsync().ConfigureAwait(false))
         .GetMonitorDataAsync().ConfigureAwait(false);
@@ -552,11 +569,35 @@ public sealed class HybridHardwareController : IHardwareController
         }
     }
 
-    public async Task<BatteryChargeMode?> GetBatteryChargeModeAsync() => await (await ResolveAsync().ConfigureAwait(false))
-        .GetBatteryChargeModeAsync().ConfigureAwait(false);
+    /// <summary>
+    /// The charge limit, from whichever provider actually holds it.
+    /// </summary>
+    /// <remarks>
+    /// The direct-WMI backend can only reach <c>WMID_GUID5</c>, and plenty of Nitros never register that class: the
+    /// AN16-61 report shows a machine whose limit is provided and controlled by Acer Care Center, so the WMI answer is
+    /// "not registered" and the dashboard hid a battery card that NitroSense was happily driving. Care Center is a
+    /// separate loopback service from AASSvc, so it answers here even with the Acer service silent — asking it before
+    /// reporting "no limit" is what makes the capability line and the card agree with the hardware.
+    /// </remarks>
+    public async Task<BatteryChargeMode?> GetBatteryChargeModeAsync()
+    {
+        var backend = await ResolveAsync().ConfigureAwait(false);
+        var mode = await backend.GetBatteryChargeModeAsync().ConfigureAwait(false);
+        if (mode.HasValue || !_activeIsWmi) return mode;
 
-    public async Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode) => await (await ResolveAsync().ConfigureAwait(false))
-        .SetBatteryChargeModeAsync(mode).ConfigureAwait(false);
+        return await _agent.GetBatteryChargeModeAsync().ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode)
+    {
+        var backend = await ResolveAsync().ConfigureAwait(false);
+        if (await backend.SetBatteryChargeModeAsync(mode).ConfigureAwait(false)) return true;
+
+        // Only the direct-WMI path has a second provider to ask. On the service path the answer already came from
+        // Care Center, and asking it again would just repeat the same refusal.
+        if (!_activeIsWmi) return false;
+        return await _agent.SetBatteryChargeModeAsync(mode).ConfigureAwait(false);
+    }
 
     public void Dispose()
     {
