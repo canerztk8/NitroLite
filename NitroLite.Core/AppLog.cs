@@ -138,7 +138,12 @@ public static class AppLog
         {
             // Logging must never throw. A full disk is the common case here, and the answer to it is to drop the
             // line rather than to fail the operation that was being logged.
-            DropWriter();
+            //
+            // Taken under the same lock as the write. The writer is shared, and disposing it while another thread is
+            // inside the lock writing to it turns one failed line into an ObjectDisposedException on a different
+            // thread. The lock is not held here — the catch runs after the lock block has unwound — so this cannot
+            // deadlock.
+            lock (Gate) DropWriter();
         }
     }
 

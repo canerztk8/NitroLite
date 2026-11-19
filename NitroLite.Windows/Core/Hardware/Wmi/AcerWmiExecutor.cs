@@ -923,6 +923,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
         catch
         {
+            // The adopted instance is released before the field is cleared. The enumeration did not finish, so
+            // nothing is known about the class and the next call has to look again — but the COM object that was
+            // already adopted is still ours, and dropping the reference without disposing it leaks it for the life
+            // of the worker.
+            try { _gaming?.Dispose(); } catch { }
             _gaming = null;
         }
 
@@ -937,7 +942,6 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     {
         if (_battery != null) return _battery;
         if (_batteryLookupDone) return null;
-        _batteryLookupDone = true;
 
         try
         {
@@ -974,12 +978,23 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                         instance.Dispose();
                     }
 
-                    if (_battery != null) return _battery;
+                    if (_battery != null)
+                    {
+                        _batteryLookupDone = true;
+                        return _battery;
+                    }
                 }
             }
+
+            // The enumeration finished and found nothing. That answer cannot change while the worker is running, so
+            // it is remembered and every later call is free. A throw skips this line, which is the point: a transient
+            // WMI failure is not an answer, and remembering it as one disabled the battery limiter for the rest of
+            // the session.
+            _batteryLookupDone = true;
         }
         catch
         {
+            try { _battery?.Dispose(); } catch { }
             _battery = null;
         }
 
@@ -999,7 +1014,6 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     {
         if (_apge != null) return _apge;
         if (_apgeLookupDone) return null;
-        _apgeLookupDone = true;
 
         try
         {
@@ -1017,9 +1031,14 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
                 instance.Dispose();
             }
+
+            // Same rule as the battery lookup: only a finished enumeration is an answer. A throw leaves the flag
+            // clear so the next call tries again instead of reporting "no CoolBoost" for the rest of the session.
+            _apgeLookupDone = true;
         }
         catch
         {
+            try { _apge?.Dispose(); } catch { }
             _apge = null;
         }
 

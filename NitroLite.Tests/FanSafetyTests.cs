@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -518,6 +518,39 @@ public class FanSafetyTests
 
         Assert.Equal(writes, hardware.FanWrites.Count);
         Assert.DoesNotContain(hardware.FanWrites, w => w.Cpu == 42);
+    }
+
+    [Fact]
+    public async Task TheFansAreHandedBackWhenTheTemperatureDisappears()
+    {
+        // A sensor that stops answering used to leave the fans at the last speed the curve wrote, with nothing left
+        // to change them: the loop is the only writer, and it had nothing to act on. A machine that was cool when the
+        // sensor died then ran at 30 % while the die heated up, and the 95 C floor never fired because there was no
+        // reading to fire it. Auto is the only safe answer to "I no longer know how hot this is".
+        var hardware = new StubHardware
+        {
+            Sample = new MonitorData
+            {
+                CpuTemperature = 70,
+                GpuTemperature = 60,
+                CpuFanSpeed = 2400,
+                GpuFanSpeed = 2400,
+                IsFanRpmMeasured = true
+            }
+        };
+
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+        vm.CurveEnabled = true;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+
+        // The curve writes 42 % at 70 C, which is what the fans are left at when the sensor dies.
+        await WaitUntilAsync(() => hardware.FanWrites.Exists(w => w.Cpu == 42), 4000);
+
+        hardware.Sample = new MonitorData { CpuTemperature = 0, GpuTemperature = 0, IsFanRpmMeasured = false };
+        await vm.RefreshTelemetryAsync();
+
+        await WaitUntilAsync(() => hardware.FanWrites.Exists(w => w.Mode == FanMode.Auto), 4000);
     }
 
     [Fact]

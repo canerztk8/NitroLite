@@ -5640,7 +5640,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (GameActive) return;
 
         int temperature = CpuTemperature;
-        if (temperature <= 0) return;
+        if (temperature <= 0)
+        {
+            // A sensor that stops answering must not leave the fans at the last speed the curve wrote. This loop is
+            // the only thing that would ever change them again, and it has nothing to act on, so the firmware's own
+            // control is handed back — once, not on every step.
+            //
+            // Only after a reading has actually been seen. A machine that has just started has no reading yet, and
+            // handing back then would take the fans out of the mode the user picked before the first tick arrived.
+            if (_hadTemperatureReading) await HandBackOnLostTemperatureAsync().ConfigureAwait(false);
+            return;
+        }
+
+        // The reading is back, so the next loss is a new event and gets its own hand-back.
+        _hadTemperatureReading = true;
+        _handedBackOnLostTemperature = false;
 
         // The curve follows the temperature, so it may only follow a temperature whose sensor ids were confirmed.
         // An unconfirmed layout is a guess about which id answers what, and a guess that reads the 55 °C system
@@ -5670,6 +5684,81 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         await WriteFanPercentAsync(manual, () => floor.Commit(manual, temperature)).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Hands the fans back to the firmware when the temperature reading disappears, and does it once.
+    /// </summary>
+    /// <remarks>
+    /// The alternative — which is what the loop used to do — is to return without writing anything. The fans then
+    /// stay at whatever speed the curve last wrote, with nothing left to change them: a machine that was cool when
+    /// the sensor died runs at 30 % while the die heats up, and the 95 °C floor never fires because there is no
+    /// reading to fire it. Auto is the firmware's own control and the only safe answer to "I no longer know how hot
+    /// this is".
+    /// <para>
+    /// The gate wait is bounded and the write is best effort: this runs on the loop's thread, and a hand-back that
+    /// blocks would stop the loop from ever noticing the sensor coming back.
+    /// </para>
+    /// </remarks>
+    private async Task HandBackOnLostTemperatureAsync()
+    {
+        if (_handedBackOnLostTemperature) return;
+        _handedBackOnLostTemperature = true;
+
+        AppLog.Warn("The fan curve lost the temperature reading",
+            "the fans were handed back to the firmware rather than left at the last speed the curve wrote");
+
+        bool ok;
+        try
+        {
+            if (!await _writeGate.WaitAsync(FanHandbackGateTimeout).ConfigureAwait(false))
+            {
+                AppLog.Warn("The fans could not be set to automatic", "the write gate timed out");
+                return;
+            }
+
+            try
+            {
+                if (_disposed || _handingBackFans) return;
+                ok = await _hardware!.SetFanModeAsync(FanMode.Auto).ConfigureAwait(false);
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The fans could not be set to automatic", ex.Message);
+            return;
+        }
+
+        if (!ok)
+        {
+            // Not remembered as done: the next step tries again, which is what makes a transient refusal recover.
+            _handedBackOnLostTemperature = false;
+            AppLog.Warn("The fans could not be set to automatic", "the hardware write was refused");
+            return;
+        }
+
+        _curveEvaluator.Reset();
+        _manualFanFloor.Reset();
+
+        // The card follows the hand-back, but a binding that cannot be updated from this thread must not turn a
+        // successful hand-back into a failed step.
+        try
+        {
+            SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The fan controls could not be updated", ex.Message);
+        }
+    }
+
+    private bool _handedBackOnLostTemperature;
+
+    /// <summary>True once a usable temperature has been seen, so "no reading yet" is not mistaken for "sensor died".</summary>
+    private bool _hadTemperatureReading;
 
     /// <summary>
     /// Logs the unconfirmed-sensor refusal once per session, not once per 1.5 s step.
@@ -5729,40 +5818,44 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task ReadStateAsync()
     {
+        // Every read happens first, and the values are applied afterwards without an await between them. The flag
+        // used to be held across all eight reads, so a click that landed during them was silently discarded by the
+        // setters and then reverted by the value the read had already fetched — the card moved back under the user's
+        // finger. Reading first makes the suppressed window synchronous, so nothing can arrive inside it.
+        var hardware = _hardware!;
+
+        var mode = await hardware.GetOperatingModeAsync().ConfigureAwait(true);
+        var fanMode = await hardware.GetFanModeAsync().ConfigureAwait(true);
+        var lighting = await hardware.GetLightingConfigAsync().ConfigureAwait(true);
+        var coolBoost = await hardware.GetCoolBoostAsync().ConfigureAwait(true);
+        var overdrive = await hardware.GetLcdOverdriveAsync().ConfigureAwait(true);
+        var timeout = await hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
+        var charge = await hardware.GetBatteryChargeModeAsync().ConfigureAwait(true);
+        var gpu = await hardware.GetGpuModeAsync().ConfigureAwait(true);
+
         // The previous value is restored rather than cleared: this runs while the window is still filling itself in,
         // and a read that finished after the first one would otherwise switch writes back on underneath it.
         bool previous = _suppressWrite;
         _suppressWrite = true;
         try
         {
-            var mode = await _hardware!.GetOperatingModeAsync().ConfigureAwait(true);
             if (mode is OperatingMode current)
                 SelectedMode = Modes.FirstOrDefault(m => m.Mode == current) ?? SelectedMode;
 
-            var fanMode = await _hardware.GetFanModeAsync().ConfigureAwait(true);
             if (fanMode is FanMode fan)
                 SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
 
-            var lighting = await _hardware.GetLightingConfigAsync().ConfigureAwait(true);
             if (lighting != null) ApplyLightingState(lighting);
 
             // The stored off state wins over the keyboard's own reading. The firmware restores the last profile on
             // some machines, and a page that showed it would be describing a state the user turned off.
             if (_settings.IsBacklightOff) ApplyLightingState(OffLightingConfig());
 
-            var coolBoost = await _hardware.GetCoolBoostAsync().ConfigureAwait(true);
             if (coolBoost is bool cool) CoolBoostOn = cool;
-
-            var overdrive = await _hardware.GetLcdOverdriveAsync().ConfigureAwait(true);
             if (overdrive is bool lcd) LcdOverdriveOn = lcd;
-
-            var timeout = await _hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
             if (timeout is bool backlight) BacklightTimeoutOn = backlight;
-
-            var charge = await _hardware.GetBatteryChargeModeAsync().ConfigureAwait(true);
             if (charge is BatteryChargeMode battery) BatteryLimitOn = battery == BatteryChargeMode.Optimized80;
 
-            var gpu = await _hardware.GetGpuModeAsync().ConfigureAwait(true);
             if (gpu is GpuOperatingMode gpuMode)
                 SelectedGpuMode = GpuModes.FirstOrDefault(m => m.Mode == gpuMode) ?? SelectedGpuMode;
         }
@@ -7112,14 +7205,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        // The loop is stopped before the gate is disposed: a step in flight is holding the gate, and disposing it
-        // underneath that step would throw on a background thread nobody is watching.
+        // The loop is stopped before anything else is torn down: a step in flight is holding the write gate, and
+        // tearing the gate down underneath that step would throw on a background thread nobody is watching.
         _curveLoop.Dispose();
 
         _lightingDebounce.Dispose();
         _customFanDebounce.Dispose();
         _curveDebounce.Dispose();
         _reactiveDebounce.Dispose();
-        _writeGate.Dispose();
+
+        // The write gate is deliberately not disposed. StopAndWait above is bounded, so a step stuck in a WMI call
+        // can still be inside the gate when this returns, and SemaphoreSlim.Dispose would then make its Release
+        // throw ObjectDisposedException out of a finally block on that thread. Nothing is leaked by leaving it: a
+        // SemaphoreSlim only needs disposal when AvailableWaitHandle was used, and this one never is.
     }
 }
