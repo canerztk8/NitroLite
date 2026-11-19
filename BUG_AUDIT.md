@@ -494,7 +494,9 @@ Removal was verified the same way as every other group: `dotnet build NitroLite.
 
 ## 4. Final build, tests and packaging
 
-Phase 5, on the frozen tree (`18f4159`).
+Phase 5. The code was frozen at `18f4159`; the only later commits are `31cd54b`
+(`scripts/publish-release.ps1`, not compiled) and `2e2b033` (documentation). The suite was
+re-run on the final HEAD to confirm that.
 
 ### 4.1 Build and tests
 
@@ -503,10 +505,26 @@ Phase 5, on the frozen tree (`18f4159`).
 | Release build | `dotnet build NitroLite.sln -c Release --nologo -warnaserror` | 0 warnings, 0 errors |
 | Bare build | `dotnet build -c Release --nologo -warnaserror` | 0 warnings, 0 errors — this failed with `MSB1011` before `NitroLite.slnx` was removed |
 | Full suite | `dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build --nologo` | **2753 passed, 0 failed, 4 skipped**, 3 m 23 s |
+| Full suite, re-run on the final HEAD `2e2b033` | same command | **2751 passed, 0 failed, 6 skipped**, 3 m 32 s |
 
-The four skips are the live-hardware tests that need
-`NITROLITE_ENABLE_LIVE_HARDWARE_TESTS=1`. They are recorded as **not run**, not as
-passed.
+The skip count moved from 4 to 6 between those two runs, and the reason matters:
+
+| Skipped test | Why |
+| --- | --- |
+| `BatteryChargeLimitProbeTests.LiveProbe_AgreesWithTheInterfacesItCanSee` | needs `NITROLITE_ENABLE_LIVE_HARDWARE_TESTS=1` |
+| `CpuPowerServiceTests.ServiceInitialization_InstantiatesAndQueriesCurrentMode` | same |
+| `SchoolModeServiceTests.EverySchoolModeSetting_ExistsInTheActiveScheme_AndAcceptsAWrite` | same |
+| `VerifiedDefectsRegressionTests.Defect5_AtkMouseService_SwitchProfile_SafeExecution` | same |
+| `UpdateServiceTests.ExtractToStaging_AcceptsTheRealReleasePackage` | no release package in `artifacts/` |
+| `UpdateServiceTests.FullUpdateFlow_TakesTheRealPackageIntoAnEmptyInstallFolder` | same |
+
+The last two ran in the first suite, against the 1.2.7 package that was in `artifacts/`.
+The packaging run in §4.2 deleted that package and could not build a replacement on this
+host, so the two tests now skip. That is the bug fixed in §4.3, seen from the other side:
+the script took the last good package with it. They are recorded as **not run**, not as
+passed, and the package was deliberately not hand-assembled to make them run again —
+`ReleasePackageFactAttribute` exists to test the archive the release script actually
+produced, and a hand-built zip would defeat the point.
 
 ### 4.2 Packaging
 
@@ -684,3 +702,7 @@ shutdown path. That path was exercised separately in §2.8f.
 | endurance | run ended | 2026-11-19 20:36:30, **180.0 min**, `RESULT: PASS` |
 | endurance | trend | ws 198.4 -> 295.5 MB, private 163.4 -> 238.4 MB, handles 1207 -> **1196**, threads 101 -> 91, mean cpu 0.25 % |
 | endurance | exit | forced with `Stop-Process -Force`; recorded as forced, not as a clean shutdown |
+| final | Release build on `2e2b033` | 0 warnings, 0 errors |
+| final | full suite on `2e2b033` | 2751 passed, 0 failed, 6 skipped — the 2 extra skips are the release-package tests, see §4.1 |
+| final | branch pushed | `audit/hardening-2026-10` -> origin, 10 commits |
+| final | draft PR opened | https://github.com/canerztk8/NitroLite/pull/4 |
