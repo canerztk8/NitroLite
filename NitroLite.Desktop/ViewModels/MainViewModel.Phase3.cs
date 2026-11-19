@@ -1003,7 +1003,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Pil sağlığı okunamadı"), ex.Message);
+            AppLog.Warn("The battery health could not be read", ex.Message);
         }
         finally
         {
@@ -1182,7 +1182,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Depolama sürücüleri okunamadı"), ex.Message);
+            AppLog.Warn("The storage drives could not be read", ex.Message);
             _storageDrives = Array.Empty<StorageDriveRow>();
         }
 
@@ -1214,7 +1214,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Acer servis durumları okunamadı"), ex.Message);
+            AppLog.Warn("The Acer service states could not be read", ex.Message);
             _acerServices = Array.Empty<AcerServiceRow>();
         }
 
@@ -1398,7 +1398,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Doğrudan WMI başlatılamadı"), ex.ToString());
+            AppLog.Warn("Direct WMI could not be started", ex.ToString());
             Status = Labels.DirectWmiFailed(ex.Message);
         }
     }
@@ -1420,7 +1420,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Otomatik başlatma durumu okunamadı"), ex.Message);
+            AppLog.Warn("The autostart state could not be read", ex.Message);
         }
     }
 
@@ -1445,7 +1445,7 @@ public sealed partial class MainViewModel
             if (enabled && _autoStart != null)
             {
                 try { await _autoStart.DisableAsync().ConfigureAwait(true); }
-                catch (Exception ex) { AppLog.Warn(Loc.T("Yönetici görevi kaldırılamadı"), ex.Message); }
+                catch (Exception ex) { AppLog.Warn("The administrator task could not be removed", ex.Message); }
             }
 
             await RefreshAutoStartAsync().ConfigureAwait(true);
@@ -1453,7 +1453,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Otomatik başlatma değiştirilemedi"), ex.ToString());
+            AppLog.Warn("Autostart could not be changed", ex.ToString());
             Status = Labels.AutoStartFailed;
             await RefreshRunAtStartupAsync().ConfigureAwait(true);
         }
@@ -1549,7 +1549,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Güncelleme uygulanamadı"), ex.Message);
+            AppLog.Warn("Update could not be applied", ex.Message);
             UpdateStatus = Labels.UpdateFailed(ex.Message);
         }
         finally
@@ -1626,7 +1626,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Teşhis paketi oluşturulamadı"), ex.ToString());
+            AppLog.Warn("The diagnostics bundle could not be created", ex.ToString());
             Status = Labels.BundleFailed(ex.Message);
         }
     }
@@ -1654,7 +1654,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yedek oluşturulamadı"), ex.ToString());
+            AppLog.Warn("The backup could not be created", ex.ToString());
             Status = Labels.BackupFailedDetail(ex.Message);
         }
     }
@@ -1683,7 +1683,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yedek geri yüklenemedi"), ex.ToString());
+            AppLog.Warn("The backup could not be restored", ex.ToString());
             Status = Labels.BackupRestoreFailedDetail(ex.Message);
         }
     }
@@ -1704,7 +1704,7 @@ public sealed partial class MainViewModel
             }
             else
             {
-                AppLog.Warn("Bağlantı açılamadı", $"No URL opener was injected; refusing to launch a browser for {url}");
+                AppLog.Warn("The link could not be opened", $"No URL opener was injected; refusing to launch a browser for {url}");
             }
         }
         catch (Exception ex)
@@ -1779,7 +1779,7 @@ public sealed partial class MainViewModel
             if (OnboardingAutoStartAvailable && _onboardingAutoStartOn && _autoStart != null)
             {
                 try { await _autoStart.EnableAsync().ConfigureAwait(true); }
-                catch (Exception ex) { AppLog.Warn(Loc.T("Otomatik başlatma açılamadı"), ex.Message); }
+                catch (Exception ex) { AppLog.Warn("Autostart could not be enabled", ex.Message); }
             }
         }
 

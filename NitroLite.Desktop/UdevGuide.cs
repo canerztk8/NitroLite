@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Reflection;
 using NitroLite.Core;
 
@@ -33,7 +33,7 @@ public static class UdevGuide
             using var stream = typeof(UdevGuide).Assembly.GetManifestResourceStream(ResourceName);
             if (stream == null)
             {
-                AppLog.Warn(Loc.T("udev kuralı gömülü kaynağı bulunamadı"), ResourceName);
+                AppLog.Warn("The embedded udev rule resource was not found", ResourceName);
                 return null;
             }
 
@@ -43,7 +43,7 @@ public static class UdevGuide
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("udev kuralı veri klasörüne yazılamadı"), ex.Message);
+            AppLog.Warn("The udev rule could not be written to the data folder", ex.Message);
             return null;
         }
     }

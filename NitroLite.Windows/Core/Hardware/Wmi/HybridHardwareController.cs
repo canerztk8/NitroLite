@@ -167,7 +167,7 @@ public sealed class HybridHardwareController : IHardwareController
         var target = TargetProvider?.Invoke();
         if (target == null)
         {
-            AppLog.Info(Loc.T("Donanım yolu değişti"), "AASSvc yeniden kullanılabilir; uzlaştırılacak hedef yok.");
+            AppLog.Info("The hardware path changed", "AASSvc is reusable; there is no target to reconcile.");
             return new ReconciliationResult(true, false, null);
         }
 
@@ -180,7 +180,7 @@ public sealed class HybridHardwareController : IHardwareController
             {
                 bool ok = await _agent.SetOperatingModeAsync(mode).ConfigureAwait(false);
                 if (ok) applied.Add($"mod={mode}");
-                else AppLog.Warn(Loc.T("Uzlaştırma: çalışma modu yazılamadı"), $"{current} -> {mode}");
+                else AppLog.Warn("Reconciliation: the operating mode could not be written", $"{current} -> {mode}");
             }
         }
 
@@ -191,7 +191,7 @@ public sealed class HybridHardwareController : IHardwareController
             {
                 bool ok = await _agent.SetFanModeAsync(fan, target.CpuPercent, target.GpuPercent).ConfigureAwait(false);
                 if (ok) applied.Add($"fan={fan}");
-                else AppLog.Warn(Loc.T("Uzlaştırma: fan modu yazılamadı"), $"{current} -> {fan}");
+                else AppLog.Warn("Reconciliation: the fan mode could not be written", $"{current} -> {fan}");
             }
         }
 
@@ -199,7 +199,7 @@ public sealed class HybridHardwareController : IHardwareController
             ? $"{target.Reason}: {string.Join(", ", applied)}"
             : $"{target.Reason}: zaten uyumlu";
 
-        AppLog.Info(Loc.T("Donanım yolu değişti"), $"WMI -> AASSvc, {detail}");
+        AppLog.Info("The hardware path changed", $"WMI -> AASSvc, {detail}");
         return new ReconciliationResult(true, applied.Count > 0, detail);
     }
 
@@ -218,7 +218,7 @@ public sealed class HybridHardwareController : IHardwareController
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Doğrudan WMI arka ucu oluşturulamadı"), ex.Message);
+            AppLog.Warn("The direct WMI backend could not be created", ex.Message);
             _wmi = null;
         }
 
@@ -245,7 +245,7 @@ public sealed class HybridHardwareController : IHardwareController
         if (await _serviceHealthy().ConfigureAwait(false)) return false;
 
         bool started = await StartDirectWmiAsync().ConfigureAwait(false);
-        if (started) AppLog.Info(Loc.T("Doğrudan WMI açılışta etkinleştirildi"), "Süreç zaten yönetici; UAC sorulmadı.");
+        if (started) AppLog.Info("Direct WMI was enabled at startup", "The process is already elevated; UAC was not asked.");
         return started;
     }
 
@@ -383,14 +383,14 @@ public sealed class HybridHardwareController : IHardwareController
             LastZoneColorsApplied = wantsZones ? applied : null;
             if (applied)
             {
-                AppLog.Info(Loc.T("Klavye aydınlatması"),
+                AppLog.Info("Keyboard lighting",
                     serviceHealthy
-                        ? "Dört bölge doğrudan WMI üzerinden yazıldı."
-                        : "Acer servisi yok; aydınlatma doğrudan WMI üzerinden yazıldı.");
+                        ? "All four zones were written through direct WMI."
+                        : "No Acer service; the lighting was written through direct WMI.");
             }
             else
             {
-                AppLog.Warn(Loc.T("Klavye aydınlatması"), "WMI yazımı uygulanmadı; servis yoluna dönülüyor.");
+                AppLog.Warn("Keyboard lighting", "The WMI write was not applied; falling back to the service path.");
             }
 
             if (applied) return true;
@@ -398,7 +398,7 @@ public sealed class HybridHardwareController : IHardwareController
         else if (wantsZones)
         {
             LastZoneColorsApplied = false;
-            AppLog.Warn(Loc.T("Klavye bölge renkleri"), "Doğrudan WMI yolu yok; servis tek renk uygulayacak.");
+            AppLog.Warn("Keyboard zone colours", "No direct WMI path; the service will apply a single colour.");
         }
 
         return await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, zoneColors)

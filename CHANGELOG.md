@@ -10,7 +10,7 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
-Two controls that were hard to read, and a keyboard that follows the processor.
+Two controls that were hard to read, a keyboard that follows the processor, and a log that reads in English.
 
 ### Added
 
@@ -49,6 +49,19 @@ Two controls that were hard to read, and a keyboard that follows the processor.
   eight languages.
 
 ### Fixed
+
+- **The log is English, whatever language the window is in.** A bug report arrived with an English title and a
+  Turkish detail under it: the title went through the catalogue, so it followed the window, and the detail was a
+  literal written in Turkish. Every log line is now English at the call site — the titles that were `Loc.T` keys are
+  the English text, and the details that were Turkish are translated — so a report from a Turkish user reads the
+  same as one from an English user. A label that is already a catalogue key (the name of the control a write failed
+  on, the title of the dialog that had no owner) goes through the new `Loc.English`, which resolves the English row
+  whatever the window is showing, and numbers in a log line are formatted with a dot so the same line reads the same
+  in Istanbul and in Berlin. `LogLanguageTests` fails the build if a new `AppLog` call is localized or carries
+  Turkish text.
+
+- **One catalogue row was half-translated.** `Nitro key WMI olay izleyicisi connected` had kept a Turkish word in
+  the middle of its English text, and the same value sat in all seven files; each now reads in its own language.
 
 - **The temperature card is on the page.** It was written behind the keyboard-lighting capability flag, and that flag
   comes from a WMI probe that opens an instance of `AcerGamingFunction` and needs elevation — without it the probe

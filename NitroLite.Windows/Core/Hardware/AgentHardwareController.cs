@@ -1,4 +1,4 @@
-namespace NitroLite.Core.Hardware;
+﻿namespace NitroLite.Core.Hardware;
 
 /// <summary>
 /// The Acer-service backend: <see cref="AcerAgentClient"/> for telemetry, fans, modes, MUX and lighting, and
@@ -136,7 +136,7 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
         var mask = await _agent.GetGpuModeCapabilityAsync().ConfigureAwait(false);
         if (mask is int bits && bits > 0 && !AcerRegistrySnapshot.IsGpuModeSupported(bits, mode))
         {
-            AppLog.Warn(Loc.T("MUX yazımı reddedildi"), $"mod {mode} yetenek bitmaskesinde yok ({bits})");
+            AppLog.Warn("The MUX write was refused", $"mode {mode} is not in the capability bitmask ({bits})");
             return false;
         }
 

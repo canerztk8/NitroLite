@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -33,7 +33,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Donanım izleyici kurulamadı"), ex.Message);
+                AppLog.Warn("Hardware monitor could not be set up", ex.Message);
                 return new HardwareMonitorService(initNvml: false);
             }
         });
@@ -66,7 +66,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Donanım bilgisi okunamadı"), ex.Message);
+                AppLog.Warn("Hardware information could not be read", ex.Message);
                 return new MonitorInfo();
             }
         }
@@ -94,7 +94,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Donanım bilgisi okunamadı"), ex.Message);
+            AppLog.Warn("Hardware information could not be read", ex.Message);
             return new MonitorInfo();
         }
     }
@@ -122,7 +122,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Telemetri zenginleştirilemedi"), ex.Message);
+            AppLog.Warn("The telemetry could not be enriched", ex.Message);
         }
     }
 
@@ -147,7 +147,7 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yedek telemetri okunamadı"), ex.Message);
+            AppLog.Warn("Backup telemetry could not be read", ex.Message);
         }
 
         return data;

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -90,7 +90,7 @@ internal static class WorkerPipe
         catch (Exception ex) when (ex is UnauthorizedAccessException or PrivilegeNotHeldException
                                       or PlatformNotSupportedException or IOException or ArgumentException)
         {
-            AppLog.Warn("--wmi-worker pipe", $"Medium etiketli pipe oluşturulamadı: {ex.Message}");
+            AppLog.Warn("--wmi-worker pipe", $"the medium-integrity pipe could not be created: {ex.Message}");
             return null;
         }
     }

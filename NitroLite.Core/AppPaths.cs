@@ -41,7 +41,7 @@ public static class AppPaths
                     // so logging from inside ResolveDataDirectory would re-enter it while the field is still null.
                     if (DataDirectoryError != null)
                     {
-                        AppLog.Error(Loc.T("Veri klasörü oluşturulamadı"), DataDirectoryError);
+                        AppLog.Error("The data folder could not be created", DataDirectoryError);
                     }
                 }
                 return _dataDirectory;

@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using NitroLite.Core.Hardware;
 
 namespace NitroLite.Desktop;
@@ -139,13 +139,13 @@ public static class CliTaskRunner
     {
         if (!Commands.Contains(command, StringComparer.OrdinalIgnoreCase))
         {
-            AppLog.Warn("Bilinmeyen CLI komutu", command);
+            AppLog.Warn("Unknown CLI command", command);
             return 2;
         }
 
         if (hardware == null)
         {
-            AppLog.Warn(Loc.T("CLI komutu için donanım arka ucu yok"), command);
+            AppLog.Warn("No hardware backend for the CLI command", command);
             return 1;
         }
 
@@ -167,7 +167,7 @@ public static class CliTaskRunner
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("CLI komutu başarısız"), $"{command}: {ex}");
+            AppLog.Error("CLI command failed", $"{command}: {ex}");
             return 1;
         }
     }
@@ -233,7 +233,7 @@ public static class CliTaskRunner
         if (autoStart != null)
         {
             try { await autoStart.DisableAsync(cancellationToken).ConfigureAwait(false); }
-            catch (Exception ex) { AppLog.Warn(Loc.T("Otomatik başlatma kaldırılamadı"), ex.Message); }
+            catch (Exception ex) { AppLog.Warn("Autostart could not be removed", ex.Message); }
         }
 
         return fan;

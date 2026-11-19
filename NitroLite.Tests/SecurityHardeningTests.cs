@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using NitroLite.Core;
 using NitroLite.Core.Hardware.Wmi;
@@ -330,6 +332,69 @@ public class SecurityHardeningTests
             "NitroLite", "NitroLite.Desktop.exe");
 
         Assert.True(WmiWorkerLauncher.IsTrustedHelperLocation(portable));
+    }
+
+    [Fact]
+    public void IsExecutableTrusted_ProfilePathIsTrusted_EmptyIsNot()
+    {
+        string profile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "NitroLite", "x.exe");
+        Assert.True(DirectoryTrust.IsExecutableTrusted(profile));
+        Assert.False(DirectoryTrust.IsExecutableTrusted(null));
+        Assert.False(DirectoryTrust.IsExecutableTrusted(""));
+    }
+
+    [Fact]
+    public void IsExecutableTrusted_RefusesAFileEveryoneCanOverwrite()
+    {
+        // A folder outside the profile (ProgramData is creatable by every user) with an explicit
+        // "Everyone: full control" rule on the executable is exactly the swap-the-binary case.
+        string dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "NitroLiteTrustTest-" + Guid.NewGuid().ToString("N"));
+        string exe = Path.Combine(dir, "NitroLite.exe");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(exe, "MZ");
+
+            var fileSecurity = new FileInfo(exe).GetAccessControl(AccessControlSections.Access);
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.WorldSid, null),
+                FileSystemRights.FullControl,
+                AccessControlType.Allow));
+            new FileInfo(exe).SetAccessControl(fileSecurity);
+
+            Assert.False(DirectoryTrust.IsExecutableTrusted(exe));
+            Assert.False(WmiWorkerLauncher.IsTrustedHelperLocation(exe));
+        }
+        finally
+        {
+            try { File.Delete(exe); Directory.Delete(dir); } catch { }
+        }
+    }
+
+    [Fact]
+    public void IsExecutableTrusted_AnExistingFileTheUserCreatedIsTrusted()
+    {
+        // A folder directly under a drive root (C:\WinTools and friends) lets Users *create* files by default but
+        // not overwrite one the signed-in user created; that install must keep working, which is exactly the
+        // case the old directory-level IsWorldWritable check got wrong.
+        string dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "NitroLiteTrustTest-" + Guid.NewGuid().ToString("N"));
+        string exe = Path.Combine(dir, "NitroLite.exe");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(exe, "MZ");
+            Assert.True(DirectoryTrust.IsExecutableTrusted(exe));
+            Assert.True(WmiWorkerLauncher.IsTrustedHelperLocation(exe));
+        }
+        finally
+        {
+            try { File.Delete(exe); Directory.Delete(dir); } catch { }
+        }
     }
 
     [Fact]

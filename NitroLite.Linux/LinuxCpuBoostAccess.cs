@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using NitroLite.Core;
 using NitroLite.Linux.Sysfs;
 
@@ -113,7 +113,7 @@ public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
         var result = _fs.WriteAllText(path, value + "\n");
         if (!result.Ok)
         {
-            AppLog.Warn(Loc.T("CPU Boost yazılamadı"), $"{path}: {result.Status} {result.Detail}");
+            AppLog.Warn("CPU Boost could not be written", $"{path}: {result.Status} {result.Detail}");
             return false;
         }
 

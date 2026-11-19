@@ -63,6 +63,96 @@ public static class DirectoryTrust
     }
 
     /// <summary>
+    /// Rights that let a principal change or replace an existing file: write, append, delete, or take ownership of
+    /// it. <see cref="FileSystemRights.ReadAndExecute"/> and <see cref="FileSystemRights.Synchronize"/> are deliberately
+    /// absent — every reader gets those, and they let nobody modify anything.
+    /// </summary>
+    private const FileSystemRights ReplacingRights =
+        FileSystemRights.WriteData |
+        FileSystemRights.AppendData |
+        FileSystemRights.Delete |
+        FileSystemRights.WriteAttributes |
+        FileSystemRights.WriteExtendedAttributes |
+        FileSystemRights.DeleteSubdirectoriesAndFiles |
+        FileSystemRights.TakeOwnership |
+        FileSystemRights.ChangePermissions;
+
+    /// <summary>
+    /// The subset that matters on a <em>directory</em>: rights that let a principal remove or replace files that
+    /// already exist in it. <see cref="FileSystemRights.WriteData"/> on a directory only means "create new files",
+    /// which cannot overwrite an existing executable, so it is deliberately excluded here — that exclusion is what
+    /// keeps a portable install directly under a drive root (e.g. <c>C:\WinTools</c>) working.
+    /// </summary>
+    private const FileSystemRights ReplacingChildRights =
+        FileSystemRights.DeleteSubdirectoriesAndFiles |
+        FileSystemRights.TakeOwnership |
+        FileSystemRights.ChangePermissions;
+
+    private static bool GrantsRights(FileSystemAccessRule rule, FileSystemRights mask)
+    {
+        if (rule.AccessControlType != AccessControlType.Allow) return false;
+        if ((rule.FileSystemRights & mask) == 0) return false;
+        if (rule.IdentityReference is not SecurityIdentifier sid) return false;
+        return sid.Value is UsersSid or EveryoneSid or AuthenticatedUsersSid or InteractiveSid;
+    }
+
+    /// <summary>
+    /// True when the executable itself is safe to launch with an administrator token: no principal wider than the
+    /// signed-in user may modify, delete or replace <em>this file</em>.
+    /// <para>
+    /// This is deliberately a file-level check, not the directory-level <see cref="IsWorldWritable"/>. A folder that
+    /// lets <c>Users</c> <em>create</em> files (the default ACL on a folder directly under a drive root, e.g.
+    /// <c>C:\WinTools</c>) still does not let another account overwrite a file the signed-in user created there —
+    /// that needs <c>Delete</c> on the file or <c>DeleteSubdirectoriesAndFiles</c> on the folder, neither of which the
+    /// default inheritance grants. Refusing on directory writability alone therefore rejected every portable install
+    /// outside the profile and Program Files, and on those machines the elevated WMI worker never started at all.
+    /// </para>
+    /// <para>
+    /// False only when a wider principal verifiably holds a replacing right on the file or on its folder. When
+    /// neither exists yet, or the ACL cannot be read, the answer is true — an unreadable ACL is not evidence of a
+    /// hole, and refusing on it would break installs on machines with unusual inheritance.
+    /// </para>
+    /// </summary>
+    public static bool IsExecutableTrusted(string? executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(executablePath)) return false;
+        if (IsUnderUserProfile(executablePath)) return true;
+
+        try
+        {
+            var file = new FileInfo(Path.GetFullPath(executablePath));
+            if (file.Exists)
+            {
+                var fileSecurity = file.GetAccessControl(AccessControlSections.Access);
+                foreach (FileSystemAccessRule rule in fileSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+                {
+                    if (GrantsRights(rule, ReplacingRights)) return false;
+                }
+            }
+
+            // Deleting the file out from under the launcher is the other way to swap the binary, and that right
+            // lives on the parent directory, not on the file. Creating new files in the folder is not enough to
+            // replace an existing one, so the directory check uses only the child-replacing subset.
+            var directory = file.Directory;
+            if (directory is { Exists: true })
+            {
+                var dirSecurity = directory.GetAccessControl(AccessControlSections.Access);
+                foreach (FileSystemAccessRule rule in dirSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+                {
+                    if (GrantsRights(rule, ReplacingChildRights)) return false;
+                }
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException
+                                      or InvalidOperationException or ArgumentException or System.Security.SecurityException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
     /// True when <paramref name="path"/> sits under a folder the signed-in user owns: the profile, its roaming and
     /// local halves, or the temp folder. Such a path is writable by the user and by nothing else, which is why it is
     /// reported separately from <see cref="IsWorldWritable"/> rather than folded into it.

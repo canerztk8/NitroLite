@@ -1,4 +1,4 @@
-namespace NitroLite.Core;
+﻿namespace NitroLite.Core;
 
 /// <summary>
 /// Runs the fan curve on its own clock, at a fixed cadence, whatever the window is doing.
@@ -146,7 +146,7 @@ public sealed class FanCurveLoop : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fan eğrisi adımı başarısız"), ex.Message);
+            AppLog.Warn("The fan curve step failed", ex.Message);
         }
     }
 

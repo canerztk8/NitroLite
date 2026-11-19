@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -62,7 +62,7 @@ public sealed class WindowsBatteryHealthService : IBatteryHealthService, IDispos
         {
             // A machine whose battery namespace is missing still has a level and a plug state; the capacity card
             // prints "--" rather than the whole page failing.
-            AppLog.Warn(Loc.T("Pil kapasite ayrıntıları okunamadı"), ex.Message);
+            AppLog.Warn("The battery capacity details could not be read", ex.Message);
         }
 
         return new BatteryHealthSnapshot { Status = status, Details = details };

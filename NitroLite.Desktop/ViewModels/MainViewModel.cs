@@ -482,6 +482,113 @@ public sealed class CurveAnchorViewModel : ObservableObject
 }
 
 /// <summary>
+/// One entry in the temp-reactive lighting profile picker: a built-in ramp, or the custom entry whose stops the user
+/// edits below it. <see cref="Id"/> is the stable identity stored in settings; <see cref="Label"/> is rebuilt when
+/// the language changes.
+/// </summary>
+public sealed class ReactiveProfileChoice : ObservableObject
+{
+    private bool _isSelected;
+
+    public ReactiveProfileChoice(string id, string label, bool isCustom, Action<ReactiveProfileChoice>? select = null)
+    {
+        Id = id;
+        Label = label;
+        IsCustom = isCustom;
+        SelectCommand = new RelayCommand(() => select?.Invoke(this));
+    }
+
+    /// <summary>The built-in profile's name, or <see cref="ReactiveLightingProfiles.CustomId"/>.</summary>
+    public string Id { get; }
+
+    public string Label { get; }
+
+    /// <summary>True for the entry whose ramp the editor below shows and saves.</summary>
+    public bool IsCustom { get; }
+
+    public RelayCommand SelectCommand { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => Set(ref _isSelected, value);
+    }
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
+/// One row of the custom temp-reactive ramp editor: a temperature and the colour the keyboard holds there. Moving
+/// either re-arms the ramp at once, exactly like dragging a fan-curve anchor.
+/// </summary>
+public sealed class ReactiveStopViewModel : ObservableObject
+{
+    private readonly Action _changed;
+    private double _atCelsius;
+    private string _color;
+
+    public ReactiveStopViewModel(double atCelsius, string color, Action changed, Action<ReactiveStopViewModel> remove,
+        Func<bool>? canRemove = null)
+    {
+        _atCelsius = ClampTemperature(atCelsius);
+        _color = LightingPolicy.NormalizeHex(color, ReactiveLighting.ColdColor);
+        _changed = changed;
+        RemoveCommand = new RelayCommand(() => remove(this), canRemove);
+        RemoveLabel = "";
+    }
+
+    private static double ClampTemperature(double value) =>
+        double.IsNaN(value) || double.IsInfinity(value)
+            ? ReactiveLighting.MinStopCelsius
+            : Math.Clamp(value, ReactiveLighting.MinStopCelsius, ReactiveLighting.MaxStopCelsius);
+
+    /// <summary>The stop's temperature in °C. The write path quantises to the bucket grid, so the value is clamped to the allowed range.</summary>
+    public double AtCelsius
+    {
+        get => _atCelsius;
+        set
+        {
+            if (!Set(ref _atCelsius, ClampTemperature(value))) return;
+            Raise(nameof(TemperatureC));
+            Raise(nameof(TemperatureText));
+            _changed();
+        }
+    }
+
+    /// <summary>The slider works in whole degrees.</summary>
+    public int TemperatureC
+    {
+        get => (int)Math.Round(_atCelsius, MidpointRounding.AwayFromZero);
+        set => AtCelsius = value;
+    }
+
+    public string TemperatureText => $"{TemperatureC} °C";
+
+    /// <summary>The slider's range endpoints, taken from the core constants so the XAML cannot drift from them.</summary>
+    public double MinTemperature => ReactiveLighting.MinStopCelsius;
+
+    public double MaxTemperature => ReactiveLighting.MaxStopCelsius;
+
+    /// <summary>The colour at this temperature, as <c>#RRGGBB</c>. Anything that is not a hex triplet keeps the old colour.</summary>
+    public string Color
+    {
+        get => _color;
+        set
+        {
+            if (!Set(ref _color, LightingPolicy.NormalizeHex(value, _color))) return;
+            _changed();
+        }
+    }
+
+    /// <summary>The delete button's label, set from the active language when the row is built.</summary>
+    public string RemoveLabel { get; set; }
+
+    public RelayCommand RemoveCommand { get; }
+
+    public override string ToString() => $"{TemperatureText} {Color}";
+}
+
+/// <summary>
 /// One row of the lighting page's direction list. A class rather than an int so the combo box can show a translated
 /// name while the backend keeps the protocol's own number.
 /// </summary>
@@ -605,6 +712,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Debouncer _lightingDebounce = new(TimeSpan.FromMilliseconds(350));
     private readonly Debouncer _customFanDebounce = new(TimeSpan.FromMilliseconds(400));
     private readonly Debouncer _curveDebounce = new(TimeSpan.FromMilliseconds(400));
+    private readonly Debouncer _reactiveDebounce = new(TimeSpan.FromMilliseconds(400));
 
     /// <summary>Automatic game switching, or null when the caller did not wire it (a test that does not need it).</summary>
     private readonly GameProfileService? _gameProfiles;
@@ -709,6 +817,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _reactiveLightingEnabled;
     private string _reactiveLightingColor = ReactiveLighting.ColdColor;
     private readonly ReactiveLightingThrottle _reactiveThrottle = new();
+    private ReactiveProfileChoice? _selectedReactiveProfile;
 
     // The on-screen display: whether it is drawn, which corner, and which display.
     private bool _osdEnabled;
@@ -987,7 +1096,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // this afterwards would delete a profile the user added by hand.
         if (GameLibraryRules.SanitizeProfiles(settings.GameProfiles) > 0)
         {
-            AppLog.Info("Oyun profilleri temizlendi", "Yardımcı veya yinelenen kayıtlar kaldırıldı.");
+            AppLog.Info("Game profiles were cleaned up", "Helper or duplicate entries were removed.");
         }
 
         BuildCurveAnchors();
@@ -1004,6 +1113,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         BuildColorPalette();
         BuildChartMetrics();
         BuildDirectionChoices();
+        BuildReactiveProfileChoices();
+        BuildReactiveStops();
         _reactiveLightingEnabled = settings.ReactiveLightingEnabled;
         _osdEnabled = settings.OsdEnabled;
         _osdCorner = Math.Clamp(settings.OsdCorner, 0, 3);
@@ -1053,6 +1164,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CycleOsdCornerCommand = new RelayCommand(CycleOsdCorner);
         ToggleOsdCommand = new RelayCommand(() => OsdEnabled = !OsdEnabled);
         ApplyAllZonesCommand = new RelayCommand(ApplyAllZones);
+        AddReactiveStopCommand = new RelayCommand(AddReactiveStop, () => CanAddReactiveStop);
         BuildPhase3Commands();
     }
 
@@ -1077,6 +1189,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             BuildFanSegments();
             BuildCpuBoostChoices();
             BuildColorPalette();
+            // The reactive profile picker carries translated names, so it is rebuilt like the other pickers, and
+            // the stop rows only carry the delete button's label.
+            BuildReactiveProfileChoices();
+            foreach (var stop in ReactiveStops) stop.RemoveLabel = value.Sil;
             Raise(nameof(SparklineBandToggleText));
             Raise(nameof(SparklineRangeText));
             Raise(nameof(SparklineNowText));
@@ -1358,7 +1474,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Pil yüzdesi okunamadı"), ex.Message);
+            AppLog.Warn("The battery percentage could not be read", ex.Message);
         }
     }
 
@@ -1547,7 +1663,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("CPU boost modu okunamadı"), ex.Message);
+            AppLog.Warn("CPU boost mode could not be read", ex.Message);
             return CpuBoostMode.Aggressive;
         }
     }
@@ -1562,7 +1678,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("CPU boost modu yazılamadı"), ex.Message);
+            AppLog.Warn("CPU boost mode could not be written", ex.Message);
             Status = Labels.WriteFailed;
         }
     }
@@ -2271,7 +2387,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Bekleme belleği boşaltılamadı"), ex.ToString());
+            AppLog.Warn("The standby memory could not be purged", ex.ToString());
             MemoryCleanStatus = Labels.MemoryCleanFailed;
         }
         finally
@@ -2773,7 +2889,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // A keyboard the user turned off stays off. The mode is a colour, not a way to switch the lights back on.
         if (_settings.IsBacklightOff || BrightnessLevel <= 0) return;
 
-        var color = ReactiveLighting.ColorFor(data.CpuTemperature);
+        var color = ReactiveLighting.ColorFor(ActiveReactiveStops(), data.CpuTemperature);
         if (!_reactiveThrottle.TryBeginWrite(color, DateTime.UtcNow)) return;
 
         ReactiveLightingTask = WriteReactiveLightingAsync(color);
@@ -2806,7 +2922,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 // A refusal is logged once per colour, not once per tick: the throttle has already recorded the write,
                 // so a keyboard that cannot take the colour does not fill the log with the same line.
-                AppLog.Warn(Loc.T("Sıcaklığa göre renk yazılamadı"), color);
+                AppLog.Warn("The temperature colour could not be written", color);
                 return;
             }
 
@@ -2815,13 +2931,215 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Sıcaklığa göre renk yazılamadı"), ex.Message);
+            AppLog.Warn("The temperature colour could not be written", ex.Message);
         }
         finally
         {
             _writeGate.Release();
         }
     }
+
+    // ---------------------------------------------------------------- temp-reactive profiles
+
+    /// <summary>The profile picker under the reactive card: the built-in ramps, then the custom entry.</summary>
+    public ObservableCollection<ReactiveProfileChoice> ReactiveProfileChoices { get; } = new();
+
+    /// <summary>The custom ramp's stops, one editor row each. Edited only while the custom entry is selected.</summary>
+    public ObservableCollection<ReactiveStopViewModel> ReactiveStops { get; } = new();
+
+    /// <summary>
+    /// The ramp the reactive mode currently follows. Picking a profile is the write: it is stored and the throttle is
+    /// reset, so the next tick paints the new ramp even at an unchanged temperature.
+    /// </summary>
+    public ReactiveProfileChoice? SelectedReactiveProfile
+    {
+        get => _selectedReactiveProfile;
+        set
+        {
+            var previous = _selectedReactiveProfile;
+            if (!Set(ref _selectedReactiveProfile, value) || value == null) return;
+
+            foreach (var choice in ReactiveProfileChoices) choice.IsSelected = ReferenceEquals(choice, value);
+            Raise(nameof(ReactiveCustomEditorVisible));
+
+            // Switching to the custom entry with no saved ramp of its own seeds the editor from the ramp that was
+            // active a moment ago, so "Custom" starts from a shape the user already knows, not from a blank list.
+            if (value.IsCustom && ReactiveStops.Count == 0 && previous is { IsCustom: false })
+            {
+                var seed = ReactiveLightingProfiles.FindBuiltIn(previous.Id)?.Stops
+                           ?? ReactiveLightingProfiles.BuiltIn[0].Stops;
+                foreach (var stop in ReactiveLightingProfiles.SanitizeStops(seed))
+                {
+                    ReactiveStops.Add(new ReactiveStopViewModel(stop.AtCelsius, stop.Color,
+                        OnReactiveStopChanged, RemoveReactiveStop, () => CanRemoveReactiveStop)
+                    { RemoveLabel = Labels.Sil });
+                }
+                Raise(nameof(CanAddReactiveStop));
+                Raise(nameof(CanRemoveReactiveStop));
+            }
+
+            if (_suppressWrite) return;
+
+            _settings.ReactiveLightingProfile = value.IsCustom ? ReactiveLightingProfiles.CustomId : value.Id;
+            SaveSettings();
+            _reactiveThrottle.Reset();
+        }
+    }
+
+    /// <summary>True when the custom entry is selected, which is what opens the ramp editor under the picker.</summary>
+    public bool ReactiveCustomEditorVisible => SelectedReactiveProfile?.IsCustom == true;
+
+    public RelayCommand AddReactiveStopCommand { get; private set; } = null!;
+
+    /// <summary>True while the custom ramp can take one more stop.</summary>
+    public bool CanAddReactiveStop => ReactiveStops.Count < ReactiveLighting.MaxStops;
+
+    /// <summary>True while the custom ramp keeps at least two stops — a ramp needs a cold end and a hot end.</summary>
+    public bool CanRemoveReactiveStop => ReactiveStops.Count > 2;
+
+    /// <summary>The ramp the tick evaluates: the selected profile's stops, or the edited stops for the custom entry.</summary>
+    private IReadOnlyList<ReactiveLightingStop> ActiveReactiveStops()
+    {
+        if (SelectedReactiveProfile?.IsCustom == true)
+        {
+            var custom = ReactiveLightingProfiles.SanitizeStops(
+                ReactiveStops.Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color }));
+            if (custom.Count >= 2) return custom;
+        }
+
+        return ReactiveLightingProfiles.FindBuiltIn(SelectedReactiveProfile?.Id)?.Stops
+               ?? (IReadOnlyList<ReactiveLightingStop>)ReactiveLightingProfiles.BuiltIn[0].Stops;
+    }
+
+    /// <summary>(Re)builds the profile picker from the built-in list plus the custom entry, keeping the stored selection.</summary>
+    private void BuildReactiveProfileChoices()
+    {
+        ReactiveProfileChoices.Clear();
+        foreach (var profile in ReactiveLightingProfiles.BuiltIn)
+        {
+            ReactiveProfileChoices.Add(new ReactiveProfileChoice(profile.Name, profile.DisplayName, isCustom: false, SelectReactiveProfile));
+        }
+        ReactiveProfileChoices.Add(new ReactiveProfileChoice(ReactiveLightingProfiles.CustomId, Loc.T("Özel"),
+            isCustom: true, SelectReactiveProfile));
+
+        var stored = _settings.ReactiveLightingProfile;
+        var match = ReactiveProfileChoices.FirstOrDefault(c =>
+                        string.Equals(c.Id, stored, StringComparison.OrdinalIgnoreCase))
+                    ?? ReactiveProfileChoices[0];
+
+        _suppressWrite = true;
+        try { SelectedReactiveProfile = match; }
+        finally { _suppressWrite = false; }
+    }
+
+    private void SelectReactiveProfile(ReactiveProfileChoice choice) => SelectedReactiveProfile = choice;
+
+    /// <summary>(Re)builds the custom ramp editor from the stored stops, seeding from the active ramp when there are none.</summary>
+    private void BuildReactiveStops()
+    {
+        ReactiveStops.Clear();
+
+        IEnumerable<ReactiveLightingStop> source;
+        if (string.Equals(_settings.ReactiveLightingProfile, ReactiveLightingProfiles.CustomId, StringComparison.OrdinalIgnoreCase)
+            && _settings.ReactiveLightingCustomStops is { Count: >= 2 } saved)
+        {
+            source = saved;
+        }
+        else
+        {
+            source = ReactiveLightingProfiles.FindBuiltIn(_settings.ReactiveLightingProfile)?.Stops
+                     ?? ReactiveLightingProfiles.BuiltIn[0].Stops;
+        }
+
+        foreach (var stop in ReactiveLightingProfiles.SanitizeStops(source))
+        {
+            ReactiveStops.Add(new ReactiveStopViewModel(stop.AtCelsius, stop.Color,
+                OnReactiveStopChanged, RemoveReactiveStop, () => CanRemoveReactiveStop)
+            { RemoveLabel = Labels.Sil });
+        }
+
+        Raise(nameof(CanAddReactiveStop));
+        Raise(nameof(CanRemoveReactiveStop));
+    }
+
+    /// <summary>
+    /// Adds one stop in the middle of the widest gap of the current ramp, coloured as the ramp is at that temperature,
+    /// so the new stop changes nothing until the user moves it.
+    /// </summary>
+    private void AddReactiveStop()
+    {
+        if (!CanAddReactiveStop) return;
+
+        var active = ReactiveLightingProfiles.SanitizeStops(
+            ReactiveStops.Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color }));
+        if (active.Count < 2) active = ReactiveLightingProfiles.SanitizeStops(ActiveReactiveStops());
+        if (active.Count < 2) return;
+
+        double bestAt = (ReactiveLighting.MinStopCelsius + ReactiveLighting.MaxStopCelsius) / 2;
+        var bestGap = -1d;
+        for (int i = 0; i <= active.Count; i++)
+        {
+            var lo = i == 0 ? ReactiveLighting.MinStopCelsius : active[i - 1].AtCelsius;
+            var hi = i == active.Count ? ReactiveLighting.MaxStopCelsius : active[i].AtCelsius;
+            if (hi - lo > bestGap)
+            {
+                bestGap = hi - lo;
+                bestAt = (lo + hi) / 2;
+            }
+        }
+
+        // Land on the bucket grid, and step off any stop that already sits there: duplicates are dropped on
+        // sanitise, which would make the button appear to do nothing.
+        var at = Math.Clamp(Math.Round(bestAt / ReactiveLighting.BucketCelsius, MidpointRounding.AwayFromZero)
+                            * ReactiveLighting.BucketCelsius,
+            ReactiveLighting.MinStopCelsius, ReactiveLighting.MaxStopCelsius);
+        while (at <= ReactiveLighting.MaxStopCelsius && active.Any(s => Math.Abs(s.AtCelsius - at) < 0.5))
+        {
+            at += ReactiveLighting.BucketCelsius;
+        }
+        at = Math.Clamp(at, ReactiveLighting.MinStopCelsius, ReactiveLighting.MaxStopCelsius);
+
+        var color = ReactiveLighting.ColorFor(active, at);
+        ReactiveStops.Add(new ReactiveStopViewModel(at, color, OnReactiveStopChanged, RemoveReactiveStop,
+            () => CanRemoveReactiveStop) { RemoveLabel = Labels.Sil });
+
+        OnReactiveStopChanged();
+    }
+
+    private void RemoveReactiveStop(ReactiveStopViewModel row)
+    {
+        if (!CanRemoveReactiveStop) return;
+        if (!ReactiveStops.Remove(row)) return;
+
+        OnReactiveStopChanged();
+    }
+
+    /// <summary>
+    /// One edit in the custom ramp: store the stops, re-arm the throttle so the next tick paints the new shape, and
+    /// let the file write wait for the drag to stop.
+    /// </summary>
+    private void OnReactiveStopChanged()
+    {
+        AddReactiveStopCommand.RaiseCanExecuteChanged();
+        foreach (var stop in ReactiveStops) stop.RemoveCommand.RaiseCanExecuteChanged();
+        Raise(nameof(CanAddReactiveStop));
+        Raise(nameof(CanRemoveReactiveStop));
+
+        if (_suppressWrite) return;
+
+        _settings.ReactiveLightingCustomStops = ReactiveStops
+            .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
+            .ToList();
+
+        _reactiveThrottle.Reset();
+        _reactiveDebounce.Run(() => SaveSettings());
+    }
+
+    /// <summary>
+    /// Writes a colour chosen in the picker window into one stop of the custom ramp. The window itself is the view's
+    /// business — this is the one line of it the view model needs, so the hex validation stays here.
+    /// </summary>
+    public void ApplyReactiveStopColor(ReactiveStopViewModel row, string hex) => row.Color = hex;
 
     // The slider ranges come from the protocol constants rather than from numbers typed into the XAML, so a change to
     // the sysfs contract cannot leave the UI offering a level the kernel will reject.
@@ -3447,6 +3765,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _selectedRgbProfile, value)) return;
+            Raise(nameof(CanDeleteRgbProfile));
 
             // The card has no Apply button: picking a profile is the write, the same way picking an effect or a
             // colour is. The guard covers the reloads that set this property themselves.
@@ -3454,6 +3773,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = ApplyRgbProfileAsync();
         }
     }
+
+    /// <summary>
+    /// False for the built-in (default) profiles and the custom label, so the delete button is disabled for them
+    /// rather than firing into a refusal. The command keeps its own guard as well: a binding can be bypassed.
+    /// </summary>
+    public bool CanDeleteRgbProfile => SelectedRgbProfile is { IsBuiltIn: false };
 
     /// <summary>The name typed into the save box. Empty means "nothing to save yet".</summary>
     public string NewProfileName
@@ -3781,7 +4106,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Oyun kitaplığı taranamadı"), ex.ToString());
+            AppLog.Warn("The game library could not be scanned", ex.ToString());
             GameScanStatus = Labels.GameScanFailed;
         }
         finally
@@ -4209,7 +4534,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fare profili okunamadı"), ex.Message);
+            AppLog.Warn("Mouse profile could not be read", ex.Message);
         }
     }
 
@@ -4430,11 +4755,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
 
             Status = Labels.GameSessionRecovered;
-            AppLog.Info(Loc.T("Yarım kalan oyun oturumu geri alındı"), $"{recovery.SavedMode} · {recovery.SavedFan}");
+            AppLog.Info("The interrupted game session was rolled back", $"{recovery.SavedMode} · {recovery.SavedFan}");
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Oyun oturumu geri alınamadı"), ex.Message);
+            AppLog.Warn("Game session could not be rolled back", ex.Message);
         }
         finally
         {
@@ -4465,7 +4790,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (SaveSettings()) return;
 
         Status = Labels.GameSessionRecoveryNotSaved;
-        AppLog.Warn(Loc.T("Oyun oturumu kaydı yazılamadı"), "Çökme durumunda mod ve fan geri alınamayabilir.");
+        AppLog.Warn("The game session record could not be written", "After a crash the mode and the fan may not be restored.");
     }
 
     /// <summary>Clears the recovery record once the session ended cleanly.</summary>
@@ -4535,7 +4860,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yeniden başlatma isteği gönderilemedi"), ex.Message);
+            AppLog.Warn("The restart request could not be sent", ex.Message);
         }
     }
 
@@ -4834,7 +5159,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.Message);
+                AppLog.Warn("Hardware capabilities could not be read", ex.Message);
             }
         }
 
@@ -4868,7 +5193,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Okul modu kurtarma başarısız"), ex.Message);
+                AppLog.Warn("School mode recovery failed", ex.Message);
             }
         }
 
@@ -4941,7 +5266,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("Linux arayüzü başlatılamadı"), ex.ToString());
+            AppLog.Error("The Linux UI could not be started", ex.ToString());
             Status = Labels.NoAcerNodes;
         }
         finally
@@ -5058,7 +5383,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Telemetri okunamadı"), ex.Message);
+            AppLog.Warn("Telemetry could not be read", ex.Message);
         }
         finally
         {
@@ -5096,7 +5421,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (verdict == null) return;
 
-        AppLog.Error(Loc.T("Fan durmuş görünüyor"),
+        AppLog.Error("The fan appears to be stopped",
             $"{verdict.Target} · {verdict.TemperatureC} °C · {verdict.FanRpm} RPM · {verdict.Sustained.TotalSeconds:F0} sn");
 
         if (_fanStallReported) return;
@@ -5175,11 +5500,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // Not committed: the next step proposes the same speed again, which is what makes a transient refusal
             // recover instead of leaving the fans at the previous value until the temperature happens to move.
-            AppLog.Warn(Loc.T("Fan hızı uygulanmadı"), $"%{percent}");
+            AppLog.Warn("The fan speed was not applied", $"%{percent}");
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fan hızı yazılamadı"), ex.Message);
+            AppLog.Warn("The fan speed could not be written", ex.Message);
         }
         finally
         {
@@ -5246,6 +5571,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (lighting.LEDs.Count > 1) Zone2 = lighting.LEDs[1];
         if (lighting.LEDs.Count > 2) Zone3 = lighting.LEDs[2];
         if (lighting.LEDs.Count > 3) Zone4 = lighting.LEDs[3];
+
+        // The profile list is a statement about where the colours the page now shows came from: if the state just
+        // read matches a preset, that preset is selected; anything else is the custom entry. Without this, a preset
+        // name stored from an earlier session (the blackout one, say) stayed selected over a keyboard that was
+        // actually running a hand-set configuration, and the list claimed "Lights Off" for colours that were lit.
+        SelectRgbProfileSilently(FindProfileMatching(lighting) ?? CustomProfile);
+    }
+
+    /// <summary>
+    /// The preset that describes <paramref name="lighting"/> exactly, or null when the configuration is the user's own.
+    /// Direction is compared only for the effects that take one, the colour only for the effects that use one, and the
+    /// four zone colours only for STATIC — the other fields are what the firmware actually stores.
+    /// </summary>
+    private RgbPreset? FindProfileMatching(LightingConfig lighting)
+    {
+        var safe = LightingPolicy.Sanitize(lighting);
+        if (safe == null) return null;
+
+        foreach (var preset in RgbProfiles)
+        {
+            if (preset.Name == CustomProfileName) continue;
+            if (!string.Equals(preset.Effect, safe.Effect, StringComparison.OrdinalIgnoreCase)) continue;
+            if (preset.Brightness != safe.Brightness || preset.Speed != safe.Speed) continue;
+
+            if (LightingPolicy.AllowedDirections(safe.Effect).Count > 0 && preset.Direction != safe.Direction) continue;
+
+            if (LightingPolicy.EffectUsesColor(safe.Effect)
+                && !string.Equals(LightingPolicy.NormalizeHex(preset.Color, ""), safe.Color, StringComparison.OrdinalIgnoreCase)) continue;
+
+            if (LightingPolicy.EffectUsesZoneColors(safe.Effect))
+            {
+                var presetLeds = preset.LEDs;
+                if (presetLeds.Count != 4 || safe.LEDs.Count != 4) continue;
+
+                var zonesMatch = true;
+                for (int i = 0; i < 4; i++)
+                {
+                    if (!string.Equals(LightingPolicy.NormalizeHex(presetLeds[i], ""), safe.LEDs[i], StringComparison.OrdinalIgnoreCase))
+                    {
+                        zonesMatch = false;
+                        break;
+                    }
+                }
+                if (!zonesMatch) continue;
+            }
+
+            return preset;
+        }
+
+        return null;
     }
 
     // ---------------------------------------------------------------- sign-in launch
@@ -5272,7 +5647,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Otomatik başlatma değiştirilemedi"), ex.ToString());
+            AppLog.Warn("Autostart could not be changed", ex.ToString());
             AutoStartStatus = Labels.AutoStartFailed;
         }
     }
@@ -5298,11 +5673,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 _ => RefreshRateStatus
             };
 
-            if (result.Changed) AppLog.Info(Loc.T("Ekran yenileme hızı değişti"), $"{result.From} Hz -> {result.To} Hz");
+            if (result.Changed) AppLog.Info("The screen refresh rate changed", $"{result.From} Hz -> {result.To} Hz");
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Ekran yenileme hızı değiştirilemedi"), ex.Message);
+            AppLog.Warn("The screen refresh rate could not be changed", ex.Message);
         }
     }
 
@@ -5319,7 +5694,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Otomatik başlatma durumu okunamadı"), ex.Message);
+            AppLog.Warn("The autostart state could not be read", ex.Message);
         }
     }
 
@@ -5350,7 +5725,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Labels.FanMode).ConfigureAwait(true);
     }
 
-    /// <summary>Sanitises the sliders into a curve, stores it and arms it.</summary>
+    /// <summary>Sanitises the sliders into a curve, stores it, arms it and writes it to the firmware.</summary>
     private async Task ApplyCurveAsync()
     {
         var points = FanCurve.Sanitize(CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
@@ -5360,7 +5735,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
         Raise(nameof(CurvePreview));
 
-        if (_hardware == null) return;
+        await ApplyCurveToHardwareAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Applies the armed curve to the firmware right now: selects custom mode (the curve only drives the fans there)
+    /// and writes the curve's own answer at the current temperature. Called both by the curve command and, debounced,
+    /// from every anchor drag — the curve applies as it is drawn, so the card needs no Apply button.
+    /// </summary>
+    private async Task ApplyCurveToHardwareAsync()
+    {
+        var hardware = _hardware;
+        if (hardware == null) return;
+
+        // A game's own fan rule owns the fans while it runs; writing here would fight it.
+        if (GameActive) return;
 
         // The curve only drives anything in custom mode, so applying it also selects that mode.
         SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Custom) ?? SelectedFanMode;
@@ -5376,7 +5765,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         var now = DateTime.UtcNow;
         bool ok = await RunWriteAsync(
-            () => _hardware.SetFanModeAsync(FanMode.Custom, cpu, gpu),
+            () => hardware.SetFanModeAsync(FanMode.Custom, cpu, gpu),
             Labels.FanCurve).ConfigureAwait(true);
 
         // Committed only when the firmware accepted it, so the loop does not immediately write the same speed again
@@ -5405,7 +5794,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // the page the user is working on. A refusal is still reported, because a silent one looks like a bug.
             if (!ok)
             {
-                AppLog.Warn(Loc.T("Klavye aydınlatması"), "Donanım yazımı uygulanmadı.");
+                AppLog.Warn("Keyboard lighting", "The hardware write was not applied.");
                 Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
                 return;
             }
@@ -5426,7 +5815,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Donanım yazımı başarısız"), $"{Labels.KeyboardLighting}: {ex.Message}");
+            AppLog.Warn("The hardware write failed", $"Keyboard lighting: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
         }
         finally
@@ -5579,7 +5968,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Okul modu değiştirilemedi"), ex.Message);
+            AppLog.Warn("School mode could not be changed", ex.Message);
             Status = Labels.SchoolModeRefused;
         }
         finally
@@ -5910,7 +6299,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Klavye aydınlatması kapatılamadı"), ex.Message);
+                AppLog.Warn("The keyboard lighting could not be turned off", ex.Message);
             }
             return;
         }
@@ -5933,7 +6322,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Klavye aydınlatması yeniden uygulanamadı"), ex.Message);
+            AppLog.Warn("The keyboard lighting could not be reapplied", ex.Message);
         }
     }
 
@@ -5966,7 +6355,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!await _writeGate.WaitAsync(WriteGateTimeout).ConfigureAwait(false))
             {
-                AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), "yazma kapısı zaman aşımına uğradı");
+                AppLog.Warn("The fans could not be set to automatic", "the write gate timed out");
                 return false;
             }
 
@@ -5981,7 +6370,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), ex.Message);
+            AppLog.Warn("The fans could not be set to automatic", ex.Message);
             return false;
         }
 
@@ -5989,7 +6378,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             // The firmware refused. The settings file is left alone: the curve is still armed as far as the machine
             // is concerned, and a file that said otherwise would be a lie the next launch acts on.
-            AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), "donanım yazımı reddedildi");
+            AppLog.Warn("The fans could not be set to automatic", "the hardware write was refused");
             return false;
         }
 
@@ -6008,7 +6397,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fan kontrolleri güncellenemedi"), ex.Message);
+            AppLog.Warn("The fan controls could not be updated", ex.Message);
         }
 
         return true;
@@ -6030,7 +6419,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Oyun oturumu kapatılamadı"), ex.Message);
+            AppLog.Warn("The game session could not be closed", ex.Message);
         }
 
         bool ok = false;
@@ -6040,7 +6429,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Temiz çıkış başarısız"), ex.Message);
+            AppLog.Warn("Clean exit failed", ex.Message);
         }
 
         try
@@ -6050,7 +6439,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             // A status line nobody is going to read is not worth failing the exit over.
-            AppLog.Warn(Loc.T("Çıkış durumu yazılamadı"), ex.Message);
+            AppLog.Warn("The exit state could not be written", ex.Message);
         }
     }
 
@@ -6071,7 +6460,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             if (!task.Wait(timeout))
             {
-                AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), "zaman aşımına uğradı");
+                AppLog.Warn("The fans could not be set to automatic", "timed out");
                 return false;
             }
 
@@ -6079,7 +6468,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fanlar otomatiğe alınamadı"), ex.Message);
+            AppLog.Warn("The fans could not be set to automatic", ex.Message);
             return false;
         }
     }
@@ -6101,7 +6490,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Donanım yazımı başarısız"), $"{what}: {ex.Message}");
+            AppLog.Warn("The hardware write failed", $"{Loc.English(what)}: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {what}";
             return false;
         }
@@ -6122,12 +6511,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             bool ok = await write().ConfigureAwait(true);
-            if (!ok) AppLog.Warn(Loc.T("Donanım yazımı başarısız"), what);
+            if (!ok) AppLog.Warn("The hardware write failed", Loc.English(what));
             return ok;
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Donanım yazımı başarısız"), $"{what}: {ex.Message}");
+            AppLog.Warn("The hardware write failed", $"{Loc.English(what)}: {ex.Message}");
             return false;
         }
         finally
@@ -6362,12 +6751,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_suppressWrite) return;
 
         // The shape is the state, so it is stored as it is dragged and the evaluator is re-armed at once: the next
-        // telemetry tick then follows the new shape. Only the file write waits for the drag to stop, because a drag
-        // raises this once per pixel and each write is a whole settings file.
+        // telemetry tick then follows the new shape. The curve applies as it is drawn — there is no Apply button — so
+        // the firmware write is queued here too. Both writes wait for the drag to stop, because a drag raises this
+        // once per pixel and each one is a whole settings file and a WMI call.
         _settings.FanCurvePoints = FanCurve.Sanitize(
             CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
         _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
-        _curveDebounce.Run(() => SaveSettings());
+        _curveDebounce.Run(() =>
+        {
+            SaveSettings();
+            _ = ApplyCurveToHardwareAsync();
+        });
     }
 
     private FanCurve CurrentCurve() =>
@@ -6390,7 +6784,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Ayarlar kaydedilemedi", ex.Message);
+            AppLog.Warn("The settings could not be saved", ex.Message);
             return false;
         }
     }
@@ -6443,7 +6837,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Gecikmeli yazma başarısız"), ex.Message);
+                AppLog.Warn("Deferred write failed", ex.Message);
             }
         }
 
@@ -6467,6 +6861,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _lightingDebounce.Dispose();
         _customFanDebounce.Dispose();
         _curveDebounce.Dispose();
+        _reactiveDebounce.Dispose();
         _writeGate.Dispose();
     }
 }

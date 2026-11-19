@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -197,7 +197,7 @@ public static class WmiWorkerHost
     {
         if (mode == null || !mode.IsValidWorkerRequest)
         {
-            AppLog.Warn(Loc.T("--wmi-worker reddedildi: eksik veya geçersiz argüman"),
+            AppLog.Warn("--wmi-worker rejected: missing or invalid argument",
                 $"pipe='{mode?.PipeName}' parent={mode?.ParentProcessId}");
             return ExitInvalidArguments;
         }
@@ -218,22 +218,22 @@ public static class WmiWorkerHost
             // merely runs as the same user cannot take the helper over.
             using var server = new WmiWorkerServer(mode.PipeName, executor, mode.ParentProcessId);
 
-            AppLog.Info(Loc.T("--wmi-worker başladı"), $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
+            AppLog.Info("--wmi-worker started", $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
 
             var served = server.RunAsync(AcceptTimeout, cts.Token).GetAwaiter().GetResult();
 
             if (Volatile.Read(ref parentGone) == 1)
             {
-                AppLog.Info(Loc.T("--wmi-worker ebeveyn kapandığı için çıkıyor"));
+                AppLog.Info("--wmi-worker exiting because the parent closed");
                 return ExitParentGone;
             }
 
-            AppLog.Info(served ? "--wmi-worker istemciyi tamamladı" : "--wmi-worker istemci bulamadı");
+            AppLog.Info(served ? "--wmi-worker served the client" : "--wmi-worker found no client");
             return served ? ExitOk : ExitNoClient;
         }
         catch (Exception ex)
         {
-            AppLog.Error("--wmi-worker beklenmedik hata", $"{ex.GetType().Name}: {ex.Message}");
+            AppLog.Error("--wmi-worker unexpected error", $"{ex.GetType().Name}: {ex.Message}");
             return ExitNoClient;
         }
     }

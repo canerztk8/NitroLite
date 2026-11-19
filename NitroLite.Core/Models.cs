@@ -380,6 +380,21 @@ public class AppSettings
     [JsonPropertyName("reactive_lighting_enabled")]
     public bool ReactiveLightingEnabled { get; set; } = false;
 
+    /// <summary>
+    /// Which temperature ramp the reactive mode follows: the <see cref="ReactiveLightingProfile.Name"/> of a built-in
+    /// profile, or <see cref="ReactiveLightingProfiles.CustomId"/> for the user's own stops. Null means the first
+    /// built-in profile.
+    /// </summary>
+    [JsonPropertyName("reactive_lighting_profile")]
+    public string? ReactiveLightingProfile { get; set; }
+
+    /// <summary>
+    /// The user's own ramp, used when <see cref="ReactiveLightingProfile"/> is
+    /// <see cref="ReactiveLightingProfiles.CustomId"/>. Sanitised on load; null when there is no usable custom ramp.
+    /// </summary>
+    [JsonPropertyName("reactive_lighting_custom_stops")]
+    public List<ReactiveLightingStop>? ReactiveLightingCustomStops { get; set; }
+
     [JsonPropertyName("last_operating_mode")]
     public OperatingMode? LastOperatingMode { get; set; }
 
@@ -657,6 +672,21 @@ public class AppSettings
         // launch. Null stays null: no lighting block means "read the keyboard's own state".
         KeyboardLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(KeyboardLighting));
         LastActiveLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(LastActiveLighting));
+
+        // The reactive profile is a name from a fixed list plus an optional ramp. A hand-edited file can carry a name
+        // no build knows, and a ramp with fewer than two stops cannot describe a gradient — both fall back to the
+        // first built-in profile rather than being trusted.
+        if (ReactiveLightingProfile != null
+            && !ReactiveLightingProfiles.CustomId.Equals(ReactiveLightingProfile, StringComparison.OrdinalIgnoreCase)
+            && ReactiveLightingProfiles.FindBuiltIn(ReactiveLightingProfile) == null)
+        {
+            ReactiveLightingProfile = null;
+        }
+        if (ReactiveLightingCustomStops != null)
+        {
+            var cleanStops = ReactiveLightingProfiles.SanitizeStops(ReactiveLightingCustomStops);
+            ReactiveLightingCustomStops = cleanStops.Count >= 2 ? cleanStops : null;
+        }
 
         // Both capability maps come out of a file a user can edit and a crash can truncate. A null here reached a
         // dictionary lookup and a list add on the first capability read, so a hand-edited file took the whole page

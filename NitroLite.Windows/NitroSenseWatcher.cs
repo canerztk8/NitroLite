@@ -218,7 +218,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             _timer = new Timer(_ => Poll(), null, PollMilliseconds, PollMilliseconds);
         }
 
-        AppLog.Info(Loc.T("NitroSense izleyicisi başladı"), $"aralık={PollMilliseconds} ms");
+        AppLog.Info("The NitroSense watcher started", $"interval={PollMilliseconds} ms");
     }
 
     public void Stop()
@@ -274,7 +274,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
 
         // Logged on every accepted press, with the shape that matched. Without this line the only evidence that the
         // key works is the window moving, which is exactly what a user reporting "it does nothing" cannot show.
-        AppLog.Info(Loc.T("Nitro tuşu algılandı"), Describe(kind, window));
+        AppLog.Info("Nitro key detected", Describe(kind, window));
 
         try
         {
@@ -283,7 +283,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         catch (Exception ex)
         {
             // A subscriber that throws must not take the timer thread down with it.
-            AppLog.Warn("NitroSense abonesi hata verdi", ex.Message);
+            AppLog.Warn("A NitroSense subscriber threw", ex.Message);
         }
     }
 
@@ -421,15 +421,15 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                 // that is what is happening; more would be a fight the user sees as a flickering window.
                 if (closes >= MaxClosesPerWindow)
                 {
-                    AppLog.Warn(Loc.T("NitroSense tekrar tekrar açılıyor"),
-                        $"pencere içinde {closes} kez kapatıldı; Acer servisi yeniden başlatıyor olabilir.");
+                    AppLog.Warn("NitroSense keeps reopening",
+                        $"closed {closes} times within the window; the Acer service may be restarting it.");
                     break;
                 }
 
                 Thread.Sleep(SweepMilliseconds);
             }
 
-            if (closed) AppLog.Info(Loc.T("NitroSense kapatıldı"), "Nitro tuşu NitroLite'a yönlendirildi.");
+            if (closed) AppLog.Info("NitroSense was closed", "The Nitro key is routed to NitroLite.");
 
             return closed;
         }
@@ -454,7 +454,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("NitroSense süreçleri listelenemedi"), $"{name}: {ex.Message}");
+                AppLog.Warn("The NitroSense processes could not be listed", $"{name}: {ex.Message}");
                 continue;
             }
 
@@ -471,11 +471,11 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
                         // runs inside, which would leave the window it was meant to remove.
                         process.Kill(entireProcessTree: true);
                         closed = true;
-                        AppLog.Info(Loc.T("NitroSense süreci kapatıldı"), name);
+                        AppLog.Info("The NitroSense process was closed", name);
                     }
                     catch (Exception ex)
                     {
-                        AppLog.Warn(Loc.T("NitroSense kapatılamadı"), $"{name}: {ex.Message}");
+                        AppLog.Warn("NitroSense could not be closed", $"{name}: {ex.Message}");
                     }
                 }
             }
@@ -484,7 +484,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         if (!closed) return false;
 
         SuppressFor(CloseCooldown);
-        if (log) AppLog.Info(Loc.T("NitroSense kapatıldı"), "Nitro tuşu NitroLite'a yönlendirildi.");
+        if (log) AppLog.Info("NitroSense was closed", "The Nitro key is routed to NitroLite.");
 
         return true;
     }
@@ -632,7 +632,7 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("NitroSense izin penceresi kapatılamadı"), ex.Message);
+            AppLog.Warn("The NitroSense permission prompt could not be closed", ex.Message);
         }
     }
 

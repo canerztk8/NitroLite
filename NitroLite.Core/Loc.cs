@@ -175,11 +175,81 @@ public static class Loc
         return _english.TryGetValue(source, out var en) ? en : null;
     }
 
+    /// <summary>
+    /// The English text for a value that is already a catalogue key or a label the catalogue produced, whatever the
+    /// window is showing. A log line is read by whoever triages the report rather than by the user, so it must not
+    /// follow the UI language: this resolves the English row for a key, and maps an already-translated label back to
+    /// the key it came from first. Works before <see cref="SetLanguage"/> has run.
+    /// </summary>
+    public static string English(string? source)
+    {
+        if (string.IsNullOrEmpty(source)) return source ?? "";
+
+        var english = LoadCatalog(DefaultLanguage);
+        if (english.TryGetValue(source, out var hit)) return hit;
+
+        // The caller may have handed over a label that is already translated — the name of a control, the title of a
+        // dialog — so find the key it came from and answer with that key's English row.
+        if (ReverseCatalog(_language).TryGetValue(source, out var key) && english.TryGetValue(key, out var fromKey))
+            return fromKey;
+
+        return source;
+    }
+
+    /// <summary>
+    /// Like <see cref="English(string)"/>, with the arguments formatted culture-independently ("55.5", never "55,5"):
+    /// the same line has to read the same in Istanbul and in Berlin.
+    /// </summary>
+    public static string English(LocInterpolation text)
+    {
+        var template = text.Template;
+        var english = LoadCatalog(DefaultLanguage);
+        return text.ResolveWith(english.TryGetValue(template, out var hit) ? hit : template, CultureInfo.InvariantCulture);
+    }
+
     internal static string Lookup(string source)
     {
         if (_current.TryGetValue(source, out var hit)) return hit;
         if (TrackMisses) MissSet.TryAdd(source, 0);
         return _english.TryGetValue(source, out var en) ? en : source;
+    }
+
+    /// <summary>
+    /// The catalogue for <paramref name="code"/> read backwards — translated text to the key it came from — so a label
+    /// that has already been translated can be turned back into its English row. Cached for the same reason the
+    /// catalogues are: the answer cannot change while the process runs.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ReverseCatalog(string code)
+    {
+        return ReverseCache.GetOrAdd(code, static c =>
+        {
+            var reverse = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in LoadCatalog(c))
+            {
+                // First key wins: two keys that share a translation are indistinguishable once translated, and the
+                // one the catalogue lists first is the one a call site is most likely to have used.
+                reverse.TryAdd(pair.Value, pair.Key);
+            }
+
+            return reverse;
+        });
+    }
+
+    private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> ReverseCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Formats the arguments into a template that has already been resolved.</summary>
+    internal static string FormatTemplate(string template, object?[] args, IFormatProvider? provider)
+    {
+        try
+        {
+            return string.Format(provider, template, args);
+        }
+        catch (FormatException)
+        {
+            // A broken translation (bad placeholder) must never take a message away: show the template as it is.
+            return template;
+        }
     }
 
     internal static string Format(string template, object?[] args, IFormatProvider? provider = null)
@@ -240,6 +310,9 @@ public sealed class LocInterpolation
     public string Template => _template.ToString();
 
     public string Resolve(IFormatProvider? provider = null) => Loc.Format(_template.ToString(), _args, provider);
+
+    /// <summary>Formats the collected arguments into a template the caller has already resolved.</summary>
+    internal string ResolveWith(string template, IFormatProvider? provider) => Loc.FormatTemplate(template, _args, provider);
 
     public override string ToString() => Resolve(CultureInfo.CurrentCulture);
 }

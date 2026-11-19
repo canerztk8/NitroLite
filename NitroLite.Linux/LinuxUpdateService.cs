@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using NitroLite.Linux.Sysfs;
 
 namespace NitroLite.Linux;
@@ -46,7 +46,7 @@ public sealed class LinuxUpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Güncelleme denetlenemedi"), ex.Message);
+            AppLog.Warn("Update could not be checked", ex.Message);
             return null;
         }
     }
@@ -78,7 +78,7 @@ public sealed class LinuxUpdateService : IUpdateService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Makine modeli okunamadı"), ex.Message);
+            AppLog.Warn("Machine model could not be read", ex.Message);
         }
 
         return Loc.T("Bilinmiyor");

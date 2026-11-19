@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Microsoft.Win32;
 using NitroLite.Core;
 
@@ -53,7 +53,7 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Oyun klasörü okunamadı"), $"{dir}: {ex.Message}");
+                AppLog.Warn("The game folder could not be read", $"{dir}: {ex.Message}");
                 continue;
             }
 
@@ -134,7 +134,7 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
             Add(key?.GetValue("SteamPath") as string);
         }
-        catch (Exception ex) { AppLog.Warn(Loc.T("Steam kaydı okunamadı"), ex.Message); }
+        catch (Exception ex) { AppLog.Warn("The Steam registry entry could not be read", ex.Message); }
 
         foreach (var (hive, path) in new (RegistryKey, string)[]
                  {
@@ -147,7 +147,7 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
                 using var key = hive.OpenSubKey(path);
                 Add(key?.GetValue("InstallPath") as string);
             }
-            catch (Exception ex) { AppLog.Warn(Loc.T("Steam kaydı okunamadı"), ex.Message); }
+            catch (Exception ex) { AppLog.Warn("The Steam registry entry could not be read", ex.Message); }
         }
 
         Add(@"C:\Program Files (x86)\Steam");
@@ -188,7 +188,7 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Steam kitaplık dosyası okunamadı"), $"{vdf}: {ex.Message}");
+                AppLog.Warn("The Steam library file could not be read", $"{vdf}: {ex.Message}");
             }
         }
 
@@ -222,13 +222,13 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Warn(Loc.T("Epic manifestosu okunamadı"), $"{file}: {ex.Message}");
+                    AppLog.Warn("Epic manifest could not be read", $"{file}: {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Epic manifest klasörü okunamadı"), ex.Message);
+            AppLog.Warn("The Epic manifest folder could not be read", ex.Message);
         }
 
         return locations.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -247,12 +247,12 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
                 {
                     if (drive.DriveType == DriveType.Fixed && drive.IsReady) roots.Add(drive.RootDirectory.FullName);
                 }
-                catch (Exception ex) { AppLog.Warn(Loc.T("Sürücü okunamadı"), ex.Message); }
+                catch (Exception ex) { AppLog.Warn("The drive could not be read", ex.Message); }
             }
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Sürücü listesi okunamadı"), ex.Message);
+            AppLog.Warn("The drive list could not be read", ex.Message);
         }
 
         return roots;

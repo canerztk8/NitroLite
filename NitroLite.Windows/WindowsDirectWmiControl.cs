@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 using NitroLite.Core.Hardware.Wmi;
 
 namespace NitroLite.Windows;
@@ -36,7 +36,7 @@ public sealed class WindowsDirectWmiControl : IDirectWmiControl
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Doğrudan WMI başlatılamadı"), ex.ToString());
+            AppLog.Warn("Direct WMI could not be started", ex.ToString());
             return false;
         }
     }

@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -36,7 +36,7 @@ public sealed class WindowsMemoryCleaner : IMemoryCleaner
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Bekleme belleği boşaltılamadı"), ex.ToString());
+            AppLog.Warn("The standby memory could not be purged", ex.ToString());
             return new MemoryCleanResult { Cleaned = false, Error = ex.Message };
         }
     }

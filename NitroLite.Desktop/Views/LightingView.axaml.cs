@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using NitroLite.Core;
@@ -45,7 +45,7 @@ public partial class LightingView : UserControl
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("Renk seçici açılamadı"), ex.ToString());
+            AppLog.Error("The colour picker could not be opened", ex.ToString());
         }
     }
 }

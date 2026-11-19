@@ -146,7 +146,7 @@ public class PowerAutomationService : IDisposable
         {
             // Without this file a crash on battery leaves the Eco settings applied with nothing to restore them
             // from, so the failure must be in the log even though the running session still recovers in memory.
-            AppLog.Warn("Eco durumu kaydedilemedi", $"{path}: {ex.Message}");
+            AppLog.Warn("The Eco state could not be saved", $"{path}: {ex.Message}");
         }
     }
 
@@ -388,7 +388,7 @@ public class PowerAutomationService : IDisposable
         {
             // Trace only reaches a debugger. A power transition that failed is exactly what a bug report needs to
             // show, so it goes to the same log the user can open from the settings card.
-            AppLog.Warn(Loc.T("Güç geçişi uygulanamadı"), ex.ToString());
+            AppLog.Warn("The power transition could not be applied", ex.ToString());
         }
     }
 
@@ -400,7 +400,7 @@ public class PowerAutomationService : IDisposable
             // Windows would not say whether the adapter is connected. Guessing "AC" is how a laptop on battery ends
             // up with Eco never applied; guessing "battery" would put a desktop into Eco for nothing. Neither is
             // worth the risk, so nothing is touched and the next power event tries again.
-            AppLog.Warn(Loc.T("Güç durumu okunamadı"), "AC/batarya durumu bilinmiyor; bu turda hiçbir ayar değiştirilmedi.");
+            AppLog.Warn("The power state could not be read", "AC/battery state is unknown; no setting was changed this round.");
             return;
         }
 
@@ -426,7 +426,7 @@ public class PowerAutomationService : IDisposable
             // it. Giving up leaves the pending flags set, so the next pass (or the retry path) picks the work up.
             if (!await _transitionLock.WaitAsync(TransitionLockTimeout))
             {
-                AppLog.Warn(Loc.T("Güç geçişi kilitlenmesi"), "Önceki geçiş 10 saniye içinde bitmedi; bu tur atlandı.");
+                AppLog.Warn("Power transition deadlock", "The previous transition did not finish within 10 seconds; this round was skipped.");
                 return;
             }
         }
@@ -657,7 +657,7 @@ public class PowerAutomationService : IDisposable
             // Without this the exception escaped to the debounce timer's async void handler, the pending flags kept
             // whatever value the half-finished pass left them at, and the retry path never ran again. Leaving them
             // set is what makes the next pass pick the work up.
-            AppLog.Warn(Loc.T("Güç geçişi tamamlanamadı"), ex.ToString());
+            AppLog.Warn("The power transition could not complete", ex.ToString());
         }
         finally
         {
@@ -805,18 +805,18 @@ public class PowerAutomationService : IDisposable
         // baseline, which the next start reads and restores.
         if (_transitionLock != null && !await _transitionLock.WaitAsync(ExitLockTimeout))
         {
-            AppLog.Warn(Loc.T("Çıkışta Eco geri alınamadı"), "Güç geçişi kilidi 3 saniye içinde alınamadı; temel durum diskte kaldı.");
+            AppLog.Warn("Eco could not be reverted on exit", "The power-transition lock was not acquired within 3 seconds; the baseline stayed on disk.");
             return false;
         }
         try
         {
             bool modeOk = false, boostOk = false, fanOk = false;
             try { modeOk = await _hardware.SetOperatingModeAsync(_savedOperatingModeBeforeDc); }
-            catch (Exception ex) { AppLog.Warn(Loc.T("Çıkışta çalışma modu geri alınamadı"), ex.Message); }
+            catch (Exception ex) { AppLog.Warn("The operating mode could not be reverted on exit", ex.Message); }
             try { boostOk = await RestoreBoostAfterEcoAsync(false, _savedCpuBoostBeforeDc); }
-            catch (Exception ex) { AppLog.Warn(Loc.T("Çıkışta CPU boost geri alınamadı"), ex.Message); }
+            catch (Exception ex) { AppLog.Warn("CPU boost could not be reverted on exit", ex.Message); }
             try { fanOk = await _hardware.SetFanModeAsync(_savedFanModeBeforeDc); }
-            catch (Exception ex) { AppLog.Warn(Loc.T("Çıkışta fan modu geri alınamadı"), ex.Message); }
+            catch (Exception ex) { AppLog.Warn("The fan mode could not be reverted on exit", ex.Message); }
 
             RestorePanelRefreshRateAfterEco();
 

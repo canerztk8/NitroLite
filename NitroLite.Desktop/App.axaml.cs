@@ -240,7 +240,7 @@ public partial class App : Application, IDisposable
         var exe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exe))
         {
-            AppLog.Warn(Loc.T("Yeniden başlatma için çalıştırılabilir dosya bulunamadı"));
+            AppLog.Warn("No executable was found to restart");
             return;
         }
 
@@ -254,13 +254,13 @@ public partial class App : Application, IDisposable
 
             if (started == null)
             {
-                AppLog.Warn(Loc.T("Yeniden başlatma başlatılamadı"));
+                AppLog.Warn("The restart could not be started");
                 return;
             }
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yeniden başlatma başlatılamadı"), ex.Message);
+            AppLog.Warn("The restart could not be started", ex.Message);
             return;
         }
 
@@ -287,7 +287,7 @@ public partial class App : Application, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Temiz çıkış sırasında hata"), ex.Message);
+            AppLog.Warn("Error during clean exit", ex.Message);
         }
         finally
         {
@@ -319,7 +319,7 @@ public partial class App : Application, IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Oturum kapanışında fanlar iade edilemedi"), ex.Message);
+            AppLog.Warn("Fans could not be restored at session end", ex.Message);
         }
         finally
         {
@@ -330,7 +330,7 @@ public partial class App : Application, IDisposable
     /// <summary>
     /// The process is being torn down. There is no time for a clean exit, so the fans get one best-effort handback.
     /// </summary>
-    private void OnProcessExit(object? sender, EventArgs e) => HandBackFansBestEffort("süreç çıkışı");
+    private void OnProcessExit(object? sender, EventArgs e) => HandBackFansBestEffort("process exit");
 
     /// <summary>
     /// An exception escaped every handler and the process is about to die with the fans at whatever speed the last
@@ -338,8 +338,8 @@ public partial class App : Application, IDisposable
     /// </summary>
     private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs e)
     {
-        AppLog.Error(Loc.T("Yakalanmamış istisna"), (e.ExceptionObject as Exception)?.ToString() ?? "bilinmeyen");
-        HandBackFansBestEffort("yakalanmamış istisna");
+        AppLog.Error("Unhandled exception", (e.ExceptionObject as Exception)?.ToString() ?? "unknown");
+        HandBackFansBestEffort("unhandled exception");
     }
 
     /// <summary>
@@ -351,17 +351,17 @@ public partial class App : Application, IDisposable
         try
         {
             if (_host?.ViewModel.RestoreFansToAutoBlocking(ShutdownHandbackTimeout) == true) return;
-            AppLog.Warn("Fanlar otomatik moda iade edilemedi", reason);
+            AppLog.Warn("The fans could not be handed back to automatic mode", reason);
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Fanlar otomatik moda iade edilemedi", $"{reason}: {ex.Message}");
+            AppLog.Warn("The fans could not be handed back to automatic mode", $"{reason}: {ex.Message}");
         }
     }
 
     private void OnUiException(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        AppLog.Error(Loc.T("Arayüz istisnası"), e.Exception?.ToString() ?? "bilinmeyen");
+        AppLog.Error("UI exception", e.Exception?.ToString() ?? "unknown");
 
         if (++_survivedUiExceptions <= MaxSurvivedUiExceptions)
         {
@@ -371,7 +371,7 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        AppLog.Error(Loc.T("Arayüz istisnası sınırı aşıldı"), "Uygulama kapatılıyor.");
+        AppLog.Error("The UI exception limit was exceeded", "The application is shutting down.");
         e.Handled = false;
     }
 

@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using NitroLite.Core;
 
 #if WINDOWS
@@ -132,7 +132,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("CLI komutu çalıştırılamadı"), $"{command}: {ex}");
+            AppLog.Error("The CLI command could not be run", $"{command}: {ex}");
             return 1;
         }
     }
@@ -158,7 +158,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("Donanım raporu yazdırılamadı"), ex.ToString());
+            AppLog.Error("The hardware report could not be printed", ex.ToString());
             return 1;
         }
     }
@@ -206,7 +206,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("Donanım komutu çalıştırılamadı"), ex.ToString());
+            AppLog.Error("The hardware command could not be run", ex.ToString());
             return 1;
         }
     }

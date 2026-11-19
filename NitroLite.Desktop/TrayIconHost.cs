@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using NitroLite.Core;
@@ -73,7 +73,7 @@ public sealed class TrayIconHost : IDisposable
             IsVisible = false
         };
         _retryItem.Click += async (_, _) => await RunMenuActionAsync(
-            () => _viewModel.RetryDesktopRestoreAsync(), "Masaüstü ayarları yeniden uygulanamadı").ConfigureAwait(true);
+            () => _viewModel.RetryDesktopRestoreAsync(), "The desktop settings could not be re-applied").ConfigureAwait(true);
         _menu.Add(_retryItem);
 
         _menu.Add(new NativeMenuItemSeparator());
@@ -87,7 +87,7 @@ public sealed class TrayIconHost : IDisposable
                 ToggleType = NativeMenuItemToggleType.CheckBox
             };
             item.Click += async (_, _) => await RunMenuActionAsync(
-                () => _viewModel.ApplyModeFromTrayAsync(mode), "Mod uygulanamadı").ConfigureAwait(true);
+                () => _viewModel.ApplyModeFromTrayAsync(mode), "The mode could not be applied").ConfigureAwait(true);
 
             _menu.Add(item);
             _modeItems[mode] = item;
@@ -103,7 +103,7 @@ public sealed class TrayIconHost : IDisposable
                 ToggleType = NativeMenuItemToggleType.Radio
             };
             item.Click += async (_, _) => await RunMenuActionAsync(
-                () => _viewModel.ApplyCpuBoostFromTrayAsync(mode), "CPU Boost uygulanamadı").ConfigureAwait(true);
+                () => _viewModel.ApplyCpuBoostFromTrayAsync(mode), "CPU Boost could not be applied").ConfigureAwait(true);
 
             _boostItem.Menu!.Add(item);
             _boostItems[mode] = item;
@@ -212,7 +212,7 @@ public sealed class TrayIconHost : IDisposable
 
         if (TrayMenuPolicy.IsDoubleClick(sinceLast))
         {
-            AppLog.Info(Loc.T("Tepsi simgesine çift tıklandı"), "pencere öne getiriliyor");
+            AppLog.Info("The tray icon was double-clicked", "bringing the window to the front");
         }
 
         showWindow();
@@ -251,7 +251,7 @@ public sealed class TrayIconHost : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Tepsi simgesi yüklenemedi"), ex.Message);
+            AppLog.Warn("The tray icon could not be loaded", ex.Message);
             return null;
         }
     }

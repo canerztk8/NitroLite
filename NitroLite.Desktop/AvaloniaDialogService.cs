@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using NitroLite.Core;
 using NitroLite.Desktop.Views;
@@ -43,7 +43,7 @@ public sealed class AvaloniaDialogService : IDialogService
         if (!string.IsNullOrWhiteSpace(startDirectory) && Directory.Exists(startDirectory))
         {
             try { start = await storage.TryGetFolderFromPathAsync(startDirectory).ConfigureAwait(true); }
-            catch (Exception ex) { AppLog.Warn(Loc.T("Başlangıç klasörü açılamadı"), ex.Message); }
+            catch (Exception ex) { AppLog.Warn("The startup folder could not be opened", ex.Message); }
         }
 
         try
@@ -67,7 +67,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Dosya seçici açılamadı"), ex.ToString());
+            AppLog.Warn("The file picker could not be opened", ex.ToString());
             return null;
         }
     }
@@ -96,7 +96,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Dosya seçici açılamadı"), ex.ToString());
+            AppLog.Warn("The file picker could not be opened", ex.ToString());
             return null;
         }
     }
@@ -126,7 +126,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Kaydetme penceresi açılamadı"), ex.ToString());
+            AppLog.Warn("The save dialog could not be opened", ex.ToString());
             return null;
         }
     }
@@ -153,7 +153,7 @@ public sealed class AvaloniaDialogService : IDialogService
         if (owner == null)
         {
             // No window to own the dialog: the only safe answer to "delete this?" is no.
-            AppLog.Warn(Loc.T("Onay penceresi sahibi bulunamadı"), title);
+            AppLog.Warn("Confirmation window owner not found", Loc.English(title));
             return false;
         }
 
@@ -163,7 +163,7 @@ public sealed class AvaloniaDialogService : IDialogService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Onay penceresi açılamadı"), ex.ToString());
+            AppLog.Warn("The confirmation dialog could not be opened", ex.ToString());
             return false;
         }
     }

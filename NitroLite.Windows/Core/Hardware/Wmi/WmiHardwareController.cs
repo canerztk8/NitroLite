@@ -370,8 +370,8 @@ public sealed class WmiHardwareController : IHardwareController
 
             if (!TryReadUlong(state, "muxRaw", out var raw) || !IsMuxValueInRange(raw))
             {
-                AppLog.Warn(Loc.T("MUX yazımı reddedildi"),
-                    $"mevcut GetGamingMiscSetting(0x02) değeri {DescribeRaw(state)}; beklenen üst bayt 1..3");
+                AppLog.Warn("The MUX write was refused",
+                    $"current GetGamingMiscSetting(0x02) value {DescribeRaw(state)}; expected high byte 1..3");
                 return false;
             }
 
@@ -588,8 +588,8 @@ public sealed class WmiHardwareController : IHardwareController
 
         if (response.Data is JsonObject data && ReadNullableBool(data, "commitApplied") == false)
         {
-            AppLog.Warn(Loc.T("Klavye statik kilidi uygulanmadı"),
-                $"SetGamingKBBacklight durumu {ReadInt(data, "commitStatus")}; bölge renkleri yine de yazıldı.");
+            AppLog.Warn("The keyboard static lock was not applied",
+                $"SetGamingKBBacklight status {ReadInt(data, "commitStatus")}; the zone colours were written anyway.");
         }
 
         return true;
@@ -731,6 +731,12 @@ public sealed class WmiHardwareController : IHardwareController
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            // No transport is not a capability failure. The worker may be unstarted because the user declined the
+            // prompt or the install folder is untrusted; counting that against the firmware would disable the
+            // capability for three sessions and then permanently, on a machine where nothing was ever written.
+            if (!await EnsureConnectedAsync().ConfigureAwait(false))
+                return ReadBackResult.NoTransport();
+
             return await _readBack.ApplyAsync(capability, write, readBack, matches).ConfigureAwait(false);
         }
         finally
@@ -763,7 +769,7 @@ public sealed class WmiHardwareController : IHardwareController
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("--wmi-worker bağlantısı koptu"), $"{command}: {ex.Message}");
+            AppLog.Warn("--wmi-worker connection lost", $"{command}: {ex.Message}");
             DropClient();
             return null;
         }

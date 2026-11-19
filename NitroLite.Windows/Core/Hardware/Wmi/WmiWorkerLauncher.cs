@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 
@@ -85,18 +85,18 @@ public sealed class WmiWorkerLauncher : IDisposable
         $"--wmi-worker --pipe \"{pipeName}\" --parent-pid {parentProcessId}";
 
     /// <summary>
-    /// True when the helper's own folder is not writable by a principal wider than the signed-in user. A portable or
-    /// Scoop install lives under the profile and stays trusted, which is the whole reason this is not a
-    /// <c>%ProgramFiles%</c> requirement: refusing those would break every build that does not ship an installer.
-    /// A copy in a shared or world-writable folder is refused, because any local account could replace the
-    /// executable between this check and the launch.
+    /// True when the helper executable itself cannot be replaced by a principal wider than the signed-in user.
+    /// A portable or Scoop install lives under the profile and stays trusted, and so does a folder directly under
+    /// a drive root (e.g. <c>C:\WinTools</c>): its default ACL lets <c>Users</c> create files there but not overwrite
+    /// one the signed-in user created, which is what <see cref="DirectoryTrust.IsExecutableTrusted"/> checks.
+    /// A copy whose file or parent folder grants delete/modify to <c>Users</c>/<c>Everyone</c> is refused, because
+    /// any local account could swap the binary between this check and the launch.
     /// </summary>
     public static bool IsTrustedHelperLocation(string executablePath)
     {
         try
         {
-            var directory = Path.GetDirectoryName(Path.GetFullPath(executablePath));
-            return !DirectoryTrust.IsWorldWritable(directory);
+            return DirectoryTrust.IsExecutableTrusted(executablePath);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException)
         {
@@ -119,8 +119,9 @@ public sealed class WmiWorkerLauncher : IDisposable
 
         if (!_isTrustedLocation(_executablePath))
         {
-            LastError = "the helper executable sits in a folder any local account can write to";
-            AppLog.Warn(Loc.T("--wmi-worker başlatılmadı"), $"{LastError}: {_executablePath}");
+            LastError = "the helper executable sits in a folder any local account can write to; "
+                        + "move NitroLite under your own profile or into Program Files and start it again";
+            AppLog.Warn("--wmi-worker was not started", $"{LastError}: {_executablePath}");
             return null;
         }
 
@@ -152,14 +153,14 @@ public sealed class WmiWorkerLauncher : IDisposable
         {
             UserDeclined = true;
             LastError = "the user declined the elevation prompt";
-            AppLog.Info(Loc.T("Doğrudan WMI için yönetici izni verilmedi"),
-                "Kullanıcı UAC penceresinde Hayır'ı seçti; bu oturumda bir daha sorulmayacak.");
+            AppLog.Info("Administrator permission was not granted for direct WMI",
+                "The user chose No in the UAC prompt; it will not be asked again this session.");
             return null;
         }
         catch (Exception ex)
         {
             LastError = $"{ex.GetType().Name}: {ex.Message}";
-            AppLog.Warn(Loc.T("--wmi-worker başlatılamadı"), LastError);
+            AppLog.Warn("--wmi-worker could not be started", LastError);
             return null;
         }
 
@@ -180,13 +181,13 @@ public sealed class WmiWorkerLauncher : IDisposable
             {
                 var client = await _connect(pipeName, nonce, ConnectTimeout, cancellationToken).ConfigureAwait(false);
                 LastError = "";
-                AppLog.Info(Loc.T("--wmi-worker bağlandı"), $"pipe='{pipeName}' pid={process.Id}");
+                AppLog.Info("--wmi-worker connected", $"pipe='{pipeName}' pid={process.Id}");
                 return client;
             }
             catch (Exception ex)
             {
                 LastError = $"{ex.GetType().Name}: {ex.Message}";
-                AppLog.Warn(Loc.T("--wmi-worker el sıkışması başarısız"), LastError);
+                AppLog.Warn("--wmi-worker handshake failed", LastError);
                 try { process.Kill(entireProcessTree: true); } catch { }
                 return null;
             }

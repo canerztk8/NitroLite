@@ -232,7 +232,7 @@ public partial class MainWindow : Window
         {
             // An exception out of this handler is raised on the thread pool and kills the process. A window that
             // opened without its telemetry is still a window the user can read the log from.
-            AppLog.Error(Loc.T("Pencere açılışı başarısız"), ex.ToString());
+            AppLog.Error("Window startup failed", ex.ToString());
         }
     }
 
@@ -325,7 +325,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Panoya kopyalanamadı"), ex.Message);
+            AppLog.Warn("Could not copy to the clipboard", ex.Message);
         }
     }
 
@@ -340,7 +340,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Klavye aydınlatması yeniden uygulanamadı"), ex.Message);
+            AppLog.Warn("The keyboard lighting could not be reapplied", ex.Message);
         }
     }
 
@@ -368,7 +368,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Pencere öne getirilemedi"), ex.Message);
+            AppLog.Warn("The window could not be brought to the front", ex.Message);
         }
     }
 
@@ -551,7 +551,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Error(Loc.T("Telemetri döngüsü başarısız"), ex.ToString());
+            AppLog.Error("The telemetry loop failed", ex.ToString());
         }
     }
 
@@ -579,7 +579,7 @@ public partial class MainWindow : Window
         if (_timer.Interval == wanted) return;
 
         _timer.Interval = wanted;
-        AppLog.Info(Loc.T("Telemetri aralığı değişti"), $"{wanted.TotalSeconds:F0} sn");
+        AppLog.Info("The telemetry interval changed", $"{wanted.TotalSeconds:F0} sn");
     }
 
     /// <summary>
@@ -684,7 +684,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Bellek kırpılamadı"), ex.Message);
+            AppLog.Warn("The memory could not be trimmed", ex.Message);
         }
     }
 

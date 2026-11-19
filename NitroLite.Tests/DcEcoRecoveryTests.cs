@@ -149,7 +149,7 @@ public class DcEcoRecoveryTests
             using var stream = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             stream.Seek(before, SeekOrigin.Begin);
             using var reader = new StreamReader(stream);
-            Assert.Contains("Eco durumu kaydedilemedi", reader.ReadToEnd());
+            Assert.Contains("The Eco state could not be saved", reader.ReadToEnd());
         }
         finally
         {

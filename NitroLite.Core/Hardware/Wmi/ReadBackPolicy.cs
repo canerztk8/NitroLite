@@ -1,4 +1,4 @@
-namespace NitroLite.Core.Hardware.Wmi;
+﻿namespace NitroLite.Core.Hardware.Wmi;
 
 /// <summary>
 /// What one write plus its read-back ended up doing.
@@ -25,12 +25,27 @@ public sealed record ReadBackResult
     /// <summary>This capability has now failed three sessions in a row and is off until a rescan.</summary>
     public bool PermanentlyDisabled { get; init; }
 
+    /// <summary>
+    /// True when the write never reached the hardware because no transport exists at all (the elevated worker
+    /// was not started, the user declined, or the install folder is untrusted). This is not a capability failure:
+    /// it must not increment the session counters, or a machine with no backend would burn its three sessions in
+    /// one afternoon and end up permanently disabled for a reason that has nothing to do with the firmware.
+    /// </summary>
+    public bool TransportMissing { get; init; }
+
     /// <summary>Human-readable reason, empty on success.</summary>
     public string Error { get; init; } = "";
 
     public static ReadBackResult Success(int attempts) => new() { Applied = true, Attempts = attempts };
 
     public static ReadBackResult AlreadyDisabled() => new() { Skipped = true, Error = "capability is disabled" };
+
+    public static ReadBackResult NoTransport() => new()
+    {
+        Skipped = true,
+        TransportMissing = true,
+        Error = "no WMI transport: the elevated worker is not running"
+    };
 }
 
 /// <summary>
@@ -201,8 +216,8 @@ public sealed class ReadBackPolicy
             if (count >= SessionsBeforePermanentDisable && !IsPermanentlyDisabled(capability))
             {
                 _settings.DisabledCapabilities.Add(capability);
-                AppLog.Warn(Loc.T("Doğrudan WMI yeteneği kalıcı olarak kapatıldı"),
-                    $"{capability}: {count} ardışık oturumda geri okuma başarısız ({error})");
+                AppLog.Warn("The direct WMI capability was disabled permanently",
+                    $"{capability}: read-back failed in {count} consecutive sessions ({error})");
 
                 return new ReadBackResult
                 {
@@ -214,8 +229,8 @@ public sealed class ReadBackPolicy
             }
         }
 
-        AppLog.Warn(Loc.T("Doğrudan WMI yeteneği bu oturum için kapatıldı"),
-            $"{capability}: {MaxAttempts} denemede geri okuma eşleşmedi ({error})");
+        AppLog.Warn("The direct WMI capability was disabled for this session",
+            $"{capability}: read-back did not match in {MaxAttempts} attempts ({error})");
 
         return new ReadBackResult
         {

@@ -535,9 +535,17 @@ public sealed class ShellLabels
     public string OpenRgbStatus => Loc.T("OpenRGB durumu");
     public string BacklightTimeoutHint => Loc.T("30 saniye boşta kaldığında aydınlatmayı kapat");
 
-    /// <summary>The reactive keyboard card: the title, and the one line that explains what it does.</summary>
-    public string ReactiveLighting => Loc.T("Sıcaklığa göre renk");
-    public string ReactiveLightingHint => Loc.T("Klavye, CPU sıcaklığına göre mavi ile kırmızı arasında renk değiştirir. 45 °C altında sabit kalır ve renk yalnızca belirgin biçimde değiştiğinde yazılır.");
+    /// <summary>The temp-reactive keyboard card: the title, and the one line that explains what it does.</summary>
+    public string ReactiveLighting => Loc.T("Temp-Reactive Lighting");
+    public string ReactiveLightingHint => Loc.T("Klavye rengi CPU sıcaklığına göre değişir. Profili aşağıdan seçin; Özel profilde her sıcaklık için rengi kendiniz ayarlarsınız.");
+    public string ReactiveStops => Loc.T("Renk skalası");
+    public string Profile => Loc.T("Profil");
+    public string ReactiveCustomHint => Loc.T("Her satır bir sıcaklık ve o sıcaklıktaki renk: klavye soğuktan sıcağa bu renkler arasında geçiş yapar.");
+    public string AddReactiveStop => Loc.T("Sıcaklık noktası ekle");
+    public string Sil => Loc.T("Sil");
+
+    /// <summary>Shown under the fan curve editor now that the curve applies as it is dragged.</summary>
+    public string CurveAutoApplyHint => Loc.T("Eğri anında uygulanır; ayrı bir uygula düğmesi yok.");
 
     /// <summary>
     /// The figure beside the brightness slider. The label on the left already says "Parlaklık", so repeating it here

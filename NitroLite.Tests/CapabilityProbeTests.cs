@@ -63,6 +63,7 @@ public class CapabilityProbeTests
 
     [Theory]
     [InlineData("AN16-41", "nitro-16-an16-41")]
+    [InlineData("AN16-61", "nitro-16-an16-61")]
     [InlineData("AN17-42", "nitro-17-an17-42")]
     [InlineData("AN515-58", "nitro-5-an515")]
     [InlineData("ANV15-51", "nitro-v-15-anv15-51")]
@@ -79,6 +80,33 @@ public class CapabilityProbeTests
     {
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
         Assert.Equal("acer-gaming-default", catalog.Match(Identity("AN999-99")).Id);
+    }
+
+    [Fact]
+    public void FamilyPatternMatch_DoesNotInheritTheVerifiedFlag()
+    {
+        // AN16-99 is in no model-code list; it reaches the AN16-41 profile only through the "Nitro 16" family
+        // pattern. That profile is verified on the reference machine, but the flag describes a read-back taken
+        // there — reporting it for an unmeasured model would claim a measurement nobody made.
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        var byFamily = catalog.Match(Identity("AN16-99", family: "Nitro 16"));
+        Assert.Equal("nitro-16-an16-41", byFamily.Id);
+        Assert.False(byFamily.Sensors.Verified);
+
+        // A model-code hit is the measured machine itself and keeps the flag.
+        var byCode = catalog.Match(Identity("AN16-41", family: "Nitro 16"));
+        Assert.Equal("nitro-16-an16-41", byCode.Id);
+        Assert.True(byCode.Sensors.Verified);
+    }
+
+    [Fact]
+    public void An16_61HasItsOwnProfile()
+    {
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        var profile = catalog.Match(Identity("AN16-61", family: "Nitro 16"));
+        Assert.Equal("nitro-16-an16-61", profile.Id);
+        Assert.False(profile.Sensors.Verified);
+        Assert.Contains("AN16-61", profile.ModelCodes, StringComparer.OrdinalIgnoreCase);
     }
 
     [Fact]

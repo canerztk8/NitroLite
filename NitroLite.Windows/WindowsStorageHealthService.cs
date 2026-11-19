@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -27,7 +27,7 @@ public sealed class WindowsStorageHealthService : IStorageHealthService
         catch (Exception ex)
         {
             // A machine whose storage namespace is missing has no list, not a broken page.
-            AppLog.Warn(Loc.T("Depolama sürücüleri okunamadı"), ex.Message);
+            AppLog.Warn("The storage drives could not be read", ex.Message);
             return Array.Empty<StorageDrive>();
         }
 

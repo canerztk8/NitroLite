@@ -712,7 +712,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         {
             PermissionHintRaised = true;
             LastError = UdevHint;
-            AppLog.Warn(Loc.T("sysfs yazımı izin nedeniyle reddedildi"), $"{path}: udev kuralı gerekiyor");
+            AppLog.Warn("The sysfs write was refused due to permissions", $"{path}: a udev rule is required");
             return Task.FromResult(false);
         }
 
@@ -720,7 +720,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             ? $"{path} artık yok: çekirdek modülü kaldırılmış olabilir."
             : $"{path} yazılamadı: {result.Detail}";
 
-        AppLog.Warn(Loc.T("sysfs yazımı başarısız"), $"{path}: {result.Status} {result.Detail}");
+        AppLog.Warn("The sysfs write failed", $"{path}: {result.Status} {result.Detail}");
         return Task.FromResult(false);
     }
 

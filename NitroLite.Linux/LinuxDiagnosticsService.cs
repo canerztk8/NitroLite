@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -120,7 +120,7 @@ public sealed class LinuxDiagnosticsService : IDiagnosticsService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Teşhis dosyası okunamadı"), $"{path}: {ex.Message}");
+            AppLog.Warn("The diagnostics file could not be read", $"{path}: {ex.Message}");
             return null;
         }
     }

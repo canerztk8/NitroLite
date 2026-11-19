@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using NitroLite.Core;
 
 namespace NitroLite.Linux;
@@ -68,7 +68,7 @@ public sealed class LinuxGameLibraryScanner : IGameLibraryScanner
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Oyun klasörü okunamadı"), $"{dir}: {ex.Message}");
+                AppLog.Warn("The game folder could not be read", $"{dir}: {ex.Message}");
                 continue;
             }
 
@@ -190,7 +190,7 @@ public sealed class LinuxGameLibraryScanner : IGameLibraryScanner
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Steam kitaplık dosyası okunamadı"), $"{vdf}: {ex.Message}");
+                AppLog.Warn("The Steam library file could not be read", $"{vdf}: {ex.Message}");
             }
         }
 

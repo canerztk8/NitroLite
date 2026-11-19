@@ -38,7 +38,7 @@ public class LocalizationSourceCoverageTests
     /// </summary>
     private static IEnumerable<(string Key, string Where)> LiteralKeys(string source, string file)
     {
-        var call = new Regex(@"Loc\.(?:T|Ps|TryT)\(\s*(?<arg>\$?""(?:[^""\\]|\\.)*"")", RegexOptions.Compiled);
+        var call = new Regex(@"Loc\.(?:T|Ps|TryT|English)\(\s*(?<arg>\$?""(?:[^""\\]|\\.)*"")", RegexOptions.Compiled);
         foreach (Match m in call.Matches(source))
         {
             var arg = m.Groups["arg"].Value;

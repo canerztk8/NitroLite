@@ -303,6 +303,27 @@ public class WmiControllerTests
     }
 
     [Fact]
+    public async Task WmiController_WriteWithoutTransport_DoesNotCountASessionFailure()
+    {
+        // The worker never started (UAC declined, or the install folder is untrusted). That is "no backend",
+        // not "the firmware refused the write": counting it would burn the three-session budget on a machine
+        // where nothing was ever written and leave the capability permanently disabled for a phantom reason.
+        var settings = new AppSettings();
+        using var launcher = new WmiWorkerLauncher(
+            executablePath: "NitroLite.exe",
+            start: _ => throw new Win32Exception(WmiWorkerLauncher.ErrorCancelled),
+            isTrustedLocation: _ => true);
+        using var controller = new WmiHardwareController(launcher, new ReadBackPolicy(settings, NoDelay));
+
+        Assert.False(await controller.SetFanModeAsync(FanMode.Max));
+        Assert.False(await controller.SetOperatingModeAsync(OperatingMode.Turbo));
+
+        Assert.Empty(settings.CapabilitySessionFailures);
+        Assert.Empty(settings.DisabledCapabilities);
+        Assert.False(new ReadBackPolicy(settings, NoDelay).IsDisabled(ReadBackPolicy.FanBehavior));
+    }
+
+    [Fact]
     public async Task WmiController_BatteryLimitKnownUnsupported_DoesNotAskTheWorker()
     {
         // The probe positively found no WMID_GUID5 class. The combined battery capability is a separate question: on

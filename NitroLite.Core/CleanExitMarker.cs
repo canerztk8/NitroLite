@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace NitroLite.Core;
 
@@ -49,7 +49,7 @@ public static class CleanExitMarker
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Çalışma işareti yazılamadı"), ex.Message);
+            AppLog.Warn("Work marker could not be written", ex.Message);
         }
     }
 
@@ -63,7 +63,7 @@ public static class CleanExitMarker
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Çalışma işareti silinemedi"), ex.Message);
+            AppLog.Warn("Work marker could not be deleted", ex.Message);
         }
     }
 }

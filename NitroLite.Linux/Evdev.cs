@@ -126,7 +126,7 @@ public sealed class RealEvdevSource : IEvdevSource
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Giriş aygıtları listelenemedi"), ex.Message);
+            AppLog.Warn("The input devices could not be listed", ex.Message);
             return devices;
         }
 
@@ -144,7 +144,7 @@ public sealed class RealEvdevSource : IEvdevSource
             }
             catch (Exception ex)
             {
-                AppLog.Info(Loc.T("Giriş aygıtı açılamadı"), $"{path}: {ex.Message}");
+                AppLog.Info("The input device could not be opened", $"{path}: {ex.Message}");
             }
         }
 

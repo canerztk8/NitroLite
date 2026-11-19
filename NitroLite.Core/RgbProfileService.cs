@@ -289,7 +289,7 @@ public class RgbProfileService
             {
                 // Custom presets are gone until the file is fixed; say so instead of pretending they loaded.
                 LoadError = Loc.T($"RGB profil dosyası okunamadı ({ex.Message}); yalnızca fabrika profilleri yüklendi.");
-                AppLog.Warn(Loc.T("RGB profilleri okunamadı"), $"{_presetsFile}: {ex}");
+                AppLog.Warn("RGB profiles could not be read", $"{_presetsFile}: {ex}");
                 QuarantineCorruptFile();
             }
         }
@@ -311,13 +311,13 @@ public class RgbProfileService
 
             var quarantined = _presetsFile + ".bad";
             File.Move(_presetsFile, quarantined, overwrite: true);
-            AppLog.Warn(Loc.T("RGB profil dosyası kenara alındı"), quarantined);
+            AppLog.Warn("The RGB profile file was set aside", quarantined);
         }
         catch (Exception ex)
         {
             // A file that cannot be moved is left where it is: the next save overwrites it, which is no worse than
             // the state this method found it in.
-            AppLog.Warn(Loc.T("RGB profil dosyası kenara alınamadı"), $"{_presetsFile}: {ex.Message}");
+            AppLog.Warn("The RGB profile file could not be set aside", $"{_presetsFile}: {ex.Message}");
         }
     }
 

@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -62,7 +62,7 @@ public sealed class AtkMouseProfileService : IMouseProfileService
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Fare profili uygulanamadı"), $"Config {profile}: {ex.Message}");
+                AppLog.Warn("Mouse profile could not be applied", $"Config {profile}: {ex.Message}");
                 return false;
             }
         }, cancellationToken);
@@ -89,7 +89,7 @@ public sealed class AtkMouseProfileService : IMouseProfileService
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Fare profili okunamadı"), ex.Message);
+                AppLog.Warn("Mouse profile could not be read", ex.Message);
                 return (int?)null;
             }
         }, cancellationToken);

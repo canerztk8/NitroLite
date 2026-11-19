@@ -102,7 +102,7 @@ public class AcerAgentClient : IDisposable
             var initResp = await SendRawAsync(PacketInitialization, new { Function = "VERSION" }, "VERSION");
             if (!IsSuccessResult(initResp))
             {
-                AppLog.Warn(Loc.T("AcerAgentService el sıkışması reddedildi"), $"VERSION yanıtı: {initResp ?? "(boş)"}");
+                AppLog.Warn("The AcerAgentService handshake was refused", $"VERSION response: {initResp ?? "(empty)"}");
                 Disconnect();
                 RegisterConnectFailure();
                 return false;
@@ -135,7 +135,7 @@ public class AcerAgentClient : IDisposable
 
         // Only the first failure of a streak: AASSvc being absent is normal and must not fill the log.
         if (_consecutiveConnectFailures == 1)
-            AppLog.Warn(Loc.T("AcerAgentService bağlantısı kurulamadı"), $"{Host}:{Port} - yeniden deneme geri çekilmesiyle devam ediliyor.");
+            AppLog.Warn("Could not connect to AcerAgentService", $"{Host}:{Port} - retrying with backoff.");
     }
 
     public const int MaxResponseSizeBytes = 1024 * 1024; // 1 MB upper bound to prevent unbounded memory allocation
@@ -842,7 +842,7 @@ public class AcerAgentClient : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Fanlar otomatik moda döndürülemedi"), ex.GetBaseException().Message);
+            AppLog.Warn("Fans could not be returned to automatic mode", ex.GetBaseException().Message);
             return false;
         }
     }

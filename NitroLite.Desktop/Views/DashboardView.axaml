@@ -247,10 +247,9 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-              <Button Classes="primary" Content="{Binding Labels.ApplyCurve}"
-                      Command="{Binding ApplyCurveCommand}" />
-            </StackPanel>
+            <!-- No Apply button: the curve is stored and written to the fans as it is dragged. -->
+            <TextBlock Classes="hint" Text="{Binding Labels.CurveAutoApplyHint}" Margin="0,6,0,0"
+                       TextWrapping="Wrap" />
           </StackPanel>
 
           <!-- A fan that stops turning while the die is hot is a hardware fault, not a tuning choice, so the guard is

@@ -1,4 +1,4 @@
-using NitroLite.Core;
+﻿using NitroLite.Core;
 
 namespace NitroLite.Windows;
 
@@ -36,7 +36,7 @@ public sealed class WindowsDebloatService : IDebloatService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Acer servis durumları okunamadı"), ex.Message);
+            AppLog.Warn("The Acer service states could not be read", ex.Message);
             return Array.Empty<AcerServiceEntry>();
         }
     }
@@ -46,7 +46,7 @@ public sealed class WindowsDebloatService : IDebloatService
         try { return _inner.IsNitroSenseRunning(); }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("NitroSense durumu okunamadı"), ex.Message);
+            AppLog.Warn("NitroSense state could not be read", ex.Message);
             return false;
         }
     }
@@ -99,7 +99,7 @@ public sealed class WindowsDebloatService : IDebloatService
             try { return _inner.IsNitroSenseLauncherBlocked; }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("NitroSense başlatıcı durumu okunamadı"), ex.Message);
+                AppLog.Warn("The NitroSense launcher state could not be read", ex.Message);
                 return false;
             }
         }

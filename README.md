@@ -251,6 +251,11 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 | Fan curve | the Acer service's own fixed-speed command, or `SetGamingFanSpeed` | the curve turns itself off and says so |
 | The Acer service itself | `AASSvc` on `127.0.0.1:46933` | the direct-WMI backend takes over; if that is unavailable too, a standing note names the missing service and everything Windows and NVIDIA can measure keeps working |
 
+Two things decide whether the direct-WMI fallback can take over, and both are worth checking when a machine reports "nothing detected":
+
+- **The install folder must be trusted.** The elevated WMI worker is only launched from an executable no other local account can replace. A file whose ACL grants `Users`/`Everyone` delete or modify is refused. A portable folder directly under a drive root (`C:\WinTools`) is fine — its default ACL lets others *create* files but not overwrite yours — and so is anything under your own profile.
+- **The `AcerGamingFunction` WMI class must be registered.** On models where Acer ships only the service, the service path is the only path; NitroLite then needs `AASSvc` running.
+
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
 already uses, or through the firmware's own WMI class, and CPU boost through the Windows power plan. Nothing here
 loads `WinRing0` or any other driver, which is the usual reason an anti-cheat refuses to start next to a hardware
@@ -434,7 +439,7 @@ Nothing about the hardware is hardcoded to one SKU. At startup NitroLite asks th
 1. **Schema and registry** — does `root\WMI` expose `AcerGamingFunction`, which methods does it declare, does
    `WMID_GUID5` exist, what does `dgpu_mode_capability` say. All read-only and unelevated.
 2. **Model profile** — SMBIOS product and board are matched against an embedded, read-only `profiles.json` that
-   carries sensor byte offsets, reference RPM ceilings and known-broken method signatures for 31 models across the
+   carries sensor byte offsets, reference RPM ceilings and known-broken method signatures for 32 models across the
    Nitro 5/16/17, Nitro V 15/16 and Predator Helios/Triton families.
 3. **Cache** — the result is stored under `SMBIOS product + BIOS version`, so a BIOS update invalidates it
    automatically.
@@ -570,7 +575,7 @@ NitroLite.Core/                     net10.0 — no Windows-only assembly, no UI 
 │   ├── DeviceIdentity.cs           # Model code, family, BIOS and CPU vendor parsing
 │   ├── ModelProfile.cs             # Sensor offsets, RPM ceilings, known-broken methods
 │   ├── ProfileCatalog.cs           # Embedded profiles.json and the validated profiles.user.json
-│   ├── Profiles/profiles.json      # 31 models: Nitro 5/16/17, Nitro V 15/16, Helios, Triton
+│   ├── Profiles/profiles.json      # 32 models: Nitro 5/16/17, Nitro V 15/16, Helios, Triton
 │   ├── SensorPlausibility.cs       # Rejects 0 °C, 127 °C and NaN before they reach the UI
 │   ├── KeyboardCapability.cs       # Zones and effects from GET_CONNECTED_DEVICE
 │   ├── LightingConfig.cs           # Zone colours, effect, brightness, speed

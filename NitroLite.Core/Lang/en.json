@@ -1548,7 +1548,7 @@
   "Linux sysfs arka ucu bağlandı": "Linux sysfs backend attached",
   "MUX yazımı reddedildi": "The MUX write was refused",
   "Makine modeli okunamadı": "Machine model could not be read",
-  "Nitro tuşu WMI olay izleyicisi bağlandı": "Nitro key WMI olay izleyicisi connected",
+  "Nitro tuşu WMI olay izleyicisi bağlandı": "Nitro key WMI event watcher connected",
   "Nitro tuşu WMI olay sınıfı bulundu": "The Nitro key WMI event class was found",
   "Nitro tuşu WMI üzerinden bulunamadı": "The Nitro key was not found via WMI",
   "Nitro tuşu abonesi hata verdi": "Nitro key subscriber threw",

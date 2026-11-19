@@ -59,7 +59,7 @@ public class CareCenterClient
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Care Center sertifika sabitlemesi silinemedi", ex.Message);
+            AppLog.Warn("The Care Center certificate pin could not be removed", ex.Message);
             return false;
         }
     }
@@ -148,9 +148,9 @@ public class CareCenterClient
                 if (string.Equals(pinned, thumbprint, StringComparison.OrdinalIgnoreCase)) return true;
                 CertificateMismatch = true;
                 LastError = Loc.T("Care Center sertifikası daha önce güvenilen sertifikadan farklı; bağlantı reddedildi.");
-                AppLog.Warn(Loc.T("Care Center sertifika sabitlemesi tutmadı"),
-                    $"Beklenen: {pinned}{Environment.NewLine}Gelen: {thumbprint}{Environment.NewLine}" +
-                    $"Sertifika yenilendiyse {path} dosyasını silin.");
+                AppLog.Warn("The Care Center certificate pin did not match",
+                    $"Expected: {pinned}{Environment.NewLine}Got: {thumbprint}{Environment.NewLine}" +
+                    $"If the certificate was renewed, delete {path}.");
                 return false;
             }
             // Atomic: a torn write would leave a thumbprint that never matches again, and the battery limit would

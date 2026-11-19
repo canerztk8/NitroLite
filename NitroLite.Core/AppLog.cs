@@ -29,6 +29,13 @@ namespace NitroLite.Core;
 /// Every line is scrubbed of the user's profile folder and the machine name before it is written. The log is the file
 /// a user attaches to a public issue, and a path names its owner.
 /// </para>
+/// <para>
+/// The text is English at the call site, never a <c>Loc.T</c> key: a log line is read by whoever triages the report,
+/// not by the user, and a title that followed the window came back from a Turkish machine as an English heading over
+/// a Turkish detail. A label that is already a catalogue key — the name of the control a write failed on, the title of
+/// the dialog that had no owner — goes through <see cref="Loc.English(string)"/> instead, and numbers in a line are
+/// formatted with a dot so the same line reads the same in Istanbul and in Berlin.
+/// </para>
 /// </remarks>
 public static class AppLog
 {

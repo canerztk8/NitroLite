@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
 using NitroLite.Core;
 
@@ -97,7 +97,7 @@ public sealed class SingleInstanceGuard : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Warn(Loc.T("Tek örnek kilidi alınamadı"), $"{name}: {ex.Message}");
+                    AppLog.Warn("The single-instance lock could not be acquired", $"{name}: {ex.Message}");
                 }
             }
 
@@ -118,7 +118,7 @@ public sealed class SingleInstanceGuard : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Tek örnek kilidi alınamadı"), ex.Message);
+            AppLog.Warn("The single-instance lock could not be acquired", ex.Message);
             return new SingleInstanceGuard(null, null, isFirst: true);
         }
     }
@@ -199,7 +199,7 @@ public sealed class SingleInstanceGuard : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Warn(Loc.T("Tek örnek dinleyicisi durdu"), ex.Message);
+                    AppLog.Warn("The single-instance listener stopped", ex.Message);
                     return;
                 }
                 finally
@@ -229,7 +229,7 @@ public sealed class SingleInstanceGuard : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Çalışan pencereye ulaşılamadı"), ex.Message);
+            AppLog.Warn("The running window could not be reached", ex.Message);
             return false;
         }
     }

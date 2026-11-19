@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using NitroLite.Core;
 using NitroLite.Linux.Sysfs;
 
@@ -51,7 +51,7 @@ public sealed class LinuxProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Süreç tablosu listelenemedi"), ex.Message);
+            AppLog.Warn("Process table could not be listed", ex.Message);
             return result;
         }
 
@@ -106,7 +106,7 @@ public sealed class LinuxProcessScanner : IProcessScanner
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Süreç dosyası okunamadı"), $"{directory}/{name}: {ex.Message}");
+            AppLog.Warn("The process file could not be read", $"{directory}/{name}: {ex.Message}");
             return null;
         }
     }

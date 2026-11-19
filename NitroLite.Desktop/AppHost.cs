@@ -97,7 +97,7 @@ public sealed class AppHost : IDisposable
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Pil gözcüsü başlatılamadı"), ex.Message);
+            AppLog.Warn("The battery watchdog could not be started", ex.Message);
         }
 
         ViewModel = new MainViewModel(
@@ -166,12 +166,12 @@ public sealed class AppHost : IDisposable
             }
             else
             {
-                AppLog.Warn("Bağlantı açılamadı", $"No browser launch path for this platform: {url}");
+                AppLog.Warn("The link could not be opened", $"No browser launch path for this platform: {url}");
             }
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Bağlantı açılamadı", $"{url}: {ex.Message}");
+            AppLog.Warn("The link could not be opened", $"{url}: {ex.Message}");
         }
     }
 
@@ -223,7 +223,7 @@ public sealed class AppHost : IDisposable
 
         if (load.PrimaryCorrupt)
         {
-            AppLog.Warn(Loc.T("Ayarlar dosyası bozuktu, yedekten okundu"), load.PrimaryError);
+            AppLog.Warn("The settings file was corrupt; it was read from the backup", load.PrimaryError);
         }
 
         // The stored choice wins; a fresh install follows the desktop language; a file written before the language
@@ -313,7 +313,7 @@ public sealed class AppHost : IDisposable
             catch (Exception ex)
             {
                 // A probe that throws is a machine with no Acer support, not a reason to refuse to start.
-                AppLog.Error(Loc.T("Windows donanım arka ucu kurulamadı"), ex.ToString());
+                AppLog.Error("The Windows hardware backend could not be set up", ex.ToString());
             }
         }
 #else
@@ -326,7 +326,7 @@ public sealed class AppHost : IDisposable
                 hardware = controller;
                 platform = linux;
                 rescan = controller;
-                AppLog.Info(Loc.T("Linux sysfs arka ucu bağlandı"),
+                AppLog.Info("Linux sysfs backend attached",
                     $"{linux.Tier} · {linux.Identity.ModelCode} · udev={(linux.NeedsUdevRule ? "gerekli" : "tamam")}");
 
                 var fs = RealSysfsFileSystem.Instance;
@@ -375,7 +375,7 @@ public sealed class AppHost : IDisposable
             catch (Exception ex)
             {
                 // A probe that throws is a machine with no Acer support, not a reason to refuse to start.
-                AppLog.Error(Loc.T("Linux donanım arka ucu kurulamadı"), ex.ToString());
+                AppLog.Error("The Linux hardware backend could not be set up", ex.ToString());
             }
         }
 #endif
@@ -403,8 +403,8 @@ public sealed class AppHost : IDisposable
             var recovery = UpdateService.RecoverInterruptedUpdate();
             if (!recovery.IsClean)
             {
-                AppLog.Info(Loc.T("Güncelleme kalıntıları denetlendi"),
-                    $"geri={recovery.Restored.Count} silinen={recovery.Removed.Count} başarısız={recovery.Failed.Count}");
+                AppLog.Info("Update leftovers were checked",
+                    $"restored={recovery.Restored.Count} removed={recovery.Removed.Count} failed={recovery.Failed.Count}");
             }
 
             if (recovery.Failed.Count == 0) UpdateService.CleanUpPreviousVersion();
@@ -413,7 +413,7 @@ public sealed class AppHost : IDisposable
         {
             // A folder that cannot be repaired is not a reason to refuse to start: the app still runs from whatever
             // is there, and the log says what was found.
-            AppLog.Warn(Loc.T("Yarım kalan güncelleme denetlenemedi"), ex.Message);
+            AppLog.Warn("The interrupted update could not be checked", ex.Message);
         }
     }
 
@@ -455,7 +455,7 @@ public sealed class AppHost : IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.ToString());
+                AppLog.Warn("Hardware capabilities could not be read", ex.ToString());
                 return null;
             }
         });
@@ -471,7 +471,7 @@ public sealed class AppHost : IDisposable
             }
             catch (Exception ex)
             {
-                AppLog.Warn(Loc.T("Donanım yetenekleri okunamadı"), ex.Message);
+                AppLog.Warn("Hardware capabilities could not be read", ex.Message);
                 return null;
             }
         }
@@ -487,6 +487,22 @@ public sealed class AppHost : IDisposable
             wmiFactory: () => wmi,
             useDirectWmi: () => settings.UseDirectWmiBackend);
 
+        // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI
+        // backend up immediately when the Acer service is not answering, so the user never sees a UAC prompt:
+        // AutoStartDirectWmiAsync is a no-op when the process is not elevated, the service is healthy, or the
+        // user pinned the app to the service path.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await hybrid.AutoStartDirectWmiAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The direct WMI backend could not be started at launch", ex.Message);
+            }
+        });
+
         var platform = new WindowsPlatformSnapshot(
             identity, Probe, () => hybrid.ActiveBackendName, readBack, () => wmi);
 
@@ -499,7 +515,7 @@ public sealed class AppHost : IDisposable
 
         var schoolMode = CreateWindowsSchoolMode(settings, hybrid);
 
-        AppLog.Info(Loc.T("Windows donanım arka ucu bağlandı"),
+        AppLog.Info("The Windows hardware backend was attached",
             $"{identity.ModelCode} · wmi={(settings.UseDirectWmiBackend ? "etkin" : "yedek")}");
 
         // The Task Scheduler entry is the only way to start elevated without a UAC prompt, and it is what makes the

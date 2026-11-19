@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
@@ -130,7 +130,7 @@ public sealed class WmiWorkerServer : IDisposable
         {
             if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out clientProcessId))
             {
-                AppLog.Warn(Loc.T("--wmi-worker bağlantısı reddedildi"), "istemci süreç kimliği okunamadı");
+                AppLog.Warn("--wmi-worker connection refused", "the client process id could not be read");
                 return false;
             }
         }
@@ -139,14 +139,14 @@ public sealed class WmiWorkerServer : IDisposable
             // Without the id there is no way to tell the parent from any other process running as this user, and
             // the pipe ACL cannot: they all pass it. Refusing is the safe answer — the window falls back to the
             // non-elevated backend instead of handing administrator hardware control to a stranger.
-            AppLog.Warn(Loc.T("--wmi-worker bağlantısı reddedildi"), "istemci süreç kimliği bu makinede okunamıyor");
+            AppLog.Warn("--wmi-worker connection refused", "the client process id cannot be read on this machine");
             return false;
         }
 
         if (clientProcessId != (uint)_expectedClientProcessId)
         {
-            AppLog.Warn(Loc.T("--wmi-worker bağlantısı reddedildi"),
-                $"beklenen pid={_expectedClientProcessId}, gelen pid={clientProcessId}");
+            AppLog.Warn("--wmi-worker connection refused",
+                $"expected pid={_expectedClientProcessId}, got pid={clientProcessId}");
             return false;
         }
 
@@ -157,8 +157,8 @@ public sealed class WmiWorkerServer : IDisposable
             if (!string.IsNullOrEmpty(clientUser) && !string.IsNullOrEmpty(identity.Name)
                 && !string.Equals(clientUser, identity.Name, StringComparison.OrdinalIgnoreCase))
             {
-                AppLog.Warn(Loc.T("--wmi-worker bağlantısı reddedildi"),
-                    $"istemci hesabı '{clientUser}', beklenen '{identity.Name}'");
+                AppLog.Warn("--wmi-worker connection refused",
+                    $"client account '{clientUser}', expected '{identity.Name}'");
                 return false;
             }
         }
@@ -440,7 +440,7 @@ public sealed class WmiWorkerServer : IDisposable
             // A throw here would end the worker and leave the window with a dead pipe and no explanation. The
             // exception type and message stay in the log: they name internal types and paths, and the caller is a
             // pipe that may not be the window at all.
-            AppLog.Warn(Loc.T("--wmi-worker komutu başarısız"), $"{ex.GetType().Name}: {ex.Message}");
+            AppLog.Warn("--wmi-worker command failed", $"{ex.GetType().Name}: {ex.Message}");
             return WmiWorkerResponse.Failure(WmiOperationResult.CodeWmiFailed, "the worker could not run the command");
         }
     }

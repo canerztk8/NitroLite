@@ -131,7 +131,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yedek yazılamadı"), $"{targetPath}: {ex.Message}");
+            AppLog.Warn("Backup could not be written", $"{targetPath}: {ex.Message}");
             return BackupResult.Fail(Loc.T($"Yedek yazılamadı: {ex.Message}"));
         }
     }
@@ -224,7 +224,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Geri yükleme öncesi güvenlik yedeği yazılamadı"), $"{settingsPath}: {ex.Message}");
+            AppLog.Warn("The safety backup before the restore could not be written", $"{settingsPath}: {ex.Message}");
         }
 
         try
@@ -234,7 +234,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(Loc.T("Yedekten ayarlar yazılamadı"), $"{settingsPath}: {ex.Message}");
+            AppLog.Warn("Settings could not be written from the backup", $"{settingsPath}: {ex.Message}");
             return BackupResult.Fail(Loc.T($"Ayarlar yazılamadı: {ex.Message}"));
         }
 
@@ -285,7 +285,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(string.Format(CultureInfo.CurrentCulture, Loc.T("Yedeğe {0} eklenemedi — {1}"), label, $"{path}: {ex.Message}"));
+            AppLog.Warn(string.Format(CultureInfo.InvariantCulture, "Could not add {0} to backup — {1}", Loc.English(label), $"{path}: {ex.Message}"));
             result.Skipped.Add(Loc.T(label));
             return null;
         }
@@ -314,7 +314,7 @@ public static class BackupService
         }
         catch (Exception ex)
         {
-            AppLog.Warn(string.Format(CultureInfo.CurrentCulture, Loc.T("Yedekten {0} yazılamadı — {1}"), label, $"{path}: {ex.Message}"));
+            AppLog.Warn(string.Format(CultureInfo.InvariantCulture, "Could not write {0} from backup — {1}", Loc.English(label), $"{path}: {ex.Message}"));
             result.Failed.Add(Loc.T(label));
         }
     }

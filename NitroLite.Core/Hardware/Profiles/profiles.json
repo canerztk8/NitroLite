@@ -259,6 +259,34 @@
       "notes": "Same platform as the AN16-41. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
     },
     {
+      "id": "nitro-16-an16-61",
+      "match": {
+        "modelCodes": [
+          "AN16-61"
+        ],
+        "familyPatterns": [
+          "Nitro 16"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "muxSwitch": true,
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 16 AN16-61 (model no. N25Q6, 2025). Same AN16 platform family as the AN16-41; the sensor ids are the firmware-wide enum, not a measurement on this unit, and the fan ceilings are carried over from the AN16-41 until someone reads them off this machine. unverified: no read-back on this model yet."
+    },
+    {
       "id": "nitro-17-an17-51",
       "match": {
         "modelCodes": [

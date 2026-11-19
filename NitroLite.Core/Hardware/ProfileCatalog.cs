@@ -363,7 +363,15 @@ public sealed class ProfileCatalog
         if (byCode != null) return byCode;
 
         var byPattern = _profiles.FirstOrDefault(p => !p.AnyAcer && p.Matches(identity));
-        if (byPattern != null) return byPattern;
+        if (byPattern != null)
+        {
+            // A family or board hit is a guess about a model nobody measured: the reference machine's "verified"
+            // flag describes a read-back taken on that machine, not on this one, and reporting it here would make
+            // the hardware report claim a measurement that was never taken.
+            return byPattern.Sensors.Verified
+                ? byPattern with { Sensors = byPattern.Sensors with { Verified = false } }
+                : byPattern;
+        }
 
         // The catch-all still has to claim the machine: a Dell laptop must not be handed the Acer default profile,
         // because its fan ceilings and sensor layout would then be reported as if they applied to it.

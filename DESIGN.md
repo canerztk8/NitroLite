@@ -281,6 +281,7 @@ The card used to carry a 200px screenshot of the app in that palette. It was rem
 - Set every figure in mono; align the label and the value on the same baseline.
 - When adding a new measurement, add it as a row to the existing reading strip; do not open a new card.
 - Write user-facing text in Turkish; keep code identifiers in English.
+- Write log lines in English at the call site, never through `Loc.T`: a log is read by whoever triages the report, not by the user. A label that is already a catalogue key goes through `Loc.English`.
 
 **Don't**
 

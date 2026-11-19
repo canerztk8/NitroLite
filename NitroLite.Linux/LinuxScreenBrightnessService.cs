@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using NitroLite.Core;
 using NitroLite.Linux.Sysfs;
 
@@ -73,7 +73,7 @@ public sealed class LinuxScreenBrightnessService : IScreenBrightnessService
         var result = _fs.WriteAllText(_brightnessNode!, target.ToString(CultureInfo.InvariantCulture) + "\n");
         if (!result.Ok)
         {
-            AppLog.Warn(Loc.T("Ekran parlaklığı yazılamadı"), $"{_brightnessNode}: {result.Status} {result.Detail}");
+            AppLog.Warn("The screen brightness could not be written", $"{_brightnessNode}: {result.Status} {result.Detail}");
             return false;
         }
 
