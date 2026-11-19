@@ -10,20 +10,36 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
-Two controls that were hard to read, a keyboard that follows the processor, and a log that reads in English.
+Two controls that were hard to read, a keyboard that follows the processor — with ramps the user can shape — and a log
+that reads in English.
 
 ### Added
 
-- **The keyboard can follow the CPU temperature.** A new switch on the Lighting page paints every zone from a
-  four-stop ramp — ice blue at 45 °C, mint at 60, amber at 72, red at 90 — and holds the ends instead of going dark
-  at idle or inventing a colour hotter than red. It is an overlay rather than a saved colour: it writes straight to
-  the hardware and never touches the stored lighting, so switching it off puts the user's own colour back, and
-  picking a colour by hand switches it off. The reading is rounded to 3 °C and a colour is written at most once
-  every three seconds, so the embedded controller sees a handful of writes an hour instead of one per telemetry
-  tick. The card only appears on machines whose keyboard the app can already paint, and a keyboard the user has
-  switched off stays off. Eight languages.
+- **The keyboard can follow the CPU temperature, and the ramp is yours to shape.** Renamed from "Colour follows
+  temperature" to **Temp-Reactive Lighting** and moved next to the saved profiles, the card offers three ready-made
+  ramps — **Aurora** (ice blue → mint → amber → red), **Inferno** (amber → orange → red) and **Nebula** (cyan → blue →
+  violet → magenta), each painted on its chip so the choice is a look rather than a name — and **Custom**, which opens
+  an editor with one row per stop: a temperature slider, a live swatch, a hex box and a delete button. One more button
+  adds a stop in the widest gap, coloured as the ramp already is there, so the button changes nothing until the user
+  moves it. A first visit to Custom copies the ramp that was active; from then on the ramp belongs to the user, and
+  switching between the built-in ramps never overwrites it. A settings file written before the rename keeps its ramp:
+  the old names are recognised and rewritten as the new ids, so upgrading does not move anyone to the first ramp. Two
+  stops are the minimum, eight the maximum, and the coldest and hottest stops hold their colours past their ends
+  instead of going dark or inventing a colour. The mode is an overlay rather than a saved colour: it writes straight
+  to the hardware and never touches the stored lighting, so switching it off puts the user's own colour back, and
+  picking a colour by hand switches it off. The reading is rounded to 3 °C and a colour is written at most once every
+  three seconds, so the embedded controller sees a handful of writes an hour instead of one per telemetry tick. The
+  card is not gated on the keyboard capability probe: that
+  probe opens a WMI instance which needs elevation and answers "no keyboard" without it, which hid the card on the
+  machine it was written for. A keyboard the user has switched off stays off. Eight languages.
 
 ### Changed
+
+- **The fan curve applies as it is drawn.** The card had an Apply button, so the shape on screen and the speed on the
+  fans could disagree until it was pressed. Moving an anchor now stores the curve and writes it to the embedded
+  controller when the drag ends — one file write and one firmware write per gesture rather than one per pixel — and
+  the preset chips go through the same path. The button is gone, a hint under the editor says the curve applies
+  itself, and a game's own fan rule still owns the fans while it runs: nothing is written behind it.
 
 - **The OSD switch lost its dot and kept its contrast.** The small filled dot beside the label was meant to repeat
   the on state, but at 11 px it read as a bullet in the text, so the accent fill is the only signal now. Hovering a
@@ -50,6 +66,22 @@ Two controls that were hard to read, a keyboard that follows the processor, and 
 
 ### Fixed
 
+- **A hand-picked colour no longer comes back as "Lights Off (Blackout)".** Changing a colour by hand left the stored
+  preset name in the settings file, and the next rebuild of the profile list matched that name and put the preset in
+  the box — so the page claimed the keyboard was running a profile it no longer was, sometimes a blackout. A hand
+  edit now clears the stored name, selecting the custom entry clears it too, and a rebuild falls back to the preset
+  whose colours actually match the file, or to Custom when none does.
+
+- **The factory profiles cannot be deleted.** The app's own profiles and the custom entry are the list's fixed
+  points; the delete button is disabled for them rather than firing into a refusal the list would have to explain,
+  and only a profile the user saved can be removed.
+
+- **A launch no longer writes a mode the user did not choose.** `BuildReactiveProfileChoices` ended its write guard
+  by clearing the flag instead of restoring it, and it runs from the constructor, so the whole window started with
+  writes switched on: rebuilding the operating-mode list then wrote its first entry — Quiet — to the embedded
+  controller on every launch, and the fan mode and a stray status line followed. The guard is restored now, a
+  selection made by a rebuild goes through it, and the fifteen tests that had been failing on those writes pass.
+
 - **The log is English, whatever language the window is in.** A bug report arrived with an English title and a
   Turkish detail under it: the title went through the catalogue, so it followed the window, and the detail was a
   literal written in Turkish. Every log line is now English at the call site — the titles that were `Loc.T` keys are
@@ -66,8 +98,9 @@ Two controls that were hard to read, a keyboard that follows the processor, and 
 - **The temperature card is on the page.** It was written behind the keyboard-lighting capability flag, and that flag
   comes from a WMI probe that opens an instance of `AcerGamingFunction` and needs elevation — without it the probe
   answers "no keyboard" on a machine whose keyboard the write path paints perfectly. On the reference AN16-41 the
-  feature existed and could not be found. The card now sits at the top of the Lighting page, above the colours it
-  overrides, and is not gated on the flag.
+  feature existed and could not be found. The card is not gated on the flag any more, and it now sits with the saved
+  profiles rather than at the top of the page: it answers the same question they do, and a saved profile is what the
+  keyboard falls back to when the mode is switched off.
 
 ## [1.2.7] - 2026-11-19
 

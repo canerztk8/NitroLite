@@ -833,8 +833,14 @@ public class LinuxFunctionalParityTests
         Assert.Equal(vm.Labels.ProfileNameRequired, vm.RgbProfileStatus);
 
         vm.SelectedRgbProfile = vm.RgbProfiles.First(p => p.IsBuiltIn);
+
+        // The button is disabled for the app's own profiles, so there is no refusal banner to read: the command does
+        // not run at all, and the list keeps the profile.
+        Assert.False(vm.CanDeleteRgbProfile);
+        Assert.False(vm.DeleteRgbProfileCommand.CanExecute(null));
+
         vm.DeleteRgbProfileCommand.Execute(null);
-        Assert.Equal(vm.Labels.BuiltInProfileLocked, vm.RgbProfileStatus);
+
         Assert.Contains(vm.RgbProfiles, p => p.IsBuiltIn);
     }
 

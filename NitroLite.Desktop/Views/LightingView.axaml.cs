@@ -24,6 +24,35 @@ public partial class LightingView : UserControl
     }
 
     /// <summary>
+    /// The picker button on one row of the temp-reactive ramp: opens the window on that stop's colour and writes
+    /// whatever comes back into the stop. The row is the button's tag, so the handler works for every row without a
+    /// command per item, and the view model only ever sees the finished <c>#RRGGBB</c>.
+    /// </summary>
+    /// <remarks>
+    /// Wrapped for the same reason as the palette's picker: an <c>async void</c> handler has nowhere to put an
+    /// exception, and one thrown out of the dialog would be raised on the thread pool and take the process down
+    /// instead of leaving the page usable.
+    /// </remarks>
+    private async void OnPickReactiveStopColor(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is not Control { Tag: ReactiveStopViewModel row }) return;
+            if (DataContext is not MainViewModel vm) return;
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
+
+            var dialog = new ColorPickerDialog(row.Color, vm.Labels.CustomColor);
+            if (!await dialog.ShowDialog<bool>(owner)) return;
+
+            vm.ApplyReactiveStopColor(row, dialog.PickedHex);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("The colour picker could not be opened", ex.ToString());
+        }
+    }
+
+    /// <summary>
     /// The swatch beside the hex box: opens the picker on the active target's colour and writes whatever comes back.
     /// The dialog is the view's business, so the view model only ever sees the finished <c>#RRGGBB</c>.
     /// </summary>

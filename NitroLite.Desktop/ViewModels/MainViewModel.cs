@@ -489,22 +489,36 @@ public sealed class CurveAnchorViewModel : ObservableObject
 public sealed class ReactiveProfileChoice : ObservableObject
 {
     private bool _isSelected;
+    private IReadOnlyList<ReactiveLightingStop> _stops;
 
-    public ReactiveProfileChoice(string id, string label, bool isCustom, Action<ReactiveProfileChoice>? select = null)
+    public ReactiveProfileChoice(string id, string label, bool isCustom, IReadOnlyList<ReactiveLightingStop> stops,
+        Action<ReactiveProfileChoice>? select = null)
     {
         Id = id;
         Label = label;
         IsCustom = isCustom;
+        _stops = stops;
         SelectCommand = new RelayCommand(() => select?.Invoke(this));
     }
 
-    /// <summary>The built-in profile's name, or <see cref="ReactiveLightingProfiles.CustomId"/>.</summary>
+    /// <summary>The built-in profile's id, or <see cref="ReactiveLightingProfiles.CustomId"/>.</summary>
     public string Id { get; }
 
     public string Label { get; }
 
     /// <summary>True for the entry whose ramp the editor below shows and saves.</summary>
     public bool IsCustom { get; }
+
+    /// <summary>
+    /// The ramp the chip paints as a gradient. The custom entry's list is replaced on every edit, which is what keeps
+    /// its preview honest while the user drags: a chip that showed the ramp the editor had a moment ago would be the
+    /// one control on the card that disagreed with the keyboard.
+    /// </summary>
+    public IReadOnlyList<ReactiveLightingStop> Stops
+    {
+        get => _stops;
+        set => Set(ref _stops, value);
+    }
 
     public RelayCommand SelectCommand { get; }
 
@@ -535,6 +549,7 @@ public sealed class ReactiveStopViewModel : ObservableObject
         _changed = changed;
         RemoveCommand = new RelayCommand(() => remove(this), canRemove);
         RemoveLabel = "";
+        PickLabel = "";
     }
 
     private static double ClampTemperature(double value) =>
@@ -582,6 +597,9 @@ public sealed class ReactiveStopViewModel : ObservableObject
 
     /// <summary>The delete button's label, set from the active language when the row is built.</summary>
     public string RemoveLabel { get; set; }
+
+    /// <summary>The picker button's tooltip, set from the active language for the same reason.</summary>
+    public string PickLabel { get; set; }
 
     public RelayCommand RemoveCommand { get; }
 
@@ -818,6 +836,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _reactiveLightingColor = ReactiveLighting.ColdColor;
     private readonly ReactiveLightingThrottle _reactiveThrottle = new();
     private ReactiveProfileChoice? _selectedReactiveProfile;
+
+    /// <summary>
+    /// True once the custom ramp is the user's own: saved in an earlier session or edited in this one. Until then the
+    /// editor holds a copy of a built-in ramp and is re-seeded from whichever ramp is active when Custom is picked, so
+    /// the first visit starts from a shape the user already knows instead of a ramp they never chose.
+    /// </summary>
+    private bool _customRampTouched;
 
     // The on-screen display: whether it is drawn, which corner, and which display.
     private bool _osdEnabled;
@@ -1152,7 +1177,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ApplyGpuModeCommand = new AsyncCommand(ApplyGpuModeAsync);
         ApplyRgbProfileCommand = new AsyncCommand(ApplyRgbProfileAsync);
         SaveRgbProfileCommand = new RelayCommand(SaveRgbProfile);
-        DeleteRgbProfileCommand = new RelayCommand(DeleteRgbProfile);
+        DeleteRgbProfileCommand = new RelayCommand(DeleteRgbProfile, () => CanDeleteRgbProfile);
         CopyHardwareReportCommand = new RelayCommand(CopyHardwareReport);
         ScanGamesCommand = new AsyncCommand(ScanGamesAsync);
         AddGameFromFileCommand = new AsyncCommand(AddGameFromFileAsync);
@@ -1192,7 +1217,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The reactive profile picker carries translated names, so it is rebuilt like the other pickers, and
             // the stop rows only carry the delete button's label.
             BuildReactiveProfileChoices();
-            foreach (var stop in ReactiveStops) stop.RemoveLabel = value.Sil;
+            foreach (var stop in ReactiveStops)
+            {
+                stop.RemoveLabel = value.Sil;
+                stop.PickLabel = value.CustomColor;
+            }
             Raise(nameof(SparklineBandToggleText));
             Raise(nameof(SparklineRangeText));
             Raise(nameof(SparklineNowText));
@@ -2589,6 +2618,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SyncFanSegment();
             SyncFanLoop();
             Status = value ? Labels.CurveEnabled : Labels.CurveDisabled;
+
+            // Choosing the curve only opens the editor: the mode card is the user's own choice and does not move. The
+            // curve reaches the fans when an anchor is moved or a preset is picked, which is the write the old Apply
+            // button made.
             if (!value) _ = ApplyFanModeAsync();
         }
     }
@@ -2962,20 +2995,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var choice in ReactiveProfileChoices) choice.IsSelected = ReferenceEquals(choice, value);
             Raise(nameof(ReactiveCustomEditorVisible));
 
-            // Switching to the custom entry with no saved ramp of its own seeds the editor from the ramp that was
-            // active a moment ago, so "Custom" starts from a shape the user already knows, not from a blank list.
-            if (value.IsCustom && ReactiveStops.Count == 0 && previous is { IsCustom: false })
+            // Switching to the custom entry before anything has been built seeds the editor from the ramp that was
+            // active a moment ago, so "Custom" starts from a shape the user already knows, not from a blank list. A
+            // ramp that was saved or edited before is left exactly as it is: overwriting it with the profile the user
+            // just left would throw away work they can only redo by hand.
+            if (value.IsCustom && previous is { IsCustom: false } && !_customRampTouched)
             {
-                var seed = ReactiveLightingProfiles.FindBuiltIn(previous.Id)?.Stops
-                           ?? ReactiveLightingProfiles.BuiltIn[0].Stops;
-                foreach (var stop in ReactiveLightingProfiles.SanitizeStops(seed))
-                {
-                    ReactiveStops.Add(new ReactiveStopViewModel(stop.AtCelsius, stop.Color,
-                        OnReactiveStopChanged, RemoveReactiveStop, () => CanRemoveReactiveStop)
-                    { RemoveLabel = Labels.Sil });
-                }
-                Raise(nameof(CanAddReactiveStop));
-                Raise(nameof(CanRemoveReactiveStop));
+                SeedCustomStops(previous.Id);
             }
 
             if (_suppressWrite) return;
@@ -3008,36 +3034,78 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         return ReactiveLightingProfiles.FindBuiltIn(SelectedReactiveProfile?.Id)?.Stops
-               ?? (IReadOnlyList<ReactiveLightingStop>)ReactiveLightingProfiles.BuiltIn[0].Stops;
+               ?? (IReadOnlyList<ReactiveLightingStop>)ReactiveLightingProfiles.Default.Stops;
     }
 
     /// <summary>(Re)builds the profile picker from the built-in list plus the custom entry, keeping the stored selection.</summary>
+    /// <remarks>
+    /// Each chip carries its ramp, because the chip paints it as a gradient: three ramps with names alone would make the
+    /// user pick a profile to find out what it looks like, and the whole point of three of them is that they look
+    /// different. The custom chip carries the editor's own stops, so it is the preview of what the user is building.
+    /// </remarks>
     private void BuildReactiveProfileChoices()
     {
         ReactiveProfileChoices.Clear();
         foreach (var profile in ReactiveLightingProfiles.BuiltIn)
         {
-            ReactiveProfileChoices.Add(new ReactiveProfileChoice(profile.Name, profile.DisplayName, isCustom: false, SelectReactiveProfile));
+            ReactiveProfileChoices.Add(new ReactiveProfileChoice(profile.Id, profile.DisplayName, isCustom: false,
+                profile.Stops, SelectReactiveProfile));
         }
         ReactiveProfileChoices.Add(new ReactiveProfileChoice(ReactiveLightingProfiles.CustomId, Loc.T("Özel"),
-            isCustom: true, SelectReactiveProfile));
+            isCustom: true, CurrentCustomStops(), SelectReactiveProfile));
 
-        var stored = _settings.ReactiveLightingProfile;
+        var stored = ReactiveLightingProfiles.CanonicalId(_settings.ReactiveLightingProfile);
         var match = ReactiveProfileChoices.FirstOrDefault(c =>
                         string.Equals(c.Id, stored, StringComparison.OrdinalIgnoreCase))
                     ?? ReactiveProfileChoices[0];
 
-        _suppressWrite = true;
-        try { SelectedReactiveProfile = match; }
-        finally { _suppressWrite = false; }
+        // A rebuild is not the user picking a ramp: the mode is already following whatever was stored. The guard is
+        // restored rather than cleared — this runs from the constructor and from the language change, both of which
+        // happen before (or outside) the first hardware read, and clearing it there switched writes back on for the
+        // whole window: every control the startup read filled in then wrote itself back to the firmware.
+        SyncControls(() => SelectedReactiveProfile = match);
     }
 
     private void SelectReactiveProfile(ReactiveProfileChoice choice) => SelectedReactiveProfile = choice;
+
+    /// <summary>
+    /// Fills the custom editor with a copy of a built-in ramp and stores it, so the entry a first-time user lands on is
+    /// a ramp they just saw on the chip next to it. The copy is theirs from that moment: a later switch between ramps
+    /// leaves it alone.
+    /// </summary>
+    private void SeedCustomStops(string fromProfileId)
+    {
+        var seed = ReactiveLightingProfiles.FindBuiltIn(fromProfileId)?.Stops
+                   ?? ReactiveLightingProfiles.Default.Stops;
+
+        ReactiveStops.Clear();
+        foreach (var stop in ReactiveLightingProfiles.SanitizeStops(seed))
+        {
+            ReactiveStops.Add(new ReactiveStopViewModel(stop.AtCelsius, stop.Color,
+                OnReactiveStopChanged, RemoveReactiveStop, () => CanRemoveReactiveStop)
+            { RemoveLabel = Labels.Sil, PickLabel = Labels.CustomColor });
+        }
+
+        Raise(nameof(CanAddReactiveStop));
+        Raise(nameof(CanRemoveReactiveStop));
+        SyncCustomRampChip();
+
+        _customRampTouched = true;
+
+        if (_suppressWrite) return;
+
+        _settings.ReactiveLightingCustomStops = ReactiveStops
+            .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
+            .ToList();
+    }
 
     /// <summary>(Re)builds the custom ramp editor from the stored stops, seeding from the active ramp when there are none.</summary>
     private void BuildReactiveStops()
     {
         ReactiveStops.Clear();
+
+        // A ramp in the file is the user's own; anything else is a placeholder the editor re-seeds on the first visit.
+        _customRampTouched = _settings.ReactiveLightingCustomStops is { Count: >= 2 };
 
         IEnumerable<ReactiveLightingStop> source;
         if (string.Equals(_settings.ReactiveLightingProfile, ReactiveLightingProfiles.CustomId, StringComparison.OrdinalIgnoreCase)
@@ -3048,18 +3116,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         else
         {
             source = ReactiveLightingProfiles.FindBuiltIn(_settings.ReactiveLightingProfile)?.Stops
-                     ?? ReactiveLightingProfiles.BuiltIn[0].Stops;
+                     ?? ReactiveLightingProfiles.Default.Stops;
         }
 
         foreach (var stop in ReactiveLightingProfiles.SanitizeStops(source))
         {
             ReactiveStops.Add(new ReactiveStopViewModel(stop.AtCelsius, stop.Color,
                 OnReactiveStopChanged, RemoveReactiveStop, () => CanRemoveReactiveStop)
-            { RemoveLabel = Labels.Sil });
+            { RemoveLabel = Labels.Sil, PickLabel = Labels.CustomColor });
         }
 
         Raise(nameof(CanAddReactiveStop));
         Raise(nameof(CanRemoveReactiveStop));
+        SyncCustomRampChip();
+    }
+
+    /// <summary>
+    /// The custom ramp as the evaluator and the chips read it: the editor's stops, sanitised, or the ramp of the
+    /// profile that is selected while the editor is still empty.
+    /// </summary>
+    private IReadOnlyList<ReactiveLightingStop> CurrentCustomStops()
+    {
+        var stops = ReactiveLightingProfiles.SanitizeStops(
+            ReactiveStops.Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color }));
+
+        return stops.Count >= 2
+            ? stops
+            : ReactiveLightingProfiles.SanitizeStops(ActiveReactiveStops());
+    }
+
+    /// <summary>Keeps the custom chip's gradient equal to what the editor holds.</summary>
+    private void SyncCustomRampChip()
+    {
+        var custom = ReactiveProfileChoices.FirstOrDefault(c => c.IsCustom);
+        if (custom != null) custom.Stops = CurrentCustomStops();
     }
 
     /// <summary>
@@ -3100,8 +3190,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         at = Math.Clamp(at, ReactiveLighting.MinStopCelsius, ReactiveLighting.MaxStopCelsius);
 
         var color = ReactiveLighting.ColorFor(active, at);
-        ReactiveStops.Add(new ReactiveStopViewModel(at, color, OnReactiveStopChanged, RemoveReactiveStop,
-            () => CanRemoveReactiveStop) { RemoveLabel = Labels.Sil });
+        var row = new ReactiveStopViewModel(at, color, OnReactiveStopChanged, RemoveReactiveStop,
+            () => CanRemoveReactiveStop) { RemoveLabel = Labels.Sil, PickLabel = Labels.CustomColor };
+
+        // Inserted where it belongs rather than appended: a stop added in a cold gap would otherwise appear under the
+        // hottest row, and the editor would read out of order while the keyboard blends in order.
+        int index = 0;
+        while (index < ReactiveStops.Count && ReactiveStops[index].AtCelsius <= at) index++;
+        ReactiveStops.Insert(index, row);
 
         OnReactiveStopChanged();
     }
@@ -3125,7 +3221,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(CanAddReactiveStop));
         Raise(nameof(CanRemoveReactiveStop));
 
+        // The chip follows the editor even before the mode is switched to custom: the preview is what the user is
+        // judging, and it has to be the shape the tick would paint if they picked it.
+        SyncCustomRampChip();
+
         if (_suppressWrite) return;
+
+        _customRampTouched = true;
 
         _settings.ReactiveLightingCustomStops = ReactiveStops
             .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
@@ -5104,7 +5206,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // ---------------------------------------------------------------- commands
 
     public AsyncCommand ApplyFanModeCommand { get; }
+
+    /// <summary>
+    /// Applies the current curve on demand. The dashboard has no button for it — the curve writes itself as it is
+    /// dragged — but the command stays as the one-call path for the chaos pass and anything that has to push the
+    /// current shape again without touching an anchor.
+    /// </summary>
     public AsyncCommand ApplyCurveCommand { get; }
+
     public AsyncCommand ApplyLightingCommand { get; }
     public AsyncCommand TurnOffLightingCommand { get; }
     public RelayCommand CopyUdevCommand { get; }
@@ -5751,8 +5860,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // A game's own fan rule owns the fans while it runs; writing here would fight it.
         if (GameActive) return;
 
-        // The curve only drives anything in custom mode, so applying it also selects that mode.
-        SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Custom) ?? SelectedFanMode;
+        // The curve only drives anything in custom mode, so applying it also selects that mode. The selection is made
+        // with the guard on: the setter would otherwise send its own write, using the manual sliders, a moment before
+        // the curve's own answer. Two writes per edit is one too many, and the first one put the fans at a speed the
+        // curve never asked for.
+        SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Custom) ?? SelectedFanMode);
 
         // The curve is what the user just edited, so the speed written is the curve's own answer at the current
         // temperature. Writing the manual slider here put the fans at a speed the curve never asked for and left them
@@ -5993,6 +6105,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     private void RefreshRgbProfiles()
     {
+        // The selection the page is showing wins over the stored name, and the stored name is only a hint for the
+        // first build: a preset the user picked and then edited by hand is no longer what the keyboard is running,
+        // and re-selecting it from the file is what made the list claim "Lights Off (Blackout)" over a lit keyboard.
         var previous = SelectedRgbProfile?.Name ?? _settings.SelectedRgbPreset;
 
         _suppressProfileApply = true;
@@ -6002,15 +6117,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var preset in _rgbProfiles.GetPresets()) RgbProfiles.Add(preset);
             RgbProfiles.Add(CustomProfile);
 
-            // Nothing matched means the editor is holding a colour no preset describes, which is what the custom
-            // entry is for. Falling back to the first preset would claim a provenance the colours do not have.
-            SelectedRgbProfile = RgbProfiles.FirstOrDefault(p => p.Name == previous) ?? CustomProfile;
+            var match = RgbProfiles.FirstOrDefault(p => p.Name == previous)
+                        ?? FindProfileMatching(CurrentLightingConfig())
+                        ?? CustomProfile;
+
+            SelectedRgbProfile = match;
+
+            // The stored name follows the list, so the next launch starts from the truth rather than from a preset
+            // that was left behind. The custom entry has no name to store.
+            _settings.SelectedRgbPreset = match.Name == CustomProfileName ? null : match.Name;
         }
         finally
         {
             _suppressProfileApply = false;
         }
 
+        Raise(nameof(CanDeleteRgbProfile));
         Raise(nameof(RgbProfileLoadError));
     }
 
@@ -6035,6 +6157,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void MarkProfileCustom()
     {
         if (_suppressWrite || _suppressProfileApply) return;
+
+        // The stored name is the provenance the next launch reads back, so a hand edit has to clear it: leaving the
+        // preset's name in the file is what brought "Lights Off (Blackout)" back as the selected entry after the user
+        // had set a colour by hand.
+        _settings.SelectedRgbPreset = null;
+
         if (SelectedRgbProfile?.Name == CustomProfileName) return;
 
         SelectRgbProfileSilently(CustomProfile);
@@ -6049,8 +6177,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (SelectedRgbProfile is not RgbPreset preset) return;
 
         // The custom entry is a label, not a preset: selecting it says "these colours came from the picker", and
-        // there is nothing to write.
-        if (preset.Name == CustomProfileName) return;
+        // there is nothing to write. The stored name is cleared for the same reason a hand edit clears it — the
+        // colours on the keyboard are not the preset's.
+        if (preset.Name == CustomProfileName)
+        {
+            _settings.SelectedRgbPreset = null;
+            SaveSettings();
+            return;
+        }
 
         // The editor is filled with the write guard on: each of these setters is a write of its own, and a preset is
         // one write, not five. The single call below is the one that reaches the keyboard.
@@ -6121,6 +6255,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         bool deleted = _rgbProfiles.DeletePreset(preset.Name);
         RefreshRgbProfiles();
+
+        // The deleted preset may have been the name the file held; the rebuild has already picked what the list shows
+        // instead, so the file is brought in line now rather than on the next unrelated save.
+        SaveSettings();
+
         RgbProfileStatus = deleted ? $"{Labels.Deleted}: {preset.DisplayName}" : Labels.DeleteFailed;
     }
 
@@ -6641,7 +6780,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             });
         }
 
-        SelectedMode = Modes.FirstOrDefault(m => m.Mode == previous) ?? Modes.FirstOrDefault();
+        // A rebuild is not a choice. The machine is already in the mode it is in, so the selection moves with the
+        // write guard on: assigning it outside the guard wrote the mode to the embedded controller every time the
+        // list was rebuilt, and on the launch path the first card in the list (Quiet) was written before the read
+        // that knows the real mode had even answered. A real choice comes from the card's own click.
+        SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == previous) ?? Modes.FirstOrDefault());
         SyncModeSelection();
 
         // The Game Profiles form offers the same modes. Its own selection is kept across a rescan.

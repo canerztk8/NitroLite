@@ -302,6 +302,132 @@ public class LightingApplyWiringTests
     }
 
     [Fact]
+    public async Task AColourSetByHand_ClearsTheStoredPresetName()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var hardware = new Phase3Fakes.StubHardware();
+            using var vm = new MainViewModel(new AppSettings(), hardware, null, path);
+            await vm.InitializeAsync();
+
+            // The blackout preset is the one that used to come back: it is the preset a user picks to switch the lights
+            // off, and its name is then in the settings file while the colours are whatever was on the keyboard next.
+            var blackout = vm.RgbProfiles.First(p => string.Equals(p.Effect, "OFF", StringComparison.OrdinalIgnoreCase));
+            vm.SelectedRgbProfile = blackout;
+            await Phase3Fakes.WaitUntilAsync(
+                () => hardware.LightingWrites.Any(w => w.StartsWith("OFF", StringComparison.Ordinal)),
+                SettleMilliseconds);
+
+            Assert.Equal(blackout.Name, SettingsManager.LoadSettingsWithFallback(path).SelectedRgbPreset);
+
+            vm.ApplyPickedColor("#123456");
+
+            // The list says Custom, and the file no longer names a preset: the next launch must not read "blackout"
+            // back over a keyboard that is lit. The file write follows the hardware write, so it is waited for rather
+            // than assumed.
+            Assert.Equal(vm.CustomProfile.Name, vm.SelectedRgbProfile?.Name);
+            await Phase3Fakes.WaitUntilAsync(
+                () => SettingsManager.LoadSettingsWithFallback(path).SelectedRgbPreset == null,
+                SettleMilliseconds);
+
+            Assert.Null(SettingsManager.LoadSettingsWithFallback(path).SelectedRgbPreset);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ReloadingTheProfileList_KeepsACustomColourOnTheCustomEntry()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        var blackout = vm.RgbProfiles.First(p => string.Equals(p.Effect, "OFF", StringComparison.OrdinalIgnoreCase));
+        vm.SelectedRgbProfile = blackout;
+        await Phase3Fakes.WaitUntilAsync(
+            () => hardware.LightingWrites.Any(w => w.StartsWith("OFF", StringComparison.Ordinal)),
+            SettleMilliseconds);
+
+        // Away from black and into a colour that is nobody's preset.
+        vm.SelectedEffect = Effect(vm, "STATIC");
+        vm.BrightnessLevel = 5;
+        vm.ApplyPickedColor("#0A0B0C");
+        await NextWriteAsync(hardware);
+
+        // Saving a profile rebuilds the whole list, which is the moment the stale name used to win: the editor held a
+        // hand-set colour, the list re-selected "Lights Off (Blackout)", and the page claimed the lights were off over
+        // a lit keyboard.
+        vm.NewProfileName = "Gece";
+        vm.SaveRgbProfileCommand.Execute(null);
+
+        Assert.Equal("Gece", vm.SelectedRgbProfile?.Name);
+        Assert.NotEqual(blackout.Name, vm.SelectedRgbProfile?.Name);
+
+        // And with no preset selected at all, the list still describes the colours rather than a name from the file.
+        vm.ApplyPickedColor("#0A0B0D");
+        Assert.Equal(vm.CustomProfile.Name, vm.SelectedRgbProfile?.Name);
+    }
+
+    [Fact]
+    public async Task AFactoryProfileCannotBeDeleted()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        var builtIn = vm.RgbProfiles.First(p => p.IsBuiltIn && p.Name != vm.CustomProfile.Name);
+        vm.SelectedRgbProfile = builtIn;
+        await NextWriteAsync(hardware);
+
+        var before = vm.RgbProfiles.Count;
+
+        // The factory profiles are the app's, not the user's: the button is disabled rather than firing into a refusal
+        // that the list then has to explain.
+        Assert.False(vm.CanDeleteRgbProfile);
+        Assert.False(vm.DeleteRgbProfileCommand.CanExecute(null));
+
+        vm.DeleteRgbProfileCommand.Execute(null);
+
+        Assert.Equal(before, vm.RgbProfiles.Count);
+        Assert.Contains(vm.RgbProfiles, p => p.Name == builtIn.Name);
+    }
+
+    [Fact]
+    public async Task TheCustomEntryCannotBeDeleted()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        vm.SelectedRgbProfile = vm.CustomProfile;
+
+        Assert.False(vm.CanDeleteRgbProfile);
+        Assert.False(vm.DeleteRgbProfileCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AProfileTheUserSaved_CanBeDeleted()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = await ReadyAsync(hardware);
+
+        vm.NewProfileName = "Atölye";
+        vm.SaveRgbProfileCommand.Execute(null);
+        await NextWriteAsync(hardware);
+
+        var saved = vm.RgbProfiles.First(p => p.Name == "Atölye");
+        vm.SelectedRgbProfile = saved;
+
+        Assert.True(vm.CanDeleteRgbProfile);
+        Assert.True(vm.DeleteRgbProfileCommand.CanExecute(null));
+
+        vm.DeleteRgbProfileCommand.Execute(null);
+
+        Assert.DoesNotContain(vm.RgbProfiles, p => p.Name == "Atölye");
+    }
+
+    [Fact]
     public async Task SelectingTheCustomEntry_WritesNothing()
     {
         var hardware = new Phase3Fakes.StubHardware();

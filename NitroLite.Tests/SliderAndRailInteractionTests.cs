@@ -290,4 +290,53 @@ public class SliderAndRailInteractionTests
             Delete(path);
         }
     }
+
+    [Fact]
+    public async Task FanCurveAnchors_ReachTheFansWithoutAnApplyButton()
+    {
+        // The card has no Apply button, so the shape on screen has to be the shape on the fans. This fails if the
+        // debounced firmware write is ever dropped and the curve goes back to being a preview until something else
+        // applies it.
+        var path = Phase3Fakes.TempSettingsPath();
+        try
+        {
+            var hardware = new Phase3Fakes.StubHardware();
+            using var vm = new MainViewModel(new AppSettings(), hardware, null, path);
+            await vm.InitializeAsync();
+            await vm.RefreshTelemetryAsync();
+
+            // The curve drives the fans only once the user has chosen it; this is what clicking the "Eğri" pill does,
+            // and it is the state the rest of the test needs.
+            vm.CurveEnabled = true;
+
+            // Nothing above this line should have written the fans: the machine boots in Auto, not Custom.
+            hardware.FanWrites.Clear();
+
+            var anchor = vm.CurveAnchors.Single(a => a.TemperatureC == 60);
+            anchor.Percent = 85;
+
+            // 58 °C sits between the 50 and the 60 anchors, so moving the 60 one changes the answer the firmware gets.
+            int expected = new FanCurve(vm.CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)))
+                .PercentAt(vm.CpuTemperature);
+
+            await Phase3Fakes.WaitUntilAsync(() =>
+                hardware.FanWrites.Any(w =>
+                    w.Mode == FanMode.Custom && w.CpuPercent == expected && w.GpuPercent == expected));
+        }
+        finally
+        {
+            Delete(path);
+        }
+    }
+
+    [Fact]
+    public void TheFanCurveCard_OffersNoApplyButton()
+    {
+        // The button was removed when the curve learned to apply itself. A binding left behind would fail silently at
+        // run time, so the absence of the command and the presence of the hint that replaced it are both pinned.
+        var xaml = ReadView("DashboardView.axaml");
+
+        Assert.DoesNotContain("ApplyCurveCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("Labels.CurveAutoApplyHint", xaml, StringComparison.Ordinal);
+    }
 }

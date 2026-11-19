@@ -22,12 +22,12 @@
   </UserControl.Resources>
 
   <!--
-    Page 3: the keyboard. The temperature mode leads, because it overrides every colour below it and a mode that
-    silently wins over the controls under it has to be the first thing on the page. Then the four-zone deck — the four
-    bars on a darker ground with thin key rows under them, so the block reads as a keyboard rather than as four
-    swatches — then the quick palette, then the saved profiles, then the effect and its two sliders. The palette sits
-    above the profiles because a colour is the thing a user reaches for first, and a profile is a colour they already
-    saved.
+    Page 3: the keyboard. The four-zone deck leads — the four bars on a darker ground with thin key rows under them, so
+    the block reads as a keyboard rather than as four swatches — then the quick palette, then the temperature mode,
+    then the saved profiles, then the effect and its two sliders. The palette sits above everything that stores a
+    colour because a colour is the thing a user reaches for first; the temperature ramps sit with the profiles because
+    they are the other way of answering the same question — which colour the keyboard shows — and a saved profile is
+    what the mode falls back to when it is switched off.
   -->
   <ScrollViewer VerticalScrollBarVisibility="Hidden">
     <StackPanel>
@@ -39,35 +39,6 @@
                 FontSize="11" VerticalAlignment="Center" IsEnabled="{Binding LightingAvailable}"
                 Command="{Binding TurnOffLightingCommand}" />
       </Grid>
-
-      <!-- ============================================================ the reactive keyboard -->
-
-      <!--
-        The colour that follows the processor. It is a mode, not a colour: the swatch shows what the keyboard is running
-        right now, and the number beside it is the reading that produced it. It is not hidden behind a capability flag:
-        the flag comes from a WMI probe that needs elevation and answers "no keyboard" without it, which hid this card
-        on the machine it was written for.
-      -->
-      <Border Classes="card" Margin="0,0,0,16">
-        <StackPanel>
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
-            <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
-                          VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
-                     TextWrapping="Wrap" />
-
-          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
-                      IsVisible="{Binding ReactiveLightingEnabled}">
-            <Border Width="26" Height="26" CornerRadius="2"
-                    Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                    BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
-            <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
 
       <!-- ============================================================ the four-zone deck -->
 
@@ -204,6 +175,95 @@
         </StackPanel>
       </Border>
 
+      <!-- ============================================================ temp-reactive lighting -->
+
+      <!--
+        The colour that follows the processor. It sits here, directly over the saved profiles, because it is a way of
+        choosing a colour rather than a subject of its own: the three ramps are shapes the app offers, and the custom
+        entry is the shape the user builds stop by stop. It is not hidden behind a capability flag: the flag comes
+        from a WMI probe that needs elevation and answers "no keyboard" without it, which hid this card on the machine
+        it was written for.
+      -->
+      <Border Classes="card" Margin="0,0,0,16">
+        <StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
+            <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
+                          VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
+                     TextWrapping="Wrap" />
+
+          <!-- The live reading: what the keyboard is showing now, and the number that produced it. -->
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
+                      IsVisible="{Binding ReactiveLightingEnabled}">
+            <Border Width="26" Height="26" CornerRadius="2"
+                    Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                    BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+            <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <!-- The three ramps, each painted as the gradient it is, then the entry the user builds. -->
+          <TextBlock Classes="caps" Text="{Binding Labels.ReactiveProfiles}" Margin="0,14,0,6" />
+          <ItemsControl ItemsSource="{Binding ReactiveProfileChoices}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ReactiveProfileChoice">
+                <Button Classes="ramp" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}"
+                        Margin="0,0,8,8">
+                  <StackPanel Width="118" Spacing="6">
+                    <Border Height="8" CornerRadius="2"
+                            Background="{Binding Stops, Converter={x:Static conv:RampToBrushConverter.Instance}}" />
+                    <TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- The custom ramp's editor: one row per stop, a temperature and the colour held there. -->
+          <StackPanel IsVisible="{Binding ReactiveCustomEditorVisible}" Margin="0,6,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="caps" Text="{Binding Labels.ReactiveStops}" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="seg" Content="{Binding Labels.AddReactiveStop}" Padding="10,4"
+                      FontSize="11" Command="{Binding AddReactiveStopCommand}" />
+            </Grid>
+
+            <TextBlock Classes="hint" Text="{Binding Labels.ReactiveCustomHint}" Margin="0,6,0,0"
+                       TextWrapping="Wrap" />
+
+            <ItemsControl ItemsSource="{Binding ReactiveStops}" Margin="0,8,0,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ReactiveStopViewModel">
+                  <Grid ColumnDefinitions="46,*,Auto,92,Auto" Margin="0,0,0,6">
+                    <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding TemperatureText}"
+                               Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                    <controls:NitroSlider Grid.Column="1" Minimum="{Binding MinTemperature}"
+                                          Maximum="{Binding MaxTemperature}" TickFrequency="1"
+                                          IsSnapToTickEnabled="True" Value="{Binding TemperatureC}"
+                                          VerticalAlignment="Center" />
+                    <Button Grid.Column="2" Classes="swatch" Width="26" Height="26" Margin="10,0,0,0"
+                            Tag="{Binding}" Click="OnPickReactiveStopColor" ToolTip.Tip="{Binding PickLabel}">
+                      <Border Width="22" Height="22" CornerRadius="2"
+                              Background="{Binding Color, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                    </Button>
+                    <TextBox Grid.Column="3" Margin="8,0" Text="{Binding Color}" Watermark="#00B4FF" />
+                    <Button Grid.Column="4" Classes="seg" Content="{Binding RemoveLabel}" Padding="8,3"
+                            FontSize="10" Command="{Binding RemoveCommand}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ saved profiles -->
 
       <Border Classes="card" Margin="0,0,0,16">
@@ -225,8 +285,11 @@
 
             <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.SaveProfile}"
                     Padding="12,7" FontSize="11" Command="{Binding SaveRgbProfileCommand}" />
+            <!-- The factory profiles and the custom entry are not the user's to delete: the button is disabled
+                 for them rather than firing into a refusal the list has to explain afterwards. -->
             <Button Grid.Column="3" Classes="danger" Content="{Binding Labels.DeleteProfile}"
                     Padding="12,7" FontSize="11" Margin="6,0,0,0"
+                    IsEnabled="{Binding CanDeleteRgbProfile}"
                     Command="{Binding DeleteRgbProfileCommand}" />
           </Grid>
 

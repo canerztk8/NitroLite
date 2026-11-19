@@ -442,9 +442,16 @@ internal static class Phase3Fakes
 
         public Task<FanMode?> GetFanModeAsync() => Task.FromResult<FanMode?>(ReportedFanMode);
 
+        /// <summary>
+        /// Every fan write with the speed it asked for. Kept apart from <see cref="Writes"/> so a test can assert the
+        /// percentage a curve produced without changing the order-only assertions the other tests make.
+        /// </summary>
+        public List<(FanMode Mode, int CpuPercent, int GpuPercent)> FanWrites { get; } = new();
+
         public Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
         {
             Writes.Add("fan:" + mode);
+            FanWrites.Add((mode, cpuPercent, gpuPercent));
             return Task.FromResult(true);
         }
 

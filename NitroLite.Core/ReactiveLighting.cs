@@ -8,10 +8,11 @@ namespace NitroLite.Core;
 /// <remarks>
 /// <para>
 /// The ramp is a pure function of one number, so it can be tested without a keyboard, a backend or a window. The
-/// built-in profile is deliberately short: four stops between 45 °C and 90 °C, which is the range a Nitro actually
-/// lives in. Below the first stop the colour holds at the cold end rather than drifting to black, because a keyboard
-/// that goes dark at idle reads as a fault; above the last stop it holds at the hot end, because a colour cannot say
-/// "hotter than hot". A custom ramp may use any stops between <see cref="MinStopCelsius"/> and
+/// default ramp is deliberately short: four stops between 45 °C and 90 °C, which is the range a Nitro actually
+/// lives in, and the other two shipped ramps use the same range so switching between them is a change of colour
+/// rather than of timing. Below the first stop the colour holds at the cold end rather than drifting to black, because
+/// a keyboard that goes dark at idle reads as a fault; above the last stop it holds at the hot end, because a colour
+/// cannot say "hotter than hot". A custom ramp may use any stops between <see cref="MinStopCelsius"/> and
 /// <see cref="MaxStopCelsius"/>.
 /// </para>
 /// <para>
@@ -166,13 +167,27 @@ public sealed class ReactiveLightingStop
 }
 
 /// <summary>
-/// A named temperature ramp. The built-in profiles translate their name for display; the custom entry keeps the
-/// label it is given in the UI.
+/// A named temperature ramp. <see cref="Id"/> is the stable identity the settings file stores, <see cref="Name"/> is
+/// the source text the catalogue translates, and the custom entry keeps the label it is given in the UI.
 /// </summary>
 public sealed class ReactiveLightingProfile
 {
-    /// <summary>The stable identity — settings store it, so it must not change with the UI language.</summary>
+    /// <summary>
+    /// The identity stored in settings, so a language change cannot lose the user's choice. A profile is looked up by
+    /// this before anything else; the names are only matched for a file written by a build that stored one.
+    /// </summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>The source text of the display name. Turkish in the catalogue, translated everywhere else.</summary>
     public string Name { get; set; } = "";
+
+    /// <summary>
+    /// The names an older build stored for this ramp. That build had no id and wrote the display text into the
+    /// settings file, so the text itself is the only identity an upgraded file carries; dropping it would quietly
+    /// move every existing user to the first ramp. Looked up after <see cref="Id"/> and <see cref="Name"/>.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> LegacyNames { get; set; } = Array.Empty<string>();
 
     public bool IsBuiltIn { get; set; }
 
@@ -191,18 +206,32 @@ public static class ReactiveLightingProfiles
     /// <summary>The id of the custom entry: the ramp the user edits stop by stop in the UI.</summary>
     public const string CustomId = "custom";
 
-    /// <summary>The three profiles the app ships. The first is the ramp <see cref="ReactiveLighting"/> has always used.</summary>
+    /// <summary>
+    /// The three profiles the app ships. Each is a different way for the same range of temperatures to read: one
+    /// that moves through the whole spectrum, one that stays warm, and one that stays cool. The first is the ramp
+    /// <see cref="ReactiveLighting"/> has always used, so a settings file with no profile of its own keeps its colour.
+    /// </summary>
+    /// <remarks>
+    /// Each ramp carries four stops between 45 and 90 °C — the range a Nitro actually lives in — spaced far enough
+    /// apart for the eye to read the change without spending writes on noise, and every colour is opaque and bright
+    /// enough to read at a glance in a dim room. <see cref="ReactiveLightingProfile.LegacyNames"/> keeps the choice of
+    /// a settings file written before the ramps were renamed.
+    /// </remarks>
     public static readonly IReadOnlyList<ReactiveLightingProfile> BuiltIn = new[]
     {
         new ReactiveLightingProfile
         {
-            Name = "Klasik (Mavi → Kırmızı)",
+            Id = "aurora",
+            Name = "Aurora (Buz → Alev)",
+            LegacyNames = new[] { "Klasik (Mavi → Kırmızı)" },
             IsBuiltIn = true,
             Stops = ReactiveLighting.DefaultStops.ToList()
         },
         new ReactiveLightingProfile
         {
-            Name = "Sıcak Ateş (Sarı → Kırmızı)",
+            Id = "inferno",
+            Name = "Inferno (Kehribar → Kırmızı)",
+            LegacyNames = new[] { "Sıcak Ateş (Sarı → Kırmızı)" },
             IsBuiltIn = true,
             Stops = new List<ReactiveLightingStop>
             {
@@ -214,11 +243,13 @@ public static class ReactiveLightingProfiles
         },
         new ReactiveLightingProfile
         {
-            Name = "Buz → Mor (Soğuk Palet)",
+            Id = "nebula",
+            Name = "Nebula (Turkuaz → Mor)",
+            LegacyNames = new[] { "Buz → Mor (Soğuk Palet)" },
             IsBuiltIn = true,
             Stops = new List<ReactiveLightingStop>
             {
-                new() { AtCelsius = 45, Color = "#00E5FF" }, // ice
+                new() { AtCelsius = 45, Color = "#00E5FF" }, // turquoise
                 new() { AtCelsius = 60, Color = "#448AFF" }, // blue
                 new() { AtCelsius = 75, Color = "#7C4DFF" }, // violet
                 new() { AtCelsius = 90, Color = "#D500F9" }  // magenta
@@ -226,11 +257,35 @@ public static class ReactiveLightingProfiles
         }
     };
 
-    /// <summary>The built-in profile with this name, or null when the name is not one.</summary>
-    public static ReactiveLightingProfile? FindBuiltIn(string? name) =>
-        string.IsNullOrWhiteSpace(name)
-            ? null
-            : BuiltIn.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    /// <summary>The profile a settings file gets when it names none.</summary>
+    public static ReactiveLightingProfile Default => BuiltIn[0];
+
+    /// <summary>
+    /// The built-in profile with this id, current name, or the name an older build stored, or null.
+    /// </summary>
+    public static ReactiveLightingProfile? FindBuiltIn(string? idOrName)
+    {
+        if (string.IsNullOrWhiteSpace(idOrName)) return null;
+
+        return BuiltIn.FirstOrDefault(p => p.Id.Equals(idOrName, StringComparison.OrdinalIgnoreCase))
+               ?? BuiltIn.FirstOrDefault(p => p.Name.Equals(idOrName, StringComparison.OrdinalIgnoreCase))
+               ?? BuiltIn.FirstOrDefault(p =>
+                   p.LegacyNames?.Any(n => n.Equals(idOrName, StringComparison.OrdinalIgnoreCase)) == true);
+    }
+
+    /// <summary>
+    /// The value to store for a profile the rest of the app identified by anything: the custom entry's id, a built-in
+    /// profile's id, or null when the name belongs to no profile. This is what turns a file written by an older build
+    /// — which stored a profile's name rather than its id, and under the old names — into the id the current build
+    /// uses.
+    /// </summary>
+    public static string? CanonicalId(string? idOrName)
+    {
+        if (string.IsNullOrWhiteSpace(idOrName)) return null;
+        if (CustomId.Equals(idOrName, StringComparison.OrdinalIgnoreCase)) return CustomId;
+
+        return FindBuiltIn(idOrName)?.Id;
+    }
 
     /// <summary>
     /// Brings a ramp read from disk or built by the editor into the shape the evaluator can use: sorted by

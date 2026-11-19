@@ -343,21 +343,285 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public void TheCardComesBeforeTheColourControls()
+    public void TheCardSitsWithTheSavedProfiles()
     {
         var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
 
-        // The mode overrides every colour under it, so it has to be the first card on the page. It was written below the
-        // effect sliders first, and the one person who went looking for it could not find it without scrolling.
-        var card = markup.IndexOf("Labels.ReactiveLighting", StringComparison.Ordinal);
-        var deck = markup.IndexOf("Labels.ZonePreview", StringComparison.Ordinal);
+        // The temperature ramps belong with the profiles: both answer the same question — which colour the keyboard
+        // shows — and one of them is what the mode falls back to when it is switched off. The card used to sit at the
+        // very top of the page, which made it a fifth subject rather than a way of choosing a colour.
         var palette = markup.IndexOf("Labels.ColorPalette", StringComparison.Ordinal);
+        var card = markup.IndexOf("Labels.ReactiveLighting", StringComparison.Ordinal);
+        var profiles = markup.IndexOf("Labels.RgbProfiles", StringComparison.Ordinal);
 
-        Assert.True(card > 0, "the lighting page has no reactive card");
-        Assert.True(deck > 0, "the lighting page has no zone deck");
-        Assert.True(card < deck, "the reactive card is below the zone deck");
         Assert.True(palette > 0, "the lighting page has no palette");
-        Assert.True(card < palette, "the reactive card is below the palette");
+        Assert.True(card > 0, "the lighting page has no reactive card");
+        Assert.True(profiles > 0, "the lighting page has no profile card");
+
+        Assert.True(card > palette, "the reactive card is above the palette");
+        Assert.True(card < profiles, "the reactive card is below the saved profiles");
+    }
+
+    [Fact]
+    public void TheCardOffersTheThreeRampsAndTheCustomEditor()
+    {
+        var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
+
+        // A picker the user cannot see is a picker that does not exist: the view model carried all three ramps and the
+        // stop editor for a while before the view was told about them.
+        Assert.Contains("ReactiveProfileChoices", markup, StringComparison.Ordinal);
+        Assert.Contains("ReactiveCustomEditorVisible", markup, StringComparison.Ordinal);
+        Assert.Contains("ReactiveStops", markup, StringComparison.Ordinal);
+        Assert.Contains("AddReactiveStopCommand", markup, StringComparison.Ordinal);
+        Assert.Contains("OnPickReactiveStopColor", markup, StringComparison.Ordinal);
+    }
+
+    // =============================================================================================================
+    // 4. The three ramps, and the one the user builds.
+    // =============================================================================================================
+
+    [Fact]
+    public void ThreeRampsAreOffered_EachWithAUsableShape()
+    {
+        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn.Count);
+
+        // Three chips with the same gradient would be one chip with three names, so every ramp has to be its own.
+        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn.Select(p => p.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn.Select(p => p.Name).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn
+            .Select(p => ReactiveLighting.ColorFor(p.Stops, 95))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count());
+
+        foreach (var profile in ReactiveLightingProfiles.BuiltIn)
+        {
+            var stops = ReactiveLightingProfiles.SanitizeStops(profile.Stops);
+
+            // Nothing is dropped as invalid: a shipped ramp is one the evaluator can walk end to end.
+            Assert.True(stops.Count >= 2, $"{profile.Id} has {stops.Count} usable stops");
+            Assert.Equal(profile.Stops.Count, stops.Count);
+            Assert.True(profile.IsBuiltIn);
+        }
+
+        // The first ramp is the one the evaluator has always used, so a settings file that names no profile keeps the
+        // colour it had before the picker existed.
+        Assert.Equal(ReactiveLighting.ColorFor(20), ReactiveLighting.ColorFor(ReactiveLightingProfiles.Default.Stops, 20));
+        Assert.Equal(ReactiveLighting.ColdColor, ReactiveLightingProfiles.Default.Stops[0].Color);
+    }
+
+    [Fact]
+    public void AProfileIsFoundByIdOrByTheNameAnOlderFileStored()
+    {
+        var inferno = ReactiveLightingProfiles.BuiltIn.First(p => p.Id == "inferno");
+
+        Assert.Same(inferno, ReactiveLightingProfiles.FindBuiltIn("inferno"));
+        Assert.Same(inferno, ReactiveLightingProfiles.FindBuiltIn("INFERNO"));
+        Assert.Same(inferno, ReactiveLightingProfiles.FindBuiltIn(inferno.Name));
+
+        // The build before the rename had no ids and stored the name instead, so an upgraded settings file carries
+        // that text and nowhere else.
+        Assert.Same(inferno, ReactiveLightingProfiles.FindBuiltIn("Sıcak Ateş (Sarı → Kırmızı)"));
+        Assert.Equal("inferno", ReactiveLightingProfiles.CanonicalId("Sıcak Ateş (Sarı → Kırmızı)"));
+
+        Assert.Equal("inferno", ReactiveLightingProfiles.CanonicalId(inferno.Name));
+        Assert.Equal(ReactiveLightingProfiles.CustomId, ReactiveLightingProfiles.CanonicalId("custom"));
+        Assert.Null(ReactiveLightingProfiles.CanonicalId("a profile that no build knows"));
+        Assert.Null(ReactiveLightingProfiles.CanonicalId(null));
+    }
+
+    [Theory]
+    [InlineData("Nebula (Turkuaz → Mor)", "nebula")]
+    [InlineData("Buz → Mor (Soğuk Palet)", "nebula")]   // what the build before the rename stored
+    [InlineData("Klasik (Mavi → Kırmızı)", "aurora")]
+    public void ASettingsFileThatStoredAName_IsRewrittenAsTheId(string stored, string expected)
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var settings = new AppSettings
+            {
+                ReactiveLightingProfile = stored
+            };
+
+            SettingsManager.SaveSettingsAtomic(path, settings);
+            var loaded = SettingsManager.LoadSettingsWithFallback(path);
+
+            // The id is the identity, so a language change cannot lose the choice, and the rename cannot lose the
+            // ramp an existing user picked: the name is looked up, and what is stored is the id.
+            Assert.Equal(expected, loaded.ReactiveLightingProfile);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task PickingARamp_PaintsItOnTheNextTickAndStoresTheId()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var hardware = new Phase3Fakes.StubHardware();
+            hardware.Sample.CpuTemperature = 95;
+
+            using var vm = Create(hardware, path: path);
+            await vm.InitializeAsync();
+
+            vm.ReactiveLightingEnabled = true;
+            await vm.RefreshTelemetryAsync();
+            await vm.ReactiveLightingTask;
+
+            hardware.LightingWrites.Clear();
+            vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.Id == "inferno");
+
+            // Choosing a ramp is not a write of its own: the colour it produces at this temperature is, and that is
+            // the next tick's business.
+            Assert.Empty(hardware.LightingWrites);
+
+            await vm.RefreshTelemetryAsync();
+            await vm.ReactiveLightingTask;
+
+            // 95 °C is the hot end of every ramp, and Inferno's hot end is its own deep red.
+            var write = Assert.Single(ReactiveWrites(hardware, "#D50000"));
+            Assert.StartsWith("STATIC|", write, StringComparison.Ordinal);
+            Assert.Equal("#D50000", vm.ReactiveLightingColor);
+
+            Assert.Equal("inferno", SettingsManager.LoadSettingsWithFallback(path).ReactiveLightingProfile);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ChoosingARampWhileTheModeIsOff_WritesNothing()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+        hardware.LightingWrites.Clear();
+
+        vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.Id == "nebula");
+
+        // The mode is off, so the choice is only a preference: a profile picked while the keyboard is following the
+        // user's own colour must not repaint it.
+        Assert.False(vm.ReactiveLightingEnabled);
+        Assert.Empty(hardware.LightingWrites);
+    }
+
+    [Fact]
+    public async Task TheCustomEntry_StartsFromTheRampThatWasActive()
+    {
+        using var vm = Create(new Phase3Fakes.StubHardware());
+        await vm.InitializeAsync();
+
+        vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.Id == "nebula");
+        vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.IsCustom);
+
+        Assert.True(vm.ReactiveCustomEditorVisible);
+        Assert.Equal(4, vm.ReactiveStops.Count);
+        Assert.Equal("#00E5FF", vm.ReactiveStops[0].Color);
+        Assert.Equal(90, vm.ReactiveStops[^1].TemperatureC);
+    }
+
+    [Fact]
+    public async Task EditingTheCustomRamp_IsWhatTheNextTickPaints()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 95;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.IsCustom);
+        vm.ReactiveStops[0].Color = "#123456";
+        vm.ReactiveStops[^1].Color = "#654321";
+
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        // 95 °C is above the last stop, so the ramp holds its hottest colour — the one the user just set. A custom
+        // ramp that painted the built-in amber instead is the failure this pins down.
+        Assert.Equal("#654321", vm.ReactiveLightingColor);
+        Assert.NotEmpty(ReactiveWrites(hardware, "#654321"));
+    }
+
+    [Fact]
+    public async Task TheCustomRampStopsAtTheLimits()
+    {
+        using var vm = Create(new Phase3Fakes.StubHardware());
+        await vm.InitializeAsync();
+
+        vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.IsCustom);
+
+        // The editor starts from a four-stop ramp seeded from the one that was active.
+        Assert.Equal(4, vm.ReactiveStops.Count);
+        Assert.True(vm.CanRemoveReactiveStop);
+
+        while (vm.CanAddReactiveStop)
+        {
+            Assert.True(vm.AddReactiveStopCommand.CanExecute(null));
+            vm.AddReactiveStopCommand.Execute(null);
+        }
+
+        Assert.Equal(ReactiveLighting.MaxStops, vm.ReactiveStops.Count);
+        Assert.False(vm.AddReactiveStopCommand.CanExecute(null));
+        Assert.True(vm.ReactiveStops[0].RemoveCommand.CanExecute(null));
+
+        // Each stop landed in its own place rather than at the end, so the editor reads cold to hot the way the
+        // keyboard blends, and no two rows ask for the same temperature.
+        var temperatures = vm.ReactiveStops.Select(s => s.TemperatureC).ToList();
+        Assert.Equal(temperatures.OrderBy(t => t), temperatures);
+        Assert.Equal(temperatures.Count, temperatures.Distinct().Count());
+
+        while (vm.CanRemoveReactiveStop)
+        {
+            vm.ReactiveStops[^1].RemoveCommand.Execute(null);
+        }
+
+        // A ramp needs a cold end and a hot end; two stops is the floor.
+        Assert.Equal(2, vm.ReactiveStops.Count);
+        Assert.False(vm.CanRemoveReactiveStop);
+        Assert.False(vm.ReactiveStops[0].RemoveCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task TheCustomChipShowsWhatTheEditorHolds()
+    {
+        using var vm = Create(new Phase3Fakes.StubHardware());
+        await vm.InitializeAsync();
+
+        vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.IsCustom);
+        var chip = vm.ReactiveProfileChoices.First(c => c.IsCustom);
+
+        var before = chip.Stops;
+        vm.ReactiveStops[0].Color = "#ABCDEF";
+
+        // The chip is the preview the user judges, so it is the same list the evaluator would walk, not a copy taken
+        // when the picker was built.
+        Assert.NotSame(before, chip.Stops);
+        Assert.Equal("#ABCDEF", chip.Stops[0].Color);
+        Assert.Equal(vm.ReactiveStops.Count, chip.Stops.Count);
+    }
+
+    [Fact]
+    public async Task TheBuiltInChipsCarryTheirOwnRamp()
+    {
+        using var vm = Create(new Phase3Fakes.StubHardware());
+        await vm.InitializeAsync();
+
+        foreach (var profile in ReactiveLightingProfiles.BuiltIn)
+        {
+            var chip = vm.ReactiveProfileChoices.First(c => c.Id == profile.Id);
+
+            Assert.Equal(profile.Stops.Count, chip.Stops.Count);
+            Assert.Equal(profile.Stops[0].Color, chip.Stops[0].Color);
+            Assert.False(chip.IsCustom);
+        }
     }
 
     private static string RepoRoot()

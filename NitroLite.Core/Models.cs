@@ -381,7 +381,7 @@ public class AppSettings
     public bool ReactiveLightingEnabled { get; set; } = false;
 
     /// <summary>
-    /// Which temperature ramp the reactive mode follows: the <see cref="ReactiveLightingProfile.Name"/> of a built-in
+    /// Which temperature ramp the reactive mode follows: the <see cref="ReactiveLightingProfile.Id"/> of a built-in
     /// profile, or <see cref="ReactiveLightingProfiles.CustomId"/> for the user's own stops. Null means the first
     /// built-in profile.
     /// </summary>
@@ -673,15 +673,11 @@ public class AppSettings
         KeyboardLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(KeyboardLighting));
         LastActiveLighting = LightingPolicy.MigrateLegacyReds(LightingPolicy.Sanitize(LastActiveLighting));
 
-        // The reactive profile is a name from a fixed list plus an optional ramp. A hand-edited file can carry a name
+        // The reactive profile is an id from a fixed list plus an optional ramp. A hand-edited file can carry a name
         // no build knows, and a ramp with fewer than two stops cannot describe a gradient — both fall back to the
-        // first built-in profile rather than being trusted.
-        if (ReactiveLightingProfile != null
-            && !ReactiveLightingProfiles.CustomId.Equals(ReactiveLightingProfile, StringComparison.OrdinalIgnoreCase)
-            && ReactiveLightingProfiles.FindBuiltIn(ReactiveLightingProfile) == null)
-        {
-            ReactiveLightingProfile = null;
-        }
+        // first built-in profile rather than being trusted. A file written by a build that stored the display name is
+        // understood too: the name resolves to its profile, and the id is what gets written back.
+        ReactiveLightingProfile = ReactiveLightingProfiles.CanonicalId(ReactiveLightingProfile);
         if (ReactiveLightingCustomStops != null)
         {
             var cleanStops = ReactiveLightingProfiles.SanitizeStops(ReactiveLightingCustomStops);

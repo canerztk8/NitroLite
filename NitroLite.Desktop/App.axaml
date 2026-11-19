@@ -582,6 +582,43 @@
       <Setter Property="Opacity" Value="0.45" />
     </Style>
 
+    <!--
+      A ramp chip: the gradient a temp-reactive profile paints, with its name under it. A card rather than a segmented
+      button, because the thing being chosen is a picture and the label only names it; the selected chip keeps the ink
+      frame the segmented row uses so the two read as the same kind of choice.
+    -->
+    <Style Selector="Button.ramp">
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="9,7" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.ramp /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.ramp:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.ramp:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
+    </Style>
+
+    <Style Selector="Button.ramp.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1,1,1,2" />
+    </Style>
+
+    <Style Selector="Button.ramp.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
     <!-- ============================================================ buttons -->
 
     <!-- Flat button: no chrome, no bevel. Hover is a paper tone, never a colour. -->

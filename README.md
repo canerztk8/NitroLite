@@ -73,7 +73,8 @@ the same cut is in [`docs/video`](docs/video) for anyone who would rather not us
   cycles them the way NitroSense does.
 - **Fan control:** automatic, maximum, a fixed speed per fan (30–100 %), or a **fan curve you draw yourself** — six
   points from 40 °C to 90 °C, with hysteresis so it does not hunt up and down on a temperature that sits on a step.
-  Three templates (Balanced, Quiet, Gaming) fill all six points in one click.
+  Three templates (Balanced, Quiet, Gaming) fill all six points in one click. The curve is stored and written to the
+  fans as you move an anchor, so there is no Apply button; the templates take the same path.
 - **A hand-set speed is held to a thermal floor.** A speed below what the current temperature allows is raised rather
   than accepted, and the fans go back to the firmware before the app exits.
 - **CPU boost** — Aggressive, Efficient or Disabled, written into the active Windows power plan.
@@ -89,10 +90,14 @@ saturated the reading barely moves. The curve is a way to trade noise against te
 - Static, breathing, wave, neon, slide, zoom, meteor and sparkle, plus your own saved profiles.
 - **Every change applies as you make it** — no Apply button. The backlight-off state survives a restart, and a colour
   set by hand marks the profile as Custom so the picker never claims a preset is selected when it is not.
-- **A colour that follows the processor**, if you want one: ice blue at 45 °C, mint at 60, amber at 72, red at 90,
-  holding the ends rather than going dark at idle. It is an overlay, not a saved colour — switching it off puts your
-  own colour back, and picking a colour by hand switches it off. The reading is rounded to 3 °C and written at most
-  once every three seconds, so it costs the keyboard a handful of writes an hour, not one per telemetry tick.
+- **Temp-Reactive Lighting**, if you want the keyboard to follow the processor: three ready-made ramps — Aurora (ice
+  blue → mint → amber → red), Inferno (amber → orange → red) and Nebula (turquoise → blue → violet → magenta) — are
+  drawn on their chips, so the choice is a look rather than a name. **Custom** opens an editor: one temperature and
+  one colour per stop, between 20 and 110 °C, up to eight stops, and one button that adds a stop in the widest gap.
+  The ends hold their colours instead of going dark at idle or inventing a colour hotter than the ramp. It is an
+  overlay, not a saved colour — switching it off puts your own colour back, and picking a colour by hand switches it
+  off. The reading is rounded to 3 °C and written at most once every three seconds, so it costs the keyboard a handful
+  of writes an hour, not one per telemetry tick.
 
 ### Battery
 - **80 % charge limit**, set through Acer Care Center or the firmware and read back to confirm. On a laptop with
