@@ -125,8 +125,10 @@ public static class DiagnosticsBundle
         builder.AppendLine($"Machine          : {Redaction.MachinePlaceholder}");
         builder.AppendLine($"Processors       : {Environment.ProcessorCount}");
         builder.AppendLine($"Data directory   : {Redaction.Scrub(SafeDataDirectory())}");
+        // Scrubbed for the same reason the line above is: the message is built from the data directory's full path,
+        // which carries the Windows user name, and this archive is a file a user attaches to a public issue.
         var dataError = AppPaths.DataDirectoryError;
-        if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {dataError}");
+        if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {Redaction.Scrub(dataError)}");
         builder.AppendLine();
 
         builder.AppendLine("[Capabilities]");

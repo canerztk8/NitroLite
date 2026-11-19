@@ -5443,7 +5443,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            var data = await _hardware.GetMonitorDataAsync().ConfigureAwait(true);
+            // The polling entry point, not the plain read: a poll must never start the elevated WMI helper, because
+            // that is a UAC prompt raised by a one-second timer. The backend that needs elevation is started by the
+            // settings page or by a write that needs it, and the poll uses it only once it is already up.
+            var data = await _hardware.GetTelemetryAsync().ConfigureAwait(true);
 
             // A backend that did not answer is not a machine with nothing to show. The platform monitor can still
             // report load, clocks and memory, which is what keeps the page useful on a machine whose Acer service is

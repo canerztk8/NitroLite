@@ -308,6 +308,14 @@ public sealed class HybridHardwareController : IHardwareController
     /// elevation prompt. The WMI path is used only once it is already connected — the user started it from the
     /// settings page, or a write needed it — and the service is still not answering.
     /// </summary>
+    /// <remarks>
+    /// This has to be the method the polling loop calls, and for a while it was not: the loop called
+    /// <see cref="GetMonitorDataAsync"/>, which resolves through <see cref="ResolveAsync"/> and therefore created the
+    /// WMI backend and started the elevated worker on the first tick. On a machine whose Acer service is missing —
+    /// the exact machine this path exists for — that was a UAC prompt one second after the window opened, and a new
+    /// elevated process every thirty seconds after that if the handshake kept failing. The interface now declares it,
+    /// so a caller cannot reach the wrong one by accident.
+    /// </remarks>
     public async Task<MonitorData?> GetTelemetryAsync()
     {
         if (_wmi is { IsAvailable: true } && !await _serviceHealthy().ConfigureAwait(false))

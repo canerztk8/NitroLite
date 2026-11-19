@@ -81,6 +81,29 @@ public sealed class AppHost : IDisposable
     private readonly IBatteryHealthService? _batteryHealth;
     private readonly Task _probeTask;
 
+    /// <summary>
+    /// The two <see cref="CpuPowerService"/> instances, held so they can be disposed.
+    /// </summary>
+    /// <remarks>
+    /// They are separate objects on purpose — the view model's boost control and school mode's undo record must not
+    /// share a hung-process slot — but both are <see cref="IDisposable"/> for one reason: a <c>powercfg.exe</c> that
+    /// did not exit inside its timeout is killed by <c>Dispose</c>. Without a field here nothing could ever call it,
+    /// because <see cref="ICpuBoostAccess"/> is not disposable, so a hung child outlived the app and every later
+    /// boost write stayed blocked behind it.
+    /// </remarks>
+    private readonly IDisposable? _cpuBoost;
+    private readonly SchoolModeService? _schoolMode;
+
+    /// <summary>
+    /// The OS monitor, held so NVML can be shut down.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IHardwareMonitor"/> is not disposable, so the view model cannot release it. The handle is released
+    /// by process teardown either way; disposing it here is what makes the driver see a clean shutdown rather than a
+    /// process that vanished.
+    /// </remarks>
+    private readonly IDisposable? _monitor;
+
     private AppHost(PlatformServices services, IDialogService? dialogs)
     {
         _hardware = services.Hardware;
@@ -88,6 +111,9 @@ public sealed class AppHost : IDisposable
         _nitroKey = services.NitroKey;
         _nitroSense = services.NitroSense;
         _batteryHealth = services.BatteryHealth;
+        _cpuBoost = services.CpuBoost as IDisposable;
+        _schoolMode = services.SchoolMode;
+        _monitor = services.Monitor as IDisposable;
 
         // The battery's own loop is started here rather than by the page: the overcharge banner and the discharge
         // estimate have to be live while the page is closed, which is the whole point of a watchdog.
@@ -638,9 +664,23 @@ public sealed class AppHost : IDisposable
 
     public void Dispose()
     {
+        // The view model first: it holds the fan curve loop and the write gate, and a step in flight reaches the
+        // hardware through the controller disposed below.
         ViewModel.Dispose();
+
+        // The NitroSense watcher is disposed here as well as in App.DisposeHost. That is not redundant: AppHost is
+        // also constructed by tests and by any future headless host, and a 400 ms foreground poll with no owner is
+        // exactly the kind of timer this audit exists to remove. Dispose is idempotent on the watcher.
+        _nitroSense?.Dispose();
         _nitroKey?.Dispose();
         _batteryHealth?.Dispose();
+
+        // The two boost backends and the OS monitor are IDisposable for one reason each — a hung powercfg.exe and an
+        // NVML session — and neither interface exposes Dispose, so this is the only place that can release them.
+        _schoolMode?.Dispose();
+        _cpuBoost?.Dispose();
+        _monitor?.Dispose();
+
         _hardware?.Dispose();
     }
 }

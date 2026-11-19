@@ -98,6 +98,23 @@ public interface IHardwareController : IDisposable
     /// <summary>One telemetry sample: temperatures, fan RPM, load, clocks. Null when the read failed.</summary>
     Task<MonitorData?> GetMonitorDataAsync();
 
+    /// <summary>
+    /// One telemetry sample for the polling loop, which must never have a side effect on the machine.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The difference from <see cref="GetMonitorDataAsync"/> is the elevation prompt. A backend that can only answer
+    /// by starting an elevated helper — the direct-WMI path on a machine whose Acer service is not running — must not
+    /// do that because a one-second timer asked it to. The user starts that backend from the settings page, or a write
+    /// that needs it starts it; a poll only uses it once it is already up.
+    /// </para>
+    /// <para>
+    /// The default is the plain read, which is correct for every backend that has no such side effect. Only the
+    /// hybrid controller overrides it.
+    /// </para>
+    /// </remarks>
+    Task<MonitorData?> GetTelemetryAsync() => GetMonitorDataAsync();
+
     /// <summary>The mode the hardware is in now, or null when it did not answer.</summary>
     Task<OperatingMode?> GetOperatingModeAsync();
 

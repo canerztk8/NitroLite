@@ -160,8 +160,11 @@ public static class AppLog
         }
         catch
         {
-            // A file that cannot be rotated is still a file that can be appended to.
-            return false;
+            // The rotation failed, so the caller must drop this line. Appending instead is what the old code did, and
+            // it is the wrong answer: the file is already past the cap, the move fails on every subsequent line, and
+            // the log grows without bound — on a full disk that is what stops the settings from saving. A dropped log
+            // line costs a diagnosis; an unbounded log costs the user their preferences.
+            return true;
         }
     }
 

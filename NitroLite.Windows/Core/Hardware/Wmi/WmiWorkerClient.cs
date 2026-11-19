@@ -29,6 +29,28 @@ public sealed class WmiWorkerClient : IDisposable
     private readonly NamedPipeClientStream _pipe;
     private bool _disposed;
 
+    /// <summary>
+    /// Serialises one request/response pair on the pipe.
+    /// </summary>
+    /// <remarks>
+    /// The wire format is a length prefix followed by a payload, and a pipe is a byte stream, not a message queue. Two
+    /// callers that write and read concurrently therefore do not merely race for an answer — they corrupt the framing:
+    /// reader A consumes the four-byte header, reader B consumes the first four bytes of A's payload as its own
+    /// header, and the length it decodes is whatever those bytes happen to be.
+    /// <para>
+    /// This is reachable in the shipped app. The fan curve steps on its own thread while the telemetry timer ticks on
+    /// the UI thread, and the controller gates only its writes — the read path calls <c>SendAsync</c> directly. The
+    /// consequence is either a bogus length that fails the frame check and tears the connection down, or two callers
+    /// each receiving the other's reply: a fan-speed write confirmed by a telemetry frame, and a telemetry read that
+    /// reports zero RPM because it parsed a write acknowledgement.
+    /// </para>
+    /// <para>
+    /// The gate belongs here rather than in the controller because this is the only place that knows a request and
+    /// its answer are one indivisible exchange.
+    /// </para>
+    /// </remarks>
+    private readonly SemaphoreSlim _exchange = new(1, 1);
+
     private WmiWorkerClient(NamedPipeClientStream pipe) => _pipe = pipe;
 
     /// <summary>
@@ -109,15 +131,25 @@ public sealed class WmiWorkerClient : IDisposable
         JsonObject? args = null,
         CancellationToken cancellationToken = default)
     {
-        await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
+        // One exchange at a time: the write and the read that answers it are a single unit on a byte stream. See
+        // _exchange for what happens without this.
+        await _exchange.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            Type = WmiWorkerProtocol.TypeCommand,
-            Command = command,
-            Args = args
-        }, cancellationToken).ConfigureAwait(false);
+            await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
+            {
+                Type = WmiWorkerProtocol.TypeCommand,
+                Command = command,
+                Args = args
+            }, cancellationToken).ConfigureAwait(false);
 
-        return await WmiWorkerProtocol.ReadResponseAsync(_pipe, cancellationToken).ConfigureAwait(false)
-               ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
+            return await WmiWorkerProtocol.ReadResponseAsync(_pipe, cancellationToken).ConfigureAwait(false)
+                   ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
+        }
+        finally
+        {
+            _exchange.Release();
+        }
     }
 
     public void Dispose()
@@ -125,5 +157,9 @@ public sealed class WmiWorkerClient : IDisposable
         if (_disposed) return;
         _disposed = true;
         try { _pipe.Dispose(); } catch { }
+
+        // Not disposed: a caller may still be inside SendAsync holding it, and disposing a SemaphoreSlim underneath a
+        // waiter throws ObjectDisposedException on a background thread. It holds no unmanaged resource unless
+        // AvailableWaitHandle is read, which this class never does.
     }
 }

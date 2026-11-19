@@ -416,31 +416,49 @@ public partial class App : Application, IDisposable
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
 
+        // A process-wide static event, so it pins this App for the life of the process unless it is removed. Left
+        // armed after the host is gone, it would also swallow a UI exception raised during shutdown and count it
+        // against a limit nobody is watching any more.
+        Dispatcher.UIThread.UnhandledException -= OnUiException;
+
         // Unsubscribed before the host is disposed: a switch flipped during teardown would otherwise reach a view
         // model that is already gone.
         if (_host != null) _host.ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+
+        // The NitroSense watcher is torn down on its own, not inside the key-listener branch below. It used to be
+        // nested there, which meant a machine whose key listener was null — a platform without the Acer input device,
+        // or a composition root that threw between the two constructions — left a 400 ms foreground poll running with
+        // no owner and an event subscription pointing at a disposed view model.
+        if (_nitroSense != null)
+        {
+            _nitroSense.NitroSenseActivated -= OnNitroSenseActivated;
+            _nitroSense.Stop();
+            _nitroSense.Dispose();
+            _nitroSense = null;
+        }
 
         // Unsubscribed before the host is disposed: the listener's read loop can raise one last event while it is
         // shutting down, and a handler that reached a disposed view model would throw on a background thread.
         if (_nitroKey != null)
         {
             _nitroKey.NitroKeyPressed -= OnNitroKeyPressed;
-
-            if (_nitroSense != null)
-            {
-                _nitroSense.NitroSenseActivated -= OnNitroSenseActivated;
-                _nitroSense.Stop();
-                _nitroSense.Dispose();
-                _nitroSense = null;
-            }
             _nitroKey.Stop();
             _nitroKey = null;
         }
 
         _nitroGate = null;
 
-        _tray?.Dispose();
-        _tray = null;
+        // The icon is removed from the Application's own collection before it is disposed. Avalonia keeps tray icons
+        // in an attached collection on the Application, so disposing the icon alone leaves a disposed object in a
+        // list that outlives it.
+        if (_tray != null)
+        {
+            var icons = TrayIcon.GetIcons(this);
+            icons?.Remove(_tray.Icon);
+            _tray.Dispose();
+            _tray = null;
+        }
+
         _host?.Dispose();
         _host = null;
     }

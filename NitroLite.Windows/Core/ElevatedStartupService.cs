@@ -389,6 +389,22 @@ public sealed class ElevatedStartupService
                         $"for autostart: {exePath}");
         }
 
+        // The temp/Downloads test above is a name test, and a name test is not an access test. A folder such as
+        // C:\WinTools is neither temp nor Downloads, yet on a stock Windows the drive root grants Authenticated Users
+        // modify to everything created beneath it, so any local account can replace the executable between this check
+        // and the logon that runs it. The task is registered at HighestAvailable, so that replacement would run with
+        // an administrator token and no prompt.
+        //
+        // This is the same predicate the elevated WMI helper is launched behind (WmiWorkerLauncher), and the two
+        // paths hand out the same thing — an administrator token for a file at a path — so they have to agree about
+        // which paths are safe. Without this, the app refuses to elevate the helper from C:\WinTools and then
+        // happily registers a logon task there.
+        if (!DirectoryTrust.IsExecutableTrusted(exePath))
+        {
+            return Fail("the executable sits in a folder another local account can write to, so it must not be " +
+                        $"registered for an elevated autostart: {exePath}");
+        }
+
         string? userId = _userId();
         if (string.IsNullOrWhiteSpace(userId))
         {
