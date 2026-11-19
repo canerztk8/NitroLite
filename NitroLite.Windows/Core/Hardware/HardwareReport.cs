@@ -6,6 +6,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32;
+using NitroLite.Core.Hardware.Verification;
 using NitroLite.Core.Hardware.Wmi;
 
 namespace NitroLite.Core.Hardware;
@@ -277,6 +278,25 @@ public static class HardwareReport
         AppendRow(sb, "Plausibility window", SensorPlausibility.Describe());
         sb.AppendLine();
 
+        // The layers behind the firmware. Without this line a report showing "CPU 0 °C" cannot be told apart from a
+        // machine whose thermal zone is also unavailable, which is the difference between a sensor-id fix and a
+        // machine that has no thermal zone at all.
+        sb.AppendLine("| Telemetry fallbacks | |");
+        sb.AppendLine("| --- | --- |");
+        foreach (var line in WindowsTelemetryFallbacks.Describe())
+        {
+            int split = line.IndexOf(": ", StringComparison.Ordinal);
+            if (split < 0)
+            {
+                sb.AppendLine($"| {Escape(line)} | |");
+                continue;
+            }
+
+            sb.AppendLine($"| {Escape(line[..split])} | {Escape(line[(split + 2)..])} |");
+        }
+
+        sb.AppendLine();
+
         if (context != null) AppendUsbHidTable(sb, context.UsbHid);
         if (context != null) AppendKeyboardLightingTable(sb, context.KeyboardLighting);
 
@@ -297,6 +317,19 @@ public static class HardwareReport
             }
         }
         sb.AppendLine();
+
+        // What this session actually confirmed after a write. A control that was written and could not be read back
+        // belongs in the report: "the toggle says applied and nothing happens" is the report this line exists to stop
+        // being rediscovered from a screenshot.
+        var verification = SessionVerification.Shared.Describe();
+        if (verification.Length > 0)
+        {
+            sb.AppendLine("**Unconfirmed controls this session**");
+            sb.AppendLine();
+            foreach (var line in verification.Split(Environment.NewLine))
+                sb.AppendLine($"- {Escape(line)}");
+            sb.AppendLine();
+        }
 
         if (probe.Rejections.Count > 0)
         {

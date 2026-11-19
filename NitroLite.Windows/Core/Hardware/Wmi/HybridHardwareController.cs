@@ -1,4 +1,5 @@
 ﻿using NitroLite.Core.Hardware.Lighting;
+using NitroLite.Core.Hardware.Verification;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
@@ -696,12 +697,76 @@ public sealed class HybridHardwareController : IHardwareController
     public async Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode)
     {
         var backend = await ResolveAsync().ConfigureAwait(false);
-        if (await backend.SetBatteryChargeModeAsync(mode).ConfigureAwait(false)) return true;
+
+        // The direct-WMI backend already reads the limit back through ReadBackPolicy, so a true answer from it is a
+        // confirmed answer and needs no second look.
+        if (_activeIsWmi && await backend.SetBatteryChargeModeAsync(mode).ConfigureAwait(false))
+        {
+            SessionVerification.Shared.Confirm(ReadBackPolicy.BatteryLimit);
+            return true;
+        }
 
         // Only the direct-WMI path has a second provider to ask. On the service path the answer already came from
         // Care Center, and asking it again would just repeat the same refusal.
         if (!_activeIsWmi) return false;
-        return await _agent.SetBatteryChargeModeAsync(mode).ConfigureAwait(false);
+        if (!await _agent.SetBatteryChargeModeAsync(mode).ConfigureAwait(false)) return false;
+
+        return await ConfirmServiceBatteryAsync(mode).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the charge limit back from Care Center after it accepted a write.
+    /// <para>
+    /// The service answers <c>ok</c> before it has told the EC, so the read is repeated after
+    /// <see cref="ReadBackPolicy.SettleDelay"/>. A service that cannot answer at all — an older Care Center, or a
+    /// machine where the vendor software is only half installed — leaves the control unverified rather than failed: the
+    /// toggle keeps what the user asked for, and the hint offers a compatibility report instead of a false "Applied".
+    /// </para>
+    /// </summary>
+    private async Task<bool> ConfirmServiceBatteryAsync(BatteryChargeMode mode)
+    {
+        await Task.Delay(ReadBackPolicy.SettleDelay).ConfigureAwait(false);
+
+        BatteryChargeMode? observed;
+        try
+        {
+            observed = await _agent.GetBatteryChargeModeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Info("The charge-limit read-back failed", ex.Message);
+            observed = null;
+        }
+
+        if (observed is not { } actual)
+        {
+            SessionVerification.Shared.Mark(new VerificationNote
+            {
+                Control = ReadBackPolicy.BatteryLimit,
+                Verdict = ControlVerdict.Unverifiable,
+                Requested = mode.ToString(),
+                Detail = "Acer Care Center accepted the write and does not report the current limit"
+            });
+
+            return true;
+        }
+
+        if (actual == mode)
+        {
+            SessionVerification.Shared.Confirm(ReadBackPolicy.BatteryLimit);
+            return true;
+        }
+
+        SessionVerification.Shared.Mark(new VerificationNote
+        {
+            Control = ReadBackPolicy.BatteryLimit,
+            Verdict = ControlVerdict.Mismatch,
+            Requested = mode.ToString(),
+            Observed = actual.ToString(),
+            Detail = "Acer Care Center accepted the write and still reports the previous limit"
+        });
+
+        return false;
     }
 
     public void Dispose()

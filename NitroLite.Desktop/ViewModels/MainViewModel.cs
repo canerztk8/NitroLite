@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Verification;
 using NitroLite.Desktop.Mvvm;
 using NitroLite.Desktop.Themes;
 
@@ -914,6 +915,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private HardwareCapabilities _capabilities = HardwareCapabilities.Unknown;
 
     /// <summary>
+    /// What this session has written and managed to confirm. Shared by default, because the read-back policy that fills
+    /// it lives in the backend and a second ledger would drift; the tests pass their own so one test cannot see
+    /// another's notes.
+    /// </summary>
+    private readonly SessionVerification _verification;
+
+    /// <summary>
     /// The thermal floor for the manual custom-speed sliders. Separate from <see cref="_curveEvaluator"/> because the
     /// two answer different questions: the curve decides what the temperature asks for, this decides how far the
     /// user's own number may be lowered while the die is hot.
@@ -1141,9 +1149,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         INitroSenseWatcher? nitroSense = null,
         FanStallWatchdog? fanStall = null,
         Action<string>? urlOpener = null,
-        Task? probeTask = null)
+        Task? probeTask = null,
+        SessionVerification? verification = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _verification = verification ?? SessionVerification.Shared;
         _hardware = hardware;
         _platform = platform;
         _rescan = rescan;
@@ -3757,6 +3767,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool BatteryLimitAvailable => _capabilities.BatteryChargeLimit;
 
+    /// <summary>
+    /// True when this session wrote a control and could not confirm it: the read-back contradicted the write, or the
+    /// machine has no way to read that setting back. The hint offers the compatibility report, because a control that
+    /// silently does nothing is the one thing a user cannot debug alone.
+    /// </summary>
+    public bool HasVerificationHint => _verification.HasUnverified;
+
+    /// <summary>The names of the unconfirmed controls, or empty when there is nothing to say.</summary>
+    public string VerificationHintText
+    {
+        get
+        {
+            var notes = _verification.NeedsAttention();
+            if (notes.Count == 0) return "";
+
+            var controls = string.Join(", ", notes.Select(note => SessionVerification.LabelFor(note.Control)));
+            return Labels.VerificationHint(controls);
+        }
+    }
+
     /// <summary>True when the backend reports at least one of the optional switches this page carries.</summary>
     public bool HasAnyExtra =>
         CoolBoostAvailable || LcdOverdriveAvailable || WinKeyLockAvailable || BacklightTimeoutAvailable;
@@ -3790,13 +3820,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _batteryLimitOn, value)) return;
-            if (!_suppressWrite)
-            {
-                _ = RunWriteAsync(
-                    () => _hardware!.SetBatteryChargeModeAsync(value ? BatteryChargeMode.Optimized80 : BatteryChargeMode.Full),
-                    Labels.BatteryLimit);
-            }
+            if (!_suppressWrite) _ = ApplyBatteryLimitAsync(value);
         }
+    }
+
+    /// <summary>
+    /// Writes the charge limit and then shows what the machine actually reports.
+    /// <para>
+    /// The write used to be fire-and-forget: the switch stayed where the user put it whatever the firmware or Acer Care
+    /// Center answered, which is how the AN16-61 report ended up with a toggle that said "80 %" while the battery kept
+    /// charging to 100. The read-back is the second half of the write — on a refusal, and on the mismatch path the
+    /// backends already detect, the switch is moved to the state the machine reports instead of the state that was
+    /// asked for.
+    /// </para>
+    /// </summary>
+    private async Task ApplyBatteryLimitAsync(bool on)
+    {
+        if (_hardware == null) return;
+
+        var mode = on ? BatteryChargeMode.Optimized80 : BatteryChargeMode.Full;
+        bool ok = await RunWriteAsync(() => _hardware.SetBatteryChargeModeAsync(mode), Labels.BatteryLimit)
+            .ConfigureAwait(true);
+
+        if (ok) return;
+
+        BatteryChargeMode? actual;
+        try
+        {
+            actual = await _hardware.GetBatteryChargeModeAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The charge limit could not be read back", ex.Message);
+            return;
+        }
+
+        if (actual is not { } observed) return;
+
+        bool isOn = observed == BatteryChargeMode.Optimized80;
+        if (isOn == on) return;
+
+        AppLog.Warn("The charge limit did not change", $"wrote {mode}, the machine reports {observed}");
+        SyncControls(() => BatteryLimitOn = isOn);
     }
 
     // ---------------------------------------------------------------- sign-in launch
@@ -6984,6 +7049,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally
         {
             _writeGate.Release();
+
+            // A write is the only thing that changes what this session has confirmed, so the hint is refreshed here
+            // rather than on a timer: the user sees it appear under the control they just used.
+            Raise(nameof(HasVerificationHint));
+            Raise(nameof(VerificationHintText));
         }
     }
 

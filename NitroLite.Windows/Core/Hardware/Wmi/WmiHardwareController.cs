@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Nodes;
+using NitroLite.Core.Hardware.Verification;
 
 namespace NitroLite.Core.Hardware.Wmi;
 
@@ -440,6 +441,17 @@ public sealed class WmiHardwareController : IHardwareController
                 // not apply the setting" report: a click, no reboot prompt, no message, and nothing in the log.
                 AppLog.Warn("The MUX write was not attempted",
                     $"the worker could not read the current mode: {refusal}");
+
+                // The AN16-61 report was exactly this: a click, no message, and nothing in the log. The note is what
+                // puts it in front of the user and into the hardware report.
+                SessionVerification.Shared.Mark(new VerificationNote
+                {
+                    Control = ReadBackPolicy.MuxMode,
+                    Verdict = ControlVerdict.Unverifiable,
+                    Requested = mode.ToString(),
+                    Detail = $"the current mode could not be read: {refusal}"
+                });
+
                 return false;
             }
 
@@ -447,6 +459,16 @@ public sealed class WmiHardwareController : IHardwareController
             {
                 AppLog.Warn("The MUX write was refused",
                     $"current GetGamingMiscSetting(0x02) value {DescribeRaw(state)}; expected high byte 1..3");
+
+                SessionVerification.Shared.Mark(new VerificationNote
+                {
+                    Control = ReadBackPolicy.MuxMode,
+                    Verdict = ControlVerdict.Mismatch,
+                    Requested = mode.ToString(),
+                    Observed = DescribeRaw(state),
+                    Detail = "GetGamingMiscSetting(0x02) answered outside the range the encoder writes"
+                });
+
                 return false;
             }
 
@@ -455,7 +477,8 @@ public sealed class WmiHardwareController : IHardwareController
                 write: () => WriteOrThrowAsync(WmiWorkerCommand.SetMuxMode,
                     new JsonObject { ["mode"] = (int)mode }),
                 readBack: GetGpuModeAsync,
-                matches: observed => observed == mode).ConfigureAwait(false);
+                matches: observed => observed == mode,
+                requested: mode.ToString()).ConfigureAwait(false);
 
             return result.Applied;
         }
@@ -796,15 +819,45 @@ public sealed class WmiHardwareController : IHardwareController
     }
 
     /// <summary>
-    /// Writes the Windows-key lock. The answer is the firmware's status byte, not a read-back: the firmware has no
-    /// getter for this setting, so a true result means "accepted", and the UI says so rather than claiming the state
-    /// was confirmed.
+    /// Writes the Windows-key lock. The firmware has no getter for this setting, so the answer is the status byte and
+    /// nothing more.
+    /// <para>
+    /// The call therefore records an <see cref="ControlVerdict.Unverifiable"/> note instead of confirming anything: the write is reported
+    /// as accepted, the control is recorded as unverified for the session, and the UI offers a compatibility report
+    /// instead of claiming a state the machine never confirmed. It is deliberately not a failure — a setting with no
+    /// getter is not a broken setting, and disabling it for the session would take away the one thing this control can
+    /// do. A refusal from the worker still comes back as false, because that is evidence the write never happened.
+    /// </para>
     /// </summary>
     public async Task<bool> SetWinKeyLockAsync(bool enabled)
     {
         var response = await SendAsync(WmiWorkerCommand.SetWinKeyLock, new JsonObject { ["enabled"] = enabled })
             .ConfigureAwait(false);
-        return response is { Ok: true };
+
+        if (response is not { Ok: true })
+        {
+            // The worker answered and refused, or it was not there at all. Both are a write that did not happen, and
+            // the caller's status line has to say so.
+            SessionVerification.Shared.Mark(new VerificationNote
+            {
+                Control = ReadBackPolicy.WinKeyLock,
+                Verdict = ControlVerdict.TransportMissing,
+                Requested = enabled ? "enabled" : "disabled",
+                Detail = DescribeWorkerRefusal(response)
+            });
+
+            return false;
+        }
+
+        SessionVerification.Shared.Mark(new VerificationNote
+        {
+            Control = ReadBackPolicy.WinKeyLock,
+            Verdict = ControlVerdict.Unverifiable,
+            Requested = enabled ? "enabled" : "disabled",
+            Detail = "the firmware has no getter for the Windows-key lock (SetGamingProfile has no matching get)"
+        });
+
+        return true;
     }
 
     // ---------------------------------------------------------------- battery charge limit
@@ -838,7 +891,8 @@ public sealed class WmiHardwareController : IHardwareController
             write: () => WriteOrThrowAsync(WmiWorkerCommand.SetBatteryLimit,
                 new JsonObject { ["mode"] = (int)mode }),
             readBack: GetBatteryChargeModeAsync,
-            matches: observed => observed == mode).ConfigureAwait(false);
+            matches: observed => observed == mode,
+            requested: mode.ToString()).ConfigureAwait(false);
 
         return result.Applied;
     }
@@ -850,7 +904,8 @@ public sealed class WmiHardwareController : IHardwareController
         string capability,
         Func<Task<bool>> write,
         Func<Task<T?>> readBack,
-        Func<T, bool> matches) where T : struct
+        Func<T, bool> matches,
+        string requested = "") where T : struct
     {
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
@@ -861,7 +916,7 @@ public sealed class WmiHardwareController : IHardwareController
             if (!await EnsureConnectedAsync().ConfigureAwait(false))
                 return ReadBackResult.NoTransport();
 
-            return await _readBack.ApplyAsync(capability, write, readBack, matches).ConfigureAwait(false);
+            return await _readBack.ApplyAsync(capability, write, readBack, matches, requested).ConfigureAwait(false);
         }
         finally
         {

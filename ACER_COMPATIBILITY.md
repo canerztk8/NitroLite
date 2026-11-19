@@ -432,11 +432,11 @@ Recorded so the next reader does not "fix" these back.
 | Item | State | First step |
 | --- | --- | --- |
 | Physical verification of any model other than AN16-41 / AN16-61 | **test pending** — no device | run `--hardware-report` on the machine and compare the sensor answers with §1.2 |
-| AN16-61 CPU clock, at the panel | **code fixed, UI unconfirmed** — the fallback is unit-tested on the reference unit, not seen on an AN16-61 | open the dashboard on an AN16-61 and check the clock is not `-- GHz` |
-| AN16-61 MUX write | **test pending** — the write path is now logged, not fixed | reproduce the switch and send the new `MUX write was not attempted` / `MUX mode could not be read` line |
+| AN16-61 CPU clock, at the panel | **code fixed, UI unconfirmed** — the fallback is unit-tested on the reference unit, not seen on an AN16-61; round three added the PDH/`CallNtPowerInformation` chain behind it (§7.2) | open the dashboard on an AN16-61 and check the clock is not `-- GHz` |
+| AN16-61 MUX write | **test pending** — read-back with a 320 ms settle, the toggle reverts on a mismatch, and the claim is recorded (§7.1) | reproduce the switch and send the new `Unconfirmed controls this session` line from the report |
 | AN16-61 per-zone keyboard colour | **code + tests, physical confirmation pending** — WMI is tried first and the ENE HID frame takes over when it does not take (§1.7) | on the machine, set four different zone colours and check the report says `hid`; then check the LEDs match |
-| AN16-61 Windows-key lock | **test pending** — no firmware getter exists, so a working write cannot be told from a no-op | needs the machine and a key-by-key check |
-| AN16-61 battery charge limit through Care Center | **test pending** — the fallback is written and compiles, nothing more | on the machine, check the battery card appears and the mode reads back |
+| AN16-61 Windows-key lock | **honest, not fixed** — the write is recorded unverified and the UI stops claiming it applied (§7.1); no firmware getter exists | press the toggle on the machine and check the hint appears; a key-by-key check is still the only proof |
+| AN16-61 battery charge limit through Care Center | **code + tests, physical pending** — the service answer is read back after 320 ms and a mismatch moves the switch (§7.1) | toggle the limit on the machine; the log says `The charge limit did not change` if the service lies |
 | AN16-61 custom fan curve | **code + tests, physical confirmation pending** — the curve is no longer gated on a static profile measurement (§1.6) | open the fan page after ~2 s of telemetry on the machine; the report should read `runtime-verified (2 samples)` |
 | The eight model codes in §4.1 | **test pending** | add the profile once a machine confirms its sensor ids |
 | `PHIN16-71` / `PHIN16S-71` code validity | **unconfirmed** | check Acer's regional model lists; delete or correct |
@@ -446,3 +446,46 @@ Recorded so the next reader does not "fix" these back.
 | ANV16S-41 four-zone colour over HID | **test pending** — the model is in the table and the protocol is confirmed on it by S7, not by this project | same check as the AN16-61 row, on a unit of that model |
 | ITE / Sonix / Chicony keyboard lighting | **no documented frame** — recognised, reported, never written | find a published frame or a capture from one of those machines before changing anything |
 | Downloaded profile table, live | **code + tests, live fetch unconfirmed** — validation and the atomic write are unit-tested; the fetch is not | on a network, check the log line `Published profiles` and that a model only the published table names matches after the rescan |
+| ACPI thermal zone (PDH) on any model | **physical on AN16-41 only** — 56.9 °C, read-only | run `--hardware-report` on the model and read the `Telemetry fallbacks` table |
+
+---
+
+## 7. Round three — what a control can be trusted to say
+
+Round three did not add a model. It changed what the program is allowed to *claim*, which is why it belongs
+in a compatibility document: the AN16-61 report's three symptoms were all "the app said it worked".
+
+### 7.1 The rule, per control
+
+A write is only reported as applied when the machine's own read-back agrees with it. Anything else is stated
+as what it is.
+
+| Control | Read-back source | Evidence level | What the UI says when it disagrees |
+| --- | --- | --- | --- |
+| Fan behaviour / fan speed | `GetGamingFanBehavior`, `GetGamingFanSpeed` | **physical** — AN16-41, measured in round one | reverts, status `Uygulanamadı`, capability off for the session |
+| Operating mode | `GetGamingMiscSetting(0x0B)` | **physical** — AN16-41 | same |
+| Keyboard colour | `GetGamingKBBacklight`, or the HID frame's own answer | **physical** — AN16-41; ENE frame confirmed by S7 on `PHN16S-71` / `ANV16S-41` | falls back to HID, then reverts |
+| MUX switch | `GetGamingMiscSetting(0x02)`, high byte `1..3` | **physical** — AN16-41 (hybrid, discrete). AN16-61: the *write* was reported as not applying, so this path is **test pending** there | reverts, clears the reboot badge, records why |
+| Battery charge limit | `WMID_GUID5` read-back, then Acer Care Center's `GET` after 320 ms | **physical** — AN16-41 for the WMI path; Care Center path **test pending** (no AN16-61 here) | switch moves to the mode the machine reports |
+| Windows-key lock | **none exists** — `SetGamingProfile` has no matching getter | **source + measurement** — `GetGamingProfile(0)` answers `0x1000000` (overdrive off) / `0x1000001000000` (on); bit 24 is the overdrive flag, so it cannot be the lock state | stays where the user put it, recorded *unverified*, hint offered |
+| LCD overdrive, CoolBoost, backlight timeout | `GetGamingProfile(0)`, `APGeAction.GetFunction(0x207)`, `GetFunction(backlight)` | **physical** — AN16-41 | unchanged by this round |
+
+### 7.2 Telemetry layers, per metric
+
+| Metric | Primary | Fallback | Physical evidence |
+| --- | --- | --- | --- |
+| CPU temperature | Acer `GetGamingSysInfo(0x0101)` / AASSvc `CPU_TEMPERATURE` | ACPI thermal zone through PDH (`\Thermal Zone Information(*)\Temperature`), 5 s cache | **physical** — AN16-41: PDH answered **56.9 °C** while the firmware value was present, i.e. the fallback is a real measurement and not a placeholder |
+| CPU clock | AASSvc `CPU_FREQUENCY` | `CallNtPowerInformation(ProcessorInformation)`, parked cores excluded | **physical** — AN16-41 (`readable`) |
+| GPU temperature / clock / power / VRAM | Acer, then NVML | NVML only; a sleeping dGPU is never woken | **physical** — AN16-41 in round one |
+| CPU power | *none* — a model, labelled `(tahmini)` | — | **physical**: it is an estimate and every surface says so |
+| VRAM via DXGI / AMD ADL | *not queried* — detected and reported only | — | **deliberately not implemented**: hand-declared COM vtables are an access violation risk that no `catch` survives |
+
+### 7.3 AN16-61 (model code `AN16-61`, BIOS 1.53), round-three status
+
+| Item | State after this round | First step on the machine |
+| --- | --- | --- |
+| MUX write | **code changed, test pending** — 320 ms settle before the read, mismatch reverts and is recorded | click *Discrete GPU*, reboot, and send the new report: the `Unconfirmed controls this session` list will name the control and both values |
+| Windows-key lock | **honest, not fixed** — recorded unverified; no firmware getter exists | press the toggle and check the hint appears; a working lock is still indistinguishable from a no-op over WMI |
+| Battery charge limit (Care Center) | **code + tests, physical pending** — the service answer is now read back, mismatch moves the switch | toggle the limit and watch the battery card; the log gets `The charge limit did not change` if it lies |
+| CPU clock `-- GHz` | **fallback compiled and measured on AN16-41**, AN16-61 pending | open the dashboard: the clock should now come from `CallNtPowerInformation` instead of zero |
+| Four-zone colour | unchanged from round two (§1.7) | — |

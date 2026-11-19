@@ -1682,5 +1682,6 @@
   "Sıcaklığa göre renk yazılamadı": "Не удалось записать цвет по температуре",
   "Raporu GitHub'da paylaş": "Сообщить о совместимости на GitHub",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Отчёт об оборудовании скопирован в буфер обмена; создана новая задача на GitHub.",
-  "Uyumluluk raporu paylaşılamadı: {0}": "Не удалось поделиться отчётом о совместимости: {0}"
+  "Uyumluluk raporu paylaşılamadı: {0}": "Не удалось поделиться отчётом о совместимости: {0}",
+  "Doğrulanamayan denetimler: {0}": "Непроверенные элементы управления: {0}"
 }

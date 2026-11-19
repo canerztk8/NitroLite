@@ -863,3 +863,72 @@ wrong. The log line is quoted in `ACER_COMPATIBILITY.md` §1.7.
   That is a smaller surface than phase 5's, not a larger one — but it is an argument, not a measurement,
   and it is recorded as such.
 
+---
+
+## 9. Round three — universal read-back and a user-mode sensor chain (2026-11-20)
+
+Branch `feat/universal-readback-and-sensors`, cut from `main` at `bea9209`. Nothing under `trailer/` was
+touched.
+
+The round exists because of one sentence in the AN16-61 report: *"the capability says my device does not
+support battery charge limit … both functions work fine via NitroSense"*, together with *"MUX switch
+option doesn't read current mode & switching to discrete GPU does not apply"* and *"Windows key lock also
+does nothing"*. All three are the same defect class: **a control whose write answer is treated as the
+truth**. Round two fixed the read-back for fan and colour; this round extends it to the rest and adds the
+screen that tells the user when the machine did not agree.
+
+### 9.1 Findings and what closed them
+
+| ID | Severity | Area | Fixed by |
+| --- | --- | --- | --- |
+| HW-09 | ORTA | the charge-limit switch stayed where the user put it whatever the backend answered. On the AN16-61 the toggle could read "80 %" while the battery charged to 100 | `MainViewModel.ApplyBatteryLimitAsync` — after a refused or mismatched write the switch is moved to the state `GetBatteryChargeModeAsync` reports, and the mismatch is logged |
+| HW-10 | ORTA | the read-back covered fan, colour, mode, MUX and battery; the **Windows-key lock** claimed success from a status byte, and a MUX refusal was a silent `false` | `ControlVerdict` + `SessionVerification` (one ledger for the session); the key lock is recorded `Unverifiable` and no longer pretends to be confirmed; both MUX refusal paths now record why |
+| HW-11 | ORTA | the first read-back ran 120 ms after the write. That is a register-poke delay; a MUX word is staged for POST and Care Center's agent applies the limit after it has answered | `ReadBackPolicy.SettleDelay` — 320 ms before the *first* read, 120 ms between retries (one attempt per delay, so the total stays bounded) |
+| HW-12 | DÜŞÜK | a missing WMI transport was counted as a **mismatch**, which is a claim about the firmware that was never observed | transport-missing verdict: recorded, never counted towards the three sessions, never offered as a compatibility bug |
+| HW-13 | ORTA | a setting with no getter was indistinguishable from a setting that worked | `ApplyUnverifiableAsync`: the write is accepted, the control is *not* called applied, the capability is *not* disabled, and the hint offers a report |
+| — | UI | there was no way to act on "the toggle does nothing" from the page the user was on | inline hint on the dashboard: `Doğrulanamayan denetimler: …` plus the existing one-click compatibility button |
+| HW-14 | ORTA | CPU temperature and clock had exactly one source each. A machine whose sensor layout is unread shows `0 °C`, and AASSvc answers `0 MHz` for a field it never implemented | `TelemetryFallbackChain` (pure, tested) wired to the ACPI thermal zone through PDH (5 s cache) and to `CallNtPowerInformation` for the clock; every reading records where it came from |
+
+### 9.2 Evidence
+
+| Check | Command / source | Result |
+| --- | --- | --- |
+| Release build, whole solution | `dotnet build NitroLite.sln -c Release --nologo -warnaserror` | **0 warnings, 0 errors** |
+| Full suite | `dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build` | **2909 passed, 0 failed, 6 skipped**, 4 m 55 s (18 new tests in `UniversalReadbackAndSensorsTests`) |
+| The four read-back outcomes | `UniversalReadbackAndSensorsTests` | confirmed · contradicted (control reverted, note recorded, capability disabled for the session) · unverifiable (kept, not claimed) · no transport (not counted) |
+| The settle delay | same | exactly one 320 ms delay before the first read; `SettleDelay > RetryDelay` |
+| The charge-limit reversion | same, on the stub machine | a write that fails while the machine still reports `Full` puts the switch back to off; a write that lands keeps it on |
+| The hint | same | hidden with an empty ledger; after one mismatch it names the control (`MUX switch`) and the report button is the one that already exists |
+| Fallback precedence | same | firmware `0` rejected → PDH 61.5 accepted; `6553.5`, `0`, `-1`, `NaN`, `∞` rejected; a provider that throws is skipped; nothing answering is `none`, never `0` |
+| The fallback, live | `NitroLite.Desktop.exe --hardware-report` | `cpu-temp fallback | PDH thermal zone readable (56.9 °C)`; `cpu-clock fallback | CallNtPowerInformation (ntdll) · readable` |
+| Provenance | `UniversalReadbackAndSensorsTests` | a sample with no firmware behind it carries `cpu-temp`, `cpu-clock`, `cpu-power=estimate` and a GPU row that never says "firmware" |
+| Report surfaces | `--hardware-report` | new `| Telemetry fallbacks |` table; `| Read-back policy |` now lists `wmi.winKeyLock`; `| Unconfirmed controls this session |` appears only after an unconfirmed write |
+| The application, normal launch | `NitroLite.Desktop.exe`, `nitrolite.log` | started, `runtime-verified (2 samples)`, published profile table refreshed (32 kept), telemetry ticking, no exception, no new warning |
+| Trim / packaging | `PublishTrimmed` untouched, no reflection added | `PdhOpenQueryW`/`PdhGetFormattedCounterArrayW` are plain `DllImport`s; the new Core types are ordinary classes and records |
+
+### 9.3 Deliberately not done
+
+- **DXGI and AMD ADL are detected, not queried.** Both are COM interfaces that would have to be declared
+  by hand to stay trim-safe, and a wrong vtable slot is an access violation that no `catch` can survive.
+  The reading they would add (VRAM budget) is already available from NVML on the machines that have a
+  dGPU. `WindowsTelemetryFallbacks.Describe()` says so in the report instead of pretending.
+- **No kernel driver, and no MSR read.** The CPU wattage stays an estimate and is labelled as one.
+- **No PDH `% Processor Performance` counter.** `CallNtPowerInformation` already answers the clock on
+  this machine, and two sources for one number is a way to disagree with yourself.
+- **The Windows-key lock is still not confirmed on any hardware.** No Acer firmware we have evidence for
+  exposes a getter: `GetGamingProfile` with the lock's selector echoes the selector, and
+  `GetGamingProfile(0)`'s bit 24 means "overdrive supported" (`0x1000000` on a machine with overdrive
+  off). The control is now honest instead of fixed.
+
+### 9.4 Still open after this round
+
+- **The AN16-61 items need that machine**: MUX read/write, the Windows-key lock, the Care Center charge
+  limit and the new hint's appearance after a real failed write. All four are recorded as *test pending*
+  in `ACER_COMPATIBILITY.md` §6 and §7, not as fixed.
+- **The ACPI thermal zone was read on the reference unit only** (AN16-41, 56.9 °C). Whether a 2025
+  Nitro publishes a zone at all is a fact about that firmware, and it is unknown.
+- **No 180-minute endurance run for this round.** The owner's instruction after round one was that the
+  clock must not block delivery; phase 5's measurement stands for the code it ran on (`31cd54b`). What
+  this round adds to the polling loop is one PDH probe every five seconds (only while the firmware has no
+  CPU temperature), one `Task.Delay(320 ms)` inside a write that already blocks the write gate, and two
+  property notifications per write. That is an argument, not a measurement, and it is recorded as such.

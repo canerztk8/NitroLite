@@ -485,12 +485,23 @@ internal static class Phase3Fakes
 
         public Task<bool> SetBacklightTimeoutAsync(bool enable30s) => Task.FromResult(true);
 
-        public Task<BatteryChargeMode?> GetBatteryChargeModeAsync() =>
-            Task.FromResult<BatteryChargeMode?>(BatteryChargeMode.Full);
+        /// <summary>
+        /// What the stub machine reports as its charge limit. Stateful on purpose: a backend whose write reports success
+        /// and whose state never changes is a backend that lies, and the view model's read-back reversion cannot be
+        /// tested against a lie.
+        /// </summary>
+        public BatteryChargeMode? BatteryMode { get; set; } = BatteryChargeMode.Full;
+
+        /// <summary>False makes the charge-limit write fail without changing <see cref="BatteryMode"/>.</summary>
+        public bool BatteryWriteSucceeds { get; set; } = true;
+
+        public Task<BatteryChargeMode?> GetBatteryChargeModeAsync() => Task.FromResult(BatteryMode);
 
         public Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode)
         {
             Writes.Add("charge:" + mode);
+            if (!BatteryWriteSucceeds) return Task.FromResult(false);
+            BatteryMode = mode;
             return Task.FromResult(true);
         }
 
