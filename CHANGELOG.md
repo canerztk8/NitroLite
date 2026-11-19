@@ -8,6 +8,146 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
+## [1.2.7] - 2026-11-19
+
+A settings page rebuilt around what people actually change, eight more palettes, seven more typefaces, and a
+release that finally ships the trimmed build. 44 commits since 1.2.6.
+
+### Settings, rebuilt
+
+The page had grown a card per feature and a paragraph per card. It now opens with three collapsed sections and
+only the controls, and the prose that was worth keeping moved into a `?` next to the heading.
+
+- **Services & Tools** is one card instead of three. The subtitle is gone, the short service name under every
+  Acer service is gone, and **System and hardware repair tools** is merged into it rather than sitting beside it
+  under its own heading. The card is collapsed by default, so the page no longer opens on a wall of switches.
+- **Start-up and integration** is collapsed by default too, and every description under it is gone. The one
+  exception is the elevated logon task, which keeps a `(recommended)` note. **Run at Windows startup** is no
+  longer a separate row on Windows — **Start in the tray at startup** covers it, and turning the elevated task on
+  now turns tray start on with it, so the two can no longer disagree.
+- **The Nitro key** moved into the same card. Its three paragraphs are behind the `?`; the row itself shows only
+  the launcher state, Enabled or Disabled.
+- **Update, diagnostics and backup** is grouped under two captions — *Diagnostics and reports* and *Backup* —
+  instead of eight buttons in a row.
+- **The Notes card is gone.** It was a scratch pad nobody used. In its place is a **Support** card with a Ko-fi
+  button, a GitHub button, and a line saying what the project has cost. Translated into all eight languages.
+- **The font picker sits beside the language picker**, and every description under both is deleted. Each font
+  name in the list is drawn in its own face, and so is the closed box, so the difference is visible before you
+  pick.
+- **The window can be resized by dragging.** A grip in the bottom-right corner calls `BeginResizeDrag`, and it
+  hides itself when the window is maximised. No layout code changed, so nothing about the footprint moved.
+
+### Palettes
+
+Eight new ones, for fourteen in total. Each is held to the same six contrast floors as the rest, and a test fails
+if one ships unreadable.
+
+- **Clean White** — neutral white with a cool grey rule, for a reader who finds Warm Cream too warm.
+- **Forest** — deep green ground, moss accent.
+- **Neon Street** — near-black with a magenta accent.
+- **High Contrast** — black ground, white ink, a 3:1 rule.
+- **Neon Sunset** — violet-black, hot-pink accent.
+- **Chrome City** — near-black, signal-yellow accent.
+- **Dusty Rose** — muted rose paper with a plum accent, the third light palette.
+- **Navy** — deep navy with a steel-blue accent.
+
+**Neon Sunset** and **Chrome City** are a nod to two aesthetics rather than to two products: the Miami sunset the
+*Vice City* games are drawn in, and the yellow-on-black chrome of the cyberpunk genre. Neither palette is taken
+from a game — the colours are NitroLite's own — and NitroLite is not affiliated with Rockstar Games or CD Projekt
+Red. The theme card is now a strip of five swatches rather than a large preview, which fits two more palettes on
+the page.
+
+### Typefaces
+
+Seven new faces, for eight bundled in total, all SIL OFL 1.1 and all subset to the ranges the eight catalogues
+can put on screen:
+
+- **Exo 2** — technical geometric, slightly squared. Latin and Cyrillic.
+- **Oxanium** — squared and HUD-like, the lightest file of the set.
+- **Rubik** — rounded, low contrast. Latin and Cyrillic.
+- **JetBrains Mono** — monospace, drawn for code. Latin and Cyrillic.
+- **Rajdhani** — condensed, drawn for a HUD. Latin and Devanagari.
+- **Space Grotesk** — retro-futuristic grotesque.
+- **Chakra Petch** — squared techno with cut corners.
+
+**Rajdhani is offered to Hindi readers only.** It is the one face in the set drawn for Devanagari, and a reader
+who does not have Hindi on screen gains nothing from a condensed HUD face. It appears when the interface language
+is Hindi *or* when the Windows display language is Hindi, so a Hindi reader who set the interface to English still
+sees it. A reader who has already selected it keeps it in the list after switching away, because a picker whose
+selected item is not among its items draws blank.
+
+Every stack still ends in the Devanagari fallbacks and a generic family, so a face without Devanagari falls
+through to Nirmala UI for Hindi rather than drawing empty boxes.
+
+### Performance
+
+- **The capability probe runs off the UI thread.** The window opens while SMBIOS, the WMI schema and the model
+  profile are still being read; the hardware controls stay in a "scanning" state until it finishes, so nothing can
+  be pressed against a half-loaded capability set. `WhenReadyAsync()` gives the tests a deterministic hook instead
+  of a `Task.Delay`.
+- **The release is trimmed.** `PublishTrimmed=true` with `TrimMode=partial`: the framework is trimmed, while
+  Avalonia, `System.Management` and the NitroLite assemblies are copied whole, because the XAML loader and the WMI
+  COM interop resolve members by name. That is what takes the exe from 43 MB to 24 MB, and the download from
+  44.6 MB to 19.5 MB. The published 1.2.6 asset predated this change; 1.2.7 is the first release that ships it.
+- **Linux telemetry reads the sensor again.** `LinuxHwmon` was replaying the values the probe had cached, so a
+  temperature that moved after startup never reached the window. It now reads `temp1_input` and the fan node on
+  every tick, under the same lock the writer takes.
+- **The Linux tick stopped allocating.** The `OrderBy().Select().ToArray()` chain per device and per file is gone,
+  and the 64 KB `File.ReadAllBytes` buffer is rented from `ArrayPool<byte>.Shared` at 256 bytes instead.
+- **The WMI worker protocol frames through one pooled buffer** instead of three arrays per packet.
+- **Telemetry the sample never used is no longer read.** `GetGamingMiscSetting` and `GetGamingFanBehavior` were
+  called every tick and thrown away; `AppendFanSpeed` now runs only when there is no tachometer.
+- **The NitroSense watcher stops when its switches are off**, instead of polling a process that cannot appear.
+- **Brushes are cached.** `HexToBrushConverter` no longer builds a `SolidColorBrush` per colour per binding.
+- **The English catalogue is not re-read** on every `SetLanguage`, and the rows that were never translated are
+  translated.
+
+### Fixes
+
+- **The fan floor clamps its own output.** A nonsense target — `NaN`, `Infinity`, a negative number — could reach
+  the firmware through `ManualFanFloor`; it is now clamped to the `30–100 %` PWM bounds before it leaves.
+- **Two startup races closed.** A probe that finished after the window had already been closed, and a second
+  probe started while the first was still running, both left state behind.
+- **CoolBoost and LCD overdrive are gone from the capability list.** Neither is a feature NitroLite has, and the
+  first-run walkthrough was claiming to check for them.
+- **The font licence stays out of the package.** `OFL.txt` was being copied into the zip root by the publish
+  script; it now travels with the faces it belongs to.
+- **The diagnostics libraries a loose publish ships are dropped** — `mscordaccore.dll`, `mscordbi.dll` and
+  `Microsoft.DiaSymReader.Native.amd64.dll` were in the package and never loaded.
+
+### Tests
+
+**2652 tests, 2648 of which run by default** (four that change the real system stay opt-in behind
+`NITROLITE_ENABLE_LIVE_HARDWARE_TESTS`). New this release:
+
+- **`HardwareMatrixAndChaosTests`** drives five chassis profiles — a fully equipped AN16-41, a Predator
+  Helios/Triton, an old Nitro 5 with a single lighting zone and no MUX, a Nitro V 15 with restricted WMI, and an
+  unsupported device — through every page and command, and asserts no unhandled exception and a `--` fallback for
+  every sensor that is missing.
+- **A fake `sysfs` tree** builds `hwmon` (`acer`, `k10temp`, `coretemp`) and `platform_profile` in a temporary
+  folder, then covers a missing node, a corrupt sensor file and a read-only `platform_profile`.
+- **`ChaosHardwareDecorator`** injects `false`, `TimeoutException`, `0 °C`, `127 °C` and `NaN` through 100
+  consecutive telemetry and setting cycles, and the settings, `FanCurve` and `ManualFanFloor` are fed `NaN`,
+  `Infinity`, `-100` and `500` to prove they clamp instead of propagating.
+- **Suspend and resume**, hundreds of concurrent mode, fan-curve and RGB commands against a live telemetry loop,
+  a corrupt `profiles.json`, and a `/sys` tree whose `hwmon` directories renumber while the app is running.
+- **`SettingsPageReworkTests`** pins the page this release rebuilt: the collapsed defaults, the merged cards, the
+  removed rows, the tooltip that replaced the Nitro key prose, and the support card in all eight catalogues.
+
+### Docs
+
+`README.md` was rewritten for the person who just wants to install it: the download, the demo and the
+compatibility table are at the top, a GIF of the app runs under them, and everything technical — the backends,
+the elevation prompt, the command line, the architecture, the build, the tests — moved into an **Advanced**
+section at the end. `DESIGN.md` records the two new palettes and the new counts.
+
+### Upgrading
+
+Extract the new zip over the folder you already have, or let the in-app updater do it. Settings, game profiles,
+RGB profiles, thermal history and battery wear history live in `%LOCALAPPDATA%\NitroLite` and are not touched.
+A theme or typeface you had selected keeps working; the two new light palettes and the seven new faces appear in
+the pickers on the next launch.
+
 ## [1.2.6] - 2026-11-18
 
 The largest release the project has had. The Windows front end was rewritten on Avalonia, the

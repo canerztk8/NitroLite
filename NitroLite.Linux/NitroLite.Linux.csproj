@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NitroLite.Linux</RootNamespace>
     <AssemblyName>NitroLite.Linux</AssemblyName>
-    <Version>1.2.6</Version>
+    <Version>1.2.7</Version>
     <Authors>NitroLite Team</Authors>
 
     <!--
