@@ -492,7 +492,83 @@ Removal was verified the same way as every other group: `dotnet build NitroLite.
 
 ---
 
-## 4. Running log
+## 4. Final build, tests and packaging
+
+Phase 5, on the frozen tree (`18f4159`).
+
+### 4.1 Build and tests
+
+| Step | Command | Result |
+| --- | --- | --- |
+| Release build | `dotnet build NitroLite.sln -c Release --nologo -warnaserror` | 0 warnings, 0 errors |
+| Bare build | `dotnet build -c Release --nologo -warnaserror` | 0 warnings, 0 errors — this failed with `MSB1011` before `NitroLite.slnx` was removed |
+| Full suite | `dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build --nologo` | **2753 passed, 0 failed, 4 skipped**, 3 m 23 s |
+
+The four skips are the live-hardware tests that need
+`NITROLITE_ENABLE_LIVE_HARDWARE_TESTS=1`. They are recorded as **not run**, not as
+passed.
+
+### 4.2 Packaging
+
+`scripts/publish-release.ps1 -SkipTests` was run. It **failed**, and the failure is
+environmental rather than a defect in the tree:
+
+```
+You must install or update .NET to run this application.
+  App: ...\microsoft.net.illink.tasks.0.14	ools
+et\illink.dll
+  Framework: 'Microsoft.NETCore.App', version '10.0.14-servicing.26522.126' (x64)
+  The following frameworks were found: 3.1.32, 8.0.13, 10.0.11, 10.0.12
+error MSB6006: "dotnet.exe" exited with code -2147450730
+error NETSDK1144: Optimizing assemblies for size failed.
+```
+
+The script pins `RuntimeFrameworkVersion=10.0.14` on purpose — the comment in it says
+10.0.14 fixes CVE-2026-111497 and that the SDK's bundled 10.0.12 is affected. The
+ILLink task that `PublishTrimmed=true` invokes is itself a .NET app, and it needs the
+10.0.14 runtime to *run* on the build host. This machine has 10.0.11 and 10.0.12, so
+the trimmer cannot start. Nothing in the tree can fix that; the host needs the
+runtime, or the build has to happen on CI.
+
+To separate "the packaging path is broken" from "this host lacks a runtime", the same
+publish was run with the pin kept and only the trimmer switched off:
+
+```
+dotnet publish NitroLite.Desktop/NitroLite.Desktop.csproj -c Release -f net10.0-windows   -r win-x64 --self-contained true -p:PublishSingleFile=true   -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true   -p:PublishTrimmed=false -p:RuntimeFrameworkVersion=10.0.14 -p:DebugType=none   -o artifacts/audit-publish --nologo
+```
+
+That produced a single 50,523,264-byte `NitroLite.Desktop.exe`, and the packaged
+binary answers `--hardware-report` correctly:
+
+```
+| NitroLite | v1.2.8 |
+| Runtime | .NET 10.0.14 |
+| Model | Nitro AN16-41 |
+| Matched | nitro-16-an16-41 (embedded) |
+```
+
+So the publish, the single-file bundling, the runtime pin and the packaged binary all
+work. **The trimmed package was not produced on this host** and is recorded as not
+verified here.
+
+### 4.3 A packaging bug found by running it
+
+The script deleted the previous package *before* it knew the new one could be built:
+
+```powershell
+Get-ChildItem $artifacts -Force | Where-Object { $_.Name -like 'NitroLite*' } | Remove-Item -Recurse -Force
+```
+
+The failed run above took `artifacts/NitroLite-v1.2.7-win-x64.zip` with it, so a
+build that fails leaves the folder with no package at all. Fixed: the up-front delete
+now clears only the staging *directories*, and the previous zip is removed just
+before `Compress-Archive`, after everything that can fail has succeeded. The script
+still parses (`[Parser]::ParseFile` → no errors).
+
+---
+
+## 5. Running log
+
 
 
 | When | What | Result |
@@ -531,3 +607,7 @@ Removal was verified the same way as every other group: `dotnet build NitroLite.
 | group 6 | bare `dotnet build` after the removal | 0 warnings, 0 errors |
 | group 6 | Release build | 0 warnings, 0 errors |
 | group 6 | full suite | 2753 passed, 0 failed, 4 skipped |
+| group 7 | `scripts/publish-release.ps1 -SkipTests` | **failed**: the ILLink task needs the 10.0.14 runtime, this host has 10.0.11/10.0.12 |
+| group 7 | same publish with `PublishTrimmed=false`, pin kept | single 50,523,264-byte exe; `--hardware-report` reports `Runtime .NET 10.0.14`, `nitro-16-an16-41 (embedded)` |
+| group 7 | trimmed package | **not produced on this host** — recorded as not verified, not as passed |
+| group 7 | packaging bug fixed | the previous zip is no longer deleted before the new one is built |
