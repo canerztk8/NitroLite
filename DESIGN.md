@@ -228,14 +228,15 @@ WPF has no letter-spacing setting; the airiness of the micro labels comes from u
 
 ## Icon
 
-The icon is the world in one square: `paper-deep` ground, a single `ink` trace, a `vermilion` dot at the end of the trace. No gradient, glow, frame or rounded corner — the icon is square like a strip of paper.
+A sleeping cat on a warm laptop: the machine is quiet, nothing is being woken up. It is the opposite of the flame-and-shield vocabulary the category uses.
 
-- **Ground** `paper-deep` across the whole square. Not `paper`: it reads against a white Explorer background and stands forward on a dark taskbar.
-- **Trace** `ink`, 72/1024 of the canvas thick, round joints. It enters from the left edge and ends in the dot on the right: the recording is running, the pen is there right now.
-- **Dot** `vermilion`, 136/1024 in diameter, where the trace ends. The only colour in the icon; no other element carries colour.
-- **One event.** The trace carries one: a fast rise, a deep turn, a return to the baseline. A second event turns to noise at 16px and is not added.
-- **Sizes** 16 / 20 / 24 / 32 / 40 / 48 / 64 / 96 / 128 / 256. The icon is right if it reads as a single spike at 16px; every change is checked at that size.
-- The icon does not change with the theme. A single `app.ico` feeds the window, the tray and the exe.
+- **Ground** `paper` (#F2EDE3) across the whole square, with a 57.6/256 corner radius. The box is paper, not a keyline: it reads on a white Explorer window and still stands forward on a dark taskbar.
+- **Cat** `ink` (#1B1917), one outline. The eyes are real holes in the shape (`fill-rule="evenodd"`), not painted white, so the icon sits correctly on any ground.
+- **Laptop bar** `vermilion` (#C0392B), a 30/256 band under the cat. **The only colour in the icon**; the cat, the eyes and the ground carry none.
+- **Small sizes** below 48 px use the small drawing, which has no eyes at all: at 16 px they close into the head, and an icon that reads as a smudge is worse than one without a face.
+- **Sizes** 16 / 20 / 24 / 32 / 40 / 48 / 64 / 96 / 128 / 256, every change checked at 16 px.
+- The icon does not change with the theme. A single `app.ico` feeds the window, the tray and the exe. The transparent `nitrolite-tray.ico` is deliberately not used: a black cat with no ground disappears on a dark taskbar.
+- Source files and the rules (spacing, minimum sizes, grounds, what not to do): [`docs/brand/logo-2026/kit/`](docs/brand/logo-2026/kit/) and [`KULLANIM.md`](docs/brand/logo-2026/kit/KULLANIM.md).
 
 ## Components
 

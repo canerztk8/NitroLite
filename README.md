@@ -1,5 +1,12 @@
 ﻿# NitroLite
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-2026/kit/lockups/nitrolite-horizontal-reversed.svg">
+    <img src="docs/brand/logo-2026/kit/lockups/nitrolite-horizontal.svg" alt="NitroLite" width="360">
+  </picture>
+</p>
+
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
 [![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)

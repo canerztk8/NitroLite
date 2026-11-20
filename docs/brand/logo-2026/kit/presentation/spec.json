@@ -1,0 +1,37 @@
+{
+  "brand": "NitroLite",
+  "tagline": "Laptop serin, kedi mışıl mışıl",
+  "brief": "Acer Nitro ve Predator dizüstüleri için küçük, açık kaynak bir kontrol merkezi: güç modları, fan eğrileri, klavye RGB, şarj sınırı. Ağır üretici yazılımının yerine geçiyor; hafif, dürüst ve tepside sessizce duruyor.",
+  "adjectives": ["hafif", "sakin", "dürüst", "samimi"],
+  "criteria": "Başarı: oyun yazılımlarının saldırgan klişelerinden ayrışmak, tek renkte ve ters zeminde çalışmak, README ve tepside tanınmak.",
+  "industry": "software",
+  "mockups": ["readme", "app-icon", "terminal", "sticker", "social", "favicon-tab"],
+  "nav": ["İndir", "Uyumluluk", "GitHub"],
+  "brand_color": "#C0392B",
+  "tile_color": "#F2EDE3",
+  "greyscale": false,
+  "designer": "NitroLite",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Kedi",
+      "symbol": "../symbol/nitrolite-symbol.svg",
+      "lockup": "../lockups/nitrolite-horizontal.svg",
+      "symbol_on_tile": "../symbol/nitrolite-symbol.svg",
+      "lockup_on_dark": "../lockups/nitrolite-horizontal-reversed.svg",
+      "tile_color": "#F2EDE3",
+      "idea": "Sıcak bir laptopun üstünde mışıl mışıl uyuyan kedi: makine serin ve sessiz, kimse rahatsız olmuyor.",
+      "rationale": [
+        "Kategorideki alev, şimşek ve kalkan klişelerinin tam tersi: sakin ve samimi",
+        "Tek bir dış hat; gözler gerçek boşluk, böylece koyu zeminde de doğru çalışıyor",
+        "Vermilyon çubuk laptop ve uygulamanın tek vurgu rengi"
+      ]
+    }
+  ],
+  "recommendation": "Kedi: tek kişilik, açık kaynak bir projeye karakter katıyor ve ilk bakışta akılda kalıyor.",
+  "next_steps": [
+    "app.ico ve tepsi ikonunu uygulamaya bağlamak",
+    "README başlığına yatay logoyu koymak",
+    "Marka tescil taraması"
+  ]
+}
