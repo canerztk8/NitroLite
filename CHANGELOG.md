@@ -113,7 +113,9 @@ unplugged.
   zones 1, 2 and 4 in the processor's colour with only zone 3 following the graphics chip. The mask is a zone bitmap, so
   neighbouring zones that share a colour now go out in a single call: `0x03` for the left half, `0x0C` for the right,
   and one `0x0F` when the whole keyboard agrees. The split is two writes instead of four, the leftmost zones are still
-  written first, and the worker's answer carries `zoneWrites` so a report can say which of the two it sent.
+  written first, and the worker's answer carries `zoneWrites` so a report can say which of the two it sent. A firmware
+  that refuses a combined mask answers non-zero, and that run falls back to one call per zone — the sequence this
+  replaces — so the fix cannot leave the keyboard on its previous colour.
 - **A colour the user cancelled cannot land afterwards.** Every lighting write now asks, once it holds the write gate,
   whether it is still wanted; a temperature colour queued behind a slow write is abandoned when the mode's switch goes
   down or the page blacks out, instead of flashing onto the keyboard after the colour the user asked for. The charging

@@ -200,7 +200,9 @@ run of neighbouring zones that share a colour rather than one per zone: `0x03` f
 for the right on a split keyboard, a single `0x0F` when all four agree. Four back-to-back calls are how a
 zone ends up holding the colour the keyboard had before — a call that arrives while the EC is still applying
 the previous mask is dropped, and the zone it addressed keeps whatever was there. Two calls, one per half,
-close most of that window; the worker's answer reports how many it sent as `zoneWrites`.
+close most of that window; the worker's answer reports how many it sent as `zoneWrites`. A combined mask
+that answers non-zero (`0x03` and `0x0C` are documented bitmap combinations, `0x0F` is the measured one)
+falls back to one call per zone for that run, which is the sequence this replaces.
 
 **Transport selection.** `KeyboardLightingRouter` (`NitroLite.Core/Hardware/Lighting`) keeps the WMI path
 first — it is still correct on every older model — and tries HID once when a WMI write does not take.

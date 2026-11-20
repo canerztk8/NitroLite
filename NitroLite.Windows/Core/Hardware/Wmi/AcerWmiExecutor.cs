@@ -639,13 +639,8 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                         (byte)(packed & 0xFF),
                         request.Brightness);
 
-                    var status = InvokeSetter(gaming, "SetGamingRgbKb",
-                        AcerWmiProtocol.EncodeRgbKb(color.Red, color.Green, color.Blue, mask));
-                    if (!status.HasValue)
-                        return WmiOperationResult.WmiFailed($"SetGamingRgbKb (mask 0x{mask:X2}) returned no status");
-                    if (status.Value != AcerWmiProtocol.StatusOk)
-                        return WmiOperationResult.StatusError(
-                            $"SetGamingRgbKb (mask 0x{mask:X2}) status 0x{status.Value:X2}");
+                    var error = WriteZoneRun(gaming, mask, color);
+                    if (error != null) return WmiOperationResult.StatusError(error);
                 }
 
                 // The report keeps one entry per zone, in zone order, whatever the writes were grouped as.
@@ -682,6 +677,48 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 return WmiOperationResult.WmiFailed(Describe(ex));
             }
         }
+    }
+    /// <summary>
+    /// Writes one run of neighbouring keyboard zones in a single <c>SetGamingRgbKb</c> call, and falls back to one call
+    /// per zone when the firmware refuses the combined mask.
+    /// </summary>
+    /// <returns>Null when the run reached the keyboard, or the message to report as a status error.</returns>
+    /// <remarks>
+    /// A mask covering several zones is a bitmap combination the protocol documents and <c>0x0F</c> was measured as an
+    /// accepted write on the reference unit, but no capture used <c>0x03</c> or <c>0x0C</c>. A firmware that answers
+    /// non-zero for one of those gets the older one-call-per-zone sequence for that run rather than a colour that never
+    /// arrives — the fix for a dropped zone must not be able to leave the keyboard on its previous colour entirely.
+    /// </remarks>
+    private static string? WriteZoneRun(ManagementObject gaming, byte mask, (byte Red, byte Green, byte Blue) color)
+    {
+        var status = InvokeSetter(gaming, "SetGamingRgbKb",
+            AcerWmiProtocol.EncodeRgbKb(color.Red, color.Green, color.Blue, mask));
+        if (status.HasValue && status.Value == AcerWmiProtocol.StatusOk) return null;
+
+        int zoneCount = 0;
+        for (int i = 0; i < AcerWmiProtocol.LedZoneCount; i++)
+            if ((mask & (AcerWmiProtocol.LedZone1 << i)) != 0) zoneCount++;
+
+        if (zoneCount <= 1)
+        {
+            return status.HasValue
+                ? $"SetGamingRgbKb (mask 0x{mask:X2}) status 0x{status.Value:X2}"
+                : $"SetGamingRgbKb (mask 0x{mask:X2}) returned no status";
+        }
+
+        for (int i = 0; i < AcerWmiProtocol.LedZoneCount; i++)
+        {
+            var single = (byte)(AcerWmiProtocol.LedZone1 << i);
+            if ((mask & single) == 0) continue;
+
+            var one = InvokeSetter(gaming, "SetGamingRgbKb",
+                AcerWmiProtocol.EncodeRgbKb(color.Red, color.Green, color.Blue, single));
+            if (!one.HasValue) return $"SetGamingRgbKb (zone {i + 1}) returned no status";
+            if (one.Value != AcerWmiProtocol.StatusOk)
+                return $"SetGamingRgbKb (zone {i + 1}) status 0x{one.Value:X2}";
+        }
+
+        return null;
     }
 
     // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
