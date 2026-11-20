@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using NitroLite.Core;
@@ -110,6 +111,12 @@ public partial class MainWindow : Window
         _railSaveTimer.Tick += (_, _) => SaveRailWidth();
 
         Opened += async (_, _) => await InitializeOnceAsync();
+
+        // The header prints the lockup instead of the product name, so the one thing that has to follow a palette
+        // change is which of the two marks is drawn. DesktopThemeManager derives RequestedThemeVariant from the
+        // palette, so this fires both on the first draw and when the user picks another theme on the settings page.
+        UpdateHeaderLogo();
+        ActualThemeVariantChanged += (_, _) => UpdateHeaderLogo();
 
         // A closed ComboBox steps its selection when the wheel turns over it, so scrolling the settings page past the
         // language or font picker silently changed the setting. The tunnel handler takes the wheel before the control
@@ -582,6 +589,22 @@ public partial class MainWindow : Window
     /// Slows the loop down while the window is hidden or minimised. The curve still runs, so the fans still follow the
     /// temperature; what changes is how often the sensors are read.
     /// </summary>
+    /// <summary>
+    /// Prints the header lockup on the ground the current palette gives it: the ink mark on the paper themes, the
+    /// white mark under Dark, Midnight OLED and the rest of the dark set.
+    /// </summary>
+    /// <remarks>
+    /// Both images sit in the same cell and only one is ever visible, which is why this is a visibility flip rather
+    /// than a source swap: an <see cref="Avalonia.Controls.Image"/> asked for a new source mid-palette-change reloads
+    /// the bitmap and the header flickers for a frame, and a palette change is something the user watches happen.
+    /// </remarks>
+    private void UpdateHeaderLogo()
+    {
+        var dark = ActualThemeVariant == ThemeVariant.Dark;
+        HeaderLogoInk.IsVisible = !dark;
+        HeaderLogoPaper.IsVisible = dark;
+    }
+
     private void UpdateTelemetryPollingRate()
     {
         // The overlay wins over the window's own visibility: a user in a game has the window hidden and the OSD on,

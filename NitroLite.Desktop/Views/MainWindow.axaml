@@ -38,9 +38,20 @@
         <Grid Margin="18,0" ColumnDefinitions="Auto,*,Auto">
 
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Labels.AppTitle}" FontSize="13" FontWeight="SemiBold"
-                       VerticalAlignment="Center" />
-            <TextBlock Text="{Binding VersionText}" FontSize="10" Margin="8,0,0,0"
+            <!-- The lockup replaces the product name the header used to set. Two images share one cell: the ink mark
+                 is what the paper palettes print, the white mark takes over under Dark and Midnight OLED. The swap
+                 happens in code behind from ActualThemeVariant, because a palette change repaints a live window and
+                 no resource lookup here would follow it. 24px tall puts the wordmark's x-height where the 13px title
+                 cap sat, so the version beside it keeps its baseline and the header keeps its weight. -->
+            <Panel VerticalAlignment="Center"
+                   AutomationProperties.Name="{Binding Labels.AppTitle}">
+              <Image x:Name="HeaderLogoInk" Height="24" Stretch="Uniform" VerticalAlignment="Center"
+                     Source="avares://NitroLite.Desktop/Assets/logo-horizontal-ink.png" />
+              <Image x:Name="HeaderLogoPaper" Height="24" Stretch="Uniform" VerticalAlignment="Center"
+                     IsVisible="False"
+                     Source="avares://NitroLite.Desktop/Assets/logo-horizontal-paper.png" />
+            </Panel>
+            <TextBlock Text="{Binding VersionText}" FontSize="10" Margin="10,0,0,0"
                        Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
 
             <!-- The update notice, in the header where the WPF window put it: a user who never opens the tools page

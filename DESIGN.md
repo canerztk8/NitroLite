@@ -236,6 +236,7 @@ A sleeping cat on a warm laptop: the machine is quiet, nothing is being woken up
 - **Small sizes** below 48 px use the small drawing, which has no eyes at all: at 16 px they close into the head, and an icon that reads as a smudge is worse than one without a face.
 - **Sizes** 16 / 20 / 24 / 32 / 40 / 48 / 64 / 96 / 128 / 256, every change checked at 16 px.
 - The icon does not change with the theme. A single `app.ico` feeds the window, the tray and the exe. The transparent `nitrolite-tray.ico` is deliberately not used: a black cat with no ground disappears on a dark taskbar.
+- **In the window** the header prints the horizontal lockup instead of the product name: the ink mark on the paper palettes, the white mark on the dark ones, 24 px tall so the wordmark's x-height sits where the old 13 px title's cap did. Two flat PNGs, swapped on `ActualThemeVariant`; the build carries no SVG renderer and the kit ships both grounds.
 - Source files and the rules (spacing, minimum sizes, grounds, what not to do): [`docs/brand/logo-2026/kit/`](docs/brand/logo-2026/kit/) and [`KULLANIM.md`](docs/brand/logo-2026/kit/KULLANIM.md).
 
 ## Components

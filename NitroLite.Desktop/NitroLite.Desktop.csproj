@@ -111,6 +111,12 @@
          a WindowIcon, which is loaded through AssetLoader from avares://. -->
     <AvaloniaResource Include="app.ico" Link="Assets\app.ico" />
 
+    <!-- The lockup the header prints instead of the product name, in the two grounds the palettes need: the ink mark
+         for the paper themes, the white one for Dark, Midnight OLED and the rest of the dark set. Two flat PNGs rather
+         than the kit's SVG because the build carries no SVG renderer, and adding one would be a package reference for
+         a wordmark that never scales. Straight copies of docs/brand/logo-2026/kit/lockups, not redrawn. -->
+    <AvaloniaResource Include="Assets\logo-horizontal-*.png" />
+
     <!-- The bundled typefaces: Quicksand, Exo 2, Oxanium, Rubik, JetBrains Mono, Rajdhani, Space Grotesk and
          Chakra Petch, each in the three weights the type scale actually uses — Regular for body text, SemiBold for
          titles and labels, Bold for the numbers. Carried inside the assembly rather than looked up on the machine, so the window is drawn in the
