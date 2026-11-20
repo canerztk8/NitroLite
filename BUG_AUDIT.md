@@ -984,6 +984,8 @@ owner moved one switch in Acer's own tool. This round adds the tool that can, an
 | A platform without the backend | same | both commands refuse to run and no status is written |
 | The application, normal launch | `NitroLite.Desktop.exe`, `nitrolite.log` | started, `runtime-verified (2 samples)`, published profile table refreshed (32 kept), no exception, no new warning |
 | Trim | `PublishTrimmed`/`TrimMode=partial` untouched | no reflection added; the new types are ordinary classes, records and `DllImport`s |
+| Merge | `gh pr merge 9 --merge --delete-branch`, then `git fetch --prune` | PR #9 merged as `ababcba`; `main` and `origin/main` sit on the same commit, the feature branch is gone from both, and `origin/main` is the only branch the prune leaves |
+| CI on `main` | run [44653190433](https://github.com/canerztk8/NitroLite/actions/runs/44653190433) for `ababcba` | **success, 8 m 12 s**: Windows build + 2 939 tests ✓, Linux build + package ✓ |
 
 ### 10.3 Deliberately not done
 
