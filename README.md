@@ -9,15 +9,16 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows 11](https://img.shields.io/badge/Platform-Windows_11-0078D4?logo=windows11&logoColor=white)](https://www.microsoft.com/windows)
-[![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](#linux-experimental)
-[![Tests](https://img.shields.io/badge/Tests-2909-10B981)](#tests)
+[![Linux](https://img.shields.io/badge/Platform-Linux-FCC624?logo=linux&logoColor=black)](https://github.com/canerztk8/NitroLite/wiki/Linux)
+[![Tests](https://img.shields.io/badge/Tests-2909-10B981)](https://github.com/canerztk8/NitroLite/wiki/Tests)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
   <a href="https://github.com/canerztk8/NitroLite/releases/latest"><b>Download for Windows</b></a> ·
   <a href="https://youtu.be/0FmFyp4AykY">45-second demo</a> ·
   <a href="#compatibility">Model compatibility</a> ·
-  <a href="#install">Install</a>
+  <a href="#install">Install</a> ·
+  <a href="https://github.com/canerztk8/NitroLite/wiki">Wiki</a>
 </p>
 
 <p align="center">
@@ -42,7 +43,7 @@ controls your laptop actually has. See [Compatibility](#compatibility).
 
 **You do not need NitroSense installed.** If Acer's service is there, NitroLite uses it and never asks for
 administrator rights. If it is not, NitroLite talks to the firmware directly instead, at the cost of one UAC prompt
-per session. Details in [Without Acer's software](#without-acers-software).
+per session. Details in [Without Acer's software](https://github.com/canerztk8/NitroLite/wiki/Without-Acer-Software).
 
 **It is light.** About a 19.7 MB download holding a 24 MB exe, roughly 70 MB of RAM while it sits in the tray, and
 about 0.2 % of one core at idle. No Electron, no background service, no kernel driver, no telemetry.
@@ -66,7 +67,7 @@ about 0.2 % of one core at idle. No Electron, no background service, no kernel d
 All five pages, in English and in the dark theme, are in [`docs/screenshots`](docs/screenshots). They are captured by
 `scripts/screenshot.ps1` against a throwaway data folder, so they show a fresh install rather than the author's
 settings. The same script captures any of the eight languages and any of the fourteen themes; see
-[Capturing screenshots](#capturing-screenshots).
+[Capturing screenshots](https://github.com/canerztk8/NitroLite/wiki/Tests#capturing-screenshots) on the wiki.
 
 The tour above is also on [YouTube](https://youtu.be/0FmFyp4AykY): 45 seconds, 1080p60, captions burned in. A copy of
 the same cut is in [`docs/video`](docs/video) for anyone who would rather not use YouTube.
@@ -199,30 +200,14 @@ performs this comparison itself and refuses to swap the executable on a mismatch
 
 ### Why SmartScreen warns
 
-The prompt is about **provenance, not detection**. It does not mean Microsoft found something in the file.
-
-- A browser tags every download with the **Mark of the Web** (an NTFS alternate data stream, `Zone.Identifier`).
-  Windows sees that tag and runs the file through SmartScreen before the first launch.
-- SmartScreen looks for an **Authenticode signature** and for **reputation** attached to the file's hash and its
-  publisher. NitroLite has neither: a code-signing certificate that SmartScreen accepts costs a few hundred dollars
-  a year and needs a registered business, which this project does not have.
-- An unsigned binary has no publisher to accumulate reputation against, so every new build starts at zero and is
-  reported as unrecognised. That is the whole of the warning.
-- You can confirm the file is unsigned rather than tampered with:
-
-  ```powershell
-  Get-AuthenticodeSignature .\NitroLite-v1.2.8-win-x64.zip | Format-List Status, StatusMessage
-  ```
-
-  `Status` reads `NotSigned`. That is expected, and it is the same answer you get for any unsigned open-source
-  binary.
-
-If you want Microsoft to look at the file rather than take the author's word for it, submit it through
-**[Microsoft Security Intelligence: submit a file](https://www.microsoft.com/en-us/wdsi/filesubmission)**. The
-result is public and does not depend on this repository.
-
+The prompt is about **provenance, not detection**: NitroLite is unsigned, so Windows has no publisher reputation to
+check. It does not mean Microsoft found something in the file. Run it with **More info → Run anyway**, verify the
+SHA-256 digest against the release page, and read the full explanation — including what you can check without
+trusting the author — on the
+**[Why SmartScreen warns](https://github.com/canerztk8/NitroLite/wiki/Why-SmartScreen-warns)** wiki page.
 The digest only proves the download matches the release; it says nothing about who published it. See
-[Trust and code signing](#trust-and-code-signing) for what that does and does not cover.
+**[Trust and code signing](https://github.com/canerztk8/NitroLite/wiki/Trust-and-Code-Signing)** for what that
+does and does not cover.
 
 ### Requirements
 - **Windows 11** (Windows 10 x64 also works), 64-bit.
@@ -268,46 +253,21 @@ Nothing about the hardware is hardcoded: the app asks, and hides what the answer
 | Fan curve | the Acer service's own fixed-speed command, or `SetGamingFanSpeed` | the curve turns itself off and says so |
 | The Acer service itself | `AASSvc` on `127.0.0.1:46933` | the direct-WMI backend takes over; if that is unavailable too, a standing note names the missing service and everything Windows and NVIDIA can measure keeps working |
 
-Two things decide whether the direct-WMI fallback can take over, and both are worth checking when a machine reports "nothing detected":
-
-- **The install folder must be trusted.** The elevated WMI worker is only launched from an executable no other local account can replace. Anything under your own profile (`%LOCALAPPDATA%\NitroLite`, a portable or Scoop folder) and anything in `C:\Program Files` qualifies. A folder you created directly under a drive root (`C:\WinTools`) does **not**: the drive root grants `Authenticated Users` modify to everything created beneath it, so the files in that folder are replaceable by any local account, and the worker refuses to start from there **when it would have to ask for elevation**. That is the only case the rule is about: a helper started by a NitroLite that is already running as administrator inherits that token, so nothing is granted that the process did not hold already — which is why **Run as administrator**, or the Task Scheduler entry, makes fan and mode control work from `C:\WinTools` as well. Without either, the log says so once, with the path, the settings row names the refusal, and the fan and mode rows keep pointing at the Acer service.
-- **The `AcerGamingFunction` WMI class must be registered.** On models where Acer ships only the service, the service path is the only path; NitroLite then needs `AASSvc` running.
-
 **No kernel driver, no EC register writes.** Fan and lighting control go through the Acer service that NitroSense
 already uses, or through the firmware's own WMI class, and CPU boost through the Windows power plan. Nothing here
 loads `WinRing0` or any other driver, which is the usual reason an anti-cheat refuses to start next to a hardware
 tool. That is a statement about what NitroLite loads, not a guarantee: anti-cheat vendors keep their own allow-lists,
 and a game that blocks unsigned overlays will still block the OSD.
 
-**A model can be added without a new release.** At startup NitroLite fetches the profile table published with this
-project, checks it against the same rules the built-in table has to pass — every record valid, sensible fan ceilings
-and sensor ids — and keeps it next to your own file. The order is: your `profiles.user.json`, then the downloaded
-table, then the one inside the binary. If you are offline, or the download is damaged, nothing changes and nothing is
-reported as an error. Delete `%LOCALAPPDATA%\NitroLite\profiles.remote.json` to go back to the built-in table.
-
 ### If your model is not covered
 
-**Settings → Export hardware report** writes `hardware-report-<timestamp>.txt` and `.json` into the data folder
-and opens it. The report lists the model code, BIOS, Acer service states, the keyboard report, the operating
-modes, the GPU mode capability and whether the Acer WMI class answers. It also lists the USB HID collections the
-machine exposes — the ITE (`0x048D`), Sonix (`0x0C45`) and Chicony controllers a backlight is often wired to when
-no Acer class admits to driving it — and the sensor verdict the fan curve ran under, `runtime-verified` or
-`unverified`. Attach it to a GitHub issue: it is the difference between "the fan slider does nothing" and a fix.
-It contains no serial number, user name, file path or log content — every line goes through the same redactor the
-log uses.
-
-**Settings → Report compatibility on GitHub** does both steps at once: it copies the report to the clipboard and
-opens a new issue with `[Compatibility] <model> (<board>)` as the title and the report as the body. If the report
-is longer than a URL can safely carry, the body is cut and the note says so — the full report is already on your
-clipboard, ready to paste over it.
-
-When a setting simply does nothing, the **NitroSense snapshot diff** under **Settings → Diagnostics** narrows it
-down to the exact register. Press **Capture state A** in NitroLite, change the one setting in NitroSense, then press
-**Capture state B and diff**: the two read-only captures of the Acer WMI selectors and the vendor HID feature
-reports are compared and only what moved is printed — a changed selector with its old and new value, and for a
-report, the byte offsets that changed. The diff goes to the clipboard with the hardware report and opens the same
-prefilled issue with the diff first. Nothing is written and nothing is elevated: a session with no direct-WMI
-worker behind it captures the HID half and says so.
+The short version: **Settings → Export hardware report** writes a redacted report into the data folder — model
+code, BIOS, Acer service states, the keyboard report, the capability verdicts and the HID controllers the machine
+exposes. Attach it to a GitHub issue, or press **Settings → Report compatibility on GitHub** to do both steps at
+once. When a setting simply does nothing, the **NitroSense snapshot diff** under **Settings → Diagnostics**
+narrows it down to the exact register. All of it is documented in detail — including what the report does and
+does not contain — on the
+**[Compatibility](https://github.com/canerztk8/NitroLite/wiki/Compatibility)** wiki page.
 
 The same report is available without the window: `NitroLite.exe --hardware-report` (add `--json` for JSON, or
 `--out <folder>` to write both files).
@@ -316,73 +276,24 @@ The same report is available without the window: `NitroLite.exe --hardware-repor
 
 ## Languages, themes and typefaces
 
-**Eight languages.** English, Türkçe, Deutsch, Español, Русский, Português, हिन्दी and Bahasa Indonesia. Pick one in
+**Eight languages** — English, Türkçe, Deutsch, Español, Русский, Português, हिन्दी and Bahasa Indonesia. Pick one in
 **Settings → Language**; NitroLite restarts itself in about a second to apply it. On first launch it follows the
-Windows display language when it is one of the eight, and falls back to English otherwise. Numbers, percentages and
-dates follow the chosen language; technical terms (Turbo, Boost, OSD, MUX) stay untranslated.
-
-The translations were written by the author, not by native speakers. If a word reads wrong in your language, please
+Windows display language when it is one of the eight, and falls back to English otherwise. If a word reads wrong in
+your language, please
 [open a translation issue](https://github.com/canerztk8/NitroLite/issues/new?title=Translation%20correction&labels=translation)
 with the language and the correct text.
 
-**Fourteen themes.** **Settings → Theme** offers **System default** plus fourteen palettes, each shown as a preview
-card with a row of five swatches — page, card, rule, ink and accent, in the order the palette defines them.
+**Fourteen themes** — **Settings → Theme** offers **System default** plus fourteen palettes from Warm Cream
+(the light default) to Midnight OLED, Nord Frost and Neon Sunset, each previewed as a card with five swatches and
+held to the same contrast floors, so a palette cannot ship unreadable. The OSD is dark in every case.
 
-| | Palette | Ground |
-|---|---|---|
-| Light | **Warm Cream** (the default "paper" theme) | warm off-white |
-| Light | **Clean White** | neutral white, cool grey rule |
-| Light | **Dusty Rose** | muted rose paper, plum accent |
-| Dark | **Dark** | charcoal |
-| Dark | **Midnight OLED** | true black |
-| Dark | **Slate Steel** | cold anthracite |
-| Dark | **Amber Console** | warm amber |
-| Dark | **Nord Frost** | glacier turquoise |
-| Dark | **Forest** | deep green, moss accent |
-| Dark | **Neon Street** | near-black, magenta accent |
-| Dark | **High Contrast** | black ground, white ink, a 3:1 rule |
-| Dark | **Neon Sunset** | violet-black, hot-pink accent |
-| Dark | **Chrome City** | near-black, signal-yellow accent |
-| Dark | **Navy** | deep navy, steel-blue accent |
+**Eight typefaces** — **Settings → Typeface** picks the face the whole window is drawn in; all eight travel
+inside the executable, so the window looks the same on a machine that has installed nothing. The default is
+Quicksand. Nothing renders as tofu in any of the eight languages.
 
-All fourteen share one key set and the same paper-and-ink hierarchy; only the temperature of the ground and the hue
-of the accent move. Every palette is held to the same six contrast floors — body ink on a card at 4.5:1, a card rule
-against the page at 1.45:1, muted ink at 3:1, the accent against the page at 3:1 — so a palette cannot ship
-unreadable, and a test fails if one does. System default follows the Windows app theme, resolved at launch. The OSD
-is dark in every case. Like the language, the theme applies after a quick restart.
-
-**Neon Sunset** and **Chrome City** are a nod to two aesthetics rather than to two products: the Miami sunset the
-*Vice City* games are drawn in, and the yellow-on-black chrome of the cyberpunk genre. Neither palette is taken from
-a game — the colours are NitroLite's own — and NitroLite is not affiliated with Rockstar Games or CD Projekt Red.
-
-**Eight typefaces.** **Settings → Typeface** picks the face the whole window is drawn in, and each name in the picker
-is drawn in its own face so you can see the difference before choosing. All eight travel inside the executable, so
-the window looks the same on a machine that has installed nothing:
-
-| Face | Character | Scripts it carries |
-|---|---|---|
-| **Quicksand** (default) | geometric sans, rounded terminals | Latin |
-| **Exo 2** | technical geometric, slightly squared | Latin, Cyrillic |
-| **Oxanium** | squared, HUD-like, the lightest file of the set | Latin |
-| **Rubik** | rounded, low contrast | Latin, Cyrillic |
-| **JetBrains Mono** | monospace, drawn for code | Latin, Cyrillic |
-| **Rajdhani** | condensed, drawn for a HUD | Latin, Devanagari |
-| **Space Grotesk** | retro-futuristic grotesque | Latin |
-| **Chakra Petch** | squared techno, cut corners | Latin |
-
-Every file is subset to the ranges the eight catalogues can put on screen, so a face that lists Latin carries Latin,
-Latin Extended and the punctuation the interface uses, and nothing else. The five behind them are the machine's own —
-Segoe UI, Arial, Verdana, Tahoma and Georgia — for a reader who would rather have the system face.
-
-**Rajdhani is offered to Hindi readers only.** It is the one face in the set drawn for Devanagari, and a reader who
-does not have Hindi on screen gains nothing from a condensed HUD face. It appears when the interface language is Hindi
-*or* when the Windows display language is Hindi, so a Hindi reader who set the interface to English still sees it. A
-reader who has already selected it keeps it in the list after switching away, because a picker whose selected item is
-not among its items draws blank.
-
-Every stack ends in the Devanagari fallbacks and a generic family, so a face without Devanagari — Quicksand, for
-instance — falls through to Nirmala UI for Hindi rather than drawing empty boxes. Nothing renders as tofu in any of
-the eight languages.
+Both tables — every palette and every face — are on the
+**[Languages, themes and typefaces](https://github.com/canerztk8/NitroLite/wiki/Languages-Themes-and-Typefaces)**
+wiki page.
 
 ---
 
@@ -424,461 +335,35 @@ as money — they are what makes the next model work.
 
 ---
 
-# Advanced
-
-Everything below is for people who want to know how it works, script it, build it, or check it. You do not need any of
-it to use NitroLite.
-
-## Without Acer's software
-
-NitroLite used to be a front end for Acer's services: no `AcerAgentService`, no fan control. That is no longer
-true. The hardware layer sits behind one interface with two backends, and the app chooses per call:
-
-| Backend | Talks to | Needs |
-|---|---|---|
-| `AgentHardwareController` | `AcerAgentService` on `127.0.0.1:46933`, and Acer Care Center for the charge limit | NitroSense installed |
-| `WmiHardwareController` | the firmware's `AcerGamingFunction` class, through an elevated helper process | one UAC prompt per session |
-| `LinuxSysfsHardwareController` | `acer-wmi`, `hwmon`, `platform_profile` and Linuwu-Sense | the in-kernel driver |
-
-`HybridHardwareController` picks one per call and reconciles the two on handover, so a machine that gains or loses
-the Acer service mid-session does not end up with half its settings in one place and half in the other.
-
-### The elevation prompt
-
-`AcerGamingFunction` is a `dynamic` WMI class: reading it and writing it both need an elevated token. The window
-itself stays `asInvoker` — it never asks for administrator rights at launch. Instead:
-
-1. Everything Windows and NVIDIA can answer keeps working unelevated.
-2. The first hardware **write** starts `NitroLite.exe --wmi-worker` with `Verb = "runas"`. That is one prompt per
-   session. Declining it is remembered: the app keeps running in read-only mode and does not ask again.
-3. The helper is a child process, not a service. A Job Object and a parent-process watchdog tie it to the window, so
-   it dies with the app even if the app crashes.
-4. The pipe it listens on is `CurrentUserOnly`, the first packet must carry a one-time 32-byte nonce, the caller is
-   authenticated by process id, and the command set is a fixed list of typed operations — never a general "invoke
-   this WMI method" call. The worker re-checks every bound itself (`30–100 %` fan speed, valid enum values) before
-   touching the hardware.
-
-If you would rather not see that prompt at all, **Settings → Start automatically with administrator rights (Task
-Scheduler)** registers a logon task with `RunLevel HighestAvailable`. It is off by default and costs one prompt to
-turn on and one to turn off; after that the helper inherits the elevated token and no prompt appears. Turning it on
-removes the standard `HKCU\…\Run` entry, so Windows never starts NitroLite twice. The task definition is kept off the
-disk.
-
-### Writes are verified, not assumed
-
-Every WMI write is followed by a read-back of the same value. If three attempts do not stick — a BIOS that accepts
-the call and ignores it — that capability is switched off for the rest of the session and the app says so. Only
-three consecutive sessions of failure disable it permanently, so one busy EC after a sleep/wake cycle cannot kill a
-working feature. **Settings → Rescan hardware capabilities** clears the counters and probes again.
-
-### Capability probing
-
-Nothing about the hardware is hardcoded to one SKU. At startup NitroLite asks three questions in order:
-
-1. **Schema and registry** — does `root\WMI` expose `AcerGamingFunction`, which methods does it declare, does
-   `WMID_GUID5` exist, what does `dgpu_mode_capability` say. All read-only and unelevated.
-2. **Model profile** — SMBIOS product and board are matched against an embedded, read-only `profiles.json` that
-   carries sensor byte offsets, reference RPM ceilings and known-broken method signatures for 32 models across the
-   Nitro 5/16/17, Nitro V 15/16 and Predator Helios/Triton families.
-3. **Cache** — the result is stored under `SMBIOS product + BIOS version`, so a BIOS update invalidates it
-   automatically.
-
-The probe runs in the background while the window opens; the hardware controls stay in a "scanning" state until it
-finishes, so nothing can be pressed against a half-loaded capability set.
-
-A `profiles.user.json` in the data folder can add a model without a new release. It is validated strictly: unknown
-fields, out-of-range RPM ceilings and malformed JSON are rejected and logged, and the default profile is used
-instead. The thermal floors (`85 / 90 / 95 °C`), the `30–100 %` PWM bounds and the school-mode rules are compiled
-into the app and cannot be relaxed by any profile file.
-
-## Command line
-
-`NitroLite.exe` accepts the maintenance commands directly:
-
-```bat
-NitroLite.exe --fix-lighting
-NitroLite.exe --fix-services
-NitroLite.exe --restore-mux
-NitroLite.exe --optimize-pc --yes
-NitroLite.exe --restore-optimize
-NitroLite.exe --uninstall-cleanup --yes
-```
-
-Commands that change system settings ask for confirmation; `--yes`, `-y` and `--force` are all accepted. Without one,
-a legacy flag exits with code 3 and prints the line that would work. The same six commands are also reachable as
-`--cli <command>`, which is the form to prefer in new scripts because it does not need the second flag:
-
-```bat
-NitroLite.exe --cli optimize
-```
-
-**One-shot hardware commands** change the machine and exit without opening the window, so a script, a launcher or a
-macro pad can drive them. They never write to `settings.json`; a running NitroLite picks the change up as an external
-change on its next poll.
-
-```bat
-NitroLite.exe --mode turbo
-NitroLite.exe --mode balanced --fan auto
-NitroLite.exe --fan 45
-NitroLite.exe --profile 2
-```
-
-`--mode` takes `turbo`, `performance`, `balanced`, `quiet` or `eco`. `--fan` takes `auto`, `max`, `custom` or a
-percentage from 30 to 100 (which means custom at that speed). `--profile` takes an ATK mouse config from 1 to 4.
-Exit codes: `0` applied, `1` the hardware refused, `2` timed out, `3` the command line was wrong.
-
-## Backup and restore
-
-**Settings → Backup** writes one JSON file holding your settings, game profiles and RGB profiles, so a new laptop or
-a fresh Windows install does not mean setting everything up again. **Restore** reads that file back and restarts
-NitroLite.
-
-- The file is plain JSON with an `app` and `schema` marker; a file that is not a NitroLite backup is refused instead
-  of half-applied.
-- Two values are deliberately not carried across machines: the window position (it may point at a monitor that is
-  not there) and **School mode** (its undo record lives on the machine that made the changes, so restoring it
-  elsewhere would leave settings nobody can put back). Restore turns it off and says so.
-- The undo records themselves — `debloat_backup_state.json`, `optimize_backup.json`, `school_mode_backup.json` — are
-  not part of the backup. They describe this machine's original state and mean nothing on another one.
-- A missing or unreadable profile file is skipped and reported, not treated as an error.
-
-## Reporting a bug
-
-**Settings → Report a bug** opens a GitHub issue with the version, Windows build, laptop model and language already
-filled in. You see the text before anything is sent, and you can edit it. No user name, file path or log content is
-added. Next to it, **Open log folder** takes you to the log if you want to paste an excerpt yourself,
-**Create diagnostics bundle** collects the log, the settings and the hardware report into one folder, and
-**Export hardware report** writes the capability report described under [Compatibility](#compatibility) — attach
-it when the problem is about a feature that is missing or does nothing on your model, or press
-**Report compatibility on GitHub**, which copies the same report and opens the issue with it already filled in.
-
-## Linux (experimental)
-
-`NitroLite.Core` holds the platform-independent logic and `NitroLite.Linux` talks to the kernel's own `acer-wmi`
-driver, so nothing is reverse-engineered and nothing runs as root. The window is Avalonia (`NitroLite.Desktop`),
-which is why the same front end runs on both platforms.
-
-| Feature | Needs |
-|---|---|
-| Temperatures, fan RPM, fan curve | `acer-wmi` + `hwmon` (in-kernel, nothing to install) |
-| Operating modes (Quiet / Balanced / Performance / Turbo) | `/sys/firmware/acpi/platform_profile` |
-| Fan speed, CoolBoost, LCD overdrive, backlight timeout, 4-zone RGB | [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) |
-| 80 % charge limit | `charge_control_end_threshold`, or Linuwu-Sense |
-| Keyboard lighting when the kernel exposes no RGB node | OpenRGB SDK on `127.0.0.1:6742` |
-| Tray background mode, game detection, MUX, School mode, RGB profiles, hardware report | the above, as available |
-
-```bash
-tar -xzf NitroLite-linux-x64.tar.gz
-cd NitroLite-linux-x64
-./install.sh            # ~/.local/share/nitrolite, ~/.local/bin/nitrolite, menu entry, udev rule
-./install.sh --system   # /opt/nitrolite, for every user
-./install.sh --no-udev  # skip the one step that needs root
-```
-
-**The udev rule.** The Acer attributes are owned by root and created `0644`, so a normal user can read them but not
-write them. `packaging/linux/99-nitrolite.rules` grants the user of the current seat an ACL on exactly those nodes.
-`install.sh` offers to install it; by hand it is:
-
-```bash
-sudo install -m 644 99-nitrolite.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-Log out and back in once: the ACL is applied when the device is created. Until then NitroLite runs read-only and
-says so on the settings page, with the command ready to copy.
-
-**The Nitro key.** The laptop's own Nitro key is read from `/dev/input`, which is a different device class from the
-Acer attributes and is not covered by the rule above. It needs the `input` group:
-
-```bash
-sudo usermod -aG input "$USER"
-```
-
-Log out and back in for the group to take effect. Without it the key is simply not heard, the settings row hides
-itself and nothing else changes.
-
-`./uninstall.sh` removes the install and keeps your settings; `--purge` deletes those too.
-
-**Status:** the Linux backend is tested against an in-memory `/sys` tree, not against every laptop. The settings
-page lists what the probe found on your machine, which is the fastest way to tell whether a missing control is the
-kernel's fault or the app's.
-
-## Architecture
-
-Four projects, split along the one line that matters: what is Windows, what is Linux, and what is neither.
-
-```
-NitroLite.Core/                     net10.0 — no Windows-only assembly, no UI framework
-├── Hardware/
-│   ├── IHardwareController.cs      # Telemetry, fan, mode, MUX, battery limit, lighting
-│   ├── DeviceCapabilities.cs       # Everything the probe reports, in one record
-│   ├── DeviceIdentity.cs           # Model code, family, BIOS and CPU vendor parsing
-│   ├── ModelProfile.cs             # Sensor offsets, RPM ceilings, known-broken methods
-│   ├── ProfileCatalog.cs           # Embedded profiles.json and the validated profiles.user.json
-│   ├── Profiles/profiles.json      # 32 models: Nitro 5/16/17, Nitro V 15/16, Helios, Triton
-│   ├── SensorPlausibility.cs       # Rejects 0 °C, 127 °C and NaN before they reach the UI
-│   ├── KeyboardCapability.cs       # Zones and effects from GET_CONNECTED_DEVICE
-│   ├── LightingConfig.cs           # Zone colours, effect, brightness, speed
-│   ├── OpenRgb/                    # OpenRGB SDK client: detects a server on 127.0.0.1:6742
-│   └── Wmi/                        # AcerSensorIds, SensorDiscovery, ReadBackPolicy
-├── Lang/                           # de, en, es, hi, id, pt, ru (Turkish is the source text)
-├── Loc.cs                          # gettext-style catalogues and the {loc:T} markup extension
-├── ThemeCatalog.cs                 # Which palettes exist and which of them are dark
-├── UiFontCatalog.cs                # The interface's own font stack
-├── FanCurve.cs                     # Curve shape, interpolation and the safety floor
-├── FanCurvePresets.cs              # The Balanced, Quiet and Gaming templates
-├── ManualFanFloor.cs               # The lowest speed the current temperature allows
-├── FanCurveLoop.cs                 # Hysteresis, dwell time, and the handover to the firmware
-├── FanStallWatchdog.cs             # A fan that stops turning while the CPU is hot
-├── ModePolicy.cs                   # Which modes are valid on AC and on battery
-├── SchoolModeService.cs            # One-switch battery saving, with an exact undo record
-├── BatteryWearHistory.cs           # Measured wear samples, trend and per-year rate
-├── RgbProfileService.cs            # Saved presets; Name is identity, DisplayName is translated
-├── ActiveRgbStateStore.cs          # What the keyboard is showing right now, across restarts
-├── GameProfileService.cs           # Per-game mode, boost, fan and mouse profile
-├── GameLibraryRules.cs             # What counts as a game, and what is a launcher
-├── BackupService.cs                # Settings, game and RGB profiles in one JSON file
-├── SettingsManager.cs              # Load, normalise, save
-├── AtomicFile.cs                   # Write to a temp file, flush, rename
-├── Redaction.cs                    # The one redactor the log and the report share
-├── UpdateService.cs                # GitHub release check, digest verification, executable swap
-├── StartupMode.cs                  # Command line parsing, including --wmi-worker
-├── CliCommands.cs                  # --mode, --fan, --profile
-└── TelemetryFormatter.cs           # Value formatting and "(estimated)" labels
-
-NitroLite.Windows/                  net10.0-windows — the Windows backends
-├── Core/
-│   ├── AcerAgentClient.cs          # AASSvc TCP protocol (mode, fan, GPU, RGB, telemetry, events)
-│   ├── CareCenterClient.cs         # Acer Care Center WebSocket client (80 % charge limit)
-│   ├── AtkMouseService.cs          # ATK / VXE mouse HID protocol
-│   ├── CpuPowerService.cs          # Windows power plan CPU boost setting
-│   ├── PowerAutomationService.cs   # AC/battery transitions and Eco recovery
-│   ├── DebloatService.cs           # Acer background services, autostart
-│   ├── SystemToolsService.cs       # Keyboard, Acer service, MUX and Windows repair engine
-│   ├── ElevatedStartupService.cs   # Optional Task Scheduler entry, XML-based, kept off the disk
-│   ├── DiagnosticsBundle.cs        # Log + settings + report in one folder
-│   └── Hardware/
-│       ├── AgentHardwareController.cs   # Backend 1: AASSvc and Care Center
-│       ├── CapabilityProbe.cs           # Schema + profile + cache, in that order
-│       ├── SmbiosProbe.cs               # Read-only SMBIOS queries that never throw
-│       ├── HardwareReport.cs            # The text and JSON report users attach to issues
-│       └── Wmi/                         # Backend 2: the firmware's own WMI class
-│           ├── HybridHardwareController.cs  # Picks a backend per call, reconciles on handover
-│           ├── WmiHardwareController.cs     # IHardwareController over the worker pipe
-│           ├── AcerWmiExecutor.cs           # The byte-level protocol, in the elevated process
-│           ├── AcerWmiProtocol.cs           # Method ids and the (value << 8) | status encoding
-│           ├── ReadBackPolicy.cs            # Verify every write; 3 sessions before giving up
-│           ├── WmiWorkerLauncher.cs         # Starts the helper, once per session
-│           ├── WmiWorkerServer.cs           # CurrentUserOnly pipe, nonce handshake, typed commands
-│           ├── WmiWorkerClient.cs           # The parent side of that pipe
-│           ├── WmiWorkerValidation.cs       # Bounds the worker re-checks before touching hardware
-│           └── JobObjectGuard.cs            # Ties the helper's lifetime to the window
-└── Windows*.cs                     # Monitor, battery, storage, debloat, update, Nitro key, autostart
-
-NitroLite.Linux/                    net10.0 — the Linux backends
-├── LinuxSysfsHardwareController.cs # IHardwareController over acer-wmi and Linuwu-Sense
-├── LinuxHwmon.cs                   # Temperature and fan nodes from hwmon
-├── LinuxPlatformProfile.cs         # quiet / balanced / balanced-performance / performance
-├── LinuxCapabilityProbe.cs         # What this kernel actually exposes
-├── LinuxKeyboardProtocol.cs        # 4-zone RGB through Linuwu-Sense
-├── LinuxHardwareReport.cs          # The same report, redacted the same way
-├── LinuxNitroKeyListener.cs        # The Nitro key from /dev/input
-├── Evdev.cs                        # The evdev reader behind it
-└── Sysfs/                          # ISysfsFileSystem, a real one and an in-memory one for tests
-
-NitroLite.Desktop/                  net10.0 and net10.0-windows — the Avalonia front end
-├── Program.cs                      # Entry point: worker, CLI, one-shot commands, single instance
-├── AppHost.cs                      # The composition root: which backend exists on this platform
-├── SingleInstanceGuard.cs          # Mutex + named pipe on Windows, lock file on Linux
-├── TrayIconHost.cs                 # Tray menu, parity with the window
-├── CliTaskRunner.cs                # --cli and the legacy flags
-├── Views/                          # Dashboard, Monitoring, Lighting, Battery, Settings, OSD
-├── ViewModels/                     # MainViewModel and the shell labels
-├── Controls/                       # SparklineChart, TelemetryChart, WearTrendChart, NitroSlider
-├── Themes/                         # Palette loading
-└── Assets/Fonts/                   # The eight bundled typefaces and their licences
-```
-
-**Data location:** settings, game profiles, RGB profiles, thermal history, battery wear history and the log live in
-`%LOCALAPPDATA%\NitroLite` on Windows and `~/.local/share/nitrolite` on Linux. Files that older versions kept next
-to the exe are copied there on first launch.
-
-## Build from source
-
-```powershell
-git clone https://github.com/canerztk8/NitroLite.git
-cd NitroLite
-
-dotnet test NitroLite.Tests/NitroLite.Tests.csproj
-dotnet build -c Release NitroLite.Desktop/NitroLite.Desktop.csproj -f net10.0-windows
-```
-
-The executable is `NitroLite.Desktop/bin/Release/net10.0-windows/NitroLite.Desktop.exe` (this build needs the
-[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)). On Linux, build the same project for
-`net10.0`:
-
-```bash
-dotnet build -c Release NitroLite.Desktop/NitroLite.Desktop.csproj -f net10.0
-```
-
-The solution has five projects:
-
-| Project | Target | Holds |
-|---|---|---|
-| `NitroLite.Core` | `net10.0` | The hardware contract, the thermal and school-mode rules, the model table, the eight language catalogues, the theme catalogue. References no Windows-only assembly. |
-| `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
-| `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
-| `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2909 tests. |
-
-`NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
-check that keeps the split honest.
-
-**To produce the downloadable package:**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1
-```
-
-This writes `artifacts\NitroLite-v<version>-win-x64.zip`: a self-contained single-file `NitroLite.exe`, the licence,
-a third-party notice, and `tools\WinMemoryCleaner.exe` with its own licence and source archive. The publish is trimmed
-(`PublishTrimmed=true`, `TrimMode=partial`): the framework is trimmed, while Avalonia, `System.Management` and the
-NitroLite assemblies are copied whole, because the XAML loader and the WMI COM interop resolve members by name and
-the trimmer cannot see through that. That is what takes the exe from 43 MB to 24 MB. The script pins the
-.NET runtime to the patched version (10.0.14, CVE-2026-111497) and refuses to package a build that does not reference
-it. It also pins the WinMemoryCleaner version and SHA-256, so a re-uploaded or tampered asset fails the build. It
-rewrites `packaging\scoop\nitrolite.json` with the new version, URL and digest, and reads the file back to prove it
-still parses. That rewrite only reaches `main` if you run the script locally and commit it: the release workflow runs
-the same script on the runner and does not commit its output back.
-
-**To cut a release:** add the entry to [`CHANGELOG.md`](CHANGELOG.md), bump `<Version>` in
-`NitroLite.Desktop/NitroLite.Desktop.csproj`, commit, then push a matching tag.
-
-```powershell
-git tag v1.2.7
-git push origin v1.2.7
-```
-
-[`.github/workflows/release.yml`](.github/workflows/release.yml) takes it from there: it fails if the tag and the
-project version disagree, runs the test suite, packages the zip, writes the `.sha256` file and publishes the GitHub
-Release. The release body is the `CHANGELOG.md` section for that version, so the notes are written by hand and the
-workflow cannot invent them; a tag with no section falls back to the commit log. Nothing is published from a branch
-push. See [`packaging/`](packaging/README.md) for the Scoop and WinGet manifests.
-
-## Tests
-
-2909 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values,
-concurrency, and the read-back rule that decides whether a hardware write may be called applied.
-
-```powershell
-dotnet test NitroLite.Tests/NitroLite.Tests.csproj
-```
-
-- The tests use their own temporary data folder (`NITROLITE_DATA_DIR`) and never touch your real settings.
-- Six tests are skipped by default: four that change the real system (changing a connected mouse's profile, power
-  plan changes, the live charge limit probe, the live CPU power service) and two that need a real release package in
-  `artifacts/`. To run the first four:
-
-```powershell
-$env:NITROLITE_ENABLE_LIVE_HARDWARE_TESTS = "1"; dotnet test NitroLite.Tests/NitroLite.Tests.csproj
-```
-
-Three suites are worth knowing about, because they are what keeps a hardware app honest without a hardware lab:
-
-- **`HardwareMatrixAndChaosTests`** drives five chassis profiles — a fully equipped AN16-41, a Predator
-  Helios/Triton, an old Nitro 5 with a single lighting zone and no MUX, a Nitro V 15 with restricted WMI, and an
-  unsupported device — through every page and command, and asserts no unhandled exception and a `--` fallback for
-  every sensor that is missing.
-- **The fake `sysfs` tree** builds `hwmon` (`acer`, `k10temp`, `coretemp`) and `platform_profile` in a temporary
-  folder, then covers a missing node, a corrupt sensor file and a read-only `platform_profile`.
-- **`ChaosHardwareDecorator`** injects `false`, `TimeoutException`, `0 °C`, `127 °C` and `NaN` through 100
-  consecutive telemetry and setting cycles, and the settings, `FanCurve` and `ManualFanFloor` are fed `NaN`,
-  `Infinity`, `-100` and `500` to prove they clamp instead of propagating.
-
-### Capturing screenshots
-
-`scripts/screenshot.ps1` captures pages without you having to open the app, centre it and grab the
-window by hand. It starts NitroLite against a throwaway data folder, parks the window in a corner,
-walks the pages, captures each one with `PrintWindow`, then closes the app and deletes the folder.
-Your real settings are never read or written, and the NitroLite you already have in the tray is left
-alone: the harness asks for a copy that owns no single-instance slot.
-
-```powershell
-# every page, dark theme, German
-powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -All -Theme dark -Language de
-
-# one page, into a folder of your choice
-powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -Page NavBattery -Out C:\temp\pil
-
-# let the telemetry chart fill before the first capture
-powershell -ExecutionPolicy Bypass -File scripts\screenshot.ps1 -All -Theme dark -Settle 62000
-```
-
-Pages are addressed by `AutomationId` (`NavModes`, `NavMonitoring`, `NavLighting`, `NavBattery`,
-`NavTools`), not by their visible label, so the same command works in all eight languages. The two
-names the retired WPF build used — `NavRgb` and `NavDebloat` — are still accepted and map onto
-`NavLighting` and `NavTools`. `-Position bottom` pushes the window behind whatever you already have
-open. There is no fully invisible mode: the compositor stops rendering a window that is completely
-off-screen, and `PrintWindow` then returns a stale frame.
-
-## Trust and code signing
-
-**NitroLite is not code-signed.** A Windows code-signing certificate that SmartScreen accepts costs a few hundred
-dollars a year and needs a registered business, which this project does not have. So the exe carries no publisher
-signature, and Windows shows "Windows protected your PC" the first time you run it. That warning is about the missing
-signature, not about anything found in the file.
-
-What you can check instead, without trusting the author:
-
-| Check | How |
-|---|---|
-| The download came from this repository | The link on the Releases page points at `github.com/canerztk8/NitroLite`; HTTPS to GitHub is the transport. |
-| The binary was built in public | Every release is built by [GitHub Actions](.github/workflows/release.yml) on a `windows-latest` runner from the tag, not on the author's laptop. The workflow run is linked from the release page, and its log shows the test run and the packaging step. |
-| The file is the one that was published | [`Get-FileHash`](#verify-the-download) and compare it with the digest on the release. |
-| The source matches the binary | Build it yourself from the tag; `scripts\publish-release.ps1` is the same script the workflow runs. |
-| The updater does not take a shortcut | It compares the downloaded package's SHA-256 against the digest GitHub publishes and refuses to swap the exe on a mismatch. |
-
-The honest limit: if this GitHub account were taken over, an attacker could publish a release and its digest together,
-and the digest check would pass. Two-factor authentication on the account is what actually protects you, not the
-signature. If you need a signed binary, build from source and sign it with your own certificate.
-
-## How many people use it
-
-NitroLite contains **no telemetry** — no counter, no analytics, no phone-home. The only numbers are the ones GitHub
-already keeps, and `scripts/stats.ps1` prints them:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\stats.ps1
-```
-
-It shows downloads per release (public) and the 14-day repository traffic — views, unique visitors, clones — which
-GitHub returns only to the repository owner. Requires the [GitHub CLI](https://cli.github.com) and a one-time
-`gh auth login`.
+## Documentation (wiki)
+
+Everything else lives in the [**NitroLite wiki**](https://github.com/canerztk8/NitroLite/wiki):
+
+- **[Why SmartScreen warns](https://github.com/canerztk8/NitroLite/wiki/Why-SmartScreen-warns)**
+- **[Compatibility](https://github.com/canerztk8/NitroLite/wiki/Compatibility)** — capability probing, the direct-WMI fallback, remote model profiles, hardware reports
+- **[Backup and restore](https://github.com/canerztk8/NitroLite/wiki/Backup-and-Restore)**
+- **[Reporting a bug](https://github.com/canerztk8/NitroLite/wiki/Reporting-a-Bug)**
+- **[Command line](https://github.com/canerztk8/NitroLite/wiki/Command-Line)** — scriptable maintenance and one-shot hardware commands
+- **[Linux (experimental)](https://github.com/canerztk8/NitroLite/wiki/Linux)** — install, udev rule, Nitro key
+- **[Without Acer's software](https://github.com/canerztk8/NitroLite/wiki/Without-Acer-Software)** — the two backends, the elevation prompt, write verification
+- **[Architecture](https://github.com/canerztk8/NitroLite/wiki/Architecture)** — the four projects, file by file
+- **[Build from source](https://github.com/canerztk8/NitroLite/wiki/Build-from-Source)** and **[Tests](https://github.com/canerztk8/NitroLite/wiki/Tests)**
+- **[Languages, themes and typefaces](https://github.com/canerztk8/NitroLite/wiki/Languages-Themes-and-Typefaces)**
+- **[Trust and code signing](https://github.com/canerztk8/NitroLite/wiki/Trust-and-Code-Signing)**
+- **[How many people use it](https://github.com/canerztk8/NitroLite/wiki/Usage-Statistics)**
+- **[License](https://github.com/canerztk8/NitroLite/wiki/License)**
+
+---
 
 ## License
 
-This project is released under the [MIT License](LICENSE).
+This project is released under the [MIT License](LICENSE). The eight embedded typefaces are licensed under the SIL
+Open Font License 1.1, and the packaged [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) is
+GPL-3.0 and shipped as a separate, unmodified executable. Details on the
+**[License](https://github.com/canerztk8/NitroLite/wiki/License)** wiki page.
 
-The interface is drawn in eight typefaces, all embedded in the executable and all licensed under the SIL Open Font
-License 1.1, which travels with the package:
+---
 
-| Face | Upstream |
-|---|---|
-| Quicksand | [andrew-paglinawan/QuicksandFamily](https://github.com/andrew-paglinawan/QuicksandFamily) |
-| Exo 2 | [google/fonts](https://github.com/google/fonts/tree/main/ofl/exo2) |
-| Oxanium | [google/fonts](https://github.com/google/fonts/tree/main/ofl/oxanium) |
-| Rubik | [google/fonts](https://github.com/google/fonts/tree/main/ofl/rubik) |
-| JetBrains Mono | [JetBrains/JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) |
-| Rajdhani | [google/fonts](https://github.com/google/fonts/tree/main/ofl/rajdhani) |
-| Space Grotesk | [floriankarsten/space-grotesk](https://github.com/floriankarsten/space-grotesk) |
-| Chakra Petch | [m4rc1e/Chakra-Petch](https://github.com/m4rc1e/Chakra-Petch) |
-
-Each was subset to the character ranges the eight catalogues can put on screen, and each was instanced at three
-weights because Avalonia 11 exposes no variation axis. None of the eight carries a Reserved Font Name, so the subset
-keeps the family name. The per-face copyright line and the exact change made are in `third-party/<face>/NOTICE.md`,
-and the combined notice is in `THIRD-PARTY-NOTICES.md`.
-
-The package also contains [WinMemoryCleaner](https://github.com/IgorMundstein/WinMemoryCleaner) 3.0.8, which is
-GPL-3.0. It is an unmodified, separate executable that NitroLite only launches as a child process, so the two form an
-aggregate under GPL-3.0 section 5 and NitroLite's own code stays MIT. The package carries the tool's licence, a notice
-and its source archive; see `THIRD-PARTY-NOTICES.md`.
+<p align="center">
+  <a href="https://ko-fi.com/cztrk"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support me on Ko-fi" height="32"></a>
+</p>
