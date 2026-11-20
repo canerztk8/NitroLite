@@ -408,6 +408,27 @@ public class AppSettings
     public List<ReactiveLightingStop>? ReactiveLightingCustomStops { get; set; }
 
     /// <summary>
+    /// Which ramp the graphics chip's half of the keyboard follows. Null means "the same ramp as the processor", which
+    /// is what a settings file from before the two halves could differ means, and what a user who never opened the
+    /// target picker expects.
+    /// </summary>
+    /// <remarks>
+    /// A second profile id rather than a boolean: the two halves can each follow a built-in ramp or their own stops, so
+    /// a machine with both sensors selected can show a warm processor beside a cool graphics chip instead of one colour
+    /// in two shades — which is what the single ramp produced and what made the split look broken.
+    /// </remarks>
+    [JsonPropertyName("reactive_lighting_profile_gpu")]
+    public string? ReactiveLightingProfileGpu { get; set; }
+
+    /// <summary>
+    /// The graphics chip's own ramp, used when <see cref="ReactiveLightingProfileGpu"/> is
+    /// <see cref="ReactiveLightingProfiles.CustomId"/>. Null means the graphics half inherits the processor's ramp
+    /// rather than painting something the user never chose.
+    /// </summary>
+    [JsonPropertyName("reactive_lighting_custom_stops_gpu")]
+    public List<ReactiveLightingStop>? ReactiveLightingCustomStopsGpu { get; set; }
+
+    /// <summary>
     /// Whether the keyboard shows a chosen colour while the charger is plugged in. Persisted, because it is a
     /// preference and not a moment: someone who set a charging colour wants it back after a reboot.
     /// </summary>
@@ -522,11 +543,17 @@ public class AppSettings
     public AppTheme Theme { get; set; } = AppTheme.WarmCream;
 
     /// <summary>
-    /// The chosen UI typeface, as a <see cref="UiFontCatalog"/> id. Null means the user has not chosen one, which is
-    /// the default face; an id this build no longer ships resolves to the default rather than to a missing font.
+    /// The chosen UI typeface, as a <see cref="UiFontCatalog"/> id. An id this build no longer ships resolves to the
+    /// default rather than to a missing font.
     /// </summary>
+    /// <remarks>
+    /// Initialised to the default rather than left null, so a settings file written by a clean launch names the face it
+    /// is in. Null is still understood — a file from an older build has no key at all — and resolves to the same face,
+    /// which is what makes "the window starts in Quicksand" a property of the settings and not of a fallback that a
+    /// hand-edited file could quietly avoid.
+    /// </remarks>
     [JsonPropertyName("ui_font")]
-    public string? UiFont { get; set; }
+    public string? UiFont { get; set; } = UiFontCatalog.DefaultId;
 
     /// <summary>
     /// Width of the left navigation rail, in device-independent pixels. Persisted because it is a layout choice:
@@ -738,6 +765,15 @@ public class AppSettings
         {
             var cleanStops = ReactiveLightingProfiles.SanitizeStops(ReactiveLightingCustomStops);
             ReactiveLightingCustomStops = cleanStops.Count >= 2 ? cleanStops : null;
+        }
+
+        // The graphics half carries the same rules. Null stays null: it means "follow the processor's ramp", which is a
+        // real answer and the one a file written before the two halves could differ gives.
+        ReactiveLightingProfileGpu = ReactiveLightingProfiles.CanonicalId(ReactiveLightingProfileGpu);
+        if (ReactiveLightingCustomStopsGpu != null)
+        {
+            var cleanGpuStops = ReactiveLightingProfiles.SanitizeStops(ReactiveLightingCustomStopsGpu);
+            ReactiveLightingCustomStopsGpu = cleanGpuStops.Count >= 2 ? cleanGpuStops : null;
         }
 
         // The two automatic colours paint at levels of their own, and a file a user can edit can hold a zero or a

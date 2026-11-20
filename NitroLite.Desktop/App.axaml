@@ -627,6 +627,52 @@
     </Style>
 
     <!--
+      A temperature tile that is also the sensor switch. The pair of segmented chips that used to sit above the tiles was
+      a second row saying the same two words, so the reading became the control: clicking the number you are already
+      looking at is the shorter way to say "the colour follows this one". The tile that is off dims rather than
+      disappearing, because the two are a choice and the one not taken has to stay legible enough to take, and the tile
+      that is on keeps full strength with the accent frame the selected controls on this page wear.
+    -->
+    <Style Selector="ToggleButton.tempchip">
+      <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
+      <Setter Property="Opacity" Value="0.75" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip:checked">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip:disabled">
+      <Setter Property="Opacity" Value="0.3" />
+    </Style>
+
+    <!--
       A ramp chip: the gradient a temp-reactive profile paints, with its name under it. A card rather than a segmented
       button, because the thing being chosen is a picture and the label only names it; the selected chip keeps the ink
       frame the segmented row uses so the two read as the same kind of choice.

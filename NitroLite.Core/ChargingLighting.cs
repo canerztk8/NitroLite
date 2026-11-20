@@ -62,6 +62,57 @@ public static class ChargingLighting
     }
 
     /// <summary>
+    /// The battery percentage a machine with the 80 % charge limit armed rests at. The firmware stops charging here and
+    /// reports "plugged in, not charging", which is not the same thing as a full pack and must not be read as one.
+    /// </summary>
+    public const int ChargeLimitPercent = 80;
+
+    /// <summary>
+    /// What the adapter is doing, as much of it as the charging colour needs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="OnAdapter"/> is the whole trigger, and it comes from the AC line status rather than from the charge
+    /// rate or the percentage. The 80 % charge limit is what makes that distinction load-bearing: with the limit armed
+    /// and the adapter in, Windows reports the pack at 80 % and the charging flag clear, so any rule written as "the
+    /// battery is rising" or "the battery is not full" answers "no charger" on a machine that is plugged in — and a
+    /// colour mode that went quiet at the cap would look broken exactly when the user is sitting at their desk.
+    /// </para>
+    /// <para>
+    /// <see cref="AtChargeLimit"/> exists so the page can say what is happening instead of claiming a charge that is
+    /// not taking place. It changes no colour.
+    /// </para>
+    /// </remarks>
+    public readonly record struct AdapterState(bool OnAdapter, bool AtChargeLimit, bool Charging);
+
+    /// <summary>
+    /// Reads the adapter state from the two figures the platform reports plus the charge-limit switch.
+    /// </summary>
+    /// <param name="onAc">The AC line status: null when the platform cannot say.</param>
+    /// <param name="batteryPercent">The pack's figure, or null when it cannot be read.</param>
+    /// <param name="chargeLimitOn">True while the 80 % charge limit is armed on this machine.</param>
+    public static AdapterState Read(bool? onAc, int? batteryPercent, bool chargeLimitOn)
+    {
+        // Null is "this platform cannot say", not "plugged in": a machine with no adapter node would otherwise paint the
+        // charging colour for the rest of its life. A failed Windows query is already reported as AC by the backend, so
+        // the honest reading here is the one the platform actually gave.
+        bool onAdapter = onAc == true;
+
+        bool atLimit = chargeLimitOn && onAdapter && batteryPercent is { } percent && percent >= ChargeLimitPercent;
+
+        // Below the cap the pack is taking a charge; at the cap it is not, and that is the honest answer.
+        bool charging = onAdapter && !atLimit;
+
+        return new AdapterState(onAdapter, atLimit, charging);
+    }
+
+    /// <summary>
+    /// True when the adapter colour belongs on the keys: the adapter is in, whatever the pack is doing about it. A
+    /// capped machine and a charging one look the same on the keyboard on purpose — the message is "the plug is in".
+    /// </summary>
+    public static bool ShouldPaint(AdapterState state) => state.OnAdapter;
+
+    /// <summary>
     /// True when <paramref name="baseline"/> describes a keyboard that can be painted at all. A page whose lights are
     /// off — blackout, or a brightness of zero — has said the keys should be dark, and a colour mode is not a way to
     /// switch them back on behind the user.

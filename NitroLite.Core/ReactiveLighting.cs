@@ -18,7 +18,13 @@ namespace NitroLite.Core;
 /// <para>
 /// The temperature is quantised before it becomes a colour. A sensor that reports 61.2 and then 61.4 is not asking for
 /// two different colours, and every colour change is a write to the embedded controller — the one thing in this
-/// feature that is not free.
+/// feature that is not free. The grid is one degree, which is fine enough for the ramp to read as a gradient and coarse
+/// enough that the colour does not chase sensor noise.
+/// </para>
+/// <para>
+/// Nothing here writes on a UI frame. The colour is evaluated once per telemetry sample (one to two seconds) and
+/// <see cref="ReactiveLightingThrottle"/> decides whether it is worth a write at all, so a smoother ramp costs no extra
+/// traffic to the keyboard: a machine whose temperature is unchanged writes nothing, whatever the grid says.
 /// </para>
 /// </remarks>
 public static class ReactiveLighting
@@ -31,10 +37,19 @@ public static class ReactiveLighting
 
     /// <summary>How far the temperature has to move before the colour is allowed to change.</summary>
     /// <remarks>
-    /// Three degrees, and every stop on the built-in ramp is a multiple of it, so the grid and the stops line up: 45, 60,
-    /// 72 and 90 are all reachable exactly. A finer grid would spend writes on noise; a coarser one would skip the amber.
+    /// <para>
+    /// One degree. It used to be three, which made the ramp step in visible jumps: 45 °C and 47 °C were the same
+    /// colour, so the keys snapped from ice blue to mint rather than sliding through the greens between them. A
+    /// degree is fine enough that the eye reads the change as a gradient.
+    /// </para>
+    /// <para>
+    /// It is deliberately not finer than a degree. The transport is protected by <see cref="MinInterval"/> and by the
+    /// "same colour is never written twice" rule, not by the grid, so a bucket of a tenth of a degree would still be
+    /// one write every three seconds at most — but it would also make the colour chase sensor noise, which looks like
+    /// a fault rather than a reading. One degree is the resolution a laptop's temperature sensors actually answer in.
+    /// </para>
     /// </remarks>
-    public const double BucketCelsius = 3;
+    public const double BucketCelsius = 1;
 
     /// <summary>The shortest gap between two writes, whatever the temperature does.</summary>
     public static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(3);
@@ -149,6 +164,25 @@ public static class ReactiveLighting
         double cpuCelsius,
         double gpuCelsius,
         bool useCpu,
+        bool useGpu) => ColorsForSensors(stops, stops, cpuCelsius, gpuCelsius, useCpu, useGpu);
+
+    /// <summary>
+    /// The same pair with one ramp per sensor: the left half is painted by <paramref name="cpuStops"/> and the right by
+    /// <paramref name="gpuStops"/>.
+    /// </summary>
+    /// <remarks>
+    /// A single ramp painted both halves, so a machine with both sensors selected showed one colour in two shades and
+    /// the user had no way to tell which half was which. Two ramps let the processor run a warm ramp and the graphics
+    /// chip a cool one, and the split reads as two sensors rather than as a gradient across the keyboard. A half whose
+    /// own reading is missing borrows the other sensor's temperature but keeps its own ramp, so the colour stays on the
+    /// scale belonging to the half it is painted on.
+    /// </remarks>
+    public static (string Left, string Right)? ColorsForSensors(
+        IReadOnlyList<ReactiveLightingStop>? cpuStops,
+        IReadOnlyList<ReactiveLightingStop>? gpuStops,
+        double cpuCelsius,
+        double gpuCelsius,
+        bool useCpu,
         bool useGpu)
     {
         if (!useCpu && !useGpu) return null;
@@ -162,13 +196,13 @@ public static class ReactiveLighting
             var right = gpu ?? cpu;
             if (left is null || right is null) return null;
 
-            return (ColorFor(stops, left.Value), ColorFor(stops, right.Value));
+            return (ColorFor(cpuStops, left.Value), ColorFor(gpuStops, right.Value));
         }
 
         var at = useCpu ? cpu ?? gpu : gpu ?? cpu;
         if (at is null) return null;
 
-        var color = ColorFor(stops, at.Value);
+        var color = ColorFor(useCpu ? cpuStops : gpuStops, at.Value);
         return (color, color);
     }
 

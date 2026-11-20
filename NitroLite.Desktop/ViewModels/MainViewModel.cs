@@ -875,6 +875,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ReactiveLightingThrottle _reactiveThrottle = new();
     private ReactiveProfileChoice? _selectedReactiveProfile;
 
+    /// <summary>
+    /// Which half's ramp the picker and the editor are working on. The two halves can follow different ramps, so the
+    /// ramp cards have one target at a time rather than two copies of every control on the page.
+    /// </summary>
+    private bool _reactiveRampTargetGpu;
+
     // Which sensors the colour follows, and the level it paints at. Both are the mode's own: the page's brightness
     // belongs to the colour the user chose, and a temperature colour that borrowed it would jump every time the page's
     // slider moved.
@@ -888,7 +894,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// editor holds a copy of a built-in ramp and is re-seeded from whichever ramp is active when Custom is picked, so
     /// the first visit starts from a shape the user already knows instead of a ramp they never chose.
     /// </summary>
+    /// <remarks>
+    /// One flag per half, because the editor is the same card pointed at one target at a time: the graphics chip's ramp
+    /// being edited must not make the processor's look edited, or the processor's custom entry would stop seeding itself
+    /// from the ramp the user just left.
+    /// </remarks>
     private bool _customRampTouched;
+    private bool _customRampTouchedGpu;
 
     // The charging keyboard colour: the colour the adapter paints, whether that mode is on, and whether the keyboard
     // is showing it right now. The painted flag is what makes the mode transition-driven — one write when the plug
@@ -1627,6 +1639,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _batteryPercent, value)) return;
             Raise(nameof(BatteryPercentText));
             Raise(nameof(BatteryBarPercent));
+
+            // The charging line says whether the pack is at the 80 % cap, which is a fact about this figure.
+            Raise(nameof(ChargingColorStateText));
         }
     }
 
@@ -2019,6 +2034,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SystemCpuText));
             Raise(nameof(SparklineNowText));
             Raise(nameof(ReactiveCpuChip));
+            Raise(nameof(ReactiveCpuReading));
             Raise(nameof(ReactiveLightingNow));
         }
     }
@@ -2032,6 +2048,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(GpuTemperatureText));
             Raise(nameof(SystemGpuText));
             Raise(nameof(ReactiveGpuChip));
+            Raise(nameof(ReactiveGpuReading));
             Raise(nameof(ReactiveLightingNow));
         }
     }
@@ -2775,12 +2792,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         int temperature = CpuTemperature;
         int effective = _manualFanFloor.EffectivePercent(CustomCpuPercent, temperature);
 
+        // Each fan gets its own slider. This used to pass the processor's percentage twice, so the graphics fan
+        // followed the processor slider and the graphics slider did nothing at all — the bug the report described as
+        // "the GPU slider has no effect".
+        var (cpuPercent, gpuPercent) = EffectiveCustomPercents();
+
         bool ok = await RunWriteAsync(
-            () => _hardware.SetFanModeAsync(FanMode.Custom, effective, effective),
+            () => _hardware.SetFanModeAsync(FanMode.Custom, cpuPercent, gpuPercent),
             Labels.FanMode).ConfigureAwait(true);
 
         // The loop must not immediately rewrite what this call just wrote, and a refused write must not be recorded
-        // as applied, so the tracker is updated only on success.
+        // as applied, so the tracker is updated only on success. The floor is tracked on the processor's speed, which
+        // is the sensor it reads; the graphics fan has no separate floor because the two sensors share a die.
         if (ok) _manualFanFloor.Commit(effective, temperature);
     }
 
@@ -3140,6 +3163,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>The graphics chip's chip text, on the same rule as <see cref="ReactiveCpuChip"/>.</summary>
     public string ReactiveGpuChip => $"GPU {GpuTemperature:F0} °C";
 
+    /// <summary>
+    /// The big figure on the processor's temperature tile: the reading, with the degree sign and nothing else. The tile's
+    /// caption already says CPU, and it is the tile itself that selects the sensor, so the number has to be the thing the
+    /// eye lands on.
+    /// </summary>
+    public string ReactiveCpuReading => $"{CpuTemperature:F0}°";
+
+    /// <summary>The graphics chip's figure, on the same rule as <see cref="ReactiveCpuReading"/>.</summary>
+    public string ReactiveGpuReading => $"{GpuTemperature:F0}°";
+
     /// <summary>False when both switches are off: the mode is armed but has nothing to follow.</summary>
     public bool HasReactiveSensors => _reactiveCpuSensor || _reactiveGpuSensor;
 
@@ -3208,6 +3241,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(ReactiveCpuChip));
         Raise(nameof(ReactiveGpuChip));
         Raise(nameof(ReactiveLightingNow));
+        Raise(nameof(ReactiveRampTargetVisible));
+
+        // The graphics half just went away: the ramp card cannot stay pointed at a half the keyboard no longer paints,
+        // and the processor's ramp is the one that is left.
+        if (!ReactiveRampTargetVisible && _reactiveRampTargetGpu) SelectReactiveRampTarget(gpu: false);
 
         // The keyboard changes shape, not just colour, so the throttle has to let the next paint through.
         ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
@@ -3283,8 +3321,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // keyboard here means the user pressed "turn off" afterwards, and nothing in a colour mode may overrule that.
         if (_lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0) return;
 
-        var pair = ReactiveLighting.ColorsForSensors(ActiveReactiveStops(), cpuCelsius, gpuCelsius,
-            _reactiveCpuSensor, _reactiveGpuSensor);
+        // One ramp per half: the processor's half and the graphics half can be painted on different scales, which is
+        // what stops both halves looking like one colour in two shades while the split is on.
+        var pair = ReactiveLighting.ColorsForSensors(ActiveReactiveStops(gpu: false), ActiveReactiveStops(gpu: true),
+            cpuCelsius, gpuCelsius, _reactiveCpuSensor, _reactiveGpuSensor);
 
         // Both switches off, or neither sensor answered: nothing to paint, and the card says so in words rather than
         // leaving the keys on a colour that stopped meaning anything.
@@ -3537,8 +3577,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// One line of state under the card's switch: whether the charging colour is on the keys right now or waiting for
     /// the plug. Empty while the mode is off, so the card is quiet when it is doing nothing.
     /// </summary>
-    public string ChargingColorStateText =>
-        OnAcPower == true ? Labels.ChargingColorActive : Labels.ChargingColorWaiting;
+    /// <remarks>
+    /// A capped machine gets its own sentence. With the 80 % charge limit armed the pack sits at the cap and the firmware
+    /// reports "plugged in, not charging", so a line that claimed a charge would describe something that is not
+    /// happening. The colour itself is the same in both cases: the keyboard follows the plug, not the charging current.
+    /// </remarks>
+    public string ChargingColorStateText
+    {
+        get
+        {
+            var adapter = ChargingLighting.Read(OnAcPower, BatteryPercent, BatteryLimitOn);
+            if (!adapter.OnAdapter) return Labels.ChargingColorWaiting;
+
+            return adapter.AtChargeLimit
+                ? Labels.ChargingColorAtLimit(ChargingLighting.ChargeLimitPercent)
+                : Labels.ChargingColorActive;
+        }
+    }
 
     public bool HasChargingColorState => _chargingColorEnabled;
 
@@ -3632,7 +3687,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // adopt the charging colour as the user's own.
             if (!_lightingStateRead || _lightingBlackedOut) return;
 
-            if (OnAcPower == true)
+            // The adapter, not the charge current: a pack parked at the 80 % limit reports "not charging" while the
+            // machine is very much plugged in, and a colour keyed off the current would go out at the cap.
+            if (ChargingLighting.ShouldPaint(ChargingLighting.Read(OnAcPower, BatteryPercent, BatteryLimitOn)))
             {
                 if (_chargingColorPainted && !force) return;
 
@@ -3702,6 +3759,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The ramp the reactive mode currently follows. Picking a profile is the write: it is stored and the throttle is
     /// reset, so the next tick paints the new ramp even at an unchanged temperature.
     /// </summary>
+    /// <remarks>
+    /// The picker edits one half at a time — <see cref="ReactiveRampTargetGpu"/> says which — so a pick is stored
+    /// against that half's own id. The processor keeps <c>reactive_lighting_profile</c>, which is where a settings file
+    /// written before the halves could differ keeps its single ramp, so an upgraded file paints what it always did.
+    /// </remarks>
     public ReactiveProfileChoice? SelectedReactiveProfile
     {
         get => _selectedReactiveProfile;
@@ -3717,18 +3779,99 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // active a moment ago, so "Custom" starts from a shape the user already knows, not from a blank list. A
             // ramp that was saved or edited before is left exactly as it is: overwriting it with the profile the user
             // just left would throw away work they can only redo by hand.
-            if (value.IsCustom && previous is { IsCustom: false } && !_customRampTouched)
+            if (value.IsCustom && previous is { IsCustom: false } && !CustomRampTouched)
             {
                 SeedCustomStops(previous.Id);
             }
 
             if (_suppressWrite) return;
 
-            _settings.ReactiveLightingProfile = value.IsCustom ? ReactiveLightingProfiles.CustomId : value.Id;
+            var id = value.IsCustom ? ReactiveLightingProfiles.CustomId : value.Id;
+            if (_reactiveRampTargetGpu) _settings.ReactiveLightingProfileGpu = id;
+            else _settings.ReactiveLightingProfile = id;
+
             SaveSettings();
             _reactiveThrottle.Reset();
         }
     }
+
+    /// <summary>Which half's ramp the picker and the editor are working on: true for the graphics chip.</summary>
+    public bool ReactiveRampTargetGpu
+    {
+        get => _reactiveRampTargetGpu;
+        set => SelectReactiveRampTarget(gpu: value);
+    }
+
+    /// <summary>The processor's half of <see cref="ReactiveRampTargetGpu"/>, for the left-hand chip.</summary>
+    public bool ReactiveRampTargetCpu
+    {
+        get => !_reactiveRampTargetGpu;
+        set
+        {
+            if (value) SelectReactiveRampTarget(gpu: false);
+        }
+    }
+
+    /// <summary>
+    /// True while the picker can be pointed at either half. With one sensor selected there is a single ramp to edit, so
+    /// the target chips are hidden rather than offering a choice that changes nothing on the keyboard.
+    /// </summary>
+    public bool ReactiveRampTargetVisible => _reactiveCpuSensor && _reactiveGpuSensor;
+
+    /// <summary>
+    /// Points the ramp card at one half of the keyboard. The chips and the editor are rebuilt from that half's own
+    /// settings; nothing is written, because choosing which ramp to look at is not choosing a colour.
+    /// </summary>
+    private void SelectReactiveRampTarget(bool gpu)
+    {
+        if (_reactiveRampTargetGpu == gpu) return;
+
+        _reactiveRampTargetGpu = gpu;
+        Raise(nameof(ReactiveRampTargetGpu));
+        Raise(nameof(ReactiveRampTargetCpu));
+
+        var previous = _suppressWrite;
+        _suppressWrite = true;
+        try
+        {
+            BuildReactiveProfileChoices();
+            BuildReactiveStops();
+        }
+        finally
+        {
+            _suppressWrite = previous;
+        }
+
+        Raise(nameof(ReactiveCustomEditorVisible));
+        Raise(nameof(CustomRampPreview));
+    }
+
+    /// <summary>True while the custom ramp of the half being edited is the user's own rather than a seeded copy.</summary>
+    private bool CustomRampTouched
+    {
+        get => _reactiveRampTargetGpu ? _customRampTouchedGpu : _customRampTouched;
+        set
+        {
+            if (_reactiveRampTargetGpu) _customRampTouchedGpu = value;
+            else _customRampTouched = value;
+        }
+    }
+
+    /// <summary>
+    /// The ramp profile id stored for one half. The graphics half with no id of its own follows the processor's, which
+    /// is what a settings file from before the split means and what a user who never touched the target chips expects.
+    /// </summary>
+    private string? StoredReactiveProfile(bool gpu) =>
+        gpu ? _settings.ReactiveLightingProfileGpu ?? _settings.ReactiveLightingProfile
+            : _settings.ReactiveLightingProfile;
+
+    /// <summary>The custom stops stored for one half, or null when it has none of its own.</summary>
+    private List<ReactiveLightingStop>? StoredCustomStops(bool gpu) =>
+        gpu ? _settings.ReactiveLightingCustomStopsGpu : _settings.ReactiveLightingCustomStops;
+
+    /// <summary>True when the graphics half has no ramp of its own and follows the processor's.</summary>
+    private bool GpuRampInherited =>
+        _settings.ReactiveLightingProfileGpu == null && _settings.ReactiveLightingCustomStopsGpu == null;
 
     /// <summary>True when the custom entry is selected, which is what opens the ramp editor under the picker.</summary>
     public bool ReactiveCustomEditorVisible => SelectedReactiveProfile?.IsCustom == true;
@@ -3741,17 +3884,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True while the custom ramp keeps at least two stops — a ramp needs a cold end and a hot end.</summary>
     public bool CanRemoveReactiveStop => ReactiveStops.Count > 2;
 
-    /// <summary>The ramp the tick evaluates: the selected profile's stops, or the edited stops for the custom entry.</summary>
-    private IReadOnlyList<ReactiveLightingStop> ActiveReactiveStops()
+    /// <summary>The ramp the processor's half of the keyboard is painted by.</summary>
+    private IReadOnlyList<ReactiveLightingStop> ActiveReactiveStops() => ActiveReactiveStops(gpu: false);
+
+    /// <summary>
+    /// The ramp one half of the keyboard is painted by: the selected profile's stops, or the edited stops when that
+    /// half stands on the custom entry.
+    /// </summary>
+    /// <remarks>
+    /// The editor is only authoritative for the half it is pointed at. The other half reads its stored stops, because
+    /// its rows are not the ones on screen and a half-edited ramp must not reach the keyboard until it is the half the
+    /// user is looking at.
+    /// </remarks>
+    private IReadOnlyList<ReactiveLightingStop> ActiveReactiveStops(bool gpu)
     {
-        if (SelectedReactiveProfile?.IsCustom == true)
+        // No ramp of its own: follow the processor's, exactly as the single-ramp build did.
+        if (gpu && GpuRampInherited) return ActiveReactiveStops(gpu: false);
+
+        var id = StoredReactiveProfile(gpu);
+        if (string.Equals(id, ReactiveLightingProfiles.CustomId, StringComparison.OrdinalIgnoreCase))
         {
-            var custom = ReactiveLightingProfiles.SanitizeStops(
-                ReactiveStops.Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color }));
-            if (custom.Count >= 2) return custom;
+            var stops = ReactiveLightingProfiles.SanitizeStops(
+                gpu == _reactiveRampTargetGpu
+                    ? ReactiveStops.Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
+                    : StoredCustomStops(gpu) ?? Enumerable.Empty<ReactiveLightingStop>());
+
+            if (stops.Count >= 2) return stops;
         }
 
-        return ReactiveLightingProfiles.FindBuiltIn(SelectedReactiveProfile?.Id)?.Stops
+        return ReactiveLightingProfiles.FindBuiltIn(id)?.Stops
                ?? (IReadOnlyList<ReactiveLightingStop>)ReactiveLightingProfiles.Default.Stops;
     }
 
@@ -3772,7 +3933,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ReactiveProfileChoices.Add(new ReactiveProfileChoice(ReactiveLightingProfiles.CustomId, Loc.T("Özel"),
             isCustom: true, CurrentCustomStops(), SelectReactiveProfile));
 
-        var stored = ReactiveLightingProfiles.CanonicalId(_settings.ReactiveLightingProfile);
+        var stored = ReactiveLightingProfiles.CanonicalId(StoredReactiveProfile(_reactiveRampTargetGpu));
         var match = ReactiveProfileChoices.FirstOrDefault(c =>
                         string.Equals(c.Id, stored, StringComparison.OrdinalIgnoreCase))
                     ?? ReactiveProfileChoices[0];
@@ -3808,32 +3969,47 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(CanRemoveReactiveStop));
         SyncCustomRampChip();
 
-        _customRampTouched = true;
+        CustomRampTouched = true;
 
         if (_suppressWrite) return;
 
-        _settings.ReactiveLightingCustomStops = ReactiveStops
-            .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
-            .ToList();
+        if (_reactiveRampTargetGpu)
+        {
+            _settings.ReactiveLightingCustomStopsGpu = ReactiveStops
+                .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
+                .ToList();
+        }
+        else
+        {
+            _settings.ReactiveLightingCustomStops = ReactiveStops
+                .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
+                .ToList();
+        }
     }
 
-    /// <summary>(Re)builds the custom ramp editor from the stored stops, seeding from the active ramp when there are none.</summary>
+    /// <summary>
+    /// (Re)builds the custom ramp editor from the selected half's stored stops, seeding from that half's active ramp when
+    /// it has none. Called at startup and whenever the ramp card is pointed at the other half.
+    /// </summary>
     private void BuildReactiveStops()
     {
         ReactiveStops.Clear();
 
         // A ramp in the file is the user's own; anything else is a placeholder the editor re-seeds on the first visit.
-        _customRampTouched = _settings.ReactiveLightingCustomStops is { Count: >= 2 };
+        CustomRampTouched = StoredCustomStops(_reactiveRampTargetGpu) is { Count: >= 2 };
+
+        var id = StoredReactiveProfile(_reactiveRampTargetGpu);
+        var stored = StoredCustomStops(_reactiveRampTargetGpu);
 
         IEnumerable<ReactiveLightingStop> source;
-        if (string.Equals(_settings.ReactiveLightingProfile, ReactiveLightingProfiles.CustomId, StringComparison.OrdinalIgnoreCase)
-            && _settings.ReactiveLightingCustomStops is { Count: >= 2 } saved)
+        if (string.Equals(id, ReactiveLightingProfiles.CustomId, StringComparison.OrdinalIgnoreCase)
+            && stored is { Count: >= 2 } saved)
         {
             source = saved;
         }
         else
         {
-            source = ReactiveLightingProfiles.FindBuiltIn(_settings.ReactiveLightingProfile)?.Stops
+            source = ReactiveLightingProfiles.FindBuiltIn(id)?.Stops
                      ?? ReactiveLightingProfiles.Default.Stops;
         }
 
@@ -3860,7 +4036,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         return stops.Count >= 2
             ? stops
-            : ReactiveLightingProfiles.SanitizeStops(ActiveReactiveStops());
+            : ReactiveLightingProfiles.SanitizeStops(ActiveReactiveStops(_reactiveRampTargetGpu));
     }
 
     /// <summary>Keeps the custom chip's gradient equal to what the editor holds.</summary>
@@ -3946,11 +4122,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (_suppressWrite) return;
 
-        _customRampTouched = true;
+        CustomRampTouched = true;
 
-        _settings.ReactiveLightingCustomStops = ReactiveStops
+        var stops = ReactiveStops
             .Select(s => new ReactiveLightingStop { AtCelsius = s.AtCelsius, Color = s.Color })
             .ToList();
+
+        // The rows on screen belong to the half the card is pointed at, so that is the half whose stored ramp they
+        // rewrite. The other half keeps its own colours while this one is edited.
+        if (_reactiveRampTargetGpu) _settings.ReactiveLightingCustomStopsGpu = stops;
+        else _settings.ReactiveLightingCustomStops = stops;
 
         _reactiveThrottle.Reset();
         _reactiveDebounce.Run(() => SaveSettings());
@@ -4471,6 +4652,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _batteryLimitOn, value)) return;
+            Raise(nameof(ChargingColorStateText));
             if (!_suppressWrite) _ = ApplyBatteryLimitAsync(value);
         }
     }

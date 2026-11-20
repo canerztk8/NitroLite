@@ -582,7 +582,6 @@ public sealed class ShellLabels
     /// <summary>The temp-reactive keyboard card: the title, and the one line that explains what it does.</summary>
     public string ReactiveLighting => Loc.T("Temp-Reactive Lighting");
     public string ReactiveLightingHint => Loc.T("Klavye rengi CPU sıcaklığına göre değişir: üç hazır rampandan birini seçin ya da Özel'de her sıcaklığa kendi renginizi verin.");
-    public string ReactiveSensors => Loc.T("Sensörler");
     public string ReactiveSensorsHint => Loc.T("CPU tek başına tüm klavyeyi boyar. CPU + GPU açıkken klavyenin solu CPU, sağı GPU sıcaklığını izler.");
     public string ReactiveNoSensor => Loc.T("Sensör seçilmedi");
     public string ReactiveProfiles => Loc.T("Sıcaklık rampaları");
@@ -601,6 +600,13 @@ public sealed class ShellLabels
     public string ChargingColorSwatches => Loc.T("Şarj rengi");
     public string ChargingColorActive => Loc.T("Şarjda · klavye bu renkte");
     public string ChargingColorWaiting => Loc.T("Pilde · adaptör takılınca bu renk");
+
+    /// <summary>
+    /// The same line on a machine whose 80 % charge limit has parked the pack at the cap: plugged in, and deliberately not
+    /// charging. The colour is on the keys exactly as it is below the cap, so the sentence says what the adapter is doing
+    /// rather than claiming a charge that stopped on purpose.
+    /// </summary>
+    public string ChargingColorAtLimit(int percent) => Loc.T($"Adaptörde · %{percent} şarj sınırı · klavye bu renkte");
     public string Sil => Loc.T("Sil");
 
     /// <summary>Shown under the fan curve editor now that the curve applies as it is dragged.</summary>

@@ -16,7 +16,10 @@ the mode is toggled again — which was exactly what made Temp-Reactive Lighting
 where the extras card used to be, that card is gone, its 30-second backlight timeout is in the header beside the
 blackout, and the keyboard can now hold a colour of its own while the charger is plugged in. The temperature colour
 follows the processor, the graphics chip, or both at once, each automatic colour paints at a level of its own, and a
-custom ramp's stops are typed as well as slid.
+custom ramp's stops are typed as well as slid. On top of that, the two halves can now be painted on ramps of their
+own, the temperature tiles *are* the sensor switches, the graphics fan answers its own slider, the ramp steps in whole
+degrees instead of three at a time, and a pack parked at the 80 % charge limit is no longer mistaken for one that is
+unplugged.
 
 ### Added
 
@@ -40,6 +43,13 @@ custom ramp's stops are typed as well as slid.
   own slider is left alone: it belongs to the colour the user chose, and a mode that borrowed it would dim and brighten
   with a control that is not its own. Zero is not offered — it is the firmware's "stay dark" — and a level moved while
   the colour is on the keys repaints at once rather than at the next temperature bucket or the next plug.
+- **A ramp per half.** With both sensors on, the processor's half and the graphics half can follow different ramps —
+  a warm built-in for one, a cool one for the other, or each its own edited stops — so the split reads as two sensors
+  rather than as one colour in two shades. The ramp card carries a CPU/GPU target beside its caption and shows that
+  half's chips, preview and editor; the processor keeps `reactive_lighting_profile` and
+  `reactive_lighting_custom_stops`, and the graphics half adds `reactive_lighting_profile_gpu` and
+  `reactive_lighting_custom_stops_gpu`, both null by default, which means "the same ramp as the processor" and keeps a
+  settings file from before the split painting exactly what it painted.
 - **Stop temperatures can be typed.** Every row of a custom ramp's editor is a slider *and* a box: type `73`, `73.5` or
   `73,5`, press Enter or leave the box, and the stop takes it, clamped to the ramp's 20–110 °C and rewritten to the value
   it actually holds so a clamped number cannot look accepted. A ramp preview above the rows shows the gradient as it is
@@ -67,6 +77,16 @@ custom ramp's stops are typed as well as slid.
   keys promises a write the firmware will not make. Both preferences stay in the settings file, and the next lit effect
   reopens the cards and puts the mode back on the keys. A brightness of zero is left alone: that is the slider's own
   dark, and the page around it still works.
+- **The temperature tiles are the sensor switches.** The pair of segmented chips that sat above the readings —
+  "CPU 58 °C" and "GPU 51 °C" — is gone: the readings are the control, so the widget already showing the number is the
+  one that turns that sensor on. The tile that is off is dimmed to 45 % with no accent frame, and the one that is on
+  keeps full strength with the accent frame every selected control on the page wears, so the keyboard has one visible
+  source at a glance. Both on still splits the keyboard down the middle.
+- **The temperature ramp steps in one degree rather than three.** The colour was quantised in 3 °C buckets, so 45 °C and
+  47 °C were the same colour and the ramp jumped from ice blue to mint instead of sliding through the greens between
+  them. The grid is a degree now, which reads as a gradient and still refuses to chase sensor noise. Nothing extra is
+  sent to the keyboard: the colour is evaluated once per telemetry sample and the existing throttle — unchanged colour
+  never written twice, no write within three seconds of the last one — decides whether it is worth a write at all.
 - **Temp-Reactive Lighting sits below the effect card**, in the place the extras card occupied, with the charging
   colour directly beneath it: the two automatic colours are together at the end of the page, after the controls that
   hold a colour of the user's own.
@@ -98,6 +118,19 @@ custom ramp's stops are typed as well as slid.
   telemetry step, and blocking the close on the embedded controller would be worse than the lost colour.
 - **The charging switch leaves the blackout the way the temperature switch does.** Switching it on is asking to see the
   colour, so the page leaves blackout and the suspension is over rather than leaving a lit keyboard behind a dark page.
+- **The graphics fan answers its own slider.** A custom-speed write handed the processor's percentage to both fans, so
+  the GPU slider moved nothing while the CPU slider moved both — the bug reported as "the GPU slider has no effect".
+  The write now sends each fan its own number; the binding, the command routing and both backends were already correct.
+- **A pack parked at the 80 % charge limit still shows the adapter colour.** The charging colour is keyed on the AC line
+  status, and that is now modelled explicitly in `ChargingLighting.AdapterState` instead of being inferred from the
+  percentage: with the limit armed the firmware reports "plugged in, not charging" at 80 %, which a rule written as
+  "the battery is rising" would read as "no adapter". The keys keep the charging colour at the cap, unplugging still
+  hands them back, and the card's state line says "adaptörde · %80 şarj sınırı" rather than claiming a charge that
+  stopped on purpose.
+- **The first launch is drawn in Quicksand because the settings say so.** `ui_font` now defaults to the bundled face
+  instead of null, so a clean settings file names the typeface it is in rather than depending on a fallback; a file from
+  an older build with no key at all still resolves to the same face, and a face this build no longer ships still falls
+  back instead of leaving the window in a missing font.
 - **The two mode figures and the temperature card's live line follow a language change**, instead of keeping the old
   language until the next restart: they are sentences built from the catalogue, so they are re-raised with the rest.
 

@@ -87,10 +87,21 @@ public class ReactiveLightingTests
     [Fact]
     public void TheTemperatureIsQuantised_SoATenthOfADegreeIsNotANewColour()
     {
-        // Every colour change is a write to the embedded controller, so a sensor wobbling between 61.2 and 61.4 must
+        // Every colour change is a write to the embedded controller, so a sensor wobbling between 61.1 and 61.2 must
         // not produce two of them.
         Assert.Equal(ReactiveLighting.ColorFor(61.1), ReactiveLighting.ColorFor(61.2));
-        Assert.Equal(ReactiveLighting.ColorFor(60.1), ReactiveLighting.ColorFor(61.2));
+    }
+
+    [Fact]
+    public void EachWholeDegree_IsItsOwnColour()
+    {
+        // The grid is one degree, so the ramp reads as a gradient rather than as three-degree jumps: 54 °C and 55 °C
+        // are two colours between ice blue and mint, not the same one twice.
+        Assert.NotEqual(ReactiveLighting.ColorFor(54), ReactiveLighting.ColorFor(55));
+
+        // And it really is a slide, not a snap: the colour at 54 is neither end of the 45-60 segment.
+        Assert.NotEqual(ReactiveLighting.ColdColor, ReactiveLighting.ColorFor(54));
+        Assert.NotEqual("#00E5A0", ReactiveLighting.ColorFor(54));
     }
 
     [Fact]
@@ -99,7 +110,7 @@ public class ReactiveLightingTests
         Assert.Equal(45, ReactiveLighting.Quantize(-10));
         Assert.Equal(90, ReactiveLighting.Quantize(400));
         Assert.Equal(45, ReactiveLighting.Quantize(double.NaN));
-        Assert.Equal(60, ReactiveLighting.Quantize(61.2));
+        Assert.Equal(61, ReactiveLighting.Quantize(61.2));
     }
 
     // =============================================================================================================

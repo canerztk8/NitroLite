@@ -310,20 +310,28 @@
                          TextWrapping="Wrap" />
 
               <!--
-                Which sensors the colour follows. Two chips rather than a list: the pair is the choice — the processor
-                alone paints the whole keyboard, both of them split it down the middle. Each chip carries its own
-                reading, so the number the colour came from sits under the switch that asked for it.
+                Which sensors the colour follows, as the readings themselves. The two tiles are the switch: the number the
+                user is already reading is the thing to click, and the tile that is not in the colour dims so the
+                keyboard has one visible source. One sensor paints the whole keyboard; both of them split it down the
+                middle.
               -->
               <StackPanel IsVisible="{Binding ReactiveLightingEnabled}" Margin="0,12,0,0">
-                <TextBlock Classes="caps" Text="{Binding Labels.ReactiveSensors}" Margin="0,0,0,6" />
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <ToggleButton Classes="seg" Content="{Binding ReactiveCpuChip}"
-                                IsChecked="{Binding ReactiveCpuSensor}"
-                                AutomationProperties.AutomationId="ReactiveSensorCpu" />
-                  <ToggleButton Classes="seg" Content="{Binding ReactiveGpuChip}"
-                                IsChecked="{Binding ReactiveGpuSensor}"
-                                AutomationProperties.AutomationId="ReactiveSensorGpu" />
-                </StackPanel>
+                <Grid ColumnDefinitions="*,*">
+                  <ToggleButton Classes="tempchip" IsChecked="{Binding ReactiveCpuSensor}" Margin="0,0,5,0"
+                                AutomationProperties.AutomationId="ReactiveSensorCpu">
+                    <StackPanel Spacing="2">
+                      <TextBlock Classes="caps" Text="CPU" />
+                      <TextBlock Classes="figurebig" Text="{Binding ReactiveCpuReading}" />
+                    </StackPanel>
+                  </ToggleButton>
+                  <ToggleButton Grid.Column="1" Classes="tempchip" IsChecked="{Binding ReactiveGpuSensor}"
+                                Margin="5,0,0,0" AutomationProperties.AutomationId="ReactiveSensorGpu">
+                    <StackPanel Spacing="2">
+                      <TextBlock Classes="caps" Text="GPU" />
+                      <TextBlock Classes="figurebig" Text="{Binding ReactiveGpuReading}" />
+                    </StackPanel>
+                  </ToggleButton>
+                </Grid>
                 <TextBlock Classes="hint" Text="{Binding Labels.ReactiveSensorsHint}" Margin="0,6,0,0"
                            TextWrapping="Wrap" />
               </StackPanel>
@@ -358,8 +366,23 @@
                                       AutomationProperties.AutomationId="ReactiveBrightness" />
               </StackPanel>
 
-              <!-- The three ramps, each painted as the gradient it is, then the entry the user builds. -->
-              <TextBlock Classes="caps" Text="{Binding Labels.ReactiveProfiles}" Margin="0,14,0,6" />
+              <!--
+                The three ramps, each painted as the gradient it is, then the entry the user builds. With both sensors on
+                the two halves can follow different ramps, so the row carries a CPU/GPU target beside its caption: every
+                chip and every stop below belongs to the half that is selected, and one card edits both rather than the
+                page growing a second copy of itself.
+              -->
+              <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,6">
+                <TextBlock Classes="caps" Text="{Binding Labels.ReactiveProfiles}" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                            IsVisible="{Binding ReactiveRampTargetVisible}"
+                            ToolTip.Tip="{Binding Labels.ReactiveSensorsHint}">
+                  <ToggleButton Classes="seg" Content="CPU" IsChecked="{Binding ReactiveRampTargetCpu}"
+                                AutomationProperties.AutomationId="ReactiveRampTargetCpu" />
+                  <ToggleButton Classes="seg" Content="GPU" IsChecked="{Binding ReactiveRampTargetGpu}"
+                                AutomationProperties.AutomationId="ReactiveRampTargetGpu" />
+                </StackPanel>
+              </Grid>
               <ItemsControl ItemsSource="{Binding ReactiveProfileChoices}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
