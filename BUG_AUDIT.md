@@ -932,3 +932,77 @@ screen that tells the user when the machine did not agree.
   this round adds to the polling loop is one PDH probe every five seconds (only while the firmware has no
   CPU temperature), one `Task.Delay(320 ms)` inside a write that already blocks the write gate, and two
   property notifications per write. That is an argument, not a measurement, and it is recorded as such.
+## 10. Round four — the 2-step NitroSense snapshot diff (2026-11-20)
+
+The reports that keep arriving say the same thing in different words: *a setting works in NitroSense and does
+nothing in NitroLite*. The hardware report describes what a machine has; it cannot describe what changed when the
+owner moved one switch in Acer's own tool. This round adds the tool that can, and it is read-only by construction.
+
+### 10.1 What it does
+
+- **`HardwareSnapshotService`** (`NitroLite.Core/Hardware/Snapshot/`) runs one or more sources and merges them into
+  one ordered, scrubbed `HardwareSnapshot`. A source that throws, or a selector inside one that throws, becomes an
+  `unavailable: …` entry rather than a missing line: the refusal is the evidence.
+- **`WmiSnapshotSource`** captures the raw `ReadDeviceState` answer the worker already produces —
+  `GetGamingMiscSetting(0x02 MUX, 0x0B profile)`, `GetGamingFanBehavior`, `GetGamingFanSpeed`, the battery register
+  and the `dgpuModeCapability` mask — plus `0x09`/`0x0A`, `APGeAction(0x207)`, overdrive, backlight timeout, GPU
+  mode, fan behaviour and the lighting configuration. **No new WMI command** was added: a diagnostic that
+  introduced a selector would be a diagnostic that could itself change what the firmware is doing.
+- **`HidSnapshotSource`** walks the HID class once, opens each interface with `GenericRead` only, and reads one
+  `HidD_GetFeature` report from the interfaces `HidSnapshotFilter` accepts: vendor id `0x048D` (ITE), `0x0C45`
+  (Sonix) or `0x04F2` (Chicony), on a vendor-defined lighting page (`0xFF00`–`0xFF05`). Usage page `0x01` and the
+  LED page `0x07` are refused by name, so the keyboard the user types through is never opened.
+- **`HardwareSnapshotDiff`** prints only what moved, sorted by selector, with `~` / `+` / `-` lines, the old and new
+  value, and — for a report of equal length — the byte offsets that changed (`byte 2: 0x81 -> 0x82`). The text is
+  cut at 3 200 characters on a line boundary, with a note saying so.
+- **Privacy**: every value goes through `SnapshotRedaction` twice (per entry, then on the finished diff):
+  `SerialNumber=…`, `UUID: …` and `UserName = …` become `<redacted>`, a GUID becomes `<uuid>`, and the profile folder
+  in a path goes through the log redactor's `<user>`.
+- **The window** (`Settings → Diagnostics → NitroSense snapshot diff`) offers **Capture state A**, then
+  **Capture state B and diff**, which stays disabled until A is in hand. Step 2 copies the hardware report with the
+  diff under it, and opens the existing prefilled compatibility issue with the diff *first*, because the body is cut
+  when it does not fit and the diff is the half that cannot be reproduced afterwards.
+
+### 10.2 Evidence
+
+| Check | How | Result |
+| --- | --- | --- |
+| Release build, whole solution | `dotnet build NitroLite.sln -c Release --nologo -warnaserror` | **0 warnings, 0 errors** |
+| Full suite | `dotnet test NitroLite.Tests/NitroLite.Tests.csproj -c Release --no-build` | **2939 passed, 0 failed, 6 skipped**, 2945 total, 5 m (30 new tests) |
+| Hex form and round trip | `HardwareSnapshotTests` | `10 FF 81 00`; a status word and a half group are rejected |
+| The diff prints only what moved | same | 2 changed / 1 unchanged → two `~` lines, the unchanged selector absent, counts in the header |
+| Byte-level detail | same | `(byte 2: 0x81 -> 0x82, byte 3: 0x00 -> 0x01)`; a status word is never described as bytes |
+| Determinism | same | two captures taken in a different source order produce byte-identical text |
+| Overlong diff | same | cut to ≤ 3 200 characters, ends with the truncation note, all 200 changes still counted |
+| No identifier survives | same | an asset tag, a profile path and a hardware UUID are gone from the diff; `<redacted>`, `<uuid>` and `<user>` present |
+| The issue is acceptable | same | `IsCompatibilityUrl` true, ≤ 7 000 characters, the `~ wmi…` line present in the body |
+| A throwing source | same | its half is one `unavailable` entry; the other source's entries survive |
+| A throwing selector | same | `TimeoutException` recorded as the value, the next selector unaffected |
+| HID eligibility | same | 9 cases: ITE/Sonix/Chicony lighting pages accepted; `0x01/0x06`, `0x01/0x02`, `0x07`, `0x0C`, an unknown vendor and `0xFF09` refused |
+| The two buttons | `SnapshotDiffViewModelTests` | B locked until A; after A it is enabled; the status is the localised sentence; B copies report + diff and opens exactly one compatibility URL |
+| Nothing moved | same | the "no differences" sentence, and the report is still copied |
+| A platform without the backend | same | both commands refuse to run and no status is written |
+| The application, normal launch | `NitroLite.Desktop.exe`, `nitrolite.log` | started, `runtime-verified (2 samples)`, published profile table refreshed (32 kept), no exception, no new warning |
+| Trim | `PublishTrimmed`/`TrimMode=partial` untouched | no reflection added; the new types are ordinary classes, records and `DllImport`s |
+
+### 10.3 Deliberately not done
+
+- **No write path and no elevation.** The WMI half is skipped when the worker is not already connected, so pressing
+  a capture button cannot raise a UAC prompt; the report says `the elevated WMI worker is not running` instead.
+  Starting direct WMI is the settings page's own button, where the elevation question belongs.
+- **No new worker command.** The raw selectors come from the read the window already makes.
+- **No HID strings.** The capture reads feature reports only. A serial number lives in
+  `HidD_GetSerialNumberString`, and that call is not in this build.
+- **The diff is not written to disk.** It goes to the clipboard and to the issue body, both of which the user sees
+  before anything leaves the machine.
+
+### 10.4 Still open after this round
+
+- **A real 2-step diff has not been captured on hardware.** The suite proves the comparison, the privacy pass and
+  the wiring; it cannot prove that a NitroSense toggle moves a selector this build reads. The first owner who runs
+  the pair on an AN16-61 — or any unverified model — produces that evidence. *Test pending.*
+- **No vendor HID feature report has been read on a real ITE/Sonix keyboard.** The filter and the read are covered
+  by unit tests and the path is read-only, but whether those controllers answer report 0 with a colour payload is a
+  fact about the controller. *Test pending.*
+- **The AN16-61 items from §9.4 remain**: MUX read/write, the Windows-key lock, the Care Center charge limit, and
+  the unconfirmed-control hint after a real failed write.

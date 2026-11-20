@@ -2,8 +2,10 @@
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Lighting;
 using NitroLite.Core.Hardware.Wmi;
+using NitroLite.Core.Hardware.Snapshot;
 using NitroLite.Windows.Core.Hardware;
 using NitroLite.Windows.Core.Hardware.Lighting;
+using NitroLite.Windows.Core.Hardware.Snapshot;
 
 namespace NitroLite.Windows;
 
@@ -26,7 +28,7 @@ namespace NitroLite.Windows;
 /// path is the elevated worker, and a refused elevation is reported by the controller instead.
 /// </para>
 /// </remarks>
-public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBackend
+public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBackend, IHardwareSnapshotBackend
 {
     private readonly Func<CapabilitySnapshot?> _probe;
     private readonly Func<string> _backendName;
@@ -129,6 +131,18 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
             _backendDetail?.Invoke(),
             extras);
     }
+
+    /// <summary>
+    /// The read-only NitroSense snapshot this platform can take: the Acer WMI selectors the worker answers and the
+    /// vendor HID feature reports, or just the HID half when the worker is not running.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here writes and nothing here elevates. The worker is only used when it is already connected: asking it
+    /// to start would put a UAC prompt behind a diagnostics button, which is exactly what a user comparing two
+    /// NitroSense states does not need.
+    /// </remarks>
+    public Task<HardwareSnapshot> CaptureSnapshotAsync(CancellationToken cancellationToken = default) =>
+        WindowsHardwareSnapshot.CaptureAsync(Identity, _wmi?.Invoke(), null, cancellationToken);
 
     /// <summary>
     /// What the lighting transports learned this session: the remembered choice per <c>Model|BIOS</c>, and what the

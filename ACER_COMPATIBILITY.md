@@ -489,3 +489,34 @@ as what it is.
 | Battery charge limit (Care Center) | **code + tests, physical pending** — the service answer is now read back, mismatch moves the switch | toggle the limit and watch the battery card; the log gets `The charge limit did not change` if it lies |
 | CPU clock `-- GHz` | **fallback compiled and measured on AN16-41**, AN16-61 pending | open the dashboard: the clock should now come from `CallNtPowerInformation` instead of zero |
 | Four-zone colour | unchanged from round two (§1.7) | — |
+## 8. Round four — how to capture what NitroSense changed (2026-11-20)
+
+The evidence this file keeps marking *test pending* has one thing in common: it needs a machine that can show what a
+NitroSense switch does to the firmware registers. NitroLite can now record exactly that, read-only, on any model —
+including the ones with no profile here.
+
+**Settings → Diagnostics → NitroSense snapshot diff** takes two captures: A before the change, B after it. The diff
+prints only the selectors that moved, so it answers "which register does this switch drive" rather than "what does
+this machine have".
+
+| What to do on the laptop | What the diff gives back | Why it settles a row above |
+| --- | --- | --- |
+| Set the MUX to Optimus in NitroSense if it is offered, capture A, switch to Discrete, capture B | `wmi.deviceState.muxRaw` / `muxStatus`, plus `wmi.misc0x09.muxSupportOverWmi` | separates "the firmware ignores the write" from "the write reaches the wrong selector" — the AN16-61 MUX row |
+| Toggle the battery charge limit in Care Center, capture A and B | `wmi.battery.chargeMode`, `wmi.deviceState.batteryLimit` | shows whether the Care Center path moves a register NitroLite can read |
+| Change the keyboard colour or effect, capture A and B | `wmi.lighting.config`, and any `hid.*` feature report that changed | says whether the colour travels over WMI at all on that chassis, which is what the HID fallback needs to know |
+| Press the Windows-key lock, capture A and B | *nothing changes* on every machine measured so far | the negative result is the evidence: no readable register exists, which is why the control is reported unverified |
+
+Two constraints the tool keeps, because it exists to be run on someone else's laptop:
+
+- **Read-only.** It calls the same Acer WMI reads the window already calls, and opens the vendor HID interfaces with
+  read access only. Usage page `0x01` — the keyboard the user types through — is refused by name, and no HID string
+  descriptor (where a serial lives) is read.
+- **No elevation.** When the direct-WMI worker is not already running, the WMI half is replaced by one
+  `unavailable: the elevated WMI worker is not running` line and the HID half is still captured. Starting the worker
+  stays the settings page's own button.
+
+**Status on the reference unit:** the comparison, the redaction and the window wiring are covered by 30 tests and
+the release gate is green, but no real 2-step diff has been taken on hardware yet, and no vendor HID feature report
+has been read on a physical ITE/Sonix keyboard. Both are marked *test pending* in `BUG_AUDIT.md` §10.4. The first
+owner who runs the pair on an `AN16-61` (or on any model in §3 that is still unverified) turns one of those rows into
+a measurement.

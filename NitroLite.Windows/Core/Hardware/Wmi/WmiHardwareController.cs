@@ -924,6 +924,17 @@ public sealed class WmiHardwareController : IHardwareController
         }
     }
 
+    /// <summary>
+    /// The raw device state the worker answers, for the read-only NitroSense snapshot diff.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the same <see cref="WmiWorkerCommand.ReadDeviceState"/> call the window already makes: a diagnostic
+    /// that introduced a new selector would be a diagnostic that can itself change what the firmware is doing, which is
+    /// the one thing a snapshot must not do. The decoded model is not enough for a diff either — two firmwares can
+    /// answer <c>GetGamingMiscSetting(0x02)</c> with different raw words and decode to the same mode name.
+    /// </remarks>
+    public Task<JsonObject?> ReadRawDeviceStateAsync() => ReadDeviceStateAsync();
+
     private async Task<JsonObject?> ReadDeviceStateAsync()
     {
         var (state, _) = await ReadDeviceStateWithReasonAsync().ConfigureAwait(false);
