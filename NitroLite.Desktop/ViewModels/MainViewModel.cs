@@ -902,6 +902,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _customRampTouched;
     private bool _customRampTouchedGpu;
 
+    /// <summary>
+    /// The text the solid colour box holds, which is the half being edited's colour except while it is being typed
+    /// into. Kept apart from the stored value for the same reason the charging card's box is: a half-typed hex must stay
+    /// on screen without reaching the settings file or the keyboard.
+    /// </summary>
+    private string _reactiveSolidDraft = ReactiveLighting.ColdColor;
+
     // The charging keyboard colour: the colour the adapter paints, whether that mode is on, and whether the keyboard
     // is showing it right now. The painted flag is what makes the mode transition-driven — one write when the plug
     // goes in and one when it comes out — instead of a write per telemetry tick.
@@ -1280,6 +1287,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         BuildDirectionChoices();
         BuildReactiveProfileChoices();
         BuildReactiveStops();
+        // The solid entry's palette marks the half's colour, so it is built before the row can be shown.
+        BuildReactiveSolidChoices();
         _reactiveLightingEnabled = settings.ReactiveLightingEnabled;
 
         // The sensors and the two mode levels are read before the page is built, because the cards show them and a
@@ -1379,6 +1388,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             BuildCpuBoostChoices();
             BuildColorPalette();
             BuildChargingColorChoices();
+            // The solid entry carries translated names in its palette, so it is rebuilt like the other pickers.
+            BuildReactiveSolidChoices();
             // The reactive profile picker carries translated names, so it is rebuilt like the other pickers, and
             // the stop rows only carry the delete button's label.
             BuildReactiveProfileChoices();
@@ -3244,6 +3255,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(ReactiveGpuChip));
         Raise(nameof(ReactiveLightingNow));
 
+        // A blend needs two halves to blend: with one sensor the chips are hidden rather than offering a shape the
+        // keyboard cannot show.
+        Raise(nameof(ReactiveBlendVisible));
+
         // The tile is the switch and the pointer at once. Switching a half on is asking to see its ramp, because the
         // card edits one half at a time and the tiles are the only control left that names a half; switching one off
         // hands the card to the half that is still painting, so it never edits a ramp nothing follows.
@@ -3363,7 +3378,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var brightness = _reactiveBrightness;
         var speed = SpeedLevel;
         var direction = SelectedDirection?.Direction ?? 1;
-        var zones = new[] { left, left, right, right };
+
+        // Two blocks by default, or a gradient across the deck when the user asked for one. Four entries in zone order
+        // either way, built in one place, so a half can never bleed into the other.
+        var zones = ReactiveLighting.ZonesFor(left, right, _settings.ReactiveLightingBlend);
 
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
@@ -3782,6 +3800,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var choice in ReactiveProfileChoices) choice.IsSelected = ReferenceEquals(choice, value);
             Raise(nameof(ReactiveCustomEditorVisible));
 
+            // The card swaps its editor for a colour row when the solid entry is picked, and the row follows the half
+            // being edited, so it is re-pointed here rather than only when the target moves.
+            Raise(nameof(ReactiveSolidVisible));
+            SyncSolidColourControls();
+
             // Switching to the custom entry before anything has been built seeds the editor from the ramp that was
             // active a moment ago, so "Custom" starts from a shape the user already knows, not from a blank list. A
             // ramp that was saved or edited before is left exactly as it is: overwriting it with the profile the user
@@ -3789,6 +3812,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (value.IsCustom && previous is { IsCustom: false } && !CustomRampTouched)
             {
                 SeedCustomStops(previous.Id);
+            }
+            else if (ReactiveLightingProfiles.IsSolid(value.Id))
+            {
+                // A solid half needs a colour the moment it is chosen. The shipped end for that half is the honest
+                // default: the processor's half starts at the cold end and the graphics half at the hot end, so a split
+                // shows two colours before the user has picked anything.
+                if (_reactiveRampTargetGpu) _settings.ReactiveLightingSolidGpu ??= DefaultSolidColor(gpu: true);
+                else _settings.ReactiveLightingSolidCpu ??= DefaultSolidColor(gpu: false);
             }
 
             if (_suppressWrite) return;
@@ -3851,6 +3882,156 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         Raise(nameof(ReactiveCustomEditorVisible));
         Raise(nameof(CustomRampPreview));
+
+        // The colour row belongs to the half the card is pointed at, and it only exists while that half is the solid
+        // one, so both the draft and the visibility follow the target.
+        SyncSolidColourControls();
+        Raise(nameof(ReactiveSolidVisible));
+    }
+
+    // ---------------------------------------------------------------- one colour per half, or a blend
+
+    /// <summary>
+    /// The colour the half being edited paints when its entry is the solid one. Two-way with the card's hex box: a
+    /// half-typed value stays on screen and reaches nothing, a whole one is stored, previewed and painted at once.
+    /// </summary>
+    public string ReactiveSolidColor
+    {
+        get => _reactiveSolidDraft;
+        set
+        {
+            if (!Set(ref _reactiveSolidDraft, value ?? "")) return;
+            Raise(nameof(ReactiveSolidPreview));
+
+            // The box is typed into, so "F5" is not a colour: nothing is stored and the swatch goes blank until the
+            // text is whole, exactly as the charging card's box behaves.
+            if (!ChargingLighting.IsColor(value)) return;
+
+            var hex = LightingPolicy.NormalizeHex(value, DefaultSolidColor(_reactiveRampTargetGpu));
+            if (_reactiveRampTargetGpu) _settings.ReactiveLightingSolidGpu = hex;
+            else _settings.ReactiveLightingSolidCpu = hex;
+
+            SaveSettings();
+            Raise(nameof(ReactiveSolidPreview));
+            SyncReactiveSolidSwatches();
+            SyncReactiveSolidChip();
+
+            // The colour is on the keys this moment, so it is repainted now rather than at the next telemetry sample.
+            ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+        }
+    }
+
+    /// <summary>The colour as a brush-worthy <c>#RRGGBB</c>, so a half-typed hex paints nothing instead of throwing.</summary>
+    public string ReactiveSolidPreview =>
+        LightingPolicy.NormalizeHex(_reactiveSolidDraft, StoredSolidColor(_reactiveRampTargetGpu));
+
+    /// <summary>True when the half being edited paints one colour whatever the temperature is.</summary>
+    public bool ReactiveSolidVisible => ReactiveLightingProfiles.IsSolid(SelectedReactiveProfile?.Id);
+
+    /// <summary>The eight quick colours for the solid entry, the same eight the palette offers.</summary>
+    public ObservableCollection<ColorSwatch> ReactiveSolidChoices { get; } = new();
+
+    /// <summary>
+    /// True when the two halves are mixed across the four zones instead of painted as two blocks: zone 1 exactly the
+    /// processor's colour, zone 4 exactly the graphics chip's, the two middle zones between them.
+    /// </summary>
+    /// <remarks>
+    /// Only meaningful with both sensors on, which is what <see cref="ReactiveBlendVisible"/> says. Switching it is a
+    /// change of shape rather than of colour, so the throttle is reset and the deck is repainted at once: the pair the
+    /// throttle remembers is the same pair, and a write that never happened would leave the keys in the old shape.
+    /// </remarks>
+    public bool ReactiveLightingBlend
+    {
+        get => _settings.ReactiveLightingBlend;
+        set
+        {
+            if (_settings.ReactiveLightingBlend == value) return;
+
+            _settings.ReactiveLightingBlend = value;
+            SaveSettings();
+
+            Raise(nameof(ReactiveLightingBlend));
+            Raise(nameof(ReactiveSplitEven));
+            Raise(nameof(ReactiveSplitBlend));
+
+            _reactiveThrottle.Reset();
+            ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+        }
+    }
+
+    /// <summary>The "even halves" chip, the left half of a two-chip switch.</summary>
+    public bool ReactiveSplitEven
+    {
+        get => !ReactiveLightingBlend;
+        set
+        {
+            if (value) ReactiveLightingBlend = false;
+        }
+    }
+
+    /// <summary>The "blended" chip.</summary>
+    public bool ReactiveSplitBlend
+    {
+        get => ReactiveLightingBlend;
+        set
+        {
+            if (value) ReactiveLightingBlend = true;
+        }
+    }
+
+    /// <summary>True while both halves are live, which is the only state in which a blend means anything.</summary>
+    public bool ReactiveBlendVisible => _reactiveCpuSensor && _reactiveGpuSensor;
+
+    /// <summary>The colour stored for one half, or the shipped end when it has none.</summary>
+    private string StoredSolidColor(bool gpu) =>
+        LightingPolicy.NormalizeHex(
+            gpu ? _settings.ReactiveLightingSolidGpu : _settings.ReactiveLightingSolidCpu, DefaultSolidColor(gpu));
+
+    /// <summary>The shipped solid colour: the cold end for the processor's half, the hot end for the graphics half.</summary>
+    private static string DefaultSolidColor(bool gpu) => gpu ? ReactiveLighting.HotColor : ReactiveLighting.ColdColor;
+
+    /// <summary>Points the solid colour row at the half being edited: the hex box, the preview and the swatches.</summary>
+    private void SyncSolidColourControls()
+    {
+        _reactiveSolidDraft = StoredSolidColor(_reactiveRampTargetGpu);
+        Raise(nameof(ReactiveSolidColor));
+        Raise(nameof(ReactiveSolidPreview));
+        SyncReactiveSolidSwatches();
+        SyncReactiveSolidChip();
+    }
+
+    /// <summary>Fills the solid entry's palette from the same eight colours as the page's.</summary>
+    private void BuildReactiveSolidChoices()
+    {
+        ReactiveSolidChoices.Clear();
+        foreach (var (hex, name) in QuickColours)
+        {
+            ReactiveSolidChoices.Add(new ColorSwatch(hex, Loc.T(name), SelectReactiveSolidSwatch));
+        }
+
+        SyncReactiveSolidSwatches();
+    }
+
+    private void SelectReactiveSolidSwatch(ColorSwatch swatch) => ReactiveSolidColor = swatch.Hex;
+
+    /// <summary>Marks the swatch that matches the colour the half paints.</summary>
+    private void SyncReactiveSolidSwatches()
+    {
+        var current = ReactiveSolidPreview;
+
+        foreach (var swatch in ReactiveSolidChoices)
+        {
+            swatch.IsSelected = string.Equals(swatch.Hex, current, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>Keeps the solid chip's preview equal to the colour that half paints.</summary>
+    private void SyncReactiveSolidChip()
+    {
+        var solid = ReactiveProfileChoices.FirstOrDefault(c =>
+            string.Equals(c.Id, ReactiveLightingProfiles.SolidId, StringComparison.OrdinalIgnoreCase));
+
+        if (solid != null) solid.Stops = ReactiveLightingProfiles.SolidStops(StoredSolidColor(_reactiveRampTargetGpu));
     }
 
     /// <summary>True while the custom ramp of the half being edited is the user's own rather than a seeded copy.</summary>
@@ -3909,6 +4090,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (gpu && GpuRampInherited) return ActiveReactiveStops(gpu: false);
 
         var id = StoredReactiveProfile(gpu);
+
+        // A flat two-stop ramp of the chosen colour: the evaluator answers it for every temperature, so a solid half
+        // needs no branch of its own anywhere downstream.
+        if (ReactiveLightingProfiles.IsSolid(id)) return ReactiveLightingProfiles.SolidStops(StoredSolidColor(gpu));
+
         if (string.Equals(id, ReactiveLightingProfiles.CustomId, StringComparison.OrdinalIgnoreCase))
         {
             var stops = ReactiveLightingProfiles.SanitizeStops(
@@ -3925,8 +4111,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>(Re)builds the profile picker from the built-in list plus the custom entry, keeping the stored selection.</summary>
     /// <remarks>
-    /// Each chip carries its ramp, because the chip paints it as a gradient: three ramps with names alone would make the
-    /// user pick a profile to find out what it looks like, and the whole point of three of them is that they look
+    /// Each chip carries its ramp, because the chip paints it as a gradient: ramps with names alone would make the user
+    /// pick a profile to find out what it looks like, and the whole point of offering several is that they look
     /// different. The custom chip carries the editor's own stops, so it is the preview of what the user is building.
     /// </remarks>
     private void BuildReactiveProfileChoices()
@@ -3937,6 +4123,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ReactiveProfileChoices.Add(new ReactiveProfileChoice(profile.Id, profile.DisplayName, isCustom: false,
                 profile.Stops, SelectReactiveProfile));
         }
+
+        // One colour whatever the temperature is, for a half that should say "processor" or "graphics" rather than
+        // "61 °C". It sits beside the ramps because it answers the same question — which colour does this half show —
+        // and its chip paints the colour itself, like every other chip paints its ramp.
+        ReactiveProfileChoices.Add(new ReactiveProfileChoice(ReactiveLightingProfiles.SolidId, Loc.T("Sabit renk"),
+            isCustom: false, ReactiveLightingProfiles.SolidStops(StoredSolidColor(_reactiveRampTargetGpu)),
+            SelectReactiveProfile));
+
         ReactiveProfileChoices.Add(new ReactiveProfileChoice(ReactiveLightingProfiles.CustomId, Loc.T("Özel"),
             isCustom: true, CurrentCustomStops(), SelectReactiveProfile));
 

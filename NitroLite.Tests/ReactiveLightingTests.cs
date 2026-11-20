@@ -478,11 +478,11 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public void TheCardOffersTheThreeRampsAndTheCustomEditor()
+    public void TheCardOffersTheRampsAndTheCustomEditor()
     {
         var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
 
-        // A picker the user cannot see is a picker that does not exist: the view model carried all three ramps and the
+        // A picker the user cannot see is a picker that does not exist: the view model carried every ramp and the
         // stop editor for a while before the view was told about them.
         Assert.Contains("ReactiveProfileChoices", markup, StringComparison.Ordinal);
         Assert.Contains("ReactiveCustomEditorVisible", markup, StringComparison.Ordinal);
@@ -492,19 +492,25 @@ public class ReactiveLightingTests
     }
 
     // =============================================================================================================
-    // 4. The three ramps, and the one the user builds.
+    // 4. The ramps, and the one the user builds.
     // =============================================================================================================
 
     [Fact]
-    public void ThreeRampsAreOffered_EachWithAUsableShape()
+    public void EveryRampOffered_HasAUsableShape()
     {
-        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn.Count);
+        // The three the app shipped with, plus room for the ones added since: a count pinned to three fails the moment a
+        // ramp is added, which says nothing about whether the ramps are any good.
+        Assert.True(ReactiveLightingProfiles.BuiltIn.Count >= 3);
 
-        // Three chips with the same gradient would be one chip with three names, so every ramp has to be its own.
-        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn.Select(p => p.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn.Select(p => p.Name).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(3, ReactiveLightingProfiles.BuiltIn
-            .Select(p => ReactiveLighting.ColorFor(p.Stops, 95))
+        // Chips with the same gradient would be one chip with several names, so every ramp has to be its own. The shape
+        // is compared whole rather than at one temperature: two ramps may share a warm end and still be different ramps.
+        Assert.Equal(ReactiveLightingProfiles.BuiltIn.Count, ReactiveLightingProfiles.BuiltIn
+            .Select(p => p.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(ReactiveLightingProfiles.BuiltIn.Count, ReactiveLightingProfiles.BuiltIn
+            .Select(p => p.Name).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(ReactiveLightingProfiles.BuiltIn.Count, ReactiveLightingProfiles.BuiltIn
+            .Select(p => string.Join(",", ReactiveLightingProfiles.SanitizeStops(p.Stops)
+                .Select(s => $"{s.AtCelsius}:{s.Color}")))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count());
 

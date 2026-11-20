@@ -102,6 +102,29 @@ public partial class LightingView : UserControl
     }
 
     /// <summary>
+    /// The swatch beside the solid entry's hex box: opens the picker on the colour that half paints and writes whatever
+    /// comes back. The view model only ever sees the finished <c>#RRGGBB</c>.
+    /// </summary>
+    /// <remarks>Wrapped for the same reason as the two pickers above.</remarks>
+    private async void OnPickReactiveSolidColor(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (DataContext is not MainViewModel vm) return;
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
+
+            var dialog = new ColorPickerDialog(vm.ReactiveSolidPreview, vm.Labels.CustomColor);
+            if (!await dialog.ShowDialog<bool>(owner)) return;
+
+            vm.ReactiveSolidColor = dialog.PickedHex;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("The colour picker could not be opened", ex.ToString());
+        }
+    }
+
+    /// <summary>
     /// Enter in a ramp row's temperature box: the typed number is committed, and the box is rewritten to what the stop
     /// actually holds so a value the ramp clamped cannot be left on screen looking accepted.
     /// </summary>

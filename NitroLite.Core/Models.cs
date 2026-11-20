@@ -429,6 +429,29 @@ public class AppSettings
     public List<ReactiveLightingStop>? ReactiveLightingCustomStopsGpu { get; set; }
 
     /// <summary>
+    /// The colour the processor's half paints when its profile is <see cref="ReactiveLightingProfiles.SolidId"/>:
+    /// one colour whatever the temperature is. Null means the shipped cold end.
+    /// </summary>
+    /// <remarks>
+    /// A colour per half rather than one for both, because the reason to pick a solid colour is usually the split: a
+    /// blue left half and an orange right half say which sensor is which without a ramp moving all evening. The pair is
+    /// stored beside the ramp ids, not instead of them, so switching back to a ramp loses nothing.
+    /// </remarks>
+    [JsonPropertyName("reactive_lighting_solid_cpu")]
+    public string? ReactiveLightingSolidCpu { get; set; }
+
+    /// <summary>The colour the graphics half paints when its profile is the solid entry. Null means the shipped hot end.</summary>
+    [JsonPropertyName("reactive_lighting_solid_gpu")]
+    public string? ReactiveLightingSolidGpu { get; set; }
+
+    /// <summary>
+    /// True when the two halves are mixed across the four zones instead of being painted as two blocks: zone 1 exactly
+    /// the left colour, zone 4 exactly the right, and the two middle zones between them.
+    /// </summary>
+    [JsonPropertyName("reactive_lighting_blend")]
+    public bool ReactiveLightingBlend { get; set; }
+
+    /// <summary>
     /// Whether the keyboard shows a chosen colour while the charger is plugged in. Persisted, because it is a
     /// preference and not a moment: someone who set a charging colour wants it back after a reboot.
     /// </summary>
@@ -782,6 +805,11 @@ public class AppSettings
         ReactiveLightingBrightness = ChargingLighting.NormalizeBrightness(ReactiveLightingBrightness);
         ChargingColorBrightness = ChargingLighting.NormalizeBrightness(ChargingColorBrightness);
 
+        // A solid colour goes straight to the keyboard, and a hand-edited file can carry "mavi" there: each half's
+        // colour is normalised on load, and a blank one becomes the shipped end for that half rather than black.
+        ReactiveLightingSolidCpu = NormalizeOptionalColor(ReactiveLightingSolidCpu, ReactiveLighting.ColdColor);
+        ReactiveLightingSolidGpu = NormalizeOptionalColor(ReactiveLightingSolidGpu, ReactiveLighting.HotColor);
+
         // Both capability maps come out of a file a user can edit and a crash can truncate. A null here reached a
         // dictionary lookup and a list add on the first capability read, so a hand-edited file took the whole page
         // down instead of costing one feature.
@@ -814,6 +842,13 @@ public class AppSettings
             if (recovery.Timestamp == default) recovery.Timestamp = DateTime.UtcNow;
         }
     }
+
+    /// <summary>
+    /// A colour setting that is allowed to be null, brought to <c>#RRGGBB</c>: a value the parser cannot read becomes
+    /// <paramref name="fallback"/>, and an empty one stays null so "not chosen" is not silently stored as a colour.
+    /// </summary>
+    private static string? NormalizeOptionalColor(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? null : LightingPolicy.NormalizeHex(value, fallback);
 }
 
 public class GameSessionRecoveryState

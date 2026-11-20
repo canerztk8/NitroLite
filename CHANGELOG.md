@@ -50,6 +50,22 @@ unplugged.
   `reactive_lighting_custom_stops`, and the graphics half adds `reactive_lighting_profile_gpu` and
   `reactive_lighting_custom_stops_gpu`, both null by default, which means "the same ramp as the processor" and keeps a
   settings file from before the split painting exactly what it painted.
+- **A solid colour for each half.** Beside the ramps the picker now offers "Sabit renk": that half paints one colour
+  whatever the temperature is, so a split keyboard can say "processor" and "graphics" rather than "61 °C" and "58 °C".
+  The colour comes from the page's own eight swatches, the picker or the hex box, is stored per half in
+  `reactive_lighting_solid_cpu` and `reactive_lighting_solid_gpu`, and is rendered as a flat two-stop ramp — so
+  evaluation, interpolation, the throttle and the four-zone write are the ones a ramp already takes, with no second
+  code path to keep in step.
+- **The split can be a gradient instead of two blocks.** With both sensors on, two chips choose the shape: "Yarı
+  yarıya" keeps the two blocks the split has always painted, and "Geçişli" paints one gradient across the deck —
+  zone 1 exactly the processor's colour, zone 4 exactly the graphics chip's, the two middle zones mixed evenly between
+  them — so the keyboard reads as one deck crossing from one sensor to the other. `reactive_lighting_blend` stores the
+  choice, and changing it repaints at once: the pair of colours is unchanged, so a write that waited for a new
+  temperature would leave the keys in the old shape.
+- **Two more ramps.** "Orman (Yeşil → Turuncu)" and "Buzul (Lacivert → Beyaz)" join the three shipped ramps: the first
+  runs from green through lime and amber to orange, the second from navy through blue and pale sky to white, four stops
+  each between 45 and 90 °C. Both are appended rather than prepended, so the ramp a fresh settings file lands on is the
+  one it always was and a settings file written before them keeps painting what it painted.
 - **Stop temperatures can be typed.** Every row of a custom ramp's editor is a slider *and* a box: type `73`, `73.5` or
   `73,5`, press Enter or leave the box, and the stop takes it, clamped to the ramp's 20–110 °C and rewritten to the value
   it actually holds so a clamped number cannot look accepted. A ramp preview above the rows shows the gradient as it is

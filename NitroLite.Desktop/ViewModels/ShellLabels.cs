@@ -585,6 +585,10 @@ public sealed class ShellLabels
     public string ReactiveSensorsHint => Loc.T("CPU tek başına tüm klavyeyi boyar. CPU + GPU açıkken klavyenin solu CPU, sağı GPU sıcaklığını izler.");
     public string ReactiveNoSensor => Loc.T("Sensör seçilmedi");
     public string ReactiveProfiles => Loc.T("Sıcaklık rampaları");
+    public string ReactiveSolidHint => Loc.T("Sıcaklık ne olursa olsun bu renk sabit kalır; sıcaklığa göre değişen bir renk için rampalardan birini seçin.");
+    public string ReactiveSplitMode => Loc.T("Bölünme");
+    public string ReactiveSplitEven => Loc.T("Yarı yarıya");
+    public string ReactiveSplitBlend => Loc.T("Geçişli");
     public string ReactiveStops => Loc.T("Renk skalası");
     public string Profile => Loc.T("Profil");
     public string ReactiveCustomHint => Loc.T("Her satır bir sıcaklık ve o sıcaklıktaki renk: klavye soğuktan sıcağa bu renkler arasında geçiş yapar.");

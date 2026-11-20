@@ -210,15 +210,67 @@ public static class ReactiveLighting
     private static double? Usable(double celsius) =>
         double.IsNaN(celsius) || double.IsInfinity(celsius) || celsius <= 0 ? null : celsius;
 
+    /// <summary>
+    /// The four zone colours a pair of half colours becomes, either as two blocks or as one gradient across the deck.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The split is two blocks by default: zones 1–2 in <paramref name="left"/>, zones 3–4 in <paramref name="right"/>.
+    /// Blended, the same pair becomes a gradient — zone 1 exactly the left colour, zone 4 exactly the right, and the two
+    /// middle zones mixed evenly between them — which reads as one keyboard crossing from one sensor to the other
+    /// rather than as two keyboards taped together. Two colours that already match produce the blocks either way, so a
+    /// blended mode with one sensor selected is not a special case.
+    /// </para>
+    /// <para>
+    /// The array is always four entries in zone order, which is what the backends take: no index is ever reused, so a
+    /// half cannot bleed into the other.
+    /// </para>
+    /// </remarks>
+    public static string[] ZonesFor(string left, string right, bool blend)
+    {
+        var first = LightingPolicy.NormalizeHex(left, ColdColor);
+        var last = LightingPolicy.NormalizeHex(right, ColdColor);
+
+        if (!blend || string.Equals(first, last, StringComparison.OrdinalIgnoreCase))
+            return new[] { first, first, last, last };
+
+        var zones = new string[4];
+        for (int i = 0; i < zones.Length; i++)
+        {
+            zones[i] = Blend(first, last, i / (double)(zones.Length - 1));
+        }
+
+        return zones;
+    }
+
+    /// <summary>
+    /// Two <c>#RRGGBB</c> colours mixed in a straight line: <paramref name="t"/> 0 is <paramref name="from"/> and 1 is
+    /// <paramref name="to"/>. Text that is not a colour falls back to the cold end rather than throwing, because this
+    /// runs on a telemetry tick.
+    /// </summary>
+    public static string Blend(string from, string to, double t)
+    {
+        var low = Channels(LightingPolicy.NormalizeHex(from, ColdColor));
+        var high = Channels(LightingPolicy.NormalizeHex(to, ColdColor));
+
+        return Hex(
+            Mix(low.R, high.R, t),
+            Mix(low.G, high.G, t),
+            Mix(low.B, high.B, t));
+    }
+
     private static (double At, byte R, byte G, byte B) Parse(ReactiveLightingStop stop)
     {
         // SanitizeStops has already normalised the colour to "#RRGGBB", so the substrings are safe to convert.
-        var hex = LightingPolicy.NormalizeHex(stop.Color, ColdColor);
-        return (stop.AtCelsius,
-            Convert.ToByte(hex.Substring(1, 2), 16),
-            Convert.ToByte(hex.Substring(3, 2), 16),
-            Convert.ToByte(hex.Substring(5, 2), 16));
+        var (r, g, b) = Channels(LightingPolicy.NormalizeHex(stop.Color, ColdColor));
+        return (stop.AtCelsius, r, g, b);
     }
+
+    /// <summary>The three channels of a <c>#RRGGBB</c> string. The caller has already validated it.</summary>
+    private static (byte R, byte G, byte B) Channels(string hex) =>
+        (Convert.ToByte(hex.Substring(1, 2), 16),
+         Convert.ToByte(hex.Substring(3, 2), 16),
+         Convert.ToByte(hex.Substring(5, 2), 16));
 
     private static byte Mix(byte from, byte to, double t)
     {
@@ -284,15 +336,43 @@ public static class ReactiveLightingProfiles
     public const string CustomId = "custom";
 
     /// <summary>
-    /// The three profiles the app ships. Each is a different way for the same range of temperatures to read: one
-    /// that moves through the whole spectrum, one that stays warm, and one that stays cool. The first is the ramp
-    /// <see cref="ReactiveLighting"/> has always used, so a settings file with no profile of its own keeps its colour.
+    /// The id of the entry that paints one colour whatever the temperature is. It is a rendering choice rather than a
+    /// ramp, but it is stored in the same profile slot, so a half can be a ramp, a solid colour or the user's own stops
+    /// without a second setting deciding which of the three is in charge.
+    /// </summary>
+    public const string SolidId = "solid";
+
+    /// <summary>True when a stored profile id means "one colour, whatever the temperature".</summary>
+    public static bool IsSolid(string? id) => SolidId.Equals(id?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A solid colour as a two-stop ramp: the same colour at the coldest and the hottest stop, so the evaluator answers
+    /// it for every temperature and nothing downstream needs a second code path. Text that is not a colour falls back
+    /// to the cold end.
+    /// </summary>
+    public static List<ReactiveLightingStop> SolidStops(string? color)
+    {
+        var hex = LightingPolicy.NormalizeHex(color, ReactiveLighting.ColdColor);
+        return new List<ReactiveLightingStop>
+        {
+            new() { AtCelsius = ReactiveLighting.MinStopCelsius, Color = hex },
+            new() { AtCelsius = ReactiveLighting.MaxStopCelsius, Color = hex }
+        };
+    }
+
+    /// <summary>
+    /// The profiles the app ships. Each is a different way for the same range of temperatures to read: one that moves
+    /// through the whole spectrum, one that stays warm, one that stays cool, and two more for the palettes those three
+    /// did not cover. The first is the ramp <see cref="ReactiveLighting"/> has always used, so a settings file with no
+    /// profile of its own keeps its colour.
     /// </summary>
     /// <remarks>
     /// Each ramp carries four stops between 45 and 90 °C — the range a Nitro actually lives in — spaced far enough
     /// apart for the eye to read the change without spending writes on noise, and every colour is opaque and bright
     /// enough to read at a glance in a dim room. <see cref="ReactiveLightingProfile.LegacyNames"/> keeps the choice of
-    /// a settings file written before the ramps were renamed.
+    /// a settings file written before the ramps were renamed. The two ramps after the first three are added for range
+    /// rather than for variety's sake: a green-to-orange ramp and a pale ice one are the two palettes the three shipped
+    /// ramps did not cover, and they are appended so the first entry stays the default.
     /// </remarks>
     public static readonly IReadOnlyList<ReactiveLightingProfile> BuiltIn = new[]
     {
@@ -331,6 +411,32 @@ public static class ReactiveLightingProfiles
                 new() { AtCelsius = 75, Color = "#7C4DFF" }, // violet
                 new() { AtCelsius = 90, Color = "#D500F9" }  // magenta
             }
+        },
+        new ReactiveLightingProfile
+        {
+            Id = "forest",
+            Name = "Orman (Yeşil → Turuncu)",
+            IsBuiltIn = true,
+            Stops = new List<ReactiveLightingStop>
+            {
+                new() { AtCelsius = 45, Color = "#00C853" }, // green
+                new() { AtCelsius = 60, Color = "#AEEA00" }, // lime
+                new() { AtCelsius = 75, Color = "#FFC400" }, // amber
+                new() { AtCelsius = 90, Color = "#FF6D00" }  // orange
+            }
+        },
+        new ReactiveLightingProfile
+        {
+            Id = "glacier",
+            Name = "Buzul (Lacivert → Beyaz)",
+            IsBuiltIn = true,
+            Stops = new List<ReactiveLightingStop>
+            {
+                new() { AtCelsius = 45, Color = "#1E3A8A" }, // navy
+                new() { AtCelsius = 60, Color = "#2563EB" }, // blue
+                new() { AtCelsius = 75, Color = "#7DD3FC" }, // pale sky
+                new() { AtCelsius = 90, Color = "#F8FAFC" }  // white
+            }
         }
     };
 
@@ -360,6 +466,7 @@ public static class ReactiveLightingProfiles
     {
         if (string.IsNullOrWhiteSpace(idOrName)) return null;
         if (CustomId.Equals(idOrName, StringComparison.OrdinalIgnoreCase)) return CustomId;
+        if (IsSolid(idOrName)) return SolidId;
 
         return FindBuiltIn(idOrName)?.Id;
     }
