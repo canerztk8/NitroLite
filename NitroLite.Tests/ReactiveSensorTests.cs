@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -277,7 +277,7 @@ public class ReactiveSensorTests
     }
 
     [Fact]
-    public async Task MovingTheModesSlider_RepaintsAtOnce()
+    public async Task MovingTheModesSlider_RepaintsOnceTheHandStops()
     {
         var hardware = new Phase3Fakes.StubHardware();
         hardware.Sample.CpuTemperature = 78;
@@ -291,10 +291,60 @@ public class ReactiveSensorTests
         hardware.LightingWrites.Clear();
 
         vm.ReactiveBrightness = 2;
-        await vm.ReactiveLightingTask;
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, 3000);
 
         var write = Assert.Single(hardware.LightingWrites);
         Assert.StartsWith("STATIC|2|", write, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADragOfTheModesSlider_WritesOnlyTheLevelItCameToRestOn()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 78;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+        hardware.LightingWrites.Clear();
+
+        // A hand crossing the slider: eight levels in a row, none of them held long enough to be the answer. Each one
+        // used to be a full repaint, and on a two-colour split that is eight WMI calls apiece — the keyboard walked
+        // through the levels one at a time long after the hand had stopped.
+        for (var level = 2; level <= 9; level++) vm.ReactiveBrightness = level;
+
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, 3000);
+
+        // One write, carrying the level the slider came to rest on.
+        var write = Assert.Single(hardware.LightingWrites);
+        Assert.StartsWith("STATIC|9|", write, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALevelAlreadyOnTheKeys_IsNotWrittenAgain()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 78;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        // The slider is moved before the mode is switched on, and the mode's own paint already carries that level.
+        vm.ReactiveBrightness = 3;
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        // The delayed repaint that the setter queued finds the level already on the keys and sends nothing: a second
+        // identical write is eight more WMI calls for a keyboard that cannot look any different.
+        await Task.Delay(600);
+
+        var write = Assert.Single(hardware.LightingWrites,
+            w => w.Contains(ReactiveLighting.ColorFor(78), StringComparison.OrdinalIgnoreCase));
+        Assert.StartsWith("STATIC|3|", write, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -331,7 +381,7 @@ public class ReactiveSensorTests
     }
 
     [Fact]
-    public async Task MovingTheChargingSliderWhileThePlugIsIn_RepaintsAtOnce()
+    public async Task MovingTheChargingSliderWhileThePlugIsIn_RepaintsOnceTheHandStops()
     {
         var hardware = new Phase3Fakes.StubHardware();
 
@@ -343,10 +393,29 @@ public class ReactiveSensorTests
         hardware.LightingWrites.Clear();
 
         vm.ChargingBrightness = 4;
-        await vm.ChargingLightingTask;
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, 3000);
 
         var write = Assert.Single(hardware.LightingWrites);
         Assert.StartsWith("STATIC|4|", write, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADragOfTheChargingSlider_WritesOnlyTheLevelItCameToRestOn()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+
+        using var vm = Create(hardware, powerState: () => (true, 80));
+        await vm.InitializeAsync();
+
+        vm.ChargingColorEnabled = true;
+        await vm.ChargingLightingTask;
+        hardware.LightingWrites.Clear();
+
+        for (var level = 2; level <= 7; level++) vm.ChargingBrightness = level;
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, 3000);
+
+        var write = Assert.Single(hardware.LightingWrites);
+        Assert.StartsWith("STATIC|7|", write, StringComparison.Ordinal);
     }
 
     // =============================================================================================================

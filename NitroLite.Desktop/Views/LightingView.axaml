@@ -304,101 +304,112 @@
             <StackPanel>
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
-                <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
-                              VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
+
+                <!--
+                  What the keys are showing, in the header: two swatches while the halves follow different sensors, one
+                  otherwise, and only while the mode is on. It used to be a row of its own in the middle of the card,
+                  under a line naming the sensors that the tiles below already name.
+                -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding ReactiveLightingEnabled}"
+                              ToolTip.Tip="{Binding ReactiveLightingNow}">
+                    <Border Width="22" Height="22" CornerRadius="2"
+                            Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                            BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                    <Border Width="22" Height="22" CornerRadius="2" IsVisible="{Binding ReactiveSplit}"
+                            Background="{Binding ReactiveLightingColorRight, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                            BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                  </StackPanel>
+                  <ToggleButton Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
+                                VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
+                </StackPanel>
               </Grid>
 
               <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
                          TextWrapping="Wrap" />
 
               <!--
-                Which sensors paint, one row each: the reading the user is already watching, and the switch that decides
-                whether that half takes a colour at all. The row used to be one button doing both this and pointing the
-                ramp card at a half, which is why a click on a live half could read as a bug - it meant "point at this
-                half" the first time and "switch this half off" the second, with nothing on screen saying which. Three
-                controls, one job each: the reading reports, the switch paints, and the chips in the ramp header say
-                which half's ramp is being edited.
+                One band, two questions: which sensor paints, and how the two halves meet. They used to be two blocks,
+                each with a caption and a paragraph under it, which is what made the card read as a panel of switches
+                rather than as a choice between two sensors. The split chips sit beside the sensors because they only
+                mean anything once both are on, and they stay in place (disabled rather than removed) with one.
               -->
-              <StackPanel Margin="0,12,0,0">
-                <TextBlock Classes="caps" Text="{Binding Labels.ReactiveSensorsTitle}" Margin="0,0,0,6" />
+              <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,12,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="caps" Text="{Binding Labels.ReactiveSensorsTitle}"
+                           Margin="0,0,0,6" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Classes="caps" Text="{Binding Labels.ReactiveSplitMode}"
+                           HorizontalAlignment="Right" Margin="16,0,0,6" />
 
-                <!-- The two halves sit side by side: they are a pair, and stacking them doubled the height of the card. -->
-                <Grid ColumnDefinitions="*,*">
-                  <Border Classes="sensor" Classes.off="{Binding !ReactiveCpuSensor}">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                      <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
-                              IsVisible="{Binding ReactiveCpuSensor}"
-                              Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
-                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
-                                  Margin="10,0,0,0">
-                        <TextBlock Classes="caps" Text="CPU" VerticalAlignment="Center" />
-                        <TextBlock Classes="figurebig" Text="{Binding ReactiveCpuReading}" />
-                      </StackPanel>
-                      <ToggleButton Grid.Column="2" Classes="toggle" VerticalAlignment="Center"
-                                    IsChecked="{Binding ReactiveCpuSensor}"
-                                    AutomationProperties.AutomationId="ReactiveSensorCpu"
-                                    AutomationProperties.Name="{Binding Labels.ReactiveCpuSwitch}" />
-                    </Grid>
-                  </Border>
+                <StackPanel Grid.Row="1" Grid.Column="0">
+                  <!-- The two halves sit side by side: they are a pair, and stacking them doubled the card's height. -->
+                  <Grid ColumnDefinitions="*,*">
+                    <Border Classes="sensor" Classes.off="{Binding !ReactiveCpuSensor}">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                                IsVisible="{Binding ReactiveCpuSensor}"
+                                Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
+                                    Margin="10,0,0,0">
+                          <TextBlock Classes="caps" Text="CPU" VerticalAlignment="Center" />
+                          <TextBlock Classes="figurebig" Text="{Binding ReactiveCpuReading}" />
+                        </StackPanel>
+                        <ToggleButton Grid.Column="2" Classes="toggle" VerticalAlignment="Center"
+                                      IsChecked="{Binding ReactiveCpuSensor}"
+                                      AutomationProperties.AutomationId="ReactiveSensorCpu"
+                                      AutomationProperties.Name="{Binding Labels.ReactiveCpuSwitch}" />
+                      </Grid>
+                    </Border>
 
-                  <Border Grid.Column="1" Classes="sensor" Classes.off="{Binding !ReactiveGpuSensor}"
-                          Margin="8,0,0,0">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                      <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
-                              IsVisible="{Binding ReactiveGpuSensor}"
-                              Background="{Binding ReactiveLightingColorRight, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
-                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
-                                  Margin="10,0,0,0">
-                        <TextBlock Classes="caps" Text="GPU" VerticalAlignment="Center" />
-                        <TextBlock Classes="figurebig" Text="{Binding ReactiveGpuReading}" />
-                      </StackPanel>
-                      <ToggleButton Grid.Column="2" Classes="toggle" VerticalAlignment="Center"
-                                    IsChecked="{Binding ReactiveGpuSensor}"
-                                    AutomationProperties.AutomationId="ReactiveSensorGpu"
-                                    AutomationProperties.Name="{Binding Labels.ReactiveGpuSwitch}" />
-                    </Grid>
-                  </Border>
-                </Grid>
+                    <Border Grid.Column="1" Classes="sensor" Classes.off="{Binding !ReactiveGpuSensor}"
+                            Margin="8,0,0,0">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border Width="10" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                                IsVisible="{Binding ReactiveGpuSensor}"
+                                Background="{Binding ReactiveLightingColorRight, Converter={x:Static conv:HexToBrushConverter.Instance}}" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
+                                    Margin="10,0,0,0">
+                          <TextBlock Classes="caps" Text="GPU" VerticalAlignment="Center" />
+                          <TextBlock Classes="figurebig" Text="{Binding ReactiveGpuReading}" />
+                        </StackPanel>
+                        <ToggleButton Grid.Column="2" Classes="toggle" VerticalAlignment="Center"
+                                      IsChecked="{Binding ReactiveGpuSensor}"
+                                      AutomationProperties.AutomationId="ReactiveSensorGpu"
+                                      AutomationProperties.Name="{Binding Labels.ReactiveGpuSwitch}" />
+                      </Grid>
+                    </Border>
+                  </Grid>
+                </StackPanel>
 
-                <TextBlock Classes="hint" Text="{Binding Labels.ReactiveSensorsHint}" Margin="0,8,0,0"
-                           TextWrapping="Wrap" />
-              </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="6" IsEnabled="{Binding ReactiveSplit}">
+                    <Button Classes="seg" Classes.selected="{Binding ReactiveSplitEven}"
+                            Content="{Binding Labels.ReactiveSplitEven}"
+                            Command="{Binding SelectReactiveSplitEvenCommand}"
+                            AutomationProperties.AutomationId="ReactiveSplitEven"
+                            AutomationProperties.Name="{Binding Labels.ReactiveSplitEven}" />
+                    <Button Classes="seg" Classes.selected="{Binding ReactiveSplitBlend}"
+                            Content="{Binding Labels.ReactiveSplitBlend}"
+                            Command="{Binding SelectReactiveSplitBlendCommand}"
+                            AutomationProperties.AutomationId="ReactiveSplitBlend"
+                            AutomationProperties.Name="{Binding Labels.ReactiveSplitBlend}" />
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
 
               <!--
-                How the two halves meet, as a pair of chips that stay where they are: with one sensor there is nothing to
-                blend, so the pair is disabled rather than removed. The row used to appear only once both halves were
-                live, which moved everything under it when a switch was flipped.
+                One line, chosen by the state it describes: nothing selected is the one answer that is a warning, and
+                with both halves live the sentence that matters is how they meet, not how a lone sensor behaves. Three
+                boxes share one cell, so the card never carries two paragraphs of help at once.
               -->
-              <TextBlock Classes="caps" Text="{Binding Labels.ReactiveSplitMode}" Margin="0,14,0,6" />
-              <StackPanel Orientation="Horizontal" Spacing="6" IsEnabled="{Binding ReactiveSplit}">
-                <Button Classes="seg" Classes.selected="{Binding ReactiveSplitEven}"
-                        Content="{Binding Labels.ReactiveSplitEven}"
-                        Command="{Binding SelectReactiveSplitEvenCommand}"
-                        AutomationProperties.AutomationId="ReactiveSplitEven"
-                        AutomationProperties.Name="{Binding Labels.ReactiveSplitEven}" />
-                <Button Classes="seg" Classes.selected="{Binding ReactiveSplitBlend}"
-                        Content="{Binding Labels.ReactiveSplitBlend}"
-                        Command="{Binding SelectReactiveSplitBlendCommand}"
-                        AutomationProperties.AutomationId="ReactiveSplitBlend"
-                        AutomationProperties.Name="{Binding Labels.ReactiveSplitBlend}" />
-              </StackPanel>
-              <TextBlock Classes="hint" Text="{Binding Labels.ReactiveSplitHint}" Margin="0,6,0,0"
-                         TextWrapping="Wrap" />
-
-              <!--
-                The live reading: what the keyboard is showing now, and the numbers behind it. A second swatch appears
-                only while the two halves follow different sensors, because one swatch is the whole truth otherwise.
-              -->
-              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
-                          IsVisible="{Binding ReactiveLightingEnabled}">
-                <Border Width="26" Height="26" CornerRadius="2"
-                        Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                        BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
-                <Border Width="26" Height="26" CornerRadius="2" IsVisible="{Binding ReactiveSplit}"
-                        Background="{Binding ReactiveLightingColorRight, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                        BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
-                <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
-              </StackPanel>
+              <Grid Margin="0,8,0,0">
+                <TextBlock Classes="hint" Text="{Binding Labels.ReactiveNoSensor}"
+                           IsVisible="{Binding !HasReactiveSensors}"
+                           Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" />
+                <TextBlock Classes="hint" Text="{Binding Labels.ReactiveSplitHint}"
+                           IsVisible="{Binding ReactiveSplit}" TextWrapping="Wrap" />
+                <TextBlock Classes="hint" Text="{Binding Labels.ReactiveSensorsHint}"
+                           IsVisible="{Binding ReactiveSingleSensor}" TextWrapping="Wrap" />
+              </Grid>
 
               <!--
                 The level this mode paints at. Its own slider: the page's brightness belongs to the colour the user chose,
@@ -441,14 +452,19 @@
               <ItemsControl ItemsSource="{Binding ReactiveProfileChoices}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal" />
+                    <!--
+                      Four to a row rather than a wrap of fixed-width cards: seven chips used to break 5 + 2 and leave
+                      half the row empty, which read as two groups of ramps rather than one list. A uniform row keeps
+                      the preview bars the same width, so they can be compared at a glance.
+                    -->
+                    <UniformGrid Columns="4" />
                   </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:ReactiveProfileChoice">
                     <Button Classes="ramp" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}"
                             Margin="0,0,8,8" AutomationProperties.Name="{Binding Label}">
-                      <StackPanel Width="150" Spacing="6">
+                      <StackPanel Spacing="6">
                         <Border Height="8" CornerRadius="2"
                                 Background="{Binding Stops, Converter={x:Static conv:RampToBrushConverter.Instance}}" />
                         <TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap" MinHeight="30" />

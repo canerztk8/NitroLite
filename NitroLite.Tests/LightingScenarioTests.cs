@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -37,25 +37,22 @@ public class LightingScenarioTests
         await vm.RefreshTelemetryAsync();
         await vm.ReactiveLightingTask;
 
-        // Each write now takes a quarter of a second, which is roughly what the embedded controller costs. That is long
-        // enough for the next two clicks to arrive while the first write still holds the gate.
-        hardware.LightingWriteDelay = TimeSpan.FromMilliseconds(250);
         hardware.LightingWrites.Clear();
 
-        vm.ReactiveBrightness = 4;   // takes the gate
-        vm.ReactiveBrightness = 5;   // queues behind it
+        vm.ReactiveBrightness = 4;
+        vm.ReactiveBrightness = 5;
         vm.ReactiveLightingEnabled = false;
 
         await Task.Delay(1200);
 
-        // The queued write was cancelled before it could reach the keyboard. Without the check it lands after the mode
-        // was switched off — a flash of the temperature colour at a brightness the user had just moved past. Only the
-        // write that was already in flight carries the colour, and it carries level 4, not 5.
+        // Neither level reached the keyboard. The slider's repaint waits for the hand to stop, and by the time it was
+        // due the mode had been switched off, so it found nothing to paint and returned before the gate. Without that
+        // check the pending write lands a moment after the switch — a flash of the temperature colour at a level the user
+        // had just moved past, on a keyboard they had just handed back. The only write here is the one that hands the
+        // keyboard back to the user's own colour.
         var colour = ReactiveLighting.ColorFor(78);
-        var reactive = Assert.Single(hardware.LightingWrites,
+        Assert.DoesNotContain(hardware.LightingWrites,
             w => w.Contains(colour, StringComparison.OrdinalIgnoreCase));
-
-        Assert.StartsWith("STATIC|4|", reactive, StringComparison.Ordinal);
         Assert.False(vm.ReactiveLightingEnabled);
     }
 

@@ -769,6 +769,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Debouncer _curveDebounce = new(TimeSpan.FromMilliseconds(400));
     private readonly Debouncer _reactiveDebounce = new(TimeSpan.FromMilliseconds(400));
 
+    /// <summary>
+    /// The two automatic colours' brightness sliders. A level is one number the firmware takes with the colour, so a
+    /// drag that wrote per pixel would queue one full repaint per pixel: on a four-zone colour that is eight WMI calls
+    /// each, and the keyboard was seen stepping through the levels long after the hand had stopped.
+    /// </summary>
+    /// <remarks>
+    /// Shorter than the page's pause on purpose. The colour itself is already on the keys and only its level changes,
+    /// so the repaint is cheap to take late but has to feel like the slider: a fifth of a second is under the threshold
+    /// where a control stops feeling attached, and it collapses a whole drag into one write of the final level.
+    /// </remarks>
+    private readonly Debouncer _reactiveBrightnessDebounce = new(TimeSpan.FromMilliseconds(180));
+
+    /// <summary>The charging colour's brightness slider, on the same rule as the temperature one.</summary>
+    private readonly Debouncer _chargingBrightnessDebounce = new(TimeSpan.FromMilliseconds(180));
+
     /// <summary>Automatic game switching, or null when the caller did not wire it (a test that does not need it).</summary>
     private readonly GameProfileService? _gameProfiles;
 
@@ -888,6 +903,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _reactiveGpuSensor;
     private int _reactiveBrightness = 6;
     private int _chargingBrightness = 6;
+
+    /// <summary>
+    /// The level the keys were last painted at by each automatic colour, or -1 before either has painted.
+    /// </summary>
+    /// <remarks>
+    /// Read by the two brightness sliders' delayed repaint. A level that is already on the keys is not worth writing
+    /// again: the mode paints the moment it is switched on, and a slider that was moved before that would otherwise
+    /// send the same colour a second time, which on the four-zone path is eight more WMI calls for no visible change.
+    /// </remarks>
+    private int _reactiveBrightnessPainted = -1;
+    private int _chargingBrightnessPainted = -1;
 
     /// <summary>
     /// True once the custom ramp is the user's own: saved in an earlier session or edited in this one. Until then the
@@ -3211,6 +3237,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True while the two halves follow different sensors, which the card shows as a second swatch.</summary>
     public bool ReactiveSplit => _reactiveCpuSensor && _reactiveGpuSensor;
 
+    /// <summary>
+    /// True with exactly one sensor on: the whole keyboard follows it, which is the one thing the card has to explain in
+    /// that state. The card shows one line of help at a time — this one, the split's, or the warning that nothing paints
+    /// — so the sentence on screen is always the one that describes what the tiles below it are doing.
+    /// </summary>
+    public bool ReactiveSingleSensor => HasReactiveSensors && !ReactiveSplit;
+
     /// <summary>The colour the right half of the keyboard is running, when the two halves disagree.</summary>
     public string ReactiveLightingColorRight => _reactiveLightingColorRight;
 
@@ -3228,12 +3261,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _reactiveBrightness, level)) return;
 
             _settings.ReactiveLightingBrightness = level;
-            SaveSettings();
             Raise(nameof(ReactiveBrightnessLabel));
 
-            // A level changed while the colour is on the keys is repainted now rather than at the next bucket: the
-            // slider is the control the user is looking at, and the keyboard has to agree with it.
-            ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+            // Both the file and the keyboard wait for the hand to stop. The number the write carries is read when it
+            // runs, so the level that lands is the one the slider came to rest on, not the one under the cursor on the
+            // way there - which is what made a drag paint every level in turn on the keys.
+            _reactiveDebounce.Run(() => SaveSettings());
+            _reactiveBrightnessDebounce.Run(RepaintReactiveBrightness);
         }
     }
 
@@ -3270,6 +3304,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
         Raise(nameof(HasReactiveSensors));
         Raise(nameof(ReactiveSplit));
+        Raise(nameof(ReactiveSingleSensor));
         Raise(nameof(ReactiveCpuChip));
         Raise(nameof(ReactiveGpuChip));
         Raise(nameof(ReactiveLightingNow));
@@ -3359,6 +3394,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Repaints the temperature colour at the level its slider came to rest on.
+    /// </summary>
+    /// <remarks>
+    /// The level and the temperatures are both read here, when the pause after the drag has passed, so the keys end on
+    /// the value the user left behind. Called from <see cref="_reactiveBrightnessDebounce"/> rather than from the
+    /// setter: a drag raises one change per pixel, and one repaint per pixel is what queued up behind the write gate.
+    /// </remarks>
+    private void RepaintReactiveBrightness()
+    {
+        if (_reactiveBrightness == _reactiveBrightnessPainted) return;
+
+        ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+    }
+
+    /// <summary>
     /// Paints the sensors' colours, if it is worth a write. Both the telemetry tick and the card's own controls come
     /// through here, so a level or a sensor change reaches the keys on the same rule the temperature does.
     /// </summary>
@@ -3438,6 +3488,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 AppLog.Warn("The temperature colour could not be written", $"{left} / {right}");
                 return;
             }
+
+            // The level the keys are now at, read from the same local the write carried: a slider moved during the
+            // write must not be mistaken for one that was already painted.
+            _reactiveBrightnessPainted = brightness;
 
             _reactiveLightingColor = left;
             _reactiveLightingColorRight = right;
@@ -3669,11 +3723,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _chargingBrightness, level)) return;
 
             _settings.ChargingColorBrightness = level;
-            SaveSettings();
             Raise(nameof(ChargingBrightnessLabel));
 
-            // A level changed while the colour is on the keys is repainted now rather than at the next plug.
-            if (_chargingColorPainted) ChargingLightingTask = SyncChargingLightingAsync(force: true);
+            // The same pause as the temperature slider: one repaint, at the level the user settled on.
+            _reactiveDebounce.Run(() => SaveSettings());
+            _chargingBrightnessDebounce.Run(() =>
+            {
+                // A level changed while the colour is on the keys is repainted rather than waiting for the next plug -
+                // but only when the keys are not already at that level, which is the case the mode's own paint covers.
+                if (_chargingColorPainted && _chargingBrightness != _chargingBrightnessPainted)
+                {
+                    ChargingLightingTask = SyncChargingLightingAsync(force: true);
+                }
+            });
         }
     }
 
@@ -3760,7 +3822,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     return;
                 }
 
-                var charging = ChargingLighting.ConfigFor(_chargingColor, baseline, _chargingBrightness);
+                // The level is read once and both written and remembered: a slider moved while the write is in flight
+                // must not be recorded as the level the keys received.
+                var level = _chargingBrightness;
+                var charging = ChargingLighting.ConfigFor(_chargingColor, baseline, level);
                 var outcome = await WriteLightingConfigAsync(charging,
                     () => _chargingColorEnabled && !_lightingBlackedOut).ConfigureAwait(true);
 
@@ -3772,6 +3837,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 }
 
                 _chargingColorPainted = true;
+                _chargingBrightnessPainted = level;
                 return;
             }
 
@@ -8804,6 +8870,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _customFanDebounce.Dispose();
         _curveDebounce.Dispose();
         _reactiveDebounce.Dispose();
+
+        // These two are not flushed above: their pending work is a hardware write, which is left where it is for the
+        // reason Debouncer.Flush gives. Disposing stops a repaint whose hand has already left the slider.
+        _reactiveBrightnessDebounce.Dispose();
+        _chargingBrightnessDebounce.Dispose();
 
         // The write gate is deliberately not disposed. StopAndWait above is bounded, so a step stuck in a WMI call
         // can still be inside the gate when this returns, and SemaphoreSlim.Dispose would then make its Release
