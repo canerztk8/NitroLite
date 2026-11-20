@@ -454,6 +454,46 @@ public static class AcerWmiProtocol
         return runs;
     }
 
+    /// <summary>One <c>SetGamingRgbKb</c> call in a lighting write: a zone bitmap and the colour it carries.</summary>
+    /// <param name="Mask">The zone bitmap: one bit per zone, <c>0x01</c>..<c>0x08</c>, or <c>0x0F</c> for all four.</param>
+    /// <param name="Color">The packed colour, <c>0xRRGGBB</c>.</param>
+    /// <param name="Pass">Zero for the first pass, one for the repeat pass that re-states every zone.</param>
+    public readonly record struct ZoneWrite(byte Mask, int Color, int Pass);
+
+    /// <summary>
+    /// The calls one keyboard write makes, in zone order, and then the whole set again.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One zone per call, with the single-bit mask the capture measured — <c>0x01</c>, <c>0x02</c>, <c>0x04</c>,
+    /// <c>0x08</c>. Combined masks were the tidier idea and they are what the reference AN16-41 refused to honour:
+    /// the left half was written as <c>0x03</c>, the right half as <c>0x0C</c>, both answered <c>0x00</c>, and the whole
+    /// keyboard came out in the first run's colour — twice, with and without the vendor service, with and without a gap
+    /// between the calls. A combined mask that paints every zone is worse than four calls: it looks applied and folds
+    /// the split into one colour. Four per-zone calls are what this firmware showed as three zones right and one wrong,
+    /// which is a dropped call, not a misunderstood mask.
+    /// </para>
+    /// <para>
+    /// The repeat pass is what answers the dropped call: the EC applies a mask asynchronously, and a write that lands in
+    /// that window is accepted with status 0 and dropped, leaving the zone on its old colour. A single colour needs no
+    /// repeat — nothing can be left behind when every zone is the same — so it stays one <c>0x0F</c> write.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<ZoneWrite> BuildZoneWritePlan(IReadOnlyList<int>? zones)
+    {
+        if (zones == null || zones.Count == 0) return Array.Empty<ZoneWrite>();
+
+        var single = GroupZoneRuns(zones);
+        if (single.Count == 1) return new[] { new ZoneWrite(single[0].Mask, single[0].Color, 0) };
+
+        var perZone = new List<ZoneWrite>(8);
+        for (int zone = 0; zone < LedZoneCount && zone < zones.Count; zone++)
+            perZone.Add(new ZoneWrite((byte)(LedZone1 << zone), zones[zone], 0));
+
+        foreach (var step in perZone.ToArray()) perZone.Add(step with { Pass = 1 });
+        return perZone;
+    }
+
     /// <summary>Parses <c>#RRGGBB</c> (the app's colour format) into its three channels.</summary>
     public static bool TryParseHexColor(string? color, out byte red, out byte green, out byte blue)
     {

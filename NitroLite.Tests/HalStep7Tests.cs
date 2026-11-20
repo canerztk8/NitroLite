@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.IO;
+using System.Text.Json.Nodes;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Wmi;
@@ -27,6 +28,17 @@ namespace NitroLite.Tests;
 /// </summary>
 public class HalStep7Tests
 {
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "NitroLite.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
+    }
     private static Task NoDelay(TimeSpan _) => Task.CompletedTask;
 
     // ---------------------------------------------------------------- RGB encoding
@@ -157,6 +169,84 @@ public class HalStep7Tests
         Assert.Equal(0xFF0000, runs[0].Color);
         Assert.Equal(0x0C, runs[1].Mask);
         Assert.Equal(0x0000FF, runs[1].Color);
+    }
+
+    [Fact]
+    public void BuildZoneWritePlan_ASplitIsOneZonePerCallTwice()
+    {
+        // The reference AN16-41 wrote the combined masks 0x03 / 0x0C with status 0 and kept the whole keyboard in the
+        // first run's colour, so a split is built from the single-bit masks the capture measured, in zone order, and
+        // every zone is stated twice because the EC drops a write that lands while it is still applying the last one.
+        var plan = AcerWmiProtocol.BuildZoneWritePlan(new[] { 0xFF0000, 0xFF0000, 0x00FF00, 0x00FF00 });
+
+        Assert.Equal(8, plan.Count);
+        Assert.Equal(new byte[] { 0x01, 0x02, 0x04, 0x08, 0x01, 0x02, 0x04, 0x08 }, plan.Select(step => step.Mask));
+        Assert.Equal(
+            new[] { 0xFF0000, 0xFF0000, 0x00FF00, 0x00FF00, 0xFF0000, 0xFF0000, 0x00FF00, 0x00FF00 },
+            plan.Select(step => step.Color));
+        Assert.Equal(new[] { 0, 0, 0, 0, 1, 1, 1, 1 }, plan.Select(step => step.Pass));
+    }
+
+    [Fact]
+    public void BuildZoneWritePlan_AOneColourWriteIsNotRepeated()
+    {
+        // Nothing can be left behind when all four zones carry the same colour, so a solid write stays one call and
+        // costs the keyboard nothing extra.
+        var plan = AcerWmiProtocol.BuildZoneWritePlan(new[] { 0x12AB34, 0x12AB34, 0x12AB34, 0x12AB34 });
+
+        var step = Assert.Single(plan);
+        Assert.Equal(AcerWmiProtocol.LedZoneAll, step.Mask);
+        Assert.Equal(0x12AB34, step.Color);
+        Assert.Equal(0, step.Pass);
+    }
+
+    [Fact]
+    public void BuildZoneWritePlan_FourColoursAreEightCallsInZoneOrder()
+    {
+        var plan = AcerWmiProtocol.BuildZoneWritePlan(new[] { 0x010101, 0x020202, 0x030303, 0x040404 });
+
+        Assert.Equal(8, plan.Count);
+        Assert.Equal(new byte[] { 0x01, 0x02, 0x04, 0x08 }, plan.Take(4).Select(step => step.Mask));
+        Assert.Equal(new byte[] { 0x01, 0x02, 0x04, 0x08 }, plan.Skip(4).Select(step => step.Mask));
+    }
+
+    [Fact]
+    public void BuildZoneWritePlan_NothingToWriteIsNoCalls()
+    {
+        Assert.Empty(AcerWmiProtocol.BuildZoneWritePlan(null));
+        Assert.Empty(AcerWmiProtocol.BuildZoneWritePlan(Array.Empty<int>()));
+    }
+
+    [Fact]
+    public void BuildZoneWritePlan_RepeatsPayloadsTheProtocolActuallySends()
+    {
+        // The repeat is only safe if it carries payloads the firmware already accepted: an encoded mask nobody measured
+        // would turn the retry into a guess.
+        foreach (var step in AcerWmiProtocol.BuildZoneWritePlan(new[] { 0xFF0000, 0xFF0000, 0x0000FF, 0x0000FF }))
+        {
+            var packed = AcerWmiProtocol.EncodeRgbKb(
+                (byte)((step.Color >> 16) & 0xFF),
+                (byte)((step.Color >> 8) & 0xFF),
+                (byte)(step.Color & 0xFF),
+                step.Mask);
+
+            var (red, green, blue, mask) = AcerWmiProtocol.DecodeRgbKb(packed);
+            Assert.Equal((byte)((step.Color >> 16) & 0xFF), red);
+            Assert.Equal((byte)((step.Color >> 8) & 0xFF), green);
+            Assert.Equal((byte)(step.Color & 0xFF), blue);
+            Assert.Equal(step.Mask, mask);
+        }
+    }
+
+    [Fact]
+    public void HybridLighting_DoesNotLetTheServicePaintOneColourUnderAZoneWrite()
+    {
+        // The service takes one colour, so its pre-write is a solid keyboard underneath a split one: whichever lands
+        // second is what the user sees, and on the reference machine that was the solid one. The check reads the source
+        // because the class needs a live WMI session to exist at all.
+        var source = File.ReadAllText(RepoFile("NitroLite.Windows/Core/Hardware/Wmi/HybridHardwareController.cs"));
+
+        Assert.Contains("if (serviceHealthy && !wantsZones)", source, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -466,8 +466,13 @@ public sealed class HybridHardwareController : IHardwareController
         if (wmi != null && await wmi.EnsureConnectedAsync().ConfigureAwait(false))
         {
             // On a healthy machine the service still owns the effect parameters, so they are written there first and
-            // the zone colours are the last thing the keyboard is told.
-            if (serviceHealthy)
+            // the zone colours are the last thing the keyboard is told — except when the request IS the zone colours.
+            // The service takes one colour and paints all four zones with it, so that pre-write is a solid keyboard
+            // underneath a split one: whichever of the two the firmware finished second is what the user sees, and a
+            // service that queues its work lands after the split and flattens it. Nothing is lost by leaving it out:
+            // the effect parameters travel with the zone write, and the fallback below still asks the service for the
+            // full request if the firmware refuses it.
+            if (serviceHealthy && !wantsZones)
             {
                 await _agent.SetLightingAsync(effect, brightness, speed, direction, primaryColor, null)
                     .ConfigureAwait(false);

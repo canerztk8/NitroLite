@@ -65,6 +65,14 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     private static readonly string[] BatterySetMethods =
         { "SetBatteryHealthControl", "SetBatteryHealth", "SetBatteryCare", "SetBatteryChargeMode" };
 
+    /// <summary>
+    /// The pause between two zone writes, in milliseconds. The EC applies a mask asynchronously and a call that
+    /// arrives inside that window is answered with status 0 and dropped, so a split keyboard ends up entirely in the
+    /// colour of whichever run landed first. 40 ms is long enough for the reference AN16-41 to take the second run and
+    /// short enough that a four-zone write still finishes well inside one telemetry tick.
+    /// </summary>
+    private const int ZoneRunGapMs = 40;
+
     private readonly object _gate = new();
     private ManagementObject? _gaming;
     private ManagementObject? _battery;
@@ -555,9 +563,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     /// brightness byte to a per-zone colour, so an unscaled 50 % write comes out at full brightness.
     /// </para>
     /// <para>
-    /// Neighbouring zones that share a colour go out in one write, because the zone mask is a bitmap: a split keyboard
-    /// is two writes (<c>0x03</c> then <c>0x0C</c>) and a solid colour is one (<c>0x0F</c>). See
-    /// <see cref="AcerWmiProtocol.GroupZoneRuns"/> for why the grouping matters beyond the round trips saved.
+    /// A solid colour is one write with <c>0x0F</c>; a split keyboard is one write per zone with the single-bit mask
+    /// (<c>0x01</c>..<c>0x08</c>), stated twice. The combined masks <c>0x03</c>/<c>0x0C</c> were tried first and the
+    /// reference AN16-41 answers them with status 0 while painting the whole keyboard in the first run's colour, so
+    /// the split is built from the same single-bit masks as the capture. See
+    /// <see cref="AcerWmiProtocol.BuildZoneWritePlan"/> for the order and the repeat.
     /// </para>
     /// <para>
     /// The commit step is tolerated: some firmware revisions apply the zone colours and still answer a non-zero
@@ -626,21 +636,37 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                         request.Brightness);
                 }
 
-                // 3a. Write them back as runs of neighbouring zones, not as four separate calls: the mask is a zone
-                //     bitmap, so the left half and the right half of a split keyboard are two writes. Four writes that
-                //     arrive while the firmware is still applying the previous frame are how a zone ends up holding the
-                //     colour the keyboard had before — the "three zones one colour, one zone the other" report.
-                var runs = AcerWmiProtocol.GroupZoneRuns(request.Zones);
-                foreach (var (mask, packed) in runs)
+                // 3a. Write them back one zone per call with the single-bit mask, not with the combined masks the mask
+                //     field would allow: 0x03 and 0x0C answer status 0 on the reference AN16-41 and paint the whole
+                //     keyboard in the first run's colour, so a halves split came out entirely in the left half's. The
+                //     single-bit masks are the ones the capture measured.
+                //
+                //     The plan states every run twice, with the gaming info polled again and a gap of ZoneRunGapMs
+                //     between the calls. The poll is what the EC treats as the start of a new frame on the models whose
+                //     arm step is refused (the AN16-41 answers WBEM_E_INVALID_PARAMETER to SetGamingLED), and the gap
+                //     keeps the next mask out of the window in which the previous run is still being applied — the
+                //     window in which a run is accepted with status 0 and dropped, which is exactly a keyboard that
+                //     keeps the first half's colour across all four zones.
+                var plan = AcerWmiProtocol.BuildZoneWritePlan(request.Zones);
+                int runs = 0;
+                for (int step = 0; step < plan.Count; step++)
                 {
+                    var write = plan[step];
+                    if (write.Pass > 0 || step > 0)
+                    {
+                        InvokeGetter(gaming, "GetGamingSysInfo", 0);
+                        if (ZoneRunGapMs > 0) System.Threading.Thread.Sleep(ZoneRunGapMs);
+                    }
+
                     var color = AcerWmiProtocol.ScaleColor(
-                        (byte)((packed >> 16) & 0xFF),
-                        (byte)((packed >> 8) & 0xFF),
-                        (byte)(packed & 0xFF),
+                        (byte)((write.Color >> 16) & 0xFF),
+                        (byte)((write.Color >> 8) & 0xFF),
+                        (byte)(write.Color & 0xFF),
                         request.Brightness);
 
-                    var error = WriteZoneRun(gaming, mask, color);
+                    var error = WriteZoneRun(gaming, write.Mask, color);
                     if (error != null) return WmiOperationResult.StatusError(error);
+                    if (write.Pass == 0) runs++;
                 }
 
                 // The report keeps one entry per zone, in zone order, whatever the writes were grouped as.
@@ -666,7 +692,8 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     ["speed"] = request.Speed,
                     ["direction"] = request.Direction,
                     ["zones"] = reported,
-                    ["zoneWrites"] = runs.Count,
+                    ["zoneWrites"] = runs,
+                    ["zoneCalls"] = plan.Count,
                     ["armError"] = armError,
                     ["commitStatus"] = commitStatus,
                     ["commitApplied"] = commitStatus == AcerWmiProtocol.StatusOk

@@ -651,12 +651,13 @@ public class WmiControllerTests
         Assert.True(await hybrid.SetLightingAsync("STATIC", 5, 3, 1, "#FF0000", zones));
 
         // The service advertises DIRECT as its only four-colour mode and animates it, so the firmware gets the
-        // colours. The service still carries brightness and the effect, and it is written first so the zone colours
-        // are the last thing the keyboard hears.
+        // colours — and the service is not asked for anything at all. It takes one colour and paints all four zones
+        // with it, so that pre-write is a solid keyboard underneath the split: whichever of the two the firmware
+        // finished second is what the user sees, and on the reference AN16-41 the solid one won and halves came out
+        // entirely in the left half's colour. The effect parameters travel with the firmware write, so nothing is lost.
         Assert.Equal(1, wmi.SetLightingCalls);
         Assert.Equal(zones, wmi.LastZoneColors);
-        Assert.Equal(1, agent.SetLightingCalls);
-        Assert.Null(agent.LastZoneColors);
+        Assert.Equal(0, agent.SetLightingCalls);
         Assert.True(hybrid.LastZoneColorsApplied);
     }
 

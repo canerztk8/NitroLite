@@ -195,14 +195,15 @@ ENE controller, and the colour is written with an **HID feature report**, not a 
 
 Source: S7. There is no Acer manual for any of this, and none is claimed.
 
-**Writing the four zones through WMI.** The mask is a bitmap, so the executor sends one `SetGamingRgbKb` per
-run of neighbouring zones that share a colour rather than one per zone: `0x03` for the left half and `0x0C`
-for the right on a split keyboard, a single `0x0F` when all four agree. Four back-to-back calls are how a
-zone ends up holding the colour the keyboard had before — a call that arrives while the EC is still applying
-the previous mask is dropped, and the zone it addressed keeps whatever was there. Two calls, one per half,
-close most of that window; the worker's answer reports how many it sent as `zoneWrites`. A combined mask
-that answers non-zero (`0x03` and `0x0C` are documented bitmap combinations, `0x0F` is the measured one)
-falls back to one call per zone for that run, which is the sequence this replaces.
+**Writing the four zones through WMI.** One `SetGamingRgbKb` per zone, with the single-bit mask the capture
+measured (`0x01`, `0x02`, `0x04`, `0x08`), and `0x0F` when all four zones agree. The combined masks were
+tried first because the mask is documented as a bitmap: on the reference AN16-41 `0x03` (left half) and
+`0x0C` (right half) both answered status `0` and painted **the whole keyboard** in the first run's colour, so
+a halves split came out entirely red. A combined mask that paints every zone is worse than four calls,
+because it looks applied. The split is therefore written per zone, twice — the EC applies a mask
+asynchronously and a call that lands in that window is answered with status `0` and dropped, which is the
+one-zone-wrong report of 2026-11-19 — with the gaming info polled before each call and 40 ms between them.
+The worker reports the first-pass count as `zoneWrites` and every call as `zoneCalls`.
 
 **Transport selection.** `KeyboardLightingRouter` (`NitroLite.Core/Hardware/Lighting`) keeps the WMI path
 first — it is still correct on every older model — and tries HID once when a WMI write does not take.
