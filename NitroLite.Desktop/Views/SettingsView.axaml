@@ -292,6 +292,26 @@
           <TextBlock Classes="hint" Text="{Binding DiagnosticsNote}" Margin="0,4,0,0"
                      IsVisible="{Binding HasDiagnosticsNote}" TextWrapping="Wrap" />
 
+          <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10"
+                  IsVisible="{Binding SnapshotDiffAvailable}" />
+
+          <!-- The two-step NitroSense diff: read-only, and the only diagnostic that needs the user to change a setting
+               in Acer's own tool between the two clicks. -->
+          <StackPanel IsVisible="{Binding SnapshotDiffAvailable}">
+            <TextBlock Classes="caps" Text="{Binding Labels.SnapshotDiffTitle}" Margin="0,0,0,6" />
+            <TextBlock Classes="hint" Text="{Binding Labels.SnapshotDiffHint}" Margin="0,0,0,8" TextWrapping="Wrap" />
+
+            <WrapPanel>
+              <Button Classes="primary" Content="{Binding Labels.SnapshotCaptureA}" Margin="0,0,6,6" Padding="12,7"
+                      FontSize="11" Command="{Binding CaptureSnapshotACommand}" />
+              <Button Classes="primary" Content="{Binding Labels.SnapshotCaptureB}" Margin="0,0,6,6" Padding="12,7"
+                      FontSize="11" Command="{Binding CaptureSnapshotBDiffCommand}" />
+            </WrapPanel>
+
+            <TextBlock Classes="hint" Text="{Binding SnapshotDiffStatus}" Margin="0,4,0,0"
+                       IsVisible="{Binding HasSnapshotDiffStatus}" TextWrapping="Wrap" />
+          </StackPanel>
+
           <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,10,0,10" />
 
           <TextBlock Classes="caps" Text="{Binding Labels.Backup}" Margin="0,0,0,6" />

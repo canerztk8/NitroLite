@@ -2,6 +2,7 @@
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Snapshot;
 using NitroLite.Desktop.Mvvm;
 
 namespace NitroLite.Desktop.ViewModels;
@@ -157,6 +158,10 @@ public sealed partial class MainViewModel
     private string _updateStatus = "";
     private bool _updateBusy;
     private string _diagnosticsNote = "";
+
+    // The snapshot pair: A is kept in memory between the two clicks, and is the only state the tool needs.
+    private HardwareSnapshot? _snapshotA;
+    private string _snapshotDiffStatus = "";
 
     // ---------------------------------------------------------------- the first-run walkthrough
 
@@ -816,6 +821,134 @@ public sealed partial class MainViewModel
 
     public bool HasDiagnosticsNote => _diagnosticsNote.Length > 0;
 
+    // ---------------------------------------------------------------- NitroSense snapshot diff
+
+    /// <summary>
+    /// True when the platform can take a read-only snapshot. False on a platform without the Acer WMI worker and the
+    /// HID walk, which is why the two buttons are hidden rather than shown and then refused.
+    /// </summary>
+    public bool SnapshotDiffAvailable => _platform is IHardwareSnapshotBackend;
+
+    /// <summary>
+    /// What the two capture buttons last said: how many entries A holds, what the diff found, or why the capture failed.
+    /// </summary>
+    public string SnapshotDiffStatus
+    {
+        get => _snapshotDiffStatus;
+        private set
+        {
+            if (!Set(ref _snapshotDiffStatus, value)) return;
+            Raise(nameof(HasSnapshotDiffStatus));
+        }
+    }
+
+    public bool HasSnapshotDiffStatus => _snapshotDiffStatus.Length > 0;
+
+    /// <summary>True once state A is in hand, which is what enables the second button.</summary>
+    public bool SnapshotBaselineReady => _snapshotA != null;
+
+    /// <summary>
+    /// Step one of the pair: the state before the user touches NitroSense. Nothing is written, so this is safe to press
+    /// on any machine and at any time.
+    /// </summary>
+    private async Task CaptureSnapshotAAsync()
+    {
+        try
+        {
+            var snapshot = await CaptureHardwareSnapshotAsync();
+            if (snapshot == null) return;
+
+            _snapshotA = snapshot;
+            Raise(nameof(SnapshotBaselineReady));
+            CaptureSnapshotBDiffCommand.RaiseCanExecuteChanged();
+            SnapshotDiffStatus = Labels.SnapshotCapturedA(snapshot.Count);
+            AppLog.Info("NitroSense snapshot A was captured", $"{snapshot.Describe()} · {snapshot.Count} entries");
+        }
+        catch (Exception ex)
+        {
+            SnapshotDiffStatus = Labels.SnapshotDiffFailed(ex.Message);
+            AppLog.Warn("NitroSense snapshot A could not be captured", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Step two: the state after the user changed one setting in NitroSense, diffed against A, copied and offered as a
+    /// prefilled compatibility issue.
+    /// </summary>
+    /// <remarks>
+    /// The clipboard carries the report first and the diff under it, which is the order a maintainer reads them in. The
+    /// URL carries the diff first, because the issue body is cut when it does not fit and the diff is the half that
+    /// cannot be reproduced afterwards: A is gone from the machine by then, while the report can be regenerated from
+    /// the settings page at any time.
+    /// </remarks>
+    private async Task CaptureSnapshotBDiffAsync()
+    {
+        var before = _snapshotA;
+        if (before == null)
+        {
+            SnapshotDiffStatus = Labels.SnapshotDiffHint;
+            return;
+        }
+
+        try
+        {
+            var after = await CaptureHardwareSnapshotAsync();
+            if (after == null) return;
+
+            var diff = HardwareSnapshotDiff.Compare(before, after);
+            var report = HardwareReportText;
+            var separator = Environment.NewLine + Environment.NewLine;
+
+            var clipboard = report.Length == 0 ? diff.Text : report + separator + diff.Text;
+            var urlBody = report.Length == 0 ? diff.Text : diff.Text + separator + report;
+
+            var identity = _platform?.Identity;
+            var model = string.IsNullOrWhiteSpace(identity?.ModelCode) ? identity?.Model : identity?.ModelCode;
+            var board = identity?.BoardProduct;
+
+            var url = CompatibilityReportUrl.Build(model, board, urlBody);
+
+            // The clipboard first: the issue body may be cut, and its note tells the reporter to paste what this holds.
+            ClipboardService.SetText(clipboard);
+            OpenUrl(url);
+
+            SnapshotDiffStatus = diff.HasChanges
+                ? Labels.SnapshotDiffCaptured(diff.TotalChanges)
+                : Labels.SnapshotDiffSame;
+
+            AppLog.Info("NitroSense snapshot diff captured",
+                $"{diff.Changed} changed · {diff.Added} added · {diff.Removed} removed · " +
+                $"{diff.Unchanged} unchanged · {CompatibilityReportUrl.DescribeLength(url)}");
+        }
+        catch (Exception ex)
+        {
+            SnapshotDiffStatus = Labels.SnapshotDiffFailed(ex.Message);
+            AppLog.Warn("NitroSense snapshot diff failed", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// One read-only capture, or null with the reason in the status line. A platform that cannot answer and a machine
+    /// that could read nothing are reported separately: the first is a missing feature, the second a real finding.
+    /// </summary>
+    private async Task<HardwareSnapshot?> CaptureHardwareSnapshotAsync()
+    {
+        if (_platform is not IHardwareSnapshotBackend backend)
+        {
+            SnapshotDiffStatus = Labels.SnapshotDiffFailed(Labels.NoBackend);
+            return null;
+        }
+
+        var snapshot = await backend.CaptureSnapshotAsync().ConfigureAwait(true);
+        if (snapshot.IsEmpty)
+        {
+            SnapshotDiffStatus = Labels.SnapshotDiffFailed("no selector could be read");
+            return null;
+        }
+
+        return snapshot;
+    }
+
     // ================================================================================================================
     // The first-run walkthrough
     // ================================================================================================================
@@ -899,6 +1032,12 @@ public sealed partial class MainViewModel
     public AsyncCommand OnboardingFinishCommand { get; private set; } = null!;
     public RelayCommand ReopenOnboardingCommand { get; private set; } = null!;
 
+    /// <summary>Takes the read-only state A of a NitroSense snapshot pair.</summary>
+    public AsyncCommand CaptureSnapshotACommand { get; private set; } = null!;
+
+    /// <summary>Takes state B, diffs it against A and prepares the GitHub compatibility issue.</summary>
+    public AsyncCommand CaptureSnapshotBDiffCommand { get; private set; } = null!;
+
     /// <summary>
     /// Wires the phase-3 commands. Called from the constructor, after the fields are assigned, so a command can never
     /// capture a null service.
@@ -933,6 +1072,9 @@ public sealed partial class MainViewModel
         OnboardingSkipCommand = new RelayCommand(() => _ = FinishOnboardingAsync(applyRecommended: false));
         OnboardingFinishCommand = new AsyncCommand(() => FinishOnboardingAsync(applyRecommended: true));
         ReopenOnboardingCommand = new RelayCommand(ReopenOnboarding);
+        CaptureSnapshotACommand = new AsyncCommand(CaptureSnapshotAAsync, () => SnapshotDiffAvailable);
+        CaptureSnapshotBDiffCommand = new AsyncCommand(
+            CaptureSnapshotBDiffAsync, () => SnapshotDiffAvailable && _snapshotA != null);
     }
 
     // ================================================================================================================

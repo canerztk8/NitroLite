@@ -276,6 +276,25 @@ public sealed class ShellLabels
 
     public string CompatibilityReportFailed(string error) => Loc.T($"Uyumluluk raporu paylaşılamadı: {error}");
 
+    // ---------------------------------------------------------------- NitroSense snapshot diff
+    public string SnapshotDiffTitle => Loc.T("NitroSense anlık görüntü farkı");
+
+    public string SnapshotDiffHint => Loc.T("NitroSense'te başlangıç ayarını yap ve A'yı yakala; ayarı değiştirdikten sonra B'yi yakala. Fark, donanım raporuyla birlikte GitHub'da yeni sorun olarak açılır.");
+
+    public string SnapshotCaptureA => Loc.T("Durum A'yı yakala");
+    public string SnapshotCaptureB => Loc.T("Durum B'yi yakala ve karşılaştır");
+
+    public string SnapshotCapturedA(int entries) => Loc.T(
+        $"Durum A alındı ({entries} kayıt). Şimdi NitroSense'te ayarı değiştir ve B'yi yakala.");
+
+    public string SnapshotDiffCaptured(int changes) => Loc.T(
+        $"Fark yakalandı ({changes} değişiklik); panoya kopyalandı ve GitHub'da yeni sorun açıldı.");
+
+    public string SnapshotDiffSame => Loc.T(
+        "İki anlık görüntü arasında fark yok; rapor yine de panoya kopyalandı.");
+
+    public string SnapshotDiffFailed(string error) => Loc.T($"Anlık görüntü alınamadı: {error}");
+
     /// <summary>
     /// The inline hint under a control this session could not confirm. The control names come from the hardware report
     /// vocabulary, so they stay English in every language — they are the same words the issue will be triaged with.
