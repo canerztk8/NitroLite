@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using NitroLite.Core.Hardware.Diagnostics;
 using NitroLite.Core.Hardware.Verification;
 
 namespace NitroLite.Core.Hardware.Wmi;
@@ -168,6 +169,12 @@ public sealed class ReadBackPolicy
     private readonly Func<TimeSpan, Task> _delay;
     private readonly SessionVerification _verification;
 
+    /// <summary>
+    /// Told about a mismatch, or null when nothing is listening. Null is the default and the only value every test
+    /// passes, so the policy's behaviour is unchanged by the diagnostics existing.
+    /// </summary>
+    private readonly IHardwareDiagnosticSink? _diagnostics;
+
     /// <summary>Capabilities switched off for this process's lifetime only.</summary>
     private readonly HashSet<string> _sessionDisabled = new(StringComparer.OrdinalIgnoreCase);
 
@@ -180,16 +187,20 @@ public sealed class ReadBackPolicy
     /// <summary>
     /// <paramref name="delay"/> is injectable so the tests do not spend 320 ms per case waiting for a pause that only
     /// exists to give the EC time it does not need in a fake. <paramref name="verification"/> is the session ledger the
-    /// UI and the hardware report read; it defaults to the process-wide instance.
+    /// UI and the hardware report read; it defaults to the process-wide instance. <paramref name="diagnostics"/> is
+    /// told about a mismatch and about nothing else; it defaults to null, which is what every host that has not
+    /// deliberately built one gets.
     /// </summary>
     public ReadBackPolicy(
         AppSettings settings,
         Func<TimeSpan, Task>? delay = null,
-        SessionVerification? verification = null)
+        SessionVerification? verification = null,
+        IHardwareDiagnosticSink? diagnostics = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _delay = delay ?? (interval => Task.Delay(interval));
         _verification = verification ?? SessionVerification.Shared;
+        _diagnostics = diagnostics;
     }
 
     /// <summary>True when the capability must not be written at all: off for this session, or off for good.</summary>
@@ -397,6 +408,12 @@ public sealed class ReadBackPolicy
             Observed = observed,
             Detail = error
         });
+
+        // The one outcome the diagnostics exist for. Everything else the policy records is either a success, a
+        // machine that cannot answer, or a transport that was never there; a mismatch is the firmware contradicting
+        // itself, which is the quirk worth knowing about. The call returns immediately: it queues background work
+        // and cannot fail in a way the write path would see.
+        _diagnostics?.ReadBackMismatch(capability);
 
         // One increment per session, however many writes failed inside it.
         if (_countedThisSession.Add(capability))

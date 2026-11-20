@@ -1,4 +1,5 @@
-﻿using NitroLite.Core.Hardware.Lighting;
+﻿using NitroLite.Core.Hardware.Diagnostics;
+using NitroLite.Core.Hardware.Lighting;
 using NitroLite.Core.Hardware.Verification;
 
 namespace NitroLite.Core.Hardware.Wmi;
@@ -57,6 +58,12 @@ public sealed class HybridHardwareController : IHardwareController
     /// </summary>
     private readonly Func<IHidLightingWriter?>? _hidLighting;
 
+    /// <summary>
+    /// Told when the WMI-to-HID lighting chain runs out, or null when nothing is listening. Null in every test and in
+    /// every host that has no error endpoint, so the lighting behaviour is unchanged by the diagnostics existing.
+    /// </summary>
+    private readonly IHardwareDiagnosticSink? _diagnostics;
+
     private IHardwareController? _wmi;
     private bool _wmiCreated;
     private bool _disposed;
@@ -69,19 +76,23 @@ public sealed class HybridHardwareController : IHardwareController
     /// use one (the test harness passes null so no test can ever raise a UAC prompt).
     /// <paramref name="serviceHealthy"/> is the <c>VERSION</c> handshake; it defaults to the agent's own
     /// <see cref="IHardwareController.EnsureConnectedAsync"/>.
+    /// <paramref name="diagnostics"/> is told when the WMI-to-HID lighting chain runs out of transports; it is
+    /// optional and null by default, which is what every test gets.
     /// </summary>
     public HybridHardwareController(
         IHardwareController agent,
         Func<IHardwareController?>? wmiFactory = null,
         Func<bool>? useDirectWmi = null,
         Func<Task<bool>>? serviceHealthy = null,
-        Func<IHidLightingWriter?>? hidLighting = null)
+        Func<IHidLightingWriter?>? hidLighting = null,
+        IHardwareDiagnosticSink? diagnostics = null)
     {
         _agent = agent ?? throw new ArgumentNullException(nameof(agent));
         _wmiFactory = wmiFactory ?? (() => null);
         _useDirectWmi = useDirectWmi ?? (() => true);
         _serviceHealthy = serviceHealthy ?? agent.EnsureConnectedAsync;
         _hidLighting = hidLighting;
+        _diagnostics = diagnostics;
     }
 
     public string BackendName => ActiveBackendName;
@@ -530,7 +541,7 @@ public sealed class HybridHardwareController : IHardwareController
         }
 
         var identity = HardwareDetector.Current;
-        return await KeyboardLightingRuntime.Router.ApplyAsync(
+        var outcome = await KeyboardLightingRuntime.Router.ApplyAsync(
                 identity.ModelCode,
                 identity.BiosVersion,
                 frame,
@@ -539,6 +550,12 @@ public sealed class HybridHardwareController : IHardwareController
                 writer => AppLog.Info("Keyboard lighting",
                     $"The colour was written through the HID controller {writer.Description}."))
             .ConfigureAwait(false);
+
+        // WMI did not take it and the HID controller did not either. Two transports tried, none applied: this is the
+        // exhaustion the diagnostics want to see, and it is said once per machine per run by the sink itself.
+        if (!outcome.Applied) _diagnostics?.LightingFallbackExhausted(identity.ModelCode, identity.BiosVersion);
+
+        return outcome;
     }
 
     /// <summary>
@@ -561,6 +578,10 @@ public sealed class HybridHardwareController : IHardwareController
 
         LastZoneColorsApplied = wantsZones ? outcome.Applied : null;
         if (outcome.Applied) return true;
+
+        // No WMI path and no HID answer: the chain is empty. The same sink call as the WMI-first route, so a machine
+        // that fails both ways produces one report rather than two.
+        _diagnostics?.LightingFallbackExhausted(identity.ModelCode, identity.BiosVersion);
 
         AppLog.Warn("Keyboard lighting", $"The hardware write was not applied ({reason}; {outcome.Detail}).");
         return false;

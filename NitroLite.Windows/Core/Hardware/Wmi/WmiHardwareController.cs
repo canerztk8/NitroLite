@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Nodes;
+using NitroLite.Core.Hardware.Diagnostics;
 using NitroLite.Core.Hardware.Verification;
 
 namespace NitroLite.Core.Hardware.Wmi;
@@ -58,19 +59,29 @@ public sealed class WmiHardwareController : IHardwareController
     private SensorLayout? _discoveredSensors;
 
     /// <summary>
+    /// Told about a mismatch the MUX pre-check finds before any write, or null when nothing is listening. The policy
+    /// sink covers every write that goes through the retry loop; this one covers the read that fails before it, which
+    /// is where a firmware answering an out-of-range selector value is caught.
+    /// </summary>
+    private readonly IHardwareDiagnosticSink? _diagnostics;
+
+    /// <summary>
     /// <paramref name="capabilities"/> supplies the probe result. It is a delegate rather than a value because the
     /// user can rescan from the settings page at any time, and a controller holding the snapshot from launch would
     /// keep using sensor offsets the rescan just replaced. It is optional: without it the controller still works,
     /// but the sensor offsets fall back to the default layout and the battery limit is always asked about.
+    /// <paramref name="diagnostics"/> is optional and null by default, which is what every test gets.
     /// </summary>
     public WmiHardwareController(
         WmiWorkerLauncher launcher,
         ReadBackPolicy readBack,
-        Func<CapabilitySnapshot?>? capabilities = null)
+        Func<CapabilitySnapshot?>? capabilities = null,
+        IHardwareDiagnosticSink? diagnostics = null)
     {
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _readBack = readBack ?? throw new ArgumentNullException(nameof(readBack));
         _capabilities = capabilities ?? (() => null);
+        _diagnostics = diagnostics;
     }
 
     /// <summary>The probe result as it stands right now, or null when nothing has been probed yet.</summary>
@@ -468,6 +479,10 @@ public sealed class WmiHardwareController : IHardwareController
                     Observed = DescribeRaw(state),
                     Detail = "GetGamingMiscSetting(0x02) answered outside the range the encoder writes"
                 });
+
+                // A mismatch that never reached the retry loop: the read itself was the refusal. Reported here because
+                // this is the branch a board with an undocumented MUX selector lands in, and the policy never sees it.
+                _diagnostics?.ReadBackMismatch(ReadBackPolicy.MuxMode);
 
                 return false;
             }

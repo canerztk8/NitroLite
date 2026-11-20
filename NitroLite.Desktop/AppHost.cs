@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Diagnostics;
 using NitroLite.Desktop.ViewModels;
 using NitroLite.Desktop.Themes;
 
@@ -505,8 +506,50 @@ public sealed class AppHost : IDisposable
             }
         }
 
-        var readBack = new ReadBackPolicy(settings);
-        var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe);
+        // The method list the diagnostics send. A live probe result carries it; a snapshot restored from the cache does
+        // not, and the cache is the common case after the first launch. So the list is taken from the probe when it is
+        // there and read from the schema once when it is not — on the diagnostics thread, after a failure, with a short
+        // timeout, and remembered, so the extra read costs one WMI walk in a run that is already failing.
+        string[]? discoveredMethods = null;
+        string[] DiscoveredMethods()
+        {
+            if (discoveredMethods != null) return discoveredMethods;
+
+            var probed = probeTask.IsCompletedSuccessfully ? probeTask.Result?.Wmi.Methods : null;
+            if (probed is { Count: > 0 })
+            {
+                discoveredMethods = probed.ToArray();
+                return discoveredMethods;
+            }
+
+            try
+            {
+                discoveredMethods = AcerWmiProbe.ReadWithTimeout(TimeSpan.FromSeconds(2)).Methods.ToArray();
+            }
+            catch (Exception)
+            {
+                // Silence is the right answer: the report still names the model, the board, the BIOS and the control.
+                discoveredMethods = Array.Empty<string>();
+            }
+
+            return discoveredMethods;
+        }
+
+        // The hardware diagnostics. One POST, only when a read-back contradicts a write or the lighting fallback chain
+        // runs out of transports, and nothing else: no setting, no button, no notification and no log line. The
+        // identity is read at the moment of the failure rather than here, because the probe runs in the background and
+        // a report sent before it lands should say "no methods known" instead of the empty answer captured at launch.
+        var diagnostics = new HardwareDiagnosticClient(
+            identity: () => new HardwareDiagnosticIdentity
+            {
+                Model = identity.ModelCode.Length > 0 ? identity.ModelCode : identity.Model,
+                Board = identity.BoardProduct,
+                BiosVersion = identity.BiosVersion,
+                AvailableWmiMethods = DiscoveredMethods()
+            });
+
+        var readBack = new ReadBackPolicy(settings, diagnostics: diagnostics);
+        var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe, diagnostics);
         var agent = new AgentHardwareController(new AcerAgentClient(), new CareCenterClient());
 
         // The service is the default path; direct WMI is the fallback the settings page can switch on, and it is the
@@ -517,7 +560,8 @@ public sealed class AppHost : IDisposable
             useDirectWmi: () => settings.UseDirectWmiBackend,
             // The vendor HID controller is the transport the 2025 boards moved their backlight to. It is probed
             // only when a WMI lighting write did not take, and it stays read-only until a documented frame exists.
-            hidLighting: NitroLite.Windows.Core.Hardware.Lighting.HidLightingDevices.FindWriter);
+            hidLighting: NitroLite.Windows.Core.Hardware.Lighting.HidLightingDevices.FindWriter,
+            diagnostics: diagnostics);
 
         // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI
         // backend up immediately when the Acer service is not answering, so the user never sees a UAC prompt:
