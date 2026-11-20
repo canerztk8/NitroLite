@@ -77,4 +77,27 @@ public partial class LightingView : UserControl
             AppLog.Error("The colour picker could not be opened", ex.ToString());
         }
     }
+
+    /// <summary>
+    /// The charging card's picker: opens the window on the colour the card holds and writes the answer into it. The
+    /// setter is the one place that validates and stores a charging colour, so the view hands it the finished hex.
+    /// </summary>
+    /// <remarks>Wrapped for the same reason as the palette's picker above.</remarks>
+    private async void OnPickChargingColorClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (DataContext is not MainViewModel vm) return;
+            if (TopLevel.GetTopLevel(this) is not Window owner) return;
+
+            var dialog = new ColorPickerDialog(vm.ChargingColorPreview, vm.Labels.CustomColor);
+            if (!await dialog.ShowDialog<bool>(owner)) return;
+
+            vm.ChargingColor = dialog.PickedHex;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("The colour picker could not be opened", ex.ToString());
+        }
+    }
 }

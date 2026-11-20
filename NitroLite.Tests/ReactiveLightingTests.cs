@@ -286,7 +286,7 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public async Task TurningTheLightsOffWhileItRuns_KeepsThemOff()
+    public async Task TurningTheLightsOffWhileItRuns_TakesTheModeDownWithThePage()
     {
         var hardware = new Phase3Fakes.StubHardware();
         hardware.Sample.CpuTemperature = 80;
@@ -298,17 +298,54 @@ public class ReactiveLightingTests
         await vm.RefreshTelemetryAsync();
         await vm.ReactiveLightingTask;
 
-        // The mode was on first, and the user turned the keyboard off afterwards: that decision wins, so the colour
-        // stops being written instead of switching the lights back on. Turning the mode off and on again revives it.
+        // The mode was on first, and the user turned the keyboard off afterwards: the page goes dark with it. The
+        // switch has to come down too — a mode left visibly on over a black keyboard was the reported bug, and the
+        // only way to make it work again was to switch it off and on. The preference stays in the settings file.
         vm.TurnOffLightingCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => vm.IsLightingBlackedOut, 3000);
         hardware.LightingWrites.Clear();
+
+        Assert.False(vm.ReactiveLightingEnabled);
+        Assert.True(vm.IsLightingBlackedOut);
+        Assert.False(vm.LightingControlsEnabled);
 
         hardware.Sample.CpuTemperature = 92;
         await vm.RefreshTelemetryAsync();
         await vm.ReactiveLightingTask;
 
-        Assert.True(vm.ReactiveLightingEnabled);
         Assert.Empty(ReactiveWrites(hardware, ReactiveLighting.ColorFor(92)));
+    }
+
+    [Fact]
+    public async Task BringingTheLightsBack_RevivesTheModeWithoutTogglingIt()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 80;
+
+        var settings = new AppSettings();
+        using var vm = Create(hardware, settings);
+        await vm.InitializeAsync();
+
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        vm.TurnOffLightingCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => vm.IsLightingBlackedOut, 3000);
+
+        // The blackout is the only thing standing between the user and their mode: the settings still say they want
+        // it, so the button that brings the lights back brings the mode back with them.
+        Assert.True(settings.ReactiveLightingEnabled);
+
+        vm.ToggleLightingBlackoutCommand.Execute(null);
+        await Phase3Fakes.WaitUntilAsync(() => !vm.IsLightingBlackedOut, 3000);
+        await Phase3Fakes.WaitUntilAsync(() => vm.ReactiveLightingEnabled, 3000);
+
+        hardware.Sample.CpuTemperature = 86;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        Assert.Single(ReactiveWrites(hardware, ReactiveLighting.ColorFor(86)));
     }
 
     [Fact]
@@ -403,23 +440,29 @@ public class ReactiveLightingTests
     }
 
     [Fact]
-    public void TheCardSitsWithTheSavedProfiles()
+    public void TheCardSitsWithTheOtherAutomaticColourAfterTheEffectCard()
     {
         var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
 
-        // The temperature ramps belong with the profiles: both answer the same question — which colour the keyboard
-        // shows — and one of them is what the mode falls back to when it is switched off. The card used to sit at the
-        // very top of the page, which made it a fifth subject rather than a way of choosing a colour.
+        // The automatic colours answer "which colour does the keyboard show" without the user choosing one, so they
+        // sit after the controls that hold a colour of their own — the palette, the profiles and the effect — and the
+        // charging colour sits directly under the temperature ramp. The card used to sit at the very top of the page,
+        // which made it a fifth subject rather than a way of choosing a colour.
         var palette = markup.IndexOf("Labels.ColorPalette", StringComparison.Ordinal);
-        var card = markup.IndexOf("Labels.ReactiveLighting", StringComparison.Ordinal);
         var profiles = markup.IndexOf("Labels.RgbProfiles", StringComparison.Ordinal);
+        var effects = markup.IndexOf("Labels.Effects", StringComparison.Ordinal);
+        var card = markup.IndexOf("Labels.ReactiveLighting", StringComparison.Ordinal);
+        var charging = markup.IndexOf("Labels.ChargingColor}", StringComparison.Ordinal);
 
         Assert.True(palette > 0, "the lighting page has no palette");
-        Assert.True(card > 0, "the lighting page has no reactive card");
-        Assert.True(profiles > 0, "the lighting page has no profile card");
+        Assert.True(profiles > palette, "the palette is below the saved profiles");
+        Assert.True(effects > profiles, "the effect card is above the saved profiles");
+        Assert.True(card > effects, "the reactive card is above the effect card");
+        Assert.True(charging > card, "the charging card is above the temperature ramp");
 
-        Assert.True(card > palette, "the reactive card is above the palette");
-        Assert.True(card < profiles, "the reactive card is below the saved profiles");
+        // The extras card is gone: its 30-second switch moved into the header, and the category with it.
+        Assert.DoesNotContain("Labels.Extras", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowExtrasCard", markup, StringComparison.Ordinal);
     }
 
     [Fact]

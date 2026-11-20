@@ -559,6 +559,21 @@ public sealed class ShellLabels
     public string CustomColor => Loc.T("Özel Renk…");
     public string ApplyToAllZones => Loc.T("Tüm Bölgelere Uygula");
     public string TurnOffLighting => Loc.T("Aydınlatmayı Kapat");
+
+    /// <summary>The same button once the page is in blackout: what it does is bring the lights back.</summary>
+    public string TurnOnLighting => Loc.T("Aydınlatmayı Aç");
+
+    /// <summary>The blackout panel that covers the page while the keyboard is off.</summary>
+    public string LightingBlackoutTitle => Loc.T("Aydınlatma kapalı");
+    public string LightingBlackoutHint => Loc.T("Klavye ışıkları kapalı. Aydınlatmayı geri açtığınızda sayfa yeniden kullanılabilir.");
+    public string RestoreLighting => Loc.T("Aydınlatmayı geri aç");
+
+    /// <summary>
+    /// The 30-second timeout's short caption in the page's top-right corner. The sentence that explains it is the
+    /// toggle's tooltip, because a hint that long would push the title off the line.
+    /// </summary>
+    public string BacklightTimeoutShort => Loc.T("30 sn");
+
     public string ZonePreviewNote => Loc.T("Bu efekt renk kullanmaz; bölgeler gökkuşağı gradyanıyla gösterilir.");
     public string WinKeyLock => Loc.T("WinKey Kilidi");
     public string OpenRgbStatus => Loc.T("OpenRGB durumu");
@@ -572,6 +587,17 @@ public sealed class ShellLabels
     public string Profile => Loc.T("Profil");
     public string ReactiveCustomHint => Loc.T("Her satır bir sıcaklık ve o sıcaklıktaki renk: klavye soğuktan sıcağa bu renkler arasında geçiş yapar.");
     public string AddReactiveStop => Loc.T("Sıcaklık noktası ekle");
+
+    /// <summary>
+    /// The charging card: a second automatic colour, driven by the adapter rather than by a sensor. The two lines of
+    /// state are the whole explanation — while the adapter is in the keys show this colour, and on battery they show
+    /// the user's own.
+    /// </summary>
+    public string ChargingColor => Loc.T("Şarjda Klavye Rengi");
+    public string ChargingColorHint => Loc.T("Adaptör takılıyken klavye bu rengi gösterir; pilde kendi renginiz geri gelir.");
+    public string ChargingColorSwatches => Loc.T("Şarj rengi");
+    public string ChargingColorActive => Loc.T("Şarjda · klavye bu renkte");
+    public string ChargingColorWaiting => Loc.T("Pilde · adaptör takılınca bu renk");
     public string Sil => Loc.T("Sil");
 
     /// <summary>Shown under the fan curve editor now that the curve applies as it is dragged.</summary>

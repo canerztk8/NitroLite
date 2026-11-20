@@ -8,6 +8,49 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
+## [Unreleased]
+
+The lighting page's off switch now means what it says. Pressing it darkens the keyboard *and* the page, and the two
+automatic colours are switched off with it instead of staying visibly on over a keyboard that refuses every write until
+the mode is toggled again — which was exactly what made Temp-Reactive Lighting look broken. The ramp moved down to
+where the extras card used to be, that card is gone, its 30-second backlight timeout is in the header beside the
+blackout, and the keyboard can now hold a colour of its own while the charger is plugged in.
+
+### Added
+
+- **A charging colour.** A second automatic colour, directly under Temp-Reactive Lighting: the four zones paint a chosen
+  colour while the adapter is in and go back to the user's own lighting the moment it comes out. The colour is picked
+  from the page's own eight swatches, the colour picker or a hex box, and is stored in `charging_color` behind
+  `charging_color_enabled`. It is transition-driven rather than tick-driven — one write when the plug goes in, one when
+  it comes out — never touches `KeyboardLighting`, takes the page's brightness, speed and direction, and stays armed
+  without painting while the lights are off. The card's state line says which of the two the keys are showing.
+
+### Changed
+
+- **The lighting page goes dark with the keyboard.** `IsLightingBlackedOut` is a page state separate from a brightness
+  of zero: the body is disabled and covered by a scrim with the way back in the middle, so no control is left promising
+  a write the firmware will not make. The top-right button becomes the page's way in and out — "Aydınlatmayı Kapat"
+  turns into "Aydınlatmayı Aç" — and the state survives a restart, read from `IsBacklightOff` plus an `OFF` effect
+  rather than from a new setting. A slider at zero stays a dark keyboard with a working page.
+- **A blackout switches both automatic colours off, and brings them back by itself.** Their preferences in the settings
+  file are left alone; the switches go off with the page because a mode that stays "on" over a dark keyboard is the
+  behaviour this change exists to remove. Any successful lit write — the restore button, the brightness slider, a
+  swatch, a profile — ends the blackout and revives whichever mode was running, so the off-and-on toggle the
+  temperature ramp used to need is gone. The two automatic colours are also mutually exclusive: switching one on
+  switches the other off, because they paint the same four zones, and a manual apply switches both off.
+- **Temp-Reactive Lighting sits below the effect card**, in the place the extras card occupied, with the charging
+  colour directly beneath it: the two automatic colours are together at the end of the page, after the controls that
+  hold a colour of the user's own.
+- **The 30-second backlight timeout moved into the page header**, left of the blackout button. It is a keyboard switch
+  like the blackout, and its explanation is now the tooltip instead of a line that pushed the page title around.
+
+### Removed
+
+- **The lighting page's Extras card.** Its place is taken by the two automatic colours, and the 30-second timeout that
+  was its standing row is in the header. The CoolBoost, LCD Overdrive and Windows-key lock switches that shared the card
+  were not on any other page and have no home in the app now; their view-model properties and tests are untouched, so a
+  page that wants them back needs only the markup.
+
 ## [1.2.9] - 2026-11-20
 
 Every control NitroLite writes can now be read back and checked, and a machine that refuses a write says so instead of

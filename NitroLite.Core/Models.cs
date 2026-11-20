@@ -407,6 +407,22 @@ public class AppSettings
     [JsonPropertyName("reactive_lighting_custom_stops")]
     public List<ReactiveLightingStop>? ReactiveLightingCustomStops { get; set; }
 
+    /// <summary>
+    /// Whether the keyboard shows a chosen colour while the charger is plugged in. Persisted, because it is a
+    /// preference and not a moment: someone who set a charging colour wants it back after a reboot.
+    /// </summary>
+    /// <remarks>
+    /// The colour itself lives beside it, and neither of them is the colour the page holds: the page's own lighting is
+    /// kept in <see cref="KeyboardLighting"/> and comes back when the adapter is pulled out, so a charging colour can
+    /// never become the colour the user's keyboard is left on.
+    /// </remarks>
+    [JsonPropertyName("charging_color_enabled")]
+    public bool ChargingColorEnabled { get; set; } = false;
+
+    /// <summary>The colour painted while the adapter is in, as <c>#RRGGBB</c>. Normalised on load.</summary>
+    [JsonPropertyName("charging_color")]
+    public string? ChargingColor { get; set; }
+
     [JsonPropertyName("last_operating_mode")]
     public OperatingMode? LastOperatingMode { get; set; }
 

@@ -23,372 +23,449 @@
 
   <!--
     Page 3: the keyboard. The four-zone deck leads — the four bars on a darker ground with thin key rows under them, so
-    the block reads as a keyboard rather than as four swatches — then the quick palette, then the temperature mode,
-    then the saved profiles, then the effect and its two sliders. The palette sits above everything that stores a
-    colour because a colour is the thing a user reaches for first; the temperature ramps sit with the profiles because
-    they are the other way of answering the same question — which colour the keyboard shows — and a saved profile is
-    what the mode falls back to when it is switched off.
+    the block reads as a keyboard rather than as four swatches — then the quick palette, then the saved profiles, then
+    the effect and its two sliders, and finally the two automatic colours: the temperature ramp and the charging colour.
+    The palette sits above everything that stores a colour because a colour is the thing a user reaches for first; the
+    temperature ramps sit with the profiles because they are the other way of answering the same question — which
+    colour the keyboard shows — and a saved profile is what the mode falls back to when it is switched off.
+
+    The header carries the two switches that belong to the keyboard rather than to a colour: the 30-second timeout and
+    the blackout. The blackout is the page's own off switch: while it is on, the body below is disabled and covered,
+    because a page full of controls over a dark keyboard is a page that promises writes the firmware will not make.
   -->
-  <ScrollViewer VerticalScrollBarVisibility="Hidden">
-    <StackPanel>
+  <Grid RowDefinitions="Auto,*">
 
-      <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,16">
-        <TextBlock Classes="pagetitle" Text="{Binding Labels.LightingPageTitle}" TextWrapping="Wrap"
-                   Margin="0,0,16,0" />
-        <Button Grid.Column="1" Classes="primary" Content="{Binding Labels.TurnOffLighting}" Padding="12,6"
-                FontSize="11" VerticalAlignment="Center" IsEnabled="{Binding LightingAvailable}"
-                Command="{Binding TurnOffLightingCommand}" />
-      </Grid>
+    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,16">
+      <TextBlock Classes="pagetitle" Text="{Binding Labels.LightingPageTitle}" TextWrapping="Wrap"
+                 Margin="0,0,16,0" />
 
-      <!-- ============================================================ the four-zone deck -->
+      <!--
+        The 30-second timeout, moved out of the extras card and into the header: it is a keyboard switch, like the
+        blackout beside it, and the sentence that explains it is the tooltip rather than a line that would push the
+        page title off the row.
+      -->
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                  Margin="0,0,14,0" IsVisible="{Binding BacklightTimeoutAvailable}"
+                  ToolTip.Tip="{Binding Labels.BacklightTimeoutHint}">
+        <TextBlock Classes="caps" Text="{Binding Labels.BacklightTimeoutShort}" VerticalAlignment="Center" />
+        <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center"
+                      AutomationProperties.AutomationId="BacklightTimeout" />
+      </StackPanel>
 
-      <Border Classes="card" Margin="0,0,0,16">
+      <Button Grid.Column="2" Classes="primary" Classes.on="{Binding IsLightingBlackedOut}"
+              Content="{Binding LightingBlackoutButtonText}" Padding="12,6" FontSize="11"
+              VerticalAlignment="Center" IsEnabled="{Binding LightingAvailable}"
+              AutomationProperties.AutomationId="LightingBlackout"
+              Command="{Binding ToggleLightingBlackoutCommand}" />
+    </Grid>
+
+    <Grid Grid.Row="1">
+      <ScrollViewer VerticalScrollBarVisibility="Hidden" IsEnabled="{Binding LightingControlsEnabled}">
         <StackPanel>
-          <TextBlock Classes="rowtitle" Text="{Binding Labels.ZonePreview}" Margin="0,0,0,10" />
 
-          <Border Background="{DynamicResource PanelBrush}"
-                  BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
-                  CornerRadius="8" Padding="10,10,10,8">
+          <!-- ============================================================ the four-zone deck -->
+
+          <Border Classes="card" Margin="0,0,0,16">
             <StackPanel>
-              <UniformGrid Columns="4">
-                <StackPanel Margin="0,0,6,0">
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
-                          PointerPressed="OnZonePressed"
-                          Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                          IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
-                          PointerPressed="OnZonePressed"
-                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
-                  <TextBlock Classes="caps" Text="{Binding Labels.Zone1}" HorizontalAlignment="Center"
-                             Margin="0,6,0,0" />
-                </StackPanel>
-                <StackPanel Margin="3,0">
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
-                          PointerPressed="OnZonePressed"
-                          Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                          IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
-                          PointerPressed="OnZonePressed"
-                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
-                  <TextBlock Classes="caps" Text="{Binding Labels.Zone2}" HorizontalAlignment="Center"
-                             Margin="0,6,0,0" />
-                </StackPanel>
-                <StackPanel Margin="3,0">
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
-                          PointerPressed="OnZonePressed"
-                          Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                          IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
-                          PointerPressed="OnZonePressed"
-                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
-                  <TextBlock Classes="caps" Text="{Binding Labels.Zone3}" HorizontalAlignment="Center"
-                             Margin="0,6,0,0" />
-                </StackPanel>
-                <StackPanel Margin="6,0,0,0">
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
-                          PointerPressed="OnZonePressed"
-                          Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                          IsVisible="{Binding ZoneSolid}" />
-                  <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
-                          PointerPressed="OnZonePressed"
-                          Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
-                  <TextBlock Classes="caps" Text="{Binding Labels.Zone4}" HorizontalAlignment="Center"
-                             Margin="0,6,0,0" />
-                </StackPanel>
-              </UniformGrid>
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.ZonePreview}" Margin="0,0,0,10" />
 
-              <!-- The key rows: decoration only, never a click target. They are what turns four bars into a deck. -->
-              <StackPanel Margin="0,10,0,0" Spacing="4" IsHitTestVisible="False">
-                <Grid ColumnDefinitions="*,*,*,*" Height="4">
-                  <Border Grid.Column="0" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="0,0,6,0" />
-                  <Border Grid.Column="1" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
-                  <Border Grid.Column="2" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
-                  <Border Grid.Column="3" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="6,0,0,0" />
-                </Grid>
-                <Grid ColumnDefinitions="*,*,*,*" Height="4">
-                  <Border Grid.Column="0" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="0,0,6,0" />
-                  <Border Grid.Column="1" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
-                  <Border Grid.Column="2" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
-                  <Border Grid.Column="3" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="6,0,0,0" />
-                </Grid>
+              <Border Background="{DynamicResource PanelBrush}"
+                      BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1"
+                      CornerRadius="8" Padding="10,10,10,8">
+                <StackPanel>
+                  <UniformGrid Columns="4">
+                    <StackPanel Margin="0,0,6,0">
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
+                              PointerPressed="OnZonePressed"
+                              Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              IsVisible="{Binding ZoneSolid}" />
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
+                              PointerPressed="OnZonePressed"
+                              Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
+                      <TextBlock Classes="caps" Text="{Binding Labels.Zone1}" HorizontalAlignment="Center"
+                                 Margin="0,6,0,0" />
+                    </StackPanel>
+                    <StackPanel Margin="3,0">
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
+                              PointerPressed="OnZonePressed"
+                              Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              IsVisible="{Binding ZoneSolid}" />
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
+                              PointerPressed="OnZonePressed"
+                              Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
+                      <TextBlock Classes="caps" Text="{Binding Labels.Zone2}" HorizontalAlignment="Center"
+                                 Margin="0,6,0,0" />
+                    </StackPanel>
+                    <StackPanel Margin="3,0">
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
+                              PointerPressed="OnZonePressed"
+                              Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              IsVisible="{Binding ZoneSolid}" />
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
+                              PointerPressed="OnZonePressed"
+                              Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
+                      <TextBlock Classes="caps" Text="{Binding Labels.Zone3}" HorizontalAlignment="Center"
+                                 Margin="0,6,0,0" />
+                    </StackPanel>
+                    <StackPanel Margin="6,0,0,0">
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
+                              PointerPressed="OnZonePressed"
+                              Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              IsVisible="{Binding ZoneSolid}" />
+                      <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
+                              PointerPressed="OnZonePressed"
+                              Background="{StaticResource RainbowBrush}" IsVisible="{Binding ZoneRainbow}" />
+                      <TextBlock Classes="caps" Text="{Binding Labels.Zone4}" HorizontalAlignment="Center"
+                                 Margin="0,6,0,0" />
+                    </StackPanel>
+                  </UniformGrid>
+
+                  <!-- The key rows: decoration only, never a click target. They are what turns four bars into a deck. -->
+                  <StackPanel Margin="0,10,0,0" Spacing="4" IsHitTestVisible="False">
+                    <Grid ColumnDefinitions="*,*,*,*" Height="4">
+                      <Border Grid.Column="0" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="0,0,6,0" />
+                      <Border Grid.Column="1" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
+                      <Border Grid.Column="2" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
+                      <Border Grid.Column="3" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="6,0,0,0" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,*,*,*" Height="4">
+                      <Border Grid.Column="0" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="0,0,6,0" />
+                      <Border Grid.Column="1" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
+                      <Border Grid.Column="2" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="3,0" />
+                      <Border Grid.Column="3" Background="{DynamicResource CardBorderBrush}" CornerRadius="1" Margin="6,0,0,0" />
+                    </Grid>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Classes="hint" Text="{Binding ZonePreviewNote}" Margin="3,8,3,0" TextWrapping="Wrap"
+                         IsVisible="{Binding HasZonePreviewNote}" />
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================ the quick palette -->
+
+          <Border Classes="card" Margin="0,0,0,16">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Classes="cardicon" Text="&#xE790;" Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Classes="section" Text="{Binding Labels.ColorPalette}" />
+                <Border Classes="pill" Margin="10,0,0,0">
+                  <TextBlock Text="{Binding ActiveZoneText}" />
+                </Border>
+              </StackPanel>
+
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <ItemsControl ItemsSource="{Binding ColorPalette}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="12" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ColorSwatch">
+                      <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
+                        <Border Width="24" Height="24" CornerRadius="2"
+                                Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                                BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!--
+                  The picker. The eight swatches are the colours that read well on both palettes; this is every colour
+                  there is, and it sits immediately left of the hex box so the two ways of naming a colour are adjacent.
+                  It shows the active target's colour, so it doubles as the readout for whichever zone the deck focused.
+                  The rule before it is what keeps it from reading as a ninth swatch.
+                -->
+                <Border Width="1" Background="{DynamicResource CardBorderBrush}" Margin="2,2" />
+
+                <Button Classes="swatch" Width="28" Height="28" Click="OnPickColorClick"
+                        AutomationProperties.AutomationId="PickColor"
+                        ToolTip.Tip="{Binding Labels.CustomColor}">
+                  <Border Width="24" Height="24" CornerRadius="2"
+                          Background="{Binding ActiveColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                          BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="1" />
+                </Button>
+
+                <TextBox Width="110" Text="{Binding ActiveColor}" Watermark="#00E5FF"
+                         AutomationProperties.AutomationId="ActiveColorHex" />
+
+                <Button Classes="primary" Content="{Binding Labels.ApplyToAllZones}" Padding="12,7" FontSize="11"
+                        Command="{Binding ApplyAllZonesCommand}" />
               </StackPanel>
             </StackPanel>
           </Border>
 
-          <TextBlock Classes="hint" Text="{Binding ZonePreviewNote}" Margin="3,8,3,0" TextWrapping="Wrap"
-                     IsVisible="{Binding HasZonePreviewNote}" />
-        </StackPanel>
-      </Border>
+          <!-- ============================================================ saved profiles -->
 
-      <!-- ============================================================ the quick palette -->
+          <Border Classes="card" Margin="0,0,0,16">
+            <StackPanel>
+              <TextBlock Classes="rowtitle" Text="{Binding Labels.RgbProfiles}" Margin="0,0,0,10" />
 
-      <Border Classes="card" Margin="0,0,0,16">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Classes="cardicon" Text="&#xE790;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.ColorPalette}" />
-            <Border Classes="pill" Margin="10,0,0,0">
-              <TextBlock Text="{Binding ActiveZoneText}" />
-            </Border>
-          </StackPanel>
-
-          <StackPanel Orientation="Horizontal" Spacing="12">
-            <ItemsControl ItemsSource="{Binding ColorPalette}">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="12" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:ColorSwatch">
-                  <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
-                    <Border Width="24" Height="24" CornerRadius="2"
-                            Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                            BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
-                  </Button>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <!--
-              The picker. The eight swatches are the colours that read well on both palettes; this is every colour
-              there is, and it sits immediately left of the hex box so the two ways of naming a colour are adjacent.
-              It shows the active target's colour, so it doubles as the readout for whichever zone the deck focused.
-              The rule before it is what keeps it from reading as a ninth swatch.
-            -->
-            <Border Width="1" Background="{DynamicResource CardBorderBrush}" Margin="2,2" />
-
-            <Button Classes="swatch" Width="28" Height="28" Click="OnPickColorClick"
-                    AutomationProperties.AutomationId="PickColor"
-                    ToolTip.Tip="{Binding Labels.CustomColor}">
-              <Border Width="24" Height="24" CornerRadius="2"
-                      Background="{Binding ActiveColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                      BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="1" />
-            </Button>
-
-            <TextBox Width="110" Text="{Binding ActiveColor}" Watermark="#00E5FF"
-                     AutomationProperties.AutomationId="ActiveColorHex" />
-
-            <Button Classes="primary" Content="{Binding Labels.ApplyToAllZones}" Padding="12,7" FontSize="11"
-                    Command="{Binding ApplyAllZonesCommand}" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ temp-reactive lighting -->
-
-      <!--
-        The colour that follows the processor. It sits here, directly over the saved profiles, because it is a way of
-        choosing a colour rather than a subject of its own: the three ramps are shapes the app offers, and the custom
-        entry is the shape the user builds stop by stop. It is not hidden behind a capability flag: the flag comes
-        from a WMI probe that needs elevation and answers "no keyboard" without it, which hid this card on the machine
-        it was written for.
-      -->
-      <Border Classes="card" Margin="0,0,0,16">
-        <StackPanel>
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
-            <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
-                          VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
-                     TextWrapping="Wrap" />
-
-          <!-- The live reading: what the keyboard is showing now, and the number that produced it. -->
-          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
-                      IsVisible="{Binding ReactiveLightingEnabled}">
-            <Border Width="26" Height="26" CornerRadius="2"
-                    Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                    BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
-            <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
-          </StackPanel>
-
-          <!-- The three ramps, each painted as the gradient it is, then the entry the user builds. -->
-          <TextBlock Classes="caps" Text="{Binding Labels.ReactiveProfiles}" Margin="0,14,0,6" />
-          <ItemsControl ItemsSource="{Binding ReactiveProfileChoices}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel Orientation="Horizontal" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:ReactiveProfileChoice">
-                <Button Classes="ramp" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}"
-                        Margin="0,0,8,8">
-                  <StackPanel Width="118" Spacing="6">
-                    <Border Height="8" CornerRadius="2"
-                            Background="{Binding Stops, Converter={x:Static conv:RampToBrushConverter.Instance}}" />
-                    <TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap" />
-                  </StackPanel>
-                </Button>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-
-          <!-- The custom ramp's editor: one row per stop, a temperature and the colour held there. -->
-          <StackPanel IsVisible="{Binding ReactiveCustomEditorVisible}" Margin="0,6,0,0">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Classes="caps" Text="{Binding Labels.ReactiveStops}" VerticalAlignment="Center" />
-              <Button Grid.Column="1" Classes="seg" Content="{Binding Labels.AddReactiveStop}" Padding="10,4"
-                      FontSize="11" Command="{Binding AddReactiveStopCommand}" />
-            </Grid>
-
-            <TextBlock Classes="hint" Text="{Binding Labels.ReactiveCustomHint}" Margin="0,6,0,0"
-                       TextWrapping="Wrap" />
-
-            <ItemsControl ItemsSource="{Binding ReactiveStops}" Margin="0,8,0,0">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:ReactiveStopViewModel">
-                  <Grid ColumnDefinitions="46,*,Auto,92,Auto" Margin="0,0,0,6">
-                    <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding TemperatureText}"
-                               Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                    <controls:NitroSlider Grid.Column="1" Minimum="{Binding MinTemperature}"
-                                          Maximum="{Binding MaxTemperature}" TickFrequency="1"
-                                          IsSnapToTickEnabled="True" Value="{Binding TemperatureC}"
-                                          VerticalAlignment="Center" />
-                    <Button Grid.Column="2" Classes="swatch" Width="26" Height="26" Margin="10,0,0,0"
-                            Tag="{Binding}" Click="OnPickReactiveStopColor" ToolTip.Tip="{Binding PickLabel}">
-                      <Border Width="22" Height="22" CornerRadius="2"
-                              Background="{Binding Color, Converter={x:Static conv:HexToBrushConverter.Instance}}"
-                              BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
-                    </Button>
-                    <TextBox Grid.Column="3" Margin="8,0" Text="{Binding Color}" Watermark="#00B4FF" />
-                    <Button Grid.Column="4" Classes="seg" Content="{Binding RemoveLabel}" Padding="8,3"
-                            FontSize="10" Command="{Binding RemoveCommand}" />
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ saved profiles -->
-
-      <Border Classes="card" Margin="0,0,0,16">
-        <StackPanel>
-          <TextBlock Classes="rowtitle" Text="{Binding Labels.RgbProfiles}" Margin="0,0,0,10" />
-
-          <Grid ColumnDefinitions="*,*,Auto,Auto">
-            <ComboBox ItemsSource="{Binding RgbProfiles}" SelectedItem="{Binding SelectedRgbProfile}"
-                      HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="core:RgbPreset">
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-
-            <TextBox Grid.Column="1" Margin="10,0" Text="{Binding NewProfileName}"
-                     Watermark="{Binding Labels.ProfileName}" />
-
-            <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.SaveProfile}"
-                    Padding="12,7" FontSize="11" Command="{Binding SaveRgbProfileCommand}" />
-            <!-- The factory profiles and the custom entry are not the user's to delete: the button is disabled
-                 for them rather than firing into a refusal the list has to explain afterwards. -->
-            <Button Grid.Column="3" Classes="danger" Content="{Binding Labels.DeleteProfile}"
-                    Padding="12,7" FontSize="11" Margin="6,0,0,0"
-                    IsEnabled="{Binding CanDeleteRgbProfile}"
-                    Command="{Binding DeleteRgbProfileCommand}" />
-          </Grid>
-
-          <TextBlock Classes="hint" Text="{Binding RgbProfileStatus}" Margin="0,8,0,0"
-                     IsVisible="{Binding HasRgbProfileStatus}" />
-        </StackPanel>
-      </Border>
-
-      <!-- ============================================================ effect and its sliders -->
-
-      <Border Classes="card" Margin="0,0,0,16">
-        <StackPanel>
-          <Grid ColumnDefinitions="*,*">
-            <StackPanel Grid.Column="0" Margin="0,0,16,0">
-              <TextBlock Classes="caps" Text="{Binding Labels.Effects}" Margin="0,0,0,4" />
-              <ComboBox ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:EffectChoice">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-
-              <StackPanel IsVisible="{Binding ShowDirectionPanel}" Margin="0,12,0,0">
-                <TextBlock Classes="caps" Text="{Binding Labels.EffectDirection}" Margin="0,0,0,4" />
-                <ComboBox ItemsSource="{Binding DirectionChoices}" SelectedItem="{Binding SelectedDirection}"
+              <Grid ColumnDefinitions="*,*,Auto,Auto">
+                <ComboBox ItemsSource="{Binding RgbProfiles}" SelectedItem="{Binding SelectedRgbProfile}"
                           HorizontalAlignment="Stretch">
                   <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:DirectionChoice">
-                      <TextBlock Text="{Binding Label}" />
+                    <DataTemplate x:DataType="core:RgbPreset">
+                      <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
+
+                <TextBox Grid.Column="1" Margin="10,0" Text="{Binding NewProfileName}"
+                         Watermark="{Binding Labels.ProfileName}" />
+
+                <Button Grid.Column="2" Classes="primary" Content="{Binding Labels.SaveProfile}"
+                        Padding="12,7" FontSize="11" Command="{Binding SaveRgbProfileCommand}" />
+                <!-- The factory profiles and the custom entry are not the user's to delete: the button is disabled
+                     for them rather than firing into a refusal the list has to explain afterwards. -->
+                <Button Grid.Column="3" Classes="danger" Content="{Binding Labels.DeleteProfile}"
+                        Padding="12,7" FontSize="11" Margin="6,0,0,0"
+                        IsEnabled="{Binding CanDeleteRgbProfile}"
+                        Command="{Binding DeleteRgbProfileCommand}" />
+              </Grid>
+
+              <TextBlock Classes="hint" Text="{Binding RgbProfileStatus}" Margin="0,8,0,0"
+                         IsVisible="{Binding HasRgbProfileStatus}" />
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================ effect and its sliders -->
+
+          <Border Classes="card" Margin="0,0,0,16">
+            <StackPanel>
+              <Grid ColumnDefinitions="*,*">
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                  <TextBlock Classes="caps" Text="{Binding Labels.Effects}" Margin="0,0,0,4" />
+                  <ComboBox ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:EffectChoice">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+
+                  <StackPanel IsVisible="{Binding ShowDirectionPanel}" Margin="0,12,0,0">
+                    <TextBlock Classes="caps" Text="{Binding Labels.EffectDirection}" Margin="0,0,0,4" />
+                    <ComboBox ItemsSource="{Binding DirectionChoices}" SelectedItem="{Binding SelectedDirection}"
+                              HorizontalAlignment="Stretch">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DirectionChoice">
+                          <TextBlock Text="{Binding Label}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
+                    <TextBlock Grid.Column="1" Text="{Binding BrightnessLabel}" FontWeight="Bold"
+                               FontSize="11" HorizontalAlignment="Right"
+                               Foreground="{DynamicResource AccentBrush}" />
+                  </Grid>
+                  <controls:NitroSlider Minimum="0" Maximum="{Binding MaxBrightness}" TickFrequency="1"
+                          IsSnapToTickEnabled="True" Value="{Binding BrightnessLevel}" Margin="0,4,0,0" />
+
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                    <TextBlock Classes="caps" Text="{Binding Labels.EffectSpeed}" />
+                    <TextBlock Grid.Column="1" Text="{Binding SpeedLabel}" FontWeight="Bold"
+                               FontSize="11" HorizontalAlignment="Right"
+                               Foreground="{DynamicResource AccentBrush}" />
+                  </Grid>
+                  <controls:NitroSlider Minimum="1" Maximum="{Binding MaxSpeed}" TickFrequency="1"
+                          IsSnapToTickEnabled="True" Value="{Binding SpeedLevel}" Margin="0,4,0,0" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- ============================================================ temp-reactive lighting -->
+
+          <!--
+            The colour that follows the processor. It sits last with the charging colour, after the controls that hold a
+            colour of the user's own, because it is the other way of answering "which colour does the keyboard show" —
+            and it is what the extras card used to occupy: the two automatic colours are the special modes, the saved
+            profile is where they fall back to when they are switched off. It is not hidden behind a capability flag:
+            the flag comes from a WMI probe that needs elevation and answers "no keyboard" without it, which hid this
+            card on the machine it was written for.
+          -->
+          <Border Classes="card" Margin="0,0,0,16">
+            <StackPanel>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
+                <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ReactiveLightingEnabled}"
+                              VerticalAlignment="Center" AutomationProperties.AutomationId="ReactiveLighting" />
+              </Grid>
+
+              <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
+                         TextWrapping="Wrap" />
+
+              <!-- The live reading: what the keyboard is showing now, and the number that produced it. -->
+              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
+                          IsVisible="{Binding ReactiveLightingEnabled}">
+                <Border Width="26" Height="26" CornerRadius="2"
+                        Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                        BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
+              </StackPanel>
+
+              <!-- The three ramps, each painted as the gradient it is, then the entry the user builds. -->
+              <TextBlock Classes="caps" Text="{Binding Labels.ReactiveProfiles}" Margin="0,14,0,6" />
+              <ItemsControl ItemsSource="{Binding ReactiveProfileChoices}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ReactiveProfileChoice">
+                    <Button Classes="ramp" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}"
+                            Margin="0,0,8,8">
+                      <StackPanel Width="118" Spacing="6">
+                        <Border Height="8" CornerRadius="2"
+                                Background="{Binding Stops, Converter={x:Static conv:RampToBrushConverter.Instance}}" />
+                        <TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <!-- The custom ramp's editor: one row per stop, a temperature and the colour held there. -->
+              <StackPanel IsVisible="{Binding ReactiveCustomEditorVisible}" Margin="0,6,0,0">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caps" Text="{Binding Labels.ReactiveStops}" VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Classes="seg" Content="{Binding Labels.AddReactiveStop}" Padding="10,4"
+                          FontSize="11" Command="{Binding AddReactiveStopCommand}" />
+                </Grid>
+
+                <TextBlock Classes="hint" Text="{Binding Labels.ReactiveCustomHint}" Margin="0,6,0,0"
+                           TextWrapping="Wrap" />
+
+                <ItemsControl ItemsSource="{Binding ReactiveStops}" Margin="0,8,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ReactiveStopViewModel">
+                      <Grid ColumnDefinitions="46,*,Auto,92,Auto" Margin="0,0,0,6">
+                        <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding TemperatureText}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <controls:NitroSlider Grid.Column="1" Minimum="{Binding MinTemperature}"
+                                              Maximum="{Binding MaxTemperature}" TickFrequency="1"
+                                              IsSnapToTickEnabled="True" Value="{Binding TemperatureC}"
+                                              VerticalAlignment="Center" />
+                        <Button Grid.Column="2" Classes="swatch" Width="26" Height="26" Margin="10,0,0,0"
+                                Tag="{Binding}" Click="OnPickReactiveStopColor" ToolTip.Tip="{Binding PickLabel}">
+                          <Border Width="22" Height="22" CornerRadius="2"
+                                  Background="{Binding Color, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                                  BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                        </Button>
+                        <TextBox Grid.Column="3" Margin="8,0" Text="{Binding Color}" Watermark="#00B4FF" />
+                        <Button Grid.Column="4" Classes="seg" Content="{Binding RemoveLabel}" Padding="8,3"
+                                FontSize="10" Command="{Binding RemoveCommand}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
               </StackPanel>
             </StackPanel>
+          </Border>
 
-            <StackPanel Grid.Column="1">
+          <!-- ============================================================ the charging colour -->
+
+          <!--
+            The second automatic colour, directly under the first: the temperature ramp follows a sensor, this one
+            follows the plug. It is a colour of its own rather than a tint of the page's, because the two answer
+            different questions — the keys show the adapter's colour while the adapter is in, and the user's own the
+            moment it comes out. The swatches are the same eight the palette offers, one row rather than a full card
+            of their own.
+          -->
+          <Border Classes="card">
+            <StackPanel>
               <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
-                <TextBlock Grid.Column="1" Text="{Binding BrightnessLabel}" FontWeight="Bold"
-                           FontSize="11" HorizontalAlignment="Right"
-                           Foreground="{DynamicResource AccentBrush}" />
+                <TextBlock Classes="rowtitle" Text="{Binding Labels.ChargingColor}" VerticalAlignment="Center" />
+                <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding ChargingColorEnabled}"
+                              VerticalAlignment="Center" AutomationProperties.AutomationId="ChargingColor" />
               </Grid>
-              <controls:NitroSlider Minimum="0" Maximum="{Binding MaxBrightness}" TickFrequency="1"
-                      IsSnapToTickEnabled="True" Value="{Binding BrightnessLevel}" Margin="0,4,0,0" />
 
-              <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0">
-                <TextBlock Classes="caps" Text="{Binding Labels.EffectSpeed}" />
-                <TextBlock Grid.Column="1" Text="{Binding SpeedLabel}" FontWeight="Bold"
-                           FontSize="11" HorizontalAlignment="Right"
-                           Foreground="{DynamicResource AccentBrush}" />
-              </Grid>
-              <controls:NitroSlider Minimum="1" Maximum="{Binding MaxSpeed}" TickFrequency="1"
-                      IsSnapToTickEnabled="True" Value="{Binding SpeedLevel}" Margin="0,4,0,0" />
+              <TextBlock Classes="hint" Text="{Binding Labels.ChargingColorHint}" Margin="0,8,0,0"
+                         TextWrapping="Wrap" />
+
+              <!-- What the keys are showing right now, in the same shape as the temperature card's live reading. -->
+              <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
+                          IsVisible="{Binding HasChargingColorState}">
+                <Border Width="26" Height="26" CornerRadius="2"
+                        Background="{Binding ChargingColorPreview, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                        BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                <TextBlock Classes="hint" Text="{Binding ChargingColorStateText}" VerticalAlignment="Center" />
+              </StackPanel>
+
+              <TextBlock Classes="caps" Text="{Binding Labels.ChargingColorSwatches}" Margin="0,14,0,6" />
+
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <ItemsControl ItemsSource="{Binding ChargingColorChoices}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" Spacing="12" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ColorSwatch">
+                      <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
+                        <Border Width="24" Height="24" CornerRadius="2"
+                                Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                                BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- The picker, the same pair the palette uses: every colour there is, then the hex box beside it. -->
+                <Border Width="1" Background="{DynamicResource CardBorderBrush}" Margin="2,2" />
+
+                <Button Classes="swatch" Width="28" Height="28" Click="OnPickChargingColorClick"
+                        AutomationProperties.AutomationId="PickChargingColor"
+                        ToolTip.Tip="{Binding Labels.CustomColor}">
+                  <Border Width="24" Height="24" CornerRadius="2"
+                          Background="{Binding ChargingColorPreview, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                          BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="1" />
+                </Button>
+
+                <TextBox Width="110" Text="{Binding ChargingColor}" Watermark="#F59E0B"
+                         AutomationProperties.AutomationId="ChargingColorHex" />
+              </StackPanel>
             </StackPanel>
-          </Grid>
+          </Border>
         </StackPanel>
-      </Border>
+      </ScrollViewer>
 
-      <!-- ============================================================ the extra switches -->
+      <!--
+        The blackout. It is a cover rather than a hidden page: the controls stay in place, greyed out underneath, so the
+        user can see what they are turning back on. The button in the middle is the same command as the one in the
+        header — the page's own off switch, in the place the eye lands when the content is gone.
+      -->
+      <Grid IsVisible="{Binding IsLightingBlackedOut}">
+        <Border Background="{DynamicResource PageBrush}" Opacity="0.94" />
 
-      <Border Classes="card" IsVisible="{Binding ShowExtrasCard}">
-        <StackPanel>
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Classes="cardicon" Text="&#xE7E8;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.Extras}" />
+        <Border Classes="card" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Padding="28,24" MaxWidth="420" BorderBrush="{DynamicResource CardBorderStrongBrush}">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="cardicon" Text="&#xE7E8;" FontSize="24" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextMutedBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.LightingBlackoutTitle}"
+                       HorizontalAlignment="Center" />
+            <TextBlock Classes="hint" Text="{Binding Labels.LightingBlackoutHint}" TextWrapping="Wrap"
+                       TextAlignment="Center" />
+            <Button Classes="primary" Content="{Binding Labels.RestoreLighting}" Padding="14,8" FontSize="11"
+                    HorizontalAlignment="Center" Margin="0,4,0,0"
+                    AutomationProperties.AutomationId="RestoreLighting"
+                    Command="{Binding ToggleLightingBlackoutCommand}" />
           </StackPanel>
-
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding BacklightTimeoutAvailable}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center" />
-            <TextBlock Classes="hint" Text="{Binding Labels.BacklightTimeoutHint}" Margin="8,0,0,0"
-                       VerticalAlignment="Center" TextWrapping="Wrap" />
-          </StackPanel>
-
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding CoolBoostAvailable}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding CoolBoostOn}" VerticalAlignment="Center" />
-            <TextBlock Classes="hint" Text="{Binding Labels.CoolBoost}" Margin="8,0,0,0" />
-          </StackPanel>
-
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding LcdOverdriveAvailable}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding LcdOverdriveOn}" VerticalAlignment="Center" />
-            <TextBlock Classes="hint" Text="{Binding Labels.LcdOverdrive}" Margin="8,0,0,0" />
-          </StackPanel>
-
-          <StackPanel Orientation="Horizontal" Margin="0,0,0,6" IsVisible="{Binding WinKeyLockAvailable}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding WinKeyLockOn}" VerticalAlignment="Center" />
-            <TextBlock Classes="hint" Text="{Binding Labels.WinKeyLock}" Margin="8,0,0,0" />
-          </StackPanel>
-
-          <!-- Nothing to switch: one line instead of an empty grey box. -->
-          <TextBlock Classes="hint" Text="{Binding Labels.NotOnThisMachine}"
-                     IsVisible="{Binding NoExtrasAvailable}" />
-
-          <!-- The third lighting path's state. Hidden until the SDK has actually been asked. -->
-          <TextBlock Classes="hint" Text="{Binding OpenRgbStatus}" Margin="0,6,0,0" TextWrapping="Wrap"
-                     IsVisible="{Binding HasOpenRgbStatus}" />
-        </StackPanel>
-      </Border>
-    </StackPanel>
-  </ScrollViewer>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
 </UserControl>

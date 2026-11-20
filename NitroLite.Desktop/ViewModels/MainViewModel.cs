@@ -880,6 +880,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private bool _customRampTouched;
 
+    // The charging keyboard colour: the colour the adapter paints, whether that mode is on, and whether the keyboard
+    // is showing it right now. The painted flag is what makes the mode transition-driven — one write when the plug
+    // goes in and one when it comes out — instead of a write per telemetry tick.
+    private bool _chargingColorEnabled;
+    private string _chargingColor = ChargingLighting.DefaultColor;
+    private bool _chargingColorPainted;
+
+    /// <summary>
+    /// True while the lighting page is in blackout: the keyboard is dark and every control on the page is disabled.
+    /// Set by the page's own button and cleared by the write that brings the lights back.
+    /// </summary>
+    private bool _lightingBlackedOut;
+
+    /// <summary>
+    /// The automatic colour a blackout switched off, so the button that restores the lights can switch it back on.
+    /// The preferences in the settings file are not touched: a blackout is a moment, not a change of mind.
+    /// </summary>
+    private bool _reactiveSuspendedForBlackout;
+    private bool _chargingSuspendedForBlackout;
+
+    /// <summary>
+    /// True once <see cref="ReadStateAsync"/> has filled the controls with what the keyboard holds. The charging
+    /// colour waits for it: painting before the first read would make the page show the charging colour as the user's
+    /// own, and the colour the user chose would be lost from the page.
+    /// </summary>
+    private bool _lightingStateRead;
+
     // The on-screen display: whether it is drawn, which corner, and which display.
     private bool _osdEnabled;
     private int _osdCorner;
@@ -1231,6 +1258,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         BuildReactiveProfileChoices();
         BuildReactiveStops();
         _reactiveLightingEnabled = settings.ReactiveLightingEnabled;
+
+        // The charging colour is read before its palette is built, because the palette marks the chosen swatch.
+        _chargingColor = ChargingLighting.Normalize(settings.ChargingColor);
+
+        // Two automatic colours cannot own the same keyboard. A file written by a hand edit — or by a build that could
+        // hold both — is resolved here rather than at the first plug, where the two would take turns painting the keys.
+        if (settings.ChargingColorEnabled && settings.ReactiveLightingEnabled) settings.ChargingColorEnabled = false;
+        _chargingColorEnabled = settings.ChargingColorEnabled;
+        BuildChargingColorChoices();
+
+        // The blackout survives a restart, but only the button's own off state does: a brightness the user slid to
+        // zero is a dark keyboard with a page that still works, and it must not come back locked.
+        _lightingBlackedOut = settings.IsBacklightOff && IsBlackoutConfiguration(settings.KeyboardLighting);
+        if (_lightingBlackedOut) SuspendAutomaticColoursForBlackout();
+
         _osdEnabled = settings.OsdEnabled;
         _osdCorner = Math.Clamp(settings.OsdCorner, 0, 3);
         _osdMonitor = Math.Max(0, settings.OsdMonitor);
@@ -1262,6 +1304,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ApplyCurveCommand = new AsyncCommand(ApplyCurveAsync);
         ApplyLightingCommand = new AsyncCommand(ApplyLightingAsync);
         TurnOffLightingCommand = new AsyncCommand(TurnOffLightingAsync);
+        ToggleLightingBlackoutCommand = new AsyncCommand(ToggleLightingBlackoutAsync);
         CopyUdevCommand = new RelayCommand(CopyUdevCommandText);
         RescanCommand = new AsyncCommand(RescanAsync);
         ApplyGpuModeCommand = new AsyncCommand(ApplyGpuModeAsync);
@@ -1305,6 +1348,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             BuildFanSegments();
             BuildCpuBoostChoices();
             BuildColorPalette();
+            BuildChargingColorChoices();
             // The reactive profile picker carries translated names, so it is rebuilt like the other pickers, and
             // the stop rows only carry the delete button's label.
             BuildReactiveProfileChoices();
@@ -1321,6 +1365,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ShowSystemGameRow));
             Raise(nameof(ActiveZoneText));
             Raise(nameof(ModeBadgeText));
+            // The blackout button and the charging card's state line are sentences built from the new catalogue.
+            Raise(nameof(LightingBlackoutButtonText));
+            Raise(nameof(ChargingColorStateText));
             // The launcher line is a sentence built from these labels, so it is re-raised rather than rebuilt.
             Raise(nameof(NitroSenseLauncherStateText));
             Raise(nameof(SchoolModeStateText));
@@ -1571,10 +1618,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _onAcPower, value)) return;
             Raise(nameof(BatteryStateText));
+            Raise(nameof(ChargingColorStateText));
 
             // Eco is a battery mode and Turbo/Performance are charger modes, so plugging the charger in changes which
             // cards exist. Rebuilding here is what makes the rule live rather than a decision taken at launch.
             RefreshModeVisibility();
+
+            // The charging colour follows the plug, not a clock. The call is fire-and-forget because a property setter
+            // cannot await, and it keeps its own task so a test — or a page that wants to know — can wait for it.
+            ChargingLightingTask = SyncChargingLightingAsync();
         }
     }
 
@@ -1852,21 +1904,59 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The red is pure #FF0000 on purpose. A "coral" red — the #D93829 this used to be — is the same colour on
         // screen, but the keyboard's diffuser mixes the three LEDs, so the green and blue it carries light the keys up
         // and the red arrives as salmon. On the deck the swatch has to be the colour the keys show.
-        AddSwatch("#FF0000", Loc.T("Kırmızı"));
-        AddSwatch("#F59E0B", Loc.T("Kehribar"));
-        AddSwatch("#5F6B3E", Loc.T("Zeytin yeşili"));
-        AddSwatch("#22D3EE", Loc.T("Buz mavisi"));
-        AddSwatch("#3B82F6", Loc.T("Gök mavisi"));
-        AddSwatch("#8B5CF6", Loc.T("Menekşe"));
-        AddSwatch("#EC4899", Loc.T("Macenta"));
-        AddSwatch("#F8FAFC", Loc.T("Beyaz"));
+        foreach (var (hex, name) in QuickColours)
+        {
+            ColorPalette.Add(new ColorSwatch(hex, Loc.T(name), SelectSwatch));
+        }
 
         ToggleSparklineBandCommand = new RelayCommand(() => SparklineBandVisible = !SparklineBandVisible);
         SyncSwatchSelection();
     }
 
-    private void AddSwatch(string hex, string name) =>
-        ColorPalette.Add(new ColorSwatch(hex, name, SelectSwatch));
+    /// <summary>
+    /// The eight colours both palettes offer, in the order they are drawn. One list rather than two, because the
+    /// charging card's swatches have to be the same colours as the page's: a colour that is good enough for the keys
+    /// is good enough for the plug.
+    /// </summary>
+    private static readonly (string Hex, string Name)[] QuickColours =
+    {
+        ("#FF0000", "Kırmızı"),
+        ("#F59E0B", "Kehribar"),
+        ("#5F6B3E", "Zeytin yeşili"),
+        ("#22D3EE", "Buz mavisi"),
+        ("#3B82F6", "Gök mavisi"),
+        ("#8B5CF6", "Menekşe"),
+        ("#EC4899", "Macenta"),
+        ("#F8FAFC", "Beyaz")
+    };
+
+    /// <summary>
+    /// The charging card's palette. Built from the same eight colours as the page's, with its own selection so picking
+    /// a charging colour cannot move the zone the deck has focused.
+    /// </summary>
+    private void BuildChargingColorChoices()
+    {
+        ChargingColorChoices.Clear();
+        foreach (var (hex, name) in QuickColours)
+        {
+            ChargingColorChoices.Add(new ColorSwatch(hex, Loc.T(name), SelectChargingSwatch));
+        }
+
+        SyncChargingSwatchSelection();
+    }
+
+    private void SelectChargingSwatch(ColorSwatch swatch) => ChargingColor = swatch.Hex;
+
+    /// <summary>Marks the swatch that matches the charging colour, so the card says which colour is chosen.</summary>
+    private void SyncChargingSwatchSelection()
+    {
+        var current = ChargingColorPreview;
+
+        foreach (var swatch in ChargingColorChoices)
+        {
+            swatch.IsSelected = string.Equals(swatch.Hex, current, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private void SelectSwatch(ColorSwatch swatch)
     {
@@ -2991,6 +3081,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         if (value)
         {
+            // Two automatic colours cannot own the same four zones. Turning the temperature ramp on is turning the
+            // charging colour off; the page shows that rather than letting the two take turns painting the keys.
+            if (_chargingColorEnabled) SetChargingColorEnabled(false, restore: false);
+
             // Asking for a colour the processor picks is asking to see it, so the lights come back if they were off.
             // Leaving that to the tick does not work: it refuses to paint a keyboard the user turned off, which made
             // the switch do nothing at all after "Lights Off (Blackout)" or a brightness of zero, and the keyboard
@@ -3005,6 +3099,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The first write should happen on the next tick rather than waiting for the interval to elapse.
             _reactiveThrottle.Reset();
+
+            // Asking for a colour is asking to see it, so the page leaves the blackout with the keyboard.
+            IsLightingBlackedOut = false;
+            _reactiveSuspendedForBlackout = false;
         }
         else if (restore)
         {
@@ -3079,6 +3177,278 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally
         {
             _writeGate.Release();
+        }
+    }
+
+    // ---------------------------------------------------------------- the page's blackout
+
+    /// <summary>
+    /// True while the page is in blackout: the keyboard is dark, so the page is dark too and none of its controls can
+    /// be used. The button in the page's top-right corner is the way in and the way out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The state was already there in the keyboard — "turn off" wrote an off configuration — but the page kept every
+    /// control live over it. That is what made the temperature ramp look broken: its switch stayed on over a black
+    /// keyboard, and the tick then refused to paint the keys the user had just turned off, so the only way to make the
+    /// mode work again was to switch it off and on. A page that is disabled cannot make that promise.
+    /// </para>
+    /// <para>
+    /// This is not <see cref="IsLightingOff"/>. A brightness the user slid to zero is a dark keyboard with a page that
+    /// still works — they may be on their way to sliding it back up — while a blackout is the page's own off switch.
+    /// </para>
+    /// </remarks>
+    public bool IsLightingBlackedOut
+    {
+        get => _lightingBlackedOut;
+        private set
+        {
+            if (!Set(ref _lightingBlackedOut, value)) return;
+            Raise(nameof(LightingControlsEnabled));
+            Raise(nameof(LightingBlackoutButtonText));
+        }
+    }
+
+    /// <summary>The inverse of <see cref="IsLightingBlackedOut"/>, so a container can be disabled without a converter.</summary>
+    public bool LightingControlsEnabled => !_lightingBlackedOut;
+
+    /// <summary>The top-right button: it puts the lights out, and the same button brings them back.</summary>
+    public string LightingBlackoutButtonText =>
+        _lightingBlackedOut ? Labels.TurnOnLighting : Labels.TurnOffLighting;
+
+    /// <summary>
+    /// The blackout button. It is one command rather than two because it is one button: the label says which way it
+    /// goes, and a second command would let the two disagree about the state.
+    /// </summary>
+    public AsyncCommand ToggleLightingBlackoutCommand { get; private set; } = null!;
+
+    private async Task ToggleLightingBlackoutAsync()
+    {
+        if (_lightingBlackedOut) await RestoreLightingAfterBlackoutAsync().ConfigureAwait(true);
+        else await TurnOffLightingAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Brings the lights back from the blackout. The last lit configuration is what "on" means, and the recovery copy
+    /// is what the keyboard actually had: it is written only after a write succeeded, so a resume puts back the
+    /// lighting the user saw rather than the colour they last clicked.
+    /// </summary>
+    private async Task RestoreLightingAfterBlackoutAsync()
+    {
+        if (_hardware == null) return;
+
+        // The recovery copy is the blackout's own off state while the page is dark — that is what turning the lights
+        // off wrote — so a dark copy falls through to the last lit configuration the settings file kept for exactly
+        // this. Without the fall-through, leaving the blackout brought back the shipped cyan rather than the user's
+        // own colour.
+        var last = ActiveRgbStateStore.Load(_settingsPath);
+        if (last == null || LightingPolicy.IsOff(last)) last = _settings.LastActiveLighting;
+
+        var config = LightingPolicy.ResumeFromOff(last);
+
+        SyncControls(() => ApplyLightingState(config));
+        await ApplyLightingAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Switches both automatic colours off for a blackout without changing either preference. The switches go off with
+    /// the keyboard — a mode that stays visibly on over a dark keyboard is the bug this exists to prevent — and the
+    /// button that restores the lights is what puts them back.
+    /// </summary>
+    private void SuspendAutomaticColoursForBlackout()
+    {
+        if (_reactiveLightingEnabled)
+        {
+            _reactiveSuspendedForBlackout = true;
+            _reactiveLightingEnabled = false;
+            Raise(nameof(ReactiveLightingEnabled));
+        }
+
+        if (_chargingColorEnabled)
+        {
+            _chargingSuspendedForBlackout = true;
+            _chargingColorEnabled = false;
+            _chargingColorPainted = false;
+            Raise(nameof(ChargingColorEnabled));
+            Raise(nameof(HasChargingColorState));
+            Raise(nameof(ChargingColorStateText));
+        }
+    }
+
+    /// <summary>Puts back the automatic colours the blackout switched off, now that the keyboard is lit again.</summary>
+    private void ResumeSuspendedModesAfterBlackout()
+    {
+        if (_reactiveSuspendedForBlackout)
+        {
+            _reactiveSuspendedForBlackout = false;
+            if (_settings.ReactiveLightingEnabled) SetReactiveLighting(true, restore: true);
+        }
+
+        if (_chargingSuspendedForBlackout)
+        {
+            _chargingSuspendedForBlackout = false;
+            if (_settings.ChargingColorEnabled) SetChargingColorEnabled(true, restore: true);
+        }
+    }
+
+    // ---------------------------------------------------------------- the charging colour
+
+    /// <summary>
+    /// Whether the keyboard shows a chosen colour while the adapter is in.
+    /// </summary>
+    /// <remarks>
+    /// The second automatic colour. It is not an overlay on the page's own state the way the temperature ramp is: the
+    /// page keeps the colour the user chose, the keyboard shows the charging colour while the plug is in, and pulling
+    /// the plug writes the page's colour back. Nothing about the user's own lighting is changed by any of it.
+    /// </remarks>
+    public bool ChargingColorEnabled
+    {
+        get => _chargingColorEnabled;
+        set => SetChargingColorEnabled(value, restore: true);
+    }
+
+    /// <summary>The colour painted while charging, as the user typed it. Saved and written only when it is whole.</summary>
+    public string ChargingColor
+    {
+        get => _chargingColor;
+        set
+        {
+            if (!Set(ref _chargingColor, value)) return;
+            Raise(nameof(ChargingColorPreview));
+
+            // The box is typed into, so a half-finished "F5" is not a colour and must not reach the store or the
+            // settings file. The swatch beside the box goes blank until the text is whole.
+            if (!ChargingLighting.IsColor(value)) return;
+
+            _settings.ChargingColor = ChargingLighting.Normalize(value);
+            SaveSettings();
+            SyncChargingSwatchSelection();
+
+            // A colour changed while it is on the keys has to be repainted now rather than at the next plug.
+            ChargingLightingTask = SyncChargingLightingAsync(force: _chargingColorPainted);
+        }
+    }
+
+    /// <summary>The colour as a brush-worthy <c>#RRGGBB</c>, so a half-typed hex paints nothing instead of throwing.</summary>
+    public string ChargingColorPreview => ChargingLighting.Normalize(_chargingColor);
+
+    /// <summary>The eight quick colours for the charging card, the same eight the palette offers.</summary>
+    public ObservableCollection<ColorSwatch> ChargingColorChoices { get; } = new();
+
+    /// <summary>
+    /// One line of state under the card's switch: whether the charging colour is on the keys right now or waiting for
+    /// the plug. Empty while the mode is off, so the card is quiet when it is doing nothing.
+    /// </summary>
+    public string ChargingColorStateText =>
+        OnAcPower == true ? Labels.ChargingColorActive : Labels.ChargingColorWaiting;
+
+    public bool HasChargingColorState => _chargingColorEnabled;
+
+    /// <summary>
+    /// The write the last charger transition started, so a test can await it instead of sleeping. The setter of
+    /// <see cref="OnAcPower"/> cannot await, and a plug is exactly the moment the write happens.
+    /// </summary>
+    public Task ChargingLightingTask { get; private set; } = Task.CompletedTask;
+
+    private void SetChargingColorEnabled(bool value, bool restore)
+    {
+        if (!Set(ref _chargingColorEnabled, value)) return;
+
+        _settings.ChargingColorEnabled = value;
+
+        if (value)
+        {
+            // One automatic colour at a time: the temperature ramp and this one paint the same four zones.
+            if (_reactiveLightingEnabled) SetReactiveLighting(false, restore: false);
+
+            // Asking for a colour is asking to see it, so the lights come back if the brightness was at zero. The
+            // config is resumed before the colour is chosen, so the write carries a brightness the firmware accepts.
+            ResumeFromOffForEdit(cfg => cfg.Effect = "STATIC");
+
+            ChargingLightingTask = SyncChargingLightingAsync(force: true);
+        }
+        else if (restore)
+        {
+            // Put the user's own colour back. The controls still hold it, so this is the same write the page makes —
+            // except it does not switch the other mode off, because that is what this call already is.
+            _chargingColorPainted = false;
+            _ = RestoreOwnLightingAsync();
+        }
+
+        SaveSettings();
+        Raise(nameof(ChargingColorStateText));
+        Raise(nameof(HasChargingColorState));
+    }
+
+    /// <summary>
+    /// Paints the charging colour when the adapter is in, and the page's own lighting when it comes out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Transition-driven: <see cref="_chargingColorPainted"/> records that the keys are showing the charging colour,
+    /// so a tick with the plug in the same state it was a second ago does nothing. That is the whole reason this is
+    /// not part of the telemetry tick's work.
+    /// </para>
+    /// <para>
+    /// A dark keyboard stays dark. If the page has no brightness to paint at — blackout, or a slider at zero — the
+    /// mode is armed and does nothing, because a colour mode is not a way to switch the lights on behind the user.
+    /// </para>
+    /// </remarks>
+    private async Task SyncChargingLightingAsync(bool force = false)
+    {
+        try
+        {
+            if (_hardware == null || !_chargingColorEnabled) return;
+
+            // The controls describe the keyboard only after the first read; painting before it would make the page
+            // adopt the charging colour as the user's own.
+            if (!_lightingStateRead || _lightingBlackedOut) return;
+
+            if (OnAcPower == true)
+            {
+                if (_chargingColorPainted && !force) return;
+
+                var baseline = CurrentLightingConfig();
+                if (!ChargingLighting.CanPaint(baseline))
+                {
+                    _chargingColorPainted = false;
+                    return;
+                }
+
+                var charging = ChargingLighting.ConfigFor(_chargingColor, baseline);
+                if (!await WriteLightingConfigAsync(charging).ConfigureAwait(true))
+                {
+                    AppLog.Warn("The charging colour could not be written", charging.Color);
+                    return;
+                }
+
+                _chargingColorPainted = true;
+                return;
+            }
+
+            // On battery, and nothing of this mode's is on the keys: nothing to take back.
+            if (!_chargingColorPainted) return;
+            _chargingColorPainted = false;
+            await RestoreOwnLightingAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The charging colour could not be applied", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Writes the configuration the page holds without changing the page, the settings file or either mode. Used when
+    /// an automatic colour hands the keyboard back.
+    /// </summary>
+    private async Task RestoreOwnLightingAsync()
+    {
+        if (_hardware == null) return;
+
+        var config = CurrentLightingConfig();
+        if (!await WriteLightingConfigAsync(config).ConfigureAwait(true))
+        {
+            AppLog.Warn("The keyboard lighting could not be restored", config.Effect);
         }
     }
 
@@ -5534,6 +5904,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // the window comes forward.
             if (_settings.IsBacklightOff) await ReassertKeyboardLightingAsync().ConfigureAwait(true);
 
+            // The first read is done, so an armed charging colour can be painted over it. The plug state was read
+            // before this and has not changed since, which is why the transition in the property setter saw nothing
+            // to do and the first paint has to be asked for here.
+            await SyncChargingLightingAsync().ConfigureAwait(true);
+
             // A Linux machine whose kernel exposes no Acer node is not an error and not a crash: the window stays
             // usable, the banner explains it, and every control that needs hardware stays hidden.
             if (!_hardware.IsAvailable)
@@ -6023,6 +6398,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             _suppressWrite = previous;
         }
+
+        // The controls now describe the keyboard, which is what the charging colour waits for: painting before this
+        // would make the page adopt the charging colour as the colour the user chose.
+        _lightingStateRead = true;
     }
 
     private void ApplyLightingState(LightingConfig lighting)
@@ -6246,18 +6625,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || SelectedEffect == null) return;
 
-        // A manual apply wins over the reactive mode: someone who reaches for a swatch is asking for that colour, not
-        // for the temperature's. The mode is turned off without a restore, because this write is the restore.
+        // A manual apply wins over the automatic colours: someone who reaches for a swatch is asking for that colour,
+        // not for the temperature's and not for the charging one. Both modes are turned off without a restore, because
+        // this write is the restore.
         if (_reactiveLightingEnabled) SetReactiveLighting(false, restore: false);
+        if (_chargingColorEnabled) SetChargingColorEnabled(false, restore: false);
 
         var config = CurrentLightingConfig();
-        var zones = config.LEDs!.ToArray();
 
-        await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
-            bool ok = await _hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
-                config.Direction, config.Color, zones).ConfigureAwait(true);
+            bool ok = await WriteLightingConfigAsync(config).ConfigureAwait(true);
 
             // No banner on success: the keyboard is the confirmation, and a toast on every slider step would cover
             // the page the user is working on. A refusal is still reported, because a silent one looks like a bug.
@@ -6281,16 +6659,50 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // not overwrite it with black.
             if (!_settings.IsBacklightOff) _settings.LastActiveLighting = config;
             SaveSettings();
+
+            // A write the keyboard accepted is the page agreeing with it: whatever was on the keys is there no more,
+            // so the page leaves the blackout, and the automatic colours the blackout switched off come back.
+            LeaveLightingBlackout();
         }
         catch (Exception ex)
         {
             AppLog.Warn("The hardware write failed", $"Keyboard lighting: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
         }
+    }
+
+    /// <summary>
+    /// Writes one lighting configuration and reports what the backend said. The gate is held for exactly the write, so
+    /// the page's own colour and either automatic colour cannot interleave on the embedded controller.
+    /// </summary>
+    /// <remarks>
+    /// Every lighting write goes through here, which is what makes the shared rules — the gate, the shape the backend
+    /// takes, the "the keyboard accepted it" answer — live in one place instead of in each caller.
+    /// </remarks>
+    private async Task<bool> WriteLightingConfigAsync(LightingConfig config)
+    {
+        var hardware = _hardware;
+        if (hardware == null) return false;
+
+        var zones = (config.LEDs ?? new List<string>()).ToArray();
+
+        await _writeGate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            return await hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
+                config.Direction, config.Color, zones).ConfigureAwait(true);
+        }
         finally
         {
             _writeGate.Release();
         }
+    }
+
+    /// <summary>Leaves the blackout because the keyboard is lit again, and puts back the modes it switched off.</summary>
+    private void LeaveLightingBlackout()
+    {
+        IsLightingBlackedOut = false;
+        ResumeSuspendedModesAfterBlackout();
     }
 
     private async Task TurnOffLightingAsync()
@@ -6308,9 +6720,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         bool ok = await RunQuietWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
         if (!ok) return;
 
+        // The page goes dark with the keyboard, and every control on it goes with the page. Both automatic colours are
+        // switched off here rather than left showing "on" over a dark keyboard — a switch that stays on and does
+        // nothing is what made the temperature ramp look broken, and switching it off and on again was the only way to
+        // make it work. Their preferences are kept, so the button that restores the lights puts them back.
+        SuspendAutomaticColoursForBlackout();
+
         // The page shows the state the keyboard is in, so the controls go to "off" as well. Without this the effect
         // list and the brightness slider kept describing a configuration the keyboard was not running.
         SyncControls(() => ApplyLightingState(off));
+        IsLightingBlackedOut = true;
 
         // "Off" is a preference, not a moment. It is written to the settings file so the next launch knows the
         // keyboard is meant to stay dark, and the recovery copy is overwritten with the same state: leaving the last
@@ -6320,6 +6739,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ActiveRgbStateStore.Save(_settingsPath, off);
         SaveSettings();
     }
+
+    /// <summary>
+    /// True when a stored configuration is the blackout's own "off", rather than a brightness the user slid to zero.
+    /// The two states look alike on the keyboard — both are dark — but only the first means the page is locked.
+    /// </summary>
+    private static bool IsBlackoutConfiguration(LightingConfig? config) =>
+        config != null && string.Equals(config.Effect, "OFF", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The lighting the page's controls describe, in the shape the backend takes.</summary>
     private LightingConfig CurrentLightingConfig()
