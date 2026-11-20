@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NitroLite.Core</RootNamespace>
     <AssemblyName>NitroLite.Core</AssemblyName>
-    <Version>1.2.8</Version>
+    <Version>1.2.9</Version>
     <Authors>NitroLite Team</Authors>
   </PropertyGroup>
 

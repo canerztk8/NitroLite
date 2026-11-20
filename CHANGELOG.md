@@ -8,6 +8,196 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
+## [1.2.9] - 2026-11-20
+
+Every control NitroLite writes can now be read back and checked, and a machine that refuses a write says so instead of
+reporting success — the AN16-61's MUX toggle, charge limit and Windows-key lock were three faces of one defect. Beside
+that: a read-only two-step diff that compares NitroSense against NitroLite on the same machine, a compatibility report
+built in one click, a fan curve that can be earned on hardware the profile table has never measured, a keyboard
+backlight that survives a WMI method lying about its answer, and a pass over the places where an elevated helper
+trusted a path or a reply it should not have. 25 commits since 1.2.8.
+
+### Added
+
+- **Every control is read back, and the ones that cannot be are named.** `ControlVerdict` and `SessionVerification`
+  keep one ledger per session of what was confirmed, what was contradicted and what this machine has no getter for,
+  and the dashboard carries a hint naming the unconfirmed controls with the one-click report beside it. A write is no
+  longer called applied because the call returned: the first read waits `ReadBackPolicy.SettleDelay` (320 ms), because
+  a staged MUX word and Care Center's own agent both answer the previous value for longer than a register poke does. A
+  control with no getter at all is written, reported as unverified and left enabled, rather than being declared applied
+  or failed. A missing transport — the Acer service not running, the worker not elevated — is no longer counted as a
+  mismatch against the firmware; the charge-limit switch moves to the mode the machine reports after a refused or
+  mismatched write; and the Windows-key lock and both MUX refusal paths now record why they refused. The report prints
+  an `Unconfirmed controls this session` list.
+
+- **A read-only two-step diff against NitroSense.** The compatibility reports keep saying the same thing — a setting
+  works in NitroSense and does nothing here — and the hardware report can describe what a machine has but not what
+  moved when its owner used Acer's own tool. **Settings → Diagnostics** now carries two buttons: the first captures a
+  snapshot, the second captures another and copies the report with the diff underneath. The snapshot reads the raw
+  device state the worker already answers (MUX, profile, fan behaviour and speed, the battery register, dGPU
+  capability, `0x09`/`0x0A`, `APGeAction` `0x207`, overdrive, backlight timeout, GPU mode and the lighting
+  configuration) plus one `HidD_GetFeature` report per eligible lighting interface — ITE `0x048D`, Sonix `0x0C45`,
+  Chicony `0x04F2`, pages `0xFF00`–`0xFF05` — opened with read access only. Usage page `0x01` and the LED page `0x07`
+  are refused by name, and no HID string descriptor is ever read. Nothing is written and no new worker command was
+  added; the worker half is skipped unless the worker is already connected, so a capture cannot raise a UAC prompt. The
+  diff prints only what moved, sorted, with `~`/`+`/`-` lines and the changed byte offsets when a report keeps its
+  length, cut at 3 200 characters with a note. Serial numbers, UUIDs, user names, GUIDs and the profile folder in a path
+  are stripped, twice, before anything reaches the clipboard.
+
+- **Runtime sensor verification, so a fan curve is earned rather than inherited.** `SensorLayout.Verified` answers "did
+  anyone measure these sensor ids on this model?", and on every model but the reference unit the answer is no — a Nitro
+  answering a real die temperature every second still had its custom curve locked. The write gate is now
+  `profile.Verified || session.RuntimeVerified`, where a session verifies itself from two consecutive samples at least
+  1.5 s apart, both die temperatures inside 15–115 °C, both fans inside 0–10 000 RPM, no documented sentinel, and the
+  ids anchored by a measured profile or the live probe. Promotion is one-way per session and logged once; the
+  85/90/95 °C floors and the dead-sensor hand-back still read the live value. `--hardware-report` prints
+  `runtime-verified (n samples)`, or the reason it is not.
+
+- **The compatibility report is built in one click, and it now lists the HID collections.** One button copies the
+  sanitised report and opens the prefilled new-issue form, with a `[Compatibility] <model> (<board>)` title taken from
+  public SMBIOS strings and the body cut to a 7 000-character URL — never splitting a surrogate pair — with a note
+  saying the full report is on the clipboard. The report itself now lists the HID collections the machine exposes (VID,
+  PID, usage page, usage), so an issue can say which controller a backlight is wired to when no Acer class admits to
+  driving it. The inventory is read-only by construction: `GENERIC_READ` handles, no IOCTL, no report written, no
+  product or serial string requested.
+
+- **A keyboard colour that survives a WMI method which lies.** The 2025 Nitro and Predator boards moved the backlight
+  onto a separate ENE controller. `SetGamingRgbKb` and `SetGamingKBBacklight` still answer status 0 on those machines
+  and the LEDs do not move, which is why the AN16-61 issue reports a lighting tab saying "Write failed" while
+  NitroSense sets the same colours. WMI is still tried first, because it is the correct path on every older model; when
+  it does not take the write, the vendor HID controller is asked once with the documented eleven-byte feature report,
+  and whichever path answered is remembered per `Model|BIOS`. A controller with no published frame — ITE, Sonix,
+  Chicony — is named in the report and never written to, no standard HID page is ever opened (in particular not the
+  keyboard's own input collection on `0x01`), and the hostile mode identifiers the protocol also defines are absent
+  from the mapping rather than filtered out later.
+
+- **A model can be supported without a new binary.** The profile table published with the project is fetched once at
+  startup, validated against the embedded table's own rules plus a fan-ceiling and sensor-id window, and written
+  atomically. The catalogue reads the user file, then the download, then the embedded table, in that order, so the
+  person at the keyboard still overrules both.
+
+- **A 2026 sleeping-cat logo, in every place the app shows a face.** One `app.ico` now feeds the executable, the window
+  and the tray, so the project no longer carries a second, sharper-but-invisible tray drawing; the kit's transparent
+  tray icon is deliberately not used, because a black cat with no ground disappears on a dark taskbar. The Linux menu
+  carries the same symbol art under the file name the installer and the workflows already expect, and the README shows
+  the lockup in a theme-aware picture above the badges.
+
+### Changed
+
+- **The header prints the lockup instead of the product name.** The top-left corner set "NitroLite" in 13 px SemiBold;
+  it now prints the horizontal lockup, so the window and the page carry the same mark. The two images are flat PNGs
+  copied straight from the kit rather than redrawn — the ink mark for the paper palettes, the white mark for Dark,
+  Midnight OLED and the rest of the dark set — sharing one cell with only one visible, flipped in code from the theme
+  variant the theme manager already derives. No SVG renderer was added for a wordmark that never scales.
+
+- **The empty solution stub and the dead thermal-trend code are gone.** Nothing referenced either, and a solution file
+  that builds nothing is a file somebody will try to build.
+
+### Fixed
+
+- **A Nitro AN16-61 showed "-- GHz" all session and claimed its MUX could not be read while running elevated.**
+  `CpuFrequencyMHz` had exactly one writer, the `CPU_FREQUENCY` field of an AcerAgentService reply, so on a machine with
+  no Acer service it stayed 0 for the whole session while fans and modes worked over direct WMI — and the power
+  estimate had been falling back to a frequency ratio of 1.0 whenever the clock was missing. The clock now comes from
+  `CallNtPowerInformation(ProcessorInformation)` and is filled before the estimate reads it. The report said "not read
+  (needs elevation)" on a session that was already elevated, because `CapabilityProbe` always passed a null MUX signal
+  and nothing carried the worker's `wmiMuxSwitch` back; the answer now travels in
+  `HardwareCapabilities.MuxSwitchOverWmi` and the report prefers it, with "needs elevation" reserved for a report
+  carrying no capabilities at all. A refused MUX write also left no trace: it now logs why.
+
+- **The published profile table was rejected by the rule meant for the hand-edited one.** The project's own document
+  carries a catch-all for every Acer machine, so validating a download against the user-file rule rejected every real
+  download and the feature could never have worked. The downloaded document is now held to the shipped rule and the
+  hand-edited user file keeps the stricter one, because a catch-all written by hand would replace the table for models
+  its author does not own.
+
+- **The elevated auto-start accepted any path that was not temp or Downloads.** That is a name test, not an access
+  test: `C:\WinTools` is neither, yet the drive root grants `Authenticated Users: Modify` to everything beneath it, so
+  another local account could replace the executable and have it run at logon with an administrator token. The task now
+  goes through `DirectoryTrust.IsExecutableTrusted`, the same predicate the elevated WMI helper already launches behind.
+
+- **The elevated error log could be made to follow a planted link.** The elevated PowerShell wrote its error message to
+  a path inside `%TEMP%` that also sat in a base64 command line, and a command line is readable by every process on the
+  machine: a same-user process could learn the path, create an NTFS hardlink there pointing at a file it wanted
+  overwritten, and `Out-File` would write through that link with administrator rights. The path being unguessable did
+  not help, because it was not guessed, it was read. The write now opens with `FileMode.CreateNew`, so a hardlink —
+  which means the path already exists — fails the open and nothing is written.
+
+- **The first telemetry tick could raise a UAC prompt on a machine with no Acer service.** `GetTelemetryAsync` exists
+  to keep the poll from starting the elevated worker and had no call sites; the poll called `GetMonitorDataAsync`,
+  which resolves through `ResolveAsync` and starts the worker. The method is on `IHardwareController` now, so a caller
+  cannot reach the wrong one by accident.
+
+- **The worker pipe answered two callers at once.** `WmiWorkerClient.SendAsync` wrote a frame and read a frame with no
+  mutual exclusion, and the fan curve steps on its own thread while the telemetry timer ticks on the UI thread, so
+  reader A could take the header and reader B take A's payload as its own header, decoding an arbitrary length. One
+  exchange at a time now, gated inside the client.
+
+- **A fixed fan speed could outlive the loop that owned it.** `RestoreFansToAutoAsync` called `_curveLoop.Stop()`,
+  which signals but does not wait, so a step already past the mode check could reach the write gate after the hand-back
+  wrote Auto and put a fixed speed back over the firmware's own control with no loop left to correct it. The hand-back
+  now sets a `_handingBackFans` flag before the stop, waits with `StopAndWait(1 s)`, and `WriteFanPercentAsync`
+  re-checks the flag inside the gate. `SetFanModeAsync(Custom)` also confirmed a write by reading the mode back and
+  comparing it to Custom; on firmware that accepts the mode and ignores the speed, a refused speed looked applied, so
+  it now reads the fan percentage back and confirms on the value.
+
+- **A dead temperature sensor left the fans at the last speed the curve wrote.** Nothing was left to change them. The
+  loop hands them back to the firmware once, and only after a reading has actually been seen — a machine that has just
+  started has no reading yet, and handing back then would take the fans out of the mode the user picked.
+
+- **One failed WMI moment disabled the battery limit and CoolBoost for the rest of the session.** `EnsureBattery` and
+  `EnsureApge` set their "lookup done" flag before the lookup, so a throw from `scope.Connect()` left the flag set and
+  every later call returned null. The flag is now set only after an enumeration finishes, which is the only thing that
+  is an answer, and the catch blocks dispose the cached COM instance they clear.
+
+- **Lifetimes that were never closed.** `CpuPowerService` and `WindowsHardwareMonitor` are `IDisposable` and were never
+  disposed, and the first one's `Dispose` is what kills a `powercfg.exe` that did not exit inside its timeout — without
+  it the child outlived the app and every later boost write stayed blocked behind it. The NitroSense watcher was never
+  disposed, and `App.DisposeHost` nested that teardown inside the key-listener branch, so a machine whose listener was
+  null left a 400 ms foreground poll running with no owner. `MainWindow` subscribed to `OsdChanged` with an anonymous
+  lambda and never unsubscribed, keeping the whole visual tree reachable after the window closed; the signature link
+  leaked a `Process` handle per click; `Dispatcher.UIThread.UnhandledException` was never unsubscribed, pinning `App`
+  for the life of the process; and the tray icon was disposed but left in the collection that still held it. The Nitro
+  key listener dropped its `ManagementEventWatcher` when `Start()` threw, skipped `Dispose()` when `Stop()` threw, and
+  never disposed `e.NewEvent` — a per-event leak, at 400 ms. An `AcerWmiProbe` abandoned on timeout was also left
+  unobserved, so a provider that failed afterwards surfaced as an unobserved task exception.
+
+- **The diagnostics bundle carried the Windows user name into a public issue.** The scrubbing ran on one line and the
+  same path was written unscrubbed on the next. The archive is scrubbed as a whole now.
+
+- **A power cut during an update could leave an executable of the right length and zeroed content.** The updater copied
+  the new binary with `File.Copy`, which returns as soon as the copy is queued in the write cache, then renamed it over
+  the live `NitroLite.exe`; a cut between the two leaves a file that cannot start, so the repair pass that would
+  restore the `.old` copy never runs. The copy goes through `AtomicFile.CopyDurable` now — write-through plus
+  `Flush(flushToDisk: true)` before the rename, the same discipline `AtomicFile.WriteAllText` already used.
+
+- **The safety copies overwrote each other.** The pre-restore copy used a fixed `.pre-restore` name, so the second
+  restore — the ordinary reaction to a first one the user regretted — destroyed the settings they actually had; the
+  name carries a UTC stamp now. The RGB presets were replaced by a restore with no safety copy at all, so a restore
+  taken on another machine destroyed every custom preset, and the RGB quarantine moved a corrupt file to a fixed `.bad`
+  name with `overwrite: true`, so the second quarantine destroyed the first — and by then only — copy. Both are
+  stamped. The debloat baseline was written before the completeness check that can abort the operation, which left an
+  incomplete file that the next attempt accepted as a valid backup and never revisited; the check runs before the
+  write. A diagnostics export that failed mid-write left a truncated zip with a plausible name for the user to attach to
+  a bug report, and is deleted on failure now — but only when this call created it, because `FileMode.CreateNew` throws
+  when the name is taken and deleting then would destroy the archive `CreateNew` exists to protect.
+  `AppLog.RotateIfNeeded` documented "returns true when the rotation failed" and returned false on every path, so the
+  caller's guard was dead code and a log that could not be rotated grew without bound.
+
+- **A failed log write could dispose the writer another thread was inside.** `AppLog.Write` called `DropWriter()`
+  outside the lock, and the catch runs after the lock block unwinds, so this cannot deadlock. `ReadStateAsync` held
+  `_suppressWrite` across eight awaits, so a click that landed during them was discarded by the setters and then
+  reverted by a value the read had already fetched — the card moved back under the user's finger; every read happens
+  first now and the values are applied afterwards with no await between them. `Dispose` disposed `_writeGate` after a
+  bounded `StopAndWait`, so a step stuck in a WMI call could still be inside the gate and its `Release` would throw
+  `ObjectDisposedException` out of a `finally` on a background thread; the gate is no longer disposed, which a
+  `SemaphoreSlim` only needs when `AvailableWaitHandle` was used.
+
+- **A failed publish took the last good package with it.** `publish-release.ps1` cleared every `NitroLite*` entry in
+  `artifacts/` before it started building, so a publish that failed — as it does on a host without the pinned runtime
+  the ILLink task itself needs — left the folder with nothing. The up-front delete clears only the staging directories
+  now, and the previous zip is removed just before `Compress-Archive`, once everything that can fail has succeeded.
+
 ## [1.2.8] - 2026-11-19
 
 An AN16-61 that detected nothing — three refusals stacked in front of its hardware, and a warning every second
