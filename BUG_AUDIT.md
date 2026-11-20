@@ -1008,3 +1008,22 @@ owner moved one switch in Acer's own tool. This round adds the tool that can, an
   fact about the controller. *Test pending.*
 - **The AN16-61 items from §9.4 remain**: MUX read/write, the Windows-key lock, the Care Center charge limit, and
   the unconfirmed-control hint after a real failed write.
+
+### 10.5 A vendor bridge this project will not build on
+
+Asked whether the compatibility work could go further by reverse engineering more of Acer's stack, one candidate is
+the local service NitroSense talks to. It was checked and rejected on evidence, not taste:
+
+- **CVE-2026-50610** (Intrinsec, 2026): `AcerSysHardwareService.exe` runs as SYSTEM, its
+  `systemmonitoring_hardware_service_` and `predatorsense_hardware_service_` pipes grant read/write/execute to
+  `Authenticated Users`, and the server imports neither `ImpersonateNamedPipeClient` nor `AccessCheck` — any local
+  user becomes SYSTEM through it.
+- **NitroLite's relationship to it is one-directional.** The app connects to `AcerAgentService` as a client when
+  that service exists and falls back to direct WMI when it does not (the AN16-61 log shows exactly that fallback).
+  It never serves a privileged endpoint of its own, and its elevated worker keeps a per-session pipe name plus the
+  nonce handshake from §2.8a and §2.8b.
+- **Decision**: no compatibility work is built on that bridge, and the service is not reverse engineered further.
+  The alternative — reading the firmware's own WMI map, which the provider publishes without elevation — is both
+  cheaper and safer. The full argument and the order of work are in `ACER_COMPATIBILITY.md` §9.
+
+No code changed for this note; it records a boundary that a future round would otherwise have to rediscover.

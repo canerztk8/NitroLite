@@ -249,6 +249,8 @@ All read-only. No package was installed, no driver was loaded, no firmware was w
 | S5 | [Arch Wiki, Laptop/Acer](https://wiki.archlinux.org/title/Laptop/Acer) | model-code cross-check |
 | S6 | [platform-driver-x86: ANV15-51 quirk patch](https://ratatoskr.run/platform-driver-x86/2026/07/17338142/t) | ANV15-51 on BIOS V1.60 needs a quirk; recorded as a caveat |
 | S7 | [`shwetankg07/kbrgb` `PROTOCOL.md`](https://github.com/shwetankg07/kbrgb) | the ENE KB5130 eleven-byte HID feature report (§1.7). Reverse-engineered by that project and verified by its author on a `PHN16S-71`; the same document records a confirmation on an `ANV16S-41` |
+| S8 | [`cleyton1986/predator-sense`](https://github.com/cleyton1986/predator-sense) | the keyboard-controller matrix in §9.3: ENEK5130 (4-zone static, Breathing/Neon), the 2024+ Sunrex chip (single-zone, full effect list), Chicony (seven-colour), and per-key on a `PH16-71`. Read for chip families and capabilities, not for code |
+| S9 | [Intrinsec, CVE-2026-50610](https://www.intrinsec.com/en/cve-2026-50610-elevation-privileges-acer-nitrosense/) | why the vendor service is not a transport: the `systemmonitoring_hardware_service_` / `predatorsense_hardware_service_` pipes are writable by `Authenticated Users` and the server does not impersonate its caller (§9.4) |
 
 S1 is the primary source for the four-zone RGB and `fan_speed` columns. It is a community table, not
 Acer documentation: it records what owners reported against the reverse-engineered methods, which is
@@ -520,3 +522,75 @@ the release gate is green, but no real 2-step diff has been taken on hardware ye
 has been read on a physical ITE/Sonix keyboard. Both are marked *test pending* in `BUG_AUDIT.md` §10.4. The first
 owner who runs the pair on an `AN16-61` (or on any model in §3 that is still unverified) turns one of those rows into
 a measurement.
+
+---
+
+## 9. Round five — what research can and cannot buy (2026-11-20)
+
+The question behind this round: *scrape the ecosystem, reverse engineer what NitroSense and PredatorSense do, and
+copy it, so that the next laptop does not produce another issue like #3.* Part of that is already how this file was
+built (§2, S1–S8); this section records where the remaining leverage actually is, and where it is not.
+
+### 9.1 The command set is not the gap
+
+| Layer | Source | NitroLite |
+| --- | --- | --- |
+| WMI method set and selectors | S3, S4 | mirrored; `--hardware-report` prints the class, the provider version and every method signature |
+| Sensor id enum | S3 | used as the profile layout (`cpu=1 gpu=10 sys1=3 rpm=2/6`) |
+| Four-zone HID frame | S7 | routed to when the WMI read-back disagrees (§1.7) |
+| Battery charge limiter | S2 | Care Center path, read back (§7.1) |
+| Keyboard controller families | S8 | **not yet modelled** — see §9.3 |
+
+Read on the reference unit while writing this section: `Get-CimClass root\wmi -ClassName AcerGamingFunction`
+answers **25** methods and their `WmiMethodId` qualifiers **1–25** *without elevation*, exactly the ordinals S4 uses.
+The provider therefore publishes its own interface map on every machine, and that map can be read instead of guessed.
+
+### 9.2 What no amount of scraping answers
+
+- **A write that returns success and changes nothing.** `SetGamingRgbKb` answers `0` on the `AN16-61` and the colour
+  stays put; the battery limiter is accepted and ignored on `AN515-58` BIOS V2.19 (S2 #57); `lcd_override` is ignored
+  on `AN515-57` (S1). These are per-firmware facts. No community table records them, because the table is built from
+  "it worked on mine", and "it returned success" reads the same as "it worked" until someone measures.
+- **The kernel driver as a model database.** The mainline `acer-wmi.c` carries **27** DMI quirk entries and **none**
+  of them is a Nitro or Predator model string (parsed from the file fetched while writing this section). The
+  per-model knowledge for these machines lives in owner reports and issues (S1, S2, S4), not in the driver.
+- **Which selector a NitroSense switch drives.** Acer does not document it and the binary does not say it out loud.
+  An A/B capture does (§8), which is why the snapshot tool exists.
+
+### 9.3 Where research still pays
+
+1. **Keyboard controller capability matrix (S7, S8).** Today the HID backend picks a device by vendor id (ITE
+   `0x048D`, Sonix `0x0C45`, Chicony `0x04F2`) and treats it as four zones. The sources say that is one of four
+   keyboards: ENEK5130 four-zone static, the 2024+ Sunrex single-zone with the full effect list, Chicony's
+   seven-colour palette, and per-key on the `PH16-71` and later Helios. Reading the HID report descriptor and the
+   product string locally (no serial) would let the app describe the keyboard it found and offer only the effects
+   that controller has, instead of writing a four-zone frame into a per-key device.
+2. **The machine's own WMI map.** Adding the `WmiMethodId` ordinal to the probe's method signature and printing
+   *offered but not driven* turns every future `--hardware-report` from any model into a machine-readable map: a new
+   selector on a 2027 chassis shows up as a named method nobody drives, instead of as a bug report.
+3. **The remote profile feed.** Already in place: a model can be marked verified, or corrected, in `profiles.json`
+   without a binary release. Every measurement from §9.3.1 and §9.3.2 lands there.
+
+### 9.4 What we will not do
+
+- **Do not build on the vendor service.** CVE-2026-50610 (S9): Acer's `AcerSysHardwareService.exe` runs as SYSTEM,
+  its `systemmonitoring_hardware_service_` and `predatorsense_hardware_service_` pipes are writable by
+  `Authenticated Users`, and the server does not impersonate the caller — a local privilege escalation. NitroLite
+  connects to Acer's service as a client only when it exists, never serves such an endpoint, and does not need the
+  bridge: its own elevated worker keeps a per-session pipe name and a nonce handshake (`BUG_AUDIT.md` §2.8a, §2.8b).
+  Reverse engineering that service further would mean reproducing an attack surface, not adding compatibility.
+- **No kernel driver, no MSR, no firmware write.** A signed driver would need a certificate and an installation,
+  and the goal is a portable build that a student can run from a folder.
+- **No scraping of Acer's download pages and no redistribution of Acer binaries.** The one fact worth having from a
+  NitroSense package — the WMI method map — is readable from the running machine (§9.1), which is both cheaper and
+  licence-clean.
+- **No GPL code in this repository.** NitroLite is MIT. The community projects are read for protocol facts and each
+  one is credited in §2; nothing is copied.
+
+### 9.5 Order of work
+
+| # | Work | Effort | Risk | What it closes |
+| --- | --- | --- | --- | --- |
+| 1 | `WmiMethodId` ordinals in the probe signature, *offered but not driven* in the report | small | none — read-only metadata | new selectors on unseen models become visible without a user report |
+| 2 | HID report-descriptor capture + controller capability record (S7, S8) | medium | low — descriptor read only | the four-zone frame stops being written to keyboards that are not four-zone |
+| 3 | A/B captures collected from issue reporters into a per-`Model\|BIOS` corpus | continuous | none | the five `AN16-61` rows in §7.3, and the model rows in §3 marked *test pending* |
