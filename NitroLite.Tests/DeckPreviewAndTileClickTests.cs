@@ -119,38 +119,11 @@ public class DeckPreviewAndTileClickTests
     }
 
     // =============================================================================================================
-    // 2. The tiles.
+    // 2. The sensor switches.
     // =============================================================================================================
 
     [Fact]
-    public async Task ClickingTheOtherLiveHalfPointsTheCardAtItInsteadOfSwitchingItOff()
-    {
-        var hardware = new Phase3Fakes.StubHardware();
-
-        using var vm = Create(hardware);
-        await vm.InitializeAsync();
-
-        vm.ReactiveCpuSensor = true;
-
-        // Switching the graphics half on last leaves the card editing it. A click on the processor's tile is then the
-        // user saying "this one" — and that click used to be read as "switch the processor off", so moving the card
-        // between two live halves took a click off, a click on, and then the click that was meant to point at it.
-        vm.ReactiveGpuSensor = true;
-        vm.ToggleReactiveSensor(gpu: false);
-
-        Assert.True(vm.ReactiveCpuSensor);
-        Assert.True(vm.ReactiveGpuSensor);
-
-        // The card moved. The same click again is on the tile that is already the target, and that is the way to
-        // switch a half off.
-        vm.ToggleReactiveSensor(gpu: false);
-
-        Assert.False(vm.ReactiveCpuSensor);
-        Assert.True(vm.ReactiveGpuSensor);
-    }
-
-    [Fact]
-    public async Task TheFirstClickOnASensorTileSwitchesThatSensorOn()
+    public async Task SwitchingAHalfOn_HandsTheRampCardToIt()
     {
         var hardware = new Phase3Fakes.StubHardware();
 
@@ -159,11 +132,37 @@ public class DeckPreviewAndTileClickTests
 
         Assert.True(vm.ReactiveCpuSensor);
         Assert.False(vm.ReactiveGpuSensor);
+        Assert.True(vm.ReactiveRampForCpu);
 
-        vm.ToggleReactiveSensor(gpu: true);
+        // The switch does one thing: it paints with that half. Pointing the ramp card at the half is what follows from
+        // lighting it, because a half that is on is the half the user just looked at — and it is said by the chips in
+        // the ramp header rather than by the switch, so one control never carries two answers.
+        vm.ReactiveGpuSensor = true;
 
         Assert.True(vm.ReactiveGpuSensor);
         Assert.True(vm.ReactiveCpuSensor);
+        Assert.True(vm.ReactiveRampForGpu);
+        Assert.False(vm.ReactiveRampForCpu);
+    }
+
+    [Fact]
+    public async Task SwitchingAHalfOff_LeavesTheCardOnTheHalfThatStillPaints()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        vm.ReactiveGpuSensor = true;
+        Assert.True(vm.ReactiveRampForGpu);
+
+        // The graphics half goes dark: one ramp is left on the keyboard, so the card edits that one rather than a ramp
+        // nothing follows.
+        vm.ReactiveGpuSensor = false;
+
+        Assert.False(vm.ReactiveGpuSensor);
+        Assert.True(vm.ReactiveRampForCpu);
+        Assert.Equal(vm.Labels.ReactiveProfiles, vm.ReactiveRampCaption);
     }
 
     // =============================================================================================================

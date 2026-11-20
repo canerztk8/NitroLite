@@ -585,6 +585,24 @@ public sealed class ShellLabels
     /// <summary>The temp-reactive keyboard card: the title, and the one line that explains what it does.</summary>
     public string ReactiveLighting => Loc.T("Temp-Reactive Lighting");
     public string ReactiveLightingHint => Loc.T("Klavye rengi seçtiğiniz sensörün sıcaklığına göre değişir: hazır rampalardan birini seçin, sabit bir renk için tek renk seçeneğini kullanın ya da Özel'de her sıcaklığa kendi renginizi verin.");
+    /// <summary>The heading over the two sensor rows.</summary>
+    public string ReactiveSensorsTitle => Loc.T("Hangi sensör boyuyor");
+
+    /// <summary>The processor row's switch, read out by a screen reader.</summary>
+    public string ReactiveCpuSwitch => Loc.T("İşlemci sıcaklığı klavyeyi boyasın");
+
+    /// <summary>The graphics row's switch.</summary>
+    public string ReactiveGpuSwitch => Loc.T("Ekran kartı sıcaklığı klavyeyi boyasın");
+
+    /// <summary>What the two split chips do, in one sentence under them.</summary>
+    public string ReactiveSplitHint => Loc.T("Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.");
+
+    /// <summary>The processor chip in the ramp header, read out by a screen reader.</summary>
+    public string ReactiveRampForCpu => Loc.T("Rampayı işlemci yarısı için düzenle");
+
+    /// <summary>The graphics chip in the ramp header.</summary>
+    public string ReactiveRampForGpu => Loc.T("Rampayı ekran kartı yarısı için düzenle");
+
     public string ReactiveSensorsHint => Loc.T("CPU tek başına tüm klavyeyi boyar. CPU + GPU açıkken klavyenin solu CPU, sağı GPU sıcaklığını izler.");
     public string ReactiveNoSensor => Loc.T("Sensör seçilmedi");
     public string ReactiveProfiles => Loc.T("Sıcaklık rampaları");

@@ -1715,5 +1715,11 @@
   "Raporu GitHub'da paylaş": "Laporkan kompatibilitas di GitHub",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Laporan perangkat keras disalin ke papan klip; isu GitHub baru telah dibuka.",
   "Uyumluluk raporu paylaşılamadı: {0}": "Laporan kompatibilitas tidak dapat dibagikan: {0}",
-  "Doğrulanamayan denetimler: {0}": "Kontrol yang belum terverifikasi: {0}"
+  "Doğrulanamayan denetimler: {0}": "Kontrol yang belum terverifikasi: {0}",
+  "Hangi sensör boyuyor": "Sensor mana yang mewarnai",
+  "İşlemci sıcaklığı klavyeyi boyasın": "Suhu prosesor mewarnai keyboard",
+  "Ekran kartı sıcaklığı klavyeyi boyasın": "Suhu kartu grafis mewarnai keyboard",
+  "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Separuh: sisi kiri tetap warna CPU dan sisi kanan warna GPU. Campuran: warna menyebar di empat zona dari kiri ke kanan.",
+  "Rampayı işlemci yarısı için düzenle": "Sunting ramp untuk bagian prosesor",
+  "Rampayı ekran kartı yarısı için düzenle": "Sunting ramp untuk bagian kartu grafis"
 }

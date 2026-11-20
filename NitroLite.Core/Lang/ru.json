@@ -1715,5 +1715,11 @@
   "Raporu GitHub'da paylaş": "Сообщить о совместимости на GitHub",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Отчёт об оборудовании скопирован в буфер обмена; создана новая задача на GitHub.",
   "Uyumluluk raporu paylaşılamadı: {0}": "Не удалось поделиться отчётом о совместимости: {0}",
-  "Doğrulanamayan denetimler: {0}": "Непроверенные элементы управления: {0}"
+  "Doğrulanamayan denetimler: {0}": "Непроверенные элементы управления: {0}",
+  "Hangi sensör boyuyor": "Какой датчик красит",
+  "İşlemci sıcaklığı klavyeyi boyasın": "Температура процессора красит клавиатуру",
+  "Ekran kartı sıcaklığı klavyeyi boyasın": "Температура видеокарты красит клавиатуру",
+  "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Половинки: слева остаётся цвет CPU, справа — цвет GPU. Плавно: цвет переходит по четырём зонам слева направо.",
+  "Rampayı işlemci yarısı için düzenle": "Изменить рампу для половины процессора",
+  "Rampayı ekran kartı yarısı için düzenle": "Изменить рампу для половины видеокарты"
 }

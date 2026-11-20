@@ -424,6 +424,59 @@ public class LightingScenarioTests
     }
 
     // =============================================================================================================
+    // 9. The switch that told the keyboard but not the card.
+    // =============================================================================================================
+
+    [Fact]
+    public async Task TheTemperatureSwitch_RaisesItsOwnPropertyName()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        vm.ReactiveLightingEnabled = true;
+        await Phase3Fakes.WaitUntilAsync(() => vm.ReactiveLightingEnabled);
+
+        var raised = new System.Collections.Generic.List<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != null) raised.Add(e.PropertyName);
+        };
+
+        vm.ReactiveLightingEnabled = false;
+
+        // The switch lives in a method, not in the property's own setter, so the notification helper's caller-member
+        // default named the method instead of the property and no binding heard the change: the keyboard stopped while
+        // the card went on drawing a live reading and a live slider, and the switch was the only thing that looked off.
+        Assert.Contains(nameof(vm.ReactiveLightingEnabled), raised);
+
+        raised.Clear();
+        vm.ReactiveLightingEnabled = true;
+        Assert.Contains(nameof(vm.ReactiveLightingEnabled), raised);
+    }
+
+    [Fact]
+    public async Task TheChargingSwitch_RaisesItsOwnPropertyName()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        using var vm = Create(hardware, powerState: () => (true, 60));
+        await vm.InitializeAsync();
+
+        var raised = new System.Collections.Generic.List<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != null) raised.Add(e.PropertyName);
+        };
+
+        vm.ChargingColorEnabled = true;
+        Assert.Contains(nameof(vm.ChargingColorEnabled), raised);
+
+        raised.Clear();
+        vm.ChargingColorEnabled = false;
+        Assert.Contains(nameof(vm.ChargingColorEnabled), raised);
+    }
+
+    // =============================================================================================================
     // harness
     // =============================================================================================================
 

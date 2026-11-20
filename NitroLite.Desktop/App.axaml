@@ -1,4 +1,4 @@
-<Application xmlns="https://github.com/avaloniaui"
+﻿<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="NitroLite.Desktop.App"
              RequestedThemeVariant="Light">
@@ -552,6 +552,17 @@
       <Setter Property="Opacity" Value="0.45" />
     </Style>
 
+    <!--
+      A row whose controls belong to a mode that can be off: always drawn, so the card keeps its shape, but faded
+      while the switch that owns it is off. Fluent fades a disabled button on its own, yet a slider draws its track
+      from the same resources whether it takes input or not, and a full-strength track with a dead thumb reads as a
+      broken control rather than as a paused one. The whole row is faded together, accent figure included, so "not
+      now" is one glance rather than a guess.
+    -->
+    <Style Selector="StackPanel.gated.off">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
     <!-- A standalone segmented button: the curve presets, the MUX apply. -->
     <Style Selector="Button.seg">
       <Setter Property="Background" Value="Transparent" />
@@ -583,106 +594,65 @@
     </Style>
 
     <!--
-      A segmented chip that stays down: the sensor pair under the temperature colour. It wears the segmented button's
-      clothes so the row reads as the same kind of control, but it is a toggle because both halves can be on at once —
-      one sensor paints the whole keyboard, two of them split it — and a plain button cannot say that.
+      A chosen chip in a segmented row: the split's halves/blended pair, the half whose ramp is being edited, the
+      chosen preset. A plain button carrying a class rather than a ToggleButton, because a ToggleButton owns its own
+      checked state and a click on the chip that is already down has to undo it - the row is a radio pair where one side
+      is always on, so the toggle had to be talked out of the click, and the race left the chosen chip drawn as the one
+      chip without a frame. A button whose look is a class cannot get out of step: what the settings say is what the
+      row shows.
     -->
-    <Style Selector="ToggleButton.seg">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="2" />
-      <Setter Property="Padding" Value="10,3" />
-      <Setter Property="MinHeight" Value="0" />
-      <Setter Property="FontSize" Value="10" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Cursor" Value="Hand" />
-    </Style>
-
-    <Style Selector="ToggleButton.seg /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <Style Selector="ToggleButton.seg:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
-    </Style>
-
-    <Style Selector="ToggleButton.seg:pointerover">
-      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
-    </Style>
-
-    <!-- Down means "the colour follows this sensor", so the chip takes the ink frame the selected ramp chip uses. -->
-    <Style Selector="ToggleButton.seg:checked">
+    <Style Selector="Button.seg.selected">
       <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-    </Style>
-
-    <Style Selector="ToggleButton.seg:checked /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <Style Selector="ToggleButton.seg:disabled">
-      <Setter Property="Opacity" Value="0.45" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="FontWeight" Value="Bold" />
     </Style>
 
     <!--
-      A temperature tile that is also the sensor switch. The pair of segmented chips that used to sit above the tiles was
-      a second row saying the same two words, so the reading became the control: clicking the number you are already
-      looking at is the shorter way to say "the colour follows this one". The tile that is off dims rather than
-      disappearing, because the two are a choice and the one not taken has to stay legible enough to take, and the tile
-      that is on keeps full strength with the accent frame the selected controls on this page wear.
+      The wash is set on the presenter as well: Fluent's own button styles that presenter directly, and a style on the
+      element outranks the template binding that carries the chip's own background into it.
     -->
-    <Style Selector="ToggleButton.tempchip">
+    <Style Selector="Button.seg.selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.seg.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="Button.seg.selected:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentHoverBrush}" />
+    </Style>
+
+
+    <!--
+      One sensor, as a row: the reading on the left and the switch that paints with it on the right. The row used to be a
+      ToggleButton wearing the figure, which made one control answer two questions at once; a plain row with a switch in
+      it answers one, and the chips over the ramp card answer the other.
+    -->
+    <Style Selector="Border.sensor">
       <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Padding" Value="10,7" />
-      <Setter Property="MinHeight" Value="0" />
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="Opacity" Value="0.45" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip:pointerover">
-      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
-      <Setter Property="Opacity" Value="0.75" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip:checked">
-      <Setter Property="Opacity" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Padding" Value="12,8" />
     </Style>
 
     <!--
-      The dimming is not only the tile's opacity: the figure inside greys out too, so the half that is off reads as
-      switched off rather than as a lighter version of the half that is on. The reading stays legible, which is the
-      point of leaving the tile on screen at all.
+      The half that paints nothing dims as a whole: the figure greys out with it, so a switched-off sensor reads as off
+      rather than as a lighter version of the one that is on. The reading stays legible, which is the point of leaving
+      the row on screen at all.
     -->
-    <Style Selector="ToggleButton.tempchip TextBlock.figurebig">
+    <Style Selector="Border.sensor.off">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+
+    <Style Selector="Border.sensor.off TextBlock.figurebig">
       <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip:checked TextBlock.figurebig">
-      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip:checked /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-
-    <Style Selector="ToggleButton.tempchip:disabled">
-      <Setter Property="Opacity" Value="0.3" />
     </Style>
 
     <!--

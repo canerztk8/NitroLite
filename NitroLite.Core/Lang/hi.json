@@ -1715,5 +1715,11 @@
   "Raporu GitHub'da paylaş": "GitHub पर अनुकूलता रिपोर्ट करें",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "हार्डवेयर रिपोर्ट क्लिपबोर्ड पर कॉपी की गई; GitHub पर नया इश्यू खोला गया।",
   "Uyumluluk raporu paylaşılamadı: {0}": "अनुकूलता रिपोर्ट साझा नहीं की जा सकी: {0}",
-  "Doğrulanamayan denetimler: {0}": "असत्यापित नियंत्रण: {0}"
+  "Doğrulanamayan denetimler: {0}": "असत्यापित नियंत्रण: {0}",
+  "Hangi sensör boyuyor": "कौन सा सेंसर रंगता है",
+  "İşlemci sıcaklığı klavyeyi boyasın": "प्रोसेसर का तापमान कीबोर्ड को रंगता है",
+  "Ekran kartı sıcaklığı klavyeyi boyasın": "ग्राफ़िक्स चिप का तापमान कीबोर्ड को रंगता है",
+  "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "आधा-आधा: बायाँ भाग CPU रंग और दायाँ GPU रंग रखता है। मिश्रित: रंग चारों ज़ोन में बाएँ से दाएँ मिलता है।",
+  "Rampayı işlemci yarısı için düzenle": "प्रोसेसर आधे के लिए रैंप संपादित करें",
+  "Rampayı ekran kartı yarısı için düzenle": "ग्राफ़िक्स आधे के लिए रैंप संपादित करें"
 }

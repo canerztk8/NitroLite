@@ -1715,5 +1715,11 @@
   "Raporu GitHub'da paylaş": "Informar de compatibilidad en GitHub",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Informe de hardware copiado al portapapeles; se abrió una nueva incidencia en GitHub.",
   "Uyumluluk raporu paylaşılamadı: {0}": "No se pudo compartir el informe de compatibilidad: {0}",
-  "Doğrulanamayan denetimler: {0}": "Controles no verificados: {0}"
+  "Doğrulanamayan denetimler: {0}": "Controles no verificados: {0}",
+  "Hangi sensör boyuyor": "Que sensor pinta",
+  "İşlemci sıcaklığı klavyeyi boyasın": "La temperatura del procesador pinta el teclado",
+  "Ekran kartı sıcaklığı klavyeyi boyasın": "La temperatura de la gráfica pinta el teclado",
+  "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Mitades: la izquierda mantiene el color de la CPU y la derecha el de la GPU. Mezclado: el color cruza las cuatro zonas de izquierda a derecha.",
+  "Rampayı işlemci yarısı için düzenle": "Editar la rampa de la mitad de la CPU",
+  "Rampayı ekran kartı yarısı için düzenle": "Editar la rampa de la mitad de la GPU"
 }

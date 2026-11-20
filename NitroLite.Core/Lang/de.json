@@ -1715,5 +1715,11 @@
   "Raporu GitHub'da paylaş": "Kompatibilität auf GitHub melden",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Hardwarebericht in die Zwischenablage kopiert; ein neues GitHub-Issue wurde geöffnet.",
   "Uyumluluk raporu paylaşılamadı: {0}": "Der Kompatibilitätsbericht konnte nicht geteilt werden: {0}",
-  "Doğrulanamayan denetimler: {0}": "Nicht bestätigte Steuerelemente: {0}"
+  "Doğrulanamayan denetimler: {0}": "Nicht bestätigte Steuerelemente: {0}",
+  "Hangi sensör boyuyor": "Welcher Sensor malt",
+  "İşlemci sıcaklığı klavyeyi boyasın": "Die Prozessortemperatur malt die Tastatur",
+  "Ekran kartı sıcaklığı klavyeyi boyasın": "Die Grafikkartentemperatur malt die Tastatur",
+  "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Hälften: links bleibt die CPU-Farbe, rechts die GPU-Farbe. Verlaufend: die Farbe geht über die vier Zonen von links nach rechts.",
+  "Rampayı işlemci yarısı için düzenle": "Rampe für die Prozessorhälfte bearbeiten",
+  "Rampayı ekran kartı yarısı için düzenle": "Rampe für die Grafikkartenhälfte bearbeiten"
 }

@@ -571,15 +571,18 @@ public class ReactiveSensorTests
     }
 
     [Fact]
-    public void TheSensorChipsHaveAStyleOfTheirOwn()
+    public void TheSegmentedChipsHaveAStyleOfTheirOwn()
     {
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "App.axaml"));
 
-        // A ToggleButton with a class that no style answers renders as the theme's default button, which is a different
-        // shape and colour from every other segmented control on the page.
-        Assert.Contains("ToggleButton.seg", app, StringComparison.Ordinal);
-        Assert.Contains("ToggleButton.seg:checked", app, StringComparison.Ordinal);
-        Assert.Contains("ToggleButton.seg /template/ ContentPresenter", app, StringComparison.Ordinal);
+        // A button with a class that no style answers renders as the theme's default button, which is a different shape
+        // and colour from every other segmented control on the page. The chips are plain buttons carrying the chosen
+        // state as a class: a ToggleButton owns its own checked state, and a click on the chip that was already down had
+        // to be undone again, which is how the chosen chip came out drawn as the one chip without a frame.
+        Assert.Contains("Button.seg\"", app, StringComparison.Ordinal);
+        Assert.Contains("Button.seg.selected", app, StringComparison.Ordinal);
+        Assert.Contains("Button.seg /template/ ContentPresenter", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ToggleButton.seg", app, StringComparison.Ordinal);
     }
 
     // =============================================================================================================

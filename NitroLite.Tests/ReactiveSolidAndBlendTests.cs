@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -404,8 +404,9 @@ public class ReactiveSolidAndBlendTests
         Assert.Contains("IsVisible=\"{Binding ReactiveSolidVisible}\"", markup, StringComparison.Ordinal);
         Assert.Contains("Labels.ReactiveSolidHint", markup, StringComparison.Ordinal);
 
-        // The two shapes, offered only while both halves are live.
-        Assert.Contains("IsVisible=\"{Binding ReactiveBlendVisible}\"", markup, StringComparison.Ordinal);
+        // The two shapes, in a row that is on the page whether or not both halves are live: with one sensor the pair
+        // is disabled rather than removed, because a row that comes and goes moves the rest of the card with it.
+        Assert.Contains("IsEnabled=\"{Binding ReactiveSplit}\"", markup, StringComparison.Ordinal);
         Assert.Contains("Labels.ReactiveSplitMode", markup, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ReactiveSplitEven\"", markup, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.AutomationId=\"ReactiveSplitBlend\"", markup, StringComparison.Ordinal);

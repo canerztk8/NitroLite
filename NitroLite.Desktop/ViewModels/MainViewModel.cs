@@ -1374,6 +1374,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ToggleOsdCommand = new RelayCommand(() => OsdEnabled = !OsdEnabled);
         ApplyAllZonesCommand = new RelayCommand(ApplyAllZones);
         AddReactiveStopCommand = new RelayCommand(AddReactiveStop, () => CanAddReactiveStop);
+        SelectReactiveSplitEvenCommand = new RelayCommand(() => ReactiveSplitEven = true);
+        SelectReactiveSplitBlendCommand = new RelayCommand(() => ReactiveSplitBlend = true);
+        SelectReactiveRampForCpuCommand = new RelayCommand(() => ReactiveRampForCpu = true);
+        SelectReactiveRampForGpuCommand = new RelayCommand(() => ReactiveRampForGpu = true);
         BuildPhase3Commands();
     }
 
@@ -3289,41 +3293,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshDeckPreview();
     }
 
-    /// <summary>
-    /// What a click on a temperature tile means. The tile is the switch and the pointer at once, so a click on a half
-    /// that is already painting is the user pointing the ramp card at that half — not asking the keyboard to stop
-    /// following it. It only switches off when the card is already pointed at it, which makes one click enough to move
-    /// between two live halves instead of three.
-    /// </summary>
-    /// <param name="gpu">True for the graphics chip's tile, false for the processor's.</param>
-    public void ToggleReactiveSensor(bool gpu)
-    {
-        if (gpu)
-        {
-            if (_reactiveGpuSensor && _reactiveCpuSensor && !_reactiveRampTargetGpu)
-            {
-                SelectReactiveRampTarget(gpu: true);
-                Raise(nameof(ReactiveGpuSensor));
-                return;
-            }
-
-            ReactiveGpuSensor = !_reactiveGpuSensor;
-            return;
-        }
-
-        if (_reactiveCpuSensor && _reactiveGpuSensor && _reactiveRampTargetGpu)
-        {
-            SelectReactiveRampTarget(gpu: false);
-            Raise(nameof(ReactiveCpuSensor));
-            return;
-        }
-
-        ReactiveCpuSensor = !_reactiveCpuSensor;
-    }
-
     private void SetReactiveLighting(bool value, bool restore)
     {
-        if (!Set(ref _reactiveLightingEnabled, value)) return;
+        // The property name has to be spelled out. This is a method, not the property's setter, so the helper's
+        // caller-member default would have raised "SetReactiveLighting" - a name no binding listens for. The
+        // keyboard stopped, but the card went on showing a mode that was on: the live reading stayed, the
+        // brightness slider stayed live, and the switch was the only thing that looked switched off.
+        if (!Set(ref _reactiveLightingEnabled, value, nameof(ReactiveLightingEnabled))) return;
 
         _settings.ReactiveLightingEnabled = value;
 
@@ -3712,7 +3688,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void SetChargingColorEnabled(bool value, bool restore)
     {
-        if (!Set(ref _chargingColorEnabled, value)) return;
+        // Named for the same reason as the temperature switch: a method call carries no caller member name.
+        if (!Set(ref _chargingColorEnabled, value, nameof(ChargingColorEnabled))) return;
 
         _settings.ChargingColorEnabled = value;
 
@@ -3898,31 +3875,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Which half's ramp the picker and the editor are working on: true for the graphics chip.</summary>
     /// <remarks>
-    /// There is no control of its own for this any more. The temperature tiles are the only thing on the page that
-    /// names a half, so the half whose tile was switched on last is the half the ramp card edits — see
-    /// <see cref="SetReactiveSensor"/>. Nothing in the view binds this; it is read by <see cref="ReactiveRampCaption"/>
-    /// and by the tests.
+    /// The user says this with the two chips in the ramp card's header, or by switching a half on, which hands the card
+    /// to the half that was just lit — see <see cref="SetReactiveSensor"/>. Nothing else on the page reads it.
     /// </remarks>
     public bool ReactiveRampTargetGpu => _reactiveRampTargetGpu;
 
+    /// <summary>The processor's chip in the ramp header, the left half of a radio pair.</summary>
+    /// <remarks>
+    /// The chips are buttons carrying a selected class rather than toggles, so neither side can be left drawn as
+    /// unselected; the write path is kept for the command, which points the card at a half without a click.
+    /// </remarks>
+    public bool ReactiveRampForCpu
+    {
+        get => !_reactiveRampTargetGpu;
+        set
+        {
+            if (value) PointRampCard(gpu: false);
+            Raise(nameof(ReactiveRampForCpu));
+            Raise(nameof(ReactiveRampForGpu));
+        }
+    }
+
+    /// <summary>The graphics chip's chip in the ramp header, on the same rule as the processor's.</summary>
+    public bool ReactiveRampForGpu
+    {
+        get => _reactiveRampTargetGpu;
+        set
+        {
+            if (value) PointRampCard(gpu: true);
+            Raise(nameof(ReactiveRampForCpu));
+            Raise(nameof(ReactiveRampForGpu));
+        }
+    }
+
     /// <summary>
-    /// The caption above the profile chips: the section title, plus the half the card is editing while both halves are
-    /// live.
+    /// The title above the profile chips.
     /// </summary>
     /// <remarks>
-    /// This sentence is what replaced the CPU/GPU chips. The chips were a second control saying "this card is pointed
-    /// at the left half"; the caption says the same thing where the user is already reading, and the tiles below are
-    /// where the pointing happens. With one sensor on there is nothing to disambiguate, so the title stands alone.
+    /// It used to carry the half as a suffix, because the temperature tiles were the only control that named one and
+    /// the caption was the answer they gave. The header now holds the CPU/GPU chips themselves, so a suffix would be
+    /// the same word twice in one row.
     /// </remarks>
-    public string ReactiveRampCaption =>
-        _reactiveCpuSensor && _reactiveGpuSensor
-            ? $"{Labels.ReactiveProfiles} · {(_reactiveRampTargetGpu ? "GPU" : "CPU")}"
-            : Labels.ReactiveProfiles;
+    public string ReactiveRampCaption => Labels.ReactiveProfiles;
 
     /// <summary>
     /// Points the ramp card at one half of the keyboard. The chips and the editor are rebuilt from that half's own
     /// settings; nothing is written, because choosing which ramp to look at is not choosing a colour.
     /// </summary>
+    /// <summary>Points the ramp card at one half, from the chips in its header rather than from a sensor tile.</summary>
+    private void PointRampCard(bool gpu) => SelectReactiveRampTarget(gpu);
+
     private void SelectReactiveRampTarget(bool gpu)
     {
         if (_reactiveRampTargetGpu == gpu) return;
@@ -3930,6 +3932,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _reactiveRampTargetGpu = gpu;
         Raise(nameof(ReactiveRampTargetGpu));
         Raise(nameof(ReactiveRampCaption));
+        Raise(nameof(ReactiveRampForCpu));
+        Raise(nameof(ReactiveRampForGpu));
 
         var previous = _suppressWrite;
         _suppressWrite = true;
@@ -4022,23 +4026,32 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>The "even halves" chip, the left half of a two-chip switch.</summary>
+    /// <summary>Whether the two halves meet at a hard edge, which the pair of chips shows as "halves".</summary>
+    /// <remarks>
+    /// One of the two is always true, so a write of <c>false</c> has nowhere to go and only re-announces both sides; the
+    /// chips say which is on with a class rather than with their own checked state, so nothing can be left drawn as
+    /// unselected. The write path stays because the command, the tests and the settings all speak in these two names.
+    /// </remarks>
     public bool ReactiveSplitEven
     {
         get => !ReactiveLightingBlend;
         set
         {
             if (value) ReactiveLightingBlend = false;
+            Raise(nameof(ReactiveSplitEven));
+            Raise(nameof(ReactiveSplitBlend));
         }
     }
 
-    /// <summary>The "blended" chip.</summary>
+    /// <summary>Whether the colour crosses the four zones, which the pair of chips shows as "blended".</summary>
     public bool ReactiveSplitBlend
     {
         get => ReactiveLightingBlend;
         set
         {
             if (value) ReactiveLightingBlend = true;
+            Raise(nameof(ReactiveSplitEven));
+            Raise(nameof(ReactiveSplitBlend));
         }
     }
 
@@ -4128,6 +4141,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool ReactiveCustomEditorVisible => SelectedReactiveProfile?.IsCustom == true;
 
     public RelayCommand AddReactiveStopCommand { get; private set; } = null!;
+
+    /// <summary>The "halves" chip: one sensor per half, hard edge down the middle of the keyboard.</summary>
+    public RelayCommand SelectReactiveSplitEvenCommand { get; private set; } = null!;
+
+    /// <summary>The "blended" chip: the same two colours, crossed through the two middle zones.</summary>
+    public RelayCommand SelectReactiveSplitBlendCommand { get; private set; } = null!;
+
+    /// <summary>The processor's chip in the ramp header: point the picker and the editor at its half.</summary>
+    public RelayCommand SelectReactiveRampForCpuCommand { get; private set; } = null!;
+
+    /// <summary>The graphics chip's chip in the ramp header.</summary>
+    public RelayCommand SelectReactiveRampForGpuCommand { get; private set; } = null!;
 
     /// <summary>True while the custom ramp can take one more stop.</summary>
     public bool CanAddReactiveStop => ReactiveStops.Count < ReactiveLighting.MaxStops;

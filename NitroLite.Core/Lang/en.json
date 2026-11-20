@@ -1715,5 +1715,11 @@
   "Raporu GitHub'da paylaş": "Report compatibility on GitHub",
   "Donanım raporu panoya kopyalandı; GitHub'da yeni sorun açıldı.": "Hardware report copied to the clipboard; a new GitHub issue was opened.",
   "Uyumluluk raporu paylaşılamadı: {0}": "The compatibility report could not be shared: {0}",
-  "Doğrulanamayan denetimler: {0}": "Unverified controls: {0}"
+  "Doğrulanamayan denetimler: {0}": "Unverified controls: {0}",
+  "Hangi sensör boyuyor": "Which sensor paints",
+  "İşlemci sıcaklığı klavyeyi boyasın": "The processor's temperature paints the keyboard",
+  "Ekran kartı sıcaklığı klavyeyi boyasın": "The graphics chip's temperature paints the keyboard",
+  "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Halves: the left of the keyboard stays the CPU colour and the right the GPU colour. Blended: the colour crosses the four zones from left to right.",
+  "Rampayı işlemci yarısı için düzenle": "Edit the ramp for the processor's half",
+  "Rampayı ekran kartı yarısı için düzenle": "Edit the ramp for the graphics chip's half"
 }

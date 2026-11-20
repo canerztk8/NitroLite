@@ -194,7 +194,7 @@ public class RampTargetAndAdapterTests
     }
 
     [Fact]
-    public async Task TheRampCaption_NamesTheHalfTheCardIsEditing()
+    public async Task TheRampHeader_CarriesTheHalfTheCardIsEditing()
     {
         var settings = new AppSettings { ReactiveLightingUseCpu = true, ReactiveLightingUseGpu = true };
 
@@ -203,17 +203,76 @@ public class RampTargetAndAdapterTests
 
         await vm.InitializeAsync();
 
-        // Both halves live: the caption carries the half the chips and the stop rows below it belong to, which is where
-        // the CPU/GPU chips used to say it. Opening the app edits the processor's ramp.
-        Assert.Equal($"{vm.Labels.ReactiveProfiles} · CPU", vm.ReactiveRampCaption);
-
-        // With one sensor there is nothing to disambiguate, so the title stands alone.
-        vm.ReactiveGpuSensor = false;
+        // The title is only a title: the half is named by the two chips in the same row, so a suffix would say it twice.
         Assert.Equal(vm.Labels.ReactiveProfiles, vm.ReactiveRampCaption);
 
-        // And the tile that switches a half on is the tile that hands the card to it.
-        vm.ReactiveGpuSensor = true;
-        Assert.Equal($"{vm.Labels.ReactiveProfiles} · GPU", vm.ReactiveRampCaption);
+        // Opening the app edits the processor's ramp, and its chip is the one drawn as selected.
+        Assert.True(vm.ReactiveRampForCpu);
+        Assert.False(vm.ReactiveRampForGpu);
+
+        // The chips are the control: picking one moves the editor and nothing else.
+        vm.ReactiveRampForGpu = true;
+
+        Assert.True(vm.ReactiveRampTargetGpu);
+        Assert.True(vm.ReactiveRampForGpu);
+        Assert.False(vm.ReactiveRampForCpu);
+        Assert.True(vm.ReactiveGpuSensor);
+        Assert.True(vm.ReactiveCpuSensor);
+
+        // Clicking the chip that is already selected is what a ToggleButton does before the setter runs: it arrives as
+        // false. Neither value may leave the pair with no chip selected, because there is always a half being edited.
+        vm.ReactiveRampForGpu = false;
+        Assert.True(vm.ReactiveRampForGpu);
+        Assert.False(vm.ReactiveRampForCpu);
+
+        // Switching the processor's half on hands the card back to it, and the chips follow without being touched.
+        vm.ReactiveCpuSensor = false;
+        vm.ReactiveCpuSensor = true;
+
+        Assert.True(vm.ReactiveRampForCpu);
+        Assert.False(vm.ReactiveRampForGpu);
+    }
+
+    [Fact]
+    public async Task TheSplitChips_BehaveLikeARadioPair()
+    {
+        var settings = new AppSettings { ReactiveLightingUseCpu = true, ReactiveLightingUseGpu = true };
+
+        using var vm = new MainViewModel(settings, new Phase3Fakes.StubHardware(), null, TempSettingsPath(),
+            powerState: () => (false, 50));
+
+        await vm.InitializeAsync();
+
+        // One of the two shapes is always selected.
+        Assert.True(vm.ReactiveSplitEven);
+        Assert.False(vm.ReactiveSplitBlend);
+
+        vm.ReactiveSplitBlend = true;
+        Assert.True(vm.ReactiveSplitBlend);
+        Assert.False(vm.ReactiveSplitEven);
+
+        // A false has nowhere to go, because one shape is always chosen: the write only re-announces both sides.
+        vm.ReactiveSplitBlend = false;
+        Assert.True(vm.ReactiveSplitBlend);
+        Assert.False(vm.ReactiveSplitEven);
+
+        vm.ReactiveSplitEven = true;
+        Assert.True(vm.ReactiveSplitEven);
+        Assert.False(vm.ReactiveSplitBlend);
+
+        vm.ReactiveSplitEven = false;
+        Assert.True(vm.ReactiveSplitEven);
+        Assert.False(vm.ReactiveSplitBlend);
+
+        // What the chips on the page actually do: a command, not a toggle. The row shows the pair by reading it back,
+        // so no click can leave it with neither shape drawn.
+        vm.SelectReactiveSplitBlendCommand.Execute(null);
+        Assert.True(vm.ReactiveSplitBlend);
+        Assert.False(vm.ReactiveSplitEven);
+
+        vm.SelectReactiveSplitEvenCommand.Execute(null);
+        Assert.True(vm.ReactiveSplitEven);
+        Assert.False(vm.ReactiveSplitBlend);
     }
 
     [Fact]
@@ -435,60 +494,122 @@ public class RampTargetAndAdapterTests
     // =============================================================================================================
 
     [Fact]
-    public void TheTemperatureTiles_AreTheSensorSwitches()
+    public void TheSensorRows_CarryTheirOwnSwitch()
     {
         var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
 
-        // The row of chips that said the same two words again is gone, and the tiles carry the switches instead.
-        Assert.DoesNotContain("Labels.ReactiveSensors}", markup, StringComparison.Ordinal);
+        // The reading is a reading again. The tile that used to be both the switch and the pointer at the ramp card is
+        // gone, which is what made a click on a live half look like a bug: it meant "point here" once and "switch this
+        // off" the next time, and nothing on screen said which.
+        Assert.DoesNotContain("Classes=\"tempchip\"", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReactiveCpuSensor, Mode=OneWay", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnReactiveCpuTile", markup, StringComparison.Ordinal);
+
         Assert.Contains("ReactiveCpuReading", markup, StringComparison.Ordinal);
         Assert.Contains("ReactiveGpuReading", markup, StringComparison.Ordinal);
-        // One-way on purpose: a two-way tile cannot tell "point the card at this half" from "switch this half off",
-        // so the click goes through the view model, which knows how many halves are live and which one the card is on.
-        Assert.Contains("IsChecked=\"{Binding ReactiveCpuSensor, Mode=OneWay}\"", markup, StringComparison.Ordinal);
-        Assert.Contains("IsChecked=\"{Binding ReactiveGpuSensor, Mode=OneWay}\"", markup, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnReactiveCpuTile\"", markup, StringComparison.Ordinal);
-        Assert.Contains("Click=\"OnReactiveGpuTile\"", markup, StringComparison.Ordinal);
-        Assert.Contains("Classes=\"tempchip\"", markup, StringComparison.Ordinal);
 
-        // And the tiles are on screen whether or not the mode is on: they are the only control that picks a sensor, and
-        // hiding them behind the switch meant the choice could only be made after the mode was already running.
-        var tiles = markup.IndexOf("AutomationProperties.AutomationId=\"ReactiveSensorCpu\"", StringComparison.Ordinal);
-        var gate = markup.LastIndexOf("IsVisible=\"{Binding ReactiveLightingEnabled}\"", tiles, StringComparison.Ordinal);
-        Assert.True(gate < 0 || markup.IndexOf("</StackPanel>", gate, StringComparison.Ordinal) < tiles,
-            "the sensor tiles must not be inside a ReactiveLightingEnabled panel");
+        // One row per sensor, each with a plain switch bound to that sensor. The switch is the only thing that decides
+        // whether the half paints, and it says so by itself.
+        Assert.Contains("Classes=\"sensor\"", markup, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ReactiveSensorCpu\"", markup, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ReactiveSensorGpu\"", markup, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding ReactiveCpuSensor}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding ReactiveGpuSensor}\"", markup, StringComparison.Ordinal);
 
-        // The ramp card can be pointed at either half, which is what lets the two halves look different — and the only
-        // control that names a half is the tile above, so the chips that repeated it are gone for good.
-        Assert.DoesNotContain("ReactiveRampTargetCpu", markup, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReactiveRampTargetGpu", markup, StringComparison.Ordinal);
-        Assert.Contains("ReactiveRampCaption", markup, StringComparison.Ordinal);
+        // The dimming of the half that is off reaches the figure as well.
+        Assert.Contains("Classes.off=\"{Binding !ReactiveCpuSensor}\"", markup, StringComparison.Ordinal);
+
+        // The ramp card names its half in its own header, and both the ramp chips and the split chips stay on the page
+        // while there is only one sensor: a row that comes and goes moves everything under it.
+        Assert.Contains("AutomationProperties.AutomationId=\"ReactiveRampForCpu\"", markup, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ReactiveRampForGpu\"", markup, StringComparison.Ordinal);
+        Assert.Contains("Classes.selected=\"{Binding ReactiveRampForGpu}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding SelectReactiveRampForGpuCommand}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding SelectReactiveSplitBlendCommand}\"", markup, StringComparison.Ordinal);
+
+        // No ToggleButton wears the segmented clothes: a toggle owns its own checked state, and a click on the chip
+        // that is already down had to be undone again, which is how the chosen chip came out drawn as unchosen.
+        Assert.DoesNotContain("ToggleButton Classes=\"seg\"", markup, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding ReactiveSplit}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ReactiveSplitEven\"", markup, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.AutomationId=\"ReactiveSplitBlend\"", markup, StringComparison.Ordinal);
+
+        // And the brightness slider is on the card whether the mode is on or not: it is the control the user comes here
+        // for, so it is disabled while the mode is off rather than hidden.
+        var slider = markup.IndexOf("AutomationProperties.AutomationId=\"ReactiveBrightness\"", StringComparison.Ordinal);
+        Assert.True(slider > 0, "the brightness slider is missing from the card");
+        var gate = markup.LastIndexOf("IsVisible=\"{Binding ReactiveLightingEnabled}\"", slider, StringComparison.Ordinal);
+        Assert.True(gate < 0 || markup.IndexOf("</StackPanel>", gate, StringComparison.Ordinal) < slider,
+            "the brightness slider must not be inside a ReactiveLightingEnabled panel");
+
+        // Nothing else gates it: the fade is a look, not a lock.
+        var row = markup.LastIndexOf("<StackPanel", slider, StringComparison.Ordinal);
+        Assert.True(row > 0, "the brightness slider is not inside a panel");
+        var opening = markup[row..markup.IndexOf('>', row)];
+        Assert.Contains("IsEnabled=\"{Binding ReactiveLightingEnabled}\"", opening, StringComparison.Ordinal);
+
+        // While the mode is off the row fades as a whole: a slider draws its track from the same resources whether it
+        // takes input or not, so a full-strength track with a dead thumb reads as broken rather than as paused.
+        Assert.Contains("Classes=\"gated\"", opening, StringComparison.Ordinal);
+        Assert.Contains("Classes.off=\"{Binding !ReactiveLightingEnabled}\"", opening, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void TheTileClick_IsDecidedByTheViewModel()
-    {
-        var codeBehind = File.ReadAllText(
-            Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml.cs"));
-
-        // The handler is the one place that knows a click on a live half means "point the card at it".
-        Assert.Contains("ToggleReactiveSensor", codeBehind, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TheTemperatureTileStyle_DimsWhatIsOff()
+    public void TheGatedRow_FadesWhileItsModeIsOff()
     {
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "App.axaml"));
 
-        // A ToggleButton with a class no style answers draws as the theme's default button; the dimmed state is the
-        // selected/unselected signal the report asked for.
-        Assert.Contains("ToggleButton.tempchip", app, StringComparison.Ordinal);
-        Assert.Contains("ToggleButton.tempchip:checked", app, StringComparison.Ordinal);
-        Assert.Contains("ToggleButton.tempchip:disabled", app, StringComparison.Ordinal);
+        // A row wearing a class that no style answers looks exactly like an enabled one. Fluent fades its own buttons
+        // when they are disabled, but a slider draws its track the same way either way, so the row carries the fade
+        // itself and the accent figure inside it fades with the rest.
+        // A class, not a property selector: [IsEnabled=False] names a property on a type that does not own it, so
+        // the selector resolved to nothing and the row never faded at all.
+        var gated = StyleBlock(app, "StackPanel.gated.off\"");
+        Assert.Contains("Opacity", gated, StringComparison.Ordinal);
+    }
 
-        // The dimming reaches the figure as well, so the half that is off reads as greyed out rather than as a lighter
-        // version of the half that is on.
-        Assert.Contains("ToggleButton.tempchip TextBlock.figurebig", app, StringComparison.Ordinal);
+    [Fact]
+    public void TheSensorRowStyle_DimsWhatIsOff()
+    {
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "App.axaml"));
+
+        // A Border with a class no style answers draws as nothing at all, so the row style has to exist for the page to
+        // look like a page.
+        Assert.Contains("Border.sensor", app, StringComparison.Ordinal);
+        Assert.Contains("Border.sensor.off", app, StringComparison.Ordinal);
+        Assert.Contains("Border.sensor.off TextBlock.figurebig", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheChosenSegment_CarriesAFrame()
+    {
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "App.axaml"));
+
+        // The chosen chip has to be unmistakable: the ink frame, the ink text and a wash of the ink, on the chip and
+        // on the presenter inside it. Fluent's own button styles that presenter directly, and a style on the element
+        // outranks the template binding that carries the chip's own brush into it, so the wash has to be set in both
+        // places or the chosen chip is the one chip in the row without one.
+        var checkedStyle = StyleBlock(app, "Button.seg.selected\"");
+        Assert.Contains("BorderBrush\" Value=\"{DynamicResource AccentBrush}\"", checkedStyle, StringComparison.Ordinal);
+        Assert.Contains("Foreground\" Value=\"{DynamicResource AccentBrush}\"", checkedStyle, StringComparison.Ordinal);
+        Assert.Contains("FontWeight\" Value=\"Bold\"", checkedStyle, StringComparison.Ordinal);
+
+        var checkedPresenter = StyleBlock(app, "Button.seg.selected /template/ ContentPresenter\"");
+        Assert.Contains("{DynamicResource AccentSoftBrush}", checkedPresenter, StringComparison.Ordinal);
+        Assert.Contains("BorderBrush\" Value=\"{DynamicResource AccentBrush}\"", checkedPresenter, StringComparison.Ordinal);
+    }
+
+    /// <summary>The body of the one style whose selector is exactly <paramref name="selector"/>, quotes and all.</summary>
+    private static string StyleBlock(string markup, string selector)
+    {
+        var bearer = "<Style Selector=\"" + selector;
+        var start = markup.IndexOf(bearer, StringComparison.Ordinal);
+        Assert.True(start >= 0, "no style for " + selector);
+
+        var end = markup.IndexOf("</Style>", start, StringComparison.Ordinal);
+        Assert.True(end > start, "unterminated style for " + selector);
+
+        return markup[start..end];
     }
 
     // =============================================================================================================
