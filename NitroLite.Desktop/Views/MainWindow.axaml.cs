@@ -622,7 +622,19 @@ public partial class MainWindow : Window
 
         if (_viewModel.OsdEnabled)
         {
-            _osd ??= new OsdOverlayWindow { DataContext = _viewModel };
+            if (_osd == null)
+            {
+                _osd = new OsdOverlayWindow { DataContext = _viewModel };
+
+                // The overlay counts the displays it is about to be placed on, and a window that has never been opened
+                // has no platform window to count them with: creating it and calling Apply left it invisible, with
+                // the setting on and nothing on screen. It is opened once and closed again so the handle exists, then
+                // placed while hidden — moving a window that is already visible is the case its placement order exists
+                // to avoid.
+                _osd.Show();
+                _osd.Hide();
+            }
+
             _osd.Apply(_viewModel);
         }
         else if (_osd != null)
