@@ -423,6 +423,34 @@ public class AppSettings
     [JsonPropertyName("charging_color")]
     public string? ChargingColor { get; set; }
 
+    /// <summary>
+    /// Which sensors the temperature colour follows. CPU is on unless the user says otherwise, because that is the
+    /// reading every machine has; GPU is opt-in, because a machine without one answers nothing and a mode that painted
+    /// a colour for a sensor it does not have would look alive while saying nothing.
+    /// </summary>
+    /// <remarks>
+    /// Both on is the split layout: the left half of the keyboard follows the processor and the right half the graphics
+    /// chip. This is a preference rather than a moment — it is the way the user reads their own machine — so it is
+    /// stored, and the switches on the page read it back.
+    /// </remarks>
+    [JsonPropertyName("reactive_lighting_use_cpu")]
+    public bool ReactiveLightingUseCpu { get; set; } = true;
+
+    /// <summary>Whether the graphics chip's temperature drives the right half of the keyboard.</summary>
+    [JsonPropertyName("reactive_lighting_use_gpu")]
+    public bool ReactiveLightingUseGpu { get; set; }
+
+    /// <summary>
+    /// The brightness the temperature colour paints at. Its own slider, independent of the page's: the colour the user
+    /// chose and the colour the sensor chooses are two different things and each keeps its own level.
+    /// </summary>
+    [JsonPropertyName("reactive_lighting_brightness")]
+    public int ReactiveLightingBrightness { get; set; } = 6;
+
+    /// <summary>The brightness the charging colour paints at, on its own slider and for the same reason.</summary>
+    [JsonPropertyName("charging_color_brightness")]
+    public int ChargingColorBrightness { get; set; } = 6;
+
     [JsonPropertyName("last_operating_mode")]
     public OperatingMode? LastOperatingMode { get; set; }
 
@@ -711,6 +739,12 @@ public class AppSettings
             var cleanStops = ReactiveLightingProfiles.SanitizeStops(ReactiveLightingCustomStops);
             ReactiveLightingCustomStops = cleanStops.Count >= 2 ? cleanStops : null;
         }
+
+        // The two automatic colours paint at levels of their own, and a file a user can edit can hold a zero or a
+        // negative in either. Zero is the firmware's "stay dark", which would make the mode look broken rather than
+        // dim, so the stored level is brought into the range the sliders offer before anything reads it.
+        ReactiveLightingBrightness = ChargingLighting.NormalizeBrightness(ReactiveLightingBrightness);
+        ChargingColorBrightness = ChargingLighting.NormalizeBrightness(ChargingColorBrightness);
 
         // Both capability maps come out of a file a user can edit and a crash can truncate. A null here reached a
         // dictionary lookup and a list add on the first capability read, so a hand-edited file took the whole page

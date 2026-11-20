@@ -582,6 +582,9 @@ public sealed class ShellLabels
     /// <summary>The temp-reactive keyboard card: the title, and the one line that explains what it does.</summary>
     public string ReactiveLighting => Loc.T("Temp-Reactive Lighting");
     public string ReactiveLightingHint => Loc.T("Klavye rengi CPU sıcaklığına göre değişir: üç hazır rampandan birini seçin ya da Özel'de her sıcaklığa kendi renginizi verin.");
+    public string ReactiveSensors => Loc.T("Sensörler");
+    public string ReactiveSensorsHint => Loc.T("CPU tek başına tüm klavyeyi boyar. CPU + GPU açıkken klavyenin solu CPU, sağı GPU sıcaklığını izler.");
+    public string ReactiveNoSensor => Loc.T("Sensör seçilmedi");
     public string ReactiveProfiles => Loc.T("Sıcaklık rampaları");
     public string ReactiveStops => Loc.T("Renk skalası");
     public string Profile => Loc.T("Profil");

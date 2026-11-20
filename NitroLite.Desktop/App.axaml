@@ -583,6 +583,50 @@
     </Style>
 
     <!--
+      A segmented chip that stays down: the sensor pair under the temperature colour. It wears the segmented button's
+      clothes so the row reads as the same kind of control, but it is a toggle because both halves can be on at once —
+      one sensor paints the whole keyboard, two of them split it — and a plain button cannot say that.
+    -->
+    <Style Selector="ToggleButton.seg">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="10,3" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="ToggleButton.seg /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToggleButton.seg:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.seg:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrongBrush}" />
+    </Style>
+
+    <!-- Down means "the colour follows this sensor", so the chip takes the ink frame the selected ramp chip uses. -->
+    <Style Selector="ToggleButton.seg:checked">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.seg:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ToggleButton.seg:disabled">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <!--
       A ramp chip: the gradient a temp-reactive profile paints, with its name under it. A card rather than a segmented
       button, because the thing being chosen is a picture and the label only names it; the selected chip keeps the ink
       frame the segmented row uses so the two read as the same kind of choice.

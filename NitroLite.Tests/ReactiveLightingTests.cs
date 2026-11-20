@@ -256,8 +256,9 @@ public class ReactiveLightingTests
 
         var write = Assert.Single(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
 
-        // The resumed brightness, not zero: the firmware ignores a colour written at brightness zero.
-        Assert.StartsWith($"STATIC|{vm.BrightnessLevel}|", write, StringComparison.Ordinal);
+        // The mode's own level, not zero: the firmware ignores a colour written at brightness zero, and the page's
+        // slider is not this mode's to borrow.
+        Assert.StartsWith($"STATIC|{vm.ReactiveBrightness}|", write, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -26,11 +26,21 @@ public static class ChargingLighting
     public const string Effect = "STATIC";
 
     /// <summary>
+    /// The lowest brightness the two automatic colours paint at. One rather than zero: zero is the firmware's "stay
+    /// dark", so a slider that reached it would look like a broken mode rather than a dim one.
+    /// </summary>
+    public const int MinBrightness = 1;
+
+    /// <summary>
     /// A colour as <c>#RRGGBB</c>, or <see cref="DefaultColor"/> when the text is not one. The store rejects a
     /// malformed colour with WRONG_PARAMETERS, so nothing unvalidated may reach it.
     /// </summary>
     public static string Normalize(string? color) =>
         IsColor(color) ? LightingPolicy.NormalizeHex(color, DefaultColor) : DefaultColor;
+
+    /// <summary>A stored level brought into the range the sliders offer. Zero and nonsense come back at the floor.</summary>
+    public static int NormalizeBrightness(int level) =>
+        Math.Clamp(level <= 0 ? MinBrightness : level, MinBrightness, LightingLimits.MaxBrightnessLevel);
 
     /// <summary>
     /// True when <paramref name="color"/> is a complete <c>#RRGGBB</c> (or <c>RRGGBB</c>) the store accepts. The card's
@@ -53,23 +63,32 @@ public static class ChargingLighting
 
     /// <summary>
     /// True when <paramref name="baseline"/> describes a keyboard that can be painted at all. A page whose lights are
-    /// off — blackout, or a brightness of zero — has no brightness to paint the charging colour at, and the firmware
-    /// reads a colour written at zero as "stay dark".
+    /// off — blackout, or a brightness of zero — has said the keys should be dark, and a colour mode is not a way to
+    /// switch them back on behind the user.
     /// </summary>
     public static bool CanPaint(LightingConfig? baseline) =>
         baseline != null && !LightingPolicy.IsOff(baseline) && baseline.Brightness > 0;
 
     /// <summary>
-    /// The configuration the charging mode writes: <paramref name="color"/> on every zone, with the brightness,
-    /// speed and direction the page already holds so the keyboard does not jump to full brightness when the plug goes
-    /// in. The caller checks <see cref="CanPaint"/> first; a baseline that is off comes back off rather than lit.
+    /// The configuration the charging mode writes: <paramref name="color"/> on every zone, with the speed and direction
+    /// the page already holds and the brightness the mode's own slider carries. The caller checks
+    /// <see cref="CanPaint"/> first; a baseline that is off comes back off rather than lit.
     /// </summary>
-    public static LightingConfig ConfigFor(string? color, LightingConfig baseline)
+    /// <remarks>
+    /// The brightness is a parameter rather than the baseline's because the two automatic colours have a level of their
+    /// own: the page's slider belongs to the colour the user chose, and a charging colour that jumped to the page's
+    /// level every time the plug went in would be a second brightness control the user never asked for. Null keeps the
+    /// baseline's.
+    /// </remarks>
+    public static LightingConfig ConfigFor(string? color, LightingConfig baseline, int? brightness = null)
     {
         var hex = Normalize(color);
 
         var config = LightingPolicy.Clone(baseline);
         config.Effect = Effect;
+        config.Brightness = brightness is { } level
+            ? NormalizeBrightness(level)
+            : config.Brightness;
         config.Color = hex;
         config.LEDs = new List<string> { hex, hex, hex, hex };
         return config;

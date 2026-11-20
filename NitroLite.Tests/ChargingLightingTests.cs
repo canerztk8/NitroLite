@@ -102,7 +102,9 @@ public class ChargingLightingTests
         await vm.ChargingLightingTask;
 
         var write = Assert.Single(hardware.LightingWrites);
-        Assert.StartsWith($"STATIC|{vm.BrightnessLevel}|", write, StringComparison.Ordinal);
+        // The mode's own level, not the page's: the charging colour has a brightness slider of its own so the plug
+        // cannot change the brightness the user set for the colour they chose.
+        Assert.StartsWith($"STATIC|{vm.ChargingBrightness}|", write, StringComparison.Ordinal);
         Assert.Contains(ChargingLighting.DefaultColor, write, StringComparison.Ordinal);
 
         // The colour the page holds is untouched: this mode paints the keyboard, it does not become the user's
@@ -354,7 +356,95 @@ public class ChargingLightingTests
         }
     }
 
-    // ---------------------------------------------------------------- harness
+    // =============================================================================================================
+    // 5. OFF in the effect list: the keyboard takes no colour, so both automatic colours close.
+    // =============================================================================================================
+
+    [Fact]
+    public async Task ChoosingOFF_ClosesBothAutomaticColours_AndKeepsThePreference()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        var settings = new AppSettings();
+
+        using var vm = Create(hardware, settings, powerState: () => (true, 80));
+        await vm.InitializeAsync();
+
+        vm.ChargingColorEnabled = true;
+        await vm.ChargingLightingTask;
+        Assert.True(vm.AutomaticColoursEnabled);
+
+        vm.SelectedEffect = vm.Effects.First(e => e.Id == "OFF");
+
+        // The switch goes off with the keyboard, immediately — not a second later, when the write lands.
+        Assert.False(vm.ChargingColorEnabled);
+        Assert.False(vm.ReactiveLightingEnabled);
+        Assert.False(vm.AutomaticColoursEnabled);
+
+        // The preference is not the switch: the next lit effect is what brings the mode back.
+        Assert.True(settings.ChargingColorEnabled);
+    }
+
+    [Fact]
+    public async Task ChoosingALitEffectAgain_ReopensThem_AndPaintsTheMode()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+
+        using var vm = Create(hardware, new AppSettings(), powerState: () => (true, 80));
+        await vm.InitializeAsync();
+
+        vm.ChargingColorEnabled = true;
+        await vm.ChargingLightingTask;
+
+        vm.SelectedEffect = vm.Effects.First(e => e.Id == "OFF");
+        await Phase3Fakes.WaitUntilAsync(() => !vm.AutomaticColoursEnabled, 3000);
+
+        hardware.LightingWrites.Clear();
+        vm.SelectedEffect = vm.Effects.First(e => e.Id == "STATIC");
+
+        // The card opens as soon as the list moves, and the mode is put back on the keys once the write is accepted.
+        Assert.True(vm.AutomaticColoursEnabled);
+        await Phase3Fakes.WaitUntilAsync(() => vm.ChargingColorEnabled, 3000);
+        await vm.ChargingLightingTask;
+
+        Assert.Contains(hardware.LightingWrites,
+            w => w.Contains(ChargingLighting.DefaultColor, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AZeroBrightness_ClosesNothing_EvenThoughTheKeysAreDark()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+
+        using var vm = Create(hardware, new AppSettings(), powerState: () => (true, 80));
+        await vm.InitializeAsync();
+
+        vm.ChargingColorEnabled = true;
+        await vm.ChargingLightingTask;
+
+        hardware.LightingWrites.Clear();
+        vm.BrightnessLevel = 0;
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, 3000);
+
+        // Both states are dark, but only one of them is the user asking for no colour at all. A slider at zero is a
+        // dark keyboard with a page around it, so nothing closes — the user is on their way back up. The page write
+        // does end the automatic colours, the same way a swatch does: that is the colour rule, not the dark one.
+        Assert.True(vm.IsLightingOff);
+        Assert.False(vm.IsLightingBlackedOut);
+        Assert.True(vm.AutomaticColoursEnabled);
+    }
+
+    [Fact]
+    public void BothAutomaticColourCardsCloseWithTheEffectList()
+    {
+        var markup = File.ReadAllText(Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml"));
+
+        // Two cards, one binding each: the ramp and the charging colour are closed together or not at all.
+        Assert.Equal(2, markup.Split("AutomaticColoursEnabled").Length - 1);
+    }
+
+    // =============================================================================================================
+    // harness
+    // =============================================================================================================
 
     private static string RepoRoot()
     {

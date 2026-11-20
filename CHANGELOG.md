@@ -14,7 +14,9 @@ The lighting page's off switch now means what it says. Pressing it darkens the k
 automatic colours are switched off with it instead of staying visibly on over a keyboard that refuses every write until
 the mode is toggled again — which was exactly what made Temp-Reactive Lighting look broken. The ramp moved down to
 where the extras card used to be, that card is gone, its 30-second backlight timeout is in the header beside the
-blackout, and the keyboard can now hold a colour of its own while the charger is plugged in.
+blackout, and the keyboard can now hold a colour of its own while the charger is plugged in. The temperature colour
+follows the processor, the graphics chip, or both at once, each automatic colour paints at a level of its own, and a
+custom ramp's stops are typed as well as slid.
 
 ### Added
 
@@ -22,8 +24,26 @@ blackout, and the keyboard can now hold a colour of its own while the charger is
   colour while the adapter is in and go back to the user's own lighting the moment it comes out. The colour is picked
   from the page's own eight swatches, the colour picker or a hex box, and is stored in `charging_color` behind
   `charging_color_enabled`. It is transition-driven rather than tick-driven — one write when the plug goes in, one when
-  it comes out — never touches `KeyboardLighting`, takes the page's brightness, speed and direction, and stays armed
-  without painting while the lights are off. The card's state line says which of the two the keys are showing.
+  it comes out — never touches `KeyboardLighting`, takes the page's speed and direction and a brightness level of its
+  own, and stays armed without painting while the lights are off. The card's state line says which of the two the keys
+  are showing.
+- **The temperature colour follows whichever chips you pick.** Two chips under Temp-Reactive Lighting — `CPU 58 °C` and
+  `GPU 51 °C`, each carrying its own reading — switch the sensors on and off. One of them on paints the whole keyboard
+  from that sensor; both on splits it down the middle, zones 1–2 from the processor and zones 3–4 from the graphics
+  chip, written as a zone pattern so the firmware addresses each half. With both off the mode is armed and paints
+  nothing, and the card says so; switching the mode on with neither selected turns the processor back on. A sensor that
+  answers zero or `NaN` falls back to the other one rather than to the ramp's cold end, because a missing reading is not
+  a cold machine. The pair is stored in `reactive_lighting_use_cpu` (default on) and `reactive_lighting_use_gpu`, and the
+  card shows a second swatch while the halves disagree.
+- **A brightness slider for each automatic colour.** The temperature ramp and the charging colour each paint at a level
+  of their own, 1–9, six by default, stored in `reactive_lighting_brightness` and `charging_color_brightness`. The page's
+  own slider is left alone: it belongs to the colour the user chose, and a mode that borrowed it would dim and brighten
+  with a control that is not its own. Zero is not offered — it is the firmware's "stay dark" — and a level moved while
+  the colour is on the keys repaints at once rather than at the next temperature bucket or the next plug.
+- **Stop temperatures can be typed.** Every row of a custom ramp's editor is a slider *and* a box: type `73`, `73.5` or
+  `73,5`, press Enter or leave the box, and the stop takes it, clamped to the ramp's 20–110 °C and rewritten to the value
+  it actually holds so a clamped number cannot look accepted. A ramp preview above the rows shows the gradient as it is
+  edited, from the same stops the evaluator walks.
 
 ### Changed
 
@@ -37,7 +57,16 @@ blackout, and the keyboard can now hold a colour of its own while the charger is
   behaviour this change exists to remove. Any successful lit write — the restore button, the brightness slider, a
   swatch, a profile — ends the blackout and revives whichever mode was running, so the off-and-on toggle the
   temperature ramp used to need is gone. The two automatic colours are also mutually exclusive: switching one on
-  switches the other off, because they paint the same four zones, and a manual apply switches both off.
+  switches the other off, because they paint the same four zones.
+- **Choosing a colour ends both automatic colours as it starts.** Picking an RGB profile, a swatch, an effect or a
+  brightness is the user asking for that colour, so both modes switch off — visibly, at once — instead of keeping a
+  switch on over keys they no longer own and forcing an off-and-on toggle before they could be used again. The cards
+  stay open: switching a mode off is not switching the page off.
+- **A dark keyboard closes both automatic colours.** OFF in the effect list is the keyboard taking no colour, so the
+  temperature ramp and the charging colour switch off with it and their two cards close — a switch left on over dark
+  keys promises a write the firmware will not make. Both preferences stay in the settings file, and the next lit effect
+  reopens the cards and puts the mode back on the keys. A brightness of zero is left alone: that is the slider's own
+  dark, and the page around it still works.
 - **Temp-Reactive Lighting sits below the effect card**, in the place the extras card occupied, with the charging
   colour directly beneath it: the two automatic colours are together at the end of the page, after the controls that
   hold a colour of the user's own.

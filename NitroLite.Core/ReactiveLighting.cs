@@ -133,6 +133,49 @@ public static class ReactiveLighting
         return Math.Clamp(steps * BucketCelsius, ColdCelsius, HotCelsius);
     }
 
+    /// <summary>
+    /// The colours the two halves of the keyboard get: the left two zones follow one sensor and the right two the
+    /// other, so a machine under load can show a hot processor beside a cool graphics chip. Null when neither sensor is
+    /// selected — a mode with no source has nothing to paint.
+    /// </summary>
+    /// <remarks>
+    /// A temperature the backend could not read — zero, or a NaN from a driver that answered nonsense — falls back to
+    /// the other sensor rather than to the cold end: a missing reading is not a cold machine. With one sensor selected
+    /// both halves carry its colour, because a keyboard split down the middle by a choice the user did not make reads
+    /// as a fault.
+    /// </remarks>
+    public static (string Left, string Right)? ColorsForSensors(
+        IReadOnlyList<ReactiveLightingStop>? stops,
+        double cpuCelsius,
+        double gpuCelsius,
+        bool useCpu,
+        bool useGpu)
+    {
+        if (!useCpu && !useGpu) return null;
+
+        var cpu = Usable(cpuCelsius);
+        var gpu = Usable(gpuCelsius);
+
+        if (useCpu && useGpu)
+        {
+            var left = cpu ?? gpu;
+            var right = gpu ?? cpu;
+            if (left is null || right is null) return null;
+
+            return (ColorFor(stops, left.Value), ColorFor(stops, right.Value));
+        }
+
+        var at = useCpu ? cpu ?? gpu : gpu ?? cpu;
+        if (at is null) return null;
+
+        var color = ColorFor(stops, at.Value);
+        return (color, color);
+    }
+
+    /// <summary>A reading that can become a colour, or null when the sensor answered nothing usable.</summary>
+    private static double? Usable(double celsius) =>
+        double.IsNaN(celsius) || double.IsInfinity(celsius) || celsius <= 0 ? null : celsius;
+
     private static (double At, byte R, byte G, byte B) Parse(ReactiveLightingStop stop)
     {
         // SanitizeStops has already normalised the colour to "#RRGGBB", so the substrings are safe to convert.

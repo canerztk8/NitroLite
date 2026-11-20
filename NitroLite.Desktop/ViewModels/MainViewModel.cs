@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
@@ -870,8 +871,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     // that keeps the embedded controller out of the telemetry loop.
     private bool _reactiveLightingEnabled;
     private string _reactiveLightingColor = ReactiveLighting.ColdColor;
+    private string _reactiveLightingColorRight = ReactiveLighting.ColdColor;
     private readonly ReactiveLightingThrottle _reactiveThrottle = new();
     private ReactiveProfileChoice? _selectedReactiveProfile;
+
+    // Which sensors the colour follows, and the level it paints at. Both are the mode's own: the page's brightness
+    // belongs to the colour the user chose, and a temperature colour that borrowed it would jump every time the page's
+    // slider moved.
+    private bool _reactiveCpuSensor = true;
+    private bool _reactiveGpuSensor;
+    private int _reactiveBrightness = 6;
+    private int _chargingBrightness = 6;
 
     /// <summary>
     /// True once the custom ramp is the user's own: saved in an earlier session or edited in this one. Until then the
@@ -894,11 +904,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _lightingBlackedOut;
 
     /// <summary>
-    /// The automatic colour a blackout switched off, so the button that restores the lights can switch it back on.
-    /// The preferences in the settings file are not touched: a blackout is a moment, not a change of mind.
+    /// The automatic colour a dark keyboard switched off — a blackout, or OFF picked from the effect list — so the
+    /// write that brings the lights back can switch it on again. The preferences in the settings file are not touched:
+    /// a dark keyboard is a moment, not a change of mind.
     /// </summary>
-    private bool _reactiveSuspendedForBlackout;
-    private bool _chargingSuspendedForBlackout;
+    private bool _reactiveSuspended;
+    private bool _chargingSuspended;
 
     /// <summary>
     /// True once <see cref="ReadStateAsync"/> has filled the controls with what the keyboard holds. The charging
@@ -1259,6 +1270,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         BuildReactiveStops();
         _reactiveLightingEnabled = settings.ReactiveLightingEnabled;
 
+        // The sensors and the two mode levels are read before the page is built, because the cards show them and a
+        // value read after the first paint would show the shipped default for one frame.
+        _reactiveCpuSensor = settings.ReactiveLightingUseCpu;
+        _reactiveGpuSensor = settings.ReactiveLightingUseGpu;
+        _reactiveBrightness = ChargingLighting.NormalizeBrightness(settings.ReactiveLightingBrightness);
+        _chargingBrightness = ChargingLighting.NormalizeBrightness(settings.ChargingColorBrightness);
+
         // The charging colour is read before its palette is built, because the palette marks the chosen swatch.
         _chargingColor = ChargingLighting.Normalize(settings.ChargingColor);
 
@@ -1271,7 +1289,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The blackout survives a restart, but only the button's own off state does: a brightness the user slid to
         // zero is a dark keyboard with a page that still works, and it must not come back locked.
         _lightingBlackedOut = settings.IsBacklightOff && IsBlackoutConfiguration(settings.KeyboardLighting);
-        if (_lightingBlackedOut) SuspendAutomaticColoursForBlackout();
+        if (_lightingBlackedOut) SuspendAutomaticColours();
 
         _osdEnabled = settings.OsdEnabled;
         _osdCorner = Math.Clamp(settings.OsdCorner, 0, 3);
@@ -1996,6 +2014,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(CurvePreview));
             Raise(nameof(SystemCpuText));
             Raise(nameof(SparklineNowText));
+            Raise(nameof(ReactiveCpuChip));
+            Raise(nameof(ReactiveLightingNow));
         }
     }
 
@@ -2007,6 +2027,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _gpuTemperature, value)) return;
             Raise(nameof(GpuTemperatureText));
             Raise(nameof(SystemGpuText));
+            Raise(nameof(ReactiveGpuChip));
+            Raise(nameof(ReactiveLightingNow));
         }
     }
 
@@ -2843,21 +2865,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ZoneSolid));
             Raise(nameof(ZonePreviewNote));
             Raise(nameof(HasZonePreviewNote));
+            Raise(nameof(AutomaticColoursEnabled));
 
             // The page has no Apply button, so picking an effect is the write. Without this the list changed the
             // view model and nothing else, and the keyboard stayed in whatever effect it was already in.
             if (_suppressWrite) return;
+            if (value == null) return;
 
-            // OFF is the user asking for dark, not for a different look, so it leaves the profile where it was.
-            if (value != null && !string.Equals(value.Id, "OFF", StringComparison.OrdinalIgnoreCase))
+            if (IsSelectedEffectOff)
+            {
+                // OFF is the user asking for dark, not for a different look: it leaves the profile where it was, and
+                // because the keyboard takes no colour, both automatic colours go off with it. A switch left on over a
+                // dark keyboard promises a write the firmware will not make. Their preferences stay in the settings
+                // file, so the effect that comes next brings them back.
+                SuspendAutomaticColours();
+            }
+            else
             {
                 MarkProfileCustom();
-            }
 
-            // Picking an effect while the lights are off is the user asking for light: the last lit configuration
-            // comes back with this effect. OFF is the exception, because that is the user asking for dark.
-            if (value != null && !string.Equals(value.Id, "OFF", StringComparison.OrdinalIgnoreCase))
-            {
+                // Picking an effect while the lights are off is the user asking for light: the last lit configuration
+                // comes back with this effect.
                 ResumeFromOffForEdit(cfg => cfg.Effect = value.Id);
             }
 
@@ -3069,9 +3097,117 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     public Task ReactiveLightingTask { get; private set; } = Task.CompletedTask;
 
-    /// <summary>The live reading beside the swatch, so the colour has a number next to it.</summary>
-    /// <remarks>"CPU" and "°C" are the same in all eight languages, so this line needs no catalogue entry.</remarks>
-    public string ReactiveLightingNow => $"CPU {CpuTemperature:F0} °C";
+    /// <summary>
+    /// The live reading beside the swatch: which sensor is driving the keyboard and what it reads, so the colour has a
+    /// number next to it.
+    /// </summary>
+    /// <remarks>"CPU" and "°C" are the same in all eight languages, so only the "nothing selected" line needs
+    /// translating.</remarks>
+    public string ReactiveLightingNow => !HasReactiveSensors
+        ? Labels.ReactiveNoSensor
+        : _reactiveCpuSensor && _reactiveGpuSensor ? $"{ReactiveCpuChip} · {ReactiveGpuChip}"
+        : _reactiveGpuSensor ? ReactiveGpuChip
+        : ReactiveCpuChip;
+
+    /// <summary>Whether the processor's temperature drives the keyboard.</summary>
+    public bool ReactiveCpuSensor
+    {
+        get => _reactiveCpuSensor;
+        set => SetReactiveSensor(cpu: value, gpu: null);
+    }
+
+    /// <summary>
+    /// Whether the graphics chip's temperature drives the right half of the keyboard. With both sensors on the left two
+    /// zones follow the processor and the right two the graphics chip, so a machine under load shows both at once.
+    /// </summary>
+    public bool ReactiveGpuSensor
+    {
+        get => _reactiveGpuSensor;
+        set => SetReactiveSensor(cpu: null, gpu: value);
+    }
+
+    /// <summary>The processor chip's own text: the sensor and the reading the colour came from.</summary>
+    /// <remarks>
+    /// A backend that has not sampled yet reports zero, so the chip can read <c>CPU 0 °C</c> for the first second. That
+    /// is the honest number: the colour beside it is the ramp's cold end for the same reason.
+    /// </remarks>
+    public string ReactiveCpuChip => $"CPU {CpuTemperature:F0} °C";
+
+    /// <summary>The graphics chip's chip text, on the same rule as <see cref="ReactiveCpuChip"/>.</summary>
+    public string ReactiveGpuChip => $"GPU {GpuTemperature:F0} °C";
+
+    /// <summary>False when both switches are off: the mode is armed but has nothing to follow.</summary>
+    public bool HasReactiveSensors => _reactiveCpuSensor || _reactiveGpuSensor;
+
+    /// <summary>True while the two halves follow different sensors, which the card shows as a second swatch.</summary>
+    public bool ReactiveSplit => _reactiveCpuSensor && _reactiveGpuSensor;
+
+    /// <summary>The colour the right half of the keyboard is running, when the two halves disagree.</summary>
+    public string ReactiveLightingColorRight => _reactiveLightingColorRight;
+
+    /// <summary>
+    /// The level the temperature colour paints at, on its own slider. The mode's own, because the page's brightness
+    /// belongs to the colour the user chose: a temperature colour that borrowed it would change every time the page's
+    /// slider moved, and would be dark whenever the page was.
+    /// </summary>
+    public int ReactiveBrightness
+    {
+        get => _reactiveBrightness;
+        set
+        {
+            var level = ChargingLighting.NormalizeBrightness(value);
+            if (!Set(ref _reactiveBrightness, level)) return;
+
+            _settings.ReactiveLightingBrightness = level;
+            SaveSettings();
+            Raise(nameof(ReactiveBrightnessLabel));
+
+            // A level changed while the colour is on the keys is repainted now rather than at the next bucket: the
+            // slider is the control the user is looking at, and the keyboard has to agree with it.
+            ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+        }
+    }
+
+    /// <summary>The figure beside the mode's slider, on the same rule as the page's brightness.</summary>
+    public string ReactiveBrightnessLabel => Labels.BrightnessValue(_reactiveBrightness, MaxBrightness);
+
+    /// <summary>
+    /// Turns one sensor on or off and repaints. A mode with both switches off is armed but paints nothing, which the
+    /// card says in words; switching the mode on with neither selected turns the processor back on, so enabling it
+    /// always does something the user can see.
+    /// </summary>
+    private void SetReactiveSensor(bool? cpu, bool? gpu)
+    {
+        bool changed = false;
+
+        if (cpu is { } cpuValue && cpuValue != _reactiveCpuSensor)
+        {
+            _reactiveCpuSensor = cpuValue;
+            _settings.ReactiveLightingUseCpu = cpuValue;
+            Raise(nameof(ReactiveCpuSensor));
+            changed = true;
+        }
+
+        if (gpu is { } gpuValue && gpuValue != _reactiveGpuSensor)
+        {
+            _reactiveGpuSensor = gpuValue;
+            _settings.ReactiveLightingUseGpu = gpuValue;
+            Raise(nameof(ReactiveGpuSensor));
+            changed = true;
+        }
+
+        if (!changed) return;
+
+        SaveSettings();
+        Raise(nameof(HasReactiveSensors));
+        Raise(nameof(ReactiveSplit));
+        Raise(nameof(ReactiveCpuChip));
+        Raise(nameof(ReactiveGpuChip));
+        Raise(nameof(ReactiveLightingNow));
+
+        // The keyboard changes shape, not just colour, so the throttle has to let the next paint through.
+        ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+    }
 
     private void SetReactiveLighting(bool value, bool restore)
     {
@@ -3097,12 +3233,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // keyboard this mode was about to paint, which read as the profile fighting the switch.
             MarkProfileCustom();
 
+            // A mode with no sensor selected would be a switch that does nothing. Turning it on with both off picks the
+            // processor back up: it is the reading every machine has, and the one the mode always used to follow.
+            if (!HasReactiveSensors) SetReactiveSensor(cpu: true, gpu: null);
+
             // The first write should happen on the next tick rather than waiting for the interval to elapse.
             _reactiveThrottle.Reset();
 
             // Asking for a colour is asking to see it, so the page leaves the blackout with the keyboard.
             IsLightingBlackedOut = false;
-            _reactiveSuspendedForBlackout = false;
+            _reactiveSuspended = false;
         }
         else if (restore)
         {
@@ -3116,9 +3256,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// One telemetry sample's worth of reactive lighting: compute the colour, and write it only if it is worth writing.
+    /// One telemetry sample's worth of reactive lighting: work out the colour pair, and write it only if it is worth
+    /// writing.
     /// </summary>
-    private void TickReactiveLighting(MonitorData data)
+    private void TickReactiveLighting(MonitorData data) =>
+        ApplyReactiveColour(data.CpuTemperature, data.GpuTemperature);
+
+    /// <summary>
+    /// Paints the sensors' colours, if it is worth a write. Both the telemetry tick and the card's own controls come
+    /// through here, so a level or a sensor change reaches the keys on the same rule the temperature does.
+    /// </summary>
+    /// <param name="force">True for a control the user just moved, which must be visible at once.</param>
+    private void ApplyReactiveColour(double cpuCelsius, double gpuCelsius, bool force = false)
     {
         // Not gated on LightingAvailable: that flag comes from the WMI capability probe, which opens an instance of
         // AcerGamingFunction and needs elevation. Without it the probe answers "no keyboard" on a machine whose
@@ -3128,47 +3277,63 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // A keyboard the user turned off stays off. Turning the mode on already brought the lights back, so a dark
         // keyboard here means the user pressed "turn off" afterwards, and nothing in a colour mode may overrule that.
-        if (_settings.IsBacklightOff || BrightnessLevel <= 0) return;
+        if (_lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0) return;
 
-        var color = ReactiveLighting.ColorFor(ActiveReactiveStops(), data.CpuTemperature);
-        if (!_reactiveThrottle.TryBeginWrite(color, DateTime.UtcNow)) return;
+        var pair = ReactiveLighting.ColorsForSensors(ActiveReactiveStops(), cpuCelsius, gpuCelsius,
+            _reactiveCpuSensor, _reactiveGpuSensor);
 
-        ReactiveLightingTask = WriteReactiveLightingAsync(color);
+        // Both switches off, or neither sensor answered: nothing to paint, and the card says so in words rather than
+        // leaving the keys on a colour that stopped meaning anything.
+        if (pair is not { } colors) return;
+
+        if (force) _reactiveThrottle.Reset();
+
+        // The pair is the identity of the write, not just one half: two sensors that swap colours still have to reach
+        // the keys even when neither half's colour is new.
+        if (!_reactiveThrottle.TryBeginWrite($"{colors.Left}|{colors.Right}", DateTime.UtcNow)) return;
+
+        ReactiveLightingTask = WriteReactiveLightingAsync(colors.Left, colors.Right);
     }
 
     /// <summary>
-    /// Writes one reactive colour to every zone.
+    /// Writes the reactive colours: one solid colour across all four zones when both halves agree, or two halves when
+    /// they do not. A zone pattern with more than one colour goes out as DIRECT — the firmware's STATIC mode takes one
+    /// colour, and four colours sent under it is why only one of them ever reached the keyboard.
     /// </summary>
     /// <remarks>
     /// The hardware call is off the UI thread: a WMI write is tens of milliseconds, and this runs while a game is in the
     /// foreground, which is exactly where a stutter would be noticed. The state updates come back to the UI thread.
     /// </remarks>
-    private async Task WriteReactiveLightingAsync(string color)
+    private async Task WriteReactiveLightingAsync(string left, string right)
     {
         var hardware = _hardware;
         if (hardware == null) return;
 
-        var brightness = BrightnessLevel;
+        var brightness = _reactiveBrightness;
         var speed = SpeedLevel;
         var direction = SelectedDirection?.Direction ?? 1;
-        var zones = new[] { color, color, color, color };
+        var zones = new[] { left, left, right, right };
 
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
-            var ok = await Task.Run(() => hardware.SetLightingAsync("STATIC", brightness, speed, direction, color, zones))
+            // STATIC with four zones that disagree is the backend's DIRECT: the keyboard addresses each zone itself,
+            // so the left half can follow the processor while the right half follows the graphics chip.
+            var ok = await Task.Run(() => hardware.SetLightingAsync("STATIC", brightness, speed, direction, left, zones))
                 .ConfigureAwait(true);
 
             if (!ok)
             {
                 // A refusal is logged once per colour, not once per tick: the throttle has already recorded the write,
                 // so a keyboard that cannot take the colour does not fill the log with the same line.
-                AppLog.Warn("The temperature colour could not be written", color);
+                AppLog.Warn("The temperature colour could not be written", $"{left} / {right}");
                 return;
             }
 
-            _reactiveLightingColor = color;
+            _reactiveLightingColor = left;
+            _reactiveLightingColorRight = right;
             Raise(nameof(ReactiveLightingColor));
+            Raise(nameof(ReactiveLightingColorRight));
         }
         catch (Exception ex)
         {
@@ -3206,11 +3371,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!Set(ref _lightingBlackedOut, value)) return;
             Raise(nameof(LightingControlsEnabled));
             Raise(nameof(LightingBlackoutButtonText));
+            Raise(nameof(AutomaticColoursEnabled));
         }
     }
 
     /// <summary>The inverse of <see cref="IsLightingBlackedOut"/>, so a container can be disabled without a converter.</summary>
     public bool LightingControlsEnabled => !_lightingBlackedOut;
+
+    /// <summary>
+    /// Whether the two automatic colours can be used: false while the keyboard takes no colour, because the effect list
+    /// stands on OFF or the page is in blackout. Neither mode paints a dark keyboard, so their switches and their
+    /// sliders are closed rather than left live over keys that will not answer them.
+    /// </summary>
+    /// <remarks>
+    /// This is not <see cref="IsLightingOff"/>. A brightness of zero is the slider's own dark and the page stays open
+    /// around it — the user is on their way to sliding it back up — while OFF in the effect list is the user saying the
+    /// keyboard should take no colour at all.
+    /// </remarks>
+    public bool AutomaticColoursEnabled => !_lightingBlackedOut && !IsSelectedEffectOff;
+
+    /// <summary>True while the effect list stands on OFF: dark, rather than a different look.</summary>
+    private bool IsSelectedEffectOff =>
+        string.Equals(_selectedEffect?.Id, "OFF", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The top-right button: it puts the lights out, and the same button brings them back.</summary>
     public string LightingBlackoutButtonText =>
@@ -3251,22 +3433,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Switches both automatic colours off for a blackout without changing either preference. The switches go off with
-    /// the keyboard — a mode that stays visibly on over a dark keyboard is the bug this exists to prevent — and the
-    /// button that restores the lights is what puts them back.
+    /// Switches both automatic colours off for a keyboard that takes no colour, without changing either preference.
+    /// The switches go off with the keyboard — a mode that stays visibly on over a dark keyboard is the bug this
+    /// exists to prevent — and the write that lights the keys again is what puts them back.
     /// </summary>
-    private void SuspendAutomaticColoursForBlackout()
+    /// <remarks>
+    /// Two things darken the keyboard: the page's blackout button and OFF in the effect list. Neither is a change of
+    /// mind about the mode, so both leave the settings file alone and both are undone by the next lit write.
+    /// </remarks>
+    private void SuspendAutomaticColours()
     {
         if (_reactiveLightingEnabled)
         {
-            _reactiveSuspendedForBlackout = true;
+            _reactiveSuspended = true;
             _reactiveLightingEnabled = false;
             Raise(nameof(ReactiveLightingEnabled));
         }
 
         if (_chargingColorEnabled)
         {
-            _chargingSuspendedForBlackout = true;
+            _chargingSuspended = true;
             _chargingColorEnabled = false;
             _chargingColorPainted = false;
             Raise(nameof(ChargingColorEnabled));
@@ -3275,18 +3461,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Puts back the automatic colours the blackout switched off, now that the keyboard is lit again.</summary>
-    private void ResumeSuspendedModesAfterBlackout()
+    /// <summary>Puts back the automatic colours a dark keyboard switched off, now that the keys take a colour again.</summary>
+    private void ResumeSuspendedAutomaticColours()
     {
-        if (_reactiveSuspendedForBlackout)
+        if (_reactiveSuspended)
         {
-            _reactiveSuspendedForBlackout = false;
+            _reactiveSuspended = false;
             if (_settings.ReactiveLightingEnabled) SetReactiveLighting(true, restore: true);
         }
 
-        if (_chargingSuspendedForBlackout)
+        if (_chargingSuspended)
         {
-            _chargingSuspendedForBlackout = false;
+            _chargingSuspended = false;
             if (_settings.ChargingColorEnabled) SetChargingColorEnabled(true, restore: true);
         }
     }
@@ -3343,6 +3529,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OnAcPower == true ? Labels.ChargingColorActive : Labels.ChargingColorWaiting;
 
     public bool HasChargingColorState => _chargingColorEnabled;
+
+    /// <summary>
+    /// The level the charging colour paints at, on its own slider. Its own for the same reason the temperature colour
+    /// has one: the page's brightness belongs to the colour the user chose, and the two automatic colours are guests on
+    /// that keyboard, not a replacement for it.
+    /// </summary>
+    public int ChargingBrightness
+    {
+        get => _chargingBrightness;
+        set
+        {
+            var level = ChargingLighting.NormalizeBrightness(value);
+            if (!Set(ref _chargingBrightness, level)) return;
+
+            _settings.ChargingColorBrightness = level;
+            SaveSettings();
+            Raise(nameof(ChargingBrightnessLabel));
+
+            // A level changed while the colour is on the keys is repainted now rather than at the next plug.
+            if (_chargingColorPainted) ChargingLightingTask = SyncChargingLightingAsync(force: true);
+        }
+    }
+
+    /// <summary>The figure beside the charging card's slider, on the same rule as the page's brightness.</summary>
+    public string ChargingBrightnessLabel => Labels.BrightnessValue(_chargingBrightness, MaxBrightness);
 
     /// <summary>
     /// The write the last charger transition started, so a test can await it instead of sleeping. The setter of
@@ -3415,7 +3626,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     return;
                 }
 
-                var charging = ChargingLighting.ConfigFor(_chargingColor, baseline);
+                var charging = ChargingLighting.ConfigFor(_chargingColor, baseline, _chargingBrightness);
                 if (!await WriteLightingConfigAsync(charging).ConfigureAwait(true))
                 {
                     AppLog.Warn("The charging colour could not be written", charging.Color);
@@ -3459,6 +3670,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>The custom ramp's stops, one editor row each. Edited only while the custom entry is selected.</summary>
     public ObservableCollection<ReactiveStopViewModel> ReactiveStops { get; } = new();
+
+    /// <summary>
+    /// The custom ramp as a gradient, for the preview above the editor's rows: the picture is the ramp the tick would
+    /// paint, so the user judges the shape while they build it rather than after switching to it.
+    /// </summary>
+    public IReadOnlyList<ReactiveLightingStop> CustomRampPreview => CurrentCustomStops();
 
     /// <summary>
     /// The ramp the reactive mode currently follows. Picking a profile is the write: it is stored and the throttle is
@@ -3630,6 +3847,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         var custom = ReactiveProfileChoices.FirstOrDefault(c => c.IsCustom);
         if (custom != null) custom.Stops = CurrentCustomStops();
+        Raise(nameof(CustomRampPreview));
     }
 
     /// <summary>
@@ -3722,6 +3940,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// business — this is the one line of it the view model needs, so the hex validation stays here.
     /// </summary>
     public void ApplyReactiveStopColor(ReactiveStopViewModel row, string hex) => row.Color = hex;
+
+    /// <summary>
+    /// Commits a temperature typed into one row of the custom ramp. The box accepts "62", "62 °C" and "62,5"; anything
+    /// else leaves the stop where it was, because a half-typed number is not a request to move it to the floor. The
+    /// stop clamps to the ramp's own range, so the editor cannot describe a temperature the evaluator would drop.
+    /// </summary>
+    public void SetReactiveStopTemperature(ReactiveStopViewModel row, string? text)
+    {
+        var trimmed = (text ?? "").Trim().TrimEnd('°', 'C', 'c', ' ').Replace(',', '.').Trim();
+        if (trimmed.Length == 0) return;
+        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var typed)) return;
+
+        row.AtCelsius = typed;
+    }
 
     // The slider ranges come from the protocol constants rather than from numbers typed into the XAML, so a change to
     // the sysfs contract cannot leave the UI offering a level the kernel will reject.
@@ -6660,9 +6892,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!_settings.IsBacklightOff) _settings.LastActiveLighting = config;
             SaveSettings();
 
-            // A write the keyboard accepted is the page agreeing with it: whatever was on the keys is there no more,
-            // so the page leaves the blackout, and the automatic colours the blackout switched off come back.
-            LeaveLightingBlackout();
+            // A write the keyboard accepted is the page agreeing with it: whatever was on the keys is there no more.
+            // A lit configuration leaves the blackout and puts back the automatic colours it switched off. An OFF
+            // configuration is the other direction — any writer can ask for dark, a saved profile included — so it
+            // closes those two instead, and the next lit write is what reopens them.
+            if (IsBlackoutConfiguration(config)) SuspendAutomaticColours();
+            else LeaveLightingBlackout();
         }
         catch (Exception ex)
         {
@@ -6702,7 +6937,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void LeaveLightingBlackout()
     {
         IsLightingBlackedOut = false;
-        ResumeSuspendedModesAfterBlackout();
+        ResumeSuspendedAutomaticColours();
     }
 
     private async Task TurnOffLightingAsync()
@@ -6724,7 +6959,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // switched off here rather than left showing "on" over a dark keyboard — a switch that stays on and does
         // nothing is what made the temperature ramp look broken, and switching it off and on again was the only way to
         // make it work. Their preferences are kept, so the button that restores the lights puts them back.
-        SuspendAutomaticColoursForBlackout();
+        SuspendAutomaticColours();
 
         // The page shows the state the keyboard is in, so the controls go to "off" as well. Without this the effect
         // list and the brightness slider kept describing a configuration the keyboard was not running.

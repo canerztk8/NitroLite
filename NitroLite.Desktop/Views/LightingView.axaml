@@ -293,8 +293,12 @@
             profile is where they fall back to when they are switched off. It is not hidden behind a capability flag:
             the flag comes from a WMI probe that needs elevation and answers "no keyboard" without it, which hid this
             card on the machine it was written for.
+
+            The card is disabled while the effect list stands on OFF, and its switch goes off with it: neither mode
+            paints a keyboard that takes no colour, and a switch left on over one promises a write the firmware will not
+            make. The preference stays in the settings file, so picking a lit effect again brings the mode back.
           -->
-          <Border Classes="card" Margin="0,0,0,16">
+          <Border Classes="card" Margin="0,0,0,16" IsEnabled="{Binding AutomaticColoursEnabled}">
             <StackPanel>
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.ReactiveLighting}" VerticalAlignment="Center" />
@@ -305,13 +309,53 @@
               <TextBlock Classes="hint" Text="{Binding Labels.ReactiveLightingHint}" Margin="0,8,0,0"
                          TextWrapping="Wrap" />
 
-              <!-- The live reading: what the keyboard is showing now, and the number that produced it. -->
+              <!--
+                Which sensors the colour follows. Two chips rather than a list: the pair is the choice — the processor
+                alone paints the whole keyboard, both of them split it down the middle. Each chip carries its own
+                reading, so the number the colour came from sits under the switch that asked for it.
+              -->
+              <StackPanel IsVisible="{Binding ReactiveLightingEnabled}" Margin="0,12,0,0">
+                <TextBlock Classes="caps" Text="{Binding Labels.ReactiveSensors}" Margin="0,0,0,6" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <ToggleButton Classes="seg" Content="{Binding ReactiveCpuChip}"
+                                IsChecked="{Binding ReactiveCpuSensor}"
+                                AutomationProperties.AutomationId="ReactiveSensorCpu" />
+                  <ToggleButton Classes="seg" Content="{Binding ReactiveGpuChip}"
+                                IsChecked="{Binding ReactiveGpuSensor}"
+                                AutomationProperties.AutomationId="ReactiveSensorGpu" />
+                </StackPanel>
+                <TextBlock Classes="hint" Text="{Binding Labels.ReactiveSensorsHint}" Margin="0,6,0,0"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+
+              <!--
+                The live reading: what the keyboard is showing now, and the numbers behind it. A second swatch appears
+                only while the two halves follow different sensors, because one swatch is the whole truth otherwise.
+              -->
               <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,10,0,0"
                           IsVisible="{Binding ReactiveLightingEnabled}">
                 <Border Width="26" Height="26" CornerRadius="2"
                         Background="{Binding ReactiveLightingColor, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                         BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
+                <Border Width="26" Height="26" CornerRadius="2" IsVisible="{Binding ReactiveSplit}"
+                        Background="{Binding ReactiveLightingColorRight, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                        BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
                 <TextBlock Classes="hint" Text="{Binding ReactiveLightingNow}" VerticalAlignment="Center" />
+              </StackPanel>
+
+              <!--
+                The level this mode paints at. Its own slider: the page's brightness belongs to the colour the user
+                chose, and a temperature colour that followed it would dim and brighten with a different control.
+              -->
+              <StackPanel IsVisible="{Binding ReactiveLightingEnabled}" Margin="0,12,0,0">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
+                  <TextBlock Grid.Column="1" Text="{Binding ReactiveBrightnessLabel}" FontWeight="Bold" FontSize="11"
+                             HorizontalAlignment="Right" Foreground="{DynamicResource AccentBrush}" />
+                </Grid>
+                <controls:NitroSlider Minimum="1" Maximum="{Binding MaxBrightness}" TickFrequency="1"
+                                      IsSnapToTickEnabled="True" Value="{Binding ReactiveBrightness}" Margin="0,4,0,0"
+                                      AutomationProperties.AutomationId="ReactiveBrightness" />
               </StackPanel>
 
               <!-- The three ramps, each painted as the gradient it is, then the entry the user builds. -->
@@ -347,12 +391,25 @@
                 <TextBlock Classes="hint" Text="{Binding Labels.ReactiveCustomHint}" Margin="0,6,0,0"
                            TextWrapping="Wrap" />
 
-                <ItemsControl ItemsSource="{Binding ReactiveStops}" Margin="0,8,0,0">
+                <!-- The ramp as a picture, above the rows that build it: what the keyboard shows while it is edited. -->
+                <Border Height="10" CornerRadius="2" Margin="0,10,0,0"
+                        BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                        Background="{Binding CustomRampPreview, Converter={x:Static conv:RampToBrushConverter.Instance}}" />
+
+                <ItemsControl ItemsSource="{Binding ReactiveStops}" Margin="0,10,0,0">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ReactiveStopViewModel">
-                      <Grid ColumnDefinitions="46,*,Auto,92,Auto" Margin="0,0,0,6">
-                        <TextBlock Grid.Column="0" Classes="figure" FontSize="11" Text="{Binding TemperatureText}"
-                                   Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                      <Grid ColumnDefinitions="62,*,Auto,92,Auto" Margin="0,0,0,6">
+                        <!--
+                          The temperature as a box and a slider: the slider for a feel of the whole range, the box for
+                          the one number the user has in mind. Enter or leaving the box commits it, and the box is
+                          rewritten to what the stop actually holds, so a clamped value cannot look accepted.
+                        -->
+                        <TextBox Grid.Column="0" Margin="0,0,8,0" FontSize="11" VerticalAlignment="Center"
+                                 Text="{Binding TemperatureText, Mode=OneWay}"
+                                 KeyDown="OnReactiveStopTemperatureKeyDown"
+                                 LostFocus="OnReactiveStopTemperatureLostFocus"
+                                 AutomationProperties.AutomationId="ReactiveStopTemperature" />
                         <controls:NitroSlider Grid.Column="1" Minimum="{Binding MinTemperature}"
                                               Maximum="{Binding MaxTemperature}" TickFrequency="1"
                                               IsSnapToTickEnabled="True" Value="{Binding TemperatureC}"
@@ -381,9 +438,9 @@
             follows the plug. It is a colour of its own rather than a tint of the page's, because the two answer
             different questions — the keys show the adapter's colour while the adapter is in, and the user's own the
             moment it comes out. The swatches are the same eight the palette offers, one row rather than a full card
-            of their own.
+            of their own. Like the ramp above it, the card is disabled while the effect list stands on OFF.
           -->
-          <Border Classes="card">
+          <Border Classes="card" IsEnabled="{Binding AutomaticColoursEnabled}">
             <StackPanel>
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.ChargingColor}" VerticalAlignment="Center" />
@@ -437,6 +494,20 @@
                 <TextBox Width="110" Text="{Binding ChargingColor}" Watermark="#F59E0B"
                          AutomationProperties.AutomationId="ChargingColorHex" />
               </StackPanel>
+
+              <!--
+                The level this colour paints at. Its own slider for the same reason the temperature card has one: the
+                page's brightness is the user's own colour's, and a plug that changed it would be a second brightness
+                control nobody asked for.
+              -->
+              <Grid ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+                <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
+                <TextBlock Grid.Column="1" Text="{Binding ChargingBrightnessLabel}" FontWeight="Bold" FontSize="11"
+                           HorizontalAlignment="Right" Foreground="{DynamicResource AccentBrush}" />
+              </Grid>
+              <controls:NitroSlider Minimum="1" Maximum="{Binding MaxBrightness}" TickFrequency="1"
+                                    IsSnapToTickEnabled="True" Value="{Binding ChargingBrightness}" Margin="0,4,0,0"
+                                    AutomationProperties.AutomationId="ChargingBrightness" />
             </StackPanel>
           </Border>
         </StackPanel>

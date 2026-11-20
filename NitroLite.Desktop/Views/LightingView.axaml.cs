@@ -100,4 +100,45 @@ public partial class LightingView : UserControl
             AppLog.Error("The colour picker could not be opened", ex.ToString());
         }
     }
+
+    /// <summary>
+    /// Enter in a ramp row's temperature box: the typed number is committed, and the box is rewritten to what the stop
+    /// actually holds so a value the ramp clamped cannot be left on screen looking accepted.
+    /// </summary>
+    private void OnReactiveStopTemperatureKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Return)) return;
+        if (sender is not TextBox box) return;
+
+        CommitReactiveStopTemperature(box);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Leaving a temperature box commits it too. The row's own buttons take the pointer, and a number typed there and
+    /// then abandoned should still be the number the stop keeps.
+    /// </summary>
+    private void OnReactiveStopTemperatureLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+
+        CommitReactiveStopTemperature(box);
+    }
+
+    /// <summary>
+    /// Hands the typed text to the view model and puts the canonical value back in the box. Both entry points share it,
+    /// so the two cannot disagree about what a half-typed number means — the view model ignores it.
+    /// </summary>
+    private void CommitReactiveStopTemperature(TextBox box)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        if (box.DataContext is not ReactiveStopViewModel row) return;
+
+        vm.SetReactiveStopTemperature(row, box.Text);
+
+        // The binding is one-way on purpose: the box is an editor, and the stop is the truth. Rewriting the text here
+        // is what makes "8" become "20 °C" the moment the ramp clamps it.
+        box.Text = row.TemperatureText;
+        box.CaretIndex = box.Text?.Length ?? 0;
+    }
 }
