@@ -555,8 +555,13 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     /// brightness byte to a per-zone colour, so an unscaled 50 % write comes out at full brightness.
     /// </para>
     /// <para>
+    /// Neighbouring zones that share a colour go out in one write, because the zone mask is a bitmap: a split keyboard
+    /// is two writes (<c>0x03</c> then <c>0x0C</c>) and a solid colour is one (<c>0x0F</c>). See
+    /// <see cref="AcerWmiProtocol.GroupZoneRuns"/> for why the grouping matters beyond the round trips saved.
+    /// </para>
+    /// <para>
     /// The commit step is tolerated: some firmware revisions apply the zone colours and still answer a non-zero
-    /// status to <c>SetGamingKBBacklight</c>. When the four colour writes succeeded, that answer is reported in
+    /// status to <c>SetGamingKBBacklight</c>. When the colour writes succeeded, that answer is reported in
     /// <c>commitStatus</c> and the write is still a success — failing it would throw away colours the keyboard is
     /// already showing.
     /// </para>
@@ -609,9 +614,8 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     armError = Describe(ex);
                 }
 
-                // 3. One brightness-scaled colour per zone.
+                // 3. One brightness-scaled colour per zone, held per zone for the report and for the commit below.
                 var scaled = new (byte Red, byte Green, byte Blue)[AcerWmiProtocol.LedZoneCount];
-                var reported = new JsonArray();
                 for (int i = 0; i < scaled.Length; i++)
                 {
                     int packed = request.Zones[i];
@@ -620,18 +624,34 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                         (byte)((packed >> 8) & 0xFF),
                         (byte)(packed & 0xFF),
                         request.Brightness);
+                }
 
-                    var mask = (byte)(AcerWmiProtocol.LedZone1 << i);
+                // 3a. Write them back as runs of neighbouring zones, not as four separate calls: the mask is a zone
+                //     bitmap, so the left half and the right half of a split keyboard are two writes. Four writes that
+                //     arrive while the firmware is still applying the previous frame are how a zone ends up holding the
+                //     colour the keyboard had before — the "three zones one colour, one zone the other" report.
+                var runs = AcerWmiProtocol.GroupZoneRuns(request.Zones);
+                foreach (var (mask, packed) in runs)
+                {
+                    var color = AcerWmiProtocol.ScaleColor(
+                        (byte)((packed >> 16) & 0xFF),
+                        (byte)((packed >> 8) & 0xFF),
+                        (byte)(packed & 0xFF),
+                        request.Brightness);
+
                     var status = InvokeSetter(gaming, "SetGamingRgbKb",
-                        AcerWmiProtocol.EncodeRgbKb(scaled[i].Red, scaled[i].Green, scaled[i].Blue, mask));
+                        AcerWmiProtocol.EncodeRgbKb(color.Red, color.Green, color.Blue, mask));
                     if (!status.HasValue)
-                        return WmiOperationResult.WmiFailed($"SetGamingRgbKb (zone {i + 1}) returned no status");
+                        return WmiOperationResult.WmiFailed($"SetGamingRgbKb (mask 0x{mask:X2}) returned no status");
                     if (status.Value != AcerWmiProtocol.StatusOk)
                         return WmiOperationResult.StatusError(
-                            $"SetGamingRgbKb (zone {i + 1}) status 0x{status.Value:X2}");
-
-                    reported.Add(AcerWmiProtocol.FormatHexColor(scaled[i].Red, scaled[i].Green, scaled[i].Blue));
+                            $"SetGamingRgbKb (mask 0x{mask:X2}) status 0x{status.Value:X2}");
                 }
+
+                // The report keeps one entry per zone, in zone order, whatever the writes were grouped as.
+                var reported = new JsonArray();
+                foreach (var zone in scaled)
+                    reported.Add(AcerWmiProtocol.FormatHexColor(zone.Red, zone.Green, zone.Blue));
 
                 // 4. Commit. The static lock carries no colour; an effect carries the first zone's colour.
                 var payload = mode.Value == AcerWmiProtocol.KbModeStatic
@@ -651,6 +671,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     ["speed"] = request.Speed,
                     ["direction"] = request.Direction,
                     ["zones"] = reported,
+                    ["zoneWrites"] = runs.Count,
                     ["armError"] = armError,
                     ["commitStatus"] = commitStatus,
                     ["commitApplied"] = commitStatus == AcerWmiProtocol.StatusOk

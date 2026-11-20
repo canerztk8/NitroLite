@@ -136,9 +136,16 @@ public class RampTargetAndAdapterTests
 
         hardware.LightingWrites.Clear();
 
-        // Both sensors are on, so the ramp card can be pointed at either half.
-        Assert.True(vm.ReactiveRampTargetVisible);
-        vm.ReactiveRampTargetGpu = true;
+        // Both sensors are on, and the ramp card is pointed at a half by that half's own tile: switching the graphics
+        // tile off and on again leaves both halves painting and hands the card to the graphics ramp.
+        vm.ReactiveGpuSensor = false;
+        await vm.ReactiveLightingTask;
+        vm.ReactiveGpuSensor = true;
+        await vm.ReactiveLightingTask;
+
+        Assert.True(vm.ReactiveGpuSensor);
+        Assert.True(vm.ReactiveRampTargetGpu);
+        hardware.LightingWrites.Clear();
 
         // The graphics half gets the custom entry, and its cold end is given a colour no processor ramp uses.
         vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.IsCustom);
@@ -168,6 +175,27 @@ public class RampTargetAndAdapterTests
     [Fact]
     public async Task TheGraphicsHalfInheritsUntilItIsGivenItsOwnRamp()
     {
+        var settings = new AppSettings { ReactiveLightingUseCpu = true, ReactiveLightingUseGpu = false };
+
+        using var vm = new MainViewModel(settings, new Phase3Fakes.StubHardware(), null, TempSettingsPath(),
+            powerState: () => (false, 50));
+
+        await vm.InitializeAsync();
+
+        // No graphics ramp in the file: the tile still works, it both enables the half and points the card at it, and
+        // the picker opens on the processor's ramp. Nothing is written to the graphics keys until a ramp is chosen.
+        Assert.False(vm.ReactiveRampTargetGpu);
+        vm.ReactiveGpuSensor = true;
+
+        Assert.True(vm.ReactiveGpuSensor);
+        Assert.True(vm.ReactiveRampTargetGpu);
+        Assert.Null(settings.ReactiveLightingProfileGpu);
+        Assert.NotNull(vm.SelectedReactiveProfile);
+    }
+
+    [Fact]
+    public async Task TheRampCaption_NamesTheHalfTheCardIsEditing()
+    {
         var settings = new AppSettings { ReactiveLightingUseCpu = true, ReactiveLightingUseGpu = true };
 
         using var vm = new MainViewModel(settings, new Phase3Fakes.StubHardware(), null, TempSettingsPath(),
@@ -175,12 +203,42 @@ public class RampTargetAndAdapterTests
 
         await vm.InitializeAsync();
 
-        // No graphics ramp in the file: the target chips still work, the picker opens on the processor's ramp, and
-        // nothing is written to the graphics keys until the user chooses one.
-        vm.ReactiveRampTargetGpu = true;
-        Assert.False(vm.ReactiveRampTargetCpu);
-        Assert.Null(settings.ReactiveLightingProfileGpu);
-        Assert.NotNull(vm.SelectedReactiveProfile);
+        // Both halves live: the caption carries the half the chips and the stop rows below it belong to, which is where
+        // the CPU/GPU chips used to say it. Opening the app edits the processor's ramp.
+        Assert.Equal($"{vm.Labels.ReactiveProfiles} · CPU", vm.ReactiveRampCaption);
+
+        // With one sensor there is nothing to disambiguate, so the title stands alone.
+        vm.ReactiveGpuSensor = false;
+        Assert.Equal(vm.Labels.ReactiveProfiles, vm.ReactiveRampCaption);
+
+        // And the tile that switches a half on is the tile that hands the card to it.
+        vm.ReactiveGpuSensor = true;
+        Assert.Equal($"{vm.Labels.ReactiveProfiles} · GPU", vm.ReactiveRampCaption);
+    }
+
+    [Fact]
+    public async Task TheRampTarget_FallsBackToTheHalfThatStillPaints()
+    {
+        var settings = new AppSettings { ReactiveLightingUseCpu = true, ReactiveLightingUseGpu = true };
+
+        using var vm = new MainViewModel(settings, new Phase3Fakes.StubHardware(), null, TempSettingsPath(),
+            powerState: () => (false, 50));
+
+        await vm.InitializeAsync();
+
+        vm.ReactiveGpuSensor = false;
+        vm.ReactiveGpuSensor = true;
+        Assert.True(vm.ReactiveRampTargetGpu);
+
+        // Switching the graphics half off leaves one ramp on the keyboard, so the card returns to it rather than
+        // editing a ramp nothing follows.
+        vm.ReactiveGpuSensor = false;
+        Assert.False(vm.ReactiveRampTargetGpu);
+
+        // The processor's half going away with the graphics half still live hands the card to the graphics ramp.
+        vm.ReactiveGpuSensor = true;
+        vm.ReactiveCpuSensor = false;
+        Assert.True(vm.ReactiveRampTargetGpu);
     }
 
     [Fact]
@@ -198,7 +256,11 @@ public class RampTargetAndAdapterTests
                 // suppressed so the window cannot write its shipped defaults back to the firmware.
                 await vm.InitializeAsync();
 
-                vm.ReactiveRampTargetGpu = true;
+                // Both halves are live; tapping the graphics tile off and on is how the ramp card is pointed at it.
+                vm.ReactiveGpuSensor = false;
+                vm.ReactiveGpuSensor = true;
+                Assert.True(vm.ReactiveRampTargetGpu);
+
                 vm.SelectedReactiveProfile = vm.ReactiveProfileChoices.First(c => c.Id == "inferno");
 
                 Assert.Equal("inferno", settings.ReactiveLightingProfileGpu);
@@ -237,6 +299,23 @@ public class RampTargetAndAdapterTests
         Assert.Equal(expectOnAdapter, ChargingLighting.ShouldPaint(state));
 
         if (expectAtLimit) Assert.False(state.Charging);
+    }
+
+    [Theory]
+    [InlineData(true, 55, false, true)]
+    [InlineData(true, 79, true, true)]
+    [InlineData(true, 80, true, false)]
+    [InlineData(true, 100, false, false)]
+    [InlineData(false, 55, false, false)]
+    public void Charging_IsOnlyTrueWhileThePackIsActuallyTakingACharge(
+        bool onAc, int percent, bool limitOn, bool expectCharging)
+    {
+        // A capped machine at 80 % and a full machine at 100 % both report "plugged in, not charging"; only the pack
+        // below its limit is charging, and the colour follows the plug either way.
+        var state = ChargingLighting.Read(onAc, percent, limitOn);
+
+        Assert.Equal(expectCharging, state.Charging);
+        Assert.Equal(onAc, ChargingLighting.ShouldPaint(state));
     }
 
     [Fact]
@@ -368,9 +447,11 @@ public class RampTargetAndAdapterTests
         Assert.Contains("IsChecked=\"{Binding ReactiveGpuSensor}\"", markup, StringComparison.Ordinal);
         Assert.Contains("Classes=\"tempchip\"", markup, StringComparison.Ordinal);
 
-        // The ramp card can be pointed at either half, which is what lets the two halves look different.
-        Assert.Contains("ReactiveRampTargetCpu", markup, StringComparison.Ordinal);
-        Assert.Contains("ReactiveRampTargetGpu", markup, StringComparison.Ordinal);
+        // The ramp card can be pointed at either half, which is what lets the two halves look different — and the only
+        // control that names a half is the tile above, so the chips that repeated it are gone for good.
+        Assert.DoesNotContain("ReactiveRampTargetCpu", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReactiveRampTargetGpu", markup, StringComparison.Ordinal);
+        Assert.Contains("ReactiveRampCaption", markup, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -383,6 +464,10 @@ public class RampTargetAndAdapterTests
         Assert.Contains("ToggleButton.tempchip", app, StringComparison.Ordinal);
         Assert.Contains("ToggleButton.tempchip:checked", app, StringComparison.Ordinal);
         Assert.Contains("ToggleButton.tempchip:disabled", app, StringComparison.Ordinal);
+
+        // The dimming reaches the figure as well, so the half that is off reads as greyed out rather than as a lighter
+        // version of the half that is on.
+        Assert.Contains("ToggleButton.tempchip TextBlock.figurebig", app, StringComparison.Ordinal);
     }
 
     // =============================================================================================================

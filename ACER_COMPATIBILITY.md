@@ -195,6 +195,13 @@ ENE controller, and the colour is written with an **HID feature report**, not a 
 
 Source: S7. There is no Acer manual for any of this, and none is claimed.
 
+**Writing the four zones through WMI.** The mask is a bitmap, so the executor sends one `SetGamingRgbKb` per
+run of neighbouring zones that share a colour rather than one per zone: `0x03` for the left half and `0x0C`
+for the right on a split keyboard, a single `0x0F` when all four agree. Four back-to-back calls are how a
+zone ends up holding the colour the keyboard had before — a call that arrives while the EC is still applying
+the previous mask is dropped, and the zone it addressed keeps whatever was there. Two calls, one per half,
+close most of that window; the worker's answer reports how many it sent as `zoneWrites`.
+
 **Transport selection.** `KeyboardLightingRouter` (`NitroLite.Core/Hardware/Lighting`) keeps the WMI path
 first — it is still correct on every older model — and tries HID once when a WMI write does not take.
 Whichever answered is remembered per `Model|BIOS`, so the next colour change does not pay for three failing

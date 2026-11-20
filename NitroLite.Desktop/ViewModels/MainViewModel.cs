@@ -1402,6 +1402,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ReactiveBrightnessLabel));
             Raise(nameof(ChargingBrightnessLabel));
             Raise(nameof(ReactiveLightingNow));
+            // The ramp caption is the section title plus the half it edits, so a language change reaches it too.
+            Raise(nameof(ReactiveRampCaption));
             // The launcher line is a sentence built from these labels, so it is re-raised rather than rebuilt.
             Raise(nameof(NitroSenseLauncherStateText));
             Raise(nameof(SchoolModeStateText));
@@ -3241,11 +3243,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(ReactiveCpuChip));
         Raise(nameof(ReactiveGpuChip));
         Raise(nameof(ReactiveLightingNow));
-        Raise(nameof(ReactiveRampTargetVisible));
 
-        // The graphics half just went away: the ramp card cannot stay pointed at a half the keyboard no longer paints,
-        // and the processor's ramp is the one that is left.
-        if (!ReactiveRampTargetVisible && _reactiveRampTargetGpu) SelectReactiveRampTarget(gpu: false);
+        // The tile is the switch and the pointer at once. Switching a half on is asking to see its ramp, because the
+        // card edits one half at a time and the tiles are the only control left that names a half; switching one off
+        // hands the card to the half that is still painting, so it never edits a ramp nothing follows.
+        if (gpu is true) SelectReactiveRampTarget(gpu: true);
+        else if (cpu is true) SelectReactiveRampTarget(gpu: false);
+        else if (_reactiveRampTargetGpu && !_reactiveGpuSensor) SelectReactiveRampTarget(gpu: false);
+        else if (!_reactiveRampTargetGpu && !_reactiveCpuSensor && _reactiveGpuSensor) SelectReactiveRampTarget(gpu: true);
+
+        Raise(nameof(ReactiveRampCaption));
 
         // The keyboard changes shape, not just colour, so the throttle has to let the next paint through.
         ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
@@ -3796,27 +3803,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Which half's ramp the picker and the editor are working on: true for the graphics chip.</summary>
-    public bool ReactiveRampTargetGpu
-    {
-        get => _reactiveRampTargetGpu;
-        set => SelectReactiveRampTarget(gpu: value);
-    }
-
-    /// <summary>The processor's half of <see cref="ReactiveRampTargetGpu"/>, for the left-hand chip.</summary>
-    public bool ReactiveRampTargetCpu
-    {
-        get => !_reactiveRampTargetGpu;
-        set
-        {
-            if (value) SelectReactiveRampTarget(gpu: false);
-        }
-    }
+    /// <remarks>
+    /// There is no control of its own for this any more. The temperature tiles are the only thing on the page that
+    /// names a half, so the half whose tile was switched on last is the half the ramp card edits — see
+    /// <see cref="SetReactiveSensor"/>. Nothing in the view binds this; it is read by <see cref="ReactiveRampCaption"/>
+    /// and by the tests.
+    /// </remarks>
+    public bool ReactiveRampTargetGpu => _reactiveRampTargetGpu;
 
     /// <summary>
-    /// True while the picker can be pointed at either half. With one sensor selected there is a single ramp to edit, so
-    /// the target chips are hidden rather than offering a choice that changes nothing on the keyboard.
+    /// The caption above the profile chips: the section title, plus the half the card is editing while both halves are
+    /// live.
     /// </summary>
-    public bool ReactiveRampTargetVisible => _reactiveCpuSensor && _reactiveGpuSensor;
+    /// <remarks>
+    /// This sentence is what replaced the CPU/GPU chips. The chips were a second control saying "this card is pointed
+    /// at the left half"; the caption says the same thing where the user is already reading, and the tiles below are
+    /// where the pointing happens. With one sensor on there is nothing to disambiguate, so the title stands alone.
+    /// </remarks>
+    public string ReactiveRampCaption =>
+        _reactiveCpuSensor && _reactiveGpuSensor
+            ? $"{Labels.ReactiveProfiles} · {(_reactiveRampTargetGpu ? "GPU" : "CPU")}"
+            : Labels.ReactiveProfiles;
 
     /// <summary>
     /// Points the ramp card at one half of the keyboard. The chips and the editor are rebuilt from that half's own
@@ -3828,7 +3835,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _reactiveRampTargetGpu = gpu;
         Raise(nameof(ReactiveRampTargetGpu));
-        Raise(nameof(ReactiveRampTargetCpu));
+        Raise(nameof(ReactiveRampCaption));
 
         var previous = _suppressWrite;
         _suppressWrite = true;

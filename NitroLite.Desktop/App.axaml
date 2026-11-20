@@ -664,6 +664,19 @@
       <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
     </Style>
 
+    <!--
+      The dimming is not only the tile's opacity: the figure inside greys out too, so the half that is off reads as
+      switched off rather than as a lighter version of the half that is on. The reading stays legible, which is the
+      point of leaving the tile on screen at all.
+    -->
+    <Style Selector="ToggleButton.tempchip TextBlock.figurebig">
+      <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.tempchip:checked TextBlock.figurebig">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
     <Style Selector="ToggleButton.tempchip:checked /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
     </Style>

@@ -100,8 +100,12 @@ public static class ChargingLighting
 
         bool atLimit = chargeLimitOn && onAdapter && batteryPercent is { } percent && percent >= ChargeLimitPercent;
 
-        // Below the cap the pack is taking a charge; at the cap it is not, and that is the honest answer.
-        bool charging = onAdapter && !atLimit;
+        // Below the cap the pack is taking a charge. At the cap it is not, and a pack that has reached 100 % with no
+        // limit armed is not either: Windows reports the charging flag clear in both of those states, and the old
+        // answer — "on the adapter, so charging" — is what made a full machine read as a charge that never finished.
+        // The colour does not depend on any of it: the plug is the message.
+        bool full = onAdapter && batteryPercent is >= 100;
+        bool charging = onAdapter && !atLimit && !full;
 
         return new AdapterState(onAdapter, atLimit, charging);
     }

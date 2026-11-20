@@ -313,7 +313,8 @@
                 Which sensors the colour follows, as the readings themselves. The two tiles are the switch: the number the
                 user is already reading is the thing to click, and the tile that is not in the colour dims so the
                 keyboard has one visible source. One sensor paints the whole keyboard; both of them split it down the
-                middle.
+                middle. The tile is also the only way to point the ramp card at a half, so switching one on is how the
+                user says "edit this half's ramp".
               -->
               <StackPanel IsVisible="{Binding ReactiveLightingEnabled}" Margin="0,12,0,0">
                 <Grid ColumnDefinitions="*,*">
@@ -368,21 +369,11 @@
 
               <!--
                 The three ramps, each painted as the gradient it is, then the entry the user builds. With both sensors on
-                the two halves can follow different ramps, so the row carries a CPU/GPU target beside its caption: every
-                chip and every stop below belongs to the half that is selected, and one card edits both rather than the
-                page growing a second copy of itself.
+                the two halves can follow different ramps, so the caption names the half this card is editing — the half
+                whose temperature tile was switched on last. The CPU/GPU chips that used to sit here were a second
+                control saying what the caption already says.
               -->
-              <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,6">
-                <TextBlock Classes="caps" Text="{Binding Labels.ReactiveProfiles}" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                            IsVisible="{Binding ReactiveRampTargetVisible}"
-                            ToolTip.Tip="{Binding Labels.ReactiveSensorsHint}">
-                  <ToggleButton Classes="seg" Content="CPU" IsChecked="{Binding ReactiveRampTargetCpu}"
-                                AutomationProperties.AutomationId="ReactiveRampTargetCpu" />
-                  <ToggleButton Classes="seg" Content="GPU" IsChecked="{Binding ReactiveRampTargetGpu}"
-                                AutomationProperties.AutomationId="ReactiveRampTargetGpu" />
-                </StackPanel>
-              </Grid>
+              <TextBlock Classes="caps" Text="{Binding ReactiveRampCaption}" Margin="0,14,0,6" />
               <ItemsControl ItemsSource="{Binding ReactiveProfileChoices}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>

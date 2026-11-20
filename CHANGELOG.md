@@ -79,9 +79,14 @@ unplugged.
   dark, and the page around it still works.
 - **The temperature tiles are the sensor switches.** The pair of segmented chips that sat above the readings —
   "CPU 58 °C" and "GPU 51 °C" — is gone: the readings are the control, so the widget already showing the number is the
-  one that turns that sensor on. The tile that is off is dimmed to 45 % with no accent frame, and the one that is on
-  keeps full strength with the accent frame every selected control on the page wears, so the keyboard has one visible
-  source at a glance. Both on still splits the keyboard down the middle.
+  one that turns that sensor on. The tile that is off is dimmed to 45 %, loses its accent frame and its reading greys
+  out, and the one that is on keeps full strength with the accent frame every selected control on the page wears, so the
+  keyboard has one visible source at a glance. Both on still splits the keyboard down the middle.
+- **The tiles are how the ramp card is pointed at a half.** The CPU/GPU chips beside "Sıcaklık rampaları" are gone: the
+  half whose tile was switched on last is the half the chips, the preview and the stop rows edit, and the caption names
+  it — "Sıcaklık rampaları · GPU" — so the card says what it is pointed at where the user is already reading. Switching
+  a half off hands the card to the half that is still painting, so it never edits a ramp nothing follows; with both
+  halves on, tapping a tile off and on is how the card changes hands.
 - **The temperature ramp steps in one degree rather than three.** The colour was quantised in 3 °C buckets, so 45 °C and
   47 °C were the same colour and the ramp jumped from ice blue to mint instead of sliding through the greens between
   them. The grid is a degree now, which reads as a gradient and still refuses to chase sensor noise. Nothing extra is
@@ -102,6 +107,13 @@ unplugged.
 
 ### Fixed
 
+- **The four-zone split can no longer leave a zone on the previous colour.** The write used to be four
+  `SetGamingRgbKb` calls, one per zone, masks `0x01`, `0x02`, `0x04`, `0x08`; a call that lands while the firmware is
+  still applying the one before it is dropped, and the zone it addressed keeps whatever colour it had — the report of
+  zones 1, 2 and 4 in the processor's colour with only zone 3 following the graphics chip. The mask is a zone bitmap, so
+  neighbouring zones that share a colour now go out in a single call: `0x03` for the left half, `0x0C` for the right,
+  and one `0x0F` when the whole keyboard agrees. The split is two writes instead of four, the leftmost zones are still
+  written first, and the worker's answer carries `zoneWrites` so a report can say which of the two it sent.
 - **A colour the user cancelled cannot land afterwards.** Every lighting write now asks, once it holds the write gate,
   whether it is still wanted; a temperature colour queued behind a slow write is abandoned when the mode's switch goes
   down or the page blacks out, instead of flashing onto the keyboard after the colour the user asked for. The charging
@@ -126,7 +138,8 @@ unplugged.
   percentage: with the limit armed the firmware reports "plugged in, not charging" at 80 %, which a rule written as
   "the battery is rising" would read as "no adapter". The keys keep the charging colour at the cap, unplugging still
   hands them back, and the card's state line says "adaptörde · %80 şarj sınırı" rather than claiming a charge that
-  stopped on purpose.
+  stopped on purpose. A pack that has reached 100 % with no limit armed counts as full for the same reason: neither
+  state is a charge in progress, and the colour follows the plug rather than the charge flag in both of them.
 - **The first launch is drawn in Quicksand because the settings say so.** `ui_font` now defaults to the bundled face
   instead of null, so a clean settings file names the typeface it is in rather than depending on a fallback; a file from
   an older build with no key at all still resolves to the same face, and a face this build no longer ships still falls

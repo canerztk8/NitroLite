@@ -143,6 +143,77 @@ public class HalStep7Tests
         Assert.Equal(9, AcerWmiProtocol.BrightnessPercentToLevel(1000));
     }
 
+    // ---------------------------------------------------------------- zone runs
+
+    [Fact]
+    public void GroupZoneRuns_ASplitKeyboardIsTwoWritesNotFour()
+    {
+        // What the temperature card asks for: the processor's colour on the left half, the graphics chip's on the right.
+        // The mask is a bitmap, so each half is one write — and the order is zone order, left first.
+        var runs = AcerWmiProtocol.GroupZoneRuns(new[] { 0xFF0000, 0xFF0000, 0x0000FF, 0x0000FF });
+
+        Assert.Equal(2, runs.Count);
+        Assert.Equal(0x03, runs[0].Mask);
+        Assert.Equal(0xFF0000, runs[0].Color);
+        Assert.Equal(0x0C, runs[1].Mask);
+        Assert.Equal(0x0000FF, runs[1].Color);
+    }
+
+    [Fact]
+    public void GroupZoneRuns_OneColourIsOneAllZoneWrite()
+    {
+        var runs = AcerWmiProtocol.GroupZoneRuns(new[] { 0x12AB34, 0x12AB34, 0x12AB34, 0x12AB34 });
+
+        var run = Assert.Single(runs);
+        Assert.Equal(AcerWmiProtocol.LedZoneAll, run.Mask);
+        Assert.Equal(0x12AB34, run.Color);
+    }
+
+    [Fact]
+    public void GroupZoneRuns_FourDifferentColoursStayFourWrites()
+    {
+        var runs = AcerWmiProtocol.GroupZoneRuns(new[] { 0x010101, 0x020202, 0x030303, 0x040404 });
+
+        Assert.Equal(4, runs.Count);
+        Assert.Equal(new byte[] { AcerWmiProtocol.LedZone1, AcerWmiProtocol.LedZone2, AcerWmiProtocol.LedZone3, AcerWmiProtocol.LedZone4 },
+            runs.Select(r => r.Mask));
+        Assert.Equal(new[] { 0x010101, 0x020202, 0x030303, 0x040404 }, runs.Select(r => r.Color));
+    }
+
+    [Fact]
+    public void GroupZoneRuns_MiddleZonesThatAgreeAreOneWrite()
+    {
+        // Not a split this app paints today, but the grouping is the general rule: neighbouring equal zones fold, and a
+        // run never swallows a zone that carries a different colour.
+        var runs = AcerWmiProtocol.GroupZoneRuns(new[] { 0x0000FF, 0xFF0000, 0xFF0000, 0x00FF00 });
+
+        Assert.Equal(3, runs.Count);
+        Assert.Equal(AcerWmiProtocol.LedZone1, runs[0].Mask);
+        Assert.Equal(0x0000FF, runs[0].Color);
+        Assert.Equal(0x06, runs[1].Mask);
+        Assert.Equal(0xFF0000, runs[1].Color);
+        Assert.Equal(AcerWmiProtocol.LedZone4, runs[2].Mask);
+        Assert.Equal(0x00FF00, runs[2].Color);
+    }
+
+    [Fact]
+    public void GroupZoneRuns_NothingToWriteIsNoWrites()
+    {
+        Assert.Empty(AcerWmiProtocol.GroupZoneRuns(null));
+        Assert.Empty(AcerWmiProtocol.GroupZoneRuns(Array.Empty<int>()));
+    }
+
+    [Fact]
+    public void GroupZoneRuns_TheSplitPayloadsCarryTheirOwnHalfOnly()
+    {
+        // The bytes the EC is actually handed. Zone 4 is in the second payload, which is the whole point: the "three
+        // zones one colour" report was a zone keeping a colour nobody had written to it in this pass.
+        var runs = AcerWmiProtocol.GroupZoneRuns(new[] { 0xFF0000, 0xFF0000, 0x0000FF, 0x0000FF });
+
+        Assert.Equal(0x000000000000FF03UL, AcerWmiProtocol.EncodeRgbKb(0xFF, 0x00, 0x00, runs[0].Mask));
+        Assert.Equal(0x00000000FF00000CUL, AcerWmiProtocol.EncodeRgbKb(0x00, 0x00, 0xFF, runs[1].Mask));
+    }
+
     // ---------------------------------------------------------------- backlight payloads
 
     [Fact]

@@ -409,6 +409,51 @@ public static class AcerWmiProtocol
          (byte)((output >> 24) & 0xFF),
          (byte)(output & 0xFF));
 
+    /// <summary>
+    /// The four zone colours folded into the fewest <c>SetGamingRgbKb</c> writes that can carry them: one entry per run
+    /// of neighbouring zones that share a colour, with the run's zone bits OR-ed into its mask.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The mask is a four-bit zone bitmap, so a run of zones is one write. The split the temperature card paints is
+    /// therefore two writes — <c>0x03</c> for the left half and <c>0x0C</c> for the right half — instead of four, and a
+    /// keyboard taken over by one solid colour is a single <c>0x0F</c> write.
+    /// </para>
+    /// <para>
+    /// This is also the fix for a split that came out as three zones on one colour and one on the other. Four
+    /// back-to-back writes are four chances for the firmware to still be applying the previous frame when the next
+    /// arrives, and a zone whose write is dropped keeps whatever colour it had; two writes, one per half, leave much
+    /// less of that window. The order is the zone order either way, so the leftmost zones are written first.
+    /// </para>
+    /// </remarks>
+    /// <param name="zones">One packed <c>0xRRGGBB</c> colour per zone, in zone order.</param>
+    /// <returns>One <c>(Mask, Color)</c> pair per run, in zone order. Empty when there is nothing to write.</returns>
+    public static IReadOnlyList<(byte Mask, int Color)> GroupZoneRuns(IReadOnlyList<int>? zones)
+    {
+        if (zones == null || zones.Count == 0) return Array.Empty<(byte Mask, int Color)>();
+
+        var runs = new List<(byte Mask, int Color)>();
+        int start = 0;
+
+        for (int i = 1; i <= zones.Count; i++)
+        {
+            if (i < zones.Count && zones[i] == zones[start]) continue;
+
+            byte mask = 0;
+            for (int zone = start; zone < i && zone < LedZoneCount; zone++)
+                mask |= (byte)(LedZone1 << zone);
+
+            // A run that starts beyond the fourth zone cannot be addressed at all; the caller's own length check is what
+            // rejects such a list, and this keeps the helper total rather than shifting past the mask.
+            if (mask == 0) return runs;
+
+            runs.Add((mask, zones[start]));
+            start = i;
+        }
+
+        return runs;
+    }
+
     /// <summary>Parses <c>#RRGGBB</c> (the app's colour format) into its three channels.</summary>
     public static bool TryParseHexColor(string? color, out byte red, out byte green, out byte blue)
     {
