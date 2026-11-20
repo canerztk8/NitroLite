@@ -917,6 +917,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _chargingColorPainted;
 
     /// <summary>
+    /// The four bars the deck preview draws, in zone order, and whether an automatic colour is choosing them.
+    /// </summary>
+    /// <remarks>
+    /// Recomputed rather than bound straight to the palette because the bars describe the keyboard, and the keyboard is
+    /// not always showing the palette: a temperature ramp or the charging colour owns all four zones while either mode
+    /// is on. Empty until the first refresh, which the getters read as "the page's own colours".
+    /// </remarks>
+    private string[] _deckPreview = Array.Empty<string>();
+    private bool _deckPreviewAutomatic;
+
+    /// <summary>
     /// True while the lighting page is in blackout: the keyboard is dark and every control on the page is disabled.
     /// Set by the page's own button and cleared by the write that brings the lights back.
     /// </summary>
@@ -3015,6 +3026,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _zone1, value)) return;
             Raise(nameof(ActiveColor));
+            RefreshDeckPreview();
             if (_suppressWrite) return;
 
             MarkProfileCustom();
@@ -3036,6 +3048,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _zone2, value)) return;
             Raise(nameof(ActiveColor));
+            RefreshDeckPreview();
             if (_suppressWrite) return;
 
             MarkProfileCustom();
@@ -3057,6 +3070,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _zone3, value)) return;
             Raise(nameof(ActiveColor));
+            RefreshDeckPreview();
             if (_suppressWrite) return;
 
             MarkProfileCustom();
@@ -3078,6 +3092,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!Set(ref _zone4, value)) return;
             Raise(nameof(ActiveColor));
+            RefreshDeckPreview();
             if (_suppressWrite) return;
 
             MarkProfileCustom();
@@ -3271,6 +3286,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The keyboard changes shape, not just colour, so the throttle has to let the next paint through.
         ApplyReactiveColour(CpuTemperature, GpuTemperature, force: true);
+        RefreshDeckPreview();
+    }
+
+    /// <summary>
+    /// What a click on a temperature tile means. The tile is the switch and the pointer at once, so a click on a half
+    /// that is already painting is the user pointing the ramp card at that half — not asking the keyboard to stop
+    /// following it. It only switches off when the card is already pointed at it, which makes one click enough to move
+    /// between two live halves instead of three.
+    /// </summary>
+    /// <param name="gpu">True for the graphics chip's tile, false for the processor's.</param>
+    public void ToggleReactiveSensor(bool gpu)
+    {
+        if (gpu)
+        {
+            if (_reactiveGpuSensor && _reactiveCpuSensor && !_reactiveRampTargetGpu)
+            {
+                SelectReactiveRampTarget(gpu: true);
+                Raise(nameof(ReactiveGpuSensor));
+                return;
+            }
+
+            ReactiveGpuSensor = !_reactiveGpuSensor;
+            return;
+        }
+
+        if (_reactiveCpuSensor && _reactiveGpuSensor && _reactiveRampTargetGpu)
+        {
+            SelectReactiveRampTarget(gpu: false);
+            Raise(nameof(ReactiveCpuSensor));
+            return;
+        }
+
+        ReactiveCpuSensor = !_reactiveCpuSensor;
     }
 
     private void SetReactiveLighting(bool value, bool restore)
@@ -3310,21 +3358,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         else if (restore)
         {
-            // Put the user's own colour back. The controls still hold it, so this is the same write the page makes.
+            // Put the user's own colour back. The controls still hold it, so this is the same write the page makes —
+            // but it is a restore, not a choice, so the other automatic colour keeps whatever it was.
             _ = ApplyLightingAsync();
         }
 
         SaveSettings();
         Raise(nameof(ReactiveLightingColor));
         Raise(nameof(ReactiveLightingNow));
+        RefreshDeckPreview();
     }
 
     /// <summary>
     /// One telemetry sample's worth of reactive lighting: work out the colour pair, and write it only if it is worth
     /// writing.
     /// </summary>
-    private void TickReactiveLighting(MonitorData data) =>
+    private void TickReactiveLighting(MonitorData data)
+    {
         ApplyReactiveColour(data.CpuTemperature, data.GpuTemperature);
+
+        // The deck rides the same tick: the temperature that decides the colour moves here, so the picture of the
+        // keyboard has to move with it rather than waiting for a click on the page.
+        RefreshDeckPreview();
+    }
 
     /// <summary>
     /// Paints the sensors' colours, if it is worth a write. Both the telemetry tick and the card's own controls come
@@ -3588,6 +3644,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SyncChargingSwatchSelection();
 
             // A colour changed while it is on the keys has to be repainted now rather than at the next plug.
+            RefreshDeckPreview();
             ChargingLightingTask = SyncChargingLightingAsync(force: _chargingColorPainted);
         }
     }
@@ -3686,6 +3743,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
         Raise(nameof(ChargingColorStateText));
         Raise(nameof(HasChargingColorState));
+        RefreshDeckPreview();
     }
 
     /// <summary>
@@ -3748,6 +3806,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             AppLog.Warn("The charging colour could not be applied", ex.Message);
+        }
+        finally
+        {
+            // Every branch above changes what the keys are showing: the paint, the hand-back, or the refusal.
+            RefreshDeckPreview();
         }
     }
 
@@ -4413,10 +4476,85 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>The inverse of <see cref="ZoneRainbow"/>, so the deck can show one bar or the other without a converter.</summary>
     public bool ZoneSolid => !ZoneRainbow;
 
-    /// <summary>The line under the deck that explains the rainbow, or empty when the zones show real colours.</summary>
-    public string ZonePreviewNote => ZoneRainbow ? Labels.ZonePreviewNote : "";
+    /// <summary>The line under the deck that explains the rainbow or the automatic colour, or empty when it needs none.</summary>
+    public string ZonePreviewNote => ZoneRainbow ? Labels.ZonePreviewNote
+        : _deckPreviewAutomatic ? Labels.ZonePreviewAutomatic
+        : "";
 
     public bool HasZonePreviewNote => ZonePreviewNote.Length > 0;
+
+    /// <summary>The first bar of the deck preview: the colour the keyboard is showing in zone 1.</summary>
+    public string Zone1Preview => _deckPreview.Length > 0 ? _deckPreview[0] : Zone1;
+
+    /// <summary>The second bar of the deck preview.</summary>
+    public string Zone2Preview => _deckPreview.Length > 1 ? _deckPreview[1] : Zone2;
+
+    /// <summary>The third bar of the deck preview.</summary>
+    public string Zone3Preview => _deckPreview.Length > 2 ? _deckPreview[2] : Zone3;
+
+    /// <summary>The fourth bar of the deck preview.</summary>
+    public string Zone4Preview => _deckPreview.Length > 3 ? _deckPreview[3] : Zone4;
+
+    /// <summary>True while a colour the page did not choose owns the deck, so the bars can say so.</summary>
+    public bool ZonePreviewAutomatic => _deckPreviewAutomatic;
+
+    /// <summary>
+    /// What the deck is showing, in zone order, and whether an automatic mode is the one choosing it.
+    /// </summary>
+    /// <remarks>
+    /// One rule in one place, and it is the write's rule: the temperature ramp's colours come from
+    /// <see cref="ReactiveLighting.ColorsForSensors"/> and <see cref="ReactiveLighting.ZonesFor"/>, which are the same
+    /// two calls <see cref="WriteReactiveLightingAsync"/> makes, and the charging colour is the one the charging card
+    /// paints. The palette is the fallback rather than the answer, because it describes the keyboard only while
+    /// neither mode is on it.
+    /// </remarks>
+    private (string[] Zones, bool Automatic) ComputeDeckPreview()
+    {
+        if (_reactiveLightingEnabled)
+        {
+            var pair = ReactiveLighting.ColorsForSensors(ActiveReactiveStops(gpu: false), ActiveReactiveStops(gpu: true),
+                CpuTemperature, GpuTemperature, _reactiveCpuSensor, _reactiveGpuSensor);
+
+            if (pair is { } colors)
+                return (ReactiveLighting.ZonesFor(colors.Left, colors.Right, _settings.ReactiveLightingBlend), true);
+        }
+
+        if (_chargingColorEnabled
+            && ChargingLighting.ShouldPaint(ChargingLighting.Read(OnAcPower, BatteryPercent, BatteryLimitOn)))
+        {
+            var hex = ChargingLighting.Normalize(_chargingColor);
+            return (new[] { hex, hex, hex, hex }, true);
+        }
+
+        return (new[] { Zone1, Zone2, Zone3, Zone4 }, false);
+    }
+
+    /// <summary>
+    /// Recomputes the deck preview and tells the bars when it changed.
+    /// </summary>
+    /// <remarks>
+    /// Called from the telemetry tick and from every control that can change which colour the keyboard is painting, so
+    /// the picture is never a frame behind the payload. Raising six properties costs nothing when the strings are the
+    /// same, which is why the comparison comes first.
+    /// </remarks>
+    private void RefreshDeckPreview()
+    {
+        var (zones, automatic) = ComputeDeckPreview();
+
+        if (automatic == _deckPreviewAutomatic && zones.SequenceEqual(_deckPreview, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        _deckPreview = zones;
+        _deckPreviewAutomatic = automatic;
+
+        Raise(nameof(Zone1Preview));
+        Raise(nameof(Zone2Preview));
+        Raise(nameof(Zone3Preview));
+        Raise(nameof(Zone4Preview));
+        Raise(nameof(ZonePreviewAutomatic));
+        Raise(nameof(ZonePreviewNote));
+        Raise(nameof(HasZonePreviewNote));
+    }
 
     /// <summary>
     /// Brightness as "5 / 9", or "0 / 9 (Kapalı)" at zero. The word "Parlaklık" is already printed to the left of the
@@ -6798,7 +6936,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (verdict == null) return;
 
         AppLog.Error("The fan appears to be stopped",
-            $"{verdict.Target} · {verdict.TemperatureC} °C · {verdict.FanRpm} RPM · {verdict.Sustained.TotalSeconds:F0} sn");
+            $"{verdict.Target} · {verdict.TemperatureC} °C · {verdict.FanRpm} RPM · {verdict.Sustained.TotalSeconds:F0} s");
 
         if (_fanStallReported) return;
         _fanStallReported = true;
@@ -7063,9 +7201,46 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _suppressWrite = previous;
         }
 
+        // The keys can still be wearing the charging colour from a session that ended while it was painted. The mode
+        // hands the user's own colour back when the plug comes out or the switch goes down, and a shutdown skips both;
+        // the page then adopted that colour as the one the user chose, and the next write stored it. The colour in the
+        // settings file is the one that survives: it goes back on the keys, and the page goes back to it.
+        if (lighting != null) RestoreOwnColourIfWearingCharging(lighting);
+
         // The controls now describe the keyboard, which is what the charging colour waits for: painting before this
         // would make the page adopt the charging colour as the colour the user chose.
         _lightingStateRead = true;
+    }
+
+    /// <summary>
+    /// Takes the charging colour off the keys when a session starts with it still on them and the mode switched off.
+    /// </summary>
+    /// <remarks>
+    /// A colour the keyboard kept is not the same thing as the user's choice: the settings file holds the colour they
+    /// picked, and the leftover is only what the last session was painting when it ended. Adopting it made "Keyboard
+    /// colour while charging" a permanent change of the page's own colour — the report was a keyboard that came back
+    /// from a restart in the charging pink, with the palette agreeing with it.
+    /// </remarks>
+    private void RestoreOwnColourIfWearingCharging(LightingConfig lighting)
+    {
+        if (_settings.ChargingColorEnabled) return;
+
+        // A dark keyboard is the user's own off state, not a colour this rule has an opinion about. The stored off
+        // state already won over the read above, so touching the page here would undo it.
+        if (_settings.IsBacklightOff || LightingPolicy.IsOff(lighting)) return;
+
+        var charging = ChargingLighting.Normalize(_settings.ChargingColor);
+        if (!string.Equals(LightingPolicy.NormalizeHex(lighting.Color, charging), charging, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var own = _settings.KeyboardLighting;
+        if (own == null || string.Equals(own.Color, charging, StringComparison.OrdinalIgnoreCase)) return;
+
+        SyncControls(() => ApplyLightingState(own));
+        _ = WriteLightingConfigAsync(own);
+
+        AppLog.Info("The keys were still wearing the charging colour",
+            $"{charging} went back to {own.Color}");
     }
 
     private void ApplyLightingState(LightingConfig lighting)
@@ -7086,6 +7261,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // name stored from an earlier session (the blackout one, say) stayed selected over a keyboard that was
         // actually running a hand-set configuration, and the list claimed "Lights Off" for colours that were lit.
         SelectRgbProfileSilently(FindProfileMatching(lighting) ?? CustomProfile);
+
+        // The deck shows what the keyboard is running, and this is the moment the page learned what that is.
+        RefreshDeckPreview();
     }
 
     /// <summary>
@@ -7330,6 +7508,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // closes those two instead, and the next lit write is what reopens them.
             if (IsBlackoutConfiguration(config)) SuspendAutomaticColours();
             else LeaveLightingBlackout();
+
+            // The deck is redrawn from the write that was just accepted rather than from the next tick: the bars are the
+            // picture of this payload, and a tick later they would show the colour before the user's last click.
+            RefreshDeckPreview();
         }
         catch (Exception ex)
         {
@@ -7655,6 +7837,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             _settings.SelectedRgbPreset = null;
             SaveSettings();
+
+            // The custom entry is the list saying "these colours are the user's own" rather than a preset waiting to
+            // be applied, so the answer to picking it is the sentence, not a write. Saying nothing was the bug: the
+            // dropdown moved, the keyboard did not, and the page looked broken.
+            RgbProfileStatus = Labels.CustomProfileStatus;
             return;
         }
 

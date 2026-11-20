@@ -24,6 +24,24 @@ public partial class LightingView : UserControl
     }
 
     /// <summary>
+    /// The processor's temperature tile, which is a switch and a pointer at once: off it starts the colour following
+    /// the processor, on it points the ramp card at that half. The two-way binding it used to carry could not say the
+    /// second thing — a click on a live half read as "switch this off", so moving the card from one half to the other
+    /// took three clicks. The binding is one-way now and the view model decides; the raise that follows puts the tile
+    /// back where it belongs when the click meant "point", not "switch".
+    /// </summary>
+    private void OnReactiveCpuTile(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm) vm.ToggleReactiveSensor(gpu: false);
+    }
+
+    /// <summary>The graphics chip's tile. Same rule as <see cref="OnReactiveCpuTile"/>.</summary>
+    private void OnReactiveGpuTile(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm) vm.ToggleReactiveSensor(gpu: true);
+    }
+
+    /// <summary>
     /// The picker button on one row of the temp-reactive ramp: opens the window on that stop's colour and writes
     /// whatever comes back into the stop. The row is the button's tag, so the handler works for every row without a
     /// command per item, and the view model only ever sees the finished <c>#RRGGBB</c>.

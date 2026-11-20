@@ -575,13 +575,16 @@ public sealed class ShellLabels
     public string BacklightTimeoutShort => Loc.T("30 sn");
 
     public string ZonePreviewNote => Loc.T("Bu efekt renk kullanmaz; bölgeler gökkuşağı gradyanıyla gösterilir.");
+
+    /// <summary>The same line while an automatic mode owns the deck: the bars are the keyboard, not the palette.</summary>
+    public string ZonePreviewAutomatic => Loc.T("Bölgeler klavyenin şu anda gösterdiği rengi gösterir; bu rengi otomatik mod seçiyor, elle seçtiğiniz renk değil.");
     public string WinKeyLock => Loc.T("WinKey Kilidi");
     public string OpenRgbStatus => Loc.T("OpenRGB durumu");
     public string BacklightTimeoutHint => Loc.T("30 saniye boşta kaldığında aydınlatmayı kapat");
 
     /// <summary>The temp-reactive keyboard card: the title, and the one line that explains what it does.</summary>
     public string ReactiveLighting => Loc.T("Temp-Reactive Lighting");
-    public string ReactiveLightingHint => Loc.T("Klavye rengi CPU sıcaklığına göre değişir: üç hazır rampandan birini seçin ya da Özel'de her sıcaklığa kendi renginizi verin.");
+    public string ReactiveLightingHint => Loc.T("Klavye rengi seçtiğiniz sensörün sıcaklığına göre değişir: hazır rampalardan birini seçin, sabit bir renk için tek renk seçeneğini kullanın ya da Özel'de her sıcaklığa kendi renginizi verin.");
     public string ReactiveSensorsHint => Loc.T("CPU tek başına tüm klavyeyi boyar. CPU + GPU açıkken klavyenin solu CPU, sağı GPU sıcaklığını izler.");
     public string ReactiveNoSensor => Loc.T("Sensör seçilmedi");
     public string ReactiveProfiles => Loc.T("Sıcaklık rampaları");
@@ -602,6 +605,19 @@ public sealed class ShellLabels
     public string ChargingColor => Loc.T("Şarjda Klavye Rengi");
     public string ChargingColorHint => Loc.T("Adaptör takılıyken klavye bu rengi gösterir; pilde kendi renginiz geri gelir.");
     public string ChargingColorSwatches => Loc.T("Şarj rengi");
+
+    /// <summary>
+    /// The two automatic cards carry their own brightness, so each slider says what it dims: three sliders all labelled
+    /// "Brightness" on one page read as one control repeated, and the wrong one is easy to move.
+    /// </summary>
+    public string ReactiveBrightnessTitle => Loc.T("Isı-tepkili parlaklık");
+    public string ChargingBrightnessTitle => Loc.T("Şarj rengi parlaklığı");
+
+    /// <summary>
+    /// Said when the profile list lands on its custom entry: picking it is not a write, and a picker that answers
+    /// nothing at all reads as broken.
+    /// </summary>
+    public string CustomProfileStatus => Loc.T("Özel: klavyede kayıtlı bir profil değil, elle seçtiğiniz renkler var.");
     public string ChargingColorActive => Loc.T("Şarjda · klavye bu renkte");
     public string ChargingColorWaiting => Loc.T("Pilde · adaptör takılınca bu renk");
 

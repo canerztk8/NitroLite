@@ -332,7 +332,7 @@
             </Border>
           </StackPanel>
 
-          <Grid Grid.Row="1" IsEnabled="{Binding IsHardwareReady}">
+          <Grid x:Name="PageHost" Grid.Row="1" IsEnabled="{Binding IsHardwareReady}">
             <views:DashboardView IsVisible="{Binding IsModesPage}" />
             <views:MonitoringView IsVisible="{Binding IsMonitoringPage}" />
             <views:LightingView IsVisible="{Binding IsLightingPage}" />

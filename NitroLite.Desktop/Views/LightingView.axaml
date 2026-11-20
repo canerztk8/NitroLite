@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui"
+﻿<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:NitroLite.Desktop.ViewModels"
              xmlns:controls="using:NitroLite.Desktop.Controls"
@@ -49,7 +49,8 @@
                   ToolTip.Tip="{Binding Labels.BacklightTimeoutHint}">
         <TextBlock Classes="caps" Text="{Binding Labels.BacklightTimeoutShort}" VerticalAlignment="Center" />
         <ToggleButton Classes="toggle" IsChecked="{Binding BacklightTimeoutOn}" VerticalAlignment="Center"
-                      AutomationProperties.AutomationId="BacklightTimeout" />
+                      AutomationProperties.AutomationId="BacklightTimeout"
+                      AutomationProperties.Name="{Binding Labels.BacklightTimeout}" />
       </StackPanel>
 
       <Button Grid.Column="2" Classes="primary" Classes.on="{Binding IsLightingBlackedOut}"
@@ -77,7 +78,7 @@
                     <StackPanel Margin="0,0,6,0">
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
                               PointerPressed="OnZonePressed"
-                              Background="{Binding Zone1, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              Background="{Binding Zone1Preview, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                               IsVisible="{Binding ZoneSolid}" />
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone1Active}" Tag="1"
                               PointerPressed="OnZonePressed"
@@ -88,7 +89,7 @@
                     <StackPanel Margin="3,0">
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
                               PointerPressed="OnZonePressed"
-                              Background="{Binding Zone2, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              Background="{Binding Zone2Preview, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                               IsVisible="{Binding ZoneSolid}" />
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone2Active}" Tag="2"
                               PointerPressed="OnZonePressed"
@@ -99,7 +100,7 @@
                     <StackPanel Margin="3,0">
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
                               PointerPressed="OnZonePressed"
-                              Background="{Binding Zone3, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              Background="{Binding Zone3Preview, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                               IsVisible="{Binding ZoneSolid}" />
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone3Active}" Tag="3"
                               PointerPressed="OnZonePressed"
@@ -110,7 +111,7 @@
                     <StackPanel Margin="6,0,0,0">
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
                               PointerPressed="OnZonePressed"
-                              Background="{Binding Zone4, Converter={x:Static conv:HexToBrushConverter.Instance}}"
+                              Background="{Binding Zone4Preview, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                               IsVisible="{Binding ZoneSolid}" />
                       <Border Classes="zone" Classes.zoneactive="{Binding IsZone4Active}" Tag="4"
                               PointerPressed="OnZonePressed"
@@ -164,7 +165,8 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ColorSwatch">
-                      <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
+                      <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}"
+                              AutomationProperties.Name="{Binding Name}">
                         <Border Width="24" Height="24" CornerRadius="2"
                                 Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                                 BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
@@ -316,17 +318,21 @@
                 middle. The tile is also the only way to point the ramp card at a half, so switching one on is how the
                 user says "edit this half's ramp".
               -->
-              <StackPanel IsVisible="{Binding ReactiveLightingEnabled}" Margin="0,12,0,0">
+              <StackPanel Margin="0,12,0,0">
                 <Grid ColumnDefinitions="*,*">
-                  <ToggleButton Classes="tempchip" IsChecked="{Binding ReactiveCpuSensor}" Margin="0,0,5,0"
-                                AutomationProperties.AutomationId="ReactiveSensorCpu">
+                  <ToggleButton Classes="tempchip" IsChecked="{Binding ReactiveCpuSensor, Mode=OneWay}"
+                                Margin="0,0,5,0" Click="OnReactiveCpuTile"
+                                AutomationProperties.AutomationId="ReactiveSensorCpu"
+                                AutomationProperties.Name="CPU">
                     <StackPanel Spacing="2">
                       <TextBlock Classes="caps" Text="CPU" />
                       <TextBlock Classes="figurebig" Text="{Binding ReactiveCpuReading}" />
                     </StackPanel>
                   </ToggleButton>
-                  <ToggleButton Grid.Column="1" Classes="tempchip" IsChecked="{Binding ReactiveGpuSensor}"
-                                Margin="5,0,0,0" AutomationProperties.AutomationId="ReactiveSensorGpu">
+                  <ToggleButton Grid.Column="1" Classes="tempchip" IsChecked="{Binding ReactiveGpuSensor, Mode=OneWay}"
+                                Margin="5,0,0,0" Click="OnReactiveGpuTile"
+                                AutomationProperties.AutomationId="ReactiveSensorGpu"
+                                AutomationProperties.Name="GPU">
                     <StackPanel Spacing="2">
                       <TextBlock Classes="caps" Text="GPU" />
                       <TextBlock Classes="figurebig" Text="{Binding ReactiveGpuReading}" />
@@ -375,7 +381,7 @@
               -->
               <StackPanel IsVisible="{Binding ReactiveLightingEnabled}" Margin="0,12,0,0">
                 <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
+                  <TextBlock Classes="caps" Text="{Binding Labels.ReactiveBrightnessTitle}" />
                   <TextBlock Grid.Column="1" Text="{Binding ReactiveBrightnessLabel}" FontWeight="Bold" FontSize="11"
                              HorizontalAlignment="Right" Foreground="{DynamicResource AccentBrush}" />
                 </Grid>
@@ -400,11 +406,11 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:ReactiveProfileChoice">
                     <Button Classes="ramp" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}"
-                            Margin="0,0,8,8">
-                      <StackPanel Width="118" Spacing="6">
+                            Margin="0,0,8,8" AutomationProperties.Name="{Binding Label}">
+                      <StackPanel Width="150" Spacing="6">
                         <Border Height="8" CornerRadius="2"
                                 Background="{Binding Stops, Converter={x:Static conv:RampToBrushConverter.Instance}}" />
-                        <TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap" MinHeight="30" />
                       </StackPanel>
                     </Button>
                   </DataTemplate>
@@ -428,7 +434,8 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:ColorSwatch">
-                        <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
+                        <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}"
+                              AutomationProperties.Name="{Binding Name}">
                           <Border Width="24" Height="24" CornerRadius="2"
                                   Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                                   BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
@@ -543,7 +550,8 @@
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ColorSwatch">
-                      <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}">
+                      <Button Classes="swatch" Command="{Binding SelectCommand}" ToolTip.Tip="{Binding Name}"
+                              AutomationProperties.Name="{Binding Name}">
                         <Border Width="24" Height="24" CornerRadius="2"
                                 Background="{Binding Hex, Converter={x:Static conv:HexToBrushConverter.Instance}}"
                                 BorderBrush="{DynamicResource CardBorderStrongBrush}" BorderThickness="1" />
@@ -573,7 +581,7 @@
                 control nobody asked for.
               -->
               <Grid ColumnDefinitions="*,Auto" Margin="0,16,0,0">
-                <TextBlock Classes="caps" Text="{Binding Labels.Brightness}" />
+                <TextBlock Classes="caps" Text="{Binding Labels.ChargingBrightnessTitle}" />
                 <TextBlock Grid.Column="1" Text="{Binding ChargingBrightnessLabel}" FontWeight="Bold" FontSize="11"
                            HorizontalAlignment="Right" Foreground="{DynamicResource AccentBrush}" />
               </Grid>

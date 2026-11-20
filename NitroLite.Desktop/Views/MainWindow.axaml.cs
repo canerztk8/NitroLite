@@ -254,6 +254,29 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Puts every scroller inside the page that just opened back at the top.
+    /// </summary>
+    /// <remarks>
+    /// The five pages are one grid of views toggled with <see cref="Visual.IsVisible"/>, not a host that builds and
+    /// throws away controls, so each page's <see cref="ScrollViewer"/> keeps its offset while it is hidden. That is
+    /// where the user last left it — and it is also why a page came back with its title cut off, because the offset
+    /// outlived the layout it was measured against. Only the visible page is touched, so the page being left keeps
+    /// its place for the next return.
+    /// </remarks>
+    private void ResetPageScroll()
+    {
+        if (PageHost == null) return;
+
+        foreach (var child in PageHost.Children)
+        {
+            if (child is not Control { IsEffectivelyVisible: true } page) continue;
+
+            foreach (var scroller in page.GetVisualDescendants().OfType<ScrollViewer>())
+                scroller.Offset = default;
+        }
+    }
+
+    /// <summary>
     /// Raises the banner whenever the view model has something new to say. Only <c>Status</c> matters: every other
     /// property is a reading, and a reading is not an event.
     /// </summary>
@@ -264,6 +287,17 @@ public partial class MainWindow : Window
     /// </remarks>
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // A page that comes back keeps the scroll offset it was left at, and that offset was measured against a window
+        // the page no longer fills: returning to a page scrolled down a long card left it scrolled past its own title.
+        // The reset happens on the way in, so the page opens at its top.
+        if (e.PropertyName is nameof(MainViewModel.IsModesPage) or nameof(MainViewModel.IsMonitoringPage)
+            or nameof(MainViewModel.IsLightingPage) or nameof(MainViewModel.IsBatteryPage)
+            or nameof(MainViewModel.IsToolsPage))
+        {
+            ResetPageScroll();
+            return;
+        }
+
         if (e.PropertyName != nameof(MainViewModel.Status)) return;
         if (_viewModel == null || !_viewModel.HasStatus) return;
         if (!IsVisible) return;
@@ -615,7 +649,7 @@ public partial class MainWindow : Window
         if (_timer.Interval == wanted) return;
 
         _timer.Interval = wanted;
-        AppLog.Info("The telemetry interval changed", $"{wanted.TotalSeconds:F0} sn");
+        AppLog.Info("The telemetry interval changed", $"{wanted.TotalSeconds:F0} s");
     }
 
     /// <summary>

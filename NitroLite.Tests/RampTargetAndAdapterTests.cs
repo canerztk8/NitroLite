@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -443,15 +443,36 @@ public class RampTargetAndAdapterTests
         Assert.DoesNotContain("Labels.ReactiveSensors}", markup, StringComparison.Ordinal);
         Assert.Contains("ReactiveCpuReading", markup, StringComparison.Ordinal);
         Assert.Contains("ReactiveGpuReading", markup, StringComparison.Ordinal);
-        Assert.Contains("IsChecked=\"{Binding ReactiveCpuSensor}\"", markup, StringComparison.Ordinal);
-        Assert.Contains("IsChecked=\"{Binding ReactiveGpuSensor}\"", markup, StringComparison.Ordinal);
+        // One-way on purpose: a two-way tile cannot tell "point the card at this half" from "switch this half off",
+        // so the click goes through the view model, which knows how many halves are live and which one the card is on.
+        Assert.Contains("IsChecked=\"{Binding ReactiveCpuSensor, Mode=OneWay}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding ReactiveGpuSensor, Mode=OneWay}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnReactiveCpuTile\"", markup, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnReactiveGpuTile\"", markup, StringComparison.Ordinal);
         Assert.Contains("Classes=\"tempchip\"", markup, StringComparison.Ordinal);
+
+        // And the tiles are on screen whether or not the mode is on: they are the only control that picks a sensor, and
+        // hiding them behind the switch meant the choice could only be made after the mode was already running.
+        var tiles = markup.IndexOf("AutomationProperties.AutomationId=\"ReactiveSensorCpu\"", StringComparison.Ordinal);
+        var gate = markup.LastIndexOf("IsVisible=\"{Binding ReactiveLightingEnabled}\"", tiles, StringComparison.Ordinal);
+        Assert.True(gate < 0 || markup.IndexOf("</StackPanel>", gate, StringComparison.Ordinal) < tiles,
+            "the sensor tiles must not be inside a ReactiveLightingEnabled panel");
 
         // The ramp card can be pointed at either half, which is what lets the two halves look different — and the only
         // control that names a half is the tile above, so the chips that repeated it are gone for good.
         Assert.DoesNotContain("ReactiveRampTargetCpu", markup, StringComparison.Ordinal);
         Assert.DoesNotContain("ReactiveRampTargetGpu", markup, StringComparison.Ordinal);
         Assert.Contains("ReactiveRampCaption", markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheTileClick_IsDecidedByTheViewModel()
+    {
+        var codeBehind = File.ReadAllText(
+            Path.Combine(RepoRoot(), "NitroLite.Desktop", "Views", "LightingView.axaml.cs"));
+
+        // The handler is the one place that knows a click on a live half means "point the card at it".
+        Assert.Contains("ToggleReactiveSensor", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]
