@@ -80,6 +80,27 @@ custom ramp's stops are typed as well as slid.
   were not on any other page and have no home in the app now; their view-model properties and tests are untouched, so a
   page that wants them back needs only the markup.
 
+### Fixed
+
+- **A colour the user cancelled cannot land afterwards.** Every lighting write now asks, once it holds the write gate,
+  whether it is still wanted; a temperature colour queued behind a slow write is abandoned when the mode's switch goes
+  down or the page blacks out, instead of flashing onto the keyboard after the colour the user asked for. The charging
+  colour obeys the same rule, and the write helper reports "written", "refused" and "abandoned" as three different
+  things so nothing logs a refusal that never happened.
+- **Two ramp rows can no longer share a temperature.** The ramp keeps one stop per degree, so two rows on the same
+  number collapsed into one and a two-row editor fell back to the built-in colours while it still showed the user's
+  own — a silent failure. A temperature typed into a row another row already holds now lands on the nearest free
+  degree, hotter first, and the box is rewritten to what it took. A row removed while its box held the caret is
+  ignored rather than written into.
+- **A setting changed just before closing the window is saved.** The debounced settings writes are flushed on
+  shutdown instead of being cancelled with their timers, so a temperature typed into a ramp half a second before the
+  app closes is the value the next launch reads. Hardware writes are left alone: the write gate can be held by a
+  telemetry step, and blocking the close on the embedded controller would be worse than the lost colour.
+- **The charging switch leaves the blackout the way the temperature switch does.** Switching it on is asking to see the
+  colour, so the page leaves blackout and the suspension is over rather than leaving a lit keyboard behind a dark page.
+- **The two mode figures and the temperature card's live line follow a language change**, instead of keeping the old
+  language until the next restart: they are sentences built from the catalogue, so they are re-raised with the rest.
+
 ## [1.2.9] - 2026-11-20
 
 Every control NitroLite writes can now be read back and checked, and a machine that refuses a write says so instead of

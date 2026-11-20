@@ -1386,6 +1386,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The blackout button and the charging card's state line are sentences built from the new catalogue.
             Raise(nameof(LightingBlackoutButtonText));
             Raise(nameof(ChargingColorStateText));
+            // So are the two modes' figures and the temperature card's live line, which names the missing sensor.
+            Raise(nameof(ReactiveBrightnessLabel));
+            Raise(nameof(ChargingBrightnessLabel));
+            Raise(nameof(ReactiveLightingNow));
             // The launcher line is a sentence built from these labels, so it is re-raised rather than rebuilt.
             Raise(nameof(NitroSenseLauncherStateText));
             Raise(nameof(SchoolModeStateText));
@@ -3317,6 +3321,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
+            // The switch can come down while this write waits for the gate: the mode was turned off, the page blacked
+            // out, the user's own colour put back. Sending the colour anyway would overwrite that colour a moment
+            // later, which is exactly the "the keyboard keeps the temperature colour after I turned it off" report.
+            if (!_reactiveLightingEnabled || _lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0)
+            {
+                return;
+            }
+
             // STATIC with four zones that disagree is the backend's DIRECT: the keyboard addresses each zone itself,
             // so the left half can follow the processor while the right half follows the graphics chip.
             var ok = await Task.Run(() => hardware.SetLightingAsync("STATIC", brightness, speed, direction, left, zones))
@@ -3576,6 +3588,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // config is resumed before the colour is chosen, so the write carries a brightness the firmware accepts.
             ResumeFromOffForEdit(cfg => cfg.Effect = "STATIC");
 
+            // Same rule as the temperature switch: a colour the user asked for is not shown to them from behind a
+            // blackout, and the suspension that put the switch down is over the moment they pick it back up.
+            IsLightingBlackedOut = false;
+            _chargingSuspended = false;
+
             ChargingLightingTask = SyncChargingLightingAsync(force: true);
         }
         else if (restore)
@@ -3627,7 +3644,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 }
 
                 var charging = ChargingLighting.ConfigFor(_chargingColor, baseline, _chargingBrightness);
-                if (!await WriteLightingConfigAsync(charging).ConfigureAwait(true))
+                var outcome = await WriteLightingConfigAsync(charging,
+                    () => _chargingColorEnabled && !_lightingBlackedOut).ConfigureAwait(true);
+
+                if (outcome == LightingWriteResult.Abandoned) return;
+                if (outcome == LightingWriteResult.Refused)
                 {
                     AppLog.Warn("The charging colour could not be written", charging.Color);
                     return;
@@ -3657,7 +3678,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_hardware == null) return;
 
         var config = CurrentLightingConfig();
-        if (!await WriteLightingConfigAsync(config).ConfigureAwait(true))
+        if (await WriteLightingConfigAsync(config).ConfigureAwait(true) != LightingWriteResult.Written)
         {
             AppLog.Warn("The keyboard lighting could not be restored", config.Effect);
         }
@@ -3946,13 +3967,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// else leaves the stop where it was, because a half-typed number is not a request to move it to the floor. The
     /// stop clamps to the ramp's own range, so the editor cannot describe a temperature the evaluator would drop.
     /// </summary>
+    /// <remarks>
+    /// A row that is no longer in the editor is ignored: the box commits on losing focus, and a row deleted while its
+    /// box held the focus would otherwise write into a stop nothing reads.
+    /// </remarks>
     public void SetReactiveStopTemperature(ReactiveStopViewModel row, string? text)
     {
+        if (!ReactiveStops.Contains(row)) return;
+
         var trimmed = (text ?? "").Trim().TrimEnd('°', 'C', 'c', ' ').Replace(',', '.').Trim();
         if (trimmed.Length == 0) return;
         if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var typed)) return;
+        if (double.IsNaN(typed) || double.IsInfinity(typed)) return;
 
-        row.AtCelsius = typed;
+        var wanted = Math.Clamp(typed, ReactiveLighting.MinStopCelsius, ReactiveLighting.MaxStopCelsius);
+        var taken = ReactiveStops.Where(s => !ReferenceEquals(s, row)).Select(s => s.AtCelsius).ToList();
+
+        // Two rows cannot hold one temperature: the ramp keeps a single stop there, and when that leaves fewer than two
+        // the keyboard quietly falls back to the built-in colours while the editor still shows the user's own. The
+        // typed value therefore lands on the nearest free degree — hotter first, then colder — and the box is rewritten
+        // to what it took, so a number that moved is visible instead of a colour that stopped working.
+        while (taken.Any(t => Math.Abs(t - wanted) < 0.001) && wanted < ReactiveLighting.MaxStopCelsius)
+        {
+            wanted += 1;
+        }
+
+        while (taken.Any(t => Math.Abs(t - wanted) < 0.001) && wanted > ReactiveLighting.MinStopCelsius)
+        {
+            wanted -= 1;
+        }
+
+        // Every degree in range is taken, which needs more rows than the ramp allows; keeping the old value is the
+        // honest answer, and the box is rewritten to it.
+        if (taken.Any(t => Math.Abs(t - wanted) < 0.001)) return;
+
+        row.AtCelsius = wanted;
     }
 
     // The slider ranges come from the protocol constants rather than from numbers typed into the XAML, so a change to
@@ -6867,7 +6916,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            bool ok = await WriteLightingConfigAsync(config).ConfigureAwait(true);
+            bool ok = await WriteLightingConfigAsync(config).ConfigureAwait(true) == LightingWriteResult.Written;
 
             // No banner on success: the keyboard is the confirmation, and a toast on every slider step would cover
             // the page the user is working on. A refusal is still reported, because a silent one looks like a bug.
@@ -6906,26 +6955,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>What became of one lighting write.</summary>
+    private enum LightingWriteResult
+    {
+        /// <summary>The keyboard took the configuration.</summary>
+        Written,
+
+        /// <summary>The backend said no, which the caller reports.</summary>
+        Refused,
+
+        /// <summary>The reason for the write had gone by the time the gate was free, so nothing was sent.</summary>
+        Abandoned
+    }
+
     /// <summary>
     /// Writes one lighting configuration and reports what the backend said. The gate is held for exactly the write, so
     /// the page's own colour and either automatic colour cannot interleave on the embedded controller.
     /// </summary>
+    /// <param name="stillWanted">
+    /// Asked once the gate is free, before anything is sent: false abandons the write. A caller that queued a colour can
+    /// be gone by then — the mode's switch flicked off, the page blacked out — and a write made anyway would land on top
+    /// of the colour the user asked for, which is the "the lights ignore my off switch for a second" report.
+    /// </param>
     /// <remarks>
     /// Every lighting write goes through here, which is what makes the shared rules — the gate, the shape the backend
     /// takes, the "the keyboard accepted it" answer — live in one place instead of in each caller.
     /// </remarks>
-    private async Task<bool> WriteLightingConfigAsync(LightingConfig config)
+    private async Task<LightingWriteResult> WriteLightingConfigAsync(LightingConfig config, Func<bool>? stillWanted = null)
     {
         var hardware = _hardware;
-        if (hardware == null) return false;
+        if (hardware == null) return LightingWriteResult.Refused;
 
         var zones = (config.LEDs ?? new List<string>()).ToArray();
 
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
+            if (stillWanted is not null && !stillWanted()) return LightingWriteResult.Abandoned;
+
             return await hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
-                config.Direction, config.Color, zones).ConfigureAwait(true);
+                config.Direction, config.Color, zones).ConfigureAwait(true)
+                ? LightingWriteResult.Written
+                : LightingWriteResult.Refused;
         }
         finally
         {
@@ -8025,9 +8096,59 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private readonly TimeSpan _delay;
         private CancellationTokenSource? _pending;
 
+        /// <summary>The pending action, when it is one that can run on the calling thread.</summary>
+        private Action? _pendingSync;
+
         public Debouncer(TimeSpan delay) => _delay = delay;
 
         public void Run(Func<Task> action)
+        {
+            _pendingSync = null;
+            Restart(action);
+        }
+
+        /// <summary>The same pause for an action that does not await anything, such as a settings write.</summary>
+        public void Run(Action action)
+        {
+            _pendingSync = action;
+            Restart(() =>
+            {
+                action();
+                return Task.CompletedTask;
+            });
+        }
+
+        /// <summary>
+        /// Runs the pending action now, cancelling the wait. The view model calls it as it shuts down: a temperature
+        /// typed into a ramp a moment before the window closes is still a change the user made, and a settings write is
+        /// a few milliseconds on the calling thread.
+        /// </summary>
+        /// <remarks>
+        /// Only actions that do not await are run. A hardware write is left where it is: the write gate can be held by a
+        /// telemetry step, and blocking the window's close on the embedded controller would trade a lost colour for an
+        /// app that will not quit.
+        /// </remarks>
+        public void Flush()
+        {
+            var action = _pendingSync;
+            _pendingSync = null;
+            if (action == null) return;
+
+            _pending?.Cancel();
+            _pending?.Dispose();
+            _pending = null;
+
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Deferred write failed", ex.Message);
+            }
+        }
+
+        private void Restart(Func<Task> action)
         {
             _pending?.Cancel();
             _pending?.Dispose();
@@ -8037,19 +8158,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _ = RunAsync(action, cts);
         }
 
-        /// <summary>The same pause for an action that does not await anything, such as a settings write.</summary>
-        public void Run(Action action) => Run(() =>
-        {
-            action();
-            return Task.CompletedTask;
-        });
-
         private async Task RunAsync(Func<Task> action, CancellationTokenSource cts)
         {
             try
             {
                 await Task.Delay(_delay, cts.Token).ConfigureAwait(true);
                 if (cts.IsCancellationRequested) return;
+
+                // The debounce fired, so there is nothing left for a flush to run.
+                _pendingSync = null;
 
                 await action().ConfigureAwait(true);
             }
@@ -8068,6 +8185,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _pending?.Cancel();
             _pending?.Dispose();
             _pending = null;
+            _pendingSync = null;
         }
     }
 
@@ -8079,6 +8197,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The loop is stopped before anything else is torn down: a step in flight is holding the write gate, and
         // tearing the gate down underneath that step would throw on a background thread nobody is watching.
         _curveLoop.Dispose();
+
+        // A setting changed a moment before the window closed is still a change the user made, so the debounced
+        // settings writes are run now rather than dropped with their timers.
+        _lightingDebounce.Flush();
+        _customFanDebounce.Flush();
+        _curveDebounce.Flush();
+        _reactiveDebounce.Flush();
 
         _lightingDebounce.Dispose();
         _customFanDebounce.Dispose();

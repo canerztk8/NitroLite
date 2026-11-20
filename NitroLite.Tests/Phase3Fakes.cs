@@ -467,12 +467,24 @@ internal static class Phase3Fakes
         /// </summary>
         public List<string> LightingWrites { get; } = new();
 
-        public Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction,
+        /// <summary>
+        /// How long one lighting write takes. Zero by default, so every other test keeps the immediate answer it was
+        /// written against; a test that wants a write in flight while the page moves on sets it.
+        /// </summary>
+        public TimeSpan LightingWriteDelay { get; set; } = TimeSpan.Zero;
+
+        /// <summary>
+        /// Records the write only once it has gone through, which is the order the keyboard sees: a write that is
+        /// abandoned on the way, or that the backend refuses, never reaches the list.
+        /// </summary>
+        public async Task<bool> SetLightingAsync(string effect, int brightness, int speed, int direction,
             string primaryColor, string[]? zoneColors)
         {
+            if (LightingWriteDelay > TimeSpan.Zero) await Task.Delay(LightingWriteDelay).ConfigureAwait(false);
+
             LightingWrites.Add(string.Join("|", effect, brightness, speed, direction, primaryColor,
                 string.Join(",", zoneColors ?? Array.Empty<string>())));
-            return Task.FromResult(true);
+            return true;
         }
 
         public Task<bool> TurnOffLightingAsync()
