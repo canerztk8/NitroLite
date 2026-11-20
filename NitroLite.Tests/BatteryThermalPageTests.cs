@@ -264,4 +264,30 @@ public class BatteryThermalPageTests
             try { if (File.Exists(path)) File.Delete(path); } catch { }
         }
     }
+
+    [Fact]
+    public async Task Watchdog_AnnouncesItsSavedStateOnTheFirstRead()
+    {
+        var path = Phase3Fakes.TempSettingsPath();
+        try
+        {
+            var settings = new AppSettings { BatteryWatchdogEnabled = true };
+            using var vm = Create(settings: settings, battery: new Phase3Fakes.FakeBattery(), path: path);
+
+            // The switch is bound before InitializeAsync finishes, so a state that is only written to the field never
+            // reaches the page. It showed "off" on every launch while the watchdog was armed, and the only way to find
+            // out was to flip it off and on again.
+            var announced = new List<string?>();
+            vm.PropertyChanged += (_, e) => announced.Add(e.PropertyName);
+
+            await vm.InitializeAsync();
+
+            Assert.Contains(nameof(vm.WatchdogOn), announced);
+            Assert.True(vm.WatchdogOn);
+        }
+        finally
+        {
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+        }
+    }
 }

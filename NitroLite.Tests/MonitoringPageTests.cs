@@ -223,6 +223,19 @@ public class MonitoringPageTests
             monitor: monitor,
             memoryCleaner: cleaner);
 
+    /// <summary>The same view model, standing on the page that owns the chart.</summary>
+    /// <remarks>
+    /// The chart is rebuilt on every tick while the monitoring page is the page on screen, and once when it opens: a
+    /// chart on a page nobody is looking at is two hundred points of geometry and five formatted numbers per second for
+    /// a control that is not in the tree. The series keeps filling in either way, so arriving on the page redraws from
+    /// the history already held, which is what these tests are about.
+    /// </remarks>
+    private static MainViewModel OnChartPage(MainViewModel vm)
+    {
+        vm.SelectedTab = vm.NavTabs.First(tab => tab.Key == MainViewModel.NavMonitoringKey);
+        return vm;
+    }
+
     // ---------------------------------------------------------------- 1. the cards
 
     [Fact]
@@ -284,7 +297,7 @@ public class MonitoringPageTests
     public async Task ChartMetric_SwitchesSeries()
     {
         var hardware = new StubHardware();
-        using var vm = Create(monitor: new FakeMonitor(), hardware: hardware);
+        using var vm = OnChartPage(Create(monitor: new FakeMonitor(), hardware: hardware));
 
         Assert.Equal(9, vm.ChartMetrics.Count);
         Assert.Equal(TelemetryMetrics.CpuTemp, vm.SelectedChartMetric?.Id);
@@ -311,7 +324,7 @@ public class MonitoringPageTests
     [Fact]
     public async Task ChartMetric_WithOneSample_ReportsEmpty()
     {
-        using var vm = Create(monitor: new FakeMonitor(), hardware: new StubHardware());
+        using var vm = OnChartPage(Create(monitor: new FakeMonitor(), hardware: new StubHardware()));
 
         await vm.RefreshTelemetryAsync();
 
@@ -325,7 +338,7 @@ public class MonitoringPageTests
     [Fact]
     public async Task ModeChangeMarks_RecordsModeChanges()
     {
-        using var vm = Create(monitor: new FakeMonitor(), hardware: new StubHardware());
+        using var vm = OnChartPage(Create(monitor: new FakeMonitor(), hardware: new StubHardware()));
 
         await vm.RefreshTelemetryAsync();
 

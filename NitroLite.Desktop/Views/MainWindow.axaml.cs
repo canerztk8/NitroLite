@@ -238,8 +238,8 @@ public partial class MainWindow : Window
             await _viewModel.InitializeAsync();
 
             // The overlay is a second window bound to the same view model, so the two can never disagree about a
-            // reading. It is created here rather than in the XAML because it must not be a child of this window.
-            _osd = new OsdOverlayWindow { DataContext = _viewModel };
+            // reading. It is created here rather than in the XAML because it must not be a child of this window - and
+            // only when it is actually asked for: see ApplyOsd.
             _viewModel.OsdChanged += OnOsdChanged;
             ApplyOsd();
 
@@ -610,11 +610,27 @@ public partial class MainWindow : Window
     private void OnOsdChanged(object? sender, EventArgs e) => ApplyOsd();
 
     /// <summary>Shows, hides or moves the overlay to match the view model.</summary>
+    /// <remarks>
+    /// The window is built on the first request and closed when the overlay is switched off again. It used to be built
+    /// on every start, for a feature that is off by default: a second top-level window, its whole visual tree, its
+    /// bindings on the shared view model and its composition target, all held for the life of the session even though
+    /// nothing was ever drawn into it.
+    /// </remarks>
     private void ApplyOsd()
     {
-        if (_viewModel == null || _osd == null) return;
+        if (_viewModel == null) return;
 
-        _osd.Apply(_viewModel);
+        if (_viewModel.OsdEnabled)
+        {
+            _osd ??= new OsdOverlayWindow { DataContext = _viewModel };
+            _osd.Apply(_viewModel);
+        }
+        else if (_osd != null)
+        {
+            _osd.Close();
+            _osd = null;
+        }
+
         UpdateTelemetryPollingRate();
         UpdateChartVisibility();
     }

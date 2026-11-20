@@ -202,10 +202,21 @@ public class DeckPreviewAndTileClickTests
     private static string[] Bars(MainViewModel vm) =>
         new[] { vm.Zone1Preview, vm.Zone2Preview, vm.Zone3Preview, vm.Zone4Preview };
 
+    /// <summary>A view model standing on the lighting page, which is the only place the deck is drawn.</summary>
+    /// <remarks>
+    /// The deck is rebuilt on every tick while the lighting page is the page on screen, and once when it opens. A view
+    /// model on another page deliberately keeps the picture it last had rather than evaluating two temperature ramps
+    /// per second for four bars nobody can see, so a test that reads the deck has to be on that page.
+    /// </remarks>
     private static MainViewModel Create(
         Phase3Fakes.StubHardware hardware,
         AppSettings? settings = null,
-        Func<(bool OnAc, int? BatteryPercent)>? powerState = null) =>
-        new(settings ?? new AppSettings(), hardware, null, Phase3Fakes.TempSettingsPath(),
+        Func<(bool OnAc, int? BatteryPercent)>? powerState = null)
+    {
+        var vm = new MainViewModel(settings ?? new AppSettings(), hardware, null, Phase3Fakes.TempSettingsPath(),
             powerState: powerState ?? (() => (false, 50)));
+
+        vm.SelectedTab = vm.NavTabs.First(tab => tab.Key == MainViewModel.NavLightingKey);
+        return vm;
+    }
 }

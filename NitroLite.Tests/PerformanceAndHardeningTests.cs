@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using NitroLite.Core;
 using NitroLite.Desktop.ViewModels;
@@ -25,13 +26,25 @@ public class PerformanceAndHardeningTests
     private static string TempSettingsPath() =>
         Path.Combine(Path.GetTempPath(), "nitrolite-perf-" + Guid.NewGuid().ToString("N") + ".json");
 
+    /// <summary>The same view model, standing on the page that owns the chart.</summary>
+    /// <remarks>
+    /// The chart is rebuilt while the monitoring page is the page on screen, and once when it opens. A chart on a
+    /// page nobody is looking at is geometry and formatting per tick for a control that is not in the tree; the
+    /// series keeps filling in either way, so arriving on the page redraws from the history already held.
+    /// </remarks>
+    private static MainViewModel OnChartPage(MainViewModel vm)
+    {
+        vm.SelectedTab = vm.NavTabs.First(tab => tab.Key == MainViewModel.NavMonitoringKey);
+        return vm;
+    }
+
     // ---------------------------------------------------------------- RACE-11 / RACE-12: the chart nobody sees
 
     [Fact]
     public async Task ChartVisible_HiddenSkipsTheRebuild_AndComingBackRebuildsFromTheHistory()
     {
         var hardware = new Phase3Fakes.StubHardware();
-        using var vm = new MainViewModel(new AppSettings(), hardware, null, TempSettingsPath());
+        using var vm = OnChartPage(new MainViewModel(new AppSettings(), hardware, null, TempSettingsPath()));
 
         await vm.RefreshTelemetryAsync();
         await vm.RefreshTelemetryAsync();
@@ -67,7 +80,7 @@ public class PerformanceAndHardeningTests
     public async Task ChartVisible_StaysTrueByDefault_SoTheFirstTickDraws()
     {
         var hardware = new Phase3Fakes.StubHardware();
-        using var vm = new MainViewModel(new AppSettings(), hardware, null, TempSettingsPath());
+        using var vm = OnChartPage(new MainViewModel(new AppSettings(), hardware, null, TempSettingsPath()));
 
         Assert.True(vm.ChartVisible);
 

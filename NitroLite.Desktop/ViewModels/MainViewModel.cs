@@ -1547,7 +1547,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The 30-second timeout is read again here rather than only at startup: the elevated helper is not
             // connected yet when the window opens, so the boot read can come back empty and leave the switch on a
             // default the keyboard does not share.
-            if (IsLightingPage) _ = RefreshBacklightTimeoutAsync();
+            if (IsLightingPage)
+            {
+                _ = RefreshBacklightTimeoutAsync();
+
+                // The deck follows the colour the keyboard is painting, and the colour kept moving while another page
+                // was up: the picture is rebuilt here rather than waiting for the next tick.
+                RefreshDeckPreview();
+            }
+
+            // The battery page's slow half is WMI, which is far too expensive to run on the tick for a card nobody is
+            // looking at: the read is one per visit, and once every few minutes after that.
+            if (IsBatteryPage) _ = RefreshBatteryHealthAsync();
+
+            // Both of these are live views of a history that kept accumulating while they were off screen.
+            if (IsModesPage) RaiseHistorySeries();
+            if (IsMonitoringPage)
+            {
+                RefreshChart();
+                RefreshModeMarks();
+            }
         }
     }
 
@@ -2089,7 +2108,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SparklineNowText));
             Raise(nameof(ReactiveCpuChip));
             Raise(nameof(ReactiveCpuReading));
-            Raise(nameof(ReactiveLightingNow));
+
+            // ReactiveLightingNow is raised once per tick, after the colour the sentence prints has been worked out.
+            // Raising it here as well meant two formatted sentences per sensor per tick for a line that can only show
+            // one of them.
         }
     }
 
@@ -2103,7 +2125,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SystemGpuText));
             Raise(nameof(ReactiveGpuChip));
             Raise(nameof(ReactiveGpuReading));
-            Raise(nameof(ReactiveLightingNow));
+
+            // See the processor's setter: the sentence about the live colour is raised once per tick, not once per
+            // sensor.
         }
     }
 
@@ -2200,12 +2224,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The chart keeps whole samples rather than one series, so the selector can redraw without waiting a minute for
         // a new history. Trimmed to the window on every tick, which is also what keeps the list from growing forever.
         _telemetryHistory.Add(data);
+
+        // The samples arrive in time order, so everything before the window is at the front and the trim is a range
+        // removal. It used to be RemoveAll with a lambda, which allocated a closure and walked the whole list every
+        // second to find the two or three entries that had aged out.
         var windowStart = DateTime.Now - ChartWindow;
-        _telemetryHistory.RemoveAll(sample => sample.Timestamp < windowStart);
+        int aged = 0;
+        while (aged < _telemetryHistory.Count && _telemetryHistory[aged].Timestamp < windowStart) aged++;
+        if (aged > 0) _telemetryHistory.RemoveRange(0, aged);
 
         RefreshChart();
         RefreshModeMarks();
 
+        // The five series and the two sparkline captions are read by the dashboard only. Raising them from a page that
+        // has no sparkline re-evaluated bindings that could not show the answer.
+        if (IsModesPage) RaiseHistorySeries();
+    }
+
+    /// <summary>
+    /// Tells the dashboard's sparkline that the series behind it changed.
+    /// </summary>
+    /// <remarks>
+    /// Called on every tick while the dashboard is the page on screen, and once when it becomes the page on screen: the
+    /// series kept accumulating while another page was up, and a snapshot taken then would draw a curve that ended when
+    /// the user last looked at it.
+    /// </remarks>
+    private void RaiseHistorySeries()
+    {
         Raise(nameof(CpuTemperatureHistory));
         Raise(nameof(GpuTemperatureHistory));
         Raise(nameof(SysTemperatureHistory));
@@ -2490,6 +2535,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Recomputes the chart's mode-change rules from the changes already held.</summary>
     private void RefreshModeMarks()
     {
+        // The rules are drawn on the monitoring page's chart, so the list is only worth rebuilding when that chart is
+        // on screen. It is rebuilt from the marks already held when the page opens, so nothing is lost.
+        if (!_chartVisible || !IsMonitoringPage) return;
+
         var windowStart = DateTime.Now - ChartWindow;
 
         var marks = new List<double>();
@@ -2530,8 +2579,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshChart()
     {
         // Nothing on screen can show the result, and the next visible tick rebuilds it from the history that kept
-        // growing while the window was away.
-        if (!_chartVisible) return;
+        // growing while the window was away. The chart itself lives on the monitoring page, so another page is the
+        // same case: the selector is not reachable from there either.
+        if (!_chartVisible || !IsMonitoringPage) return;
 
         var metric = SelectedChartMetric?.Id ?? TelemetryMetrics.CpuTemp;
         var windowStart = DateTime.Now - ChartWindow;
@@ -3389,8 +3439,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ApplyReactiveColour(data.CpuTemperature, data.GpuTemperature);
 
         // The deck rides the same tick: the temperature that decides the colour moves here, so the picture of the
-        // keyboard has to move with it rather than waiting for a click on the page.
-        RefreshDeckPreview();
+        // keyboard has to move with it rather than waiting for a click on the page. Only while that page is the one on
+        // screen - the picture is the same four colours the write above already worked out, and a second evaluation of
+        // two ramps per tick for a card nobody is looking at is work with no reader.
+        if (IsLightingPage) RefreshDeckPreview();
     }
 
     /// <summary>
@@ -3437,10 +3489,44 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (force) _reactiveThrottle.Reset();
 
         // The pair is the identity of the write, not just one half: two sensors that swap colours still have to reach
-        // the keys even when neither half's colour is new.
-        if (!_reactiveThrottle.TryBeginWrite($"{colors.Left}|{colors.Right}", DateTime.UtcNow)) return;
+        // the keys even when neither half's colour is new. The identity is the pair's *stepped* colour, because a ramp
+        // that moves one step of one channel per reading is not a change anyone can see on a keyboard: writing it
+        // costs eight WMI calls, and a temperature that wanders by a degree used to pay for a repaint every three
+        // seconds for as long as the machine was on.
+        if (!_reactiveThrottle.TryBeginWrite(ReactiveWriteKey(colors.Left, colors.Right), DateTime.UtcNow)) return;
 
         ReactiveLightingTask = WriteReactiveLightingAsync(colors.Left, colors.Right);
+    }
+
+    /// <summary>
+    /// The colour pair as the throttle sees it: each channel rounded down to the nearest eighth of its range.
+    /// </summary>
+    /// <remarks>
+    /// 32 levels per channel is finer than the keyboard's own LEDs and far finer than the eye can separate on a keycap,
+    /// so a colour that only moved by a step or two inside one of those levels is treated as the colour already on the
+    /// keys. Everything that reaches the firmware is still the exact colour; this only decides whether a write is worth
+    /// making. A colour that is not a plain <c>#RRGGBB</c> is passed through untouched, so an unexpected format can
+    /// only ever make the throttle stricter, never wrong.
+    /// </remarks>
+    private static string ReactiveWriteKey(string left, string right) =>
+        $"{SteppedColour(left)}|{SteppedColour(right)}";
+
+    /// <summary>One colour, with each channel floored to a multiple of eight.</summary>
+    private static string SteppedColour(string hex)
+    {
+        if (hex.Length != 7 || hex[0] != '#') return hex;
+
+        var red = Step(hex.AsSpan(1, 2));
+        var green = Step(hex.AsSpan(3, 2));
+        var blue = Step(hex.AsSpan(5, 2));
+        if (red < 0 || green < 0 || blue < 0) return hex;
+
+        return $"#{red:X2}{green:X2}{blue:X2}";
+
+        static int Step(ReadOnlySpan<char> channel) =>
+            int.TryParse(channel, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value)
+                ? value & 0xF8
+                : -1;
     }
 
     /// <summary>
@@ -6938,7 +7024,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             CpuFanRpm = data.CpuFanSpeed;
             GpuFanRpm = data.GpuFanSpeed;
             FanRpmMeasured = data.IsFanRpmMeasured;
-            Raise(nameof(CurvePreview));
+
+            // CurvePreview is raised by the temperature setters, which are the only thing it depends on. Raising it
+            // again here would format the same sentence a second time on every tick for no visible change.
 
             CpuCores = data.CpuCores > 0 ? data.CpuCores : _monitor?.Info.CpuThreads ?? 0;
             CpuUsage = data.CpuUsage;
@@ -6970,9 +7058,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ReactiveLightingNow));
             TickReactiveLighting(data);
 
-            // Game detection runs on the same tick as telemetry, every other second: a /proc scan is cheap but not
-            // free, and a game that starts is not going to be missed by a one-second delay.
-            if (++_tick % 2 == 0) await PollGameAsync().ConfigureAwait(true);
+            // Game detection runs on the same tick as telemetry, every five seconds. It was every other second,
+            // which on a desktop with a few hundred processes is the most expensive periodic thing in the app: the
+            // scan builds one Process per process and opens a handle on each, and a measured session paid ~1.5 % of
+            // a core for it. Five seconds still notices a game before its first loading screen is over.
+            if (++_tick % 5 == 0) await PollGameAsync().ConfigureAwait(true);
 
             // The refresh-rate policy is transition-driven, so after the first call this is a boolean comparison. It
             // runs on every tick because a replug is not something to notice two seconds late.

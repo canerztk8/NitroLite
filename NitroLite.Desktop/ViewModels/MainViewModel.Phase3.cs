@@ -174,7 +174,13 @@ public sealed partial class MainViewModel
     /// header already uses; the capacities come from WMI, which costs tens of milliseconds and does not change between
     /// one minute and the next.
     /// </summary>
-    private const int BatteryHealthTickInterval = 30;
+    /// <remarks>
+    /// Five minutes rather than thirty seconds. The number it produces is the design capacity, the full-charge capacity
+    /// and the cycle count, all of which move about once a day: reading them every half-minute bought nothing and kept
+    /// a WMI connection (and, through it, the battery driver) awake for the whole session. Opening the battery page
+    /// still reads on the spot, which is when the user can actually see the difference.
+    /// </remarks>
+    private const int BatteryHealthTickInterval = 300;
 
     // ================================================================================================================
     // Battery and thermal page
@@ -1089,6 +1095,12 @@ public sealed partial class MainViewModel
     {
         _watchdogOn = _settings.BatteryWatchdogEnabled;
         if (_batteryHealth != null) _batteryHealth.WatchdogEnabled = _watchdogOn;
+
+        // The toggle was bound before this ran, so it read the field's default of false and stayed there: the switch
+        // showed "off" on every launch while the watchdog was in fact armed, and the only way to find out was to flip
+        // it off and on again. The field is assigned directly rather than through the setter because the setter would
+        // write the value back to the settings file it was just read from.
+        Raise(nameof(WatchdogOn));
 
         _selectedDcProfile = DcProfileChoices.FirstOrDefault(c => c.Value == _settings.DcPowerMode)
                              ?? DcProfileChoices[0];
