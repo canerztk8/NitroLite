@@ -49,9 +49,11 @@ which is what `predator_v4` switches on.
    name or user name), opens the folder with the file, and opens a GitHub issue; drag the file in. If `predator_v4`
    worked, say so in the issue. That is the evidence needed to add your model to the kernel, so the next person with
    your laptop gets it with no extra step.
-3. **For fan speed, keyboard colour and the charge limit** without kernel support, there is the out-of-tree
-   [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) module. Its authors report testing on kernels 6.12 to
-   6.14; it may not build on newer ones.
+3. **For fan speed, keyboard colour and the charge limit** without kernel support, there are two out-of-tree
+   modules: [acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu), which extends the kernel's own
+   driver, and [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense), whose authors report testing on kernels
+   6.12 to 6.14 (it may not build on newer ones). The 80 % charge limit is in the kernel itself from Linux 7.3 on the
+   models its `acer-wmi-battery` driver lists.
 
 ## Keyboard colour
 

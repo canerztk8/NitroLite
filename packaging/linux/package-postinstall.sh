@@ -12,6 +12,9 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
     systemctl try-restart nitrolite-helper.service || true
 fi
 
+# The udev rule hands attributes to this group; without it every chgrp fails and the attributes stay root-only.
+command -v groupadd >/dev/null 2>&1 && groupadd -f -r nitrolite || true
+
 if command -v udevadm >/dev/null 2>&1; then
     udevadm control --reload-rules || true
     udevadm trigger --subsystem-match=hidraw --subsystem-match=hwmon --subsystem-match=power_supply \

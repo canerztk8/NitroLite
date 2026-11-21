@@ -33,21 +33,22 @@ SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr
 # The in-kernel acer-wmi driver
 # ---------------------------------------------------------------------------------------------------------------------
 
-# Fan control on the models the kernel enables it for (pwm1/pwm2 and their _enable files on the "acer" hwmon device).
-# The tachometers and temperatures next to them are read-only and stay that way.
-SUBSYSTEM=="hwmon", ATTR{name}=="acer", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; cd /sys$env{DEVPATH} && for f in pwm1 pwm2 pwm1_enable pwm2_enable; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0664 $$f; done; true'"
+# Fan control is deliberately NOT handed to the group. pwm1/pwm2 accept 0, which stops a fan, and nothing on a group
+# write puts the fans back in automatic when the app that set them dies. Fan writes go through the NitroLite helper,
+# which refuses a speed below the app's floor and hands the fans back to the firmware when its client disconnects.
 
-# The battery charge limit, where the standard battery class has one.
-SUBSYSTEM=="power_supply", ATTR{type}=="Battery", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; cd /sys$env{DEVPATH} && for f in charge_control_end_threshold charge_control_start_threshold; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0664 $$f; done; true'"
+# The battery charge limit: the standard threshold where the battery class has one, and the charge type that the
+# in-kernel acer-wmi-battery driver (Linux 7.3) uses for Acer's 80 % health mode.
+SUBSYSTEM=="power_supply", ATTR{type}=="Battery", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; cd /sys$env{DEVPATH} && for f in charge_control_end_threshold charge_control_start_threshold charge_types; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0664 $$f; done; true'"
 
 # ---------------------------------------------------------------------------------------------------------------------
-# The out-of-tree Linuwu-Sense module
+# The out-of-tree modules (Linuwu-Sense, acer-wmi-linuwu)
 # ---------------------------------------------------------------------------------------------------------------------
 
-# Its settings sit on the acer-wmi platform device in nitro_sense/ or predator_sense/, with the keyboard in
-# four_zoned_kb/ below them. Only attributes the owner may already write are widened, so a read-only attribute stays
-# read-only for everyone.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; for d in /sys$env{DEVPATH}/nitro_sense /sys$env{DEVPATH}/predator_sense /sys$env{DEVPATH}/nitro_sense/four_zoned_kb /sys$env{DEVPATH}/predator_sense/four_zoned_kb; do [ -d $$d ] && find $$d -maxdepth 1 -type f -perm -u+w -exec chgrp nitrolite {} + -exec chmod g+w {} + 2>/dev/null; done; true'"
+# Their settings sit on the acer-wmi platform device in nitro_sense/ or predator_sense/, with the keyboard in
+# four_zoned_kb/ beside them (or below them, on older builds). Only attributes the owner may already write are widened,
+# so a read-only attribute stays read-only for everyone. fan_speed is left to the helper, for the reason above.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; for d in /sys$env{DEVPATH}/nitro_sense /sys$env{DEVPATH}/predator_sense /sys$env{DEVPATH}/four_zoned_kb /sys$env{DEVPATH}/nitro_sense/four_zoned_kb /sys$env{DEVPATH}/predator_sense/four_zoned_kb; do [ -d $$d ] && find $$d -maxdepth 1 -type f -perm -u+w ! -name fan_speed -exec chgrp nitrolite {} + -exec chmod g+w {} + 2>/dev/null; done; true'"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # A real device node

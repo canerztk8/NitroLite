@@ -778,6 +778,17 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             return Task.FromResult(flag == null ? (BatteryChargeMode?)null : flag.Value ? BatteryChargeMode.Optimized80 : BatteryChargeMode.Full);
         }
 
+        if (_caps.Nodes.ChargeTypes != null)
+        {
+            var active = LinuxChargeTypes.Parse(_fs.ReadAllText(_caps.Nodes.ChargeTypes))?.Active;
+            return Task.FromResult(active switch
+            {
+                LinuxPaths.ChargeTypeLongLife => (BatteryChargeMode?)BatteryChargeMode.Optimized80,
+                LinuxPaths.ChargeTypeStandard => BatteryChargeMode.Full,
+                _ => null
+            });
+        }
+
         if (_caps.Nodes.ChargeThreshold != null)
         {
             var percent = ReadInt(_caps.Nodes.ChargeThreshold);
@@ -801,14 +812,21 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         if (mode == BatteryChargeMode.Adaptive) return false;
 
         var limiter = _caps.Nodes.BatteryLimiter;
+        var types = _caps.Nodes.ChargeTypes;
         var threshold = _caps.Nodes.ChargeThreshold;
-        if (limiter == null && threshold == null) return false;
+        if (limiter == null && types == null && threshold == null) return false;
 
         var result = await ApplyAsync(
             ReadBackPolicy.BatteryLimit,
             write: async () =>
             {
                 if (limiter != null) return await WriteNodeAsync(limiter, mode == BatteryChargeMode.Optimized80 ? "1" : "0").ConfigureAwait(false);
+                if (types != null)
+                {
+                    var type = mode == BatteryChargeMode.Optimized80 ? LinuxPaths.ChargeTypeLongLife : LinuxPaths.ChargeTypeStandard;
+                    return await WriteNodeAsync(types, type).ConfigureAwait(false);
+                }
+
                 return await WriteNodeAsync(threshold!, mode == BatteryChargeMode.Optimized80 ? "80" : "100").ConfigureAwait(false);
             },
             readBack: GetBatteryChargeModeAsync,
@@ -842,11 +860,18 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     }
 
     /// <summary>
-    /// No Acer Linux module exposes the Windows-key lock, so there is nothing to write. False rather than a silent
-    /// success: the UI hides the switch when the probe reports no support, and a caller that asks anyway is told the
-    /// truth.
+    /// Only acer-wmi-linuwu exposes the Windows-key lock. Without its <c>win_key_lock</c> there is nothing to write, and
+    /// the answer is false rather than a silent success: the UI hides the switch when the probe reports no support, and
+    /// a caller that asks anyway is told the truth.
     /// </summary>
-    public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
+    public async Task<bool> SetWinKeyLockAsync(bool enabled)
+    {
+        var node = _caps.Nodes.WinKeyLock;
+        if (node == null) return false;
+
+        if (!await WriteNodeAsync(node, enabled ? "1" : "0").ConfigureAwait(false)) return false;
+        return ReadFlag(node) == enabled;
+    }
 
     // ---------------------------------------------------------------- plumbing
 

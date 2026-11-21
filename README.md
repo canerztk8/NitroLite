@@ -34,7 +34,8 @@
 - **Power modes**: Quiet, Balanced, Performance, Turbo and Eco in one click.
 - **Fans**: automatic, maximum, a fixed speed, or a fan curve you draw yourself.
 - **Keyboard lighting**: colours, zones, effects, and a colour that follows your temperature.
-- **Battery**: 80 % charge limit, health, wear trend and a school mode for long days.
+- **Battery**: 80 % charge limit (on Linux, where the kernel or a module offers it), health, wear trend and a school
+  mode for long days.
 - **In-game overlay**: CPU, GPU, RAM and fan over your game, without touching the game.
 - **Per-game profiles**: each game gets its own mode and fan setting, restored when you quit.
 

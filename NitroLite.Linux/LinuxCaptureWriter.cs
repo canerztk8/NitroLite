@@ -34,7 +34,7 @@ public sealed class LinuxCaptureWriter
         "type", "online", "status", "capacity", "technology", "manufacturer", "model_name", "cycle_count",
         "voltage_now", "current_now", "power_now", "energy_now", "energy_full", "energy_full_design", "charge_now",
         "charge_full", "charge_full_design", "time_to_empty_now", "charge_control_end_threshold",
-        "charge_control_start_threshold", "charge_behaviour"
+        "charge_control_start_threshold", "charge_behaviour", "charge_types"
     };
 
     private static readonly string[] PowerProfileService =
@@ -182,27 +182,36 @@ public sealed class LinuxCaptureWriter
 
     // ---------------------------------------------------------------- sections
 
+    /// <summary>
+    /// The sense and keyboard directories: Linuwu-Sense's under its module, acer-wmi-linuwu's on the platform device.
+    /// The keyboard directory is captured beside the sense directory and below it, since builds have used both.
+    /// </summary>
     private void CaptureSense()
     {
-        var root = LinuxPaths.LinuwuModuleRoot;
-        if (!_fs.DirectoryExists(root)) return;
+        if (_fs.DirectoryExists("/sys/module/linuwu_sense")) Dir("/sys/module/linuwu_sense");
 
-        Dir("/sys/module/linuwu_sense");
-        Dir(root);
-        foreach (var sense in new[] { LinuxPaths.NitroSense, LinuxPaths.PredatorSense })
+        foreach (var root in new[] { LinuxPaths.LinuwuModuleRoot, LinuxPaths.AcpiPlatformRoot })
         {
-            var dir = LinuxPaths.Combine(root, sense);
-            if (!_fs.DirectoryExists(dir)) continue;
+            if (!_fs.DirectoryExists(root)) continue;
+            if (root == LinuxPaths.LinuwuModuleRoot) Dir(root);
 
-            Dir(dir);
-            foreach (var name in _fs.EnumerateFiles(dir)) File(LinuxPaths.Combine(dir, name));
+            foreach (var name in new[] { LinuxPaths.NitroSense, LinuxPaths.PredatorSense, LinuxPaths.FourZoneKeyboard })
+            {
+                var dir = LinuxPaths.Combine(root, name);
+                if (!_fs.DirectoryExists(dir)) continue;
 
-            var keyboard = LinuxPaths.Combine(dir, LinuxPaths.FourZoneKeyboard);
-            if (!_fs.DirectoryExists(keyboard)) continue;
-
-            Dir(keyboard);
-            foreach (var name in _fs.EnumerateFiles(keyboard)) File(LinuxPaths.Combine(keyboard, name));
+                Flat(dir);
+                if (name != LinuxPaths.FourZoneKeyboard) Flat(LinuxPaths.Combine(dir, LinuxPaths.FourZoneKeyboard));
+            }
         }
+    }
+
+    private void Flat(string dir)
+    {
+        if (!_fs.DirectoryExists(dir)) return;
+
+        Dir(dir);
+        foreach (var name in _fs.EnumerateFiles(dir)) File(LinuxPaths.Combine(dir, name));
     }
 
     /// <summary>The attributes of a platform device, without the links back into the device tree.</summary>

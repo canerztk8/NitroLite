@@ -274,9 +274,11 @@ public class LinuxModelSupportTests
         Assert.All(active.Where(l => l.Contains("uaccess", StringComparison.Ordinal)),
             l => Assert.Contains("SUBSYSTEM==\"hidraw\"", l));
 
-        Assert.Contains(active, l => l.Contains("ATTR{name}==\"acer\"") && l.Contains("pwm1_enable") && l.Contains("chgrp nitrolite"));
-        Assert.Contains(active, l => l.Contains("charge_control_end_threshold") && l.Contains("chgrp nitrolite"));
-        Assert.Contains(active, l => l.Contains("nitro_sense") && l.Contains("chgrp nitrolite"));
+        // Fans are the helper's alone: a group write could stop them, and nothing would hand them back.
+        Assert.DoesNotContain(active, l => l.Contains("pwm", StringComparison.Ordinal));
+        Assert.Contains(active, l => l.Contains("nitro_sense") && l.Contains("! -name fan_speed"));
+        Assert.Contains(active, l => l.Contains("charge_control_end_threshold") && l.Contains("charge_types") && l.Contains("chgrp nitrolite"));
+        Assert.Contains(active, l => l.Contains("nitro_sense") && l.Contains("$env{DEVPATH}/four_zoned_kb") && l.Contains("chgrp nitrolite"));
         Assert.DoesNotContain("0666", string.Join("\n", active));
         Assert.DoesNotContain("a+w", string.Join("\n", active));
     }

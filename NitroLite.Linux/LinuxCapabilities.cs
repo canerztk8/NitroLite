@@ -35,6 +35,15 @@ public sealed record LinuxNodes
     /// <summary>80 % charge limit, from the standard kernel battery class.</summary>
     public string? ChargeThreshold { get; init; }
 
+    /// <summary>
+    /// The battery's <c>charge_types</c>, when it offers "Standard" and "Long Life": the in-kernel acer-wmi-battery
+    /// driver's 80 % health mode.
+    /// </summary>
+    public string? ChargeTypes { get; init; }
+
+    /// <summary>The Windows-key lock, from acer-wmi-linuwu.</summary>
+    public string? WinKeyLock { get; init; }
+
     /// <summary>LCD overdrive.</summary>
     public string? LcdOverride { get; init; }
 

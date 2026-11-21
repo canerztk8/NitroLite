@@ -46,12 +46,17 @@ cd NitroLite-linux-x64
 On a per-user install, or a distribution without systemd, NitroLite uses a permission rule instead. Open
 **Settings**: the **Linux setup** card has an **Enable** button. It asks for your password once, then
 
-- installs the permission rule (`99-nitrolite.rules`) so NitroLite may change the operating mode, the fans, the
-  keyboard, the charge limit and the processor boost without running as root,
+- installs the permission rule (`99-nitrolite.rules`) so NitroLite may change the operating mode, the keyboard, the
+  charge limit and the processor boost without running as root,
 - adds you to the `nitrolite` group, which owns those settings, and to the `input` group, which lets NitroLite hear
   the laptop's **Nitro key**.
 
 **Log out and back in afterwards.** Group membership is only read at login.
+
+The rule does **not** hand over the fans. A fan speed written straight to the kernel can be 0, which stops the fan,
+and nothing would put the fans back in automatic if NitroLite were killed. Fan control goes through the helper, which
+refuses a speed below NitroLite's floor and returns the fans to the firmware when NitroLite exits; on an install
+without the helper, fan control is not available.
 
 You can skip it. The operating mode still works through your desktop's own power service, and temperatures, the
 graphics card and battery health need no permission at all.
@@ -69,8 +74,11 @@ graphics card and battery health need no permission at all.
 | Nitro key | After **Enable** | the `input` group |
 | Keyboard colour on the 2024+ boards (Nitro V, Nitro 16S, Helios Neo with an ENE KB5130 controller) | After **Enable** | the permission rule |
 | Fan RPM and Acer's own modes | Depends on the model | the kernel knowing your model; see **[Linux model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)**, or `predator_v4` |
-| Fan speed and fan curve | On the models the kernel lists for fan control, after **Enable** | a new enough kernel ([model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)), or Linuwu-Sense |
-| 4-zone keyboard colour (firmware-driven boards), CoolBoost, LCD overdrive, 80 % charge limit, MUX | No | the [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) kernel module |
+| Fan speed and fan curve | On the models the kernel lists for fan control | the helper (the packages, or `install.sh --system`) and a new enough kernel ([model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)), or an out-of-tree module |
+| 80 % charge limit | On the models the kernel lists, from Linux 7.3 | the kernel's `acer-wmi-battery` driver (Nitro ANV15-51, AN515-57, AN515-58, AN517-54 and some Aspire models), or an out-of-tree module |
+| 4-zone keyboard colour (firmware-driven boards), LCD overdrive, backlight timeout | No | an out-of-tree module: [acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu) or [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) |
+| CoolBoost, Windows key lock | No | [acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu), on the models it lists (AN515-57) |
+| GPU mode (MUX) | No | no Linux driver exposes it; switch it in the firmware setup (BIOS) instead |
 | Keyboard colour through OpenRGB | If OpenRGB is running | the OpenRGB SDK server on `127.0.0.1:6742` |
 
 The **Settings** page lists what was found on your machine. That is the quickest way to tell whether a missing
@@ -98,12 +106,19 @@ the model to the kernel, after which nobody with that laptop has to do this step
 On AMD laptops the `amd-pmf` driver usually owns the operating mode already. With `predator_v4` on, `acer-wmi` adds a
 second provider, and the kernel then offers only the modes both agree on, so the list of modes may change.
 
-### Fan speed, keyboard colour and charge limit: Linuwu-Sense
+### Fan speed, keyboard colour and charge limit: an out-of-tree module
 
-These controls need a kernel module that is not part of Linux yet. Install
-[Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) by following its own instructions; NitroLite finds it on
-the next start. If **Secure Boot** is on, the module has to be signed, which the Linuwu-Sense instructions cover.
-NitroLite does not install kernel modules itself.
+On a model the kernel does not cover yet, these controls need a kernel module that is not part of Linux. There are two,
+and NitroLite finds either on the next start:
+
+- **[acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu)** replaces the kernel's own `acer-wmi` with
+  an extended copy through DKMS, so nothing is blacklisted and everything the kernel driver did keeps working. It is
+  the only one with CoolBoost and the Windows key lock.
+- **[Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense)** blacklists `acer-wmi` and loads its own module in its
+  place.
+
+Install one, not both, following its own instructions. If **Secure Boot** is on, the module has to be signed, which
+both cover. NitroLite does not install kernel modules itself.
 
 ## Doing it by hand
 
@@ -125,7 +140,7 @@ out and back in afterwards. The Settings page shows the same command with the ri
 |---|---|---|
 | The mode switch does nothing and the Settings page shows the Linux setup card | no permission and no power-profile service | press **Enable**, or install `power-profiles-daemon` |
 | The Nitro key is not heard | not in the `input` group | **Enable**, then log out and back in |
-| The keyboard page is covered with "Keyboard lighting is not reachable" | the kernel offers no path to your keyboard | Linuwu-Sense, or OpenRGB |
+| The keyboard page is covered with "Keyboard lighting is not reachable" | the kernel offers no path to your keyboard | acer-wmi-linuwu or Linuwu-Sense, or OpenRGB |
 | No fan RPM | `acer-wmi` does not know your model | try `predator_v4` |
 | The graphics card shows no reading | the GPU is asleep, or the NVIDIA driver is not installed | open a game or `nvidia-smi` once; a sleeping GPU is not woken on purpose, to save battery |
 | No NitroLite icon in the top bar, and closing the window only minimises it | GNOME shows no tray icons without the AppIndicator extension (Ubuntu ships it; Fedora and Debian do not) | install "AppIndicator and KStatusNotifierItem Support" from GNOME Extensions; until then NitroLite keeps running minimised in the dock instead of disappearing |

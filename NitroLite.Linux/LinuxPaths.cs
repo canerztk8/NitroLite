@@ -7,8 +7,10 @@ namespace NitroLite.Linux;
 /// The two roots are not interchangeable. <c>/sys/devices/platform/acer-wmi</c> is what the in-kernel
 /// <c>acer-wmi</c> module registers, and it is the only one that exists on a stock distribution. The
 /// <c>/sys/module/linuwu_sense/...</c> tree is what the out-of-tree Linuwu-Sense module adds, and it is where the
-/// fan, RGB, battery-limiter and LCD-override attributes live. A machine can have either, both, or neither, so the
-/// probe looks at both and the controller uses whichever answered.
+/// fan, RGB, battery-limiter and LCD-override attributes live. The out-of-tree acer-wmi-linuwu module replaces the
+/// in-kernel driver under its own name, so its <c>nitro_sense</c>/<c>predator_sense</c> and <c>four_zoned_kb</c>
+/// directories sit under <c>/sys/devices/platform/acer-wmi</c>. A machine can have any of these, or none, so the probe
+/// looks at all of them and the controller uses whichever answered.
 /// </remarks>
 public static class LinuxPaths
 {
@@ -54,8 +56,14 @@ public static class LinuxPaths
     /// <summary>0 or 1: stop charging at 80 %.</summary>
     public const string BatteryLimiter = "battery_limiter";
 
-    /// <summary>0 or 1: reduce panel latency at the cost of some contrast.</summary>
+    /// <summary>0 or 1: reduce panel latency at the cost of some contrast. Linuwu-Sense's name for it.</summary>
     public const string LcdOverride = "lcd_override";
+
+    /// <summary>The same switch under acer-wmi-linuwu's name; that module keeps <c>lcd_override</c> as an alias.</summary>
+    public const string LcdOverdrive = "lcd_overdrive";
+
+    /// <summary>0 or 1: disable the Windows and menu keys. Only acer-wmi-linuwu exposes it.</summary>
+    public const string WinKeyLock = "win_key_lock";
 
     /// <summary>0 or 1: run both fans above the firmware curve. Not every module exposes it.</summary>
     public const string CoolBoost = "cool_boost";
@@ -71,6 +79,19 @@ public static class LinuxPaths
 
     /// <summary>The standard kernel battery charge limit, 0-100.</summary>
     public const string ChargeControlEndThreshold = "charge_control_end_threshold";
+
+    /// <summary>
+    /// The battery's charge type, with the active one in brackets: <c>[Standard] Long Life</c>. The in-kernel
+    /// <c>acer-wmi-battery</c> driver (Linux 7.3) offers exactly these two on the models in its list, and "Long Life" is
+    /// Acer's 80 % health mode — the kernel's way of exposing it, since Acer has no percentage threshold.
+    /// </summary>
+    public const string ChargeTypes = "charge_types";
+
+    /// <summary>The charge type that stops at 80 %.</summary>
+    public const string ChargeTypeLongLife = "Long Life";
+
+    /// <summary>The charge type that charges to full.</summary>
+    public const string ChargeTypeStandard = "Standard";
 
     /// <summary>
     /// The process table. Read through the same file-system abstraction as <c>/sys</c> because both are kernel

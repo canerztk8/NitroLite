@@ -110,10 +110,12 @@ dir /sys/module/acer_wmi
 for f in /sys/module/acer_wmi/parameters/*; do file "$f"; done
 attrs /sys/devices/platform/acer-wmi
 dir /sys/module/linuwu_sense
-for root in /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi; do
+# Linuwu-Sense registers under its own module; acer-wmi-linuwu replaces the kernel driver, so its directories are on
+# the platform device. four_zoned_kb sits beside the sense directory.
+for root in /sys/module/linuwu_sense/drivers/platform:acer-wmi/acer-wmi /sys/devices/platform/acer-wmi; do
     [ -d "$root" ] || continue
-    emit "@@ dir $root"
-    for sense in nitro_sense predator_sense; do
+    [ "$root" = /sys/devices/platform/acer-wmi ] || emit "@@ dir $root"
+    for sense in nitro_sense predator_sense four_zoned_kb; do
         [ -d "$root/$sense" ] || continue
         emit "@@ dir $root/$sense"
         for f in "$root/$sense"/*; do
@@ -138,7 +140,7 @@ for d in /sys/class/power_supply/*; do
     emit "@@ dir $d"
     for f in type online status capacity technology manufacturer model_name cycle_count voltage_now current_now \
              power_now energy_now energy_full energy_full_design charge_now charge_full charge_full_design \
-             time_to_empty_now charge_control_end_threshold charge_control_start_threshold charge_behaviour; do
+             time_to_empty_now charge_control_end_threshold charge_control_start_threshold charge_behaviour charge_types; do
         file "$d/$f"
     done
 done

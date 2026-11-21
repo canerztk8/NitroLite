@@ -135,7 +135,8 @@ public sealed class LinuxSelfTest
         yield return ("fan speed (Linuwu-Sense)", n.FanSpeed, false);
         yield return ("keyboard zones", n.PerZoneMode, true);
         yield return ("keyboard effect", n.FourZoneMode, true);
-        yield return ("charge limit", n.BatteryLimiter ?? n.ChargeThreshold, true);
+        yield return ("charge limit", n.BatteryLimiter ?? n.ChargeTypes ?? n.ChargeThreshold, true);
+        yield return ("Windows key lock", n.WinKeyLock, true);
         yield return ("CoolBoost", n.CoolBoost, true);
         yield return ("LCD overdrive", n.LcdOverride, true);
         yield return ("backlight timeout", n.BacklightTimeout, true);

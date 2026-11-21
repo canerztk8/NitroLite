@@ -82,13 +82,13 @@ public sealed class LinuxCapabilityProbe
             OperatingModeControl = hasAcpi || viaDaemon,
             FanControl = nodes.FanSpeed != null || nodes.HasKernelFanControl,
             MuxSwitch = nodes.DgpuMode != null,
-            BatteryChargeLimit = nodes.BatteryLimiter != null || nodes.ChargeThreshold != null,
+            BatteryChargeLimit = nodes.BatteryLimiter != null || nodes.ChargeTypes != null || nodes.ChargeThreshold != null,
             KeyboardLighting = hasKeyboardNodes || nodes.HidrawKeyboard != null,
             BacklightTimeout = nodes.BacklightTimeout != null,
             CoolBoost = nodes.CoolBoost != null,
             LcdOverdrive = nodes.LcdOverride != null,
-            // There is no sysfs attribute for the Windows-key lock on any Acer Linux module.
-            WinKeyLock = false,
+            // Only acer-wmi-linuwu has the Windows-key lock; neither the kernel driver nor Linuwu-Sense does.
+            WinKeyLock = nodes.WinKeyLock != null,
             SupportedOperatingModes = supportedModes,
             SupportedModeMask = null
         };
@@ -100,7 +100,7 @@ public sealed class LinuxCapabilityProbe
 
         if (viaDaemon) notes.Add("Çalışma modu power-profiles-daemon üzerinden değiştiriliyor.");
         if (!hasSense && !hardware.FanControl && !hardware.KeyboardLighting)
-            notes.Add("Linuwu-Sense yok: özel fan hızı, klavye RGB ve CoolBoost kullanılamaz.");
+            notes.Add("Ek Acer modülü (acer-wmi-linuwu veya Linuwu-Sense) yok: özel fan hızı, klavye RGB ve CoolBoost kullanılamaz.");
         if (hwmon.Count == 0) notes.Add("hwmon cihazı bulunamadı: sıcaklık ve fan devri okunamıyor.");
         if (sample.CpuFanRpm == null && sample.GpuFanRpm == null)
         {
@@ -199,6 +199,8 @@ public sealed class LinuxCapabilityProbe
                      nodes.BacklightTimeout,
                      nodes.BatteryLimiter,
                      nodes.ChargeThreshold,
+                     nodes.ChargeTypes,
+                     nodes.WinKeyLock,
                      nodes.DgpuMode,
                      nodes.HidrawKeyboard,
                      nodes.AcerPwmCpu,
@@ -234,7 +236,9 @@ public sealed class LinuxCapabilityProbe
         string? Pwm(string name) => acerHwmon == null ? null : Existing(LinuxPaths.Combine(acerHwmon, name));
 
         // four_zoned_kb is a directory, not an attribute: the two files inside it are the ones that carry the state.
-        var keyboard = sense == null ? null : ExistingDirectory(LinuxPaths.Combine(sense, LinuxPaths.FourZoneKeyboard));
+        // Both modules put it next to the sense directory, on the platform device; below it is checked too, for the
+        // layouts older module builds used.
+        var keyboard = ResolveKeyboardDirectory(sense);
 
         return new LinuxNodes
         {
@@ -245,7 +249,10 @@ public sealed class LinuxCapabilityProbe
             BacklightTimeout = Sense(LinuxPaths.BacklightTimeout) ?? Acpi(LinuxPaths.BacklightTimeout),
             BatteryLimiter = Sense(LinuxPaths.BatteryLimiter) ?? Acpi(LinuxPaths.BatteryLimiter),
             ChargeThreshold = ResolveChargeThreshold(),
-            LcdOverride = Sense(LinuxPaths.LcdOverride) ?? Acpi(LinuxPaths.LcdOverride),
+            ChargeTypes = ResolveChargeTypes(),
+            WinKeyLock = Sense(LinuxPaths.WinKeyLock) ?? Acpi(LinuxPaths.WinKeyLock),
+            LcdOverride = Sense(LinuxPaths.LcdOverdrive) ?? Sense(LinuxPaths.LcdOverride) ??
+                          Acpi(LinuxPaths.LcdOverdrive) ?? Acpi(LinuxPaths.LcdOverride),
             CoolBoost = Sense(LinuxPaths.CoolBoost) ?? Acpi(LinuxPaths.CoolBoost),
             DgpuMode = Sense(LinuxPaths.DgpuMode) ?? Acpi(LinuxPaths.DgpuMode),
             PerZoneMode = keyboard == null ? null : Existing(LinuxPaths.Combine(keyboard, LinuxPaths.PerZoneMode)),
@@ -261,14 +268,53 @@ public sealed class LinuxCapabilityProbe
 
     /// <summary>
     /// The module registers <c>predator_sense</c> on Predators and <c>nitro_sense</c> on Nitros, and a machine can
-    /// have both directories. Predator wins because it is the superset.
+    /// have both directories. Predator wins because it is the superset. Linuwu-Sense registers them under its own
+    /// module name; acer-wmi-linuwu replaces the kernel driver, so its directories are on the acer-wmi platform device.
     /// </summary>
     private string? ResolveSenseRoot()
     {
-        foreach (var name in new[] { LinuxPaths.PredatorSense, LinuxPaths.NitroSense })
+        foreach (var parent in SenseParents)
         {
-            var path = LinuxPaths.Combine(LinuxPaths.LinuwuModuleRoot, name);
-            if (_fs.DirectoryExists(path)) return path;
+            foreach (var name in new[] { LinuxPaths.PredatorSense, LinuxPaths.NitroSense })
+            {
+                var path = LinuxPaths.Combine(parent, name);
+                if (_fs.DirectoryExists(path)) return path;
+            }
+        }
+
+        return null;
+    }
+
+    private static readonly string[] SenseParents = { LinuxPaths.LinuwuModuleRoot, LinuxPaths.AcpiPlatformRoot };
+
+    /// <summary>The <c>four_zoned_kb</c> directory: beside the sense directory, or below it.</summary>
+    private string? ResolveKeyboardDirectory(string? sense)
+    {
+        if (sense == null) return null;
+
+        var parent = sense[..sense.LastIndexOf('/')];
+        return ExistingDirectory(LinuxPaths.Combine(parent, LinuxPaths.FourZoneKeyboard)) ??
+               ExistingDirectory(LinuxPaths.Combine(sense, LinuxPaths.FourZoneKeyboard));
+    }
+
+    /// <summary>
+    /// The first battery whose <c>charge_types</c> offers both "Standard" and "Long Life", or null. Other drivers use
+    /// the same attribute for other types (Fast, Adaptive, Custom), and those are not Acer's 80 % mode.
+    /// </summary>
+    private string? ResolveChargeTypes()
+    {
+        foreach (var directory in _fs.EnumerateDirectories(LinuxPaths.PowerSupplyRoot))
+        {
+            var name = Path.GetFileName(directory);
+            if (!name.StartsWith("BAT", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var path = LinuxPaths.Combine(directory, LinuxPaths.ChargeTypes);
+            var offered = LinuxChargeTypes.Parse(_fs.ReadAllText(path));
+            if (offered != null && offered.Value.Offered.Contains(LinuxPaths.ChargeTypeLongLife) &&
+                offered.Value.Offered.Contains(LinuxPaths.ChargeTypeStandard))
+            {
+                return path;
+            }
         }
 
         return null;

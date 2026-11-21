@@ -121,6 +121,8 @@ public static class LinuxHardwareReport
         AppendNode(text, "backlight_timeout", nodes.BacklightTimeout);
         AppendNode(text, "battery_limiter", nodes.BatteryLimiter);
         AppendNode(text, "charge_control_end_threshold", nodes.ChargeThreshold);
+        AppendNode(text, "charge_types", nodes.ChargeTypes);
+        AppendNode(text, "win_key_lock", nodes.WinKeyLock);
         AppendNode(text, "lcd_override", nodes.LcdOverride);
         AppendNode(text, "cool_boost", nodes.CoolBoost);
         AppendNode(text, "dgpu_mode", nodes.DgpuMode);
