@@ -33,6 +33,11 @@ SUBSYSTEM=="platform", KERNEL=="acer-wmi", TAG+="uaccess"
 # fails and the attribute stays root-only, which is the safe direction to fail in.
 SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null; chmod 0660 /sys/firmware/acpi/platform_profile'"
 
+# The processor boost switch school mode turns off, handed to the same group the same way. Like platform_profile it is
+# a global attribute with no device of its own, so it rides on the acer-wmi device appearing at boot. Only the node the
+# kernel actually has is touched: cpufreq/boost on AMD and most Intel, intel_pstate/no_turbo on Intel in active mode.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'for f in /sys/devices/system/cpu/cpufreq/boost /sys/devices/system/cpu/intel_pstate/no_turbo; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0660 $$f; done; true'"
+
 # The laptop's own fans and board sensor. The CPU and GPU die sensors (k10temp, coretemp, amdgpu) are read-only and
 # need no rule.
 SUBSYSTEM=="hwmon", ATTR{name}=="acer", TAG+="uaccess"

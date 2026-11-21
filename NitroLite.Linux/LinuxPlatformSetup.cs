@@ -37,7 +37,10 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         "udevadm trigger\n" +
         "if [ -e /sys/firmware/acpi/platform_profile ]; then\n" +
         "  chgrp nitrolite /sys/firmware/acpi/platform_profile && chmod 0660 /sys/firmware/acpi/platform_profile || true\n" +
-        "fi\n";
+        "fi\n" +
+        "for f in /sys/devices/system/cpu/cpufreq/boost /sys/devices/system/cpu/intel_pstate/no_turbo; do\n" +
+        "  if [ -e \"$f\" ]; then chgrp nitrolite \"$f\" && chmod 0660 \"$f\" || true; fi\n" +
+        "done\n";
 
     /// <summary>The modprobe option file the predator_v4 step writes.</summary>
     public const string PredatorV4ConfPath = "/etc/modprobe.d/nitrolite-acer.conf";

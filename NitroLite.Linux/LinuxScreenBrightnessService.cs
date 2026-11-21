@@ -15,6 +15,12 @@ namespace NitroLite.Linux;
 /// on every read would make the school-mode state machine do file-system work inside its undo record.
 /// </para>
 /// <para>
+/// The backlight attribute is root-owned, so a write from the desktop session usually fails. The session's own
+/// <c>systemd-logind</c> then does it: <c>org.freedesktop.login1.Session.SetBrightness</c> lets the active session set
+/// its panel without a password, which is how GNOME and KDE change brightness. That is the path school mode takes on a
+/// stock install.
+/// </para>
+/// <para>
 /// A write is read back before it is reported as applied. Some panels clamp the value to their own table, and a
 /// brightness the app claims to have set but did not is worse than a refusal: school mode records the previous value
 /// and would restore a number that was never in effect.
@@ -22,14 +28,23 @@ namespace NitroLite.Linux;
 /// </remarks>
 public sealed class LinuxScreenBrightnessService : IScreenBrightnessService
 {
+    private static readonly TimeSpan LogindTimeout = TimeSpan.FromSeconds(3);
+
     private readonly ISysfsFileSystem _fs;
+    private readonly ICommandRunner? _runner;
     private readonly string? _brightnessNode;
     private readonly string? _maxNode;
 
-    /// <summary>Resolves the first backlight device that exposes both a level and a maximum.</summary>
-    public LinuxScreenBrightnessService(ISysfsFileSystem fs, string root = LinuxPaths.BacklightRoot)
+    /// <summary>
+    /// Resolves the first backlight device that exposes both a level and a maximum. <paramref name="runner"/> reaches
+    /// logind when the attribute is not writable; left null it is the real one on the real file system only, so a test
+    /// on a fixture tree never talks to the build machine's bus.
+    /// </summary>
+    public LinuxScreenBrightnessService(ISysfsFileSystem fs, string root = LinuxPaths.BacklightRoot,
+        ICommandRunner? runner = null)
     {
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
+        _runner = runner ?? (ReferenceEquals(fs, RealSysfsFileSystem.Instance) ? ProcessCommandRunner.Instance : null);
 
         foreach (var directory in fs.EnumerateDirectories(root))
         {
@@ -71,7 +86,7 @@ public sealed class LinuxScreenBrightnessService : IScreenBrightnessService
 
         int target = ToRaw(Math.Clamp(percent, 1, 100), max);
         var result = _fs.WriteAllText(_brightnessNode!, target.ToString(CultureInfo.InvariantCulture) + "\n");
-        if (!result.Ok)
+        if (!result.Ok && !(result.NeedsUdevRule && SetThroughLogind(target)))
         {
             AppLog.Warn("The screen brightness could not be written", $"{_brightnessNode}: {result.Status} {result.Detail}");
             return false;
@@ -80,6 +95,29 @@ public sealed class LinuxScreenBrightnessService : IScreenBrightnessService
         // Read back: a panel that clamps to its own table still reports the level it settled on, and that is what the
         // undo record has to hold.
         return ReadInt(_brightnessNode) is int observed && Math.Abs(observed - target) <= 1;
+    }
+
+    /// <summary>
+    /// Asks logind to set the level. The device is the backlight directory's name (<c>nvidia_0</c>,
+    /// <c>amdgpu_bl1</c>); <c>session/auto</c> is the caller's own session, which is the one polkit allows.
+    /// </summary>
+    private bool SetThroughLogind(int raw)
+    {
+        if (_runner?.Find("busctl") is not { } busctl) return false;
+
+        var parts = _brightnessNode!.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2) return false;
+        var device = parts[^2];
+
+        var answer = _runner.Run(busctl, new[]
+        {
+            "--system", "call", "org.freedesktop.login1", "/org/freedesktop/login1/session/auto",
+            "org.freedesktop.login1.Session", "SetBrightness", "ssu", "backlight", device,
+            raw.ToString(CultureInfo.InvariantCulture)
+        }, LogindTimeout);
+
+        if (!answer.Ok) AppLog.Warn("logind refused the brightness change", $"{device}: {answer.Error}");
+        return answer.Ok;
     }
 
     /// <summary>A raw level as a percentage, rounded to the nearest whole percent.</summary>

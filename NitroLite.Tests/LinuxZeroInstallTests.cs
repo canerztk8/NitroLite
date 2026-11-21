@@ -501,6 +501,57 @@ public class LinuxZeroInstallTests
         Assert.False(setup.NeedsInputGroup);
     }
 
+    // ---------------------------------------------------------------- school mode without root
+
+    [Fact]
+    public void Brightness_OnARootOwnedBacklight_IsSetThroughLogind()
+    {
+        var fs = new InMemorySysfsFileSystem();
+        fs.WithDirectory("/sys/class/backlight/nvidia_0");
+        fs.WithFile("/sys/class/backlight/nvidia_0/brightness", "100\n");
+        fs.WithFile("/sys/class/backlight/nvidia_0/max_brightness", "100\n");
+        fs.DenyWrite("/sys/class/backlight/nvidia_0/brightness");
+
+        // logind applies the level as root, which the fake models by changing the file the read-back sees.
+        var runner = new FakeRunner(new() { ["busctl"] = "/usr/bin/busctl" }, (_, args) =>
+        {
+            fs.WithFile("/sys/class/backlight/nvidia_0/brightness", args[^1] + "\n");
+            return new CommandResult(0, "", "");
+        });
+        var brightness = new LinuxScreenBrightnessService(fs, runner: runner);
+
+        Assert.True(brightness.SetBrightness(40));
+        Assert.Equal(40, brightness.GetBrightness());
+
+        var call = Assert.Single(runner.Calls);
+        Assert.Equal(new[]
+        {
+            "--system", "call", "org.freedesktop.login1", "/org/freedesktop/login1/session/auto",
+            "org.freedesktop.login1.Session", "SetBrightness", "ssu", "backlight", "nvidia_0", "40"
+        }, call.Args);
+    }
+
+    [Fact]
+    public void Brightness_WithoutLogind_StillReportsTheRefusal()
+    {
+        var fs = new InMemorySysfsFileSystem();
+        fs.WithDirectory("/sys/class/backlight/amdgpu_bl1");
+        fs.WithFile("/sys/class/backlight/amdgpu_bl1/brightness", "200\n");
+        fs.WithFile("/sys/class/backlight/amdgpu_bl1/max_brightness", "255\n");
+        fs.DenyWrite("/sys/class/backlight/amdgpu_bl1/brightness");
+
+        var brightness = new LinuxScreenBrightnessService(fs, runner: new FakeRunner(new(), (_, _) => default));
+        Assert.False(brightness.SetBrightness(40));
+    }
+
+    [Fact]
+    public void GrantScript_HandsTheBoostSwitchToTheGroup()
+    {
+        Assert.Contains("/sys/devices/system/cpu/cpufreq/boost", LinuxPlatformSetup.GrantScript);
+        Assert.Contains("/sys/devices/system/cpu/intel_pstate/no_turbo", LinuxPlatformSetup.GrantScript);
+        Assert.DoesNotContain("0666", LinuxPlatformSetup.GrantScript);
+    }
+
     // ---------------------------------------------------------------- diagnostics
 
     [Theory]

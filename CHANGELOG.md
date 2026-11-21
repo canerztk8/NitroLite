@@ -10,16 +10,31 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
-The lighting page's off switch now means what it says. Pressing it darkens the keyboard *and* the page, and the two
-automatic colours are switched off with it instead of staying visibly on over a keyboard that refuses every write until
-the mode is toggled again — which was exactly what made Temp-Reactive Lighting look broken. The ramp moved down to
-where the extras card used to be, that card is gone, its 30-second backlight timeout is in the header beside the
-blackout, and the keyboard can now hold a colour of its own while the charger is plugged in. The temperature colour
-follows the processor, the graphics chip, or both at once, each automatic colour paints at a level of its own, and a
-custom ramp's stops are typed as well as slid. On top of that, the two halves can now be painted on ramps of their
-own, the temperature tiles *are* the sensor switches, the graphics fan answers its own slider, the ramp steps in whole
-degrees instead of three at a time, and a pack parked at the 80 % charge limit is no longer mistaken for one that is
-unplugged.
+## [1.3.0] - 2026-11-21
+
+Linux goes from "experimental" to usable on a stock install, and the lighting page is rebuilt around a real off switch.
+21 commits since 1.2.9.
+
+**Linux**
+- Operating modes work with nothing installed, through the desktop's own power-profile service.
+- NVIDIA GPU temperature, load, clock, power and VRAM, without waking a sleeping GPU.
+- One *Enable* button in Settings sets up every permission behind a single password prompt.
+- Keyboard colour on the 2024+ boards (ENE KB5130) without a kernel module.
+- School mode can dim the screen and cap the processor.
+- A missing udev rule no longer switches the operating mode off for good.
+- Controls the machine has no path to are covered with the reason instead of failing on every press.
+- Diagnostics name the distribution and no longer contain the machine or user name.
+
+**Lighting**
+- The off switch darkens the keyboard and the page together and stops the automatic colours.
+- A charging colour, a temperature colour per CPU/GPU half, and typed ramp stops.
+- The four-zone split and every slider write once and land reliably.
+
+**Everywhere**
+- Pages, scans and log lines cost nothing until they are used; the overlay opens before it asks about the displays.
+
+<details>
+<summary>Full list of changes</summary>
 
 ### Added
 
@@ -139,6 +154,9 @@ unplugged.
 
 ### Fixed
 
+- **Linux: school mode can dim the screen and cap the processor on a stock install.** The backlight is set through
+  `systemd-logind` (`Session.SetBrightness`) when the attribute is root-owned, which is how the desktop itself does it,
+  and the udev rule and the *Enable* step hand `cpufreq/boost` (or `intel_pstate/no_turbo`) to the `nitrolite` group.
 - **Linux: a missing udev rule no longer switches the operating mode off for good.** A write refused for lack of
   permission was counted as a firmware failure, retried three times and, after three launches, recorded as permanently
   disabled, so installing the rule afterwards changed nothing. It is now treated as "nothing reached the hardware": no
@@ -197,6 +215,8 @@ unplugged.
   back instead of leaving the window in a missing font.
 - **The two mode figures and the temperature card's live line follow a language change**, instead of keeping the old
   language until the next restart: they are sentences built from the catalogue, so they are re-raised with the rest.
+
+</details>
 
 ## [1.2.9] - 2026-11-20
 
