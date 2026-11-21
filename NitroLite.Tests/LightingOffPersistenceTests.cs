@@ -186,6 +186,43 @@ public class LightingOffPersistenceTests
     }
 
     [Fact]
+    public async Task Startup_PutsTheStoredColourBack_WithoutStartingTheElevatedHelper()
+    {
+        var dir = TempDirectory();
+        try
+        {
+            var settingsPath = Path.Combine(dir, "settings.json");
+            var settings = new AppSettings
+            {
+                KeyboardLighting = new LightingConfig
+                {
+                    Effect = "STATIC",
+                    Brightness = 7,
+                    Color = "#FF0000",
+                    LEDs = new() { "#FF0000", "#FF0000", "#FF0000", "#FF0000" }
+                }
+            };
+
+            // The Windows probe can answer "no keyboard" on a machine whose keyboard the write path paints; start-up
+            // must not be gated on it.
+            var hardware = new Phase3Fakes.StubHardware();
+            hardware.Capabilities = hardware.Capabilities with { KeyboardLighting = false };
+
+            using var vm = new MainViewModel(settings, hardware, null, settingsPath);
+            await vm.InitializeAsync();
+
+            Assert.Contains(hardware.LightingWrites, w => w.StartsWith("STATIC|7|", StringComparison.Ordinal) && w.Contains("#FF0000"));
+            // Written with elevation off (a login must never raise a UAC prompt), and the switch is put back after.
+            Assert.Contains(false, hardware.ElevationDuringLightingWrites);
+            Assert.True(hardware.AllowElevationForLighting);
+        }
+        finally
+        {
+            TestDataIsolation.DeleteFolder(dir);
+        }
+    }
+
+    [Fact]
     public async Task Startup_WithAStoredOffState_PutsTheLightsBackOff()
     {
         var dir = TempDirectory();
@@ -219,7 +256,7 @@ public class LightingOffPersistenceTests
     }
 
     [Fact]
-    public async Task Startup_WithALitState_DoesNotWriteToTheKeyboard()
+    public async Task Startup_WithALitState_PutsThatStateBackOnce()
     {
         var dir = TempDirectory();
         try
@@ -241,7 +278,11 @@ public class LightingOffPersistenceTests
             using var vm = new MainViewModel(settings, hardware, null, settingsPath);
             await vm.InitializeAsync();
 
-            Assert.Empty(hardware.LightingWrites);
+            // Not every keyboard keeps its colour across a power cycle, so the stored lit state is put back — once,
+            // and never as a lit colour over an "off" (that case is the test above).
+            var write = Assert.Single(hardware.LightingWrites);
+            Assert.StartsWith("STATIC|6|", write, StringComparison.Ordinal);
+            Assert.Contains("#00E5FF", write);
         }
         finally
         {

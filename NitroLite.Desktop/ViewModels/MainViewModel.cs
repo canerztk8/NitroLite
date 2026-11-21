@@ -7038,10 +7038,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             await ReadStateAsync().ConfigureAwait(true);
 
-            // The user turned the lights off before the last exit. The keyboard's own firmware may have brought the
-            // last profile back on boot, so the stored off state is put back here rather than left to the next time
-            // the window comes forward.
-            if (_settings.IsBacklightOff) await ReassertKeyboardLightingAsync().ConfigureAwait(true);
+            // The keyboard's own firmware does not keep NitroLite's colour across a power cycle on every model: some
+            // come up dark, some in their factory colour, and one that was turned off may come back lit. So the stored
+            // state — the last colour the keyboard accepted, or "off" — is put back at start-up, not left to the next
+            // time the window comes forward. It never raises a UAC prompt: see ReassertKeyboardLightingAsync.
+            await ReassertKeyboardLightingAsync().ConfigureAwait(true);
 
             // The first read is done, so an armed charging colour can be painted over it. The plug state was read
             // before this and has not changed since, which is why the transition in the property setter saw nothing
@@ -8485,7 +8486,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     public async Task ReassertKeyboardLightingAsync()
     {
-        if (_hardware == null || !LightingAvailable) return;
+        // Not gated on LightingAvailable: on Windows that flag comes from a probe that needs elevation and answers
+        // "no keyboard" on machines whose keyboard the write path paints (the reference AN16-41 among them). Only a
+        // platform whose "no" is conclusive (Linux) skips the write.
+        if (_hardware == null || LightingUnsupported) return;
+
+        // An automatic re-assertion must never start the elevated helper: it uses a transport that is already open, or
+        // does nothing until the user changes a colour themselves.
+        var elevation = _hardware as ILightingElevationControl;
+        var allowed = elevation?.AllowElevationForLighting ?? false;
+        if (elevation != null) elevation.AllowElevationForLighting = false;
+        try
+        {
+            await ReassertKeyboardLightingCoreAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            if (elevation != null) elevation.AllowElevationForLighting = allowed;
+        }
+    }
+
+    private async Task ReassertKeyboardLightingCoreAsync()
+    {
+        if (_hardware == null) return;
 
         if (_settings.IsBacklightOff)
         {

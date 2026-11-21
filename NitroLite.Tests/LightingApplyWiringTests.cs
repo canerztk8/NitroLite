@@ -184,6 +184,10 @@ public class LightingApplyWiringTests
         // The first read selects a profile so the card is not blank. That selection is not the user picking one, and
         // it must not bounce out as a write — the same rule the rest of the page follows.
         await vm.InitializeAsync();
+
+        // Start-up puts the stored lighting back once, deliberately (the keyboard may have lost it over a power
+        // cycle). What must not happen is the controls bouncing their first values back out as further writes.
+        hardware.LightingWrites.Clear();
         await Task.Delay(600);
 
         Assert.Empty(hardware.LightingWrites);
@@ -251,6 +255,10 @@ public class LightingApplyWiringTests
         // The first read fills every control from the hardware. Those assignments are not user actions, so none of
         // them may bounce back out as a write.
         await vm.InitializeAsync();
+
+        // Start-up puts the stored lighting back once, deliberately (the keyboard may have lost it over a power
+        // cycle). What must not happen is the controls bouncing their first values back out as further writes.
+        hardware.LightingWrites.Clear();
         await Task.Delay(600);
 
         Assert.Empty(hardware.LightingWrites);

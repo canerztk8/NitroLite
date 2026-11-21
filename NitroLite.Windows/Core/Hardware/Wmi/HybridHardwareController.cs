@@ -45,7 +45,7 @@ public sealed record ReconciliationResult(bool Switched, bool Reapplied, string?
 /// the two disagree.
 /// </para>
 /// </summary>
-public sealed class HybridHardwareController : IHardwareController
+public sealed class HybridHardwareController : IHardwareController, ILightingElevationControl
 {
     private readonly IHardwareController _agent;
     private readonly Func<IHardwareController?> _wmiFactory;
@@ -410,9 +410,9 @@ public sealed class HybridHardwareController : IHardwareController
     public bool? LastZoneColorsApplied { get; private set; }
 
     /// <summary>
-    /// True when a lighting write may start the elevated helper. The window clears it around the automatic
-    /// re-assertions — boot, resume, an adapter change — so opening the app never raises a prompt, and leaves it set
-    /// for the writes the user asked for.
+    /// True when a lighting write may start the elevated helper. <see cref="ILightingElevationControl"/>: the view
+    /// model clears it around the automatic re-assertions — start-up, resume, the window coming back — so opening the
+    /// app never raises a prompt, and leaves it set for the writes the user asked for.
     /// </summary>
     public bool AllowElevationForLighting { get; set; } = true;
 

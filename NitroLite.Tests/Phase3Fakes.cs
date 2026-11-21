@@ -358,7 +358,7 @@ internal static class Phase3Fakes
     }
 
     /// <summary>A backend that answers one fixed capability set and accepts every write.</summary>
-    internal sealed class StubHardware : IHardwareController
+    internal sealed class StubHardware : IHardwareController, ILightingElevationControl
     {
         public string BackendName => "Test";
 
@@ -467,6 +467,12 @@ internal static class Phase3Fakes
         /// </summary>
         public List<string> LightingWrites { get; } = new();
 
+        /// <summary>The elevation switch, as a backend that can start an elevated helper exposes it.</summary>
+        public bool AllowElevationForLighting { get; set; } = true;
+
+        /// <summary>What <see cref="AllowElevationForLighting"/> was during each lighting write.</summary>
+        public List<bool> ElevationDuringLightingWrites { get; } = new();
+
         /// <summary>
         /// How long one lighting write takes. Zero by default, so every other test keeps the immediate answer it was
         /// written against; a test that wants a write in flight while the page moves on sets it.
@@ -482,6 +488,7 @@ internal static class Phase3Fakes
         {
             if (LightingWriteDelay > TimeSpan.Zero) await Task.Delay(LightingWriteDelay).ConfigureAwait(false);
 
+            ElevationDuringLightingWrites.Add(AllowElevationForLighting);
             LightingWrites.Add(string.Join("|", effect, brightness, speed, direction, primaryColor,
                 string.Join(",", zoneColors ?? Array.Empty<string>())));
             return true;
