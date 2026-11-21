@@ -1,0 +1,23 @@
+name: Laptop compatibility measurement
+description: Record one Acer laptop on one BIOS and operating system
+title: "[Hardware pilot] "
+body:
+  - type: textarea
+    id: report
+    attributes:
+      label: Hardware report
+      description: Paste the Settings hardware report. Keep the model, BIOS, OS, kernel and backend. Omit serial numbers.
+    validations:
+      required: true
+  - type: textarea
+    id: observations
+    attributes:
+      label: Physical observations
+      description: Copy the pilot table from the report. For each feature tried, record the starting value, action, observed result, and restored state. Leave untested features marked Not recorded.
+    validations:
+      required: true
+  - type: textarea
+    id: capture
+    attributes:
+      label: Supporting capture
+      description: On Windows attach the read-only before/after snapshot for a single setting. On Linux attach the self-test and a Linux info capture. Include Acer utility or driver version if known.

@@ -123,7 +123,7 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
 
         return HardwareReport.BuildMarkdown(
             probe,
-            null,
+            extras.BackendCapabilities,
             _readBack,
             wmi?.DiscoveredSensors,
             wmi?.SensorProbeRan == true,

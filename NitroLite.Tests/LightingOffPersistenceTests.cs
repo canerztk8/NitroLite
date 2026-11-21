@@ -132,11 +132,16 @@ public class LightingOffPersistenceTests
             var hardware = new Phase3Fakes.StubHardware();
             using var vm = await ReadyAsync(hardware, settings, settingsPath);
 
-            vm.BrightnessLevel = 7;
-            await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Count > 0, SettleMilliseconds);
+            // Complete both writes before simulating a resume. The fake records each hardware
+            // call before the view model finishes persisting that call's configuration.
+            await vm.ApplyLightingCommand.ExecuteAsync(null);
+            Assert.NotEmpty(hardware.LightingWrites);
+            Assert.NotNull(settings.LastActiveLighting);
+            Assert.False(LightingPolicy.IsOff(settings.LastActiveLighting!));
 
-            vm.TurnOffLightingCommand.Execute(null);
-            await Phase3Fakes.WaitUntilAsync(() => settings.IsBacklightOff, SettleMilliseconds);
+            await vm.TurnOffLightingCommand.ExecuteAsync(null);
+            Assert.True(settings.IsBacklightOff);
+            Assert.Equal("OFF", hardware.LightingWrites.Last());
             hardware.LightingWrites.Clear();
 
             await vm.ReassertKeyboardLightingAsync();

@@ -1744,6 +1744,7 @@
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "The password window was closed; nothing changed.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "Permission was not granted or the password window could not open; run the command below in a terminal.",
   "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "Setup could not finish; run the command below in a terminal.",
+  "Acer modları: Linux {0}. Fan hızı kontrolü: Linux {1}. Mevcut çekirdek: {2}. predator_v4 desteği modele bağlıdır.": "Acer modes: Linux {0}. Fan speed control: Linux {1}. Running kernel: {2}. Support for predator_v4 varies by model.",
   "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} supports this model fully, fan control included; the running kernel is {1}. Until then, predator_v4 brings fan RPM and the Acer modes.",
   "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} supports this model's Acer modes and fan RPM; the running kernel is {1}. Until then, predator_v4 brings the same features.",
   "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "Your kernel supports this model's Acer modes; fan control arrives with Linux {0}.",

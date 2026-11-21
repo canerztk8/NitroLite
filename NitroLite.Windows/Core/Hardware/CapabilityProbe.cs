@@ -70,6 +70,7 @@ public sealed record CapabilitySnapshot
     public string CacheKey { get; init; } = "";
 
     public string ProfileId { get; init; } = "";
+    public string ProfileMatchBasis { get; init; } = "unknown";
     public string ProfileSource { get; init; } = "";
     public string ProfileNotes { get; init; } = "";
 
@@ -218,6 +219,7 @@ public static class CapabilityProbe
         {
             CacheKey = CacheKey(identity),
             ProfileId = profile.Id,
+            ProfileMatchBasis = profile.MatchBasis,
             ProfileSource = profile.Source,
             ProfileNotes = profile.Notes,
             Sensors = profile.Sensors,
@@ -279,6 +281,7 @@ public static class CapabilityProbe
         {
             CacheKey = key,
             ProfileId = profile.Id,
+            ProfileMatchBasis = profile.MatchBasis,
             ProfileSource = profile.Source,
             ProfileNotes = profile.Notes,
             Sensors = profile.Sensors,

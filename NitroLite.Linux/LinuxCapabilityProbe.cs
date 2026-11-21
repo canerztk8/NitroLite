@@ -99,7 +99,8 @@ public sealed class LinuxCapabilityProbe
         }
 
         if (viaDaemon) notes.Add("Çalışma modu power-profiles-daemon üzerinden değiştiriliyor.");
-        if (!hasSense) notes.Add("Linuwu-Sense yok: özel fan hızı, klavye RGB ve CoolBoost kullanılamaz.");
+        if (!hasSense && !hardware.FanControl && !hardware.KeyboardLighting)
+            notes.Add("Linuwu-Sense yok: özel fan hızı, klavye RGB ve CoolBoost kullanılamaz.");
         if (hwmon.Count == 0) notes.Add("hwmon cihazı bulunamadı: sıcaklık ve fan devri okunamıyor.");
         if (sample.CpuFanRpm == null && sample.GpuFanRpm == null)
         {
@@ -126,7 +127,10 @@ public sealed class LinuxCapabilityProbe
         // A node that exists but cannot be opened for writing is the udev case, and it is worth saying so before the
         // user presses a control and watches it fail. Checked here rather than on the first failed write so the
         // settings page can show the rule on launch. platform_profile does not count when the daemon carries the mode.
-        var needsUdevRule = NeedsUdevRule(nodes, viaDaemon);
+        var denied = WritableNodes(nodes)
+            .Where(path => !(viaDaemon && path == nodes.PlatformProfile) && !_fs.CanWrite(path))
+            .ToArray();
+        var needsUdevRule = denied.Length > 0;
         if (needsUdevRule)
         {
             notes.Add("sysfs düğümleri yazılabilir değil: packaging/linux/99-nitrolite.rules kurulmalı.");
@@ -139,6 +143,7 @@ public sealed class LinuxCapabilityProbe
             Hardware = hardware,
             Nodes = nodes,
             NeedsUdevRule = needsUdevRule,
+            DirectWriteDenied = denied,
             ModeViaPowerProfiles = viaDaemon,
             PowerProfiles = viaDaemon ? _power : NoPowerProfiles.Instance,
             KernelHint = kernelHint,
@@ -157,24 +162,6 @@ public sealed class LinuxCapabilityProbe
             },
             Notes = notes
         };
-    }
-
-    /// <summary>
-    /// True when at least one attribute the backend would write exists but this process may not open it for writing.
-    /// <para>
-    /// Only the nodes that carry a write are checked: a read-only attribute that cannot be written is not a
-    /// permission problem, and telling the user to install a udev rule for it would be wrong.
-    /// </para>
-    /// </summary>
-    private bool NeedsUdevRule(LinuxNodes nodes, bool modeViaDaemon)
-    {
-        foreach (var path in WritableNodes(nodes))
-        {
-            if (modeViaDaemon && path == nodes.PlatformProfile) continue;
-            if (!_fs.CanWrite(path)) return true;
-        }
-
-        return false;
     }
 
     /// <summary>

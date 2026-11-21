@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -465,8 +465,18 @@ public sealed class ProfileCatalog
     /// </summary>
     public ModelProfile Match(DeviceIdentity identity)
     {
+        if (!string.IsNullOrWhiteSpace(identity.Manufacturer) && !DeviceIdentity.IsAcerManufacturer(identity.Manufacturer))
+            return new ModelProfile { Id = "unknown", Source = "none" };
+
         var byCode = _profiles.FirstOrDefault(p => !p.AnyAcer && p.MatchesModelCode(identity));
-        if (byCode != null) return byCode;
+        if (byCode != null) return byCode with { MatchBasis = "exact model" };
+
+        if (identity.SalesSuffix.Length > 0)
+        {
+            var baseIdentity = identity with { ModelCode = identity.BaseModelCode };
+            var byBaseCode = _profiles.FirstOrDefault(p => !p.AnyAcer && p.MatchesModelCode(baseIdentity));
+            if (byBaseCode != null) return byBaseCode with { MatchBasis = "base model" };
+        }
 
         var byPattern = _profiles.FirstOrDefault(p => !p.AnyAcer && p.Matches(identity));
         if (byPattern != null)
@@ -474,15 +484,19 @@ public sealed class ProfileCatalog
             // A family or board hit is a guess about a model nobody measured: the reference machine's "verified"
             // flag describes a read-back taken on that machine, not on this one, and reporting it here would make
             // the hardware report claim a measurement that was never taken.
-            return byPattern.Sensors.Verified
-                ? byPattern with { Sensors = byPattern.Sensors with { Verified = false } }
-                : byPattern;
+            return new ModelProfile
+            {
+                Id = byPattern.Id,
+                MatchBasis = "family or board only",
+                Source = byPattern.Source,
+                Notes = "Board/family match only; model-specific hardware facts are unconfirmed."
+            };
         }
 
         // The catch-all still has to claim the machine: a Dell laptop must not be handed the Acer default profile,
         // because its fan ceilings and sensor layout would then be reported as if they applied to it.
         var catchAll = _profiles.FirstOrDefault(p => p.AnyAcer && p.Matches(identity));
-        if (catchAll != null) return catchAll;
+        if (catchAll != null) return catchAll with { MatchBasis = "generic Acer" };
 
         return new ModelProfile
         {

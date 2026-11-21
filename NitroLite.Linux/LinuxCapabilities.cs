@@ -106,6 +106,7 @@ public sealed record LinuxCapabilities : IPlatformSnapshot
     /// this into the one-line install command instead of letting the user discover it by pressing a control.
     /// </summary>
     public bool NeedsUdevRule { get; init; }
+    public IReadOnlyList<string> DirectWriteDenied { get; init; } = Array.Empty<string>();
 
     /// <summary>
     /// True when the operating mode is written through power-profiles-daemon (or tuned-ppd) rather than straight to

@@ -58,7 +58,7 @@ public static class LinuxModelSupport
         {
             if (string.Equals(model.ProductName, identity.Model?.Trim(), StringComparison.OrdinalIgnoreCase) ||
                 (!string.IsNullOrWhiteSpace(identity.ModelCode) &&
-                 string.Equals(model.ModelCode, identity.ModelCode.Trim(), StringComparison.OrdinalIgnoreCase)))
+                 string.Equals(model.ModelCode, identity.BaseModelCode, StringComparison.OrdinalIgnoreCase)))
             {
                 return model;
             }
@@ -99,9 +99,11 @@ public static class LinuxModelSupport
         var now = $"{kernel.Major}.{kernel.Minor}";
         if (kernel < model.Since)
         {
-            return model.FanControlSince != null
-                ? Loc.T($"Linux {since} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {now}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.")
-                : Loc.T($"Linux {since} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {now}. O zamana kadar predator_v4 aynı özellikleri getirir.");
+            return model.FanControlSince is { } fanSince
+                ? Loc.T($"Acer modları: Linux {since}. Fan hızı kontrolü: Linux {fanSince}. Mevcut çekirdek: {now}. predator_v4 desteği modele bağlıdır.")
+                : model.Note == null
+                    ? Loc.T($"Linux {since} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {now}. O zamana kadar predator_v4 aynı özellikleri getirir.")
+                    : Loc.T(model.Note);
         }
 
         if (model.FanControlSince != null && kernel < model.FanControlSince)

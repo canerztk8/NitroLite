@@ -109,6 +109,9 @@ public class LinuxModelSupportTests
         using var controller = new LinuxSysfsHardwareController(fs, caps, new ReadBackPolicy(settings, _ => Task.CompletedTask));
 
         Assert.True(caps.NeedsUdevRule);
+        var report = LinuxHardwareReport.Build(caps);
+        Assert.Contains("Direct write permission denied: /sys/class/hwmon/hwmon4/pwm1_enable", report);
+        Assert.Contains("| Fan: manual | Interface detected | Not recorded |", report);
         Assert.False(await controller.SetFanModeAsync(FanMode.Max));
         Assert.True(controller.PermissionHintRaised);
         Assert.Empty(settings.CapabilitySessionFailures);
@@ -162,6 +165,15 @@ public class LinuxModelSupportTests
         var model = LinuxModelSupport.Find(new DeviceIdentity { Model = "Predator PH16-72" });
         var note = LinuxModelSupport.Describe(model, new Version(6, 16));
 
+        Assert.Contains("6.19", note);
+    }
+
+    [Fact]
+    public void OlderKernelDistinguishesModesFromManualFans()
+    {
+        var model = LinuxModelSupport.Find(new DeviceIdentity { ModelCode = "AN515-58-79QL" });
+        var note = LinuxModelSupport.Describe(model, new Version(6, 10));
+        Assert.Contains("6.14", note);
         Assert.Contains("6.19", note);
     }
 

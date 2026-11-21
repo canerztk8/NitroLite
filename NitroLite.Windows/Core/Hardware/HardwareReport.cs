@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -197,6 +197,8 @@ public static class HardwareReport
         AppendRow(sb, "Manufacturer", identity.Manufacturer);
         AppendRow(sb, "Model", identity.Model);
         AppendRow(sb, "Model code", identity.ModelCode);
+        AppendRow(sb, "Base model", identity.BaseModelCode);
+        AppendRow(sb, "Sales suffix", identity.SalesSuffix);
         AppendRow(sb, "Family", identity.ModelFamily);
         AppendRow(sb, "Board", identity.BoardProduct);
         AppendRow(sb, "BIOS", string.Join(" ", new[] { identity.BiosVendor, identity.BiosVersion }
@@ -208,6 +210,8 @@ public static class HardwareReport
         sb.AppendLine("| --- | --- |");
         AppendRow(sb, "Matched", $"{probe.ProfileId} ({probe.ProfileSource})");
         AppendRow(sb, "Cache key", probe.CacheKey);
+        AppendRow(sb, "Match evidence", probe.ProfileMatchBasis);
+        AppendRow(sb, "Capability evidence", probe.FromCache ? "cached probe" : "current probe");
         AppendRow(sb, "Notes", probe.ProfileNotes);
         sb.AppendLine();
 
@@ -228,9 +232,16 @@ public static class HardwareReport
             sb.AppendLine($"| {Escape(capability.Capability)} | {capability.Outcome} | {Escape(capability.Detail)} |");
         sb.AppendLine();
 
+        string Advertised(bool? available) => available == true ? "Backend advertised" : "Not established";
+        string Result(string key) => probe.Find(key)?.Outcome.ToString() ?? "Not probed";
+        var sensors = context?.SensorTrust?.RuntimeVerified == true ? "Runtime sample verified" : "No verified sample";
+        PilotReport.Append(sb, sensors, sensors, Advertised(capabilities?.FanControl),
+            Advertised(capabilities?.KeyboardLighting), Result(CapabilitySnapshot.KeyboardZones),
+            Advertised(capabilities?.OperatingModeControl), Result(CapabilitySnapshot.MuxSwitch),
+            Result(CapabilitySnapshot.WmiBatteryChargeLimit));
         sb.AppendLine("| Acer WMI | |");
         sb.AppendLine("| --- | --- |");
-        AppendRow(sb, "AcerGamingFunction", probe.Wmi.Summary);
+        AppendRow(sb, "AcerGamingFunction", probe.FromCache ? "not read (cached snapshot)" : probe.Wmi.Summary);
         AppendRow(sb, "Methods", string.Join(", ", probe.Wmi.Methods));
         AppendRow(sb, "Signatures", string.Join("<br>", probe.Wmi.Signatures));
         AppendRow(sb, "Acer classes", probe.AcerClassGuids.Count == 0
@@ -501,6 +512,7 @@ public static class HardwareReport
         {
             ["profile"] = probe.ProfileId,
             ["profileSource"] = probe.ProfileSource,
+            ["matchBasis"] = probe.ProfileMatchBasis,
             ["cacheKey"] = probe.CacheKey,
             ["sensors"] = new JsonObject
             {

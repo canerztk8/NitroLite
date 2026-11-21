@@ -33,6 +33,9 @@ public sealed record DeviceIdentity
     /// <summary>The model code pulled out of <see cref="Model"/>, e.g. "AN16-41". Empty when the string has none.</summary>
     public string ModelCode { get; init; } = "";
 
+    public string BaseModelCode => string.Join("-", ModelCode.Trim().Split('-').Take(2));
+    public string SalesSuffix => string.Join("-", ModelCode.Trim().Split('-').Skip(2));
+
     /// <summary>Marketing family, e.g. "Nitro 16". Prefers SMBIOS SystemFamily, falls back to the model code.</summary>
     public string ModelFamily { get; init; } = "";
 
@@ -84,7 +87,7 @@ public sealed record DeviceIdentity
     // letters, two or three digits, then dash-separated suffixes. A single leading letter ("N50-620") is a desktop
     // and is not matched, which is what we want: NitroLite targets laptops.
     private static readonly Regex ModelCodePattern = new(
-        @"\b([A-Z]{2,3}\d{2,3}(?:-[A-Z0-9]{2,4})*)\b",
+        @"\b([A-Z]{2,4}\d{2,3}[A-Z]?(?:-[A-Z0-9]{2,4})*)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -110,6 +113,12 @@ public sealed record DeviceIdentity
         var series = dash > 0 ? code[..dash] : code;
         return series switch
         {
+            "NL16" => "Nitro Lite 16",
+            "PHN16" => "Predator Helios Neo 16",
+            "PHN16S" => "Predator Helios Neo 16 S",
+            "PHN14" => "Predator Helios Neo 14",
+            "PTN16" => "Predator Triton Neo 16",
+            "ANV16S" => "Nitro V 16 S",
             "AN16" => "Nitro 16",
             "AN17" => "Nitro 17",
             "AN515" => "Nitro 5",

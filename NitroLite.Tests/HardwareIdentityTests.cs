@@ -11,6 +11,22 @@ namespace NitroLite.Tests;
 /// </summary>
 public class HardwareIdentityTests
 {
+    [Fact]
+    public void RawFirmwareModelAndRetailSuffixResolveEveryCatalogEntry()
+    {
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        foreach (var profile in catalog.Profiles)
+        foreach (var code in profile.ModelCodes)
+        {
+            var raw = $"Acer {code}-AB12";
+            var identity = new DeviceIdentity { Manufacturer = "Acer", Model = raw, ModelCode = DeviceIdentity.ExtractModelCode(raw) };
+            Assert.Equal(code, identity.BaseModelCode);
+            Assert.Equal("AB12", identity.SalesSuffix);
+            Assert.Equal(profile.Id, catalog.Match(identity).Id);
+            Assert.Equal("unknown", catalog.Match(identity with { Manufacturer = "Dell" }).Id);
+        }
+    }
+
     [Theory]
     [InlineData("Nitro AN16-41", "AN16-41")]
     [InlineData("Nitro AN16-41 ", "AN16-41")]
@@ -35,6 +51,7 @@ public class HardwareIdentityTests
         Assert.Equal("", DeviceIdentity.ExtractModelCode(model));
 
     [Theory]
+    [InlineData("NL16-71G", "Nitro Lite 16")]
     [InlineData("AN16-41", "Nitro 16")]
     [InlineData("AN17-51", "Nitro 17")]
     [InlineData("AN515-58", "Nitro 5")]

@@ -1,5 +1,7 @@
 # Compatibility
 
+[Collect a hardware pilot report](Hardware-Pilot.md) to verify individual controls on a new laptop.
+
 NitroLite targets the whole Acer Nitro line (Nitro 5, 16 and 17; Nitro V 15 and 16; Intel and AMD), not one SKU.
 Nothing about the hardware is hardcoded: the app asks, and hides what the answer does not cover.
 

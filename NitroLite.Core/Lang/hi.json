@@ -1744,6 +1744,7 @@
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "पासवर्ड विंडो बंद कर दी गई; कुछ नहीं बदला।",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "अनुमति नहीं मिली या पासवर्ड विंडो नहीं खुल सकी; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
   "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "सेटअप पूरा नहीं हो सका; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
+  "Acer modları: Linux {0}. Fan hızı kontrolü: Linux {1}. Mevcut çekirdek: {2}. predator_v4 desteği modele bağlıdır.": "Acer मोड: Linux {0}। पंखे की गति का नियंत्रण: Linux {1}। मौजूदा कर्नेल: {2}। predator_v4 का समर्थन मॉडल पर निर्भर करता है।",
   "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} इस मॉडल को फ़ैन कंट्रोल सहित पूरी तरह सपोर्ट करता है; अभी का कर्नेल {1} है। तब तक predator_v4 फ़ैन RPM और Acer मोड देता है।",
   "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} इस मॉडल के Acer मोड और फ़ैन RPM सपोर्ट करता है; अभी का कर्नेल {1} है। तब तक predator_v4 यही सुविधाएँ देता है।",
   "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "आपका कर्नेल इस मॉडल के Acer मोड सपोर्ट करता है; फ़ैन कंट्रोल Linux {0} के साथ आएगा।",

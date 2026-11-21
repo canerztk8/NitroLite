@@ -92,6 +92,10 @@ public class CapabilityProbeTests
         var byFamily = catalog.Match(Identity("AN16-99", family: "Nitro 16"));
         Assert.Equal("nitro-16-an16-41", byFamily.Id);
         Assert.False(byFamily.Sensors.Verified);
+        Assert.False(byFamily.Sensors.Supported);
+        Assert.Null(byFamily.FourZoneKeyboard);
+        Assert.Null(byFamily.MuxSwitch);
+        Assert.Equal("family or board only", byFamily.MatchBasis);
 
         // A model-code hit is the measured machine itself and keeps the flag.
         var byCode = catalog.Match(Identity("AN16-41", family: "Nitro 16"));

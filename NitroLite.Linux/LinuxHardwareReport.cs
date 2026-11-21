@@ -129,6 +129,9 @@ public static class LinuxHardwareReport
         text.AppendLine();
 
         text.AppendLine("## Capabilities");
+        text.AppendLine("Detected interfaces; confirm physical behaviour separately for each control.");
+        AppendCapability(text, "temperature readings", nodes.Hwmon.Any(d => d.TemperaturesC.Count > 0));
+        AppendCapability(text, "fan RPM readings", nodes.Hwmon.Any(d => d.FanRpms.Count > 0));
         text.AppendLine();
         AppendCapability(text, "fan control", hardware.FanControl);
         AppendCapability(text, "operating mode", hardware.OperatingModeControl);
@@ -142,6 +145,9 @@ public static class LinuxHardwareReport
         text.AppendLine();
 
         text.AppendLine("## Model profile");
+        text.AppendLine($"- Match evidence: {Clean(capabilities.Profile.MatchBasis)}");
+        foreach (var path in capabilities.DirectWriteDenied)
+            text.AppendLine($"- Direct write permission denied: {Clean(path)}");
         text.AppendLine();
         text.AppendLine($"- Matched: {Clean(capabilities.Profile.Id)}");
         text.AppendLine($"- Model codes: {Clean(string.Join(", ", capabilities.Profile.ModelCodes))}");
@@ -160,6 +166,12 @@ public static class LinuxHardwareReport
             foreach (var note in capabilities.Notes) text.AppendLine($"- {Clean(note)}");
         }
 
+        string Detected(bool found) => found ? "Interface detected" : "No interface detected";
+        PilotReport.Append(text,
+            Detected(nodes.Hwmon.Any(d => d.TemperaturesC.Count > 0)),
+            Detected(nodes.Hwmon.Any(d => d.FanRpms.Count > 0)), Detected(hardware.FanControl),
+            Detected(hardware.KeyboardLighting), Detected(nodes.PerZoneMode != null || nodes.HidrawKeyboard != null),
+            Detected(hardware.OperatingModeControl), Detected(hardware.MuxSwitch), Detected(hardware.BatteryChargeLimit));
         return text.ToString();
     }
 

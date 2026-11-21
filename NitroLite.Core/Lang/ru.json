@@ -1744,6 +1744,7 @@
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "Окно ввода пароля закрыто; ничего не изменено.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "Разрешение не выдано или окно ввода пароля не открылось; выполните команду ниже в терминале.",
   "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "Настройку не удалось завершить; выполните команду ниже в терминале.",
+  "Acer modları: Linux {0}. Fan hızı kontrolü: Linux {1}. Mevcut çekirdek: {2}. predator_v4 desteği modele bağlıdır.": "Режимы Acer: Linux {0}. Управление вентиляторами: Linux {1}. Текущее ядро: {2}. Поддержка predator_v4 зависит от модели.",
   "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} полностью поддерживает эту модель, включая управление вентиляторами; текущее ядро {1}. До тех пор predator_v4 даёт обороты вентиляторов и режимы Acer.",
   "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} поддерживает режимы Acer и обороты вентиляторов этой модели; текущее ядро {1}. До тех пор predator_v4 даёт те же функции.",
   "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "Ваше ядро поддерживает режимы Acer этой модели; управление вентиляторами появится в Linux {0}.",

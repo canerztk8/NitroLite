@@ -6449,7 +6449,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// and the probe state can change after a rescan.
     /// </summary>
     public string HardwareReportText =>
-        _platform?.BuildHardwareReport(HardwareReportContext.ForSensors(_sensorTrust)) ?? "";
+        _platform?.BuildHardwareReport(new HardwareReportContext { SensorTrust = _sensorTrust, BackendCapabilities = _capabilities }) ?? "";
 
     public bool HardwareReportAvailable => _platform != null;
 

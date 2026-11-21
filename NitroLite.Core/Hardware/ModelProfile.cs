@@ -65,6 +65,7 @@ public sealed record SensorLayout
 /// </summary>
 public sealed record ModelProfile
 {
+    public string MatchBasis { get; init; } = "none";
     /// <summary>Stable identifier, e.g. "nitro-16-an16-41". Shown in the hardware report.</summary>
     public string Id { get; init; } = "";
 

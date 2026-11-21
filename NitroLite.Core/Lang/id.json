@@ -1744,6 +1744,7 @@
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "Jendela kata sandi ditutup; tidak ada yang berubah.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "Izin tidak diberikan atau jendela kata sandi tidak bisa dibuka; jalankan perintah di bawah di terminal.",
   "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "Penyiapan tidak dapat diselesaikan; jalankan perintah di bawah di terminal.",
+  "Acer modları: Linux {0}. Fan hızı kontrolü: Linux {1}. Mevcut çekirdek: {2}. predator_v4 desteği modele bağlıdır.": "Mode Acer: Linux {0}. Kontrol kecepatan kipas: Linux {1}. Kernel saat ini: {2}. Dukungan predator_v4 bergantung pada model.",
   "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} mendukung model ini sepenuhnya, termasuk kontrol kipas; kernel saat ini {1}. Sampai saat itu, predator_v4 memberikan RPM kipas dan mode Acer.",
   "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} mendukung mode Acer dan RPM kipas model ini; kernel saat ini {1}. Sampai saat itu, predator_v4 memberikan fitur yang sama.",
   "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "Kernel Anda mendukung mode Acer model ini; kontrol kipas hadir di Linux {0}.",

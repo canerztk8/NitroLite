@@ -11,6 +11,7 @@
 /// </remarks>
 public sealed record HardwareReportContext
 {
+    public HardwareCapabilities? BackendCapabilities { get; init; }
     /// <summary>The session's runtime sensor verification, when a live backend is updating one.</summary>
     public RuntimeSensorVerification? SensorTrust { get; init; }
 
@@ -24,7 +25,7 @@ public sealed record HardwareReportContext
     public IReadOnlyList<string> KeyboardLighting { get; init; } = Array.Empty<string>();
 
     /// <summary>True when the context carries nothing to add.</summary>
-    public bool IsEmpty => SensorTrust == null && UsbHid.Count == 0 && KeyboardLighting.Count == 0;
+    public bool IsEmpty => BackendCapabilities == null && SensorTrust == null && UsbHid.Count == 0 && KeyboardLighting.Count == 0;
 
     /// <summary>A context with nothing in it.</summary>
     public static HardwareReportContext Empty { get; } = new();
