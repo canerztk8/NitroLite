@@ -213,7 +213,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -276,7 +276,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -307,7 +307,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -373,7 +373,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -403,7 +403,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -441,7 +441,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -478,7 +478,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -545,7 +545,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -701,7 +701,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -783,7 +783,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -807,7 +807,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -838,7 +838,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -862,7 +862,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -893,7 +893,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -926,7 +926,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -975,7 +975,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
             catch (Exception ex)
             {
-                return WmiOperationResult.WmiFailed(Describe(ex));
+                return Failed(ex);
             }
         }
     }
@@ -1368,6 +1368,51 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
         return names;
     }
+
+    /// <summary>
+    /// The failure result for <paramref name="ex"/>, after dropping the cached instances when the exception says the
+    /// provider behind them is gone. Every caller holds <see cref="_gate"/>.
+    /// </summary>
+    /// <remarks>
+    /// The instances are adopted once and kept, which is right while the provider is healthy. A provider that crashed
+    /// or was restarted leaves the cached COM object pointing at nothing, and every later call would fail the same way
+    /// for the rest of the worker's life while the capability still looked present. Releasing them on those errors —
+    /// and only those — makes the next call enumerate again and find the provider's new instance.
+    /// </remarks>
+    private WmiOperationResult Failed(Exception ex)
+    {
+        if (IsWedged(ex))
+        {
+            AppLog.Warn("The WMI provider stopped answering; its instances will be looked up again", Describe(ex));
+            try { _gaming?.Dispose(); } catch { }
+            try { _battery?.Dispose(); } catch { }
+            try { _apge?.Dispose(); } catch { }
+            _gaming = null;
+            _battery = null;
+            _apge = null;
+            _batteryLookupDone = false;
+            _apgeLookupDone = false;
+        }
+
+        return WmiOperationResult.WmiFailed(Describe(ex));
+    }
+
+    /// <summary>
+    /// True for the errors that mean the provider or its object is gone, not that the call was wrong: a provider
+    /// failure, a provider that is shutting down or could not be loaded, an object that no longer exists, or the COM
+    /// connection to the provider's host breaking. A firmware that refuses a parameter is not one of them.
+    /// </summary>
+    internal static bool IsWedged(Exception ex) => ex switch
+    {
+        ManagementException m => m.ErrorCode is ManagementStatus.ProviderFailure or ManagementStatus.ProviderLoadFailure
+            or ManagementStatus.ShuttingDown or ManagementStatus.TransportFailure or ManagementStatus.InvalidObject
+            or ManagementStatus.NotFound or ManagementStatus.CallCanceled,
+        System.Runtime.InteropServices.COMException c => (uint)c.HResult is
+            0x80010108u /* RPC_E_DISCONNECTED */ or 0x800706BAu /* RPC_S_SERVER_UNAVAILABLE */ or
+            0x800706BEu /* RPC_S_CALL_FAILED */ or 0x80010114u /* RPC_E_INVALID_OBJECT */,
+        System.Runtime.InteropServices.InvalidComObjectException => true,
+        _ => false
+    };
 
     private static string Describe(Exception ex) =>
         ex is ManagementException management

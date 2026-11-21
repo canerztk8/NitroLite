@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+﻿using System.Globalization;
+using System.Text.Json.Nodes;
 using NitroLite.Core.Hardware.Diagnostics;
 using NitroLite.Core.Hardware.Verification;
 
@@ -699,7 +700,9 @@ public sealed class WmiHardwareController : IHardwareController
             // this path, so a missing transport is answered here instead of being counted against anything.
             try
             {
-                return await WriteLightingAsync(request).ConfigureAwait(false);
+                var written = await WriteLightingAsync(request).ConfigureAwait(false);
+                if (written) NoteRejectedCommit();
+                return written;
             }
             catch (WmiTransportUnavailableException)
             {
@@ -717,7 +720,32 @@ public sealed class WmiHardwareController : IHardwareController
             readBack: ReadLightingStateAsync,
             matches: observed => observed.Rgb == target.Rgb).ConfigureAwait(false);
 
+        // After the policy's own verdict, which would clear a note made earlier: a colour that reads back is still not
+        // proof the keys show it when the firmware refused the static lock.
+        if (result.Applied) NoteRejectedCommit();
         return result.Applied;
+    }
+
+    /// <summary>The status of the last <c>SetGamingKBBacklight</c> commit the firmware refused, or null.</summary>
+    private int? _rejectedCommitStatus;
+
+    /// <summary>
+    /// Records a refused commit as an unverified lighting write, so the keyboard page offers a compatibility report
+    /// instead of claiming a colour the keys may not be showing. Not a failure: on the firmware that answers non-zero
+    /// and applies the colours anyway, calling it one would disable a keyboard that works.
+    /// </summary>
+    private void NoteRejectedCommit()
+    {
+        if (_rejectedCommitStatus is not { } status) return;
+
+        SessionVerification.Shared.Mark(new VerificationNote
+        {
+            Control = ReadBackPolicy.KeyboardLighting,
+            Verdict = ControlVerdict.Unverifiable,
+            Requested = "static lock",
+            Detail = string.Create(CultureInfo.InvariantCulture,
+                $"SetGamingKBBacklight refused the commit (status {status}); the zone colours were written, but the keys may not show them")
+        });
     }
 
     public Task<bool> TurnOffLightingAsync() =>
@@ -745,13 +773,15 @@ public sealed class WmiHardwareController : IHardwareController
             ["zones"] = zones
         }).ConfigureAwait(false);
 
+        _rejectedCommitStatus = null;
         if (response is null) throw new WmiTransportUnavailableException(_launcher.LastError);
         if (!response.Ok) return false;
 
         if (response.Data is JsonObject data && ReadNullableBool(data, "commitApplied") == false)
         {
+            _rejectedCommitStatus = ReadInt(data, "commitStatus") ?? -1;
             AppLog.Warn("The keyboard static lock was not applied",
-                $"SetGamingKBBacklight status {ReadInt(data, "commitStatus")}; the zone colours were written anyway.");
+                $"SetGamingKBBacklight status {_rejectedCommitStatus}; the zone colours were written anyway.");
         }
 
         return true;
@@ -786,14 +816,25 @@ public sealed class WmiHardwareController : IHardwareController
         return ReadNullableBool(data, "enabled");
     }
 
+    /// <summary>
+    /// Writes the 30-second backlight timeout and reads it back, as every control with a getter is. A firmware that
+    /// answers status 0 and keeps the old value is reported as a failure; one whose getter answers nothing leaves the
+    /// status byte as the only evidence there is.
+    /// </summary>
     public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
     {
         var response = await SendAsync(WmiWorkerCommand.SetBacklightTimeout, new JsonObject
         {
             ["enabled"] = enable30s
         }).ConfigureAwait(false);
+        if (response is not { Ok: true }) return false;
 
-        return response is { Ok: true };
+        var observed = await GetBacklightTimeoutAsync().ConfigureAwait(false);
+        if (observed == null || observed == enable30s) return true;
+
+        AppLog.Warn("The backlight timeout did not change",
+            $"requested {(enable30s ? "on" : "off")}, the firmware still reports {(observed.Value ? "on" : "off")}");
+        return false;
     }
 
     // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
