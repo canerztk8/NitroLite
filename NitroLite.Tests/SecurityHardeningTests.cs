@@ -587,9 +587,11 @@ public class SecurityHardeningTests
         guard.WatchForWakeRequests();
 
         Assert.True(SingleInstanceGuard.PostWakeRequest());
-        var finished = await Task.WhenAny(woken.Task, Task.Delay(TimeSpan.FromSeconds(8)));
+        // WaitAsync rather than WhenAny with a Delay: the timeout's timer is released as soon as the wake arrives, and a
+        // missed wake fails the test with a TimeoutException that says so.
+        await woken.Task.WaitAsync(TimeSpan.FromSeconds(8));
 
-        Assert.Same(woken.Task, finished);
+        Assert.True(woken.Task.IsCompletedSuccessfully);
     }
 
     [Fact]
