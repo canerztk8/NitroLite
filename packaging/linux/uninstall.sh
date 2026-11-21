@@ -102,6 +102,13 @@ fi
 command -v update-desktop-database >/dev/null 2>&1 && \
     $SUDO update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 
+if [ "$MODE" = "system" ] && [ -f /etc/systemd/system/nitrolite-helper.socket ]; then
+    echo "Removing the NitroLite helper service (needs root)..."
+    sudo systemctl disable --now nitrolite-helper.socket nitrolite-helper.service >/dev/null 2>&1 || true
+    sudo rm -f /etc/systemd/system/nitrolite-helper.socket /etc/systemd/system/nitrolite-helper.service         /usr/share/polkit-1/actions/io.github.canerztk8.nitrolite.policy
+    sudo systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
 if [ "$REMOVE_UDEV" -eq 1 ] && [ -f "/etc/udev/rules.d/$RULE_NAME" ]; then
     echo "Removing the udev rule (needs root)..."
     if sudo rm -f "/etc/udev/rules.d/$RULE_NAME" \

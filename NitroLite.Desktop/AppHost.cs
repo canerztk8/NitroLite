@@ -418,10 +418,19 @@ public sealed class AppHost : IDisposable
             try
             {
                 ISysfsFileSystem fs = capture != null ? capture.FileSystem : RealSysfsFileSystem.Instance;
-                var controller = capture == null
-                    ? LinuxSysfsHardwareController.Create(settings)
-                    : LinuxSysfsHardwareController.Create(settings, capture.FileSystem,
-                        powerProfiles: capture.PowerProfiles, readBytes: capture.ReadBytes);
+
+                // The root helper, when the package installed it: a write this user may not make goes to it instead of
+                // asking for the udev rule. Reads stay direct, and everything that is not a write keeps the real file
+                // system, so the NVIDIA reader and the logind brightness path still recognise it.
+                var helper = capture == null && OperatingSystem.IsLinux() ? new LinuxHelperClient() : null;
+                ISysfsFileSystem writeFs = helper is { IsInstalled: true } ? new HelperBackedFileSystem(fs, helper) : fs;
+
+                var controller = capture != null
+                    ? LinuxSysfsHardwareController.Create(settings, capture.FileSystem,
+                        powerProfiles: capture.PowerProfiles, readBytes: capture.ReadBytes)
+                    : ReferenceEquals(writeFs, fs)
+                        ? LinuxSysfsHardwareController.Create(settings)
+                        : LinuxSysfsHardwareController.Create(settings, writeFs, powerProfiles: new PowerProfilesDaemon());
                 var linux = controller.Capabilities;
                 hardware = controller;
                 platform = linux;
@@ -430,13 +439,13 @@ public sealed class AppHost : IDisposable
                     $"{linux.Tier} · {linux.Identity.ModelCode} · udev={(linux.NeedsUdevRule ? "gerekli" : "tamam")}");
 
                 gameProfiles = CreateLinuxGameProfiles(settings, controller, fs);
-                schoolMode = CreateLinuxSchoolMode(settings, controller, linux, fs);
+                schoolMode = CreateLinuxSchoolMode(settings, controller, linux, fs, writeFs);
 
                 // The Linux display service reports IsSupported false, so the automation is inert and the settings
                 // card hides itself. Wiring it anyway keeps the composition root free of a platform branch that would
                 // have to be remembered when a Wayland or XRandR backend is added.
                 refreshRate = new RefreshRateAutomation(new LinuxDisplayRefreshRateService(), settings);
-                cpuBoost = new LinuxCpuBoostAccess(fs);
+                cpuBoost = new LinuxCpuBoostAccess(writeFs);
                 powerState = () =>
                 {
                     var (onAc, percent) = LinuxPowerSupply.Read(fs);
@@ -748,11 +757,12 @@ public sealed class AppHost : IDisposable
     /// the machine-independent half stays free of the keyboard protocol.
     /// </summary>
     private static SchoolModeService CreateLinuxSchoolMode(
-        AppSettings settings, IHardwareController hardware, LinuxCapabilities linux, ISysfsFileSystem fs)
+        AppSettings settings, IHardwareController hardware, LinuxCapabilities linux, ISysfsFileSystem fs,
+        ISysfsFileSystem writeFs)
     {
         var service = new SchoolModeService(
             hardware,
-            new LinuxCpuBoostAccess(fs),
+            new LinuxCpuBoostAccess(writeFs),
             new LinuxDisplayRefreshRateService(),
             new LinuxScreenBrightnessService(fs),
             settings,

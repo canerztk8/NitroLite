@@ -76,14 +76,13 @@ administrator prompts, uninstalling.
 
 ### Linux
 
-```bash
-tar -xzf NitroLite-v1.3.0-linux-x64.tar.gz
-cd NitroLite-linux-x64
-./install.sh
-```
+Download the package for your distribution from the **[latest release](https://github.com/canerztk8/NitroLite/releases/latest)**
+and open it: **`.deb`** for Ubuntu, Debian, Mint and Pop!_OS, **`.rpm`** for Fedora and openSUSE. If double-clicking
+does not open an installer, run `sudo apt install ./NitroLite-*.deb` (or `sudo dnf install ./NitroLite-*.rpm`).
 
-Then open **Settings** and press **Enable** once. Temperatures, the graphics card and power modes work on most
-distributions with nothing else installed; fan speed and keyboard colour depend on your kernel.
+That is all: open NitroLite from the menu. The package installs a small helper service, so there is no setup step and
+no logging out. Temperatures, the graphics card and power modes work on most laptops; fan speed and keyboard colour
+depend on your model and kernel.
 
 → **[Linux guide](https://github.com/canerztk8/NitroLite/wiki/Linux)**: what works, and how to unlock more.
 

@@ -1,0 +1,42 @@
+# NitroLite hardware helper — the service.
+#
+# Runs as root so it can write the Acer sysfs attributes, and does nothing else: it writes only the attributes its own
+# probe found (operating mode, fans, keyboard, charge limit, CoolBoost, overdrive, backlight timeout, GPU mode, CPU
+# boost), only values each of them accepts, and only for callers polkit allows. Started by nitrolite-helper.socket.
+#
+# @APP_DIR@ is replaced at install time with the folder that holds NitroLite.Desktop (/opt/nitrolite for the packages).
+# The binary must be root-owned and not writable by users, or this service would run whatever a user put there.
+
+[Unit]
+Description=NitroLite hardware helper
+Documentation=https://github.com/canerztk8/NitroLite/wiki/Linux
+Requires=nitrolite-helper.socket
+After=nitrolite-helper.socket
+
+[Service]
+Type=simple
+ExecStart=@APP_DIR@/NitroLite.Desktop --linux-helper
+RuntimeDirectory=nitrolite-helper
+Environment=NITROLITE_DATA_DIR=/run/nitrolite-helper
+Environment=HOME=/run/nitrolite-helper
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+# Confinement. /sys stays writable because writing it is the job; ProtectKernelTunables is deliberately not set, since
+# it would make /sys read-only. Everything else the helper does not need is taken away.
+ProtectSystem=strict
+ReadWritePaths=/sys
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectClock=yes
+ProtectHostname=yes
+SystemCallArchitectures=native

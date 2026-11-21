@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Who may ask the NitroLite helper to change a hardware setting.
+
+  The user sitting at the machine (the active local session) may, without a password: changing the fan speed or the
+  power mode of the laptop you are using should not need one, exactly as power-profiles-daemon allows the power mode.
+  A session that is not active (another user's, switched away from) and a remote one (SSH) may not.
+-->
+<policyconfig>
+  <vendor>NitroLite</vendor>
+  <vendor_url>https://github.com/canerztk8/NitroLite</vendor_url>
+
+  <action id="io.github.canerztk8.nitrolite.control">
+    <description>Change the laptop's hardware settings</description>
+    <description xml:lang="tr">Dizüstü bilgisayarın donanım ayarlarını değiştir</description>
+    <message>Authentication is required to change the fan, power mode or keyboard settings</message>
+    <message xml:lang="tr">Fan, güç modu veya klavye ayarlarını değiştirmek için kimlik doğrulama gerekiyor</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

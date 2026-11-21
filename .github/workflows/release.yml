@@ -299,6 +299,9 @@ jobs:
           install -m 644 packaging/linux/nitrolite.desktop  "$APP/share/nitrolite.desktop"
           install -m 644 packaging/linux/nitrolite.svg      "$APP/share/nitrolite.svg"
           install -m 644 packaging/linux/99-nitrolite.rules "$APP/share/99-nitrolite.rules"
+          install -m 644 packaging/linux/nitrolite-helper.socket "$APP/share/nitrolite-helper.socket"
+          install -m 644 packaging/linux/nitrolite-helper.service.in "$APP/share/nitrolite-helper.service.in"
+          install -m 644 packaging/linux/io.github.canerztk8.nitrolite.policy "$APP/share/io.github.canerztk8.nitrolite.policy"
           rm -f "$APP"/*.pdb
 
           mkdir -p artifacts
@@ -318,6 +321,46 @@ jobs:
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "sha256=$(cut -d' ' -f1 "$TARBALL.sha256")" >> "$GITHUB_OUTPUT"
 
+      - name: Build the .deb and .rpm
+        id: packages
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.version.outputs.version }}'
+
+          # nfpm, pinned and checked against the digest its release publishes, so the packager cannot change under us.
+          NFPM_VERSION=2.48.0
+          NFPM_SHA256=6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750
+          curl -fsSL -o nfpm.tar.gz \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
+          echo "${NFPM_SHA256}  nfpm.tar.gz" | sha256sum -c -
+          tar -xzf nfpm.tar.gz nfpm
+
+          # The packages install to /opt/nitrolite, so that is the path the helper's unit runs.
+          sed -e 's|@APP_DIR@|/opt/nitrolite|g' packaging/linux/nitrolite-helper.service.in > staging/nitrolite-helper.service
+          if grep -q '@APP_DIR@' staging/nitrolite-helper.service; then echo "::error::unit placeholder left"; exit 1; fi
+
+          export VERSION
+          DEB="artifacts/NitroLite-v$VERSION-amd64.deb"
+          RPM="artifacts/NitroLite-v$VERSION-x86_64.rpm"
+          ./nfpm package --config packaging/linux/nfpm.yaml --packager deb --target "$DEB"
+          ./nfpm package --config packaging/linux/nfpm.yaml --packager rpm --target "$RPM"
+
+          # A package missing its binary, its helper or its polkit rule installs cleanly and does nothing, so each is
+          # checked before anything is uploaded.
+          dpkg-deb --contents "$DEB" > artifacts/deb-contents.txt
+          for f in ./opt/nitrolite/NitroLite.Desktop ./opt/nitrolite/libSkiaSharp.so \
+                   ./usr/lib/systemd/system/nitrolite-helper.socket ./usr/lib/systemd/system/nitrolite-helper.service \
+                   ./usr/share/polkit-1/actions/io.github.canerztk8.nitrolite.policy \
+                   ./usr/lib/udev/rules.d/99-nitrolite.rules ./usr/share/applications/nitrolite.desktop; do
+            grep -q " $f" artifacts/deb-contents.txt || { echo "::error::$f missing from the .deb"; exit 1; }
+          done
+          dpkg-deb --info "$DEB"
+          ( cd artifacts && sha256sum "$(basename "$DEB")" > "$(basename "$DEB").sha256" \
+                         && sha256sum "$(basename "$RPM")" > "$(basename "$RPM").sha256" )
+
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          echo "rpm=$RPM" >> "$GITHUB_OUTPUT"
+
       - name: Attach the Linux package to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -326,6 +369,10 @@ jobs:
           gh release upload "$TAG" \
             "${{ steps.package.outputs.tarball }}" \
             "${{ steps.package.outputs.tarball }}.sha256" \
+            "${{ steps.packages.outputs.deb }}" \
+            "${{ steps.packages.outputs.deb }}.sha256" \
+            "${{ steps.packages.outputs.rpm }}" \
+            "${{ steps.packages.outputs.rpm }}.sha256" \
             --clobber
 
       - name: Summarise
@@ -338,5 +385,7 @@ jobs:
             echo "|---|---|"
             echo "| Tag | $TAG |"
             echo "| Archive | $(basename "${{ steps.package.outputs.tarball }}") |"
+            echo "| Debian/Ubuntu | $(basename "${{ steps.packages.outputs.deb }}") |"
+            echo "| Fedora/openSUSE | $(basename "${{ steps.packages.outputs.rpm }}") |"
             echo "| SHA-256 | ${{ steps.package.outputs.sha256 }} |"
           } >> "$GITHUB_STEP_SUMMARY"

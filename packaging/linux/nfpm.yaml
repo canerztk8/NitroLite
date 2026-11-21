@@ -1,0 +1,72 @@
+# NitroLite — .deb and .rpm from one description, built by nfpm in the release workflow.
+#
+#   VERSION=1.3.1 nfpm package --config packaging/linux/nfpm.yaml --packager deb --target artifacts/
+#
+# Paths under staging/ are produced by the workflow: the self-contained publish, plus the helper's service unit with
+# @APP_DIR@ already replaced by /opt/nitrolite.
+
+name: nitrolite
+arch: amd64
+platform: linux
+version: ${VERSION}
+version_schema: semver
+section: utils
+priority: optional
+maintainer: NitroLite <https://github.com/canerztk8/NitroLite/issues>
+description: |
+  Fan, power mode and keyboard lighting control for Acer Nitro and Predator laptops.
+  A small replacement for NitroSense. Installs a socket-activated helper so the app can change hardware settings
+  for the user at the machine without running as root.
+vendor: NitroLite
+homepage: https://github.com/canerztk8/NitroLite
+license: MIT
+
+overrides:
+  deb:
+    recommends:
+      - polkitd | policykit-1
+  rpm:
+    recommends:
+      - polkit
+
+contents:
+  - src: staging/NitroLite-linux-x64/NitroLite.Desktop
+    dst: /opt/nitrolite/NitroLite.Desktop
+    file_info:
+      mode: 0755
+  - src: staging/NitroLite-linux-x64/*.so
+    dst: /opt/nitrolite/
+    file_info:
+      mode: 0644
+  - src: /opt/nitrolite/NitroLite.Desktop
+    dst: /usr/bin/nitrolite
+    type: symlink
+  - src: packaging/linux/nitrolite.desktop
+    dst: /usr/share/applications/nitrolite.desktop
+    file_info:
+      mode: 0644
+  - src: packaging/linux/nitrolite.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/nitrolite.svg
+    file_info:
+      mode: 0644
+  - src: packaging/linux/nitrolite-helper.socket
+    dst: /usr/lib/systemd/system/nitrolite-helper.socket
+    file_info:
+      mode: 0644
+  - src: staging/nitrolite-helper.service
+    dst: /usr/lib/systemd/system/nitrolite-helper.service
+    file_info:
+      mode: 0644
+  - src: packaging/linux/io.github.canerztk8.nitrolite.policy
+    dst: /usr/share/polkit-1/actions/io.github.canerztk8.nitrolite.policy
+    file_info:
+      mode: 0644
+  - src: packaging/linux/99-nitrolite.rules
+    dst: /usr/lib/udev/rules.d/99-nitrolite.rules
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: packaging/linux/package-postinstall.sh
+  preremove: packaging/linux/package-preremove.sh
+  postremove: packaging/linux/package-postremove.sh

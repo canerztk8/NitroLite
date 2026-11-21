@@ -7,10 +7,14 @@
 #
 #   ./install.sh                 # ~/.local/share/nitrolite, ~/.local/bin/nitrolite, menu entry, udev rule
 #   ./install.sh --no-udev       # same, but leave /etc alone (the app then starts read-only)
-#   ./install.sh --system        # /opt/nitrolite, /usr/local/bin, /usr/share/applications
+#   ./install.sh --system        # /opt/nitrolite, /usr/local/bin, /usr/share/applications, and the helper service
 #   ./install.sh --prefix DIR    # install the application files under DIR instead
 #
 # Nothing here needs root except the udev rule, and that step is skipped cleanly if you decline the prompt.
+#
+# --system also installs the NitroLite helper (a socket-activated systemd service with a polkit rule), which lets the
+# app change hardware settings for the user at the machine with no groups and no logging out. The per-user install
+# cannot: a root service must never run a binary that lives in, and can be replaced from, a user's home.
 
 set -euo pipefail
 
@@ -110,6 +114,20 @@ if [ -f "$SHARE_DIR/$ICON_NAME" ]; then
     $SUDO install -m 644 "$SHARE_DIR/$ICON_NAME" "$ICON_DIR/$ICON_NAME"
 fi
 
+HELPER_OK=0
+if [ "$MODE" = "system" ] && command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]     && [ -f "$SHARE_DIR/nitrolite-helper.service.in" ]; then
+    echo "Installing the NitroLite helper service..."
+    unit_tmp="$(mktemp)"
+    sed -e "s|@APP_DIR@|$APP_DIR|g" "$SHARE_DIR/nitrolite-helper.service.in" > "$unit_tmp"
+    if sudo install -m 644 "$unit_tmp" /etc/systemd/system/nitrolite-helper.service         && sudo install -m 644 "$SHARE_DIR/nitrolite-helper.socket" /etc/systemd/system/nitrolite-helper.socket         && sudo install -D -m 644 "$SHARE_DIR/io.github.canerztk8.nitrolite.policy"             /usr/share/polkit-1/actions/io.github.canerztk8.nitrolite.policy         && sudo systemctl daemon-reload         && sudo systemctl enable --now nitrolite-helper.socket; then
+        echo "  helper       /etc/systemd/system/nitrolite-helper.{socket,service}"
+        HELPER_OK=1
+    else
+        echo "  warning: the helper was not installed; NitroLite falls back to the udev rule and the nitrolite group." >&2
+    fi
+    rm -f "$unit_tmp"
+fi
+
 # Best effort: a missing cache tool is not a failed install, the desktop environment picks the entry up anyway.
 command -v update-desktop-database >/dev/null 2>&1 && \
     $SUDO update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
@@ -145,8 +163,14 @@ case ":$PATH:" in
     *) echo "note: $BIN_DIR is not on PATH, so the 'nitrolite' command needs the full path." ;;
 esac
 
-if [ "$UDEV_OK" -eq 1 ]; then
+if [ "$HELPER_OK" -eq 1 ]; then
     echo
-    echo "Log out and back in once: the rule grants an ACL to the user of the current seat, and that ACL is applied"
-    echo "when the device is created. Until then the app runs read-only and says so on the settings page."
+    echo "The helper is running: NitroLite can change hardware settings right away, no logging out needed."
+elif [ "$UDEV_OK" -eq 1 ]; then
+    echo
+    echo "Log out and back in once, so your session picks up the nitrolite group the rule hands the settings to."
+    echo "Until then the app runs read-only and says so on the settings page."
+    if [ "$MODE" = "user" ]; then
+        echo "Tip: ./install.sh --system also installs the helper, which needs no group and no logging out."
+    fi
 fi

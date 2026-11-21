@@ -49,6 +49,15 @@ internal static class Program
         }
 #endif
 
+#if !WINDOWS
+        // The root helper the Linux package installs as a systemd socket service. It is decided before anything else
+        // runs: the helper has no window, no settings and no user, and it must not touch either.
+        if (args.Any(a => string.Equals(a, "--linux-helper", StringComparison.Ordinal)))
+        {
+            return NitroLite.Linux.LinuxHelperHost.Run(args);
+        }
+#endif
+
         // The one-shot commands. Each of these talks to the hardware and exits without a window, so a script or a
         // shortcut can repair a machine without a user in front of it. Both spellings arrive here: --cli <command>
         // and the legacy --fix-lighting / --optimize-pc flags the shipped .bat files still use.

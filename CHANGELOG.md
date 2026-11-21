@@ -11,6 +11,13 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 ## [Unreleased]
 
 **Linux**
+- **`.deb` and `.rpm` packages.** Install by double-click on Ubuntu, Debian, Mint, Pop!_OS, Fedora and openSUSE, and
+  open the app: no terminal, no setup button, no groups, no logging out.
+- **A small helper service** does the hardware writes for the user at the machine. It is socket-activated (it runs
+  only while NitroLite is changing something), asks polkit per connection (the active local session is allowed without
+  a password, remote and inactive sessions are not), writes only the attributes its own probe found and only values
+  each accepts, and runs confined by systemd. `install.sh --system` installs it too; without it NitroLite falls back
+  to the permission rule as before.
 - Fan control through the kernel itself (hwmon `pwm`) on the models the kernel lists for it: Nitro AN515-58, AN16-41
   and ANV15-51, Predator PH16-72, PHN16-72 and PT14-51. No Linuwu-Sense needed there.
 - The app knows which Nitro and Predator models the mainline kernel supports and from which release, and says so on

@@ -5,3 +5,7 @@ packaging/linux/*.desktop text eol=lf
 packaging/linux/*.rules   text eol=lf
 packaging/linux/*.svg     text eol=lf
 tools/linux-capture/*.sh   text eol=lf
+packaging/linux/*.in       text eol=lf
+packaging/linux/*.socket   text eol=lf
+packaging/linux/*.policy   text eol=lf
+packaging/linux/*.yaml     text eol=lf

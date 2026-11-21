@@ -7,28 +7,44 @@ says why the others are missing.
 
 ## Install
 
-Download `NitroLite-v1.3.0-linux-x64.tar.gz` from the
-**[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page, then in a terminal:
+### The easy way: a package
+
+From the **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page:
+
+| Distribution | Download | If double-clicking does not install it |
+|---|---|---|
+| Ubuntu, Debian, Mint, Pop!_OS, Zorin, elementary | `NitroLite-v…-amd64.deb` | `sudo apt install ./NitroLite-v…-amd64.deb` |
+| Fedora, openSUSE | `NitroLite-v…-x86_64.rpm` | `sudo dnf install ./NitroLite-v…-x86_64.rpm` |
+
+Open NitroLite from the menu. That is the whole setup.
+
+The package installs a small **helper service** next to the app. When NitroLite changes the operating mode, the fans,
+the keyboard or the charge limit, the helper makes the change; your desktop's permission system (polkit) lets the
+person sitting at the laptop do that without a password, and nobody else. There are no groups to join and no need to
+log out. The helper only starts when NitroLite asks for something and stops again half a minute later, it can only
+write the handful of hardware settings NitroLite uses, and only values each of them accepts.
+
+To remove it: `sudo apt remove nitrolite` or `sudo dnf remove nitrolite`.
+
+### Any other distribution: the archive
 
 ```bash
-tar -xzf NitroLite-v1.3.0-linux-x64.tar.gz
+tar -xzf NitroLite-v…-linux-x64.tar.gz
 cd NitroLite-linux-x64
-./install.sh
+./install.sh --system
 ```
-
-NitroLite appears in your application menu. No .NET install is needed; the runtime is inside the program.
 
 | Option | What it does |
 |---|---|
-| `./install.sh` | Installs for you only (`~/.local/share/nitrolite`), adds the menu entry, offers the permission rule |
-| `./install.sh --system` | Installs for every user (`/opt/nitrolite`) |
-| `./install.sh --no-udev` | Skips the one step that needs your password |
-| `./uninstall.sh` | Removes NitroLite and keeps your settings; `--purge` removes those too |
+| `./install.sh --system` | Installs for every user (`/opt/nitrolite`) and, on systemd distributions, the same helper service as the packages |
+| `./install.sh` | Installs for you only (`~/.local/share/nitrolite`), without the helper: a root service must not run a program from your home folder |
+| `./install.sh --no-udev` | Skips the permission rule |
+| `./uninstall.sh` | Removes NitroLite (add `--system` for a system install) and keeps your settings; `--purge` removes those too |
 
-## First start: one button
+## Without the helper: one button
 
-Open **Settings**. If NitroLite needs permission for something, a **Linux setup** card is at the top. Press
-**Enable**: it asks for your password once, then
+On a per-user install, or a distribution without systemd, NitroLite uses a permission rule instead. Open
+**Settings**: the **Linux setup** card has an **Enable** button. It asks for your password once, then
 
 - installs the permission rule (`99-nitrolite.rules`) so NitroLite may change the operating mode, the fans, the
   keyboard, the charge limit and the processor boost without running as root,

@@ -1,0 +1,19 @@
+# NitroLite hardware helper — the socket.
+#
+# systemd listens here and starts nitrolite-helper.service on the first connection, so the helper costs nothing until
+# NitroLite changes a setting, and it exits again after half a minute of silence.
+#
+# Anyone may connect (0666): who may actually change a setting is decided per connection by polkit, through
+# io.github.canerztk8.nitrolite.control, which allows the user at the active local session and nobody else.
+
+[Unit]
+Description=NitroLite hardware helper socket
+
+[Socket]
+ListenStream=/run/nitrolite/helper.sock
+SocketMode=0666
+DirectoryMode=0755
+Accept=no
+
+[Install]
+WantedBy=sockets.target
