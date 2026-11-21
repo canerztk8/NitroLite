@@ -22,7 +22,7 @@ public class LinuxCaptureTests
     }
 
     private static LinuxCapture Sample() => LinuxCapture.LoadFile(
-        Path.Combine(RepoRoot(), "tools", "linux-capture", "samples", "an16-41-ubuntu-reconstructed.txt"));
+        Path.Combine(RepoRoot(), "tools", "linux-capture", "samples", "an16-41-ubuntu-26.04.txt"));
 
     private static ProfileCatalog Catalog() =>
         ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
@@ -76,8 +76,13 @@ public class LinuxCaptureTests
     public void Parse_RejectsAFileThatIsNotACapture() =>
         Assert.Throws<FormatException>(() => LinuxCapture.Parse("hello\n"));
 
+    /// <summary>
+    /// The real AN16-41 on Ubuntu 26.04 after the udev rule was installed: amd-pmf owns platform_profile and this user
+    /// may write it, acer-wmi is loaded without the PredatorSense v4 quirk, there is no Linuwu-Sense, no Acer hwmon
+    /// device and no KB5130 keyboard controller.
+    /// </summary>
     [Fact]
-    public void Sample_ProbesLikeTheReportedMachine()
+    public void RealCapture_ProbesLikeTheMachine()
     {
         var capture = Sample();
         var caps = new LinuxCapabilityProbe(capture.FileSystem, Catalog(), capture.PowerProfiles, capture.ReadBytes).Probe();
@@ -86,22 +91,59 @@ public class LinuxCaptureTests
         Assert.True(caps.AcerWmiLoaded);
         Assert.Equal("N", caps.PredatorV4);
         Assert.Equal(KernelSetupHint.EnablePredatorV4, caps.KernelHint);
-        Assert.True(caps.ModeViaPowerProfiles);
+        Assert.Equal("low-power balanced performance", caps.PlatformProfileChoicesText);
+
+        // The attribute is writable, so it is written directly and the daemon is not needed.
+        Assert.False(caps.ModeViaPowerProfiles);
         Assert.False(caps.NeedsUdevRule);
+        Assert.True(caps.Hardware.OperatingModeControl);
+        Assert.Equal(new[] { OperatingMode.Default, OperatingMode.Turbo, OperatingMode.Eco },
+            caps.Hardware.SupportedOperatingModes);
+
         Assert.False(caps.Hardware.FanControl);
         Assert.False(caps.Hardware.KeyboardLighting);
+        Assert.Null(caps.Nodes.HidrawKeyboard);
     }
 
     [Fact]
-    public async Task Sample_ModeSwitchGoesThroughTheReplayedDaemon_AndSticks()
+    public async Task RealCapture_ModeSwitchWritesPlatformProfile()
     {
         var capture = Sample();
         using var controller = LinuxSysfsHardwareController.Create(new AppSettings(), capture.FileSystem, Catalog(),
             powerProfiles: capture.PowerProfiles, readBytes: capture.ReadBytes);
 
         Assert.True(await controller.SetOperatingModeAsync(OperatingMode.Turbo));
-        Assert.True(await controller.SetOperatingModeAsync(OperatingMode.Quiet));
+        Assert.Equal("performance", capture.FileSystem.Peek("/sys/firmware/acpi/platform_profile")?.Trim());
+        Assert.True(await controller.SetOperatingModeAsync(OperatingMode.Eco));
+        Assert.Equal("low-power", capture.FileSystem.Peek("/sys/firmware/acpi/platform_profile")?.Trim());
         Assert.False(controller.PermissionHintRaised);
+    }
+
+    [Fact]
+    public async Task RealCapture_WithoutTheUdevRule_FallsBackToTheDaemon()
+    {
+        var capture = Sample();
+        capture.FileSystem.DenyWrite("/sys/firmware/acpi/platform_profile");
+        var power = capture.PowerProfiles;
+        using var controller = LinuxSysfsHardwareController.Create(new AppSettings(), capture.FileSystem, Catalog(),
+            powerProfiles: power, readBytes: capture.ReadBytes);
+
+        Assert.True(controller.Capabilities.ModeViaPowerProfiles);
+        Assert.True(await controller.SetOperatingModeAsync(OperatingMode.Turbo));
+        Assert.Equal("performance", power.GetActive());
+    }
+
+    [Fact]
+    public async Task RealCapture_TemperaturesComeFromTheRightSensors()
+    {
+        var capture = Sample();
+        using var controller = LinuxSysfsHardwareController.Create(new AppSettings(), capture.FileSystem, Catalog(),
+            powerProfiles: capture.PowerProfiles, readBytes: capture.ReadBytes);
+
+        var data = await controller.GetMonitorDataAsync();
+        Assert.NotNull(data);
+        Assert.Equal(57, data!.CpuTemperature); // k10temp Tctl 57.75 °C, truncated
+        Assert.False(data.IsFanRpmMeasured);
     }
 
     [Fact]
@@ -114,7 +156,7 @@ public class LinuxCaptureTests
         var sample = gpu.QueryNow();
         Assert.NotNull(sample);
         Assert.Equal("NVIDIA GeForce RTX 4070 Laptop GPU", sample!.Name);
-        Assert.Equal(82, sample.TemperatureC);
+        Assert.Equal(48, sample.TemperatureC);
     }
 
     [Fact]

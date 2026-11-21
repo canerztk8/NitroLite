@@ -160,7 +160,12 @@ for d in /sys/class/powercap/intel-rapl:0 /sys/class/powercap/amd-rapl:0; do dir
 for d in /sys/class/hidraw/hidraw*; do
     [ -d "$d" ] || continue
     emit "@@ dir $d"
-    file "$d/device/uevent"
+    # The uevent's HID_UNIQ is a device serial on many dongles and pads, and HID_PHYS a bus path; only the ids and the
+    # name are needed to recognise a keyboard controller.
+    if [ -r "$d/device/uevent" ]; then
+        emit "@@ file $d/device/uevent"
+        grep -E '^(DRIVER|HID_ID|HID_NAME)=' "$d/device/uevent" 2>/dev/null | sed 's/^/| /' >>"$TMP"
+    fi
     hex "$d/device/report_descriptor"
     node "/dev/${d##*/}"
 done
@@ -179,7 +184,7 @@ done
 # --- input devices (names only: the Uniq= line carries Bluetooth addresses)
 if [ -r /proc/bus/input/devices ]; then
     emit "@@ info input-devices"
-    grep -v '^U: Uniq=' /proc/bus/input/devices | sed 's/^/| /' >>"$TMP"
+    grep -v -E '^(U: Uniq=|P: Phys=)' /proc/bus/input/devices | sed 's/^/| /' >>"$TMP"
 fi
 
 # --- the tools the app runs, exactly as it runs them

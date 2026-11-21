@@ -1,0 +1,1341 @@
+NITROLITE-CAPTURE 1
+@@ meta captured 2026-11-21T11:07:27Z
+@@ meta note Real capture of an AN16-41 on Ubuntu 26.04.1, kernel 7.0.0-44, taken with nitrolite-capture.sh. HID_UNIQ, HID_PHYS, MODALIAS and P: Phys= lines were removed afterwards; the script no longer records them.
+@@ file /sys/class/dmi/id/sys_vendor
+| Acer
+@@ ro /sys/class/dmi/id/sys_vendor
+@@ file /sys/class/dmi/id/product_name
+| Nitro AN16-41
+@@ ro /sys/class/dmi/id/product_name
+@@ file /sys/class/dmi/id/product_family
+| Acer Nitro 16
+@@ ro /sys/class/dmi/id/product_family
+@@ file /sys/class/dmi/id/product_version
+| V1.27
+@@ ro /sys/class/dmi/id/product_version
+@@ file /sys/class/dmi/id/board_name
+| Sierra_PEH
+@@ ro /sys/class/dmi/id/board_name
+@@ file /sys/class/dmi/id/board_vendor
+| PHX
+@@ ro /sys/class/dmi/id/board_vendor
+@@ file /sys/class/dmi/id/bios_version
+| V1.27
+@@ ro /sys/class/dmi/id/bios_version
+@@ file /sys/class/dmi/id/bios_vendor
+| INSYDE Corp.
+@@ ro /sys/class/dmi/id/bios_vendor
+@@ file /sys/class/dmi/id/bios_date
+| 08/27/2026
+@@ ro /sys/class/dmi/id/bios_date
+@@ file /etc/os-release
+| PRETTY_NAME="Ubuntu 26.04.1 LTS"
+| NAME="Ubuntu"
+| VERSION_ID="26.04"
+| VERSION="26.04.1 LTS (Resolute Raccoon)"
+| VERSION_CODENAME=resolute
+| ID=ubuntu
+| ID_LIKE=debian
+| HOME_URL="https://www.ubuntu.com/"
+| SUPPORT_URL="https://help.ubuntu.com/"
+| BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+| PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+| UBUNTU_CODENAME=resolute
+| LOGO=ubuntu-logo
+@@ ro /etc/os-release
+@@ file /proc/sys/kernel/osrelease
+| 7.0.0-44-generic
+@@ ro /proc/sys/kernel/osrelease
+@@ file /proc/cpuinfo
+| processor	: 0
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 4604.572
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 0
+| cpu cores	: 8
+| apicid		: 0
+| initial apicid	: 0
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 1
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 4865.720
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 0
+| cpu cores	: 8
+| apicid		: 1
+| initial apicid	: 1
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 2
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 3833.676
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 1
+| cpu cores	: 8
+| apicid		: 2
+| initial apicid	: 2
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 3
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 4641.761
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 1
+| cpu cores	: 8
+| apicid		: 3
+| initial apicid	: 3
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 4
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 4915.948
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 2
+| cpu cores	: 8
+| apicid		: 4
+| initial apicid	: 4
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 5
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 1100.980
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 2
+| cpu cores	: 8
+| apicid		: 5
+| initial apicid	: 5
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 6
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 2183.010
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 3
+| cpu cores	: 8
+| apicid		: 6
+| initial apicid	: 6
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 7
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 3001.567
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 3
+| cpu cores	: 8
+| apicid		: 7
+| initial apicid	: 7
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 8
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 2299.580
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 4
+| cpu cores	: 8
+| apicid		: 8
+| initial apicid	: 8
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 9
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 1744.787
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 4
+| cpu cores	: 8
+| apicid		: 9
+| initial apicid	: 9
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 10
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 3657.472
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 5
+| cpu cores	: 8
+| apicid		: 10
+| initial apicid	: 10
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 11
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 1100.980
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 5
+| cpu cores	: 8
+| apicid		: 11
+| initial apicid	: 11
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 12
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 2176.411
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 6
+| cpu cores	: 8
+| apicid		: 12
+| initial apicid	: 12
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 13
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 2362.336
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 6
+| cpu cores	: 8
+| apicid		: 13
+| initial apicid	: 13
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 14
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 2015.060
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 7
+| cpu cores	: 8
+| apicid		: 14
+| initial apicid	: 14
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+| 
+| processor	: 15
+| vendor_id	: AuthenticAMD
+| cpu family	: 25
+| model		: 116
+| model name	: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+| stepping	: 1
+| microcode	: 0xa704108
+| cpu MHz		: 1100.980
+| cache size	: 1024 KB
+| physical id	: 0
+| siblings	: 16
+| core id		: 7
+| cpu cores	: 8
+| apicid		: 15
+| initial apicid	: 15
+| fpu		: yes
+| fpu_exception	: yes
+| cpuid level	: 16
+| wp		: yes
+| flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 cdp_l3 hw_pstate ssbd mba perfmon_v2 ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local user_shstk avx512_bf16 clzero irperf xsaveerptr rdpru wbnoinvd cppc arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold vgif x2avic v_spec_ctrl vnmi avx512vbmi umip pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid overflow_recov succor smca flush_l1d amd_lbr_pmc_freeze
+| bugs		: sysret_ss_attrs spectre_v1 spectre_v2 spec_store_bypass srso spectre_v2_user tsa vmscape
+| bogomips	: 7585.99
+| TLB size	: 3584 4K pages
+| clflush size	: 64
+| cache_alignment	: 64
+| address sizes	: 48 bits physical, 48 bits virtual
+| power management: ts ttp tm hwpstate cpb eff_freq_ro [13] [14] [15]
+@@ ro /proc/cpuinfo
+@@ file /proc/meminfo
+| MemTotal:       31616656 kB
+| MemFree:        23093864 kB
+| MemAvailable:   26450044 kB
+| Buffers:           75156 kB
+| Cached:          2829112 kB
+| SwapCached:            0 kB
+| Active:          4967864 kB
+| Inactive:        2514492 kB
+| Active(anon):    3830080 kB
+| Inactive(anon):        0 kB
+| Active(file):    1137784 kB
+| Inactive(file):  2514492 kB
+| Unevictable:         136 kB
+| Mlocked:             136 kB
+| SwapTotal:       8388604 kB
+| SwapFree:        8388604 kB
+| Zswap:                 0 kB
+| Zswapped:              0 kB
+| Dirty:             18956 kB
+| Writeback:             0 kB
+| AnonPages:       4578596 kB
+| Mapped:           982464 kB
+| Shmem:            147444 kB
+| KReclaimable:     134924 kB
+| Slab:             387096 kB
+| SReclaimable:     126732 kB
+| SUnreclaim:       260364 kB
+| KernelStack:       22452 kB
+| PageTables:        62032 kB
+| SecPageTables:      3948 kB
+| NFS_Unstable:          0 kB
+| Bounce:                0 kB
+| WritebackTmp:          0 kB
+| CommitLimit:    24196932 kB
+| Committed_AS:   11434736 kB
+| VmallocTotal:   34359738367 kB
+| VmallocUsed:      147116 kB
+| VmallocChunk:          0 kB
+| Percpu:            20160 kB
+| HardwareCorrupted:     0 kB
+| AnonHugePages:         0 kB
+| ShmemHugePages:        0 kB
+| ShmemPmdMapped:        0 kB
+| FileHugePages:     96256 kB
+| FilePmdMapped:      2048 kB
+| CmaTotal:              0 kB
+| CmaFree:               0 kB
+| Unaccepted:            0 kB
+| Balloon:               0 kB
+| GPUActive:         13856 kB
+| GPUReclaim:            0 kB
+| HugePages_Total:       0
+| HugePages_Free:        0
+| HugePages_Rsvd:        0
+| HugePages_Surp:        0
+| Hugepagesize:       2048 kB
+| Hugetlb:               0 kB
+| DirectMap4k:      804092 kB
+| DirectMap2M:    11055104 kB
+| DirectMap1G:    22020096 kB
+@@ ro /proc/meminfo
+@@ file /proc/stat
+| cpu  40987 350 14035 942589 2297 0 326 0 0 0
+| cpu0 1884 3 766 59328 226 0 224 0 0 0
+| cpu1 740 2 485 59219 33 0 19 0 0 0
+| cpu2 1524 3 731 59911 242 0 24 0 0 0
+| cpu3 422 1 199 62202 68 0 1 0 0 0
+| cpu4 2021 2 815 59405 227 0 9 0 0 0
+| cpu5 514 2 248 62062 60 0 0 0 0 0
+| cpu6 6875 39 2273 53114 119 0 43 0 0 0
+| cpu7 3645 60 727 58365 50 0 0 0 0 0
+| cpu8 4275 16 1460 56567 197 0 0 0 0 0
+| cpu9 1303 2 416 61032 108 0 0 0 0 0
+| cpu10 6691 193 2057 53346 230 0 0 0 0 0
+| cpu11 3091 0 854 58654 156 0 0 0 0 0
+| cpu12 3443 16 1266 57690 179 0 0 0 0 0
+| cpu13 948 0 337 61526 72 0 0 0 0 0
+| cpu14 2870 5 1078 58422 228 0 0 0 0 0
+| cpu15 734 0 317 61740 94 0 0 0 0 0
+| intr 7303820 137 16 0 0 0 0 0 109 0 108 750 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 108 25 2 1 1 2 2 0 0 0 0 0 48569 0 373 0 7896 0 28 0 12 0 1 6 0 160 160 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 57 58 45 30 93 0 105 2 83 189 173 15 313 47 54 14 20 56 3720 1552 6637 3917 7875 2077 14781 4485 5246 1822 5128 2644 4873 1663 4367 1367 0 36161 0 0 0 0 0 0 0 0 0 0 0 0 0 0 11 0 855 0 108 599 298489 625 288 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+| ctxt 9909099
+| btime 1795258617
+| processes 11923
+| procs_running 1
+| procs_blocked 0
+| softirq 1669243 55791 134447 238 110519 9112 0 3474 767265 23 588374
+@@ ro /proc/stat
+@@ file /sys/firmware/acpi/platform_profile
+| balanced
+@@ file /sys/firmware/acpi/platform_profile_choices
+| low-power balanced performance
+@@ ro /sys/firmware/acpi/platform_profile_choices
+@@ file /sys/class/platform-profile/platform-profile-0/name
+| amd-pmf
+@@ ro /sys/class/platform-profile/platform-profile-0/name
+@@ file /sys/class/platform-profile/platform-profile-0/profile
+| balanced
+@@ ro /sys/class/platform-profile/platform-profile-0/profile
+@@ file /sys/class/platform-profile/platform-profile-0/choices
+| low-power balanced performance
+@@ ro /sys/class/platform-profile/platform-profile-0/choices
+@@ dir /sys/module/acer_wmi
+@@ file /sys/module/acer_wmi/parameters/brightness
+| -1
+@@ ro /sys/module/acer_wmi/parameters/brightness
+@@ file /sys/module/acer_wmi/parameters/cycle_gaming_thermal_profile
+| Y
+@@ ro /sys/module/acer_wmi/parameters/cycle_gaming_thermal_profile
+@@ file /sys/module/acer_wmi/parameters/ec_raw_mode
+| N
+@@ ro /sys/module/acer_wmi/parameters/ec_raw_mode
+@@ file /sys/module/acer_wmi/parameters/force_caps
+| -1
+@@ ro /sys/module/acer_wmi/parameters/force_caps
+@@ file /sys/module/acer_wmi/parameters/force_series
+| 0
+@@ ro /sys/module/acer_wmi/parameters/force_series
+@@ file /sys/module/acer_wmi/parameters/mailled
+| -1
+@@ ro /sys/module/acer_wmi/parameters/mailled
+@@ file /sys/module/acer_wmi/parameters/predator_v4
+| N
+@@ ro /sys/module/acer_wmi/parameters/predator_v4
+@@ file /sys/module/acer_wmi/parameters/threeg
+| -1
+@@ ro /sys/module/acer_wmi/parameters/threeg
+@@ dir /sys/devices/platform/acer-wmi
+@@ file /sys/devices/platform/acer-wmi/driver_override
+| (null)
+@@ ro /sys/devices/platform/acer-wmi/driver_override
+@@ dir /sys/devices/platform/acer-wmi/rfkill
+@@ dir /sys/class/hwmon/hwmon0
+@@ file /sys/class/hwmon/hwmon0/name
+| ACAD
+@@ ro /sys/class/hwmon/hwmon0/name
+@@ dir /sys/class/hwmon/hwmon1
+@@ file /sys/class/hwmon/hwmon1/name
+| acpitz
+@@ ro /sys/class/hwmon/hwmon1/name
+@@ file /sys/class/hwmon/hwmon1/temp1_input
+| 55000
+@@ ro /sys/class/hwmon/hwmon1/temp1_input
+@@ dir /sys/class/hwmon/hwmon2
+@@ file /sys/class/hwmon/hwmon2/name
+| BAT1
+@@ ro /sys/class/hwmon/hwmon2/name
+@@ dir /sys/class/hwmon/hwmon3
+@@ file /sys/class/hwmon/hwmon3/name
+| nvme
+@@ ro /sys/class/hwmon/hwmon3/name
+@@ file /sys/class/hwmon/hwmon3/temp1_input
+| 53850
+@@ ro /sys/class/hwmon/hwmon3/temp1_input
+@@ file /sys/class/hwmon/hwmon3/temp2_input
+| 53850
+@@ ro /sys/class/hwmon/hwmon3/temp2_input
+@@ file /sys/class/hwmon/hwmon3/temp3_input
+| 56850
+@@ ro /sys/class/hwmon/hwmon3/temp3_input
+@@ file /sys/class/hwmon/hwmon3/temp1_label
+| Composite
+@@ ro /sys/class/hwmon/hwmon3/temp1_label
+@@ file /sys/class/hwmon/hwmon3/temp2_label
+| Sensor 1
+@@ ro /sys/class/hwmon/hwmon3/temp2_label
+@@ file /sys/class/hwmon/hwmon3/temp3_label
+| Sensor 2
+@@ ro /sys/class/hwmon/hwmon3/temp3_label
+@@ dir /sys/class/hwmon/hwmon4
+@@ file /sys/class/hwmon/hwmon4/name
+| nvme
+@@ ro /sys/class/hwmon/hwmon4/name
+@@ file /sys/class/hwmon/hwmon4/temp1_input
+| 44850
+@@ ro /sys/class/hwmon/hwmon4/temp1_input
+@@ file /sys/class/hwmon/hwmon4/temp2_input
+| 44850
+@@ ro /sys/class/hwmon/hwmon4/temp2_input
+@@ file /sys/class/hwmon/hwmon4/temp3_input
+| 47850
+@@ ro /sys/class/hwmon/hwmon4/temp3_input
+@@ file /sys/class/hwmon/hwmon4/temp1_label
+| Composite
+@@ ro /sys/class/hwmon/hwmon4/temp1_label
+@@ file /sys/class/hwmon/hwmon4/temp2_label
+| Sensor 1
+@@ ro /sys/class/hwmon/hwmon4/temp2_label
+@@ file /sys/class/hwmon/hwmon4/temp3_label
+| Sensor 2
+@@ ro /sys/class/hwmon/hwmon4/temp3_label
+@@ dir /sys/class/hwmon/hwmon5
+@@ file /sys/class/hwmon/hwmon5/name
+| k10temp
+@@ ro /sys/class/hwmon/hwmon5/name
+@@ file /sys/class/hwmon/hwmon5/temp1_input
+| 57750
+@@ ro /sys/class/hwmon/hwmon5/temp1_input
+@@ file /sys/class/hwmon/hwmon5/temp1_label
+| Tctl
+@@ ro /sys/class/hwmon/hwmon5/temp1_label
+@@ dir /sys/class/hwmon/hwmon6
+@@ file /sys/class/hwmon/hwmon6/name
+| ucsi_source_psy_USBC000:001
+@@ ro /sys/class/hwmon/hwmon6/name
+@@ dir /sys/class/hwmon/hwmon7
+@@ file /sys/class/hwmon/hwmon7/name
+| mt7921_phy0
+@@ ro /sys/class/hwmon/hwmon7/name
+@@ file /sys/class/hwmon/hwmon7/temp1_input
+| 38000
+@@ ro /sys/class/hwmon/hwmon7/temp1_input
+@@ dir /sys/class/hwmon/hwmon8
+@@ file /sys/class/hwmon/hwmon8/name
+| amdgpu
+@@ ro /sys/class/hwmon/hwmon8/name
+@@ file /sys/class/hwmon/hwmon8/temp1_input
+| 52000
+@@ ro /sys/class/hwmon/hwmon8/temp1_input
+@@ file /sys/class/hwmon/hwmon8/temp1_label
+| edge
+@@ ro /sys/class/hwmon/hwmon8/temp1_label
+@@ dir /sys/class/hwmon/hwmon9
+@@ file /sys/class/hwmon/hwmon9/name
+| ucsi_source_psy_USBC000:002
+@@ ro /sys/class/hwmon/hwmon9/name
+@@ dir /sys/class/power_supply/ACAD
+@@ file /sys/class/power_supply/ACAD/type
+| Mains
+@@ ro /sys/class/power_supply/ACAD/type
+@@ file /sys/class/power_supply/ACAD/online
+| 1
+@@ ro /sys/class/power_supply/ACAD/online
+@@ dir /sys/class/power_supply/BAT1
+@@ file /sys/class/power_supply/BAT1/type
+| Battery
+@@ ro /sys/class/power_supply/BAT1/type
+@@ file /sys/class/power_supply/BAT1/status
+| Charging
+@@ ro /sys/class/power_supply/BAT1/status
+@@ file /sys/class/power_supply/BAT1/capacity
+| 80
+@@ ro /sys/class/power_supply/BAT1/capacity
+@@ file /sys/class/power_supply/BAT1/technology
+| Li-ion
+@@ ro /sys/class/power_supply/BAT1/technology
+@@ file /sys/class/power_supply/BAT1/manufacturer
+| LGC
+@@ ro /sys/class/power_supply/BAT1/manufacturer
+@@ file /sys/class/power_supply/BAT1/model_name
+| AP21A8T
+@@ ro /sys/class/power_supply/BAT1/model_name
+@@ file /sys/class/power_supply/BAT1/cycle_count
+| 0
+@@ ro /sys/class/power_supply/BAT1/cycle_count
+@@ file /sys/class/power_supply/BAT1/voltage_now
+| 16273000
+@@ ro /sys/class/power_supply/BAT1/voltage_now
+@@ file /sys/class/power_supply/BAT1/current_now
+| 0
+@@ ro /sys/class/power_supply/BAT1/current_now
+@@ file /sys/class/power_supply/BAT1/charge_now
+| 4321000
+@@ ro /sys/class/power_supply/BAT1/charge_now
+@@ file /sys/class/power_supply/BAT1/charge_full
+| 5431000
+@@ ro /sys/class/power_supply/BAT1/charge_full
+@@ file /sys/class/power_supply/BAT1/charge_full_design
+| 5884000
+@@ ro /sys/class/power_supply/BAT1/charge_full_design
+@@ dir /sys/class/power_supply/ucsi-source-psy-USBC000:001
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:001/type
+| USB
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:001/type
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:001/online
+| 0
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:001/online
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:001/status
+| Discharging
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:001/status
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:001/voltage_now
+| 5000000
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:001/voltage_now
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:001/current_now
+| 3000000
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:001/current_now
+@@ dir /sys/class/power_supply/ucsi-source-psy-USBC000:002
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:002/type
+| USB
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:002/type
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:002/online
+| 0
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:002/online
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:002/status
+| Discharging
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:002/status
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:002/voltage_now
+| 0
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:002/voltage_now
+@@ file /sys/class/power_supply/ucsi-source-psy-USBC000:002/current_now
+| 3000000
+@@ ro /sys/class/power_supply/ucsi-source-psy-USBC000:002/current_now
+@@ dir /sys/class/backlight/nvidia_0
+@@ file /sys/class/backlight/nvidia_0/brightness
+| 100
+@@ ro /sys/class/backlight/nvidia_0/brightness
+@@ file /sys/class/backlight/nvidia_0/max_brightness
+| 100
+@@ ro /sys/class/backlight/nvidia_0/max_brightness
+@@ file /sys/devices/system/cpu/cpufreq/boost
+| 1
+@@ ro /sys/devices/system/cpu/cpufreq/boost
+@@ file /sys/devices/system/cpu/amd_pstate/status
+| active
+@@ ro /sys/devices/system/cpu/amd_pstate/status
+@@ file /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
+| 2162075
+@@ ro /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
+@@ dir /sys/class/powercap/intel-rapl:0
+@@ dir /sys/class/hidraw/hidraw0
+@@ file /sys/class/hidraw/hidraw0/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:0000373B:000012DA
+| HID_NAME=Compx ATK Wireless Charging dongle
+@@ ro /sys/class/hidraw/hidraw0/device/uevent
+@@ hex /sys/class/hidraw/hidraw0/device/report_descriptor
+| 05010902a1010901a1000509190129051500250195057501810295017503810105010930093116008026ff7f751095028106c0a100050109381581257f750895018106c0a100050c0a3802950175081581257f8106c0c0
+@@ file /dev/hidraw0
+@@ ro /dev/hidraw0
+@@ dir /sys/class/hidraw/hidraw1
+@@ file /sys/class/hidraw/hidraw1/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00001038:000022A1
+| HID_NAME=SteelSeries Arctis Nova 7
+@@ ro /sys/class/hidraw/hidraw1/device/uevent
+@@ hex /sys/class/hidraw/hidraw1/device/report_descriptor
+| 06c0ff0901a10106c1ff150026ff00750809f09540810209f19540910209f2960202b102c0
+@@ file /dev/hidraw1
+@@ ro /dev/hidraw1
+@@ dir /sys/class/hidraw/hidraw10
+@@ file /sys/class/hidraw/hidraw10/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00000C76:0000161E
+| HID_NAME=USB PnP Audio Device
+@@ ro /sys/class/hidraw/hidraw10/device/uevent
+@@ hex /sys/class/hidraw/hidraw10/device/report_descriptor
+| 050c0901a1011500250109e909ea09b509b675019504810209e209b709cd95038106050b092095018106050c26ff000900750895038102090095049102c0
+@@ file /dev/hidraw10
+@@ ro /dev/hidraw10
+@@ dir /sys/class/hidraw/hidraw2
+@@ file /sys/class/hidraw/hidraw2/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00001038:000022A1
+| HID_NAME=SteelSeries Arctis Nova 7
+@@ ro /sys/class/hidraw/hidraw2/device/uevent
+@@ hex /sys/class/hidraw/hidraw2/device/report_descriptor
+| 050c0901a10109e909ea750195021500250181027506950181039503750109b609cd09b58102751595018103c0
+@@ file /dev/hidraw2
+@@ ro /dev/hidraw2
+@@ dir /sys/class/hidraw/hidraw3
+@@ file /sys/class/hidraw/hidraw3/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:0000373B:000012DA
+| HID_NAME=Compx ATK Wireless Charging dongle
+@@ ro /sys/class/hidraw/hidraw3/device/uevent
+@@ hex /sys/class/hidraw/hidraw3/device/report_descriptor
+| 0605ff0900a10185100900150026ff00750895078102c00603ff0900a10185020900150026ff00750895078102c0050c0901a10185051500263c0219002a3c02751095018100c005010980a10185031981298315002501950375018102950175058101c00602ff0902a1018508150026ff00750895100902810009029100c00604ff0902a10185060902150026ff0075089507b102c00606ff0902a1018509150026ff00750895300902810009029100c005010902a101850b0901a1000509190129051500250195057501810295017503810105010930093116008026ff7f751095028106c0a100050109381581257f750895018106c0a100050c0a3802950175081581257f8106c0c0
+@@ file /dev/hidraw3
+@@ ro /dev/hidraw3
+@@ dir /sys/class/hidraw/hidraw4
+@@ file /sys/class/hidraw/hidraw4/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00001038:000022A1
+| HID_NAME=SteelSeries Arctis Nova 7
+@@ ro /sys/class/hidraw/hidraw4/device/uevent
+@@ hex /sys/class/hidraw/hidraw4/device/report_descriptor
+| 0600ff0901a1010601ff150026ff00750809f09540810209f195409102c0
+@@ file /dev/hidraw4
+@@ ro /dev/hidraw4
+@@ dir /sys/class/hidraw/hidraw5
+@@ file /sys/class/hidraw/hidraw5/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:0000373B:000012DA
+| HID_NAME=Compx ATK Wireless Charging dongle
+@@ ro /sys/class/hidraw/hidraw5/device/uevent
+@@ hex /sys/class/hidraw/hidraw5/device/report_descriptor
+| 05010906a1010508190129031500250175019503910295059101050719e029e795088102750895018101050719002aff0026ff0095068100c0
+@@ file /dev/hidraw5
+@@ ro /dev/hidraw5
+@@ dir /sys/class/hidraw/hidraw6
+@@ file /sys/class/hidraw/hidraw6/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00003554:0000FA09
+| HID_NAME=Compx 2.4G Wireless Receiver
+@@ ro /sys/class/hidraw/hidraw6/device/uevent
+@@ hex /sys/class/hidraw/hidraw6/device/report_descriptor
+| 05010906a1010508190129031500250175019503910295059101050719e029e715002501750195088102750895018101050719002aff00150026ff0075089505810005ff0903750895018102c0
+@@ file /dev/hidraw6
+@@ ro /dev/hidraw6
+@@ dir /sys/class/hidraw/hidraw7
+@@ file /sys/class/hidraw/hidraw7/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00003554:0000FA09
+| HID_NAME=Compx 2.4G Wireless Receiver
+@@ ro /sys/class/hidraw/hidraw7/device/uevent
+@@ hex /sys/class/hidraw/hidraw7/device/report_descriptor
+| 0602ff0902a1018513150026ff00750895130902810009029100c0050c0901a1018505150026140519002a1405751095018100c005010980a10185031981298315002501950375018102950175058101c005010906a10185040507150025011900299f95a075018102c005010902a1010901a10085070509190129051500250195057501810295017503810105010930093116008026ff7f751095028106c0a100050109381581257f750895018106c0a100050c0a3802950175081581257f8106c0c00604ff0902a10185060902150026ff0075089507b102c0
+@@ file /dev/hidraw7
+@@ ro /dev/hidraw7
+@@ dir /sys/class/hidraw/hidraw8
+@@ file /sys/class/hidraw/hidraw8/device/uevent
+| DRIVER=hid-multitouch
+| HID_ID=0018:000004F3:00003215
+| HID_NAME=ELAN0524:00 04F3:3215
+@@ ro /sys/class/hidraw/hidraw8/device/uevent
+@@ hex /sys/class/hidraw/hidraw8/device/report_descriptor
+| 05010902a10185010901a10005091901290215002501750195028102950681030501093009311581257f750895028106750895058103c00600ff0901850e09c5150026ff0075089504b102c00600ff0901a101855c0901950b75088106850d09c5150026ff0075089504b102850c09c69680037508b102850b09c795827508b102c0050d0905a10185040922a102150025010947094295027501810275019502810395017504250f095181020501150026180f7510550d651109303500460c3095018102462e1d262b09262b0909318102050d150025649503c0550c66011047ffff000027ffff000075109501095681020954257f9501750881020509090125017501950181029507810309c5750895028103050d85020955095975049502250fb102850709607501950115002501b102950fb1030600ff0600ff850609c5150026ff007508960001b102c0050d090ea10185030922a10009521500250a75109501b102c00922a100850509570958750195022501b102950eb103c0c0
+@@ file /dev/hidraw8
+@@ ro /dev/hidraw8
+@@ dir /sys/class/hidraw/hidraw9
+@@ file /sys/class/hidraw/hidraw9/device/uevent
+| DRIVER=hid-generic
+| HID_ID=0003:00002DC8:0000301C
+| HID_NAME=8BitDo IDLE
+@@ ro /sys/class/hidraw/hidraw9/device/uevent
+@@ hex /sys/class/hidraw/hidraw9/device/report_descriptor
+| 06a0ff0901a1018502150026ff00190129027508953f81028581150026ff00190129027508953f9102c0
+@@ file /dev/hidraw9
+@@ ro /dev/hidraw9
+@@ dir /sys/bus/pci/devices/0000:01:00.0
+@@ file /sys/bus/pci/devices/0000:01:00.0/vendor
+| 0x10de
+@@ ro /sys/bus/pci/devices/0000:01:00.0/vendor
+@@ file /sys/bus/pci/devices/0000:01:00.0/device
+| 0x2860
+@@ ro /sys/bus/pci/devices/0000:01:00.0/device
+@@ file /sys/bus/pci/devices/0000:01:00.0/class
+| 0x030000
+@@ ro /sys/bus/pci/devices/0000:01:00.0/class
+@@ file /sys/bus/pci/devices/0000:01:00.0/power/runtime_status
+| active
+@@ ro /sys/bus/pci/devices/0000:01:00.0/power/runtime_status
+@@ dir /sys/bus/pci/devices/0000:66:00.0
+@@ file /sys/bus/pci/devices/0000:66:00.0/vendor
+| 0x1002
+@@ ro /sys/bus/pci/devices/0000:66:00.0/vendor
+@@ file /sys/bus/pci/devices/0000:66:00.0/device
+| 0x15bf
+@@ ro /sys/bus/pci/devices/0000:66:00.0/device
+@@ file /sys/bus/pci/devices/0000:66:00.0/class
+| 0x030000
+@@ ro /sys/bus/pci/devices/0000:66:00.0/class
+@@ file /sys/bus/pci/devices/0000:66:00.0/power/runtime_status
+| active
+@@ ro /sys/bus/pci/devices/0000:66:00.0/power/runtime_status
+@@ info input-devices
+| I: Bus=0019 Vendor=0000 Product=0001 Version=0000
+| N: Name="Power Button"
+| S: Sysfs=/devices/platform/PNP0C0C:00/input/input0
+| H: Handlers=kbd event0 
+| B: PROP=0
+| B: EV=3
+| B: KEY=8000 10000000000000 0
+| 
+| I: Bus=0019 Vendor=0000 Product=0005 Version=0000
+| N: Name="Lid Switch"
+| S: Sysfs=/devices/platform/PNP0C0D:00/input/input1
+| H: Handlers=event1 
+| B: PROP=0
+| B: EV=21
+| B: SW=1
+| 
+| I: Bus=0019 Vendor=0000 Product=0001 Version=0000
+| N: Name="Power Button"
+| S: Sysfs=/devices/platform/LNXPWRBN:00/input/input2
+| H: Handlers=kbd event2 
+| B: PROP=0
+| B: EV=3
+| B: KEY=8000 10000000000000 0
+| 
+| I: Bus=0011 Vendor=0001 Product=0001 Version=ab83
+| N: Name="AT Translated Set 2 keyboard"
+| S: Sysfs=/devices/platform/i8042/serio0/input/input3
+| H: Handlers=sysrq kbd event3 leds 
+| B: PROP=0
+| B: EV=120013
+| B: KEY=180000 10000 c020000000000 0 0 700f02000007 ff802078f870f401 febfffdfffcfffff fffffffffffffffe
+| B: MSC=10
+| B: LED=7
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.0/0003:373B:12DA.0001/input/input4
+| H: Handlers=mouse0 event4 
+| B: PROP=0
+| B: EV=17
+| B: KEY=1f0000 0 0 0 0
+| B: REL=1943
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input5
+| H: Handlers=event5 
+| B: PROP=0
+| B: EV=9
+| B: ABS=10000000000
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input6
+| H: Handlers=event6 
+| B: PROP=0
+| B: EV=9
+| B: ABS=10000000000
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle Consumer Control"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input7
+| H: Handlers=kbd event7 
+| B: PROP=0
+| B: EV=1f
+| B: KEY=733eff 0 0 483ffff17aff32d bfd4444600000000 1 130c730b17c000 267bfad9415fed 9e168000004400 10000002
+| B: REL=1040
+| B: ABS=100000000
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=1038 Product=22a1 Version=0111
+| N: Name="SteelSeries Arctis Nova 7"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.3/0000:68:00.3/usb5/5-1/5-1:1.4/0003:1038:22A1.0005/input/input12
+| H: Handlers=kbd event8 
+| B: PROP=0
+| B: EV=13
+| B: KEY=3800000000 c000000000000 0
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle System Control"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input8
+| H: Handlers=kbd event9 
+| B: PROP=0
+| B: EV=13
+| B: KEY=c000 10000000000000 0
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input9
+| H: Handlers=event10 
+| B: PROP=0
+| B: EV=9
+| B: ABS=10000000000
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input10
+| H: Handlers=event11 
+| B: PROP=0
+| B: EV=9
+| B: ABS=10000000000
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle Mouse"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.1/0003:373B:12DA.0002/input/input11
+| H: Handlers=mouse1 event12 
+| B: PROP=0
+| B: EV=17
+| B: KEY=1f0000 0 0 0 0
+| B: REL=1943
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=373b Product=12da Version=0111
+| N: Name="Compx ATK Wireless Charging dongle"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-1/1-1:1.2/0003:373B:12DA.0003/input/input13
+| H: Handlers=sysrq kbd event13 leds 
+| B: PROP=0
+| B: EV=120013
+| B: KEY=1000000000007 ff9f207ac14057ff febeffdfffefffff fffffffffffffffe
+| B: MSC=10
+| B: LED=7
+| 
+| I: Bus=0003 Vendor=3554 Product=fa09 Version=0111
+| N: Name="Compx 2.4G Wireless Receiver"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-2/1-2:1.0/0003:3554:FA09.0007/input/input14
+| H: Handlers=sysrq kbd event14 leds 
+| B: PROP=0
+| B: EV=120013
+| B: KEY=1000000000007 ff9f207ac14057ff febeffdfffefffff fffffffffffffffe
+| B: MSC=10
+| B: LED=7
+| 
+| I: Bus=0019 Vendor=0000 Product=0006 Version=0000
+| N: Name="Video Bus"
+| S: Sysfs=/devices/pci0000:00/0000:00:01.1/acpi.video_bus.0/input/input15
+| H: Handlers=kbd event15 
+| B: PROP=0
+| B: EV=3
+| B: KEY=3e000b00000000 0 0 0
+| 
+| I: Bus=0019 Vendor=0000 Product=0006 Version=0000
+| N: Name="Video Bus"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/acpi.video_bus.1/input/input16
+| H: Handlers=kbd event16 
+| B: PROP=0
+| B: EV=3
+| B: KEY=3e000b00000000 0 0 0
+| 
+| I: Bus=0003 Vendor=3554 Product=fa09 Version=0111
+| N: Name="Compx 2.4G Wireless Receiver"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-2/1-2:1.1/0003:3554:FA09.0008/input/input17
+| H: Handlers=event17 
+| B: PROP=0
+| B: EV=9
+| B: ABS=10000000000
+| 
+| I: Bus=0003 Vendor=3554 Product=fa09 Version=0111
+| N: Name="Compx 2.4G Wireless Receiver Consumer Control"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-2/1-2:1.1/0003:3554:FA09.0008/input/input18
+| H: Handlers=kbd event18 
+| B: PROP=0
+| B: EV=1f
+| B: KEY=3f00733fff 0 0 483ffff17aff32d bfd4444600000000 1 130ff38b17d000 677bfad9415fed 19ed68000004400 10000002
+| B: REL=1040
+| B: ABS=100000000
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=3554 Product=fa09 Version=0111
+| N: Name="Compx 2.4G Wireless Receiver System Control"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-2/1-2:1.1/0003:3554:FA09.0008/input/input19
+| H: Handlers=kbd event19 
+| B: PROP=0
+| B: EV=13
+| B: KEY=c000 10000000000000 0
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=3554 Product=fa09 Version=0111
+| N: Name="Compx 2.4G Wireless Receiver Keyboard"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-2/1-2:1.1/0003:3554:FA09.0008/input/input20
+| H: Handlers=kbd event20 
+| B: PROP=0
+| B: EV=100013
+| B: KEY=1000000000007 ff800000000007ff 9ebeffcdffefffff febffbffdffffffe
+| B: MSC=10
+| 
+| I: Bus=0003 Vendor=3554 Product=fa09 Version=0111
+| N: Name="Compx 2.4G Wireless Receiver Mouse"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-2/1-2:1.1/0003:3554:FA09.0008/input/input21
+| H: Handlers=mouse2 event21 
+| B: PROP=0
+| B: EV=17
+| B: KEY=1f0000 0 0 0 0
+| B: REL=1943
+| B: MSC=10
+| 
+| I: Bus=0018 Vendor=04f3 Product=3215 Version=0100
+| N: Name="ELAN0524:00 04F3:3215 Mouse"
+| S: Sysfs=/devices/platform/AMDI0010:00/i2c-0/i2c-ELAN0524:00/0018:04F3:3215.0009/input/input25
+| H: Handlers=mouse3 event22 
+| B: PROP=0
+| B: EV=17
+| B: KEY=30000 0 0 0 0
+| B: REL=3
+| B: MSC=10
+| 
+| I: Bus=0018 Vendor=04f3 Product=3215 Version=0100
+| N: Name="ELAN0524:00 04F3:3215 Touchpad"
+| S: Sysfs=/devices/platform/AMDI0010:00/i2c-0/i2c-ELAN0524:00/0018:04F3:3215.0009/input/input27
+| H: Handlers=mouse4 event23 
+| B: PROP=5
+| B: EV=1b
+| B: KEY=e520 10000 0 0 0 0
+| B: ABS=2e0800000000003
+| B: MSC=20
+| 
+| I: Bus=0003 Vendor=0c76 Product=161e Version=0100
+| N: Name="USB PnP Audio Device"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.3/usb1/1-3/1-3.4/1-3.4:1.2/0003:0C76:161E.000B/input/input28
+| H: Handlers=kbd event24 
+| B: PROP=0
+| B: EV=13
+| B: KEY=7800000000 e000000000000 0
+| B: MSC=10
+| 
+| I: Bus=0019 Vendor=1025 Product=1229 Version=0000
+| N: Name="Acer Wireless Radio Control"
+| S: Sysfs=/devices/LNXSYSTM:00/LNXSYBUS:00/PNP0A08:00/device:40/10251229:00/input/input29
+| H: Handlers=rfkill kbd event25 
+| B: PROP=0
+| B: EV=3
+| B: KEY=80000000000000 0 0 0
+| 
+| I: Bus=0019 Vendor=0000 Product=0000 Version=0000
+| N: Name="Acer WMI hotkeys"
+| S: Sysfs=/devices/virtual/input/input30
+| H: Handlers=rfkill kbd event26 
+| B: PROP=0
+| B: EV=13
+| B: KEY=1c0000 0 0 0 0 1600800000c00 300400 10000000000000 0
+| B: MSC=10
+| 
+| I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+| N: Name="HD-Audio Generic HDMI/DP,pcm=3"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.1/sound/card1/input31
+| H: Handlers=event27 
+| B: PROP=0
+| B: EV=21
+| B: SW=140
+| 
+| I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+| N: Name="HDA NVidia HDMI/DP,pcm=3"
+| S: Sysfs=/devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input32
+| H: Handlers=event28 
+| B: PROP=0
+| B: EV=21
+| B: SW=140
+| 
+| I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+| N: Name="HDA NVidia HDMI/DP,pcm=7"
+| S: Sysfs=/devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input33
+| H: Handlers=event29 
+| B: PROP=0
+| B: EV=21
+| B: SW=140
+| 
+| I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+| N: Name="HDA NVidia HDMI/DP,pcm=8"
+| S: Sysfs=/devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input34
+| H: Handlers=event30 
+| B: PROP=0
+| B: EV=21
+| B: SW=140
+| 
+| I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+| N: Name="HDA NVidia HDMI/DP,pcm=9"
+| S: Sysfs=/devices/pci0000:00/0000:00:01.1/0000:01:00.1/sound/card0/input35
+| H: Handlers=event31 
+| B: PROP=0
+| B: EV=21
+| B: SW=140
+| 
+| I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+| N: Name="HD-Audio Generic Headphone"
+| S: Sysfs=/devices/pci0000:00/0000:00:08.1/0000:66:00.6/sound/card3/input36
+| H: Handlers=event256 
+| B: PROP=0
+| B: EV=21
+| B: SW=4
+| 
+@@ which busctl present
+@@ cmd busctl --system --json=short get-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles ActiveProfile
+@@ exit 0
+| {"type":"s","data":"balanced"}
+@@ which busctl present
+@@ cmd busctl --system --json=short get-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles Profiles
+@@ exit 0
+| {"type":"aa{sv}","data":[{"Profile":{"type":"s","data":"power-saver"},"CpuDriver":{"type":"s","data":"amd_pstate"},"PlatformDriver":{"type":"s","data":"platform_profile"},"Driver":{"type":"s","data":"multiple"}},{"Profile":{"type":"s","data":"balanced"},"CpuDriver":{"type":"s","data":"amd_pstate"},"PlatformDriver":{"type":"s","data":"platform_profile"},"Driver":{"type":"s","data":"multiple"}},{"Profile":{"type":"s","data":"performance"},"CpuDriver":{"type":"s","data":"amd_pstate"},"PlatformDriver":{"type":"s","data":"platform_profile"},"Driver":{"type":"s","data":"multiple"}}]}
+@@ which busctl present
+@@ cmd busctl --system get-property org.freedesktop.UPower.PowerProfiles /org/freedesktop/UPower/PowerProfiles org.freedesktop.UPower.PowerProfiles ActiveProfile
+@@ exit 0
+| s "balanced"
+@@ which busctl present
+@@ cmd busctl --system --json=short get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles ActiveProfile
+@@ exit 0
+| {"type":"s","data":"balanced"}
+@@ which busctl present
+@@ cmd busctl --system --json=short get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles Profiles
+@@ exit 0
+| {"type":"aa{sv}","data":[{"Profile":{"type":"s","data":"power-saver"},"CpuDriver":{"type":"s","data":"amd_pstate"},"PlatformDriver":{"type":"s","data":"platform_profile"},"Driver":{"type":"s","data":"multiple"}},{"Profile":{"type":"s","data":"balanced"},"CpuDriver":{"type":"s","data":"amd_pstate"},"PlatformDriver":{"type":"s","data":"platform_profile"},"Driver":{"type":"s","data":"multiple"}},{"Profile":{"type":"s","data":"performance"},"CpuDriver":{"type":"s","data":"amd_pstate"},"PlatformDriver":{"type":"s","data":"platform_profile"},"Driver":{"type":"s","data":"multiple"}}]}
+@@ which busctl present
+@@ cmd busctl --system get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles ActiveProfile
+@@ exit 0
+| s "balanced"
+@@ which powerprofilesctl present
+@@ cmd powerprofilesctl get
+@@ exit 0
+| balanced
+@@ which nvidia-smi present
+@@ cmd nvidia-smi --query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,clocks.gr,power.draw --format=csv,noheader,nounits
+@@ exit 0
+| NVIDIA GeForce RTX 4070 Laptop GPU, 48, 10, 804, 8188, 285, 8.80
+@@ which pkexec present
+@@ which sh present
+@@ info lsmod
+| nvidia_uvm           2088960  0
+| nvidia_drm            147456  42
+| nvidia_modeset       1748992  12 nvidia_drm
+| acer_wmi               36864  0
+| nvidia_wmi_ec_backlight    12288  0
+| sparse_keymap          12288  1 acer_wmi
+| wmi_bmof               12288  0
+| snd_rawmidi            57344  3 snd_seq_midi,snd_usbmidi_lib,snd_ump
+| amd_pmf               131072  1 amdxdna
+| nvidia              14823424  373 nvidia_uvm,nvidia_modeset
+| acer_wireless          16384  0
+| snd_seq_device         16384  4 snd_seq,snd_seq_midi,snd_ump,snd_rawmidi
+| snd                   147456  100 snd_ctl_led,snd_hda_codec_generic,snd_seq,snd_seq_device,snd_hda_codec_hdmi,snd_hwdep,snd_hda_intel,snd_usb_audio,snd_usbmidi_lib,snd_hda_codec,snd_sof,snd_soc_sdca,snd_timer,snd_hda_codec_realtek_lib,snd_compress,snd_hda_codec_alc269,snd_soc_core,snd_ump,snd_pcm,snd_rawmidi
+| drm_ttm_helper         20480  2 amdgpu,nvidia_drm
+| amd_sfh                73728  1 amd_pmf
+| tee                    61440  2 amd_pmf,amdtee
+| mac_hid                12288  0
+| hid_multitouch         40960  0
+| i2c_hid_acpi           12288  0
+| i2c_hid                40960  1 i2c_hid_acpi
+| video                  77824  4 nvidia_wmi_ec_backlight,acer_wmi,amdgpu,nvidia_modeset
+| wmi                    36864  4 video,nvidia_wmi_ec_backlight,acer_wmi,wmi_bmof
+| hid_generic            12288  0
+| usbhid                 86016  0
+| hid                   286720  6 i2c_hid,usbhid,hid_multitouch,snd_soc_sdca,hid_generic,amd_sfh
+@@ info modinfo-acer-wmi
+| filename:       /lib/modules/7.0.0-44-generic/kernel/drivers/platform/x86/acer-wmi.ko.zst
+| parm:           mailled:Set initial state of Mail LED (int)
+| parm:           brightness:Set initial LCD backlight brightness (int)
+| parm:           threeg:Set initial state of 3G hardware (int)
+| parm:           force_series:Force a different laptop series (int)
+| parm:           force_caps:Force the capability bitmask to this value (int)
+| parm:           ec_raw_mode:Enable EC raw mode (bool)
+| parm:           cycle_gaming_thermal_profile:Set thermal mode key in cycle mode. Disabling it sets the mode key in turbo toggle mode (bool)
+| parm:           predator_v4:Enable features for predator laptops that use predator sense v4 (bool)
+@@ info lsusb
+| Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+| Bus 001 Device 002: ID 373b:12da Compx ATK Wireless Charging dongle
+| Bus 001 Device 003: ID 3554:fa09 Compx 2.4G Wireless Receiver
+| Bus 001 Device 004: ID 0bda:5411 Realtek Semiconductor Corp. RTS5411 Hub
+| Bus 001 Device 005: ID 0489:e0e4 Foxconn / Hon Hai Wireless_Device
+| Bus 001 Device 006: ID 2dc8:301c 8BitDo IDLE
+| Bus 001 Device 007: ID 0c76:161e JMTek, LLC. USB PnP Audio Device
+| Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+| Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+| Bus 003 Device 002: ID 04f2:b76f Chicony Electronics Co., Ltd ACER HD User Facing
+| Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+| Bus 005 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+| Bus 005 Device 002: ID 1038:22a1 SteelSeries ApS Arctis Nova 7
+| Bus 006 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+| Bus 007 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+| Bus 007 Device 002: ID 05e3:0f01 Genesys Logic, Inc. Billboard Device
+| Bus 008 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+@@ info secure-boot
+| SecureBoot disabled
+@@ info groups
+| input no
+| nitrolite yes
+@@ info desktop
+| ubuntu:GNOME / wayland
+@@ end
