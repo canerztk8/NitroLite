@@ -45,6 +45,12 @@ public sealed class PowerProfilesDaemon : IPowerProfiles
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(3);
 
+    /// <summary>
+    /// What the start-up probe may spend in total. It runs while the first window is being built, and a system bus
+    /// that does not answer would otherwise cost every timeout in turn — two endpoints, two forms each, then the CLI.
+    /// </summary>
+    private static readonly TimeSpan ProbeBudget = TimeSpan.FromSeconds(4);
+
     /// <summary>The current name (0.20 and later, and tuned-ppd), then the original one.</summary>
     private static readonly (string Service, string Path, string Interface)[] Endpoints =
     {
@@ -63,11 +69,13 @@ public sealed class PowerProfilesDaemon : IPowerProfiles
         _busctl = _runner.Find("busctl");
         _ctl = _runner.Find("powerprofilesctl");
 
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         if (_busctl != null)
         {
             foreach (var endpoint in Endpoints)
             {
-                var active = ReadActive(endpoint);
+                if (clock.Elapsed > ProbeBudget) break;
+                var active = ReadActive(endpoint, () => clock.Elapsed <= ProbeBudget);
                 if (active == null) continue;
 
                 _endpoint = endpoint;
@@ -76,7 +84,7 @@ public sealed class PowerProfilesDaemon : IPowerProfiles
             }
         }
 
-        if (_endpoint == null && _ctl != null)
+        if (_endpoint == null && _ctl != null && clock.Elapsed <= ProbeBudget)
         {
             var result = _runner.Run(_ctl, GetArgs, Timeout);
             if (result.Ok && !string.IsNullOrWhiteSpace(result.Output)) Profiles = DefaultProfiles;
@@ -123,7 +131,7 @@ public sealed class PowerProfilesDaemon : IPowerProfiles
         return result.Ok;
     }
 
-    private string? ReadActive((string Service, string Path, string Interface) endpoint)
+    private string? ReadActive((string Service, string Path, string Interface) endpoint, Func<bool>? mayContinue = null)
     {
         var json = _runner.Run(_busctl!, new[]
         {
@@ -136,6 +144,7 @@ public sealed class PowerProfilesDaemon : IPowerProfiles
         }
 
         // systemd before 240 has no --json; its plain form is `s "balanced"`.
+        if (mayContinue != null && !mayContinue()) return null;
         var plain = _runner.Run(_busctl!, new[]
         {
             "--system", "get-property", endpoint.Service, endpoint.Path, endpoint.Interface, "ActiveProfile"

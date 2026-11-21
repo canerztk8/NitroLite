@@ -41,9 +41,10 @@ public class LinuxTrayProbeTests
         Assert.False(LinuxTrayProbe.IsAvailable(new Runner("/usr/bin/busctl", new CommandResult(0, "b false", ""))));
 
     [Fact]
-    public void AQuestionThatCannotBeAsked_AssumesATray()
+    public void AQuestionThatCannotBeAsked_AssumesNoTray_SoTheWindowIsNeverHiddenForGood()
     {
-        Assert.True(LinuxTrayProbe.IsAvailable(new Runner(null, default)));
-        Assert.True(LinuxTrayProbe.IsAvailable(new Runner("/usr/bin/busctl", new CommandResult(1, "", "no bus"))));
+        Assert.False(LinuxTrayProbe.IsAvailable(new Runner(null, default)));
+        Assert.False(LinuxTrayProbe.IsAvailable(new Runner("/usr/bin/busctl", new CommandResult(1, "", "no bus"))));
+        Assert.False(LinuxTrayProbe.IsAvailable(new Runner("/usr/bin/busctl", new CommandResult(0, "garbage", ""))));
     }
 }
