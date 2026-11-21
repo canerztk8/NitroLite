@@ -5,7 +5,7 @@
 # every file is where systemd, polkit and the desktop expect it, starts the program headless, and removes it again.
 #
 #   docker run --rm -v "$PWD/artifacts:/pkg:ro" -v "$PWD/packaging/linux:/t:ro" ubuntu:24.04 sh /t/test-package.sh deb
-#   docker run --rm -v "$PWD/artifacts:/pkg:ro" -v "$PWD/packaging/linux:/t:ro" fedora:41   sh /t/test-package.sh rpm
+#   docker run --rm -v "$PWD/artifacts:/pkg:ro" -v "$PWD/packaging/linux:/t:ro" fedora:44   sh /t/test-package.sh rpm
 
 set -eu
 KIND="${1:?usage: test-package.sh deb|rpm}"
