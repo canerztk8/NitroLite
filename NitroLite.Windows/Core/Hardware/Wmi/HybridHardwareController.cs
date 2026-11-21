@@ -51,6 +51,8 @@ public sealed class HybridHardwareController : IHardwareController
     private readonly Func<IHardwareController?> _wmiFactory;
     private readonly Func<bool> _useDirectWmi;
     private readonly Func<Task<bool>> _serviceHealthy;
+    private readonly Func<Task<MonitorData?>>? _legacyTelemetry;
+    private long _nextLegacyPoll;
 
     /// <summary>
     /// The vendor HID lighting probe, or null when this build or this session must not touch HID. The test harness
@@ -85,7 +87,8 @@ public sealed class HybridHardwareController : IHardwareController
         Func<bool>? useDirectWmi = null,
         Func<Task<bool>>? serviceHealthy = null,
         Func<IHidLightingWriter?>? hidLighting = null,
-        IHardwareDiagnosticSink? diagnostics = null)
+        IHardwareDiagnosticSink? diagnostics = null,
+        Func<Task<MonitorData?>>? legacyTelemetry = null)
     {
         _agent = agent ?? throw new ArgumentNullException(nameof(agent));
         _wmiFactory = wmiFactory ?? (() => null);
@@ -93,6 +96,7 @@ public sealed class HybridHardwareController : IHardwareController
         _serviceHealthy = serviceHealthy ?? agent.EnsureConnectedAsync;
         _hidLighting = hidLighting;
         _diagnostics = diagnostics;
+        _legacyTelemetry = legacyTelemetry;
     }
 
     public string BackendName => ActiveBackendName;
@@ -357,12 +361,15 @@ public sealed class HybridHardwareController : IHardwareController
     /// </remarks>
     public async Task<MonitorData?> GetTelemetryAsync()
     {
-        if (_wmi is { IsAvailable: true } && !await _serviceHealthy().ConfigureAwait(false))
-        {
-            return await _wmi.GetMonitorDataAsync().ConfigureAwait(false);
-        }
-
-        return await _agent.GetMonitorDataAsync().ConfigureAwait(false);
+        var primary = _wmi is { IsAvailable: true } && !await _serviceHealthy().ConfigureAwait(false) ? _wmi : _agent;
+        var data = await primary.GetMonitorDataAsync().ConfigureAwait(false);
+        if (data != null || _legacyTelemetry == null) return data;
+        var now = Environment.TickCount64;
+        var next = Interlocked.Read(ref _nextLegacyPoll);
+        if (now < next || Interlocked.CompareExchange(ref _nextLegacyPoll, now + 30000, next) != next) return null;
+        var legacy = await _legacyTelemetry().ConfigureAwait(false);
+        if (legacy != null) Interlocked.Exchange(ref _nextLegacyPoll, 0);
+        return legacy;
     }
 
     public async Task<OperatingMode?> GetOperatingModeAsync() => await (await ResolveAsync().ConfigureAwait(false))

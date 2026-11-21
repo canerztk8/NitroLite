@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Security.Principal;
+using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Wmi;
 
@@ -17,15 +18,9 @@ public static class LegacySenseSensors
             (6, "GPU fan (RPM)"), (10, "GPU temperature (C)") })
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            using var pipe = new NamedPipeClientStream(".", "PredatorSense_service_namedpipe",
-                PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.Identification);
             try
             {
-                await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
-                await pipe.WriteAsync(Request(id), timeout.Token).ConfigureAwait(false);
-                var reply = new byte[13];
-                await pipe.ReadExactlyAsync(reply, timeout.Token).ConfigureAwait(false);
-                var reading = Decode(id, reply);
+                var reading = await ReadAsync(id, timeout.Token).ConfigureAwait(false);
                 if (!reading.HasValue) complete = false;
                 await output.WriteLineAsync($"{name}: {reading?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unavailable"}").ConfigureAwait(false);
             }
@@ -36,6 +31,47 @@ public static class LegacySenseSensors
             }
         }
         return complete ? 0 : 1;
+    }
+
+    private static async Task<int?> ReadAsync(byte id, CancellationToken token)
+    {
+        using var pipe = new NamedPipeClientStream(".", "PredatorSense_service_namedpipe",
+            PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.Identification);
+        await pipe.ConnectAsync(token).ConfigureAwait(false);
+        await pipe.WriteAsync(Request(id), token).ConfigureAwait(false);
+        var reply = new byte[13];
+        await pipe.ReadExactlyAsync(reply, token).ConfigureAwait(false);
+        return Decode(id, reply);
+    }
+
+    public static Task<MonitorData?> ReadTelemetryAsync() => ReadTelemetryAsync(ReadAsync);
+
+    internal static async Task<MonitorData?> ReadTelemetryAsync(Func<byte, CancellationToken, Task<int?>> read)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(750));
+        var data = new MonitorData { IsTemperatureMeasured = false };
+        try
+        {
+            foreach (byte id in new byte[] { 1, 2, 6, 10 })
+            {
+                var value = await read(id, timeout.Token).ConfigureAwait(false);
+                if (value is not int n) continue;
+                switch (id)
+                {
+                    case 1: data.CpuTemperature = n; data.Provenance[nameof(data.CpuTemperature)] = "PSSvc"; break;
+                    case 2: data.CpuFanSpeed = n; data.Provenance[nameof(data.CpuFanSpeed)] = "PSSvc"; break;
+                    case 6: data.GpuFanSpeed = n; data.Provenance[nameof(data.GpuFanSpeed)] = "PSSvc"; break;
+                    case 10: data.GpuTemperature = n; data.Provenance[nameof(data.GpuTemperature)] = "PSSvc"; break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException or TimeoutException)
+        {
+            // A service can stop between replies. Keep only the readings it actually returned.
+        }
+        data.IsFanRpmMeasured = data.Provenance.ContainsKey(nameof(data.CpuFanSpeed)) &&
+                                data.Provenance.ContainsKey(nameof(data.GpuFanSpeed));
+        return data.Provenance.Count == 0 ? null : data;
     }
 
     internal static byte[] Request(byte id)

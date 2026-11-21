@@ -653,7 +653,8 @@ public sealed class AppHost : IDisposable
             // The vendor HID controller is the transport the 2025 boards moved their backlight to. It is probed
             // only when a WMI lighting write did not take, and it stays read-only until a documented frame exists.
             hidLighting: NitroLite.Windows.Core.Hardware.Lighting.HidLightingDevices.FindWriter,
-            diagnostics: diagnostics);
+            diagnostics: diagnostics,
+            legacyTelemetry: identity.IsAcer ? NitroLite.Windows.Core.Hardware.LegacySenseSensors.ReadTelemetryAsync : null);
 
         // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI
         // backend up immediately when the Acer service is not answering, so the user never sees a UAC prompt:

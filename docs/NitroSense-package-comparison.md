@@ -1,5 +1,7 @@
 # Windows NitroSense package comparison
 
+On Windows, the dashboard automatically reads the legacy service on Acer machines when the primary telemetry source returns no sample. This works without a model-specific catalog entry. Missing readings remain unknown; a legacy temperature alone does not establish a verified fan-curve sensor mapping. An absent service is retried after 30 seconds.
+
 Run `NitroLite.Desktop.exe --pssvc-sensors` from a terminal on Windows. Exit code 0 means all four sensor replies contained plausible values. Exit code 1 means at least one reading was unavailable or the service connection failed.
 
 Inspected 2026-11-21 without installing either package. Package declarations describe the OEM software and are not measurements of a particular keyboard or fan.
