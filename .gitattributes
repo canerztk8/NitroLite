@@ -4,3 +4,4 @@ packaging/linux/*.sh      text eol=lf
 packaging/linux/*.desktop text eol=lf
 packaging/linux/*.rules   text eol=lf
 packaging/linux/*.svg     text eol=lf
+tools/linux-capture/*.sh   text eol=lf

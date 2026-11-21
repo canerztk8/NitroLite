@@ -67,6 +67,26 @@ internal static class Program
             return RunHardwareCommand(args);
         }
 
+#if !WINDOWS
+        // --linux-capture <file>: the Linux window, driven by a machine recorded with tools/linux-capture. It runs on
+        // any OS, so the Linux build can be worked on from Windows. It gets a data folder of its own next to the capture
+        // — the Linux build on Windows would otherwise share the Windows app's settings and overwrite them — and it
+        // skips the single-instance slot, so it can run beside an installed NitroLite.
+        var captureIndex = Array.FindIndex(args, a => string.Equals(a, "--linux-capture", StringComparison.OrdinalIgnoreCase));
+        if (captureIndex >= 0 && captureIndex + 1 < args.Length)
+        {
+            var capturePath = Path.GetFullPath(args[captureIndex + 1]);
+            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(AppPaths.DataDirOverrideVariable)))
+            {
+                Environment.SetEnvironmentVariable(AppPaths.DataDirOverrideVariable, capturePath + ".data");
+            }
+
+            AppHost.LinuxCapturePath = capturePath;
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            return 0;
+        }
+#endif
+
         // One NitroLite per desktop. A second launch brings the first one forward instead of opening a second window
         // with a second telemetry loop and a second fan curve writing to the same fans.
         //

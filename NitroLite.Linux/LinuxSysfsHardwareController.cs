@@ -101,7 +101,8 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         ISysfsFileSystem? fs = null,
         ProfileCatalog? catalog = null,
         OpenRgbClient? openRgb = null,
-        IPowerProfiles? powerProfiles = null)
+        IPowerProfiles? powerProfiles = null,
+        Func<string, byte[]?>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -109,7 +110,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         // build machine's system bus.
         var fileSystem = fs ?? RealSysfsFileSystem.Instance;
         var power = powerProfiles ?? (fs == null ? new PowerProfilesDaemon() : NoPowerProfiles.Instance);
-        var capabilities = new LinuxCapabilityProbe(fileSystem, catalog, power).Probe();
+        var capabilities = new LinuxCapabilityProbe(fileSystem, catalog, power, readBytes).Probe();
         var client = openRgb ?? new OpenRgbClient();
         return new LinuxSysfsHardwareController(
             fileSystem, capabilities, new ReadBackPolicy(settings), client, ownsOpenRgb: openRgb == null);

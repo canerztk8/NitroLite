@@ -173,6 +173,38 @@ public sealed class AppHost : IDisposable
     public MainViewModel ViewModel { get; }
 
     /// <summary>
+    /// The capture file <c>--linux-capture</c> named, or null. Set by <c>Program.Main</c> before the host is built.
+    /// </summary>
+    public static string? LinuxCapturePath { get; set; }
+
+#if !WINDOWS
+    /// <summary>The recorded machine, when <see cref="LinuxCapturePath"/> names one that parses.</summary>
+    private static LinuxCapture? _capture;
+    private static string? _capturePathLoaded;
+
+    private static LinuxCapture? LoadLinuxCapture()
+    {
+        var path = LinuxCapturePath;
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        if (_capture != null && _capturePathLoaded == path) return _capture;
+
+        try
+        {
+            var capture = LinuxCapture.LoadFile(path);
+            _capture = capture;
+            _capturePathLoaded = path;
+            AppLog.Info("Replaying a Linux capture", $"{Path.GetFileName(path)} (captured {capture.Captured})");
+            return capture;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        {
+            AppLog.Error("The Linux capture could not be read", $"{path}: {ex.Message}");
+            return null;
+        }
+    }
+#endif
+
+    /// <summary>
     /// The one-time setup the settings page offers: on Linux the udev rule, the groups and the predator_v4 option,
     /// behind one password prompt. Windows has nothing to set up once, so it gets none.
     /// </summary>
@@ -182,10 +214,19 @@ public sealed class AppHost : IDisposable
         _ = platform;
         return null;
 #else
-        if (!OperatingSystem.IsLinux() || platform is not LinuxCapabilities linux) return null;
+        if (platform is not LinuxCapabilities linux) return null;
 
         try
         {
+            // A replayed capture answers the setup from the recording too: the card shows what the recorded machine
+            // would show, and pressing a button runs nothing on this one.
+            var capture = LoadLinuxCapture();
+            if (capture != null)
+            {
+                return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile, capture.Runner, capture.FileSystem);
+            }
+
+            if (!OperatingSystem.IsLinux()) return null;
             return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile);
         }
         catch (Exception ex)
@@ -369,11 +410,18 @@ public sealed class AppHost : IDisposable
             }
         }
 #else
-        if (OperatingSystem.IsLinux())
+        // A capture replays a recorded Linux machine — on any OS — so the Linux window can be worked on without booting
+        // Linux. Everything below reads the recorded tree instead of the real one; nothing reaches this machine's /sys.
+        var capture = LoadLinuxCapture();
+        if (OperatingSystem.IsLinux() || capture != null)
         {
             try
             {
-                var controller = LinuxSysfsHardwareController.Create(settings);
+                ISysfsFileSystem fs = capture != null ? capture.FileSystem : RealSysfsFileSystem.Instance;
+                var controller = capture == null
+                    ? LinuxSysfsHardwareController.Create(settings)
+                    : LinuxSysfsHardwareController.Create(settings, capture.FileSystem,
+                        powerProfiles: capture.PowerProfiles, readBytes: capture.ReadBytes);
                 var linux = controller.Capabilities;
                 hardware = controller;
                 platform = linux;
@@ -381,7 +429,6 @@ public sealed class AppHost : IDisposable
                 AppLog.Info("Linux sysfs backend attached",
                     $"{linux.Tier} · {linux.Identity.ModelCode} · udev={(linux.NeedsUdevRule ? "gerekli" : "tamam")}");
 
-                var fs = RealSysfsFileSystem.Instance;
                 gameProfiles = CreateLinuxGameProfiles(settings, controller, fs);
                 schoolMode = CreateLinuxSchoolMode(settings, controller, linux, fs);
 
@@ -403,7 +450,9 @@ public sealed class AppHost : IDisposable
 
                 // /proc and hwmon answer the same rows Windows answers through WMI and NVML. The standby-list cleaner
                 // reports itself unsupported, so its card hides rather than offering a button that does nothing.
-                monitor = new LinuxHardwareMonitor(fs);
+                monitor = capture == null
+                    ? new LinuxHardwareMonitor(fs)
+                    : new LinuxHardwareMonitor(fs, nvidia: new LinuxNvidiaGpu(fs, capture.Runner));
                 memoryCleaner = new LinuxMemoryCleaner();
 
                 // The SDK is the third lighting path, and the only one that can say whether it answered. The status
