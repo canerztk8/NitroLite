@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Globalization;
+using System.IO;
 using System.IO.Pipes;
 using NitroLite.Core;
 
@@ -31,6 +32,17 @@ public sealed class SingleInstanceGuard : IDisposable
     public const string PipeName = "NitroLite.SingleInstance.AN16";
 
     /// <summary>
+    /// The file a second launch drops a timestamp into when the pipe refuses it. An elevated NitroLite (the Task
+    /// Scheduler auto-start) creates its pipe with a high integrity label, so a normal launch cannot open it for
+    /// writing and the window would never come forward: "Access is denied" every time, for a reason the user cannot
+    /// see. A file in the data folder has no such label, and the first instance polls it once a second.
+    /// </summary>
+    public const string WakeFileName = "nitrolite.wake";
+
+    /// <summary>How often the first instance looks for a wake request the pipe could not deliver.</summary>
+    private static readonly TimeSpan WakePollInterval = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Set to <c>1</c> to start without taking the machine's slot. Only <c>scripts/screenshot.ps1</c> uses it: the
     /// harness runs against a throwaway data folder while the user's own NitroLite sits in the tray, and the guard
     /// would otherwise make it exit before the first window appears.
@@ -41,8 +53,11 @@ public sealed class SingleInstanceGuard : IDisposable
     private readonly FileStream? _lockFile;
     private readonly CancellationTokenSource _stop = new();
     private readonly bool _standalone;
+    private readonly long _startedAtTicks = DateTime.UtcNow.Ticks;
     private NamedPipeServerStream? _server;
     private Task? _listener;
+    private Timer? _wakeWatch;
+    private long _wakeSeen;
     private bool _disposed;
 
     private SingleInstanceGuard(Mutex? mutex, FileStream? lockFile, bool isFirst, bool standalone = false)
@@ -168,6 +183,8 @@ public sealed class SingleInstanceGuard : IDisposable
         // running instance and log a warning for a condition the caller asked for.
         if (!IsFirstInstance || _standalone || _listener != null) return;
 
+        StartWakeWatch();
+
         _listener = Task.Run(async () =>
         {
             while (!_stop.IsCancellationRequested)
@@ -217,21 +234,111 @@ public sealed class SingleInstanceGuard : IDisposable
     /// Tells the running instance to come forward. Returns false when nobody answered, which is what a stale lock
     /// looks like.
     /// </summary>
+    /// <remarks>
+    /// The pipe is tried first because it is instant and touches no disk. When it is refused — the running copy is
+    /// elevated, or another account owns it — the request is left in <see cref="WakeFileName"/> instead, which the
+    /// first instance picks up within a second. A launch that does nothing at all is the one outcome worth avoiding:
+    /// the user clicked the icon and has to be given a window.
+    /// </remarks>
     public static bool SignalExistingInstance()
     {
+        var piped = false;
+
         try
         {
             using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
             client.Connect(1500);
             client.WriteByte(1);
             client.Flush();
+            piped = true;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The running window could not be reached through the pipe", ex.Message);
+        }
+
+        // Both are sent when the pipe worked: the wake file is one tick behind, so a request that lands just as the
+        // pipe closes still arrives, and a duplicate wake is a window that was already coming forward.
+        return PostWakeRequest() || piped;
+    }
+
+    /// <summary>
+    /// Leaves a wake request for the first instance. Returns false when even that failed, which means the data folder
+    /// is not writable and there is no way to reach the running copy at all.
+    /// </summary>
+    public static bool PostWakeRequest()
+    {
+        try
+        {
+            File.WriteAllText(WakeFilePath, DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture));
             return true;
         }
         catch (Exception ex)
         {
-            AppLog.Warn("The running window could not be reached", ex.Message);
+            AppLog.Warn("The running window could not be asked to come forward", ex.Message);
             return false;
         }
+    }
+
+    /// <summary>Where a wake request is left.</summary>
+    public static string WakeFilePath => AppPaths.GetDataFile(WakeFileName);
+
+    /// <summary>
+    /// The pending wake request, or null when there is none newer than <paramref name="sinceTicks"/>. A request from
+    /// before this instance started is ignored: it belongs to a launch that has already been answered, or to a copy
+    /// that is no longer running.
+    /// </summary>
+    public static long? PendingWakeRequest(long sinceTicks)
+    {
+        try
+        {
+            var path = WakeFilePath;
+            if (!File.Exists(path)) return null;
+
+            var text = File.ReadAllText(path).Trim();
+            if (!long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long stamp)) return null;
+
+            return stamp > sinceTicks ? stamp : null;
+        }
+        catch (IOException)
+        {
+            // The second instance is halfway through writing it. The next poll a second later gets a whole file.
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Starts looking for wake requests. <see cref="Listen"/> calls this; the tests call it directly.</summary>
+    /// <remarks>
+    /// Split out because a developer machine already runs a NitroLite that owns the slot and the pipe name, so the
+    /// tests cannot start a real listener: they would be skipped on exactly the machines that would catch a regression.
+    /// </remarks>
+    public void WatchForWakeRequests() => StartWakeWatch();
+
+    /// <summary>Starts looking for wake requests the pipe could not deliver.</summary>
+    private void StartWakeWatch()
+    {
+        if (_wakeWatch != null) return;
+
+        // A leftover request from the previous run is answered at once, otherwise the timer would keep re-reading it.
+        _wakeSeen = PendingWakeRequest(_startedAtTicks) ?? 0;
+
+        _wakeWatch = new Timer(_ => CheckWakeRequest(), null, WakePollInterval, WakePollInterval);
+    }
+
+    /// <summary>One poll: raises the activation event when a request newer than the last one answered is waiting.</summary>
+    private void CheckWakeRequest()
+    {
+        if (_disposed) return;
+
+        var stamp = PendingWakeRequest(Math.Max(_startedAtTicks, _wakeSeen));
+        if (stamp == null) return;
+
+        _wakeSeen = stamp.Value;
+        ActivationRequested?.Invoke();
     }
 
     public void Dispose()
@@ -240,6 +347,10 @@ public sealed class SingleInstanceGuard : IDisposable
         _disposed = true;
 
         _stop.Cancel();
+
+        try { _wakeWatch?.Dispose(); } catch { /* the poll has already stopped */ }
+        _wakeWatch = null;
+
         try { _server?.Dispose(); } catch { /* the listener is already gone */ }
         _server = null;
 

@@ -573,6 +573,48 @@ public class SecurityHardeningTests
         Assert.False(second.IsFirstInstance);
     }
 
+    // ---------------------------------------------------------------- SEC-30: a launch that the pipe refuses
+
+    [Fact]
+    public async Task WakeFile_BringsTheRunningWindowForwardWhenThePipeIsRefused()
+    {
+        // An elevated NitroLite owns a pipe a normal launch may not write to: "Access is denied" for every icon click
+        // and no window. The wake file is the second path, and it is polled once a second.
+        using var guard = SingleInstanceGuard.Acquire();
+        var woken = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        guard.ActivationRequested += () => woken.TrySetResult();
+
+        guard.WatchForWakeRequests();
+
+        Assert.True(SingleInstanceGuard.PostWakeRequest());
+        var finished = await Task.WhenAny(woken.Task, Task.Delay(TimeSpan.FromSeconds(8)));
+
+        Assert.Same(woken.Task, finished);
+    }
+
+    [Fact]
+    public void WakeFile_AnsweredOnceIsNotOfferedAgain()
+    {
+        Assert.True(SingleInstanceGuard.PostWakeRequest());
+
+        var stamp = SingleInstanceGuard.PendingWakeRequest(0);
+
+        Assert.NotNull(stamp);
+        // The window is already on its way forward; a second raise would fight the user for the foreground.
+        Assert.Null(SingleInstanceGuard.PendingWakeRequest(stamp.Value));
+    }
+
+    [Fact]
+    public void WakeFile_FromBeforeThisInstanceStartedIsIgnored()
+    {
+        Assert.True(SingleInstanceGuard.PostWakeRequest());
+
+        // A request left by an earlier run belongs to a window that has already been answered, or to nothing at all.
+        var later = DateTime.UtcNow.Ticks + TimeSpan.TicksPerMinute;
+
+        Assert.Null(SingleInstanceGuard.PendingWakeRequest(later));
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private sealed class RecordingRunner : IProcessRunner
