@@ -9,3 +9,4 @@ packaging/linux/*.in       text eol=lf
 packaging/linux/*.socket   text eol=lf
 packaging/linux/*.policy   text eol=lf
 packaging/linux/*.yaml     text eol=lf
+packaging/linux/build-packages.sh text eol=lf

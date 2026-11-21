@@ -21,11 +21,26 @@ vendor: NitroLite
 homepage: https://github.com/canerztk8/NitroLite
 license: MIT
 
+# The program is self-contained except for what every desktop already has: ICU (culture-aware formatting in eight
+# languages), fontconfig and the X11 client libraries the window draws through. Declared so a minimal install pulls
+# them in instead of failing at start-up; the container test in CI proves the list is complete.
 overrides:
   deb:
+    depends:
+      - libicu78 | libicu77 | libicu76 | libicu75 | libicu74 | libicu73 | libicu72 | libicu71 | libicu70
+      - libfontconfig1
+      - libx11-6
+      - libice6
+      - libsm6
     recommends:
       - polkitd | policykit-1
   rpm:
+    depends:
+      - libicu
+      - fontconfig
+      - libX11
+      - libICE
+      - libSM
     recommends:
       - polkit
 
