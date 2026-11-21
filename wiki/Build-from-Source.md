@@ -24,7 +24,7 @@ The solution has five projects:
 | `NitroLite.Windows` | `net10.0-windows` | WMI, the Acer service socket, Care Center, the registry, the elevated worker, the ATK mouse. |
 | `NitroLite.Linux` | `net10.0` | `acer-wmi`, `hwmon`, `platform_profile`, Linuwu-Sense, evdev, OpenRGB. |
 | `NitroLite.Desktop` | `net10.0` and `net10.0-windows` | The Avalonia front end, the tray, the OSD, the composition root. |
-| `NitroLite.Tests` | `net10.0-windows` | 2909 tests. |
+| `NitroLite.Tests` | `net10.0-windows` | Over 3,100 tests. |
 
 `NitroLite.Core` builds on its own with `dotnet build -c Release NitroLite.Core/NitroLite.Core.csproj`, which is the
 check that keeps the split honest.

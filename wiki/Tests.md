@@ -1,6 +1,6 @@
 # Tests
 
-2909 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values,
+Over 3,100 tests: protocol packets, Eco/game transitions, recovery scenarios, formatting, boundary values,
 concurrency, and the read-back rule that decides whether a hardware write may be called applied.
 
 ```powershell

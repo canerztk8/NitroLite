@@ -1,61 +1,157 @@
-# Linux (experimental)
+# Linux
 
-`NitroLite.Core` holds the platform-independent logic and `NitroLite.Linux` talks to the kernel's own `acer-wmi`
-driver, so nothing is reverse-engineered and nothing runs as root. The window is Avalonia (`NitroLite.Desktop`),
-which is why the same front end runs on both platforms.
+NitroLite runs on Linux with the same window as on Windows. It talks to the hardware through what the kernel already
+offers, so on a normal desktop distribution (Ubuntu, Fedora, Mint, Pop!_OS, Arch…) most of it works with nothing
+extra installed. What your laptop can do depends on your kernel; NitroLite shows only the controls that will work and
+says why the others are missing.
 
-| Feature | Needs |
-|---|---|
-| CPU temperature, load, clocks, RAM | `hwmon` and `/proc` (nothing to install) |
-| NVIDIA GPU temperature, load, clock, power, VRAM | `nvidia-smi`, which ships with the NVIDIA driver |
-| Operating modes (Quiet / Balanced / Performance) | power-profiles-daemon or tuned-ppd, which most desktops ship; finer modes with the udev rule |
-| Fan RPM, Acer modes | `acer-wmi` + `hwmon`; on models the driver does not list, the `predator_v4` option (the Settings page offers it) |
-| Keyboard RGB on the KB5130 boards (Nitro V / 16S, Helios Neo 2024+) | `/dev/hidraw`, with the udev rule |
-| Fan speed, CoolBoost, LCD overdrive, backlight timeout, 4-zone RGB | [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) |
-| 80 % charge limit | `charge_control_end_threshold`, or Linuwu-Sense |
-| Keyboard lighting when the kernel exposes no RGB node | OpenRGB SDK on `127.0.0.1:6742` |
-| Tray background mode, game detection, MUX, School mode, RGB profiles, hardware report | the above, as available |
+## Install
+
+Download `NitroLite-v1.3.0-linux-x64.tar.gz` from the
+**[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page, then in a terminal:
 
 ```bash
-tar -xzf NitroLite-linux-x64.tar.gz
+tar -xzf NitroLite-v1.3.0-linux-x64.tar.gz
 cd NitroLite-linux-x64
-./install.sh            # ~/.local/share/nitrolite, ~/.local/bin/nitrolite, menu entry, udev rule
-./install.sh --system   # /opt/nitrolite, for every user
-./install.sh --no-udev  # skip the one step that needs root
+./install.sh
 ```
 
-**The Settings page does the rest.** When something needs permission, the *Linux setup* card has one *Enable* button:
-it asks for your password once (through `pkexec`), installs the udev rule, and adds you to the `nitrolite` and `input`
-groups. Log out and back in afterwards. The same card offers the `predator_v4` option when your kernel has it switched
-off, and points at Linuwu-Sense for the controls only that module can reach. What follows is the manual route.
+NitroLite appears in your application menu. No .NET install is needed; the runtime is inside the program.
 
-**The udev rule.** The Acer attributes are owned by root and created `0644`, so a normal user can read them but not
-write them. `packaging/linux/99-nitrolite.rules` grants the user of the current seat an ACL on exactly those nodes.
-`install.sh` offers to install it; by hand it is:
+| Option | What it does |
+|---|---|
+| `./install.sh` | Installs for you only (`~/.local/share/nitrolite`), adds the menu entry, offers the permission rule |
+| `./install.sh --system` | Installs for every user (`/opt/nitrolite`) |
+| `./install.sh --no-udev` | Skips the one step that needs your password |
+| `./uninstall.sh` | Removes NitroLite and keeps your settings; `--purge` removes those too |
+
+## First start: one button
+
+Open **Settings**. If NitroLite needs permission for something, a **Linux setup** card is at the top. Press
+**Enable**: it asks for your password once, then
+
+- installs the permission rule (`99-nitrolite.rules`) so NitroLite may change the operating mode, the keyboard and the
+  processor boost without running as root,
+- adds you to the `nitrolite` group, which owns those settings, and to the `input` group, which lets NitroLite hear
+  the laptop's **Nitro key**.
+
+**Log out and back in afterwards.** Group membership is only read at login.
+
+You can skip it. The operating mode still works through your desktop's own power service, and temperatures, the
+graphics card and battery health need no permission at all.
+
+## What works
+
+| Feature | Works out of the box? | Needs |
+|---|---|---|
+| CPU temperature, load, clock, RAM | Yes | — |
+| NVIDIA GPU temperature, load, clock, power, VRAM | Yes | the NVIDIA driver (`nvidia-smi` ships with it) |
+| Battery health and charge state | Yes | — |
+| Operating modes (Quiet / Balanced / Performance) | Yes | power-profiles-daemon or tuned-ppd, which most desktops include. With the permission rule, NitroLite writes the kernel's own list directly, which can be finer |
+| School mode: screen brightness | Yes | your desktop session (`systemd-logind`) |
+| School mode: processor boost off | After **Enable** | the permission rule |
+| Nitro key | After **Enable** | the `input` group |
+| Keyboard colour on the 2024+ boards (Nitro V, Nitro 16S, Helios Neo with an ENE KB5130 controller) | After **Enable** | the permission rule |
+| Fan RPM and Acer's own modes | Depends on the model | the kernel's `acer-wmi` driver knowing your model; see *Unlock more* |
+| Fan speed, fan curve, 4-zone keyboard colour (older boards), CoolBoost, LCD overdrive, 80 % charge limit, MUX | No | the [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) kernel module |
+| Keyboard colour through OpenRGB | If OpenRGB is running | the OpenRGB SDK server on `127.0.0.1:6742` |
+
+The **Settings** page lists what was found on your machine. That is the quickest way to tell whether a missing
+control is your kernel or NitroLite.
+
+## Unlock more
+
+### Fan RPM and Acer modes: `predator_v4` (experimental)
+
+The kernel's `acer-wmi` driver turns on the Nitro/Predator features only for models on its list. If your model is not
+listed yet, NitroLite offers to switch them on: **Settings → Linux setup → Turn on predator_v4**, then restart the
+computer. By hand:
 
 ```bash
+echo "options acer_wmi predator_v4=1" | sudo tee /etc/modprobe.d/nitrolite-acer.conf
+```
+
+To undo it, delete that file and restart. If it works on your laptop, please
+**[open an issue](https://github.com/canerztk8/NitroLite/issues)** with your model: that is the evidence needed to add
+the model to the kernel, after which nobody with that laptop has to do this step.
+
+On AMD laptops the `amd-pmf` driver usually owns the operating mode already. With `predator_v4` on, `acer-wmi` adds a
+second provider, and the kernel then offers only the modes both agree on, so the list of modes may change.
+
+### Fan speed, keyboard colour and charge limit: Linuwu-Sense
+
+These controls need a kernel module that is not part of Linux yet. Install
+[Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) by following its own instructions; NitroLite finds it on
+the next start. If **Secure Boot** is on, the module has to be signed, which the Linuwu-Sense instructions cover.
+NitroLite does not install kernel modules itself.
+
+## Doing it by hand
+
+What **Enable** does, if you prefer a terminal or your desktop has no password dialog (`pkexec`):
+
+```bash
+sudo groupadd -f nitrolite
+sudo usermod -aG nitrolite,input "$USER"
 sudo install -m 644 99-nitrolite.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-Log out and back in once: the ACL is applied when the device is created. Until then NitroLite runs read-only and
-says so on the settings page, with the command ready to copy.
+The rule file is in the `share` folder of the download, and NitroLite also writes a copy into its data folder. Log
+out and back in afterwards. The Settings page shows the same command with the right path, ready to copy.
 
-**The Nitro key.** The laptop's own Nitro key is read from `/dev/input`, which is a different device class from the
-Acer attributes and is not covered by the rule above. It needs the `input` group:
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The mode switch does nothing and the Settings page shows the Linux setup card | no permission and no power-profile service | press **Enable**, or install `power-profiles-daemon` |
+| The Nitro key is not heard | not in the `input` group | **Enable**, then log out and back in |
+| The keyboard page is covered with "Keyboard lighting is not reachable" | the kernel offers no path to your keyboard | Linuwu-Sense, or OpenRGB |
+| No fan RPM | `acer-wmi` does not know your model | try `predator_v4` |
+| The graphics card shows no reading | the GPU is asleep, or the NVIDIA driver is not installed | open a game or `nvidia-smi` once; a sleeping GPU is not woken on purpose, to save battery |
+
+Still stuck? **Settings → Export hardware report** and attach the file to a
+**[GitHub issue](https://github.com/canerztk8/NitroLite/issues)**.
+
+## Tested on
+
+| Laptop | Distribution | Result |
+|---|---|---|
+| Acer Nitro 16 **AN16-41** (Ryzen 7 7840HS, RTX 4070) | Ubuntu 26.04.1, kernel 7.0 | From a capture of the machine: the operating mode (through `amd-pmf`), temperatures, the RTX 4070 and battery health are all readable, and the mode is writable once the permission rule is in. No fan RPM: `predator_v4` is off and not yet tried. Fan speed and keyboard colour need Linuwu-Sense, because this keyboard has no KB5130 controller. The 1.3.0 build itself has not been run on this laptop yet |
+
+Other models have not been run on real hardware yet. A capture from your laptop (below) is the most useful thing you
+can send.
+
+## For contributors: capture a laptop once
+
+Working on the Linux build should not mean rebooting into Linux for every change. On the Linux laptop, once:
 
 ```bash
-sudo usermod -aG input "$USER"
+wget https://raw.githubusercontent.com/canerztk8/NitroLite/main/tools/linux-capture/nitrolite-capture.sh
+sh nitrolite-capture.sh
 ```
 
-Log out and back in for the group to take effect. Without it the key is simply not heard, the settings row hides
-itself and nothing else changes.
+It writes `nitrolite-capture-<date>.txt`. The script only reads: it records the `/sys` and `/proc` files NitroLite
+uses, which of them are writable, and what `busctl`, `powerprofilesctl` and `nvidia-smi` answer. It does not record
+serial numbers, MAC addresses, the host name or the user name.
 
-`./uninstall.sh` removes the install and keeps your settings; `--purge` deletes those too.
+Then, on any machine, Windows included:
 
-**Status:** the Linux backend is tested against an in-memory `/sys` tree, not against every laptop. The settings
-page lists what the probe found on your machine, which is the fastest way to tell whether a missing control is the
-kernel's fault or the app's.
+```bash
+dotnet run --project NitroLite.Desktop -f net10.0 -- --linux-capture nitrolite-capture-<date>.txt
+```
+
+That opens the Linux window driven by the recorded laptop, with its own data folder, beside an installed NitroLite.
+The same file loads in a unit test with `LinuxCapture.LoadFile`. Details in
+[`tools/linux-capture`](https://github.com/canerztk8/NitroLite/tree/main/tools/linux-capture).
+
+## How it works
+
+`NitroLite.Core` holds the platform-independent logic and `NitroLite.Linux` the Linux backend; the window is the same
+Avalonia front end on both systems. The backend reads `/sys` (`hwmon`, `platform_profile`, `power_supply`, `hidraw`,
+`acer-wmi` and Linuwu-Sense), asks power-profiles-daemon over D-Bus through `busctl`, reads NVIDIA through
+`nvidia-smi`, and sets the backlight through `systemd-logind`. Nothing runs as root. Every write is read back before it
+is reported as done, and a write refused for lack of permission is reported as such rather than as a hardware fault.
+The full file list is on the **[Architecture](https://github.com/canerztk8/NitroLite/wiki/Architecture)** page.
 
 ---
 
