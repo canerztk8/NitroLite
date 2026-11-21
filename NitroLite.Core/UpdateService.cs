@@ -231,19 +231,35 @@ public static class UpdateService
     /// package for this platform, or when the answer cannot be understood. Network failures throw, so the caller can
     /// tell "no update" from "could not ask".
     /// </summary>
-    public static async Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken = default)
+    public static async Task<UpdateInfo?> CheckAsync(CancellationToken cancellationToken = default) =>
+        await CheckAsync(WindowsAssetSuffix, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>The release asset each build installs from: the Windows zip by default.</summary>
+    public const string WindowsAssetSuffix = "-win-x64.zip";
+
+    /// <summary>
+    /// The latest release, with the asset whose name ends in <paramref name="assetSuffix"/>: the Linux build asks for
+    /// its <c>.deb</c> or <c>.rpm</c> this way.
+    /// </summary>
+    public static async Task<UpdateInfo?> CheckAsync(string assetSuffix, CancellationToken cancellationToken = default)
     {
         using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseContentRead, cancellationToken)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        return ParseRelease(document.RootElement, CurrentVersion);
+        return ParseRelease(document.RootElement, CurrentVersion, assetSuffix);
     }
 
     /// <summary>Reads a release payload. Split out so the parsing can be tested without a network call.</summary>
-    public static UpdateInfo? ParseRelease(JsonElement release, Version current)
+    public static UpdateInfo? ParseRelease(JsonElement release, Version current) =>
+        ParseRelease(release, current, WindowsAssetSuffix);
+
+    /// <summary>The same, for the asset whose name ends in <paramref name="assetSuffix"/>.</summary>
+    public static UpdateInfo? ParseRelease(JsonElement release, Version current, string assetSuffix)
     {
+        ArgumentException.ThrowIfNullOrEmpty(assetSuffix);
+
         if (release.ValueKind != JsonValueKind.Object) return null;
         if (!release.TryGetProperty("tag_name", out var tagElement) || tagElement.ValueKind != JsonValueKind.String) return null;
         var tag = tagElement.GetString() ?? "";
@@ -261,7 +277,7 @@ public static class UpdateService
         {
             if (asset.ValueKind != JsonValueKind.Object) continue;
             var name = asset.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
-            if (name == null || !name.EndsWith("-win-x64.zip", StringComparison.OrdinalIgnoreCase)) continue;
+            if (name == null || !name.EndsWith(assetSuffix, StringComparison.OrdinalIgnoreCase)) continue;
 
             var url = asset.TryGetProperty("browser_download_url", out var u) && u.ValueKind == JsonValueKind.String
                 ? u.GetString() : null;
