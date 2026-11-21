@@ -7,6 +7,10 @@ on:
   push:
     tags:
       - 'v*'
+  # A dry run: started by hand from the Actions tab, it builds, tests and packages everything exactly like a release,
+  # and uploads the packages as workflow artifacts (so a .deb can be tried on a real machine), but creates no tag, no
+  # release and no upload. Every step that publishes is limited to tag pushes.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,7 +36,9 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          # The exact SDK in global.json, the one local builds use too, so the analyzers that turn warnings into errors
+          # are the same here and on a developer's machine. Moving to a newer SDK is a one-line change to that file.
+          global-json-file: global.json
           cache: true
           cache-dependency-path: |
             NitroLite.Core/NitroLite.Core.csproj
@@ -51,6 +57,7 @@ jobs:
           Write-Host "NitroLite.Desktop.csproj says $version, the tag says $env:TAG"
 
       - name: Check the tag matches the project version
+        if: github.event_name == 'push'
         shell: pwsh
         run: |
           $tag = $env:TAG.TrimStart('v', 'V')
@@ -204,6 +211,7 @@ jobs:
           Write-Host $notes
 
       - name: Publish the GitHub Release
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -261,7 +269,9 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          # The exact SDK in global.json, the one local builds use too, so the analyzers that turn warnings into errors
+          # are the same here and on a developer's machine. Moving to a newer SDK is a one-line change to that file.
+          global-json-file: global.json
           cache: true
           cache-dependency-path: |
             NitroLite.Core/NitroLite.Core.csproj
@@ -334,7 +344,19 @@ jobs:
           docker run --rm -v "$PWD/artifacts:/pkg:ro" -v "$PWD/packaging/linux:/t:ro" ubuntu:24.04 sh /t/test-package.sh deb
           docker run --rm -v "$PWD/artifacts:/pkg:ro" -v "$PWD/packaging/linux:/t:ro" fedora:41 sh /t/test-package.sh rpm
 
+      - name: Upload the Linux packages as a workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: NitroLite-v${{ steps.version.outputs.version }}-linux
+          path: |
+            ${{ steps.package.outputs.tarball }}
+            ${{ steps.packages.outputs.deb }}
+            ${{ steps.packages.outputs.rpm }}
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Attach the Linux package to the release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
