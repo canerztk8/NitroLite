@@ -476,7 +476,11 @@ public sealed class AppHost : IDisposable
                 systemTools = new LinuxSystemToolsService();
                 updates = new LinuxUpdateService(fs);
                 diagnostics = new LinuxDiagnosticsService(() => linux.BuildHardwareReport());
-                runAtStartup = new LinuxRunAtStartupService();
+                // A replayed capture keeps its autostart entry in its own data folder: on Windows the real autostart
+                // folder would be the user's profile, and a test run must never leave a login entry behind.
+                runAtStartup = capture == null
+                    ? new LinuxRunAtStartupService()
+                    : new LinuxRunAtStartupService(Path.Combine(AppPaths.DataDirectory, "autostart"));
 
                 // The same button, read out of /dev/input instead of WMI. A machine without acer-wmi, or a user who is
                 // not in the input group, gets IsSupported false and no settings row.
