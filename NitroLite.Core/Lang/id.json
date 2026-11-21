@@ -1721,5 +1721,7 @@
   "Ekran kartı sıcaklığı klavyeyi boyasın": "Suhu kartu grafis mewarnai keyboard",
   "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Separuh: sisi kiri tetap warna CPU dan sisi kanan warna GPU. Campuran: warna menyebar di empat zona dari kiri ke kanan.",
   "Rampayı işlemci yarısı için düzenle": "Sunting ramp untuk bagian prosesor",
-  "Rampayı ekran kartı yarısı için düzenle": "Sunting ramp untuk bagian kartu grafis"
+  "Rampayı ekran kartı yarısı için düzenle": "Sunting ramp untuk bagian kartu grafis",
+  "CPU yarısı": "Setengah CPU",
+  "GPU yarısı": "Setengah GPU"
 }

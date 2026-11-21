@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
@@ -88,6 +90,31 @@ public partial class MainWindow : Window
     /// launch calls the setup directly and the window's own <c>Opened</c> can follow it.
     /// </remarks>
     private readonly OneShotGate _initialized = new();
+
+    /// <summary>
+    /// The pages built so far, keyed by the view-model flag that opens them.
+    /// </summary>
+    /// <remarks>
+    /// A page is built on the first visit and kept. Rebuilding one per visit would trade the startup cost this saves
+    /// for a stall every time the user clicks the rail.
+    /// </remarks>
+    private readonly Dictionary<string, Control> _pages = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The pages, in rail order: the flag that opens each one, the same flag as a predicate, and how to build it.
+    /// </summary>
+    /// <remarks>
+    /// The flag doubles as the key and as the binding path, so a page cannot be cached under one flag and shown by
+    /// another — the two used to be separate strings in two files.
+    /// </remarks>
+    private static readonly (string Flag, Func<MainViewModel, bool> IsOpen, Func<Control> Create)[] Pages =
+    [
+        (nameof(MainViewModel.IsModesPage), vm => vm.IsModesPage, () => new DashboardView()),
+        (nameof(MainViewModel.IsMonitoringPage), vm => vm.IsMonitoringPage, () => new MonitoringView()),
+        (nameof(MainViewModel.IsLightingPage), vm => vm.IsLightingPage, () => new LightingView()),
+        (nameof(MainViewModel.IsBatteryPage), vm => vm.IsBatteryPage, () => new BatteryView()),
+        (nameof(MainViewModel.IsToolsPage), vm => vm.IsToolsPage, () => new SettingsView())
+    ];
 
     /// <summary>
     /// The last size and position the window had while it was not maximised. Avalonia has no <c>RestoreBounds</c>, so
@@ -227,6 +254,10 @@ public partial class MainWindow : Window
 
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
+            // The page the user left the app on is built before the first draw, so the window never opens on an empty
+            // grid. Every other page arrives the first time its rail button is pressed.
+            EnsureCurrentPage();
+
             // The rail starts at the width the user left it at. An absolute width also decides how the splitter
             // behaves: with a pixel column next to a star column it resizes the pixel one, so the rail keeps a real
             // width instead of turning into a star that the page can squeeze.
@@ -257,22 +288,46 @@ public partial class MainWindow : Window
     /// Puts every scroller inside the page that just opened back at the top.
     /// </summary>
     /// <remarks>
-    /// The five pages are one grid of views toggled with <see cref="Visual.IsVisible"/>, not a host that builds and
-    /// throws away controls, so each page's <see cref="ScrollViewer"/> keeps its offset while it is hidden. That is
-    /// where the user last left it — and it is also why a page came back with its title cut off, because the offset
-    /// outlived the layout it was measured against. Only the visible page is touched, so the page being left keeps
-    /// its place for the next return.
+    /// Each page's <see cref="ScrollViewer"/> keeps its offset while it is hidden. That is where the user last left
+    /// it — and it is also why a page came back with its title cut off, because the offset outlived the layout it was
+    /// measured against. Only the visible page is touched, so the page being left keeps its place for the next return.
     /// </remarks>
     private void ResetPageScroll()
     {
-        if (PageHost == null) return;
+        if (PageHostPages == null) return;
 
-        foreach (var child in PageHost.Children)
+        foreach (var child in PageHostPages.Children)
         {
             if (child is not Control { IsEffectivelyVisible: true } page) continue;
 
             foreach (var scroller in page.GetVisualDescendants().OfType<ScrollViewer>())
                 scroller.Offset = default;
+        }
+    }
+
+    /// <summary>
+    /// Builds the page that is open now, if this is the first visit to it.
+    /// </summary>
+    /// <remarks>
+    /// The five pages used to be declared in the XAML and built with the window, which meant every card on every page
+    /// was measured and themed at launch while four of the five were never seen. A page appears the first time it is
+    /// asked for and is then kept, and its <see cref="Visual.IsVisible"/> is bound to the same flag the XAML carried,
+    /// so the rest of the shell cannot tell the difference.
+    /// </remarks>
+    private void EnsureCurrentPage()
+    {
+        if (_viewModel == null || PageHostPages == null) return;
+
+        foreach (var page in Pages)
+        {
+            if (!page.IsOpen(_viewModel)) continue;
+            if (_pages.ContainsKey(page.Flag)) return;
+
+            var view = page.Create();
+            view.Bind(IsVisibleProperty, new Binding(page.Flag));
+            _pages[page.Flag] = view;
+            PageHostPages.Children.Add(view);
+            return;
         }
     }
 
@@ -294,6 +349,7 @@ public partial class MainWindow : Window
             or nameof(MainViewModel.IsLightingPage) or nameof(MainViewModel.IsBatteryPage)
             or nameof(MainViewModel.IsToolsPage))
         {
+            EnsureCurrentPage();
             ResetPageScroll();
             return;
         }

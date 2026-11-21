@@ -333,11 +333,11 @@
           </StackPanel>
 
           <Grid x:Name="PageHost" Grid.Row="1" IsEnabled="{Binding IsHardwareReady}">
-            <views:DashboardView IsVisible="{Binding IsModesPage}" />
-            <views:MonitoringView IsVisible="{Binding IsMonitoringPage}" />
-            <views:LightingView IsVisible="{Binding IsLightingPage}" />
-            <views:BatteryView IsVisible="{Binding IsBatteryPage}" />
-            <views:SettingsView IsVisible="{Binding IsToolsPage}" />
+            <!-- The five pages are built on the first visit instead of with the window: five pages of cards is more
+                 than a thousand controls, and four of them were being measured and themed while nobody was looking at
+                 them. The shell adds the one that is open (MainWindow.axaml.cs, EnsureCurrentPage) and binds its
+                 IsVisible to the same flag the page used to carry here, so navigation still behaves the same. -->
+            <Grid x:Name="PageHostPages" />
 
             <!-- The last thing that happened, printed at the foot of the page the way the WPF window did it. The
                  action button is optional: a message that can be acted on carries one, a plain confirmation does

@@ -17,7 +17,9 @@ public sealed class StorageDriveRow
         BusType = drive.BusType;
         FreeText = drive.FreeText;
         UsedPercent = Math.Clamp(drive.UsedPercent, 0, 100);
-        TemperatureText = drive.TemperatureC is int celsius ? $"{celsius} °C" : "--";
+        // The unit stays on the line even with no reading: a bare dash beside a drive says nothing about what is
+        // missing, while "-- °C" says the app asked for a temperature and did not get one.
+        TemperatureText = drive.TemperatureC is int celsius ? $"{celsius} °C" : "-- °C";
         HealthText = drive.HealthText;
         Healthy = drive.Healthy;
     }

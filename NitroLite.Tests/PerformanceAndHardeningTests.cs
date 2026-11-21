@@ -162,6 +162,52 @@ public class PerformanceAndHardeningTests
         Assert.Equal(0, scanner.Calls);
     }
 
+    /// <summary>A scanner that remembers the hint it was handed, and returns a table that matches nothing.</summary>
+    private sealed class HintRecordingScanner : IProcessScanner
+    {
+        public IReadOnlyCollection<string>? ExecutablesOfInterest { get; set; }
+
+        public IReadOnlyList<RunningProcess> Scan() => Array.Empty<RunningProcess>();
+    }
+
+    [Fact]
+    public async Task GameDetection_HandsTheConfiguredNamesToTheScanner()
+    {
+        // The Windows scanner opens a handle per process to read an image path it does not need. It can only skip that
+        // if the names it is supposed to find are known before the scan, so detection has to hand them over.
+        var scanner = new HintRecordingScanner();
+        var settings = new AppSettings
+        {
+            AutoGameModeEnabled = true,
+            GameProfiles = new List<GameProfile>
+            {
+                new() { ExeName = "Cyberpunk2077", AutoApply = true },
+                new() { ExeName = "cs2.exe", AutoApply = true },
+                new() { ExeName = "manual-only", AutoApply = false }
+            }
+        };
+
+        await new GameProfileService(scanner, settings).PollAsync();
+
+        Assert.NotNull(scanner.ExecutablesOfInterest);
+        Assert.Equal(new[] { "Cyberpunk2077", "cs2.exe" }, scanner.ExecutablesOfInterest);
+    }
+
+    [Fact]
+    public async Task GameDetection_WithNoAutoApplyProfiles_LeavesTheHintUnset()
+    {
+        var scanner = new HintRecordingScanner();
+        var settings = new AppSettings
+        {
+            AutoGameModeEnabled = true,
+            GameProfiles = new List<GameProfile>()
+        };
+
+        await new GameProfileService(scanner, settings).PollAsync();
+
+        Assert.Null(scanner.ExecutablesOfInterest);
+    }
+
     // ---------------------------------------------------------------- SEC-08 / SEC-09: what a log line may carry
 
     [Fact]
@@ -187,6 +233,20 @@ public class PerformanceAndHardeningTests
         const string line = "Acer WMI: fan write accepted (cpu=55, gpu=55)";
 
         Assert.Equal(line, Redaction.Scrub(line));
+    }
+
+    [Fact]
+    public void Redaction_StillReplacesTheMachineNameInALineWithNoPathInIt()
+    {
+        // The three path patterns are skipped when the line has no separator, because none of them can match without
+        // one. The machine name is not a path and must still go.
+        string machine = Environment.MachineName;
+        if (machine.Length < 3) return; // A two-letter name is deliberately left alone.
+
+        var scrubbed = Redaction.Scrub($"the update was built on {machine} this morning");
+
+        Assert.DoesNotContain(machine, scrubbed, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<machine>", scrubbed, StringComparison.Ordinal);
     }
 
     [Fact]

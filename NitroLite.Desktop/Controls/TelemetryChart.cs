@@ -140,6 +140,9 @@ public sealed class TelemetryChart : Control
         set => SetValue(MarkProperty, value);
     }
 
+    /// <summary>The point buffer, reused between paints. See the comment where it is grown.</summary>
+    private Point[] _points = [];
+
     public override void Render(DrawingContext context)
     {
         double width = Bounds.Width;
@@ -162,10 +165,16 @@ public sealed class TelemetryChart : Control
         double inset = Math.Max(1, StrokeThickness / 2);
         double plotHeight = Math.Max(1, height - inset * 2);
 
-        var points = new Point[values.Count];
-        for (int i = 0; i < values.Count; i++)
+        // One buffer for the life of the control, grown to the widest series it has been handed: the chart is painted
+        // once per telemetry tick for as long as the page is open, and a fresh array per paint was an allocation the
+        // user never sees the result of.
+        int count = values.Count;
+        if (_points.Length < count) _points = new Point[count];
+        var points = _points;
+
+        for (int i = 0; i < count; i++)
         {
-            double x = i / (double)(values.Count - 1) * width;
+            double x = i / (double)(count - 1) * width;
             double ratio = Math.Clamp((values[i] - low) / (high - low), 0, 1);
             points[i] = new Point(x, inset + (1 - ratio) * plotHeight);
         }
@@ -177,8 +186,8 @@ public sealed class TelemetryChart : Control
             using (var sink = area.Open())
             {
                 sink.BeginFigure(new Point(points[0].X, height), true);
-                foreach (var point in points) sink.LineTo(point);
-                sink.LineTo(new Point(points[^1].X, height));
+                for (int i = 0; i < count; i++) sink.LineTo(points[i]);
+                sink.LineTo(new Point(points[count - 1].X, height));
                 sink.EndFigure(true);
             }
 
@@ -189,7 +198,7 @@ public sealed class TelemetryChart : Control
         using (var sink = line.Open())
         {
             sink.BeginFigure(points[0], false);
-            for (int i = 1; i < points.Length; i++) sink.LineTo(points[i]);
+            for (int i = 1; i < count; i++) sink.LineTo(points[i]);
             sink.EndFigure(false);
         }
 
@@ -197,7 +206,7 @@ public sealed class TelemetryChart : Control
 
         // The newest sample is the number the strip below repeats, so it gets a marker. The ring is drawn first and
         // slightly larger, which is what keeps the dot legible where the line runs through it.
-        var last = points[^1];
+        var last = points[count - 1];
         var ring = DotRing;
         if (ring != null) context.DrawEllipse(ring, null, last, 4.5, 4.5);
         var dot = Dot;

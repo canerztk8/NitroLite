@@ -43,6 +43,16 @@ public static class AppLog
     private static string? _logFile;
     private const long MaxLogBytes = 1024 * 1024;
 
+    /// <summary>
+    /// Roughly how much text has been logged since the file's size was last read. The size is only checked once per
+    /// <see cref="RotationCheckCharacters"/>, because reading it on every line was a system call per log line for a
+    /// cap that a normal session crosses once an hour at most.
+    /// </summary>
+    private static long _charactersSinceCheck;
+
+    /// <summary>How much text goes by between two reads of the log's size. See <see cref="_charactersSinceCheck"/>.</summary>
+    private const int RotationCheckCharacters = 64 * 1024;
+
     private static StreamWriter? _writer;
 
     private static string LogFile
@@ -128,7 +138,16 @@ public static class AppLog
             lock (Gate)
             {
                 var path = LogFile;
-                if (RotateIfNeeded(path)) return;
+
+                // The size is read when the file is opened and then once every 64 KB of text, not on every line.
+                // Characters rather than bytes: UTF-8 never uses fewer bytes than the character count, so the check
+                // happens at or before the cap rather than after it.
+                _charactersSinceCheck += line.Length;
+                if (_writer == null || _charactersSinceCheck >= RotationCheckCharacters)
+                {
+                    _charactersSinceCheck = 0;
+                    if (RotateIfNeeded(path)) return;
+                }
 
                 var writer = _writer ??= OpenWriter(path);
                 writer?.Write(line);

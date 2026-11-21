@@ -152,6 +152,49 @@ public class LeakAndIntegrityTests : IDisposable
         Assert.Contains("Türkçe", File.ReadAllText(path), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AtomicFile_KeepsTheReplacedFileAsTheBackup()
+    {
+        // The previous file is renamed, not read and written again: a second durable write of the same bytes was half
+        // the cost of every settings save.
+        var path = Path_("settings.json");
+        var backup = path + ".bak";
+        AtomicFile.WriteAllText(path, "old");
+
+        AtomicFile.WriteAllText(path, "new", backup);
+
+        Assert.Equal("new", File.ReadAllText(path));
+        Assert.Equal("old", File.ReadAllText(backup));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp.*"));
+    }
+
+    [Fact]
+    public void AtomicFile_WritesNoBackupWhenThereWasNoFileToKeep()
+    {
+        var path = Path_("settings.json");
+        var backup = path + ".bak";
+
+        AtomicFile.WriteAllText(path, "first", backup);
+
+        Assert.Equal("first", File.ReadAllText(path));
+        Assert.False(File.Exists(backup));
+    }
+
+    [Fact]
+    public void AtomicFile_StillWritesWhenTheBackupCannotBeMoved()
+    {
+        // A backup is a copy of something that already exists; the new settings are the only copy of what the user
+        // just did. A read-only backup path must not cost them the change.
+        var path = Path_("settings.json");
+        AtomicFile.WriteAllText(path, "old");
+        var backup = Path.Combine(_dir, "missing-folder", "settings.json.bak");
+
+        AtomicFile.WriteAllText(path, "new", backup);
+
+        Assert.Equal("new", File.ReadAllText(path));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp.*"));
+    }
+
     // ---------------------------------------------------------------- DATA-21
 
     [Theory]

@@ -1721,5 +1721,7 @@
   "Ekran kartı sıcaklığı klavyeyi boyasın": "The graphics chip's temperature paints the keyboard",
   "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Halves: the left of the keyboard stays the CPU colour and the right the GPU colour. Blended: the colour crosses the four zones from left to right.",
   "Rampayı işlemci yarısı için düzenle": "Edit the ramp for the processor's half",
-  "Rampayı ekran kartı yarısı için düzenle": "Edit the ramp for the graphics chip's half"
+  "Rampayı ekran kartı yarısı için düzenle": "Edit the ramp for the graphics chip's half",
+  "CPU yarısı": "CPU half",
+  "GPU yarısı": "GPU half"
 }

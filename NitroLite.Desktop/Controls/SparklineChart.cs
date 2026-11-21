@@ -106,6 +106,9 @@ public sealed class SparklineChart : Control
         set => SetValue(BaselineProperty, value);
     }
 
+    /// <summary>The point buffer, reused between paints: the dashboard sparkline is repainted on every tick.</summary>
+    private Point[] _points = [];
+
     public override void Render(DrawingContext context)
     {
         double width = Bounds.Width;
@@ -126,10 +129,13 @@ public sealed class SparklineChart : Control
         double inset = Math.Max(1, StrokeThickness / 2);
         double plotHeight = Math.Max(1, height - inset * 2);
 
-        var points = new Point[values.Count];
-        for (int i = 0; i < values.Count; i++)
+        int count = values.Count;
+        if (_points.Length < count) _points = new Point[count];
+        var points = _points;
+
+        for (int i = 0; i < count; i++)
         {
-            double x = values.Count == 1 ? 0 : i / (double)(values.Count - 1) * width;
+            double x = count == 1 ? 0 : i / (double)(count - 1) * width;
             double ratio = Math.Clamp((values[i] - low) / (high - low), 0, 1);
             points[i] = new Point(x, inset + (1 - ratio) * plotHeight);
         }
@@ -141,8 +147,8 @@ public sealed class SparklineChart : Control
             using (var sink = area.Open())
             {
                 sink.BeginFigure(new Point(points[0].X, height), true);
-                foreach (var point in points) sink.LineTo(point);
-                sink.LineTo(new Point(points[^1].X, height));
+                for (int i = 0; i < count; i++) sink.LineTo(points[i]);
+                sink.LineTo(new Point(points[count - 1].X, height));
                 sink.EndFigure(true);
             }
 
@@ -153,7 +159,7 @@ public sealed class SparklineChart : Control
         using (var sink = line.Open())
         {
             sink.BeginFigure(points[0], false);
-            for (int i = 1; i < points.Length; i++) sink.LineTo(points[i]);
+            for (int i = 1; i < count; i++) sink.LineTo(points[i]);
             sink.EndFigure(false);
         }
 

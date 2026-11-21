@@ -29,34 +29,40 @@ public static class AtomicFile
     /// </summary>
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
-    public static void WriteAllText(string path, string contents)
+    public static void WriteAllText(string path, string contents) => WriteAllText(path, contents, null);
+
+    /// <summary>
+    /// The same write, and the file it replaces kept at <paramref name="backupPath"/>.
+    /// </summary>
+    /// <param name="path">The file to write.</param>
+    /// <param name="contents">What to put in it.</param>
+    /// <param name="backupPath">
+    /// Where the previous content goes, or null for no backup. The previous file is <em>renamed</em> there rather than
+    /// read and written again: its bytes are already on the platter, and a second durable write of the same file was
+    /// half the cost of saving the settings.
+    /// </param>
+    /// <remarks>
+    /// A failed backup move is logged and does not stop the write: the new settings are worth more than the copy of
+    /// the old ones. The other order — moving the backup first, then the new file in — is what makes the window
+    /// between the two moves harmless: the previous file is still readable, under the backup's name.
+    /// </remarks>
+    public static void WriteAllText(string path, string contents, string? backupPath)
     {
         var tmp = path + ".tmp." + Guid.NewGuid().ToString("N");
         try
         {
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-            {
-                Directory.CreateDirectory(dir);
-            }
+            WriteTemporary(tmp, contents);
 
-            using (var stream = new FileStream(
-                       tmp, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096,
-                       FileOptions.WriteThrough))
+            if (backupPath != null && File.Exists(path))
             {
-                // Set before anything is written, so the content is never readable by another local user even for
-                // the moment the write takes. The move below keeps the mode.
-                RestrictFilePermissions(tmp);
-
-                using (var writer = new StreamWriter(stream, Utf8NoBom, bufferSize: 4096, leaveOpen: true))
+                try
                 {
-                    writer.Write(contents);
-                    writer.Flush();
+                    File.Move(path, backupPath, overwrite: true);
                 }
-
-                // After the writer has handed everything to the stream, and before the move: this is the call that
-                // makes the content survive a power cut.
-                stream.Flush(flushToDisk: true);
+                catch (Exception ex)
+                {
+                    AppLog.Warn("The settings backup could not be written", $"{backupPath}: {ex.Message}");
+                }
             }
 
             File.Move(tmp, path, overwrite: true);
@@ -72,6 +78,37 @@ public static class AtomicFile
                 // The original failure is the one worth reporting.
             }
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="contents"/> to <paramref name="tmp"/> so nothing is left in a cache.
+    /// </summary>
+    private static void WriteTemporary(string tmp, string contents)
+    {
+        var dir = Path.GetDirectoryName(tmp);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        using (var stream = new FileStream(
+                   tmp, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096,
+                   FileOptions.WriteThrough))
+        {
+            // Set before anything is written, so the content is never readable by another local user even for
+            // the moment the write takes. The move below keeps the mode.
+            RestrictFilePermissions(tmp);
+
+            using (var writer = new StreamWriter(stream, Utf8NoBom, bufferSize: 4096, leaveOpen: true))
+            {
+                writer.Write(contents);
+                writer.Flush();
+            }
+
+            // After the writer has handed everything to the stream, and before the move: this is the call that
+            // makes the content survive a power cut.
+            stream.Flush(flushToDisk: true);
         }
     }
 

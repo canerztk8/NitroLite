@@ -54,6 +54,12 @@ public static partial class Redaction
     {
         if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
 
+        // Every path pattern is anchored on a separator: "C:\Users\", "/home/", "/Users/". A line with neither
+        // character in it cannot contain a path at all, so the three regex passes are skipped for the lines that make
+        // up most of the log. The machine name is still replaced — it needs no separator, and that check is a plain
+        // scan.
+        if (!text.Contains('\\') && !text.Contains('/')) return ScrubMachineName(text);
+
         var result = WindowsProfile().Replace(text, "${drive}" + UserPlaceholder);
         result = UnixProfile().Replace(result, "${root}" + UserPlaceholder);
         result = MacProfile().Replace(result, "${root}" + UserPlaceholder);

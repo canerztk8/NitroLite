@@ -91,6 +91,39 @@ public class UnifiedDesktopTests
         Assert.Empty(scanner.Scan());
     }
 
+    [Theory]
+    [InlineData(null, "cs2", true)]          // no hint: every process is read, as before the hint existed
+    [InlineData("cs2", "CS2", true)]         // the configured game itself, matched case-insensitively
+    [InlineData("cs2.exe", "cs2", true)]     // a profile written with the extension still matches the short name
+    [InlineData("cs2", "explorer", false)]   // a name no profile can match: the path would only repeat the name
+    public void WindowsScanner_AsksForTheImagePathOnlyForANameAProfileCouldMatch(
+        string? hint, string processName, bool expected)
+    {
+        IReadOnlyCollection<string>? executablesOfInterest = hint is null ? null : new[] { hint };
+
+        Assert.Equal(expected, WindowsProcessScanner.NeedsImagePath(processName, executablesOfInterest));
+    }
+
+    [Fact]
+    public void WindowsScanner_ReturnsTheWholeTableWhenTheScannerCannotUseTheHint()
+    {
+        // The hint is an optimisation, not a filter: a table that was already built — a test's, or a platform's that
+        // reads no paths — must come back untouched even when the hint names only one of its processes.
+        var scanner = new WindowsProcessScanner(() => new[]
+        {
+            new WindowsProcessEntry(1, "cs2", @"C:\Games\cs2.exe"),
+            new WindowsProcessEntry(2, "explorer", @"C:\Windows\explorer.exe")
+        })
+        {
+            ExecutablesOfInterest = new[] { "cs2" }
+        };
+
+        var processes = scanner.Scan();
+
+        Assert.Equal(2, processes.Count);
+        Assert.Contains(processes, p => p.Matches("explorer.exe"));
+    }
+
     [Fact]
     public async Task WindowsScanner_MatchesAProfileByExecutableName()
     {

@@ -1721,5 +1721,7 @@
   "Ekran kartı sıcaklığı klavyeyi boyasın": "La temperatura de la gráfica pinta el teclado",
   "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "Mitades: la izquierda mantiene el color de la CPU y la derecha el de la GPU. Mezclado: el color cruza las cuatro zonas de izquierda a derecha.",
   "Rampayı işlemci yarısı için düzenle": "Editar la rampa de la mitad de la CPU",
-  "Rampayı ekran kartı yarısı için düzenle": "Editar la rampa de la mitad de la GPU"
+  "Rampayı ekran kartı yarısı için düzenle": "Editar la rampa de la mitad de la GPU",
+  "CPU yarısı": "Mitad CPU",
+  "GPU yarısı": "Mitad GPU"
 }

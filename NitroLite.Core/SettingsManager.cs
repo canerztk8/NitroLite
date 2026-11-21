@@ -129,27 +129,12 @@ public static class SettingsManager
             throw new InvalidOperationException("Ayarlar serileştirilemedi; dosya yazılmadı.");
         }
 
-        string backupPath = filePath + ".bak";
+        // A previous good file becomes the backup by being renamed, and only when it is a file worth falling back to:
+        // an empty or corrupt primary must not push the last good copy out of the way. The read-and-write it used to
+        // be was a second durable write of a file already on the platter, on every single save.
+        bool keepPrevious = File.Exists(filePath) && IsKnownGoodOrValid(filePath);
 
-        // Maintain backup of previous valid settings (only copy if filePath contains valid deserializable settings)
-        if (File.Exists(filePath) && IsKnownGoodOrValid(filePath))
-        {
-            try
-            {
-                // Through AtomicFile rather than File.Copy: a copy is not atomic, so a crash halfway through it left
-                // a truncated .bak that the next launch would try to read as the fallback. The content is read first
-                // and written the same way the primary file is.
-                AtomicFile.WriteAllText(backupPath, BoundedTextFile.ReadAllText(filePath));
-            }
-            catch (Exception ex)
-            {
-                // The write below still goes ahead, but a corrupt settings file would now have no copy to fall
-                // back to, so the failure has to be visible in the log.
-                AppLog.Warn("The settings backup could not be written", $"{backupPath}: {ex.Message}");
-            }
-        }
-
-        AtomicFile.WriteAllText(filePath, json);
+        AtomicFile.WriteAllText(filePath, json, keepPrevious ? filePath + ".bak" : null);
         RememberKnownGood(filePath);
     }
 

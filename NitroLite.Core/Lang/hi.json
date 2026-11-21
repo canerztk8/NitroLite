@@ -1721,5 +1721,7 @@
   "Ekran kartı sıcaklığı klavyeyi boyasın": "ग्राफ़िक्स चिप का तापमान कीबोर्ड को रंगता है",
   "Yarı yarıya: klavyenin solu CPU, sağı GPU renginde kalır. Geçişli: renk dört bölge boyunca soldan sağa karışır.": "आधा-आधा: बायाँ भाग CPU रंग और दायाँ GPU रंग रखता है। मिश्रित: रंग चारों ज़ोन में बाएँ से दाएँ मिलता है।",
   "Rampayı işlemci yarısı için düzenle": "प्रोसेसर आधे के लिए रैंप संपादित करें",
-  "Rampayı ekran kartı yarısı için düzenle": "ग्राफ़िक्स आधे के लिए रैंप संपादित करें"
+  "Rampayı ekran kartı yarısı için düzenle": "ग्राफ़िक्स आधे के लिए रैंप संपादित करें",
+  "CPU yarısı": "CPU आधा",
+  "GPU yarısı": "GPU आधा"
 }

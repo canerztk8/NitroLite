@@ -37,11 +37,14 @@ public sealed class WindowsProcessScanner : IProcessScanner
 {
     private const uint ProcessQueryLimitedInformation = 0x1000;
 
-    private readonly Func<IReadOnlyList<WindowsProcessEntry>> _enumerate;
+    private readonly Func<IReadOnlyList<WindowsProcessEntry>>? _enumerate;
+
+    private IReadOnlyCollection<string>? _executablesOfInterest;
 
     /// <summary>The live process table.</summary>
-    public WindowsProcessScanner() : this(EnumerateRunningProcesses)
+    public WindowsProcessScanner()
     {
+        _enumerate = null;
     }
 
     /// <summary>
@@ -53,6 +56,51 @@ public sealed class WindowsProcessScanner : IProcessScanner
         _enumerate = enumerate ?? throw new ArgumentNullException(nameof(enumerate));
     }
 
+    /// <inheritdoc />
+    public IReadOnlyCollection<string>? ExecutablesOfInterest
+    {
+        get => Volatile.Read(ref _executablesOfInterest);
+        set => Volatile.Write(ref _executablesOfInterest, value);
+    }
+
+    /// <summary>
+    /// Whether this process needs its image path read for the matcher to find it.
+    /// </summary>
+    /// <param name="processName">The short name, as <see cref="Process.ProcessName"/> reports it.</param>
+    /// <param name="executablesOfInterest">
+    /// The names the caller can match, or null/empty for "no hint". No hint means every process needs its path, which
+    /// is what the scanner did before the hint existed.
+    /// </param>
+    /// <remarks>
+    /// On Windows the short name <em>is</em> the executable's file name, so the path a handle opens only repeats it.
+    /// The one thing a path adds is a file the profile names under a different name than the running process, which is
+    /// why a configured game still gets read and an unnamed background process does not.
+    /// </remarks>
+    public static bool NeedsImagePath(string processName, IReadOnlyCollection<string>? executablesOfInterest)
+    {
+        if (executablesOfInterest is null || executablesOfInterest.Count == 0) return true;
+        return Wanted(executablesOfInterest).Contains(Stem(processName));
+    }
+
+    /// <summary>The hint as a set of extension-less names, so a profile may name either form.</summary>
+    private static HashSet<string> Wanted(IReadOnlyCollection<string> executablesOfInterest)
+    {
+        var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in executablesOfInterest)
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            wanted.Add(Stem(name));
+        }
+
+        return wanted;
+    }
+
+    private static string Stem(string? name)
+    {
+        var trimmed = name?.Trim() ?? "";
+        return trimmed.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? trimmed[..^4] : trimmed;
+    }
+
     /// <summary>Every process this user can see, in the order the operating system returned them.</summary>
     public IReadOnlyList<RunningProcess> Scan()
     {
@@ -61,7 +109,7 @@ public sealed class WindowsProcessScanner : IProcessScanner
         IReadOnlyList<WindowsProcessEntry> entries;
         try
         {
-            entries = _enumerate();
+            entries = _enumerate?.Invoke() ?? EnumerateRunningProcesses();
         }
         catch (Exception ex)
         {
@@ -84,9 +132,14 @@ public sealed class WindowsProcessScanner : IProcessScanner
     }
 
     /// <summary>The live table. Every failure is swallowed per process, never for the whole scan.</summary>
-    private static IReadOnlyList<WindowsProcessEntry> EnumerateRunningProcesses()
+    private IReadOnlyList<WindowsProcessEntry> EnumerateRunningProcesses()
     {
         var entries = new List<WindowsProcessEntry>();
+
+        // One set per scan rather than one per process, and null when there is no hint: then every process is read,
+        // which is the old behaviour and still the only correct one for a caller that matches on paths.
+        var interest = ExecutablesOfInterest;
+        var wanted = interest is { Count: > 0 } ? Wanted(interest) : null;
 
         Process[] processes;
         try
@@ -105,7 +158,11 @@ public sealed class WindowsProcessScanner : IProcessScanner
             {
                 try
                 {
-                    entries.Add(new WindowsProcessEntry(process.Id, process.ProcessName, TryGetImagePath(process.Id)));
+                    var name = process.ProcessName;
+                    entries.Add(new WindowsProcessEntry(
+                        process.Id,
+                        name,
+                        wanted is null || wanted.Contains(Stem(name)) ? TryGetImagePath(process.Id) : ""));
                 }
                 catch (Exception ex)
                 {

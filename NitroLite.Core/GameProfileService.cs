@@ -219,12 +219,35 @@ public sealed class GameProfileService
     /// <summary>True when the profile's executable is still in the process table.</summary>
     private async Task<bool> IsStillRunningAsync(GameProfile profile)
     {
+        Hint([profile]);
+
         foreach (var process in await ScanAsync().ConfigureAwait(false))
         {
             if (process.Matches(profile.ExeName)) return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Tells the scanner which executables this pass can match before it reads the table.
+    /// </summary>
+    /// <remarks>
+    /// On Windows the scan opens a handle on every process to ask for its image path, which is the whole cost of a
+    /// pass. The matcher only ever compares against the names handed over here, so a scanner that understands the hint
+    /// can skip the rest. It is a hint: a scanner that ignores it returns the same table, and a null hint means the
+    /// caller has no names to offer rather than "match nothing".
+    /// </remarks>
+    private void Hint(IEnumerable<GameProfile?> profiles)
+    {
+        var names = new List<string>();
+        foreach (var profile in profiles)
+        {
+            if (profile == null || string.IsNullOrWhiteSpace(profile.ExeName)) continue;
+            names.Add(profile.ExeName.Trim());
+        }
+
+        _scanner.ExecutablesOfInterest = names.Count == 0 ? null : names;
     }
 
     /// <summary>
@@ -252,6 +275,8 @@ public sealed class GameProfileService
     private async Task<(GameProfile Profile, RunningProcess Process)?> FindRunningGameAsync(
         IReadOnlyList<GameProfile> candidates)
     {
+        Hint(candidates);
+
         var processes = await ScanAsync().ConfigureAwait(false);
         if (processes.Count == 0) return null;
 

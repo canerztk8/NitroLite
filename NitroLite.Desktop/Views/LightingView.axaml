@@ -437,12 +437,14 @@
               <Grid ColumnDefinitions="*,Auto" Margin="0,14,0,6">
                 <TextBlock Classes="caps" Text="{Binding ReactiveRampCaption}" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" IsEnabled="{Binding ReactiveSplit}">
-                  <Button Classes="seg" Classes.selected="{Binding ReactiveRampForCpu}" Content="CPU"
+                  <Button Classes="seg" Classes.selected="{Binding ReactiveRampForCpu}"
+                          Content="{Binding Labels.ReactiveRampCpuChip}"
                           Padding="9,2" FontSize="10"
                           Command="{Binding SelectReactiveRampForCpuCommand}"
                           AutomationProperties.AutomationId="ReactiveRampForCpu"
                           AutomationProperties.Name="{Binding Labels.ReactiveRampForCpu}" />
-                  <Button Classes="seg" Classes.selected="{Binding ReactiveRampForGpu}" Content="GPU"
+                  <Button Classes="seg" Classes.selected="{Binding ReactiveRampForGpu}"
+                          Content="{Binding Labels.ReactiveRampGpuChip}"
                           Padding="9,2" FontSize="10"
                           Command="{Binding SelectReactiveRampForGpuCommand}"
                           AutomationProperties.AutomationId="ReactiveRampForGpu"

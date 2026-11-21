@@ -64,4 +64,25 @@ public interface IProcessScanner
 {
     /// <summary>Every process this user can see. Empty when the platform has no process table to read.</summary>
     IReadOnlyList<RunningProcess> Scan();
+
+    /// <summary>
+    /// The executable names the caller can match, so a platform that pays per process for something it does not need
+    /// can skip it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A hint, not a contract. The Windows scanner opens a handle on every process to ask for its image path, which is
+    /// the expensive half of a scan and, on Windows, redundant: <see cref="RunningProcess.Name"/> is already the
+    /// executable's file name, and the path's file name is the same string. Handing it the handful of names a profile
+    /// can match lets it ask only those, and a scanner that ignores the hint still returns a correct table.
+    /// </para>
+    /// <para>
+    /// Null or empty means "no hint": the scanner then does whatever it did before anyone set this.
+    /// </para>
+    /// </remarks>
+    IReadOnlyCollection<string>? ExecutablesOfInterest
+    {
+        get => null;
+        set { }
+    }
 }

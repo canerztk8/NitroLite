@@ -603,6 +603,16 @@ public sealed class ShellLabels
     /// <summary>The graphics chip in the ramp header.</summary>
     public string ReactiveRampForGpu => Loc.T("Rampayı ekran kartı yarısı için düzenle");
 
+    /// <summary>
+    /// The text on the processor's ramp chip. It says which half of the keyboard the ramp paints rather than just "CPU",
+    /// because the two big sensor tiles a few lines above already say CPU and GPU: two more buttons with the same two
+    /// words read as duplicates of them, not as "which ramp am I editing".
+    /// </summary>
+    public string ReactiveRampCpuChip => Loc.T("CPU yarısı");
+
+    /// <inheritdoc cref="ReactiveRampCpuChip"/>
+    public string ReactiveRampGpuChip => Loc.T("GPU yarısı");
+
     public string ReactiveSensorsHint => Loc.T("CPU tek başına tüm klavyeyi boyar. CPU + GPU açıkken klavyenin solu CPU, sağı GPU sıcaklığını izler.");
     public string ReactiveNoSensor => Loc.T("Sensör seçilmedi");
     public string ReactiveProfiles => Loc.T("Sıcaklık rampaları");
