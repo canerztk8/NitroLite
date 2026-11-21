@@ -42,9 +42,13 @@ public sealed class LinuxUpdateService : IUpdateService
     private readonly ISysfsFileSystem _fs;
     private readonly ICommandRunner _runner;
     private readonly LinuxInstallKind _kind;
+    private readonly Func<string, long, IProgress<double>?, CancellationToken, Task<string>> _download;
 
-    public LinuxUpdateService(ISysfsFileSystem? fs = null, ICommandRunner? runner = null, LinuxInstallKind? kind = null)
+    /// <param name="download">Left null, the shared GitHub download; a test passes a local file instead.</param>
+    public LinuxUpdateService(ISysfsFileSystem? fs = null, ICommandRunner? runner = null, LinuxInstallKind? kind = null,
+        Func<string, long, IProgress<double>?, CancellationToken, Task<string>>? download = null)
     {
+        _download = download ?? UpdateService.DownloadAsync;
         _fs = fs ?? RealSysfsFileSystem.Instance;
         _runner = runner ?? ProcessCommandRunner.Instance;
         _kind = kind ?? DetectKind(_fs, _runner, Environment.ProcessPath);
@@ -82,13 +86,45 @@ public sealed class LinuxUpdateService : IUpdateService
     public string AssetSuffix => _kind == LinuxInstallKind.Rpm ? RpmSuffix : DebSuffix;
 
     /// <summary>
-    /// The command that installs <paramref name="packagePath"/> as root. <c>apt-get install</c> with a path (not a
-    /// name) installs that file and resolves its dependencies; <c>dnf install</c> does the same for an rpm.
+    /// The root half of the update, run by <c>pkexec /bin/sh -c</c>: <c>$1</c> the downloaded file, <c>$2</c> its
+    /// expected SHA-256, <c>$3</c> <c>apt</c> or <c>dnf</c>.
     /// </summary>
-    public static IReadOnlyList<string> InstallCommand(LinuxInstallKind kind, string packagePath) => kind switch
+    /// <remarks>
+    /// The download lives in the user's own temp folder, where any process of that user can replace it while the
+    /// password dialog is open. Checking the digest there and then installing that path would install whatever is
+    /// there at the moment root reads it. So root copies the file into a directory only root can write
+    /// (<c>mktemp -d</c> under <c>/var/tmp</c>, mode 0700), checks the digest of <em>that</em> copy, and installs the
+    /// copy. A swapped file fails the check and nothing is installed. The name and the digest are validated before
+    /// anything is copied, and nothing from the arguments reaches the shell as code.
+    /// </remarks>
+    public const string RootInstallScript =
+        "set -eu\n" +
+        "src=\"$1\"; sha=\"$2\"; tool=\"$3\"\n" +
+        "case \"$sha\" in ''|*[!0-9a-f]*) exit 3 ;; esac\n" +
+        "[ \"${#sha}\" -eq 64 ] || exit 3\n" +
+        "name=\"$(basename -- \"$src\")\"\n" +
+        "case \"$name\" in NitroLite-v*-amd64.deb|NitroLite-v*-x86_64.rpm) ;; *) exit 3 ;; esac\n" +
+        "dir=\"$(mktemp -d /var/tmp/nitrolite-update.XXXXXXXX)\"\n" +
+        "trap 'rm -rf -- \"$dir\"' EXIT\n" +
+        "cp -- \"$src\" \"$dir/$name\"\n" +
+        "echo \"$sha  $dir/$name\" | sha256sum -c --status - || exit 4\n" +
+        "case \"$tool\" in\n" +
+        "  apt) apt-get install -y \"$dir/$name\" ;;\n" +
+        "  dnf) dnf install -y \"$dir/$name\" ;;\n" +
+        "  *) exit 3 ;;\n" +
+        "esac\n";
+
+    /// <summary>Exit code of <see cref="RootInstallScript"/> when the root-side digest check fails.</summary>
+    public const int RootDigestMismatch = 4;
+
+    /// <summary>
+    /// The arguments for <c>pkexec</c>: the fixed script, then the file, the digest and the tool as positional
+    /// arguments.
+    /// </summary>
+    public static IReadOnlyList<string> InstallCommand(LinuxInstallKind kind, string packagePath, string sha256) => kind switch
     {
-        LinuxInstallKind.Deb => new[] { "apt-get", "install", "-y", packagePath },
-        LinuxInstallKind.Rpm => new[] { "dnf", "install", "-y", packagePath },
+        LinuxInstallKind.Deb => new[] { "/bin/sh", "-c", RootInstallScript, "nitrolite-update", packagePath, sha256.ToLowerInvariant(), "apt" },
+        LinuxInstallKind.Rpm => new[] { "/bin/sh", "-c", RootInstallScript, "nitrolite-update", packagePath, sha256.ToLowerInvariant(), "dnf" },
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "an archive install is not updated in place")
     };
 
@@ -148,7 +184,7 @@ public sealed class LinuxUpdateService : IUpdateService
         string? downloaded = null;
         try
         {
-            downloaded = await UpdateService.DownloadAsync(url, result.SizeBytes, progress, cancellationToken)
+            downloaded = await _download(url, result.SizeBytes, progress, cancellationToken)
                 .ConfigureAwait(false);
 
             if (!UpdateService.VerifyDigest(downloaded, result.Sha256))
@@ -161,14 +197,19 @@ public sealed class LinuxUpdateService : IUpdateService
             if (!string.Equals(package, downloaded, StringComparison.Ordinal)) File.Move(downloaded, package, overwrite: true);
             downloaded = package;
 
-            var install = _runner.Run(pkexec, InstallCommand(_kind, package), InstallTimeout);
+            // The digest was checked here too, but that check is advisory: the file is the user's, and root checks its
+            // own private copy again before installing (RootInstallScript).
+            var install = _runner.Run(pkexec, InstallCommand(_kind, package, result.Sha256!), InstallTimeout);
             if (!install.Ok)
             {
                 AppLog.Warn("The package update was not installed",
                     $"exit {install.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)}: {install.Error}");
-                return UpdateInstallResult.Fail(install.ExitCode == 126
-                    ? Loc.T("Şifre penceresi kapatıldı; hiçbir şey değişmedi.")
-                    : Loc.T("Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın."));
+                return UpdateInstallResult.Fail(install.ExitCode switch
+                {
+                    126 => Loc.T("Şifre penceresi kapatıldı; hiçbir şey değişmedi."),
+                    RootDigestMismatch => Loc.T("İndirilen paket yayınlanan özetle eşleşmiyor; kurulmadı."),
+                    _ => Loc.T("Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.")
+                });
             }
 
             AppLog.Info("Update installed", $"{result.DisplayVersion} via {_kind}");
