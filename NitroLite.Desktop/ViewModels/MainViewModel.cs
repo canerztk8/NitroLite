@@ -8373,6 +8373,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var points = _gameProfiles.ActiveCurvePoints;
             _curveEvaluator = new FanCurveEvaluator(points != null ? new FanCurve(points) : _settings.BuildFanCurve());
             _curveEvaluator.Reset();
+
+            // The mouse rides along with the mode and the fan: this is the only consumer of
+            // GameProfile.TargetAtkMouseProfile, so without this write the picker's choice never reaches the mouse.
+            // 0 stays "leave it alone", which ApplyProfileAsync answers without touching the device.
+            if (_mouseProfiles != null && started.TargetAtkMouseProfile > 0)
+            {
+                bool ok = await _mouseProfiles.ApplyProfileAsync(started.TargetAtkMouseProfile).ConfigureAwait(true);
+                AppLog.Info("Mouse profile applied for the game", $"{started.DisplayName}: config {started.TargetAtkMouseProfile} ok={ok}");
+            }
         }
         else if (result.Change == GameDetectionChange.Ended && result.Previous is GameProfile ended)
         {
@@ -8382,8 +8391,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SystemGameText));
             Raise(nameof(ShowSystemGameRow));
 
+            // The recovery record holds the mouse config the user was in before the game, and the call below
+            // clears it, so the value is read first. Without this, ending a session leaves the mouse in the
+            // game's config until the user switches it by hand.
+            int savedMouse = _settings.GameSessionRecovery?.SavedMouseProfile ?? 0;
+
             // The session ended cleanly, so there is nothing left to recover on the next launch.
             EndGameSessionRecovery();
+
+            // The mouse goes back the way the mode and the fan do: to what the machine was before the game. The
+            // same value the crash path would have restored, so a clean exit and a crash end in the same place.
+            if (_mouseProfiles != null && savedMouse > 0)
+                await _mouseProfiles.ApplyProfileAsync(savedMouse).ConfigureAwait(true);
 
             var snapshot = result.Snapshot;
             if (snapshot != null)

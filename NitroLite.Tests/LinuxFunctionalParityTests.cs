@@ -95,6 +95,26 @@ public class LinuxFunctionalParityTests
             Throw ? throw new IOException("no process table") : Processes.ToList();
     }
 
+    /// <summary>A mouse that records what it was asked to switch to, starting in config 2.</summary>
+    private sealed class FakeMouse : IMouseProfileService
+    {
+        public bool IsSupported => true;
+
+        public int CurrentProfile { get; private set; } = 2;
+
+        public List<int> Applied { get; } = new();
+
+        public Task<bool> ApplyProfileAsync(int profile, CancellationToken cancellationToken = default)
+        {
+            Applied.Add(profile);
+            CurrentProfile = profile;
+            return Task.FromResult(true);
+        }
+
+        public Task<int?> QueryCurrentProfileAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<int?>(CurrentProfile);
+    }
+
     /// <summary>A settings object with one game rule and nothing else that could interfere.</summary>
     private static AppSettings SettingsWithGame(string exe, OperatingMode mode, FanMode fan = FanMode.Auto)
     {
@@ -946,6 +966,35 @@ public class LinuxFunctionalParityTests
         Assert.False(vm.GameActive);
         Assert.False(settings.AutoGameModeEnabled);
     }
+
+    [Fact]
+    public async Task GameDetection_TheMouseFollowsTheGameProfileAndGoesBackAfterwards()
+    {
+        var fs = Nitro16();
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        settings.GameProfiles[0].TargetAtkMouseProfile = 3;
+        var mouse = new FakeMouse();
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"),
+            gameProfiles: service, mouseProfiles: mouse);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+
+        Assert.True(vm.GameActive);
+        Assert.Equal(new[] { 3 }, mouse.Applied);
+
+        scanner.Processes.Clear();
+        await vm.PollGameAsync();
+
+        // The session ended, so the mouse goes back to the config the user was in before the game.
+        Assert.Equal(new[] { 3, 2 }, mouse.Applied);
+    }
+
 
     // ---------------------------------------------------------------- 10. tray and clean exit
 

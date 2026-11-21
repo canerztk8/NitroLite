@@ -10,6 +10,10 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+### Fixed
+- Game profiles now switch the ATK mouse into the profile's own config when a game starts, and put it back to
+  the pre-game config when the session ends. The setting used to be saved but never read.
+
 ## [1.3.1] - 2026-11-21
 
 Linux installs like any other app, and a round of safety and accuracy fixes. 24 commits since 1.3.0.
