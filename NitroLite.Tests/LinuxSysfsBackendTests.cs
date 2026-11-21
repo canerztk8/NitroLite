@@ -526,8 +526,9 @@ public class LinuxSysfsBackendTests
 
         Assert.False(await controller.SetFanModeAsync(FanMode.Max));
         Assert.True(controller.PermissionHintRaised);
-        Assert.Contains("udev", controller.PermissionHint, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("99-nitrolite.rules", controller.PermissionHint);
+        // The hint points at the one-press setup on the settings page, not at a file the user has to copy by hand.
+        Assert.Contains("Etkinleştir", controller.PermissionHint);
+        Assert.Contains("oturumu", controller.PermissionHint);
     }
 
     [Fact]

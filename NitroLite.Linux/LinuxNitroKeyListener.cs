@@ -160,8 +160,15 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
 
             if (_devices.Count == 0)
             {
-                AppLog.Info("The Nitro key input device was not found",
-                    "the acer-wmi module is not loaded, or the user is not in the 'input' group.");
+                // Three different causes with three different fixes, so the log names the one that applies: no input
+                // device could be opened at all (the user is not in the 'input' group), the module that creates the
+                // key's device is absent, or the module is there and this model's key is not one of its events.
+                var reason = opened.Count == 0
+                    ? "no input device could be opened: the user is not in the 'input' group."
+                    : !Directory.Exists(LinuxPaths.AcerWmiModule)
+                        ? "the acer-wmi module is not loaded."
+                        : "acer-wmi is loaded but exposes no Nitro key event on this model.";
+                AppLog.Info("The Nitro key input device was not found", reason);
             }
             else
             {

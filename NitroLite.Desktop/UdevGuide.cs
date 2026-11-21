@@ -10,7 +10,8 @@ namespace NitroLite.Desktop;
 /// <remarks>
 /// The rule is embedded in this assembly rather than read from the repository, so the command works on a machine that
 /// only has the published build. The command is a single line on purpose: the settings page offers one button that
-/// copies it, and a user pasting three separate commands into a terminal is three chances to paste the wrong one.
+/// copies it, and a user pasting three separate commands into a terminal is three chances to paste the wrong one. It is
+/// the fallback for a desktop without <c>pkexec</c>; the settings page's "Enable" button runs the same steps itself.
 /// </remarks>
 public static class UdevGuide
 {
@@ -22,14 +23,15 @@ public static class UdevGuide
     /// <summary>
     /// Extracts the rule to the data folder and returns its path, or null when the resource is missing. Never throws:
     /// a read-only data folder means the user cannot be given the file, not that the app should fail.
+    /// <para>
+    /// The copy is rewritten whenever it differs from the embedded one, so an update that adds a device to the rule
+    /// does not leave the user installing the previous version from the data folder.
+    /// </para>
     /// </summary>
     public static string? EnsureRuleFile()
     {
         try
         {
-            var path = AppPaths.GetDataFile(RuleFileName);
-            if (File.Exists(path)) return path;
-
             using var stream = typeof(UdevGuide).Assembly.GetManifestResourceStream(ResourceName);
             if (stream == null)
             {
@@ -37,8 +39,13 @@ public static class UdevGuide
                 return null;
             }
 
+            // udev reads LF-terminated lines; a build from a Windows checkout would otherwise embed CRLF and the rule's
+            // match keys would carry a stray carriage return.
             using var reader = new StreamReader(stream);
-            File.WriteAllText(path, reader.ReadToEnd());
+            var rule = reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
+
+            var path = AppPaths.GetDataFile(RuleFileName);
+            if (!File.Exists(path) || File.ReadAllText(path) != rule) File.WriteAllText(path, rule);
             return path;
         }
         catch (Exception ex)
@@ -50,9 +57,12 @@ public static class UdevGuide
 
     /// <summary>
     /// The install command for <paramref name="rulePath"/>. Quoted because a data folder can contain a space, and
-    /// chained with <c>&amp;&amp;</c> so a failed copy does not reload a udev daemon that has nothing new to read.
+    /// chained with <c>&amp;&amp;</c> so a failed copy does not reload a udev daemon that has nothing new to read. The group
+    /// steps come first: the rule hands <c>platform_profile</c> to the <c>nitrolite</c> group, and without the group the
+    /// rule installs cleanly and still leaves mode switching root-only.
     /// </summary>
     public static string InstallCommand(string rulePath) =>
-        $"sudo install -m 644 \"{rulePath}\" /etc/udev/rules.d/{RuleFileName} " +
+        "sudo groupadd -f nitrolite && sudo usermod -aG nitrolite,input \"$USER\" " +
+        $"&& sudo install -m 644 \"{rulePath}\" /etc/udev/rules.d/{RuleFileName} " +
         "&& sudo udevadm control --reload && sudo udevadm trigger";
 }

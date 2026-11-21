@@ -253,7 +253,7 @@ public sealed class ReadBackPolicy
             {
                 if (!await write().ConfigureAwait(false))
                 {
-                    lastError = "the worker refused the write";
+                    lastError = "the write was refused";
                 }
                 else
                 {
@@ -328,7 +328,7 @@ public sealed class ReadBackPolicy
         {
             if (!await write().ConfigureAwait(false))
             {
-                return Fail(capability, "the worker refused the write", "", requested);
+                return Fail(capability, "the write was refused", "", requested);
             }
         }
         catch (WmiTransportUnavailableException ex)
@@ -424,7 +424,7 @@ public sealed class ReadBackPolicy
             if (count >= SessionsBeforePermanentDisable && !IsPermanentlyDisabled(capability))
             {
                 _settings.DisabledCapabilities.Add(capability);
-                AppLog.Warn("The direct WMI capability was disabled permanently",
+                AppLog.Warn("The hardware capability was disabled permanently",
                     $"{capability}: read-back failed in {count} consecutive sessions ({error})");
 
                 return new ReadBackResult
@@ -439,7 +439,7 @@ public sealed class ReadBackPolicy
             }
         }
 
-        AppLog.Warn("The direct WMI capability was disabled for this session",
+        AppLog.Warn("The hardware capability was disabled for this session",
             $"{capability}: read-back did not match in {MaxAttempts} attempts ({error})");
 
         return new ReadBackResult

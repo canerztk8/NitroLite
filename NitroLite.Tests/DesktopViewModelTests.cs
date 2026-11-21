@@ -1023,4 +1023,39 @@ public class DesktopViewModelTests
             if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task Linux_NoKeyboardPath_CoversTheLightingPage_AndSendsNothing()
+    {
+        var fs = Nitro16();
+        fs.WithoutFile(Keyboard("per_zone_mode"));
+        fs.WithoutFile(Keyboard("four_zone_mode"));
+
+        var (vm, controller) = Create(fs);
+        using var _ = vm;
+        using var __ = controller;
+        await vm.InitializeAsync();
+
+        // The Linux probe enumerates the real nodes, so its "no keyboard" is an answer: the page says why instead of
+        // offering a deck of controls whose every press fails.
+        Assert.True(vm.LightingUnsupported);
+        Assert.False(vm.LightingControlsEnabled);
+
+        var writesBefore = fs.Writes.Count;
+        vm.ApplyLightingCommand.Execute(null);
+        await Task.Delay(50);
+        Assert.Equal(writesBefore, fs.Writes.Count);
+    }
+
+    [Fact]
+    public async Task Linux_WithAKeyboardPath_KeepsTheLightingPage()
+    {
+        var (vm, controller) = Create(Nitro16());
+        using var _ = vm;
+        using var __ = controller;
+        await vm.InitializeAsync();
+
+        Assert.False(vm.LightingUnsupported);
+        Assert.True(vm.LightingControlsEnabled);
+    }
 }

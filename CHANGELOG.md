@@ -23,6 +23,22 @@ unplugged.
 
 ### Added
 
+- **Linux works out of the box on a stock install.** Measured against an AN16-41 on Ubuntu with kernel 7.0, where
+  almost every control used to fail:
+  - The operating mode goes through power-profiles-daemon (or tuned-ppd) over `busctl` when `platform_profile` is not
+    writable, so mode switching needs no udev rule, no root and nothing installed. A writable attribute is still
+    preferred, because the kernel's list is finer than the daemon's three profiles.
+  - The NVIDIA GPU is read through `nvidia-smi`: name, temperature, load, clock, power and VRAM. A GPU in runtime
+    suspend is left asleep rather than woken once a second.
+  - The ENE KB5130 keyboard controller of the 2024-and-later boards is written through `/dev/hidrawN` with the same
+    eleven-byte feature report the Windows build sends, with no kernel module.
+  - A **Linux setup** card on the Settings page: one *Enable* button installs the udev rule, creates the `nitrolite`
+    group and adds the user to it and to `input`, behind a single `pkexec` password prompt. The copyable command stays
+    underneath for a desktop without `pkexec`, and now includes the group steps it was missing.
+  - When the loaded `acer-wmi` has the `predator_v4` switch and it is off, the card offers to turn it on (fan
+    tachometers and the Acer modes on models the driver does not list yet), and points at Linuwu-Sense for fan speed,
+    keyboard RGB and the charge limit.
+
 - **A charging colour.** A second automatic colour, directly under Temp-Reactive Lighting: the four zones paint a chosen
   colour while the adapter is in and go back to the user's own lighting the moment it comes out. The colour is picked
   from the page's own eight swatches, the colour picker or a hex box, and is stored in `charging_color` behind
@@ -122,6 +138,23 @@ unplugged.
   page that wants them back needs only the markup.
 
 ### Fixed
+
+- **Linux: a missing udev rule no longer switches the operating mode off for good.** A write refused for lack of
+  permission was counted as a firmware failure, retried three times and, after three launches, recorded as permanently
+  disabled, so installing the rule afterwards changed nothing. It is now treated as "nothing reached the hardware": no
+  retry, no session count, one log line per node.
+- **Linux: the lighting page no longer offers controls with no path behind them.** When the probe finds no keyboard
+  node, no KB5130 and no OpenRGB, the page is covered with the reason instead, and the temperature and charging colours
+  send nothing. The fan loop likewise stays quiet on a machine with no fan node.
+- **Linux report and diagnostics.** The hardware report printed the path of `platform_profile_choices` instead of its
+  contents, and named `acer-wmi` for a profile that `amd-pmf` may have registered; it now prints the choices, whether
+  `acer-wmi` is loaded, the `predator_v4` state and which path carries the mode. `system.txt` reads the distribution
+  from `/etc/os-release` instead of printing `Unix 7.0.0.44`, and no longer contains the machine name or the home
+  folder; the bundled log is scrubbed the same way, and the hardware report is now actually included in the bundle.
+- **Linux: the Nitro key log line names the real cause** — not in the `input` group, `acer-wmi` not loaded, or no key
+  event on this model — instead of guessing between the first two.
+- Read-back log lines say "hardware capability" and "the write was refused" instead of naming WMI and a worker
+  process, which do not exist on Linux.
 
 - **The four-zone split can no longer leave a zone on the previous colour.** The write used to be four
   `SetGamingRgbKb` calls, one per zone, masks `0x01`, `0x02`, `0x04`, `0x08`; a call that lands while the firmware is

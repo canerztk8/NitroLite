@@ -65,7 +65,7 @@ public sealed class LinuxDiagnosticsService : IDiagnosticsService
         // A missing log or settings file is normal on a fresh install; an empty placeholder would only make the archive
         // look complete when it is not, so the entry is simply left out.
         var log = ReadIfExists(AppLog.LogFilePath);
-        if (log != null) Write(archive, LogFileName, log);
+        if (log != null) Write(archive, LogFileName, Redaction.Scrub(log));
 
         var settings = ReadIfExists(AppPaths.GetDataFile("settings.json"));
         if (settings != null) Write(archive, SettingsFileName, settings);
@@ -91,16 +91,44 @@ public sealed class LinuxDiagnosticsService : IDiagnosticsService
         builder.AppendLine();
 
         builder.AppendLine("[System]");
-        builder.AppendLine($"OS               : {Environment.OSVersion.VersionString}");
-        builder.AppendLine($"Kernel           : {Environment.OSVersion.Version}");
-        builder.AppendLine($"Machine          : {Environment.MachineName}");
+        builder.AppendLine($"OS               : {OsName(ReadIfExists("/etc/os-release"))}");
+        builder.AppendLine($"Kernel           : {ReadIfExists("/proc/sys/kernel/osrelease")?.Trim() ?? Environment.OSVersion.Version.ToString()}");
+        builder.AppendLine($"Desktop          : {Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP") ?? "(unknown)"} / {Environment.GetEnvironmentVariable("XDG_SESSION_TYPE") ?? "(unknown)"}");
+        // The machine name and the home folder are not part of a diagnosis, and this archive is a file a user attaches
+        // to a public issue; the Windows bundle drops them the same way.
+        builder.AppendLine($"Machine          : {Redaction.MachinePlaceholder}");
         builder.AppendLine($"Processors       : {Environment.ProcessorCount}");
-        builder.AppendLine($"Data directory   : {SafeDataDirectory()}");
+        builder.AppendLine($"Data directory   : {Redaction.Scrub(SafeDataDirectory())}");
 
         var dataError = AppPaths.DataDirectoryError;
-        if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {dataError}");
+        if (!string.IsNullOrWhiteSpace(dataError)) builder.AppendLine($"Data dir warning : {Redaction.Scrub(dataError)}");
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// <c>PRETTY_NAME</c> out of <c>/etc/os-release</c> (for example <c>Ubuntu 26.04 LTS</c>), falling back to
+    /// <c>NAME VERSION_ID</c>, then to the runtime's own description.
+    /// </summary>
+    public static string OsName(string? osRelease)
+    {
+        string? pretty = null, name = null, version = null;
+        foreach (var raw in (osRelease ?? "").Split('\n'))
+        {
+            var line = raw.Trim();
+            var eq = line.IndexOf('=');
+            if (eq <= 0) continue;
+
+            var key = line[..eq];
+            var value = line[(eq + 1)..].Trim().Trim('"');
+            if (key == "PRETTY_NAME") pretty = value;
+            else if (key == "NAME") name = value;
+            else if (key == "VERSION_ID") version = value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(pretty)) return pretty;
+        if (!string.IsNullOrWhiteSpace(name)) return string.IsNullOrWhiteSpace(version) ? name : $"{name} {version}";
+        return System.Runtime.InteropServices.RuntimeInformation.OSDescription;
     }
 
     private static void Write(ZipArchive archive, string name, string content)

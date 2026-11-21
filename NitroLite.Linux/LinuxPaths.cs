@@ -105,6 +105,16 @@ public static class LinuxPaths
     /// </summary>
     public const string AmdPstateStatus = "/sys/devices/system/cpu/amd_pstate/status";
 
+    /// <summary>
+    /// The in-kernel <c>acer-wmi</c> switch that turns on the PredatorSense v4 features (platform profile, fan
+    /// tachometers) on a model the driver's quirk table does not list. Present only on kernels that have the switch;
+    /// <c>N</c> when it is off.
+    /// </summary>
+    public const string AcerWmiPredatorV4 = "/sys/module/acer_wmi/parameters/predator_v4";
+
+    /// <summary><c>/sys/module/acer_wmi</c>: present whenever the in-kernel module is loaded.</summary>
+    public const string AcerWmiModule = "/sys/module/acer_wmi";
+
     /// <summary>Joins a root and a relative attribute name with a single slash.</summary>
     public static string Combine(string root, string name) => $"{root.TrimEnd('/')}/{name}";
 }

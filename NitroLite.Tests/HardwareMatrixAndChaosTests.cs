@@ -765,8 +765,7 @@ public class HardwareMatrixAndChaosTests
         Assert.False(await controller.SetOperatingModeAsync(OperatingMode.Quiet));
         Assert.True(controller.PermissionHintRaised);
         Assert.NotNull(controller.PermissionHint);
-        Assert.Contains("udev", controller.PermissionHint, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("99-nitrolite.rules", controller.PermissionHint);
+        Assert.Contains("Etkinleştir", controller.PermissionHint);
 
         // A refused write is not a write: the firmware is still in the profile it was in.
         Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile));

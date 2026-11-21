@@ -94,7 +94,16 @@ public sealed class ShellLabels
     public string DataFolder => Loc.T("Veri klasörü");
     public string Rescan => Loc.T("Yeniden tara");
     public string UdevNeeded => Loc.T("udev kuralı gerekli");
-    public string UdevInstruction => Loc.T("sysfs düğümlerine yazmak için udev kuralını kurun:");
+    public string UdevInstruction => Loc.T("Ya da bu komutu terminalde çalıştırın:");
+    public string LinuxSetupTitle => Loc.T("Linux kurulumu");
+    public string LinuxGrantHint => Loc.T("Uygulama çalışma modu, klavye ve Nitro tuşu gibi ayarları değiştirebilmek için bir kez izin istiyor. Düğme yönetici şifrenizi sorar; ardından oturumu kapatıp yeniden açın.");
+    public string LinuxGrantButton => Loc.T("Etkinleştir");
+    public string LinuxPredatorV4Title => Loc.T("Fan devri ve Acer modları (deneysel)");
+    public string LinuxPredatorV4Hint => Loc.T("Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Yeniden başlatma gerekir; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.");
+    public string LinuxPredatorV4Button => Loc.T("predator_v4'ü aç");
+    public string LinuxLinuwuTitle => Loc.T("Fan hızı, klavye RGB ve şarj sınırı");
+    public string LinuxLinuwuHint => Loc.T("Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.");
+    public string LinuxLinuwuButton => Loc.T("Linuwu-Sense'i aç");
     public string CopyCommand => Loc.T("Komutu kopyala");
     public string Copied => Loc.T("Kopyalandı");
     public string LanguageRestarting => Loc.T("Dil değişti; NitroLite yeni dille yeniden açılıyor.");
@@ -566,6 +575,8 @@ public sealed class ShellLabels
     /// <summary>The blackout panel that covers the page while the keyboard is off.</summary>
     public string LightingBlackoutTitle => Loc.T("Aydınlatma kapalı");
     public string LightingBlackoutHint => Loc.T("Klavye ışıkları kapalı. Aydınlatmayı geri açtığınızda sayfa yeniden kullanılabilir.");
+    public string LightingUnsupportedTitle => Loc.T("Bu makinede klavye ışığına erişilemiyor");
+    public string LightingUnsupportedHint => Loc.T("Linux çekirdeği bu klavyenin ışığına bir yol açmıyor. Linuwu-Sense modülü ya da çalışan bir OpenRGB gerekiyor; Ayarlar sayfasındaki Linux kartı ne yapılacağını gösterir.");
     public string RestoreLighting => Loc.T("Aydınlatmayı geri aç");
 
     /// <summary>

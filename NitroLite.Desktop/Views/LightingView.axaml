@@ -679,6 +679,27 @@
           </StackPanel>
         </Border>
       </Grid>
+
+      <!--
+        No lighting path on this machine (Linux only, where the probe's "no" is an answer). The same cover as the
+        blackout, so the deck stays visible and greyed underneath, with the reason in words instead of a page whose
+        every control fails.
+      -->
+      <Grid IsVisible="{Binding LightingUnsupported}">
+        <Border Background="{DynamicResource PageBrush}" Opacity="0.94" />
+
+        <Border Classes="card" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Padding="28,24" MaxWidth="460" BorderBrush="{DynamicResource CardBorderStrongBrush}">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="cardicon" Text="&#xE7E8;" FontSize="24" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextMutedBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.LightingUnsupportedTitle}"
+                       HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+            <TextBlock Classes="hint" Text="{Binding Labels.LightingUnsupportedHint}" TextWrapping="Wrap"
+                       TextAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </Grid>
     </Grid>
   </Grid>
 </UserControl>

@@ -710,6 +710,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private readonly IPlatformSnapshot? _platform;
 
+    /// <summary>The one-time Linux setup (udev rule, groups, predator_v4). Null on Windows.</summary>
+    private readonly IPlatformSetup? _platformSetup;
+
     /// <summary>The backend that can be asked again, or null when this platform cannot re-probe.</summary>
     private readonly IRescannableBackend? _rescan;
 
@@ -1244,9 +1247,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         FanStallWatchdog? fanStall = null,
         Action<string>? urlOpener = null,
         Task? probeTask = null,
-        SessionVerification? verification = null)
+        SessionVerification? verification = null,
+        IPlatformSetup? platformSetup = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _platformSetup = platformSetup;
         _verification = verification ?? SessionVerification.Shared;
         _hardware = hardware;
         _platform = platform;
@@ -1363,7 +1368,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _selectedLanguage = Loc.Languages.FirstOrDefault(l => l.Code == Loc.Language) ?? Loc.Languages[0];
         _needsUdevRule = platform?.NeedsUdevRule == true;
-        if (_needsUdevRule)
+        if (_needsUdevRule || _platformSetup != null)
         {
             var rulePath = UdevGuide.EnsureRuleFile();
             _udevCommand = rulePath == null ? "" : UdevGuide.InstallCommand(rulePath);
@@ -1382,6 +1387,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         TurnOffLightingCommand = new AsyncCommand(TurnOffLightingAsync);
         ToggleLightingBlackoutCommand = new AsyncCommand(ToggleLightingBlackoutAsync);
         CopyUdevCommand = new RelayCommand(CopyUdevCommandText);
+        GrantLinuxAccessCommand = new AsyncCommand(GrantLinuxAccessAsync);
+        EnablePredatorV4Command = new AsyncCommand(EnablePredatorV4Async);
+        OpenLinuwuSenseCommand = new RelayCommand(() => _urlOpener?.Invoke(LinuwuSenseUrl));
         RescanCommand = new AsyncCommand(RescanAsync);
         ApplyGpuModeCommand = new AsyncCommand(ApplyGpuModeAsync);
         ApplyRgbProfileCommand = new AsyncCommand(ApplyRgbProfileAsync);
@@ -3189,6 +3197,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public bool LightingAvailable => _capabilities.KeyboardLighting;
 
+    /// <summary>
+    /// True when this platform has said, conclusively, that the keyboard has no lighting path. Linux only: there the
+    /// probe enumerates the real nodes, so "no" is an answer, and the page is covered with the reason instead of
+    /// offering a deck of controls whose every press fails. Windows keeps its controls, because its probe can answer
+    /// "no keyboard" on a machine whose keyboard the write path paints (see <see cref="ApplyReactiveColour"/>).
+    /// </summary>
+    public bool LightingUnsupported => _hardware != null && PlatformSaidNo && !_capabilities.KeyboardLighting;
+
+    /// <summary>
+    /// True only when a real platform snapshot says its negatives are conclusive. Unlike
+    /// <see cref="NegativeAnswersAreConclusive"/>, a missing snapshot is not taken as a yes: the two controls that go
+    /// quiet on this answer (the lighting page and the fan loop) must keep working when nothing has been probed.
+    /// </summary>
+    private bool PlatformSaidNo => _platform?.NegativeAnswersAreConclusive == true;
+
     // ---------------------------------------------------------------- reactive lighting
 
     /// <summary>
@@ -3541,7 +3564,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task WriteReactiveLightingAsync(string left, string right)
     {
         var hardware = _hardware;
-        if (hardware == null) return;
+        if (hardware == null || LightingUnsupported) return;
 
         var brightness = _reactiveBrightness;
         var speed = SpeedLevel;
@@ -3625,7 +3648,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>The inverse of <see cref="IsLightingBlackedOut"/>, so a container can be disabled without a converter.</summary>
-    public bool LightingControlsEnabled => !_lightingBlackedOut;
+    public bool LightingControlsEnabled => !_lightingBlackedOut && !LightingUnsupported;
 
     /// <summary>
     /// Whether the two automatic colours can be used: false while the keyboard takes no colour, because the effect list
@@ -6679,7 +6702,93 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool NeedsUdevRule
     {
         get => _needsUdevRule;
-        private set => Set(ref _needsUdevRule, value);
+        private set
+        {
+            if (!Set(ref _needsUdevRule, value)) return;
+            Raise(nameof(ShowGrantAccess));
+            Raise(nameof(ShowLinuxSetupCard));
+        }
+    }
+
+    // ---------------------------------------------------------------- Linux setup card
+
+    /// <summary>Where the Linuwu-Sense module lives, for the one button that points at it.</summary>
+    public const string LinuwuSenseUrl = "https://github.com/0x7375646F/Linuwu-Sense";
+
+    private string _linuxSetupStatus = "";
+    private bool _linuxSetupBusy;
+
+    /// <summary>
+    /// The Linux card is drawn when there is something to do: a node that needs the udev rule, a user who cannot hear
+    /// the Nitro key, or a kernel step that would unlock more of the machine.
+    /// </summary>
+    public bool ShowLinuxSetupCard => _platformSetup != null && (ShowGrantAccess || ShowPredatorV4 || ShowLinuwuSense);
+
+    /// <summary>The permissions half: the udev rule and the two groups, behind one password prompt.</summary>
+    public bool ShowGrantAccess => _platformSetup != null && (NeedsUdevRule || _platformSetup.NeedsInputGroup);
+
+    /// <summary>True when the desktop has a password prompt, so the button can do the work itself.</summary>
+    public bool CanElevate => _platformSetup?.CanElevate == true;
+
+    public bool ShowPredatorV4 => _platformSetup?.KernelHint == KernelSetupHint.EnablePredatorV4;
+
+    public bool ShowLinuwuSense => _platformSetup?.KernelHint is KernelSetupHint.InstallLinuwuSense
+                                                          or KernelSetupHint.EnablePredatorV4;
+
+    /// <summary>What the last setup step answered, under the buttons. Empty until one ran.</summary>
+    public string LinuxSetupStatus
+    {
+        get => _linuxSetupStatus;
+        private set
+        {
+            if (!Set(ref _linuxSetupStatus, value)) return;
+            Raise(nameof(HasLinuxSetupStatus));
+        }
+    }
+
+    public bool HasLinuxSetupStatus => _linuxSetupStatus.Length > 0;
+
+    /// <summary>False while a password prompt is open, so a second press cannot stack a second prompt.</summary>
+    public bool LinuxSetupIdle
+    {
+        get => !_linuxSetupBusy;
+        private set => Set(ref _linuxSetupBusy, !value);
+    }
+
+    private async Task GrantLinuxAccessAsync()
+    {
+        if (_platformSetup == null || !LinuxSetupIdle) return;
+
+        LinuxSetupIdle = false;
+        try
+        {
+            var result = await _platformSetup.GrantAccessAsync().ConfigureAwait(true);
+            LinuxSetupStatus = result.Message;
+
+            // The udev trigger hands the seat ACLs over at once, so a rescan right away already finds most nodes
+            // writable; the group-owned ones follow after the next login.
+            if (result.Ok) await RescanAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            LinuxSetupIdle = true;
+        }
+    }
+
+    private async Task EnablePredatorV4Async()
+    {
+        if (_platformSetup == null || !LinuxSetupIdle) return;
+
+        LinuxSetupIdle = false;
+        try
+        {
+            var result = await _platformSetup.EnablePredatorV4Async().ConfigureAwait(true);
+            LinuxSetupStatus = result.Message;
+        }
+        finally
+        {
+            LinuxSetupIdle = true;
+        }
     }
 
     public string UdevCommand
@@ -6739,6 +6848,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public AsyncCommand ApplyLightingCommand { get; }
     public AsyncCommand TurnOffLightingCommand { get; }
     public RelayCommand CopyUdevCommand { get; }
+    public AsyncCommand GrantLinuxAccessCommand { get; }
+    public AsyncCommand EnablePredatorV4Command { get; }
+    public RelayCommand OpenLinuwuSenseCommand { get; }
     public AsyncCommand RescanCommand { get; }
     public AsyncCommand ApplyGpuModeCommand { get; }
     public AsyncCommand ApplyRgbProfileCommand { get; }
@@ -6862,6 +6974,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(HasModeLockNote));
             Raise(nameof(FanControlAvailable));
             Raise(nameof(LightingAvailable));
+            Raise(nameof(LightingUnsupported));
+            Raise(nameof(LightingControlsEnabled));
             Raise(nameof(CoolBoostAvailable));
             Raise(nameof(LcdOverdriveAvailable));
             Raise(nameof(BacklightTimeoutAvailable));
@@ -7151,6 +7265,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || _disposed) return;
         if (SelectedFanMode?.Mode != FanMode.Custom) return;
+
+        // A machine with no fan path has nothing for this loop to write. On a conclusive platform that is a fact, not a
+        // transport that is still opening, so the loop stays quiet instead of logging a refused hand-back every step.
+        if (!FanControlAvailable && PlatformSaidNo) return;
 
         // A game's own fan rule owns the fans while it runs; writing here would fight it.
         if (GameActive) return;
@@ -7646,7 +7764,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task ApplyLightingAsync()
     {
-        if (_hardware == null || SelectedEffect == null) return;
+        if (_hardware == null || SelectedEffect == null || LightingUnsupported) return;
 
         // A manual apply wins over the automatic colours: someone who reaches for a swatch is asking for that colour,
         // not for the temperature's and not for the charging one. Both modes are turned off without a restore, because
@@ -7731,6 +7849,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         var hardware = _hardware;
         if (hardware == null) return LightingWriteResult.Refused;
+
+        // A keyboard the platform has no path to: nothing is sent, and nothing is reported as a refusal either, because
+        // the page already says why in words.
+        if (LightingUnsupported) return LightingWriteResult.Abandoned;
 
         var zones = (config.LEDs ?? new List<string>()).ToArray();
 
@@ -8589,6 +8711,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Raise(nameof(HasModeLockNote));
         Raise(nameof(FanControlAvailable));
         Raise(nameof(LightingAvailable));
+        Raise(nameof(LightingUnsupported));
+        Raise(nameof(LightingControlsEnabled));
         Raise(nameof(CoolBoostAvailable));
         Raise(nameof(LcdOverdriveAvailable));
         Raise(nameof(BacklightTimeoutAvailable));

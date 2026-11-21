@@ -35,12 +35,19 @@ public sealed class LinuxHardwareMonitor : IHardwareMonitor
     private long _lastEnergyMicroJoules;
     private long _lastEnergyTicks;
 
+    private readonly LinuxNvidiaGpu? _nvidia;
+
+    /// <summary>
+    /// <paramref name="nvidia"/> is the discrete-GPU reader. Left null, the real one is built only on the real file
+    /// system, so a test pointed at a fixture tree never runs <c>nvidia-smi</c> on the build machine.
+    /// </summary>
     public LinuxHardwareMonitor(ISysfsFileSystem? fs = null, string procRoot = LinuxPaths.ProcRoot,
-        string raplRoot = "/sys/class/powercap")
+        string raplRoot = "/sys/class/powercap", LinuxNvidiaGpu? nvidia = null)
     {
         _fs = fs ?? RealSysfsFileSystem.Instance;
         _procRoot = procRoot;
         _raplRoot = raplRoot;
+        _nvidia = nvidia ?? (ReferenceEquals(_fs, RealSysfsFileSystem.Instance) ? new LinuxNvidiaGpu(_fs) : null);
     }
 
     /// <summary><c>/proc</c> is always there on a Linux machine, so the rows that depend on it are always offered.</summary>
@@ -68,9 +75,30 @@ public sealed class LinuxHardwareMonitor : IHardwareMonitor
             data.RamUsage = usedPercent;
         }
 
-        // GPU load, VRAM and clocks have no portable Linux source: amdgpu exposes them per-process through debugfs,
-        // which needs root, and the NVIDIA driver only through NVML. Leaving them at zero is what makes the page show
-        // "no reading" instead of a fabricated 0 %.
+        // The discrete NVIDIA GPU, when there is one and its driver tool is installed. It wins over the hwmon GPU row,
+        // which on a Nitro is the integrated Radeon or nothing. A sleeping GPU is left asleep: the row keeps its name
+        // and reads "no reading" rather than waking the card once a second.
+        var nvidia = _nvidia?.Latest();
+        if (nvidia != null)
+        {
+            if (nvidia.Name.Length > 0) data.GpuName = nvidia.Name;
+            if (nvidia.TemperatureC > 0)
+            {
+                data.GpuTemperature = nvidia.TemperatureC;
+                data.GpuUsage = nvidia.UtilizationPercent;
+                data.GpuFrequencyMHz = nvidia.ClockMhz;
+                data.GpuPowerWatts = nvidia.PowerWatts;
+                data.VramUsedMB = nvidia.MemoryUsedMb;
+                data.VramTotalMB = nvidia.MemoryTotalMb;
+                data.GpuMetricsAvailable = true;
+                data.Provenance["gpu-temp"] = "nvidia-smi";
+                return;
+            }
+        }
+
+        // Without NVIDIA, GPU load, VRAM and clocks have no portable Linux source: amdgpu exposes them per-process
+        // through debugfs, which needs root. Leaving them at zero is what makes the page show "no reading" instead of
+        // a fabricated 0 %.
         data.GpuMetricsAvailable = data.GpuTemperature > 0;
     }
 

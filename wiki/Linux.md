@@ -6,8 +6,11 @@ which is why the same front end runs on both platforms.
 
 | Feature | Needs |
 |---|---|
-| Temperatures, fan RPM, fan curve | `acer-wmi` + `hwmon` (in-kernel, nothing to install) |
-| Operating modes (Quiet / Balanced / Performance / Turbo) | `/sys/firmware/acpi/platform_profile` |
+| CPU temperature, load, clocks, RAM | `hwmon` and `/proc` (nothing to install) |
+| NVIDIA GPU temperature, load, clock, power, VRAM | `nvidia-smi`, which ships with the NVIDIA driver |
+| Operating modes (Quiet / Balanced / Performance) | power-profiles-daemon or tuned-ppd, which most desktops ship; finer modes with the udev rule |
+| Fan RPM, Acer modes | `acer-wmi` + `hwmon`; on models the driver does not list, the `predator_v4` option (the Settings page offers it) |
+| Keyboard RGB on the KB5130 boards (Nitro V / 16S, Helios Neo 2024+) | `/dev/hidraw`, with the udev rule |
 | Fan speed, CoolBoost, LCD overdrive, backlight timeout, 4-zone RGB | [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) |
 | 80 % charge limit | `charge_control_end_threshold`, or Linuwu-Sense |
 | Keyboard lighting when the kernel exposes no RGB node | OpenRGB SDK on `127.0.0.1:6742` |
@@ -20,6 +23,11 @@ cd NitroLite-linux-x64
 ./install.sh --system   # /opt/nitrolite, for every user
 ./install.sh --no-udev  # skip the one step that needs root
 ```
+
+**The Settings page does the rest.** When something needs permission, the *Linux setup* card has one *Enable* button:
+it asks for your password once (through `pkexec`), installs the udev rule, and adds you to the `nitrolite` and `input`
+groups. Log out and back in afterwards. The same card offers the `predator_v4` option when your kernel has it switched
+off, and points at Linuwu-Sense for the controls only that module can reach. What follows is the manual route.
 
 **The udev rule.** The Acer attributes are owned by root and created `0644`, so a normal user can read them but not
 write them. `packaging/linux/99-nitrolite.rules` grants the user of the current seat an ACL on exactly those nodes.

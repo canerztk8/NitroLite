@@ -50,13 +50,18 @@ public sealed record LinuxNodes
     /// <summary>Effect, speed, brightness, direction and colour.</summary>
     public string? FourZoneMode { get; init; }
 
+    /// <summary><c>/dev/hidrawN</c> of an ENE KB5130 keyboard controller, when the machine has one.</summary>
+    public string? HidrawKeyboard { get; init; }
+
     /// <summary>Every hwmon device that answered.</summary>
     public IReadOnlyList<LinuxHwmonDevice> Hwmon { get; init; } = Array.Empty<LinuxHwmonDevice>();
 
     /// <summary>True when nothing at all was found, so the backend has no path to the hardware.</summary>
     public bool IsEmpty =>
-        PlatformProfile == null && SenseRoot == null && PerZoneMode == null && ChargeThreshold == null && Hwmon.Count == 0;
+        PlatformProfile == null && SenseRoot == null && PerZoneMode == null && ChargeThreshold == null &&
+        HidrawKeyboard == null && Hwmon.Count == 0;
 }
+
 
 /// <summary>
 /// What the Linux probe concluded: who this machine is, which profile it matched, which nodes exist, and what that
@@ -81,6 +86,27 @@ public sealed record LinuxCapabilities : IPlatformSnapshot
     /// this into the one-line install command instead of letting the user discover it by pressing a control.
     /// </summary>
     public bool NeedsUdevRule { get; init; }
+
+    /// <summary>
+    /// True when the operating mode is written through power-profiles-daemon (or tuned-ppd) rather than straight to
+    /// <c>platform_profile</c>: the attribute is not writable by this user, and the desktop's own daemon is.
+    /// </summary>
+    public bool ModeViaPowerProfiles { get; init; }
+
+    /// <summary>The daemon client the controller writes through when <see cref="ModeViaPowerProfiles"/> is set.</summary>
+    public IPowerProfiles PowerProfiles { get; init; } = NoPowerProfiles.Instance;
+
+    /// <summary>True when the in-kernel <c>acer-wmi</c> module is loaded.</summary>
+    public bool AcerWmiLoaded { get; init; }
+
+    /// <summary>The <c>predator_v4</c> parameter as the kernel prints it (<c>Y</c>/<c>N</c>), or null when absent.</summary>
+    public string? PredatorV4 { get; init; }
+
+    /// <summary>What <c>platform_profile_choices</c> contained at probe time, for the report.</summary>
+    public string? PlatformProfileChoicesText { get; init; }
+
+    /// <summary>The next kernel-side step that would unlock more of this machine, for the settings page.</summary>
+    public KernelSetupHint KernelHint { get; init; }
 
     /// <summary>Human-readable notes about what was missing and why, in the user's language.</summary>
     public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();

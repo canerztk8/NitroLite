@@ -76,13 +76,21 @@ public static class LinuxHardwareReport
 
         text.AppendLine("## Kernel modules");
         text.AppendLine();
-        text.AppendLine($"- acer-wmi (platform_profile): {(nodes.PlatformProfile != null ? "present" : "absent")}");
+        // The module and the profile are reported apart: on an AMD laptop platform_profile is often registered by
+        // amd-pmf rather than acer-wmi, and one line naming both made a present file look like a present Acer driver.
+        text.AppendLine($"- acer-wmi: {(capabilities.AcerWmiLoaded ? "loaded" : "not loaded")}");
+        var predatorV4 = capabilities.PredatorV4;
+        text.AppendLine($"- acer-wmi predator_v4: {(predatorV4 == null ? "not available on this kernel" : Clean(predatorV4))}");
+        text.AppendLine($"- platform_profile: {(nodes.PlatformProfile != null ? "present" : "absent")}");
         if (nodes.PlatformProfileChoices != null)
         {
-            var choices = Clean(nodes.PlatformProfileChoices);
-            text.AppendLine($"- platform_profile_choices: {choices}");
+            // The file's contents, not its path: the path is the same on every machine and says nothing.
+            text.AppendLine($"- platform_profile_choices: {Clean(capabilities.PlatformProfileChoicesText)}");
         }
+        text.AppendLine($"- operating mode written through: {(capabilities.ModeViaPowerProfiles ? "power-profiles-daemon" : nodes.PlatformProfile != null ? "platform_profile" : "nothing")}");
         text.AppendLine($"- Linuwu-Sense: {(nodes.SenseRoot != null ? "present" : "absent")}");
+        text.AppendLine($"- ENE KB5130 keyboard (hidraw): {(nodes.HidrawKeyboard != null ? Clean(nodes.HidrawKeyboard) : "absent")}");
+        text.AppendLine($"- suggested kernel step: {capabilities.KernelHint}");
         text.AppendLine();
 
         text.AppendLine("## hwmon");

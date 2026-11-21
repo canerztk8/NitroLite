@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
+using NitroLite.Core.Hardware.Lighting;
 using NitroLite.Core.Hardware.OpenRgb;
 using NitroLite.Core.Hardware.Wmi;
 using NitroLite.Linux.Sysfs;
@@ -39,9 +40,8 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
 
     /// <summary>The message shown when a write was refused for lack of permission.</summary>
     public const string UdevHint =
-        "Yazma izni yok. /sys düğümleri root'a ait; packaging/linux/99-nitrolite.rules dosyasını " +
-        "/etc/udev/rules.d/ içine kopyalayıp `sudo udevadm control --reload && sudo udevadm trigger` " +
-        "komutunu çalıştırın, sonra oturumu kapatıp açın.";
+        "Yazma izni yok. Ayarlar sayfasındaki Linux kurulumu kartında \"Etkinleştir\" düğmesine basın " +
+        "(bir kez yönetici şifresi sorar), sonra oturumu kapatıp açın.";
 
     private readonly ISysfsFileSystem _fs;
     private readonly LinuxCapabilities _caps;
@@ -100,12 +100,16 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         AppSettings settings,
         ISysfsFileSystem? fs = null,
         ProfileCatalog? catalog = null,
-        OpenRgbClient? openRgb = null)
+        OpenRgbClient? openRgb = null,
+        IPowerProfiles? powerProfiles = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        // The real daemon only on the real file system: a test that hands in an in-memory tree must never reach the
+        // build machine's system bus.
         var fileSystem = fs ?? RealSysfsFileSystem.Instance;
-        var capabilities = new LinuxCapabilityProbe(fileSystem, catalog).Probe();
+        var power = powerProfiles ?? (fs == null ? new PowerProfilesDaemon() : NoPowerProfiles.Instance);
+        var capabilities = new LinuxCapabilityProbe(fileSystem, catalog, power).Probe();
         var client = openRgb ?? new OpenRgbClient();
         return new LinuxSysfsHardwareController(
             fileSystem, capabilities, new ReadBackPolicy(settings), client, ownsOpenRgb: openRgb == null);
@@ -224,7 +228,16 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
 
     public Task<OperatingMode?> GetOperatingModeAsync()
     {
-        return Task.FromResult(LinuxPlatformProfile.Parse(ReadNode(_caps.Nodes.PlatformProfile)));
+        // platform_profile is world-readable, so it is the answer whenever it exists — also when the daemon writes it.
+        // Only a machine with the daemon and no attribute asks the bus.
+        if (_caps.Nodes.PlatformProfile != null)
+        {
+            return Task.FromResult(LinuxPlatformProfile.Parse(ReadNode(_caps.Nodes.PlatformProfile)));
+        }
+
+        return Task.FromResult(_caps.ModeViaPowerProfiles
+            ? PowerProfilesDaemon.ToMode(_caps.PowerProfiles.GetActive())
+            : null);
     }
 
     /// <summary>
@@ -235,6 +248,8 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// </summary>
     public async Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {
+        if (_caps.ModeViaPowerProfiles) return await SetOperatingModeViaDaemonAsync(mode).ConfigureAwait(false);
+
         var node = _caps.Nodes.PlatformProfile;
         if (node == null) return false;
 
@@ -247,6 +262,27 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             matches: observed => string.Equals(observed.Value, target, StringComparison.OrdinalIgnoreCase))
             .ConfigureAwait(false);
 
+        return result.Applied;
+    }
+
+    /// <summary>
+    /// Asks power-profiles-daemon for the closest of its three profiles. The read-back is the daemon's own
+    /// <c>ActiveProfile</c>: the daemon may refuse <c>performance</c> (it does while the machine is hot or on a
+    /// degraded battery), and that refusal has to reach the UI as a failed write rather than as a mode that moved.
+    /// </summary>
+    private async Task<bool> SetOperatingModeViaDaemonAsync(OperatingMode mode)
+    {
+        var power = _caps.PowerProfiles;
+        var target = PowerProfilesDaemon.ToProfile(mode);
+
+        var result = await ApplyAsync(
+            ReadBackPolicy.OperatingMode,
+            write: () => Task.FromResult(power.SetActive(target)),
+            readBack: () => Task.FromResult(power.GetActive() is { } active ? new ProfileText(active) : (ProfileText?)null),
+            matches: observed => string.Equals(observed.Value, target, StringComparison.OrdinalIgnoreCase))
+            .ConfigureAwait(false);
+
+        if (!result.Applied && !result.Skipped) LastError = Loc.T("Güç profili servisi modu değiştirmedi.");
         return result.Applied;
     }
 
@@ -458,7 +494,55 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
                 .ConfigureAwait(false);
         }
 
+        if (_caps.Nodes.HidrawKeyboard != null)
+        {
+            return await WriteHidrawAsync(isOff ? "OFF" : requested, level, speed, direction, primaryColor, zoneColors)
+                .ConfigureAwait(false);
+        }
+
         return await WriteOpenRgbAsync(primaryColor, zoneColors, isOff).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The ENE KB5130 path: the same eleven-byte feature report the Windows build sends, through <c>hidraw</c>. A
+    /// feature report has no getter on this controller, so there is nothing to read back; the ioctl's answer is the
+    /// whole answer, which is also how the Windows HID path treats it.
+    /// </summary>
+    private async Task<bool> WriteHidrawAsync(
+        string effect, int level, int speed, int direction, string primaryColor, string[]? zoneColors)
+    {
+        if (_disposed) return false;
+
+        var percent = LinuxKeyboardProtocol.BrightnessLevelToPercent(level);
+        var frame = KeyboardLightingFrame.Create(effect, percent, speed, direction, primaryColor, zoneColors);
+
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            using var writer = new LinuxHidrawKeyboardWriter(_caps.Nodes.HidrawKeyboard!);
+            if (writer.TryWrite(frame, out var error))
+            {
+                LastError = null;
+                return true;
+            }
+
+            if (error != null && error.StartsWith("permission denied", StringComparison.Ordinal))
+            {
+                PermissionHintRaised = true;
+                LastError = UdevHint;
+            }
+            else
+            {
+                LastError = error;
+            }
+
+            LogOnce("hidraw:" + error, "The keyboard controller write failed", $"{_caps.Nodes.HidrawKeyboard}: {error}");
+            return false;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
     }
 
     /// <summary>True for the two effect names that mean "a fixed colour", which is what <c>per_zone_mode</c> holds.</summary>
@@ -675,7 +759,15 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
 
     // ---------------------------------------------------------------- plumbing
 
-    /// <summary>Runs one write and its read-back behind the write gate.</summary>
+    /// <summary>
+    /// Runs one write and its read-back behind the write gate.
+    /// <para>
+    /// A write refused for lack of permission never reached the hardware, so it is handed to the policy as a missing
+    /// transport rather than as a refusal. That keeps it out of the session counters: before this, three launches
+    /// without the udev rule switched the operating mode off for good, and installing the rule afterwards changed
+    /// nothing. It also stops the policy retrying a write that cannot succeed until the user acts.
+    /// </para>
+    /// </summary>
     private async Task<ReadBackResult> ApplyAsync<T>(
         string capability,
         Func<Task<bool>> write,
@@ -687,12 +779,36 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            return await _readBack.ApplyAsync(capability, write, readBack, matches).ConfigureAwait(false);
+            async Task<bool> Guarded()
+            {
+                _lastWriteDenied = false;
+                var ok = await write().ConfigureAwait(false);
+                if (!ok && _lastWriteDenied) throw new WmiTransportUnavailableException(UdevHint);
+                return ok;
+            }
+
+            return await _readBack.ApplyAsync(capability, Guarded, readBack, matches).ConfigureAwait(false);
         }
         finally
         {
             _writeGate.Release();
         }
+    }
+
+    /// <summary>Set by <see cref="WriteNodeAsync"/> when the last write was refused for lack of permission.</summary>
+    private bool _lastWriteDenied;
+
+    /// <summary>The warnings already logged this session, so a control pressed ten times logs once.</summary>
+    private readonly HashSet<string> _logged = new(StringComparer.Ordinal);
+
+    private void LogOnce(string key, string message, string detail)
+    {
+        lock (_logged)
+        {
+            if (!_logged.Add(key)) return;
+        }
+
+        AppLog.Warn(message, detail);
     }
 
     /// <summary>
@@ -711,8 +827,9 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         if (result.NeedsUdevRule)
         {
             PermissionHintRaised = true;
+            _lastWriteDenied = true;
             LastError = UdevHint;
-            AppLog.Warn("The sysfs write was refused due to permissions", $"{path}: a udev rule is required");
+            LogOnce("denied:" + path, "The sysfs write was refused due to permissions", $"{path}: a udev rule is required");
             return Task.FromResult(false);
         }
 

@@ -40,6 +40,11 @@ SUBSYSTEM=="hwmon", ATTR{name}=="acer", TAG+="uaccess"
 # The battery charge limit, which the standard kernel class exposes as charge_control_end_threshold.
 SUBSYSTEM=="power_supply", ATTR{type}=="Battery", TAG+="uaccess"
 
+# The ENE KB5130 keyboard controller on the 2024-and-later Nitro V, Nitro 16S and Helios Neo boards. The colour is an
+# HID feature report, written straight to /dev/hidrawN with no kernel module; this tag lets the seat user open that one
+# node. No other HID device is matched.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0cf2", ATTRS{idProduct}=="5130", TAG+="uaccess"
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Tier 2: the out-of-tree Linuwu-Sense module
 # ---------------------------------------------------------------------------------------------------------------------

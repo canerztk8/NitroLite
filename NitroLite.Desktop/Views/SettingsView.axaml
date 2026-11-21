@@ -402,18 +402,48 @@
         </StackPanel>
       </Border>
 
-      <!-- The udev banner only appears when a write actually failed for lack of permission, so a user who already
-           installed the rule never sees it. -->
-      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding NeedsUdevRule}">
-        <StackPanel>
-          <TextBlock Classes="section" Text="{Binding Labels.UdevNeeded}" Margin="0,0,0,8" />
-          <TextBlock Classes="hint" Text="{Binding Labels.UdevInstruction}" Margin="0,0,0,8" />
-          <Border Classes="panel">
-            <TextBox Text="{Binding UdevCommand}" IsReadOnly="True" TextWrapping="Wrap" Classes="mono"
-                     Background="Transparent" BorderThickness="0" Padding="0" />
-          </Border>
-          <Button Classes="primary" Content="{Binding Labels.CopyCommand}" Margin="0,8,0,0"
-                  HorizontalAlignment="Left" Command="{Binding CopyUdevCommand}" />
+      <!--
+        The Linux setup card. Drawn only when there is something to do: nodes that need the udev rule, a user who is
+        not in the input group, or a kernel step that would unlock more of the machine. The permissions are one button
+        and one password prompt; the copyable command stays underneath for a desktop without pkexec.
+      -->
+      <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding ShowLinuxSetupCard}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="section" Text="{Binding Labels.LinuxSetupTitle}" />
+
+          <StackPanel Spacing="8" IsVisible="{Binding ShowGrantAccess}">
+            <TextBlock Classes="hint" Text="{Binding Labels.LinuxGrantHint}" TextWrapping="Wrap" />
+            <Button Classes="primary" Content="{Binding Labels.LinuxGrantButton}" HorizontalAlignment="Left"
+                    IsVisible="{Binding CanElevate}" IsEnabled="{Binding LinuxSetupIdle}"
+                    AutomationProperties.AutomationId="GrantLinuxAccess"
+                    Command="{Binding GrantLinuxAccessCommand}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.UdevInstruction}" TextWrapping="Wrap" />
+            <Border Classes="panel">
+              <TextBox Text="{Binding UdevCommand}" IsReadOnly="True" TextWrapping="Wrap" Classes="mono"
+                       Background="Transparent" BorderThickness="0" Padding="0" />
+            </Border>
+            <Button Content="{Binding Labels.CopyCommand}" HorizontalAlignment="Left"
+                    Command="{Binding CopyUdevCommand}" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" IsVisible="{Binding ShowPredatorV4}" Margin="0,6,0,0">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.LinuxPredatorV4Title}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.LinuxPredatorV4Hint}" TextWrapping="Wrap" />
+            <Button Content="{Binding Labels.LinuxPredatorV4Button}" HorizontalAlignment="Left"
+                    IsVisible="{Binding CanElevate}" IsEnabled="{Binding LinuxSetupIdle}"
+                    AutomationProperties.AutomationId="EnablePredatorV4"
+                    Command="{Binding EnablePredatorV4Command}" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" IsVisible="{Binding ShowLinuwuSense}" Margin="0,6,0,0">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.LinuxLinuwuTitle}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.LinuxLinuwuHint}" TextWrapping="Wrap" />
+            <Button Content="{Binding Labels.LinuxLinuwuButton}" HorizontalAlignment="Left"
+                    Command="{Binding OpenLinuwuSenseCommand}" />
+          </StackPanel>
+
+          <TextBlock Classes="hint" Text="{Binding LinuxSetupStatus}" TextWrapping="Wrap" FontWeight="SemiBold"
+                     IsVisible="{Binding HasLinuxSetupStatus}" />
         </StackPanel>
       </Border>
 

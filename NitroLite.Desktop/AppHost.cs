@@ -158,7 +158,8 @@ public sealed class AppHost : IDisposable
             services.NitroKey,
             services.NitroSense,
             urlOpener: OpenInDefaultBrowser,
-            probeTask: services.ProbeTask);
+            probeTask: services.ProbeTask,
+            platformSetup: CreatePlatformSetup(services.Platform));
 
         // A settings file that had to be discarded is the one startup failure the user has to be told about: the app
         // is running on the backup or on defaults, and the preferences they set may be gone. The message is handed
@@ -170,6 +171,30 @@ public sealed class AppHost : IDisposable
     }
 
     public MainViewModel ViewModel { get; }
+
+    /// <summary>
+    /// The one-time setup the settings page offers: on Linux the udev rule, the groups and the predator_v4 option,
+    /// behind one password prompt. Windows has nothing to set up once, so it gets none.
+    /// </summary>
+    private static IPlatformSetup? CreatePlatformSetup(IPlatformSnapshot? platform)
+    {
+#if WINDOWS
+        _ = platform;
+        return null;
+#else
+        if (!OperatingSystem.IsLinux() || platform is not LinuxCapabilities linux) return null;
+
+        try
+        {
+            return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The Linux setup helper could not be created", ex.Message);
+            return null;
+        }
+#endif
+    }
 
     /// <summary>
     /// Opens a URL through the shell, the way <see cref="MainViewModel"/> expects its injected opener to. Lives here
@@ -392,7 +417,7 @@ public sealed class AppHost : IDisposable
                 debloat = new LinuxDebloatService();
                 systemTools = new LinuxSystemToolsService();
                 updates = new LinuxUpdateService(fs);
-                diagnostics = new LinuxDiagnosticsService();
+                diagnostics = new LinuxDiagnosticsService(() => linux.BuildHardwareReport());
                 runAtStartup = new LinuxRunAtStartupService();
 
                 // The same button, read out of /dev/input instead of WMI. A machine without acer-wmi, or a user who is
