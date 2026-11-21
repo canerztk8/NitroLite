@@ -71,6 +71,13 @@ public static class LegacySenseSensors
         }
         data.IsFanRpmMeasured = data.Provenance.ContainsKey(nameof(data.CpuFanSpeed)) &&
                                 data.Provenance.ContainsKey(nameof(data.GpuFanSpeed));
+
+        // The service answers each sensor by its own id, so a temperature it returned is a measurement, not a guess
+        // about which id means what. Left false, the fan curve, the manual floor and the 95 °C safety floor all refused
+        // to act on it, and with a real reading above zero the lost-sensor hand-back never fired either: the fans stayed
+        // at whatever was last written for as long as the dashboard ran on this fallback.
+        data.IsTemperatureMeasured = data.Provenance.ContainsKey(nameof(data.CpuTemperature)) &&
+                                     data.CpuTemperature > 0;
         return data.Provenance.Count == 0 ? null : data;
     }
 

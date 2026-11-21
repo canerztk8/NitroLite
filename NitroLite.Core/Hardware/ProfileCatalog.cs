@@ -86,6 +86,19 @@ public sealed class ProfileCatalog
     public static string RemoteProfilePath => AppPaths.GetDataFile("profiles.remote.json");
 
     /// <summary>
+    /// Where a profile came from. Only a hand-edited user file is restricted: the published table (shipped or
+    /// downloaded) may carry the <c>anyAcer</c> catch-all, and its records say "remote", not "user". Treating the
+    /// download as a user file is what dropped the catch-all on every restart and labelled shipped records "(user)".
+    /// </summary>
+    public const string EmbeddedOrigin = "embedded";
+
+    /// <inheritdoc cref="EmbeddedOrigin"/>
+    public const string RemoteOrigin = "remote";
+
+    /// <inheritdoc cref="EmbeddedOrigin"/>
+    public const string UserOrigin = "user";
+
+    /// <summary>
     /// Loads the embedded table and, when present, the user file. Never throws: a missing or broken file leaves the
     /// embedded table in place, which is the state a fresh install is in.
     /// </summary>
@@ -154,8 +167,8 @@ public sealed class ProfileCatalog
     {
         var collected = new List<string>();
         var defaultSensors = SensorLayout.Default;
-        var fileName = isUserFile ? "profiles.remote.json" : "profiles.json";
-        var parsed = ParseDocument(json, fileName, isUserFile, collected, ref defaultSensors);
+        var fileName = isUserFile ? "profiles.user.json" : "profiles.remote.json";
+        var parsed = ParseDocument(json, fileName, isUserFile ? UserOrigin : RemoteOrigin, collected, ref defaultSensors);
         profileCount = parsed.Count;
 
         foreach (var profile in parsed)
@@ -220,7 +233,7 @@ public sealed class ProfileCatalog
         // shipped table for their own machine.
         if (!string.IsNullOrWhiteSpace(userJson))
         {
-            var parsed = ParseDocument(userJson!, "profiles.user.json", isUserFile: true, rejections, ref defaultSensors);
+            var parsed = ParseDocument(userJson!, "profiles.user.json", UserOrigin, rejections, ref defaultSensors);
             profiles.AddRange(parsed);
         }
 
@@ -228,13 +241,13 @@ public sealed class ProfileCatalog
         if (!string.IsNullOrWhiteSpace(remoteJson))
         {
             var parsed = ParseDocument(
-                remoteJson!, "profiles.remote.json", isUserFile: true, rejections, ref defaultSensors);
+                remoteJson!, "profiles.remote.json", RemoteOrigin, rejections, ref defaultSensors);
             profiles.AddRange(parsed);
         }
 
         if (!string.IsNullOrWhiteSpace(embeddedJson))
         {
-            var parsed = ParseDocument(embeddedJson!, "profiles.json", isUserFile: false, rejections, ref defaultSensors);
+            var parsed = ParseDocument(embeddedJson!, "profiles.json", EmbeddedOrigin, rejections, ref defaultSensors);
             profiles.AddRange(parsed);
         }
 
@@ -242,7 +255,7 @@ public sealed class ProfileCatalog
     }
 
     private static List<ModelProfile> ParseDocument(
-        string json, string fileName, bool isUserFile, List<string> rejections, ref SensorLayout defaultSensors)
+        string json, string fileName, string origin, List<string> rejections, ref SensorLayout defaultSensors)
     {
         var result = new List<ModelProfile>();
 
@@ -299,7 +312,7 @@ public sealed class ProfileCatalog
                 continue;
             }
 
-            var profile = ParseProfile(profileObject, fileName, isUserFile, defaultSensors, rejections);
+            var profile = ParseProfile(profileObject, fileName, origin, defaultSensors, rejections);
             if (profile != null) result.Add(profile);
         }
 
@@ -307,7 +320,7 @@ public sealed class ProfileCatalog
     }
 
     private static ModelProfile? ParseProfile(
-        JsonObject node, string fileName, bool isUserFile, SensorLayout defaultSensors, List<string> rejections)
+        JsonObject node, string fileName, string origin, SensorLayout defaultSensors, List<string> rejections)
     {
         var id = ReadString(node, "id");
         var label = string.IsNullOrWhiteSpace(id) ? "(kimliksiz)" : id;
@@ -344,7 +357,7 @@ public sealed class ProfileCatalog
         }
 
         var anyAcer = ReadBool(matchNode, "anyAcer") ?? false;
-        if (anyAcer && isUserFile)
+        if (anyAcer && origin == UserOrigin)
         {
             // A catch-all in a hand-edited file would replace the shipped default for every model, including the
             // ones the user does not own. Refused rather than silently ignored.
@@ -428,7 +441,7 @@ public sealed class ProfileCatalog
             KbZoneArm = ReadBool(node, "kbZoneArm") ?? false,
             UnsupportedMethods = unsupported,
             Notes = ReadString(node, "notes"),
-            Source = isUserFile ? "user" : "embedded"
+            Source = origin
         };
     }
 

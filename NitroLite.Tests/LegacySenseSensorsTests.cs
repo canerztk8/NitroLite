@@ -27,7 +27,9 @@ public class LegacySenseSensorsTests
         Assert.Equal(4, queries);
         Assert.Equal(57, sample.CpuTemperature);
         Assert.Equal(2300, sample.CpuFanSpeed);
-        Assert.False(sample.IsTemperatureMeasured);
+        // A temperature the service returned by its own id is a measurement: the fan curve and the 95 °C floor may act
+        // on it. The fan RPM is not, because only one of the two tachometers answered.
+        Assert.True(sample.IsTemperatureMeasured);
         Assert.False(sample.IsFanRpmMeasured);
     }
 

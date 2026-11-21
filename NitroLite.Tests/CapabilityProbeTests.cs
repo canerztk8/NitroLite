@@ -156,6 +156,20 @@ public class CapabilityProbeTests
         Assert.Equal(6500, profile.MaxCpuFanRpm);
     }
 
+    [Fact]
+    public void DownloadedTable_KeepsItsCatchAll_AndSaysRemote()
+    {
+        // The published table, as RemoteProfiles saves it: the same document as the embedded one.
+        var remote = ProfileCatalog.ReadEmbeddedJson();
+
+        var catalog = ProfileCatalog.FromJson(null, null, remote, out var rejections);
+
+        Assert.DoesNotContain(rejections, r => r.Contains("anyAcer", StringComparison.Ordinal));
+        Assert.Equal("remote", catalog.Match(Identity("AN16-41")).Source);
+        // A model no record names still falls back to the catch-all instead of to nothing.
+        Assert.NotEqual("none", catalog.Match(Identity("AN99-99")).Source);
+    }
+
     // ---------------------------------------------------------------- user profile validation
 
     [Fact]

@@ -132,7 +132,9 @@ public sealed record ModelProfile
     /// <summary>Free-form note for whoever reads the report. Never interpreted.</summary>
     public string Notes { get; init; } = "";
 
-    /// <summary>"embedded" or "user". A user profile is reported as such so a bug report says where it came from.</summary>
+    /// <summary>
+    /// "embedded", "remote" (the downloaded table) or "user" (a hand-edited file), so a bug report says where it came from.
+    /// </summary>
     public string Source { get; init; } = "embedded";
 
     /// <summary>
