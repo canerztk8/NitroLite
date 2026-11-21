@@ -67,7 +67,7 @@ public sealed class PolkitCallerAuthorizer : ICallerAuthorizer
         var start = StartTime(_fs.ReadAllText($"/proc/{pid.ToString(CultureInfo.InvariantCulture)}/stat"));
         if (start == null) return false;
 
-        var pkcheck = _runner.Find("pkcheck");
+        var pkcheck = FindPkcheck();
         if (pkcheck == null)
         {
             AppLog.Warn("The helper refused a request", "pkcheck is not installed, so no caller can be authorized");
@@ -78,6 +78,23 @@ public sealed class PolkitCallerAuthorizer : ICallerAuthorizer
         var result = _runner.Run(pkcheck, new[] { "--action-id", Action, "--process", subject }, TimeSpan.FromSeconds(10));
         return result.Ok;
     }
+
+    /// <summary>
+    /// pkcheck from the locations distributions install it, never from <c>PATH</c>: this runs as root, and the one
+    /// program it trusts with the authorization answer must not be one a changed environment can substitute.
+    /// </summary>
+    private string? FindPkcheck()
+    {
+        foreach (var path in PkcheckLocations)
+        {
+            if (_runner.Find(path) is { } found) return found;
+        }
+
+        return null;
+    }
+
+    /// <summary>Where pkcheck lives on Debian/Ubuntu, Fedora, openSUSE and Arch.</summary>
+    public static IReadOnlyList<string> PkcheckLocations { get; } = new[] { "/usr/bin/pkcheck", "/bin/pkcheck" };
 
     /// <summary>
     /// Field 22 of <c>/proc/PID/stat</c>. The second field is the command name in parentheses and may itself contain
@@ -116,6 +133,12 @@ public sealed class LinuxHelperServer : IDisposable
 {
     public const int MaxLineBytes = 4096;
 
+    /// <summary>
+    /// Connections served at once. The app holds one; the cap stops a local process from exhausting the root
+    /// service's descriptors. A connection over the cap is closed at once, before any authorization work.
+    /// </summary>
+    public const int MaxConnections = 8;
+
     public static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromSeconds(30);
 
     private readonly Socket _listener;
@@ -126,6 +149,10 @@ public sealed class LinuxHelperServer : IDisposable
 
     private int _active;
     private long _lastActivity = Environment.TickCount64;
+
+    /// <summary>Connections that have put a fan in manual mode, for the watchdog.</summary>
+    private readonly HashSet<int> _manualOwners = new();
+    private int _nextConnection;
 
     public LinuxHelperServer(Socket listener, LinuxHelperPolicy policy, ISysfsFileSystem fs, ICallerAuthorizer authorizer,
         TimeSpan? idleTimeout = null)
@@ -159,10 +186,24 @@ public sealed class LinuxHelperServer : IDisposable
                 {
                     break;
                 }
+                catch (SocketException ex)
+                {
+                    // Out of descriptors, or a client that vanished mid-accept: a bad accept must not end a root
+                    // service that other clients rely on. A short pause keeps a persistent error from spinning.
+                    AppLog.Warn("The helper could not accept a connection", ex.SocketErrorCode.ToString());
+                    await Task.Delay(100, CancellationToken.None).ConfigureAwait(false);
+                    continue;
+                }
 
                 Touch();
-                connections.Add(ServeAsync(client, stop.Token));
                 connections.RemoveAll(t => t.IsCompleted);
+                if (Volatile.Read(ref _active) >= MaxConnections)
+                {
+                    client.Dispose();
+                    continue;
+                }
+
+                connections.Add(ServeAsync(client, stop.Token));
             }
         }
         finally
@@ -170,6 +211,9 @@ public sealed class LinuxHelperServer : IDisposable
             await stop.CancelAsync().ConfigureAwait(false);
             await Task.WhenAll(connections).ConfigureAwait(false);
             await watchdog.ConfigureAwait(false);
+
+            // Whatever ended the server, a fan left in manual mode goes back to the firmware.
+            await HandBackFansAsync().ConfigureAwait(false);
         }
     }
 
@@ -199,12 +243,18 @@ public sealed class LinuxHelperServer : IDisposable
     private async Task ServeAsync(Socket client, CancellationToken cancel)
     {
         Interlocked.Increment(ref _active);
+        var id = Interlocked.Increment(ref _nextConnection);
         try
         {
             using (client)
             await using (var stream = new NetworkStream(client, ownsSocket: false))
             {
-                bool? authorized = null;
+                // Authorized as soon as it connects, so an unauthorized connection cannot sit on one of the slots.
+                if (!_authorizer.IsAuthorized(client))
+                {
+                    await stream.WriteAsync(Encoding.UTF8.GetBytes(Error("not-authorized") + "\n"), cancel).ConfigureAwait(false);
+                    return;
+                }
 
                 while (!cancel.IsCancellationRequested)
                 {
@@ -212,11 +262,7 @@ public sealed class LinuxHelperServer : IDisposable
                     if (line == null) break;
                     Touch();
 
-                    authorized ??= _authorizer.IsAuthorized(client);
-                    var response = authorized == true
-                        ? await HandleAsync(line).ConfigureAwait(false)
-                        : Error("not-authorized");
-
+                    var response = await HandleAsync(line, id).ConfigureAwait(false);
                     var bytes = Encoding.UTF8.GetBytes(response + "\n");
                     await stream.WriteAsync(bytes, cancel).ConfigureAwait(false);
                 }
@@ -230,11 +276,53 @@ public sealed class LinuxHelperServer : IDisposable
         {
             Interlocked.Decrement(ref _active);
             Touch();
+            await ReleaseManualAsync(id).ConfigureAwait(false);
         }
     }
 
-    /// <summary>Answers one request line. Public for the tests, which drive it without a socket.</summary>
-    public async Task<string> HandleAsync(string line)
+    /// <summary>
+    /// The fan watchdog. A connection that put a fan in manual mode owns that state; when the last owner goes away
+    /// (the app closed or crashed), the fans go back to the firmware. Manual speeds are only safe while something is
+    /// watching the temperature, and the helper itself does not.
+    /// </summary>
+    private async Task ReleaseManualAsync(int id)
+    {
+        bool last;
+        lock (_manualOwners)
+        {
+            if (!_manualOwners.Remove(id)) return;
+            last = _manualOwners.Count == 0;
+        }
+
+        if (last) await HandBackFansAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Writes "automatic" to every fan mode attribute that is currently manual.</summary>
+    private async Task HandBackFansAsync()
+    {
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            foreach (var (path, manual, automatic) in _policy.FanResets)
+            {
+                var current = _fs.ReadAllText(path)?.Trim();
+                if (current == null || current == automatic) continue;
+                if (manual != "*" && current != manual) continue;
+
+                var result = _fs.WriteAllText(path, automatic + "\n");
+                AppLog.Info("The helper handed the fans back to the firmware", $"{path}: {(result.Ok ? "ok" : result.Status.ToString())}");
+            }
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
+
+    /// <summary>Answers one request line. Internal for the tests, which drive it without a socket.</summary>
+    internal Task<string> HandleAsync(string line) => HandleAsync(line, 0);
+
+    internal async Task<string> HandleAsync(string line, int connection)
     {
         string? op, path, value;
         try
@@ -269,7 +357,9 @@ public sealed class LinuxHelperServer : IDisposable
                 await _writeGate.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    var result = _fs.WriteAllText(path!, value!.TrimEnd('\n') + "\n");
+                    var trimmed = value!.TrimEnd('\n');
+                    var result = _fs.WriteAllText(path!, trimmed + "\n");
+                    if (result.Ok) TrackManual(connection, path!, trimmed);
                     return result.Ok ? Ok() : Error("write-failed", $"{result.Status} {result.Detail}");
                 }
                 finally
@@ -280,6 +370,22 @@ public sealed class LinuxHelperServer : IDisposable
 
             default:
                 return Error("bad-request");
+        }
+    }
+
+    /// <summary>Records which connection last set a fan mode, so the watchdog knows whose departure to act on.</summary>
+    private void TrackManual(int connection, string path, string value)
+    {
+        foreach (var (fanPath, manual, automatic) in _policy.FanResets)
+        {
+            if (fanPath != path) continue;
+
+            var isManual = manual == "*" ? value != automatic : value == manual;
+            lock (_manualOwners)
+            {
+                if (isManual) _manualOwners.Add(connection);
+                else if (value == automatic) _manualOwners.Remove(connection);
+            }
         }
     }
 

@@ -307,6 +307,117 @@ public class LinuxHelperTests
         }
     }
 
+    // ---------------------------------------------------------------- the fan watchdog and the cap
+
+    private static (Socket Listener, string Path) Listen()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nl-{Guid.NewGuid():N}.sock");
+        var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        listener.Bind(new UnixDomainSocketEndPoint(path));
+        listener.Listen(16);
+        return (listener, path);
+    }
+
+    [Fact]
+    public async Task Watchdog_HandsTheFansBackWhenTheManualClientGoesAway()
+    {
+        var root = AsRoot();
+        var (listener, socketPath) = Listen();
+        using (listener)
+        using (var server = new LinuxHelperServer(listener, Policy(Machine()), root, new Allow(), TimeSpan.FromSeconds(30)))
+        {
+            using var stop = new CancellationTokenSource();
+            var serving = server.RunAsync(stop.Token);
+            try
+            {
+                var client = new LinuxHelperClient(socketPath);
+                Assert.True(client.Write(Pwm1Enable, "1").Ok);
+                Assert.True(client.Write(Pwm1, "200").Ok);
+                Assert.Equal("1", root.Peek(Pwm1Enable)?.Trim());
+
+                client.Dispose(); // the app crashed or closed
+
+                await Phase3Fakes.WaitUntilAsync(() => root.Peek(Pwm1Enable)?.Trim() == "2", 5000);
+                Assert.Equal("2", root.Peek(Pwm1Enable)?.Trim());
+            }
+            finally
+            {
+                await stop.CancelAsync();
+                await serving;
+                File.Delete(socketPath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Watchdog_LeavesAutomaticAloneAndDoesNotActWhileAnotherOwnerRemains()
+    {
+        var root = AsRoot();
+        var (listener, socketPath) = Listen();
+        using (listener)
+        using (var server = new LinuxHelperServer(listener, Policy(Machine()), root, new Allow(), TimeSpan.FromSeconds(30)))
+        {
+            using var stop = new CancellationTokenSource();
+            var serving = server.RunAsync(stop.Token);
+            try
+            {
+                using var app = new LinuxHelperClient(socketPath);
+                var other = new LinuxHelperClient(socketPath);
+                Assert.True(app.Write(Pwm1Enable, "1").Ok);
+                Assert.True(other.Write(Pwm1Enable, "1").Ok);
+
+                other.Dispose();
+                await Task.Delay(300);
+                Assert.Equal("1", root.Peek(Pwm1Enable)?.Trim()); // the app still owns manual mode
+
+                Assert.True(app.Write(Pwm1Enable, "2").Ok); // the app handed back itself
+            }
+            finally
+            {
+                await stop.CancelAsync();
+                await serving;
+                File.Delete(socketPath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConnectionsOverTheCapAreClosed_AndTheServerKeepsServing()
+    {
+        var (listener, socketPath) = Listen();
+        using (listener)
+        using (var server = new LinuxHelperServer(listener, Policy(Machine()), AsRoot(), new Allow(), TimeSpan.FromSeconds(30)))
+        {
+            using var stop = new CancellationTokenSource();
+            var serving = server.RunAsync(stop.Token);
+            var hogs = new List<Socket>();
+            try
+            {
+                for (int i = 0; i < LinuxHelperServer.MaxConnections + 4; i++)
+                {
+                    var s = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                    s.Connect(new UnixDomainSocketEndPoint(socketPath));
+                    hogs.Add(s);
+                }
+
+                await Task.Delay(300);
+                foreach (var s in hogs) s.Dispose();
+                hogs.Clear();
+                await Task.Delay(300);
+
+                using var client = new LinuxHelperClient(socketPath);
+                Assert.NotEmpty(client.Allowed); // slots were released and the server is still up
+            }
+            finally
+            {
+                foreach (var s in hogs) s.Dispose();
+                await stop.CancelAsync();
+                await serving;
+                File.Delete(socketPath);
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- polkit
 
     [Theory]
@@ -320,7 +431,7 @@ public class LinuxHelperTests
     {
         public int Exit { get; init; }
         public List<IReadOnlyList<string>> Calls { get; } = new();
-        public string? Find(string name) => name == "pkcheck" ? "/usr/bin/pkcheck" : null;
+        public string? Find(string name) => name == "/usr/bin/pkcheck" ? "/usr/bin/pkcheck" : null;
         public CommandResult Run(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout)
         {
             Calls.Add(arguments);

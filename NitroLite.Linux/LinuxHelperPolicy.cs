@@ -32,6 +32,15 @@ public sealed class LinuxHelperPolicy
     {
     }
 
+    /// <summary>
+    /// The writes that hand the fans back to the firmware, with the values that mean "manual" for each. The watchdog
+    /// uses them: when the last client that put a fan in manual mode goes away, these are written so the fans are
+    /// never left at a fixed speed with nobody watching the temperature.
+    /// </summary>
+    public IReadOnlyList<(string Path, string Manual, string Automatic)> FanResets => _fanResets;
+
+    private readonly List<(string Path, string Manual, string Automatic)> _fanResets = new();
+
     /// <summary>The attributes the helper may write, for the client's <c>list</c> request and the log.</summary>
     public IReadOnlyCollection<string> Paths => _rules.Keys;
 
@@ -81,6 +90,11 @@ public sealed class LinuxHelperPolicy
         policy.Add(nodes.AcerPwmGpu, v => IsInt(v, MinPwm, 255));
         policy.Add(nodes.AcerPwmCpuEnable, v => IsInt(v, 0, 2));
         policy.Add(nodes.AcerPwmGpuEnable, v => IsInt(v, 0, 2));
+
+        // pwmN_enable 1 is manual and 2 automatic; Linuwu-Sense's fan_speed is manual for anything but "0,0".
+        if (nodes.AcerPwmCpuEnable != null) policy._fanResets.Add((nodes.AcerPwmCpuEnable, "1", "2"));
+        if (nodes.AcerPwmGpuEnable != null) policy._fanResets.Add((nodes.AcerPwmGpuEnable, "1", "2"));
+        if (nodes.FanSpeed != null) policy._fanResets.Add((nodes.FanSpeed, "*", "0,0"));
 
         policy.Add(nodes.PerZoneMode, v => LinuxKeyboardProtocol.ParsePerZone(v) != null);
         policy.Add(nodes.FourZoneMode, v => LinuxKeyboardProtocol.ParseFourZone(v) != null);

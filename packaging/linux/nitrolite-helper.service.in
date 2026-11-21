@@ -20,6 +20,7 @@ RuntimeDirectory=nitrolite-helper
 Environment=NITROLITE_DATA_DIR=/run/nitrolite-helper
 Environment=HOME=/run/nitrolite-helper
 Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 # Confinement. /sys stays writable because writing it is the job; ProtectKernelTunables is deliberately not set, since
 # it would make /sys read-only. Everything else the helper does not need is taken away.
