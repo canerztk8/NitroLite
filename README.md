@@ -59,7 +59,7 @@ installed. About a 21 MB download and 70 MB of RAM in the tray.
 
 ### Windows
 
-1. Download **`NitroLite-v1.3.0-win-x64.zip`** from the **[latest release](https://github.com/canerztk8/NitroLite/releases/latest)**.
+1. Download **`NitroLite-v1.3.1-win-x64.zip`** from the **[latest release](https://github.com/canerztk8/NitroLite/releases/latest)**.
 2. Extract it to a folder you will keep (not Downloads).
 3. Open **`NitroLite.exe`**. Nothing else to install.
 

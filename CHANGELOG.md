@@ -10,60 +10,23 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-21
+
+Linux installs like any other app, and a round of safety and accuracy fixes. 24 commits since 1.3.0.
+
 **Linux**
-- **`.deb` and `.rpm` packages.** Install by double-click on Ubuntu, Debian, Mint, Pop!_OS, Fedora and openSUSE, and
-  open the app: no terminal, no setup button, no groups, no logging out.
-- **A small helper service** does the hardware writes for the user at the machine. It is socket-activated (it runs
-  only while NitroLite is changing something), asks polkit per connection (the active local session is allowed without
-  a password, remote and inactive sessions are not), writes only the attributes its own probe found and only values
-  each accepts, and runs confined by systemd. `install.sh --system` installs it too; without it NitroLite falls back
-  to the permission rule as before.
-- **Updates from the package.** A copy installed from the .deb or .rpm downloads the new package, checks it against
-  GitHub's published SHA-256 and installs it with apt or dnf behind one password prompt. Tarball copies still open
-  the release page.
-- **Start with the session**, through an XDG autostart entry, like "start with Windows".
-- **Desktops without a tray** (stock GNOME without the AppIndicator extension): closing the window minimises it
-  instead of hiding the app with no way back, "start in the tray" opens the window, and Settings says why.
-- **`nitrolite --linux-selftest`** checks a real machine in one command (helper, polkit, every setting, the daemon,
-  NVIDIA) without changing anything, and saves the report for an issue.
-- Fan control through the kernel itself (hwmon `pwm`) on the models the kernel lists for it: Nitro AN515-58, AN16-41
-  and ANV15-51, Predator PH16-72, PHN16-72 and PT14-51. No Linuwu-Sense needed there.
-- The app knows which Nitro and Predator models the mainline kernel supports and from which release, and says so on
-  the Settings page: on an AN16-41 with Linux 7.0, "Linux 7.4 supports this model fully; until then, predator_v4".
-- **Send Linux info** in Settings records the machine (read-only, no serial numbers, host or user name), opens the
-  folder and a pre-filled GitHub issue, so any model can be supported from one button.
-- The permission rule now actually reaches the charge-limit and module settings. `TAG+="uaccess"` only applies to
-  `/dev` nodes, so those sysfs attributes were never writable; they are now handed to the `nitrolite` group like the
-  operating mode, which the packages create themselves.
-- **Fans only through the helper.** The rule no longer hands the fan attributes to the group: a direct write could
-  stop a fan, and nothing would put it back. The helper refuses a speed below the app's floor and returns the fans to
-  automatic when NitroLite disconnects or crashes.
-- **80 % charge limit from the kernel itself** (Linux 7.3, `acer-wmi-battery`) on the models it lists, through the
-  battery's "Long Life" charge type.
-- **acer-wmi-linuwu** is supported next to Linuwu-Sense, and brings the **Windows key lock** to Linux for the first
-  time; its `lcd_overdrive` and keyboard paths are found too.
-- Helper hardening: at most eight connections, polkit checked when a client connects, a fixed `PATH`.
-- Package updates install a private root-owned copy that root re-checks against the digest, so the file cannot be
-  swapped between the check and apt/dnf.
-- On a desktop where the tray cannot be asked about, NitroLite now assumes there is none, so closing the window can
-  never hide it for good. The start-up probes are time-limited.
-- Remaining capacity on charge-based batteries is converted with the voltage like the other figures; an adapter
-  with an unfamiliar name is found by its type.
-- The docs say plainly what Linux cannot do: no driver exposes the MUX, and CoolBoost and the Windows key lock come
-  only from acer-wmi-linuwu.
+- `.deb` and `.rpm` packages: double-click to install, nothing else to set up.
+- A small helper service makes the hardware changes, so no groups and no logging out.
+- Fan control through the kernel on the models it supports; fans go back to automatic if NitroLite closes or crashes.
+- 80 % charge limit through the kernel (Linux 7.3) on supported models, and acer-wmi-linuwu support with the
+  Windows key lock.
+- In-app updates for package installs, start with the session, and a one-command self-test.
+- On desktops without a tray, closing the window no longer hides the app for good.
 
-**Both platforms**
-- A downloaded model table keeps its catch-all record and is labelled "remote", not "user".
-- A profile's `unsupportedMethods` now actually switches the matching control off.
-- The stored keyboard colour is put back at start-up, never with a UAC prompt.
-
-**Windows**
-- The legacy temperature service's readings count as measured.
-- The backlight timeout is read back after a write; a refused keyboard commit is reported as unverified instead of
-  as success; a WMI provider that stops answering is looked up again instead of failing until restart.
-
-**Build**
-- GitHub Actions are pinned by commit SHA, the rpm is tested on Fedora 44, and a release tag must be on `main`.
+**All platforms**
+- The keyboard colour comes back at start-up without a UAC prompt.
+- Controls a model is known not to support are switched off instead of failing.
+- The Windows backend checks more of its writes and recovers when the hardware interface stops responding.
 
 ## [1.3.0] - 2026-11-21
 
