@@ -56,6 +56,28 @@ internal static class Program
         {
             return NitroLite.Linux.LinuxHelperHost.Run(args);
         }
+
+        // One command that checks, on a real Linux machine, everything the Linux build depends on. The report goes to
+        // the terminal and to a file in the data folder, so it can be attached to an issue as it is.
+        if (args.Any(a => string.Equals(a, "--linux-selftest", StringComparison.OrdinalIgnoreCase)))
+        {
+            var test = NitroLite.Linux.LinuxSelfTest.ForThisMachine();
+            var report = test.Run();
+            Console.Out.Write(report);
+            try
+            {
+                var path = AppPaths.GetDataFile("nitrolite-selftest.txt");
+                File.WriteAllText(path, report);
+                Console.Out.WriteLine();
+                Console.Out.WriteLine("Saved to " + path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("The report could not be saved: " + ex.Message);
+            }
+
+            return test.Failures == 0 ? 0 : 1;
+        }
 #endif
 
         // The one-shot commands. Each of these talks to the hardware and exits without a window, so a script or a
