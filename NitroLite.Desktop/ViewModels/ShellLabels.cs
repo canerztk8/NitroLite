@@ -104,6 +104,7 @@ public sealed class ShellLabels
     public string LinuxLinuwuTitle => Loc.T("Fan hızı, klavye RGB ve şarj sınırı");
     public string LinuxLinuwuHint => Loc.T("Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.");
     public string LinuxLinuwuButton => Loc.T("Linuwu-Sense'i aç");
+    public string TrayUnavailableHint => Loc.T("Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.");
     public string LinuxCaptureTitle => Loc.T("Bu laptopu desteklememize yardım edin");
     public string LinuxCaptureHint => Loc.T("Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.");
     public string LinuxCaptureButton => Loc.T("Linux bilgilerini gönder");

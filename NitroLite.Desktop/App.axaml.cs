@@ -111,7 +111,9 @@ public partial class App : Application, IDisposable
             // Either one means the window must not appear: a launch at sign-in that opened a window is the opposite
             // of what the switch promises.
             bool startHidden = StartupOptions.ShouldStartHidden(
-                StartupOptions.Parse(Environment.GetCommandLineArgs()), _host.ViewModel.StartMinimizedOn);
+                StartupOptions.Parse(Environment.GetCommandLineArgs()), _host.ViewModel.StartMinimizedOn)
+                // A desktop with no tray would leave a hidden window unreachable, so it opens instead.
+                && DesktopShell.TrayAvailable;
 
             if (startHidden)
             {

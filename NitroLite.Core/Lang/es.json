@@ -1753,5 +1753,6 @@
   "Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.": "Guarda en un archivo los datos de hardware que lee NitroLite y abre un issue en GitHub. No contiene números de serie, nombre del equipo ni nombre de usuario. Cada portátil enviado mejora el soporte para todos los que tienen el mismo modelo.",
   "Linux bilgilerini gönder": "Enviar información de Linux",
   "Kayıt dosyası yazılamadı.": "No se pudo escribir el archivo de captura.",
-  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} guardado. Arrastra el archivo de la carpeta que se abrió a la página de GitHub."
+  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} guardado. Arrastra el archivo de la carpeta que se abrió a la página de GitHub.",
+  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "Este escritorio no muestra iconos en la bandeja (GNOME necesita la extensión AppIndicator). Cerrar la ventana la minimiza y la aplicación sigue en marcha; en lugar de iniciar en la bandeja, se abre la ventana."
 }

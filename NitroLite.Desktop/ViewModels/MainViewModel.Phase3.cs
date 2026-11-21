@@ -640,6 +640,9 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>True when this desktop shows no tray icons, so the tray settings explain what happens instead.</summary>
+    public bool TrayUnavailable => !DesktopShell.TrayAvailable;
+
     /// <summary>Start minimised to the tray. Baked into the command line, so changing it rewrites the entry.</summary>
     public bool StartMinimizedOn
     {

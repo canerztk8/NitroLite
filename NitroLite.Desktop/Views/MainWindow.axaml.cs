@@ -630,6 +630,15 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         SaveWindowPosition();
+
+        // No tray on this desktop (stock GNOME): hiding would leave the app running with nothing on screen to bring it
+        // back, so it minimises to the dock instead and keeps running there.
+        if (!DesktopShell.TrayAvailable)
+        {
+            WindowState = WindowState.Minimized;
+            return;
+        }
+
         Hide();
         TrimMemory();
         UpdateTelemetryPollingRate();

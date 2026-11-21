@@ -1753,5 +1753,6 @@
   "Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.": "NitroLite जो हार्डवेयर जानकारी पढ़ता है उसे एक फ़ाइल में सहेजता है और GitHub पर एक issue खोलता है। इसमें कोई सीरियल नंबर, कंप्यूटर का नाम या यूज़र नेम नहीं होता। भेजा गया हर लैपटॉप उसी मॉडल वाले सभी लोगों के लिए सपोर्ट बेहतर करता है।",
   "Linux bilgilerini gönder": "Linux जानकारी भेजें",
   "Kayıt dosyası yazılamadı.": "कैप्चर फ़ाइल नहीं लिखी जा सकी।",
-  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} सहेजा गया। खुले फ़ोल्डर से फ़ाइल को GitHub पेज पर खींचें।"
+  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} सहेजा गया। खुले फ़ोल्डर से फ़ाइल को GitHub पेज पर खींचें।",
+  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "यह डेस्कटॉप ट्रे आइकन नहीं दिखाता (GNOME को AppIndicator एक्सटेंशन चाहिए)। विंडो बंद करने पर वह मिनिमाइज़ हो जाती है और ऐप चलता रहता है; ट्रे में शुरू होने के बजाय विंडो खुलती है।"
 }

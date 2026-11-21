@@ -18,6 +18,14 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
   a password, remote and inactive sessions are not), writes only the attributes its own probe found and only values
   each accepts, and runs confined by systemd. `install.sh --system` installs it too; without it NitroLite falls back
   to the permission rule as before.
+- **Updates from the package.** A copy installed from the .deb or .rpm downloads the new package, checks it against
+  GitHub's published SHA-256 and installs it with apt or dnf behind one password prompt. Tarball copies still open
+  the release page.
+- **Start with the session**, through an XDG autostart entry, like "start with Windows".
+- **Desktops without a tray** (stock GNOME without the AppIndicator extension): closing the window minimises it
+  instead of hiding the app with no way back, "start in the tray" opens the window, and Settings says why.
+- **`nitrolite --linux-selftest`** checks a real machine in one command (helper, polkit, every setting, the daemon,
+  NVIDIA) without changing anything, and saves the report for an issue.
 - Fan control through the kernel itself (hwmon `pwm`) on the models the kernel lists for it: Nitro AN515-58, AN16-41
   and ANV15-51, Predator PH16-72, PHN16-72 and PT14-51. No Linuwu-Sense needed there.
 - The app knows which Nitro and Predator models the mainline kernel supports and from which release, and says so on

@@ -485,6 +485,11 @@ public sealed class AppHost : IDisposable
                 // The same button, read out of /dev/input instead of WMI. A machine without acer-wmi, or a user who is
                 // not in the input group, gets IsSupported false and no settings row.
                 nitroKey = new LinuxNitroKeyListener();
+
+                // Whether this desktop shows tray icons at all (stock GNOME does not). Without one, closing the window
+                // minimises it and "start in the tray" opens it, so the app can never be hidden with no way back. A
+                // replay on Windows has the Windows tray and keeps the default.
+                if (capture == null) DesktopShell.TrayAvailable = LinuxTrayProbe.IsAvailable();
             }
             catch (Exception ex)
             {

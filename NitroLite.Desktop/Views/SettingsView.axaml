@@ -221,6 +221,9 @@
                             VerticalAlignment="Center" />
             </Grid>
 
+            <TextBlock Classes="hint" Text="{Binding Labels.TrayUnavailableHint}" Margin="0,4,0,0"
+                       IsVisible="{Binding TrayUnavailable}" TextWrapping="Wrap" />
+
             <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,8,0,8" />
 
             <Grid ColumnDefinitions="*,Auto">

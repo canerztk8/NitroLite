@@ -128,6 +128,8 @@ out and back in afterwards. The Settings page shows the same command with the ri
 | The keyboard page is covered with "Keyboard lighting is not reachable" | the kernel offers no path to your keyboard | Linuwu-Sense, or OpenRGB |
 | No fan RPM | `acer-wmi` does not know your model | try `predator_v4` |
 | The graphics card shows no reading | the GPU is asleep, or the NVIDIA driver is not installed | open a game or `nvidia-smi` once; a sleeping GPU is not woken on purpose, to save battery |
+| No NitroLite icon in the top bar, and closing the window only minimises it | GNOME shows no tray icons without the AppIndicator extension (Ubuntu ships it; Fedora and Debian do not) | install "AppIndicator and KStatusNotifierItem Support" from GNOME Extensions; until then NitroLite keeps running minimised in the dock instead of disappearing |
+| The on-screen display does not appear over a game | the game runs natively on Wayland in fullscreen, where no application can draw on top | most Steam and Proton games run through XWayland and show it; for a native Wayland game, play it windowed or borderless |
 
 Still stuck? **Settings → Export hardware report** and attach the file to a
 **[GitHub issue](https://github.com/canerztk8/NitroLite/issues)**.

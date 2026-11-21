@@ -1753,5 +1753,6 @@
   "Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.": "Menyimpan data perangkat keras yang dibaca NitroLite ke satu berkas dan membuka issue di GitHub. Berkas ini tidak berisi nomor seri, nama komputer, atau nama pengguna. Setiap laptop yang dikirim meningkatkan dukungan untuk semua pemilik model yang sama.",
   "Linux bilgilerini gönder": "Kirim info Linux",
   "Kayıt dosyası yazılamadı.": "Berkas rekaman tidak dapat ditulis.",
-  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} disimpan. Seret berkas dari folder yang terbuka ke halaman GitHub."
+  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} disimpan. Seret berkas dari folder yang terbuka ke halaman GitHub.",
+  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "Desktop ini tidak menampilkan ikon baki (GNOME membutuhkan ekstensi AppIndicator). Menutup jendela akan meminimalkannya dan aplikasi tetap berjalan; alih-alih mulai di baki, jendela akan dibuka."
 }
