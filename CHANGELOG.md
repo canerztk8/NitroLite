@@ -32,9 +32,38 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
   the Settings page: on an AN16-41 with Linux 7.0, "Linux 7.4 supports this model fully; until then, predator_v4".
 - **Send Linux info** in Settings records the machine (read-only, no serial numbers, host or user name), opens the
   folder and a pre-filled GitHub issue, so any model can be supported from one button.
-- The permission rule now actually reaches the fan, charge-limit and Linuwu-Sense settings. `TAG+="uaccess"` only
-  applies to `/dev` nodes, so those sysfs attributes were never writable; they are now handed to the `nitrolite`
-  group like the operating mode.
+- The permission rule now actually reaches the charge-limit and module settings. `TAG+="uaccess"` only applies to
+  `/dev` nodes, so those sysfs attributes were never writable; they are now handed to the `nitrolite` group like the
+  operating mode, which the packages create themselves.
+- **Fans only through the helper.** The rule no longer hands the fan attributes to the group: a direct write could
+  stop a fan, and nothing would put it back. The helper refuses a speed below the app's floor and returns the fans to
+  automatic when NitroLite disconnects or crashes.
+- **80 % charge limit from the kernel itself** (Linux 7.3, `acer-wmi-battery`) on the models it lists, through the
+  battery's "Long Life" charge type.
+- **acer-wmi-linuwu** is supported next to Linuwu-Sense, and brings the **Windows key lock** to Linux for the first
+  time; its `lcd_overdrive` and keyboard paths are found too.
+- Helper hardening: at most eight connections, polkit checked when a client connects, a fixed `PATH`.
+- Package updates install a private root-owned copy that root re-checks against the digest, so the file cannot be
+  swapped between the check and apt/dnf.
+- On a desktop where the tray cannot be asked about, NitroLite now assumes there is none, so closing the window can
+  never hide it for good. The start-up probes are time-limited.
+- Remaining capacity on charge-based batteries is converted with the voltage like the other figures; an adapter
+  with an unfamiliar name is found by its type.
+- The docs say plainly what Linux cannot do: no driver exposes the MUX, and CoolBoost and the Windows key lock come
+  only from acer-wmi-linuwu.
+
+**Both platforms**
+- A downloaded model table keeps its catch-all record and is labelled "remote", not "user".
+- A profile's `unsupportedMethods` now actually switches the matching control off.
+- The stored keyboard colour is put back at start-up, never with a UAC prompt.
+
+**Windows**
+- The legacy temperature service's readings count as measured.
+- The backlight timeout is read back after a write; a refused keyboard commit is reported as unverified instead of
+  as success; a WMI provider that stops answering is looked up again instead of failing until restart.
+
+**Build**
+- GitHub Actions are pinned by commit SHA, the rpm is tested on Fedora 44, and a release tag must be on `main`.
 
 ## [1.3.0] - 2026-11-21
 
