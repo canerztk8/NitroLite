@@ -13,7 +13,7 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 ## [1.3.0] - 2026-11-21
 
 Linux goes from "experimental" to usable on a stock install, and the lighting page is rebuilt around a real off switch.
-21 commits since 1.2.9.
+23 commits since 1.2.9.
 
 **Linux**
 - Operating modes work with nothing installed, through the desktop's own power-profile service.
@@ -29,6 +29,7 @@ Linux goes from "experimental" to usable on a stock install, and the lighting pa
 - The off switch darkens the keyboard and the page together and stops the automatic colours.
 - A charging colour, a temperature colour per CPU/GPU half, and typed ramp stops.
 - The four-zone split and every slider write once and land reliably.
+- Turning the lights off right after moving a slider no longer lets that slider's colour light them again.
 
 **Everywhere**
 - Pages, scans and log lines cost nothing until they are used; the overlay opens before it asks about the displays.

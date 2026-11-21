@@ -152,6 +152,35 @@ public class LightingOffPersistenceTests
     }
 
     [Fact]
+    public async Task TurnOff_WhileASliderWriteIsStillPending_KeepsTheLightsOff()
+    {
+        var dir = TempDirectory();
+        try
+        {
+            var settingsPath = Path.Combine(dir, "settings.json");
+            var settings = new AppSettings();
+            var hardware = new Phase3Fakes.StubHardware();
+            using var vm = await ReadyAsync(hardware, settings, settingsPath);
+            hardware.LightingWrites.Clear();
+
+            // The slider's colour waits out the debounce; "off" arrives inside that pause.
+            vm.BrightnessLevel = 7;
+            vm.TurnOffLightingCommand.Execute(null);
+            await Phase3Fakes.WaitUntilAsync(() => settings.IsBacklightOff, SettleMilliseconds);
+
+            // Well past the debounce: a queued colour would have landed by now.
+            await Task.Delay(800);
+
+            Assert.Equal("OFF", hardware.LightingWrites.LastOrDefault());
+            Assert.DoesNotContain(hardware.LightingWrites.SkipWhile(w => w != "OFF"), w => w != "OFF");
+        }
+        finally
+        {
+            TestDataIsolation.DeleteFolder(dir);
+        }
+    }
+
+    [Fact]
     public async Task Startup_WithAStoredOffState_PutsTheLightsBackOff()
     {
         var dir = TempDirectory();

@@ -7883,6 +7883,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null) return;
 
+        // A slider moved a moment ago still has its colour waiting out the debounce. Turning the lights off overrules
+        // it; left queued, it would run after the "off" write and light the keys again.
+        _lightingDebounce.Cancel();
+
         // Keep what was lit so raising the brightness or picking an effect can bring it back later.
         var current = CurrentLightingConfig();
         if (!LightingPolicy.IsOff(current)) _settings.LastActiveLighting = current;
@@ -9021,6 +9025,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 AppLog.Warn("Deferred write failed", ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Drops the pending action without running it. For a write the user has just overruled: a colour still waiting
+        /// out the pause when the lights are turned off would otherwise land afterwards and light the keys again.
+        /// </summary>
+        public void Cancel()
+        {
+            _pendingSync = null;
+            _pending?.Cancel();
+            _pending?.Dispose();
+            _pending = null;
         }
 
         private void Restart(Func<Task> action)
