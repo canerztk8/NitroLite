@@ -104,6 +104,11 @@ public sealed class ShellLabels
     public string LinuxLinuwuTitle => Loc.T("Fan hızı, klavye RGB ve şarj sınırı");
     public string LinuxLinuwuHint => Loc.T("Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.");
     public string LinuxLinuwuButton => Loc.T("Linuwu-Sense'i aç");
+    public string LinuxCaptureTitle => Loc.T("Bu laptopu desteklememize yardım edin");
+    public string LinuxCaptureHint => Loc.T("Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.");
+    public string LinuxCaptureButton => Loc.T("Linux bilgilerini gönder");
+    public string LinuxCaptureFailed => Loc.T("Kayıt dosyası yazılamadı.");
+    public string LinuxCaptureSent(string file) => Loc.T($"{file} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.");
     public string CopyCommand => Loc.T("Komutu kopyala");
     public string Copied => Loc.T("Kopyalandı");
     public string LanguageRestarting => Loc.T("Dil değişti; NitroLite yeni dille yeniden açılıyor.");

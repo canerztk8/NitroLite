@@ -40,6 +40,12 @@ public interface IPlatformSetup
     KernelSetupHint KernelHint { get; }
 
     /// <summary>
+    /// What the mainline kernel does for this exact model, for example "Linux 7.4 supports it fully", or null when
+    /// there is nothing specific to say.
+    /// </summary>
+    string? ModelNote { get; }
+
+    /// <summary>
     /// Installs the udev rule, creates the <c>nitrolite</c> group and adds this user to it and to <c>input</c>. One
     /// password prompt. Takes effect after the user logs out and back in.
     /// </summary>
@@ -47,4 +53,13 @@ public interface IPlatformSetup
 
     /// <summary>Writes <c>options acer_wmi predator_v4=1</c> to modprobe.d. Takes effect after a restart.</summary>
     Task<PlatformSetupResult> EnablePredatorV4Async();
+
+    /// <summary>
+    /// Records this machine for a bug report, the way <c>tools/linux-capture</c> does, into
+    /// <paramref name="directory"/>. Returns the file's path, or null when it could not be written. Reads only.
+    /// </summary>
+    Task<string?> WriteCaptureAsync(string directory);
+
+    /// <summary>Two or three lines about this machine for the top of the issue: model, kernel, distribution.</summary>
+    string CaptureSummary { get; }
 }

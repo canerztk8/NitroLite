@@ -367,7 +367,11 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     public async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
     {
         var node = _caps.Nodes.FanSpeed;
-        if (node == null) return false;
+        if (node == null)
+        {
+            return _caps.Nodes.HasKernelFanControl
+                && await SetKernelFanModeAsync(mode, cpuPercent, gpuPercent).ConfigureAwait(false);
+        }
 
         var (cpu, gpu) = mode switch
         {
@@ -399,9 +403,88 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         ? 50
         : Math.Clamp(percent, FanCurve.MinPercent, FanCurve.MaxPercent);
 
+    /// <summary>
+    /// The kernel's fan control, through the <c>acer</c> hwmon device. The mode goes in <c>pwmN_enable</c> first
+    /// (0 maximum, 1 manual, 2 automatic) and a manual speed in <c>pwmN</c> after it, on the 0..255 scale hwmon uses;
+    /// the firmware itself works in percent, so a speed reads back within a step of what was written.
+    /// </summary>
+    private async Task<bool> SetKernelFanModeAsync(FanMode mode, int cpuPercent, int gpuPercent)
+    {
+        var nodes = _caps.Nodes;
+        var (cpu, gpu) = mode switch
+        {
+            FanMode.Auto => (0, 0),
+            FanMode.Max => (100, 100),
+            _ => (NormalisePercent(cpuPercent), NormalisePercent(gpuPercent))
+        };
+
+        var enable = mode switch
+        {
+            FanMode.Auto => "2",
+            FanMode.Max => "0",
+            _ => "1"
+        };
+
+        async Task<bool> Write()
+        {
+            if (!await WriteNodeAsync(nodes.AcerPwmCpuEnable!, enable).ConfigureAwait(false)) return false;
+            if (nodes.AcerPwmGpuEnable != null &&
+                !await WriteNodeAsync(nodes.AcerPwmGpuEnable, enable).ConfigureAwait(false)) return false;
+            if (mode != FanMode.Custom) return true;
+
+            if (!await WriteNodeAsync(nodes.AcerPwmCpu!, PercentToPwm(cpu).ToString(CultureInfo.InvariantCulture))
+                    .ConfigureAwait(false)) return false;
+            return nodes.AcerPwmGpu == null ||
+                   await WriteNodeAsync(nodes.AcerPwmGpu, PercentToPwm(gpu).ToString(CultureInfo.InvariantCulture))
+                       .ConfigureAwait(false);
+        }
+
+        var result = await ApplyAsync(
+            mode == FanMode.Custom ? ReadBackPolicy.FanSpeed : ReadBackPolicy.FanBehavior,
+            write: Write,
+            readBack: () => Task.FromResult(ReadFanState()),
+            matches: observed => observed.Mode == mode &&
+                                 (mode != FanMode.Custom ||
+                                  (Math.Abs(observed.CpuPercent - cpu) <= 1 &&
+                                   (nodes.AcerPwmGpu == null || Math.Abs(observed.GpuPercent - gpu) <= 1))))
+            .ConfigureAwait(false);
+
+        return result.Applied;
+    }
+
+    /// <summary>A percentage on hwmon's 0..255 scale.</summary>
+    public static int PercentToPwm(int percent) =>
+        (int)Math.Round(Math.Clamp(percent, 0, 100) * 255 / 100.0, MidpointRounding.AwayFromZero);
+
+    /// <summary>An hwmon 0..255 value as a percentage.</summary>
+    public static int PwmToPercent(int pwm) =>
+        (int)Math.Round(Math.Clamp(pwm, 0, 255) * 100 / 255.0, MidpointRounding.AwayFromZero);
+
+    /// <summary>The kernel's fan mode and speeds, or null when the hwmon fan control is absent or unreadable.</summary>
+    private FanState? ReadKernelFanState()
+    {
+        var nodes = _caps.Nodes;
+        if (!nodes.HasKernelFanControl) return null;
+
+        FanMode? mode = ReadInt(nodes.AcerPwmCpuEnable) switch
+        {
+            2 => FanMode.Auto,
+            0 => FanMode.Max,
+            1 => FanMode.Custom,
+            _ => null
+        };
+        if (mode == null) return null;
+
+        var cpu = ReadInt(nodes.AcerPwmCpu) is int c ? PwmToPercent(c) : 0;
+        var gpu = ReadInt(nodes.AcerPwmGpu) is int g ? PwmToPercent(g) : cpu;
+        return new FanState(mode.Value, cpu, gpu);
+    }
+
     /// <summary>Reads <c>fan_speed</c> and classifies it. Null when the attribute is absent or unreadable.</summary>
     private FanState? ReadFanState()
     {
+        if (_caps.Nodes.FanSpeed == null) return ReadKernelFanState();
+
         var (cpu, gpu) = ReadFanPercent();
         if (cpu == null && gpu == null) return null;
 
@@ -418,7 +501,14 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         return new FanState(mode, cpuValue, gpuValue);
     }
 
-    private (int? Cpu, int? Gpu) ReadFanPercent() => ParseFanPercent(ReadNode(_caps.Nodes.FanSpeed));
+    private (int? Cpu, int? Gpu) ReadFanPercent()
+    {
+        if (_caps.Nodes.FanSpeed != null) return ParseFanPercent(ReadNode(_caps.Nodes.FanSpeed));
+        if (ReadKernelFanState() is not { } state) return (null, null);
+
+        // Automatic reads as 0 % on Linuwu-Sense's scale too: "the firmware decides", not a stopped fan.
+        return state.Mode == FanMode.Auto ? (0, 0) : (state.CpuPercent, state.GpuPercent);
+    }
 
     /// <summary>One <c>cpu,gpu</c> line as two percentages. A missing or malformed field reads as null, not as zero.</summary>
     public static (int? Cpu, int? Gpu) ParseFanPercent(string? text)

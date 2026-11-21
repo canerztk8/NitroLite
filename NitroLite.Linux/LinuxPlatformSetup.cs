@@ -72,6 +72,34 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         _user = string.IsNullOrWhiteSpace(user) ? Environment.UserName : user;
         _pkexec = _runner.Find("pkexec");
         _hint = capabilities.KernelHint;
+        ModelNote = capabilities.ModelNote;
+    }
+
+    public string? ModelNote { get; }
+
+    public Task<string?> WriteCaptureAsync(string directory) => Task.Run(() =>
+    {
+        try
+        {
+            var path = new LinuxCaptureWriter(_fs, _runner).WriteTo(directory);
+            AppLog.Info("A Linux capture was written", Path.GetFileName(path));
+            return (string?)path;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Warn("The Linux capture could not be written", ex.Message);
+            return null;
+        }
+    });
+
+    public string CaptureSummary
+    {
+        get
+        {
+            var os = LinuxDiagnosticsService.OsName(_fs.ReadAllText("/etc/os-release"));
+            var kernel = _fs.ReadAllText("/proc/sys/kernel/osrelease")?.Trim() ?? "unknown";
+            return $"- Distribution: {os}\n- Kernel: {kernel}\n- Suggested kernel step: {_hint}";
+        }
     }
 
     public bool CanElevate => _pkexec != null && _runner.Find("sh") != null;

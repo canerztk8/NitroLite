@@ -134,6 +134,24 @@ public static class CompatibilityReportUrl
         return text.Trim();
     }
 
+    /// <summary>
+    /// The URL for a new issue that carries a Linux capture. The capture is a file of a thousand lines and too long for
+    /// a URL, so the body says which file to attach and gives the few facts a maintainer reads first; GitHub takes the
+    /// file itself by drag and drop.
+    /// </summary>
+    public static string BuildLinuxCapture(string? model, string? board, string fileName, string? summary)
+    {
+        var title = BuildTitle(model, board).Replace("[Compatibility]", "[Linux capture]", StringComparison.Ordinal);
+        var body =
+            $"Please drag **{Clean(fileName)}** into this box to attach it. It is in the folder NitroLite just opened." +
+            "\n\nThe capture only records what NitroLite reads; it contains no serial numbers, host name or user name." +
+            (string.IsNullOrWhiteSpace(summary) ? "" : "\n\n" + Clean(summary));
+
+        var prefix = $"{NewIssueUrl}?title={Uri.EscapeDataString(title)}&labels=linux&body=";
+        var budget = MaximumUrlLength - prefix.Length;
+        return prefix + Uri.EscapeDataString(Fit(body, budget));
+    }
+
     /// <summary>For a log line: how long the link turned out, without printing the report again.</summary>
     public static string DescribeLength(string url) =>
         string.Create(CultureInfo.InvariantCulture, $"length {url.Length} of {MaximumUrlLength}");

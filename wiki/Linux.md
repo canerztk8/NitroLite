@@ -30,8 +30,8 @@ NitroLite appears in your application menu. No .NET install is needed; the runti
 Open **Settings**. If NitroLite needs permission for something, a **Linux setup** card is at the top. Press
 **Enable**: it asks for your password once, then
 
-- installs the permission rule (`99-nitrolite.rules`) so NitroLite may change the operating mode, the keyboard and the
-  processor boost without running as root,
+- installs the permission rule (`99-nitrolite.rules`) so NitroLite may change the operating mode, the fans, the
+  keyboard, the charge limit and the processor boost without running as root,
 - adds you to the `nitrolite` group, which owns those settings, and to the `input` group, which lets NitroLite hear
   the laptop's **Nitro key**.
 
@@ -52,14 +52,18 @@ graphics card and battery health need no permission at all.
 | School mode: processor boost off | After **Enable** | the permission rule |
 | Nitro key | After **Enable** | the `input` group |
 | Keyboard colour on the 2024+ boards (Nitro V, Nitro 16S, Helios Neo with an ENE KB5130 controller) | After **Enable** | the permission rule |
-| Fan RPM and Acer's own modes | Depends on the model | the kernel's `acer-wmi` driver knowing your model; see *Unlock more* |
-| Fan speed, fan curve, 4-zone keyboard colour (older boards), CoolBoost, LCD overdrive, 80 % charge limit, MUX | No | the [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) kernel module |
+| Fan RPM and Acer's own modes | Depends on the model | the kernel knowing your model; see **[Linux model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)**, or `predator_v4` |
+| Fan speed and fan curve | On the models the kernel lists for fan control, after **Enable** | a new enough kernel ([model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)), or Linuwu-Sense |
+| 4-zone keyboard colour (firmware-driven boards), CoolBoost, LCD overdrive, 80 % charge limit, MUX | No | the [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) kernel module |
 | Keyboard colour through OpenRGB | If OpenRGB is running | the OpenRGB SDK server on `127.0.0.1:6742` |
 
 The **Settings** page lists what was found on your machine. That is the quickest way to tell whether a missing
 control is your kernel or NitroLite.
 
 ## Unlock more
+
+First check **[Linux model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)**: if your model is
+listed, a newer kernel may already do everything below for you. NitroLite also says so on the Settings page.
 
 ### Fan RPM and Acer modes: `predator_v4` (experimental)
 
@@ -118,8 +122,9 @@ Still stuck? **Settings → Export hardware report** and attach the file to a
 |---|---|---|
 | Acer Nitro 16 **AN16-41** (Ryzen 7 7840HS, RTX 4070) | Ubuntu 26.04.1, kernel 7.0 | From a capture of the machine: the operating mode (through `amd-pmf`), temperatures, the RTX 4070 and battery health are all readable, and the mode is writable once the permission rule is in. No fan RPM: `predator_v4` is off and not yet tried. Fan speed and keyboard colour need Linuwu-Sense, because this keyboard has no KB5130 controller. The 1.3.0 build itself has not been run on this laptop yet |
 
-Other models have not been run on real hardware yet. A capture from your laptop (below) is the most useful thing you
-can send.
+Other models have not been run on real hardware yet. **Settings → Linux setup → Send Linux info** records your
+laptop and opens a GitHub issue for it: the most useful thing you can send. The Linux 7.4 kernel adds full support
+for the AN16-41, fan control included.
 
 ## For contributors: capture a laptop once
 

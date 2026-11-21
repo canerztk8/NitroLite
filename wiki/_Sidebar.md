@@ -5,6 +5,7 @@
 - [Features](https://github.com/canerztk8/NitroLite/wiki/Features)
 - [Installing on Windows](https://github.com/canerztk8/NitroLite/wiki/Installing-on-Windows)
 - [Linux](https://github.com/canerztk8/NitroLite/wiki/Linux)
+- [Linux model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)
 - [Why SmartScreen warns](https://github.com/canerztk8/NitroLite/wiki/Why-SmartScreen-warns)
 
 **When something does not work**

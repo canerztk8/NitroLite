@@ -91,6 +91,11 @@ public static class LinuxHardwareReport
         text.AppendLine($"- Linuwu-Sense: {(nodes.SenseRoot != null ? "present" : "absent")}");
         text.AppendLine($"- ENE KB5130 keyboard (hidraw): {(nodes.HidrawKeyboard != null ? Clean(nodes.HidrawKeyboard) : "absent")}");
         text.AppendLine($"- suggested kernel step: {capabilities.KernelHint}");
+        text.AppendLine($"- running kernel: {(capabilities.KernelVersion?.ToString() ?? "unknown")}");
+        text.AppendLine(capabilities.KernelModel is { } km
+            ? $"- mainline support: since Linux {km.Since}{(km.FanControlSince != null ? $", fan control since {km.FanControlSince}" : ", no fan control")}"
+            : "- mainline support: not in the acer-wmi quirk table");
+        text.AppendLine($"- kernel fan control (hwmon pwm): {(nodes.HasKernelFanControl ? "present" : "absent")}");
         text.AppendLine();
 
         text.AppendLine("## hwmon");

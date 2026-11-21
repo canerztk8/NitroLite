@@ -1743,5 +1743,15 @@
   "pkexec bulunamadı; aşağıdaki komutu terminalde çalıştırın.": "pkexec tidak ditemukan; jalankan perintah di bawah di terminal.",
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "Jendela kata sandi ditutup; tidak ada yang berubah.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "Izin tidak diberikan atau jendela kata sandi tidak bisa dibuka; jalankan perintah di bawah di terminal.",
-  "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "Penyiapan tidak dapat diselesaikan; jalankan perintah di bawah di terminal."
+  "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "Penyiapan tidak dapat diselesaikan; jalankan perintah di bawah di terminal.",
+  "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} mendukung model ini sepenuhnya, termasuk kontrol kipas; kernel saat ini {1}. Sampai saat itu, predator_v4 memberikan RPM kipas dan mode Acer.",
+  "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} mendukung mode Acer dan RPM kipas model ini; kernel saat ini {1}. Sampai saat itu, predator_v4 memberikan fitur yang sama.",
+  "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "Kernel Anda mendukung mode Acer model ini; kontrol kipas hadir di Linux {0}.",
+  "Bu modelin firmware'i performance profilini reddediyor; diğer dört mod çalışıyor.": "Firmware model ini menolak profil performance; empat mode lainnya berfungsi.",
+  "Çekirdek bu modelde yalnızca Turbo tuşunu ve fan modunu destekliyor.": "Pada model ini kernel hanya mendukung tombol Turbo dan mode kipas.",
+  "Bu laptopu desteklememize yardım edin": "Bantu kami mendukung laptop ini",
+  "Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.": "Menyimpan data perangkat keras yang dibaca NitroLite ke satu berkas dan membuka issue di GitHub. Berkas ini tidak berisi nomor seri, nama komputer, atau nama pengguna. Setiap laptop yang dikirim meningkatkan dukungan untuk semua pemilik model yang sama.",
+  "Linux bilgilerini gönder": "Kirim info Linux",
+  "Kayıt dosyası yazılamadı.": "Berkas rekaman tidak dapat ditulis.",
+  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} disimpan. Seret berkas dari folder yang terbuka ke halaman GitHub."
 }

@@ -50,6 +50,26 @@ public sealed record LinuxNodes
     /// <summary>Effect, speed, brightness, direction and colour.</summary>
     public string? FourZoneMode { get; init; }
 
+    /// <summary>
+    /// The in-kernel fan control: <c>pwm1</c>/<c>pwm2</c> (CPU/GPU, 0..255) and their <c>_enable</c> files
+    /// (0 = maximum, 1 = manual, 2 = automatic) on the <c>acer</c> hwmon device. The kernel offers them on the models
+    /// its quirk table marks for fan control (AN515-58, AN16-41, ANV15-51, PH16-72, PHN16-72, PT14-51), so this is fan
+    /// control with no out-of-tree module.
+    /// </summary>
+    public string? AcerPwmCpu { get; init; }
+
+    /// <inheritdoc cref="AcerPwmCpu"/>
+    public string? AcerPwmGpu { get; init; }
+
+    /// <inheritdoc cref="AcerPwmCpu"/>
+    public string? AcerPwmCpuEnable { get; init; }
+
+    /// <inheritdoc cref="AcerPwmCpu"/>
+    public string? AcerPwmGpuEnable { get; init; }
+
+    /// <summary>True when the kernel's own fan control is there: at least the CPU fan's mode and speed.</summary>
+    public bool HasKernelFanControl => AcerPwmCpu != null && AcerPwmCpuEnable != null;
+
     /// <summary><c>/dev/hidrawN</c> of an ENE KB5130 keyboard controller, when the machine has one.</summary>
     public string? HidrawKeyboard { get; init; }
 
@@ -95,6 +115,15 @@ public sealed record LinuxCapabilities : IPlatformSnapshot
 
     /// <summary>The daemon client the controller writes through when <see cref="ModeViaPowerProfiles"/> is set.</summary>
     public IPowerProfiles PowerProfiles { get; init; } = NoPowerProfiles.Instance;
+
+    /// <summary>The running kernel as major.minor, from <c>/proc/sys/kernel/osrelease</c>; null when unreadable.</summary>
+    public Version? KernelVersion { get; init; }
+
+    /// <summary>The mainline kernel's entry for this model, or null when its quirk table does not list it.</summary>
+    public LinuxKernelModel? KernelModel { get; init; }
+
+    /// <summary>One sentence about this model on this kernel for the settings page, or null.</summary>
+    public string? ModelNote { get; init; }
 
     /// <summary>True when the in-kernel <c>acer-wmi</c> module is loaded.</summary>
     public bool AcerWmiLoaded { get; init; }

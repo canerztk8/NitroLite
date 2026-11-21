@@ -1743,5 +1743,15 @@
   "pkexec bulunamadı; aşağıdaki komutu terminalde çalıştırın.": "No se encontró pkexec; ejecuta el comando de abajo en una terminal.",
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "Se cerró la ventana de contraseña; no se cambió nada.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "No se concedió el permiso o no se pudo abrir la ventana de contraseña; ejecuta el comando de abajo en una terminal.",
-  "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "La configuración no pudo completarse; ejecuta el comando de abajo en una terminal."
+  "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "La configuración no pudo completarse; ejecuta el comando de abajo en una terminal.",
+  "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} admite este modelo por completo, control de ventiladores incluido; el kernel actual es {1}. Hasta entonces, predator_v4 trae las RPM de los ventiladores y los modos de Acer.",
+  "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} admite los modos de Acer y las RPM de los ventiladores de este modelo; el kernel actual es {1}. Hasta entonces, predator_v4 trae las mismas funciones.",
+  "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "Tu kernel admite los modos de Acer de este modelo; el control de ventiladores llega con Linux {0}.",
+  "Bu modelin firmware'i performance profilini reddediyor; diğer dört mod çalışıyor.": "El firmware de este modelo rechaza el perfil performance; los otros cuatro modos funcionan.",
+  "Çekirdek bu modelde yalnızca Turbo tuşunu ve fan modunu destekliyor.": "En este modelo el kernel solo admite la tecla Turbo y el modo de ventilador.",
+  "Bu laptopu desteklememize yardım edin": "Ayúdanos a dar soporte a este portátil",
+  "Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.": "Guarda en un archivo los datos de hardware que lee NitroLite y abre un issue en GitHub. No contiene números de serie, nombre del equipo ni nombre de usuario. Cada portátil enviado mejora el soporte para todos los que tienen el mismo modelo.",
+  "Linux bilgilerini gönder": "Enviar información de Linux",
+  "Kayıt dosyası yazılamadı.": "No se pudo escribir el archivo de captura.",
+  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} guardado. Arrastra el archivo de la carpeta que se abrió a la página de GitHub."
 }

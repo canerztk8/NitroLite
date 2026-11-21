@@ -1,75 +1,67 @@
-﻿# NitroLite — Linux sysfs permissions
+﻿# NitroLite — Linux permissions
 #
-# The Acer hardware attributes are owned by root and created 0644, so a normal user can read them but not write them.
-# Without this rule NitroLite starts in read-only mode: telemetry works, and every control answers "permission denied"
-# with the hint that points here.
+# The Acer hardware settings are sysfs attributes owned by root and created 0644, so a normal user can read them but
+# not write them. This rule hands exactly those attributes to the "nitrolite" group, which NitroLite's Settings page
+# (or install.sh) creates and adds you to. Without it NitroLite still runs: telemetry works, the operating mode goes
+# through power-profiles-daemon, and every other control says what is missing.
 #
-# Install:
-#   sudo cp 99-nitrolite.rules /etc/udev/rules.d/
-#   sudo udevadm control --reload
-#   sudo udevadm trigger
+# Install (the Settings page's "Enable" button does all of this behind one password prompt):
+#   sudo groupadd -f nitrolite && sudo usermod -aG nitrolite,input "$USER"
+#   sudo install -m 644 99-nitrolite.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# Then log out and back in, so the session picks up the group.
 #
-# Then log out and back in. TAG+="uaccess" grants an ACL to the user of the *current seat*, and that ACL is applied
-# when the device is created, so a session that was already open when the rule was installed does not get it.
+# Why group ownership and not TAG+="uaccess": uaccess makes logind put an ACL on a device's /dev node. A sysfs attribute
+# has no /dev node, so the tag never reached the files NitroLite writes. It is still the right tool for the one real
+# device node here, the keyboard controller's /dev/hidrawN.
 #
-# Nothing here grants anything to a user who is not logged in at the machine, and nothing here is world-writable
-# except the one ACPI attribute that udev cannot tag (see the note at the bottom).
+# Every change is 0660/g+w to the nitrolite group, never world-writable. If the group does not exist the chgrp fails
+# and the attribute stays root-only, which is the safe direction to fail in.
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Tier 1: the in-kernel acer-wmi module
+# Global attributes, applied when the acer-wmi platform device appears at boot
 # ---------------------------------------------------------------------------------------------------------------------
 
-# The platform device itself. Its attributes are the fan speed, CoolBoost, LCD overdrive, the backlight timeout and the
-# battery limiter on kernels that expose them, and the Linuwu-Sense tree is a symlink to this same device, so one tag
-# covers both.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", TAG+="uaccess"
+# The ACPI platform profile (the operating mode). It lives under /sys/firmware/acpi/, which has no device of its own.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null && chmod 0660 /sys/firmware/acpi/platform_profile; true'"
 
-# The ACPI platform profile. This one is not a device: it lives under /sys/firmware/acpi/, which udev has no device to
-# tag, so the mode is widened directly when the platform device appears. kernfs supports a mode change on a sysfs
-# attribute, and the write is idempotent, so a second trigger is harmless.
-#
-# 0660 with the nitrolite group, not 0666. The attribute decides the machine's power profile, and a world-writable one
-# let any local user change it. install.sh creates the group and adds you to it; if the group is missing the chgrp
-# fails and the attribute stays root-only, which is the safe direction to fail in.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null; chmod 0660 /sys/firmware/acpi/platform_profile'"
+# The processor boost switch school mode turns off: cpufreq/boost on AMD and most Intel, intel_pstate/no_turbo on Intel
+# in active mode. Only the node the kernel actually has is touched.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; for f in /sys/devices/system/cpu/cpufreq/boost /sys/devices/system/cpu/intel_pstate/no_turbo; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0660 $$f; done; true'"
 
-# The processor boost switch school mode turns off, handed to the same group the same way. Like platform_profile it is
-# a global attribute with no device of its own, so it rides on the acer-wmi device appearing at boot. Only the node the
-# kernel actually has is touched: cpufreq/boost on AMD and most Intel, intel_pstate/no_turbo on Intel in active mode.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'for f in /sys/devices/system/cpu/cpufreq/boost /sys/devices/system/cpu/intel_pstate/no_turbo; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0660 $$f; done; true'"
+# ---------------------------------------------------------------------------------------------------------------------
+# The in-kernel acer-wmi driver
+# ---------------------------------------------------------------------------------------------------------------------
 
-# The laptop's own fans and board sensor. The CPU and GPU die sensors (k10temp, coretemp, amdgpu) are read-only and
-# need no rule.
-SUBSYSTEM=="hwmon", ATTR{name}=="acer", TAG+="uaccess"
+# Fan control on the models the kernel enables it for (pwm1/pwm2 and their _enable files on the "acer" hwmon device).
+# The tachometers and temperatures next to them are read-only and stay that way.
+SUBSYSTEM=="hwmon", ATTR{name}=="acer", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; cd /sys$env{DEVPATH} && for f in pwm1 pwm2 pwm1_enable pwm2_enable; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0664 $$f; done; true'"
 
-# The battery charge limit, which the standard kernel class exposes as charge_control_end_threshold.
-SUBSYSTEM=="power_supply", ATTR{type}=="Battery", TAG+="uaccess"
+# The battery charge limit, where the standard battery class has one.
+SUBSYSTEM=="power_supply", ATTR{type}=="Battery", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; cd /sys$env{DEVPATH} && for f in charge_control_end_threshold charge_control_start_threshold; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0664 $$f; done; true'"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The out-of-tree Linuwu-Sense module
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Its settings sit on the acer-wmi platform device in nitro_sense/ or predator_sense/, with the keyboard in
+# four_zoned_kb/ below them. Only attributes the owner may already write are widened, so a read-only attribute stays
+# read-only for everyone.
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; for d in /sys$env{DEVPATH}/nitro_sense /sys$env{DEVPATH}/predator_sense /sys$env{DEVPATH}/nitro_sense/four_zoned_kb /sys$env{DEVPATH}/predator_sense/four_zoned_kb; do [ -d $$d ] && find $$d -maxdepth 1 -type f -perm -u+w -exec chgrp nitrolite {} + -exec chmod g+w {} + 2>/dev/null; done; true'"
+
+# ---------------------------------------------------------------------------------------------------------------------
+# A real device node
+# ---------------------------------------------------------------------------------------------------------------------
 
 # The ENE KB5130 keyboard controller on the 2024-and-later Nitro V, Nitro 16S and Helios Neo boards. The colour is an
-# HID feature report, written straight to /dev/hidrawN with no kernel module; this tag lets the seat user open that one
-# node. No other HID device is matched.
+# HID feature report written to /dev/hidrawN; uaccess gives the user at the seat that one node. No other HID device is
+# matched.
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0cf2", ATTRS{idProduct}=="5130", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Tier 2: the out-of-tree Linuwu-Sense module
+# If the operating mode still says "permission denied"
 # ---------------------------------------------------------------------------------------------------------------------
-
-# The module registers its attributes on the acer-wmi platform device, which the first rule already tags. This rule is
-# kept as a belt-and-braces match for the builds that register a separate device instead.
-SUBSYSTEM=="platform", DRIVERS=="acer-wmi", TAG+="uaccess"
-
-# ---------------------------------------------------------------------------------------------------------------------
-# Note on /sys/firmware/acpi/platform_profile
-# ---------------------------------------------------------------------------------------------------------------------
-# If mode switching still reports "permission denied" after installing this rule, the chmod above did not run on your
-# kernel. Two things work instead, and both are a deliberate choice by the user rather than something this file does
-# silently:
-#
-#   1. Use power-profiles-daemon, which owns that attribute through D-Bus and needs no permission at all:
-#        sudo systemctl enable --now power-profiles-daemon
-#
-#   2. Widen it by hand for the current boot:
-#        sudo chgrp nitrolite /sys/firmware/acpi/platform_profile && sudo chmod 0660 /sys/firmware/acpi/platform_profile
-#      (or 0666 instead of 0660 if you would rather not use the group at all)
-#
-# NitroLite reports which of the two it found, so the settings page says what is missing instead of failing quietly.
+# NitroLite switches the mode through power-profiles-daemon (or tuned-ppd) when it cannot write the attribute, which
+# needs no permission at all:
+#     sudo systemctl enable --now power-profiles-daemon
+# The Settings page says which of the two paths it is using.

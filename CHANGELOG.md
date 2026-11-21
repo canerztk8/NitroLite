@@ -10,6 +10,17 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+**Linux**
+- Fan control through the kernel itself (hwmon `pwm`) on the models the kernel lists for it: Nitro AN515-58, AN16-41
+  and ANV15-51, Predator PH16-72, PHN16-72 and PT14-51. No Linuwu-Sense needed there.
+- The app knows which Nitro and Predator models the mainline kernel supports and from which release, and says so on
+  the Settings page: on an AN16-41 with Linux 7.0, "Linux 7.4 supports this model fully; until then, predator_v4".
+- **Send Linux info** in Settings records the machine (read-only, no serial numbers, host or user name), opens the
+  folder and a pre-filled GitHub issue, so any model can be supported from one button.
+- The permission rule now actually reaches the fan, charge-limit and Linuwu-Sense settings. `TAG+="uaccess"` only
+  applies to `/dev` nodes, so those sysfs attributes were never writable; they are now handed to the `nitrolite`
+  group like the operating mode.
+
 ## [1.3.0] - 2026-11-21
 
 Linux goes from "experimental" to usable on a stock install, and the lighting page is rebuilt around a real off switch.

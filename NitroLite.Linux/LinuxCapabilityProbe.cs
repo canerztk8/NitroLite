@@ -80,7 +80,7 @@ public sealed class LinuxCapabilityProbe
             // "A working path to the hardware" on Linux means at least one node answered.
             ServiceAvailable = !nodes.IsEmpty || viaDaemon,
             OperatingModeControl = hasAcpi || viaDaemon,
-            FanControl = nodes.FanSpeed != null,
+            FanControl = nodes.FanSpeed != null || nodes.HasKernelFanControl,
             MuxSwitch = nodes.DgpuMode != null,
             BatteryChargeLimit = nodes.BatteryLimiter != null || nodes.ChargeThreshold != null,
             KeyboardLighting = hasKeyboardNodes || nodes.HidrawKeyboard != null,
@@ -116,6 +116,8 @@ public sealed class LinuxCapabilityProbe
         }
 
         var kernelHint = KernelHintFor(identity, hasSense, sample);
+        var kernelVersion = LinuxModelSupport.ParseKernel(_fs.ReadAllText("/proc/sys/kernel/osrelease"));
+        var kernelModel = LinuxModelSupport.Find(identity);
         if (kernelHint == KernelSetupHint.EnablePredatorV4)
         {
             notes.Add("acer-wmi predator_v4 kapalı: açılırsa fan devri ve Acer çalışma modları gelebilir.");
@@ -140,6 +142,9 @@ public sealed class LinuxCapabilityProbe
             ModeViaPowerProfiles = viaDaemon,
             PowerProfiles = viaDaemon ? _power : NoPowerProfiles.Instance,
             KernelHint = kernelHint,
+            KernelVersion = kernelVersion,
+            KernelModel = kernelModel,
+            ModelNote = LinuxModelSupport.Describe(kernelModel, kernelVersion),
             AcerWmiLoaded = _fs.DirectoryExists(LinuxPaths.AcerWmiModule),
             PredatorV4 = _fs.ReadAllText(LinuxPaths.AcerWmiPredatorV4)?.Trim(),
             PlatformProfileChoicesText = choices?.Trim(),
@@ -208,7 +213,11 @@ public sealed class LinuxCapabilityProbe
                      nodes.BatteryLimiter,
                      nodes.ChargeThreshold,
                      nodes.DgpuMode,
-                     nodes.HidrawKeyboard
+                     nodes.HidrawKeyboard,
+                     nodes.AcerPwmCpu,
+                     nodes.AcerPwmGpu,
+                     nodes.AcerPwmCpuEnable,
+                     nodes.AcerPwmGpuEnable
                  })
         {
             if (path != null) yield return path;
@@ -226,6 +235,16 @@ public sealed class LinuxCapabilityProbe
 
         string? Sense(string name) => sense == null ? null : Existing(LinuxPaths.Combine(sense, name));
         string? Acpi(string name) => acpi == null ? null : Existing(LinuxPaths.Combine(acpi, name));
+
+        // The kernel's own fan control lives on the acer hwmon device, next to the tachometers.
+        var hwmon = LinuxHwmon.Read(_fs);
+        string? acerHwmon = null;
+        foreach (var device in hwmon)
+        {
+            if (device.Name.Equals("acer", StringComparison.OrdinalIgnoreCase)) { acerHwmon = device.Path; break; }
+        }
+
+        string? Pwm(string name) => acerHwmon == null ? null : Existing(LinuxPaths.Combine(acerHwmon, name));
 
         // four_zoned_kb is a directory, not an attribute: the two files inside it are the ones that carry the state.
         var keyboard = sense == null ? null : ExistingDirectory(LinuxPaths.Combine(sense, LinuxPaths.FourZoneKeyboard));
@@ -245,7 +264,11 @@ public sealed class LinuxCapabilityProbe
             PerZoneMode = keyboard == null ? null : Existing(LinuxPaths.Combine(keyboard, LinuxPaths.PerZoneMode)),
             FourZoneMode = keyboard == null ? null : Existing(LinuxPaths.Combine(keyboard, LinuxPaths.FourZoneMode)),
             HidrawKeyboard = LinuxHidrawLocator.FindEneKb5130(_fs, _readBytes),
-            Hwmon = LinuxHwmon.Read(_fs)
+            AcerPwmCpu = Pwm("pwm1"),
+            AcerPwmGpu = Pwm("pwm2"),
+            AcerPwmCpuEnable = Pwm("pwm1_enable"),
+            AcerPwmGpuEnable = Pwm("pwm2_enable"),
+            Hwmon = hwmon
         };
     }
 

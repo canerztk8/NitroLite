@@ -410,6 +410,8 @@
       <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding ShowLinuxSetupCard}">
         <StackPanel Spacing="8">
           <TextBlock Classes="section" Text="{Binding Labels.LinuxSetupTitle}" />
+          <TextBlock Classes="hint" Text="{Binding LinuxModelNote}" TextWrapping="Wrap" FontWeight="SemiBold"
+                     IsVisible="{Binding HasLinuxModelNote}" />
 
           <StackPanel Spacing="8" IsVisible="{Binding ShowGrantAccess}">
             <TextBlock Classes="hint" Text="{Binding Labels.LinuxGrantHint}" TextWrapping="Wrap" />
@@ -440,6 +442,15 @@
             <TextBlock Classes="hint" Text="{Binding Labels.LinuxLinuwuHint}" TextWrapping="Wrap" />
             <Button Content="{Binding Labels.LinuxLinuwuButton}" HorizontalAlignment="Left"
                     Command="{Binding OpenLinuwuSenseCommand}" />
+          </StackPanel>
+
+          <StackPanel Spacing="8" Margin="0,6,0,0">
+            <TextBlock Classes="rowtitle" Text="{Binding Labels.LinuxCaptureTitle}" />
+            <TextBlock Classes="hint" Text="{Binding Labels.LinuxCaptureHint}" TextWrapping="Wrap" />
+            <Button Content="{Binding Labels.LinuxCaptureButton}" HorizontalAlignment="Left"
+                    IsEnabled="{Binding LinuxSetupIdle}"
+                    AutomationProperties.AutomationId="SendLinuxInfo"
+                    Command="{Binding SendLinuxInfoCommand}" />
           </StackPanel>
 
           <TextBlock Classes="hint" Text="{Binding LinuxSetupStatus}" TextWrapping="Wrap" FontWeight="SemiBold"

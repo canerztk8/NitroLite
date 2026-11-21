@@ -1390,6 +1390,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         GrantLinuxAccessCommand = new AsyncCommand(GrantLinuxAccessAsync);
         EnablePredatorV4Command = new AsyncCommand(EnablePredatorV4Async);
         OpenLinuwuSenseCommand = new RelayCommand(() => _urlOpener?.Invoke(LinuwuSenseUrl));
+        SendLinuxInfoCommand = new AsyncCommand(SendLinuxInfoAsync);
         RescanCommand = new AsyncCommand(RescanAsync);
         ApplyGpuModeCommand = new AsyncCommand(ApplyGpuModeAsync);
         ApplyRgbProfileCommand = new AsyncCommand(ApplyRgbProfileAsync);
@@ -6722,7 +6723,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The Linux card is drawn when there is something to do: a node that needs the udev rule, a user who cannot hear
     /// the Nitro key, or a kernel step that would unlock more of the machine.
     /// </summary>
-    public bool ShowLinuxSetupCard => _platformSetup != null && (ShowGrantAccess || ShowPredatorV4 || ShowLinuwuSense);
+    /// <summary>
+    /// The Linux card is always there on Linux: it carries the button that sends this machine's capture, which is how
+    /// a model nobody has tested gets supported. The other sections inside it show only when they have something to do.
+    /// </summary>
+    public bool ShowLinuxSetupCard => _platformSetup != null;
+
+    /// <summary>What the mainline kernel does for this exact model, when the kernel's quirk table lists it.</summary>
+    public string LinuxModelNote => _platformSetup?.ModelNote ?? "";
+
+    public bool HasLinuxModelNote => !string.IsNullOrEmpty(_platformSetup?.ModelNote);
 
     /// <summary>The permissions half: the udev rule and the two groups, behind one password prompt.</summary>
     public bool ShowGrantAccess => _platformSetup != null && (NeedsUdevRule || _platformSetup.NeedsInputGroup);
@@ -6768,6 +6778,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The udev trigger hands the seat ACLs over at once, so a rescan right away already finds most nodes
             // writable; the group-owned ones follow after the next login.
             if (result.Ok) await RescanAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            LinuxSetupIdle = true;
+        }
+    }
+
+    /// <summary>
+    /// Records this machine (read-only, nothing personal), opens the folder the file is in, and opens a GitHub issue
+    /// that says which file to drag in. Two windows rather than an upload: NitroLite has no account to upload with, and
+    /// the user sees exactly what they are sending.
+    /// </summary>
+    private async Task SendLinuxInfoAsync()
+    {
+        if (_platformSetup == null || !LinuxSetupIdle) return;
+
+        LinuxSetupIdle = false;
+        try
+        {
+            var directory = AppPaths.DataDirectory;
+            var path = await _platformSetup.WriteCaptureAsync(directory).ConfigureAwait(true);
+            if (path == null)
+            {
+                LinuxSetupStatus = Labels.LinuxCaptureFailed;
+                return;
+            }
+
+            var identity = _platform?.Identity;
+            var model = string.IsNullOrWhiteSpace(identity?.ModelCode) ? identity?.Model : identity?.ModelCode;
+            var url = CompatibilityReportUrl.BuildLinuxCapture(model, identity?.BoardProduct,
+                Path.GetFileName(path), _platformSetup.CaptureSummary);
+
+            _urlOpener?.Invoke(directory);
+            OpenUrl(url);
+            LinuxSetupStatus = Labels.LinuxCaptureSent(Path.GetFileName(path));
         }
         finally
         {
@@ -6851,6 +6896,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public AsyncCommand GrantLinuxAccessCommand { get; }
     public AsyncCommand EnablePredatorV4Command { get; }
     public RelayCommand OpenLinuwuSenseCommand { get; }
+    public AsyncCommand SendLinuxInfoCommand { get; }
     public AsyncCommand RescanCommand { get; }
     public AsyncCommand ApplyGpuModeCommand { get; }
     public AsyncCommand ApplyRgbProfileCommand { get; }

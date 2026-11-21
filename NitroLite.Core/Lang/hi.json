@@ -1743,5 +1743,15 @@
   "pkexec bulunamadı; aşağıdaki komutu terminalde çalıştırın.": "pkexec नहीं मिला; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "पासवर्ड विंडो बंद कर दी गई; कुछ नहीं बदला।",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "अनुमति नहीं मिली या पासवर्ड विंडो नहीं खुल सकी; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
-  "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "सेटअप पूरा नहीं हो सका; नीचे दी गई कमांड टर्मिनल में चलाएँ।"
+  "Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.": "सेटअप पूरा नहीं हो सका; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
+  "Linux {0} bu modeli fan kontrolü dahil tam destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 fan devrini ve Acer modlarını getirir.": "Linux {0} इस मॉडल को फ़ैन कंट्रोल सहित पूरी तरह सपोर्ट करता है; अभी का कर्नेल {1} है। तब तक predator_v4 फ़ैन RPM और Acer मोड देता है।",
+  "Linux {0} bu modelin Acer modlarını ve fan devrini destekliyor; şu anki çekirdek {1}. O zamana kadar predator_v4 aynı özellikleri getirir.": "Linux {0} इस मॉडल के Acer मोड और फ़ैन RPM सपोर्ट करता है; अभी का कर्नेल {1} है। तब तक predator_v4 यही सुविधाएँ देता है।",
+  "Çekirdeğiniz bu modelin Acer modlarını destekliyor; fan kontrolü Linux {0} ile geliyor.": "आपका कर्नेल इस मॉडल के Acer मोड सपोर्ट करता है; फ़ैन कंट्रोल Linux {0} के साथ आएगा।",
+  "Bu modelin firmware'i performance profilini reddediyor; diğer dört mod çalışıyor.": "इस मॉडल का फ़र्मवेयर performance प्रोफ़ाइल अस्वीकार करता है; बाकी चार मोड काम करते हैं।",
+  "Çekirdek bu modelde yalnızca Turbo tuşunu ve fan modunu destekliyor.": "इस मॉडल पर कर्नेल केवल Turbo कुंजी और फ़ैन मोड सपोर्ट करता है।",
+  "Bu laptopu desteklememize yardım edin": "इस लैपटॉप को सपोर्ट करने में हमारी मदद करें",
+  "Uygulamanın okuduğu donanım bilgilerini tek bir dosyaya kaydeder ve GitHub'da bir kayıt açar. Seri numarası, bilgisayar adı ya da kullanıcı adı içermez. Gönderilen her laptop, aynı modeldeki herkes için desteği iyileştirir.": "NitroLite जो हार्डवेयर जानकारी पढ़ता है उसे एक फ़ाइल में सहेजता है और GitHub पर एक issue खोलता है। इसमें कोई सीरियल नंबर, कंप्यूटर का नाम या यूज़र नेम नहीं होता। भेजा गया हर लैपटॉप उसी मॉडल वाले सभी लोगों के लिए सपोर्ट बेहतर करता है।",
+  "Linux bilgilerini gönder": "Linux जानकारी भेजें",
+  "Kayıt dosyası yazılamadı.": "कैप्चर फ़ाइल नहीं लिखी जा सकी।",
+  "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} सहेजा गया। खुले फ़ोल्डर से फ़ाइल को GitHub पेज पर खींचें।"
 }

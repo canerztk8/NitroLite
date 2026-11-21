@@ -14,6 +14,8 @@ NitroLite is a small, open-source replacement for NitroSense on Acer Nitro and P
   checking the download, when it asks for administrator rights, uninstalling.
 - **[Linux](https://github.com/canerztk8/NitroLite/wiki/Linux)**: install, the one-button setup, what works on which
   kernel, and how to unlock more.
+- **[Linux model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)**: which Nitro and Predator
+  models the Linux kernel supports, from which release.
 - **[Why SmartScreen warns](https://github.com/canerztk8/NitroLite/wiki/Why-SmartScreen-warns)**: what the "Windows
   protected your PC" prompt means and how to check the file yourself.
 
