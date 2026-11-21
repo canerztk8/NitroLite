@@ -1,4 +1,4 @@
-﻿# NitroLite — Acer Nitro and Predator compatibility
+# NitroLite — Acer Nitro and Predator compatibility
 
 What NitroLite claims about each Acer model, where the claim comes from, and whether it has been
 checked on a real machine. Two kinds of evidence are kept apart throughout:
@@ -425,11 +425,13 @@ Recorded so the next reader does not "fix" these back.
   may be a mis-transcription of `PHN16-71`/`PHN16S-71`, or a regional code. They are left in place
   because deleting a profile is a claim too, and a wrong profile only affects the report — but they
   are marked **code unconfirmed** and must not be used as evidence for anything.
-- **`unsupportedMethods` is left empty everywhere.** The field is parsed and stored but **nothing
-  reads it** (`grep -rn "UnsupportedMethods"` finds only the declaration and the parser). Adding
-  `SetGamingFanSpeed` for PH16-72 or PHN16S-71 would look like enforcement and would enforce
-  nothing. The fan caveats for those two models are recorded in this document and in the profile
-  `notes` instead, which is documented as free-form and never interpreted.
+- **`unsupportedMethods` is enforced, and still empty (2026-11-21).** `UnsupportedMethodGate` maps a
+  listed method to the capability it drives (`SetGamingFanSpeed`/`SetGamingFanBehavior` → fan
+  control, `SetGamingRgbKb`/`SetGamingKBBacklight` → keyboard lighting, `SetBatteryHealthControl` →
+  charge limit) and switches it off; it can only take a capability away, and an unknown name is
+  logged, not guessed at. The shipped table stays empty until a measurement proves a method broken on
+  a model: the PHN16S-71 fan caveat is a community report, and PH16-72 has the opposite evidence (the
+  mainline kernel enables its fan control because the WMI methods work, commit `d727823c134a`).
 - **No sensor id was changed.** The only profile with measured ids is `nitro-16-an16-41`. Every
   other profile carries the firmware-wide enum with `verified: false`, and since the HW-04 fix the
   fan curve refuses to act on an unconfirmed layout — the reading is shown, the curve leaves the

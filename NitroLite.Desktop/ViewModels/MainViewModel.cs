@@ -7013,7 +7013,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await _hardware.EnsureConnectedAsync().ConfigureAwait(true);
-            _capabilities = await _hardware.GetCapabilitiesAsync().ConfigureAwait(true);
+            _capabilities = GateByProfile(await _hardware.GetCapabilitiesAsync().ConfigureAwait(true));
 
             BuildModeChoices();
             Raise(nameof(ModeControlAvailable));
@@ -8484,6 +8484,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// lights back on every time the window came forward.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The backend's capabilities with the matched profile's <c>unsupportedMethods</c> applied: a method the model is
+    /// known to accept and ignore is not offered as a control. It can only take a capability away.
+    /// </summary>
+    private HardwareCapabilities GateByProfile(HardwareCapabilities capabilities)
+    {
+        try
+        {
+            if (_platform?.Identity is not { } identity) return capabilities;
+
+            _gateProfile ??= ProfileCatalog.Load().Match(identity);
+            var gated = UnsupportedMethodGate.Apply(capabilities, _gateProfile, out var disabled);
+            foreach (var note in disabled) AppLog.Info("A control was switched off by the model profile", note);
+            return gated;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The model profile could not be applied to the capabilities", ex.Message);
+            return capabilities;
+        }
+    }
+
+    private ModelProfile? _gateProfile;
+
     public async Task ReassertKeyboardLightingAsync()
     {
         // Not gated on LightingAvailable: on Windows that flag comes from a probe that needs elevation and answers
@@ -8776,7 +8800,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_hardware == null || _rescan == null) return;
 
         _rescan.ResetReadBackCounters();
-        _capabilities = await _hardware.GetCapabilitiesAsync().ConfigureAwait(true);
+        _capabilities = GateByProfile(await _hardware.GetCapabilitiesAsync().ConfigureAwait(true));
         NeedsUdevRule = _rescan.Snapshot.NeedsUdevRule || _rescan.PermissionHintRaised;
 
         Raise(nameof(CapabilitySummaryText));
