@@ -43,6 +43,8 @@ internal static class Program
         // decided before Avalonia is touched: a worker that started a window would put a second NitroLite on the
         // user's desktop, and the caller would be left waiting on a pipe nobody is listening to.
         var mode = StartupMode.Parse(args);
+        if (args.Length == 1 && args[0] == "--pssvc-sensors")
+            return NitroLite.Windows.Core.Hardware.LegacySenseSensors.RunAsync(Console.Out).GetAwaiter().GetResult();
         if (mode.IsWmiWorker)
         {
             return WmiWorkerHost.Run(mode);

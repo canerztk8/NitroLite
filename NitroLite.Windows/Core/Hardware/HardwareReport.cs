@@ -37,6 +37,7 @@ public static class HardwareReport
     private static readonly string[] ReportedServices =
     {
         "AASSvc",
+        "PSSvc",
         "AcerLightingService",
         "AcerCCAgentSvis",
         "AcerServiceSvc",
