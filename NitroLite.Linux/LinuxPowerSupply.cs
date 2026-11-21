@@ -31,7 +31,7 @@ public static class LinuxPowerSupply
             int slash = name.LastIndexOf('/');
             if (slash >= 0) name = name[(slash + 1)..];
 
-            if (onAc == null && IsAdapter(name))
+            if (onAc == null && (IsAdapter(name) || IsMains(fs, directory)))
             {
                 var online = ReadInt(fs, LinuxPaths.Combine(directory, "online"));
                 if (online.HasValue) onAc = online.Value != 0;
@@ -54,6 +54,14 @@ public static class LinuxPowerSupply
         (name.StartsWith("AC", StringComparison.OrdinalIgnoreCase) ||
          name.StartsWith("ADP", StringComparison.OrdinalIgnoreCase) ||
          name.StartsWith("ACAD", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// True when the supply says it is the mains adapter, whatever its directory is called. Some drivers use names the
+    /// prefix list does not know (<c>ACPI0003:00</c>, a vendor's own); <c>type</c> is the attribute the class defines
+    /// for exactly this. USB-C sources say <c>USB</c> and are not counted: one can be a phone being charged.
+    /// </summary>
+    private static bool IsMains(ISysfsFileSystem fs, string directory) =>
+        string.Equals(fs.ReadAllText(LinuxPaths.Combine(directory, "type"))?.Trim(), "Mains", StringComparison.Ordinal);
 
     private static int? ReadInt(ISysfsFileSystem fs, string path)
     {

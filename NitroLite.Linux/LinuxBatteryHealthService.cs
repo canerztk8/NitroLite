@@ -118,8 +118,10 @@ public sealed class LinuxBatteryHealthService : IBatteryHealthService
 
         status.ChargeRateUnknown = !charging && !discharging && !full;
 
-        var remaining = ReadInt(directory, "energy_now") ?? ReadInt(directory, "charge_now");
-        if (remaining.HasValue) status.RemainingCapacityMWh = remaining.Value / 1000.0;
+        // The same conversion as the details: a charge-based driver's µAh is not mWh until the voltage is applied, and
+        // the two figures on one page must not disagree by the pack voltage.
+        var remaining = ReadEnergyMWh(directory, "energy_now", "charge_now");
+        if (remaining > 0) status.RemainingCapacityMWh = remaining;
 
         // The kernel's own estimate, in minutes. Absent on most drivers, which is why the page hides the row when the
         // machine is on the adapter rather than printing a placeholder.
