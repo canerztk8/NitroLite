@@ -12,7 +12,7 @@ The prompt is about **provenance, not detection**. It does not mean Microsoft fo
 - You can confirm the file is unsigned rather than tampered with:
 
   ```powershell
-  Get-AuthenticodeSignature .\NitroLite-v1.3.1-win-x64.zip | Format-List Status, StatusMessage
+  Get-AuthenticodeSignature .\NitroLite-v1.3.2-win-x64.zip | Format-List Status, StatusMessage
   ```
 
   `Status` reads `NotSigned`. That is expected, and it is the same answer you get for any unsigned open-source

@@ -12,7 +12,7 @@ protected your PC" prompt does not appear. `scoop update nitrolite` picks up new
 
 ## Option 2: Download the zip
 
-1. Download `NitroLite-v1.3.1-win-x64.zip` from the
+1. Download `NitroLite-v1.3.2-win-x64.zip` from the
    **[Releases](https://github.com/canerztk8/NitroLite/releases/latest)** page.
 2. Extract it to a **permanent folder**, for example `C:\Users\<you>\Programs\NitroLite`. Not Downloads: "start with
    Windows" remembers where the program lives.
@@ -27,11 +27,11 @@ Closing the window keeps NitroLite in the system tray. To quit, right-click the 
 In PowerShell, in the folder you downloaded to:
 
 ```powershell
-Get-FileHash .\NitroLite-v1.3.1-win-x64.zip -Algorithm SHA256 | Format-List
+Get-FileHash .\NitroLite-v1.3.2-win-x64.zip -Algorithm SHA256 | Format-List
 ```
 
 `Hash` must equal the digest on the release page. The same value is attached to the release as
-`NitroLite-v1.3.1-win-x64.zip.sha256`, so `sha256sum -c` works too. The built-in updater makes this comparison itself
+`NitroLite-v1.3.2-win-x64.zip.sha256`, so `sha256sum -c` works too. The built-in updater makes this comparison itself
 and refuses a file that does not match. The digest proves the file matches the release; what it does not prove is on
 **[Trust and code signing](https://github.com/canerztk8/NitroLite/wiki/Trust-and-Code-Signing)**.
 

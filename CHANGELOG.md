@@ -10,9 +10,23 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
-### Fixed
-- Game profiles now switch the ATK mouse into the profile's own config when a game starts, and put it back to
-  the pre-game config when the session ends. The setting used to be saved but never read.
+## [1.3.2] - 2026-11-22
+
+Game profiles that follow the game you are playing, and fixes from the first reports on new models. 11 commits since
+1.3.1.
+
+**Game profiles and mouse**
+- The running game's profile opens in the editor, and changes to it apply to the game straight away.
+- The game's ATK mouse config is applied when the game starts, retried if the mouse does not answer, and the default
+  config comes back when the game closes. Changing the default during a game no longer overrides the game.
+
+**Fixes**
+- A mode card click is never swallowed, and a mode that did not apply shows the real one.
+- Keyboard lighting no longer switches off for the whole session after one missed write.
+- An update no longer gets stuck on "file already exists".
+- Nitro 16 AN16-61: keyboard colour goes to its ENE controller. Nitro Lite 16: unsupported controls are hidden and
+  modes use the Windows power mode.
+- Clearer messages when the install folder blocks the hardware helper or autostart.
 
 ## [1.3.1] - 2026-11-21
 
