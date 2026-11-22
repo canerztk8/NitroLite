@@ -59,16 +59,27 @@ public class KeyboardLightingTransportTests
     }
 
     [Fact]
-    public async Task An1661DetectedKeyboardGetsFullBrightnessEvenWhenTheAgentWouldAccept()
+    public async Task AHidKeyboardProfile_GoesToTheController_AtFullBrightness_EvenWhenTheAgentWouldAccept()
     {
         var writer = new StubWriter();
         var agent = new Phase3Fakes.StubHardware();
         using var hybrid = new NitroLite.Core.Hardware.Wmi.HybridHardwareController(agent, hidLighting: () => writer)
-            { PreferDetectedHidKeyboard = true };
+            { PreferHidKeyboard = () => true };
         Assert.True(await hybrid.SetLightingAsync("STATIC", 9, 1, 1, "#0000FF", null));
         Assert.Equal(100, writer.Brightness);
         Assert.Equal(1, writer.Writes);
         Assert.Empty(agent.LightingWrites);
+    }
+
+    [Fact]
+    public async Task AHidKeyboardProfile_WithNoWritableController_KeepsTheNormalChain()
+    {
+        var agent = new Phase3Fakes.StubHardware();
+        using var hybrid = new NitroLite.Core.Hardware.Wmi.HybridHardwareController(agent, hidLighting: () => null)
+            { PreferHidKeyboard = () => true };
+
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 9, 1, 1, "#0000FF", null));
+        Assert.Single(agent.LightingWrites);
     }
 
     [Fact]

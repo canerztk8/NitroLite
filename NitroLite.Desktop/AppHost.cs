@@ -656,7 +656,10 @@ public sealed class AppHost : IDisposable
             diagnostics: diagnostics,
             legacyTelemetry: identity.IsAcer ? NitroLite.Windows.Core.Hardware.LegacySenseSensors.ReadTelemetryAsync : null)
         {
-            PreferDetectedHidKeyboard = identity.IsAcer && identity.BaseModelCode.Equals("AN16-61", StringComparison.OrdinalIgnoreCase)
+            // From the matched profile, never from a model name in code: the published table can then declare the
+            // quirk for the next board without a release. Read without waiting, so a write during start-up never blocks
+            // on the probe; until it lands, the WMI path's own profile check sends the colour to the controller.
+            PreferHidKeyboard = () => probeTask.IsCompletedSuccessfully && probeTask.Result?.NitroHidKeyboard == true
         };
 
         // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI

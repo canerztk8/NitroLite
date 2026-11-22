@@ -416,7 +416,16 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </summary>
     public bool AllowElevationForLighting { get; set; } = true;
 
-    public bool PreferDetectedHidKeyboard { get; init; }
+    /// <summary>
+    /// True when the matched profile declares <c>nitroHidKeyboard</c>: the WMI colour methods answer success and change
+    /// nothing, and the vendor HID controller carries the colour. Asked on every write, because the probe that knows it
+    /// runs in the background and may land after the first write.
+    /// </summary>
+    /// <remarks>
+    /// Checked before the Acer service as well as before WMI: the service writes through the same ignored interface,
+    /// so its "applied" is no more true than the WMI read-back, which on these boards echoes the colour back unlit.
+    /// </remarks>
+    public Func<bool>? PreferHidKeyboard { get; init; }
 
     /// <summary>
     /// Writes the keyboard lighting, choosing between the service and the firmware.
@@ -443,14 +452,12 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         var frame = KeyboardLightingFrame.Create(effect, AcerWmiProtocol.BrightnessLevelToPercent(brightness), speed, direction, primaryColor, zoneColors);
         bool wantsZones = WantsZoneColors(zoneColors);
 
-        // On EV9_SKF the WMI colour can read back unchanged while the actual keyboard runs on KB5130.
-        if (PreferDetectedHidKeyboard && _hidLighting?.Invoke() is { CanWrite: true, Protocol: "ene-kb5130" } keyboard)
+        // A profile that says the keyboard is HID-driven goes straight to the controller, when one is there to write
+        // to. Without a writable controller the normal chain runs, so a missing driver is no worse than before.
+        if (PreferHidKeyboard?.Invoke() == true && _hidLighting?.Invoke() is { CanWrite: true })
         {
-            var identity = HardwareDetector.Current;
-            var result = KeyboardLightingRuntime.Router.ApplyDetectedHid(identity.ModelCode, identity.BiosVersion, frame, keyboard);
-            LastZoneColorsApplied = wantsZones ? result.Applied : null;
-            if (!result.Applied) AppLog.Warn("Keyboard lighting", result.Detail);
-            return result.Applied;
+            return await ApplyThroughHidAsync(frame, wantsZones, "the model profile declares a HID keyboard")
+                .ConfigureAwait(false);
         }
 
         if (!_useDirectWmi())

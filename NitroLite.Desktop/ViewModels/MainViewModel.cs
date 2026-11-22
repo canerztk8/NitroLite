@@ -7539,7 +7539,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var overdrive = await hardware.GetLcdOverdriveAsync().ConfigureAwait(true);
         var timeout = await hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
         var charge = await hardware.GetBatteryChargeModeAsync().ConfigureAwait(true);
-        var gpu = await hardware.GetGpuModeAsync().ConfigureAwait(true);
+        // Only a machine with a MUX is asked for its mode. Asking the others put a "MUX mode was not recognised" line
+        // in the log on every refresh of an NL16-71G, whose selector answers a word that is not a mode at all.
+        var gpu = MuxAvailable ? await hardware.GetGpuModeAsync().ConfigureAwait(true) : null;
 
         // The previous value is restored rather than cleared: this runs while the window is still filling itself in,
         // and a read that finished after the first one would otherwise switch writes back on underneath it.

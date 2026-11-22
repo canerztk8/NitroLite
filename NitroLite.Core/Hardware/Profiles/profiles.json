@@ -282,8 +282,9 @@
       },
       "muxSwitch": true,
       "fourZoneKeyboard": true,
+      "nitroHidKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Acer Nitro 16 AN16-61 (model no. N25Q6, 2025). Same AN16 platform family as the AN16-41; the sensor ids are the firmware-wide enum, not a measurement on this unit, and the fan ceilings are carried over from the AN16-41 until someone reads them off this machine. unverified: no read-back on this model yet."
+      "notes": "Acer Nitro 16 AN16-61 (model no. N25Q6, 2025). Same AN16 platform family as the AN16-41; the sensor ids are the firmware-wide enum, not a measurement on this unit, and the fan ceilings are carried over from the AN16-41 until someone reads them off this machine. Keyboard colour runs on the ENE KB5130 (0CF2:5130): an owner's NitroSense snapshot showed the WMI zone colours unchanged while NitroSense switched red to blue, and SetGamingRgbKb reads back what was written without lighting it. unverified: no read-back on this model yet."
     },
     {
       "id": "nitro-17-an17-51",
@@ -874,6 +875,39 @@
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
       "notes": "Predator Triton 17. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
+    },
+    {
+      "id": "nitro-lite-16-nl16-71g",
+      "match": {
+        "modelCodes": [
+          "NL16-71G"
+        ],
+        "familyPatterns": [
+          "Nitro Lite"
+        ]
+      },
+      "sensors": {
+        "supported": false,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 7000,
+        "gpu": 7000
+      },
+      "muxSwitch": false,
+      "fourZoneKeyboard": false,
+      "unsupportedMethods": [
+        "SetGamingFanSpeed",
+        "SetGamingFanBehavior",
+        "SetGamingRgbKb",
+        "SetGamingKBBacklight"
+      ],
+      "notes": "Acer Nitro Lite 16 NL16-71G (Intel, 2024). From an owner's report (issue 11) on v1.3.0 with the elevated worker running: the firmware refused every fan-behaviour, fan-speed and keyboard-colour write three times in a row and refused all 557 GetGamingSysInfo sensor reads, so those controls are off and temperatures come from the Windows thermal zone and NVML. The keyboard is a two-level white backlight with no RGB, and GetGamingMiscSetting(0x02) answers 0x0001, which is not a MUX mode. Operating-mode writes were refused as well; the read-back policy switches that control off on its own, since no single method name covers it. Fan ceilings are the generic default: no tachometer answered."
     },
     {
       "id": "acer-gaming-default",

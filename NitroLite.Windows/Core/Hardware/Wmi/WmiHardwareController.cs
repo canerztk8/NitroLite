@@ -371,6 +371,9 @@ public sealed class WmiHardwareController : IHardwareController
 
     // ---------------------------------------------------------------- MUX
 
+    /// <summary>The last MUX word logged as unrecognised, so the same answer is said once, not on every read.</summary>
+    private ulong? _unrecognisedMuxWord;
+
     public async Task<GpuOperatingMode?> GetGpuModeAsync()
     {
         var (state, refusal) = await ReadDeviceStateWithReasonAsync().ConfigureAwait(false);
@@ -392,10 +395,12 @@ public sealed class WmiHardwareController : IHardwareController
         }
 
         var decoded = ParseEnum<GpuOperatingMode>(state, "muxMode");
-        if (decoded == null)
+        if (decoded == null && _unrecognisedMuxWord != raw)
         {
             // The firmware answered something this build does not map. Say what it was rather than showing nothing:
-            // the raw word is how a new numbering gets recognised.
+            // the raw word is how a new numbering gets recognised. Once per distinct word: the same answer on every
+            // refresh is one fact, not a stream of them.
+            _unrecognisedMuxWord = raw;
             AppLog.Warn("The MUX mode was not recognised",
                 $"GetGamingMiscSetting(0x02) answered 0x{raw:X4}; expected the high byte to be 1..3");
         }

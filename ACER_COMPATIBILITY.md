@@ -425,13 +425,25 @@ Recorded so the next reader does not "fix" these back.
   may be a mis-transcription of `PHN16-71`/`PHN16S-71`, or a regional code. They are left in place
   because deleting a profile is a claim too, and a wrong profile only affects the report — but they
   are marked **code unconfirmed** and must not be used as evidence for anything.
-- **`unsupportedMethods` is enforced, and still empty (2026-11-21).** `UnsupportedMethodGate` maps a
+- **`unsupportedMethods` is enforced (2026-11-21).** `UnsupportedMethodGate` maps a
   listed method to the capability it drives (`SetGamingFanSpeed`/`SetGamingFanBehavior` → fan
   control, `SetGamingRgbKb`/`SetGamingKBBacklight` → keyboard lighting, `SetBatteryHealthControl` →
   charge limit) and switches it off; it can only take a capability away, and an unknown name is
-  logged, not guessed at. The shipped table stays empty until a measurement proves a method broken on
-  a model: the PHN16S-71 fan caveat is a community report, and PH16-72 has the opposite evidence (the
-  mainline kernel enables its fan control because the WMI methods work, commit `d727823c134a`).
+  logged, not guessed at. A model gets an entry only when a report proves a method broken on it: the
+  PHN16S-71 fan caveat is a community report, and PH16-72 has the opposite evidence (the mainline
+  kernel enables its fan control because the WMI methods work, commit `d727823c134a`).
+- **The first evidence-backed entries (2026-11-22).**
+  - `nitro-lite-16-nl16-71g` (issue 11, v1.3.0, elevated worker): the firmware refused every
+    fan-behaviour, fan-speed and keyboard-colour write three times in a row, refused all 557
+    `GetGamingSysInfo` sensor reads, and answers `GetGamingMiscSetting(0x02)` with `0x0001`, which is
+    not a MUX mode. The keyboard is a two-level white backlight with no RGB. The profile lists the
+    four fan and lighting methods, marks the sensors unsupported (temperatures come from the Windows
+    thermal zone and NVML), and leaves the operating mode to the read-back policy, which switches it
+    off on its own because no single method name covers it.
+  - `nitro-16-an16-61` (issue 3) now sets `nitroHidKeyboard: true`: the owner's NitroSense snapshot
+    kept the WMI zone colours unchanged while NitroSense switched red to blue, `SetGamingRgbKb` reads
+    back what it was given without lighting it, and the HID list carries the ENE KB5130 (`0CF2:5130`).
+    Colour writes go to the KB5130 with the documented frame (§1.7). **Physical confirmation pending.**
 - **No sensor id was changed.** The only profile with measured ids is `nitro-16-an16-41`. Every
   other profile carries the firmware-wide enum with `verified: false`, and since the HW-04 fix the
   fan curve refuses to act on an unconfirmed layout — the reading is shown, the curve leaves the

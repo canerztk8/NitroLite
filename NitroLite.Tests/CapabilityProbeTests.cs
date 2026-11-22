@@ -40,12 +40,54 @@ public class CapabilityProbeTests
     }
 
     [Fact]
-    public void EmbeddedProfilesCarryNoUnsupportedMethodsYet()
+    public void EmbeddedProfilesListUnsupportedMethodsOnlyWithEvidence()
     {
-        // No report has proven a method broken on a specific model. The mechanism exists; guessing would disable a
-        // working feature, so the shipped table stays empty until evidence arrives.
+        // Guessing would disable a working feature, so a profile lists a method only when a report proved the firmware
+        // refuses it. Each entry here names its evidence; any other profile must stay empty.
+        var evidence = new Dictionary<string, string[]>
+        {
+            // Issue 11: v1.3.0, elevated worker, every write refused three times; white backlight, no RGB.
+            ["nitro-lite-16-nl16-71g"] = new[]
+            {
+                "SetGamingFanSpeed", "SetGamingFanBehavior", "SetGamingRgbKb", "SetGamingKBBacklight"
+            }
+        };
+
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
-        Assert.All(catalog.Profiles, p => Assert.Empty(p.UnsupportedMethods));
+        foreach (var profile in catalog.Profiles)
+        {
+            if (evidence.TryGetValue(profile.Id, out var expected))
+                Assert.Equal(expected, profile.UnsupportedMethods);
+            else
+                Assert.Empty(profile.UnsupportedMethods);
+        }
+
+        // Every listed name must be one the gate maps to a control, or the entry would enforce nothing.
+        Assert.All(evidence.Values.SelectMany(v => v), m => Assert.True(UnsupportedMethodGate.Methods.ContainsKey(m)));
+    }
+
+    [Fact]
+    public void TheNitroLite16_MatchesItsOwnProfile_AndLosesTheControlsItsFirmwareRefused()
+    {
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        var profile = catalog.Match(new DeviceIdentity
+        {
+            Manufacturer = "Acer",
+            Model = "Nitro NL16-71G",
+            ModelCode = "NL16-71G",
+            ModelFamily = "Nitro Lite",
+            IsAcer = true,
+            BoardProduct = "CTE_NB_NL160P1G_RTH"
+        });
+
+        Assert.Equal("nitro-lite-16-nl16-71g", profile.Id);
+        Assert.False(profile.Sensors.Supported);
+
+        var all = new HardwareCapabilities { FanControl = true, KeyboardLighting = true, OperatingModeControl = true };
+        var gated = UnsupportedMethodGate.Apply(all, profile, out _);
+        Assert.False(gated.FanControl);
+        Assert.False(gated.KeyboardLighting);
+        Assert.True(gated.OperatingModeControl); // left to the read-back policy: no method name covers it alone
     }
 
     [Fact]

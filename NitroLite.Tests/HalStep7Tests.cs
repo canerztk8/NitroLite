@@ -845,10 +845,11 @@ public class HalStep7Tests
     public void EmbeddedProfiles_DeclareTheFirmwareSensorIds()
     {
         // The ids are the firmware-wide enum, so every shipped profile carries them. Only the reference machine has
-        // been measured, so only it is marked verified.
+        // been measured, so only it is marked verified. The one profile whose firmware refused every sensor read in a
+        // report (NL16-71G, issue 11) is marked unsupported; the ids stay, so the layout is still a valid record.
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
 
-        Assert.All(catalog.Profiles, p => Assert.True(p.Sensors.Supported));
+        Assert.All(catalog.Profiles, p => Assert.Equal(p.Id != "nitro-lite-16-nl16-71g", p.Sensors.Supported));
         Assert.All(catalog.Profiles, p => Assert.Equal(1, p.Sensors.CpuTempSensor));
         Assert.All(catalog.Profiles, p => Assert.Equal(2, p.Sensors.CpuFanRpmSensor));
         Assert.All(catalog.Profiles, p => Assert.Equal(3, p.Sensors.Sys1TempSensor));
@@ -968,16 +969,20 @@ public class HalStep7Tests
     [Fact]
     public void EmbeddedProfiles_DeclareTheNitroHidKeyboardQuirk()
     {
-        // ANV16S-41 accepts the WMI lighting writes and silently ignores them, so the profile has to say so or the
-        // lighting page would report success while the keyboard stays dark.
+        // ANV16S-41 and AN16-61 accept the WMI lighting writes and silently ignore them, so the profile has to say so
+        // or the lighting page would report success while the keyboard stays dark.
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        var declared = new[] { "nitro-v-16-anv16s-41", "nitro-16-an16-61" };
 
-        var hid = catalog.Profiles.Single(p => p.Id == "nitro-v-16-anv16s-41");
-        Assert.True(hid.NitroHidKeyboard);
-        Assert.True(hid.FourZoneKeyboard);
+        foreach (var id in declared)
+        {
+            var hid = catalog.Profiles.Single(p => p.Id == id);
+            Assert.True(hid.NitroHidKeyboard);
+            Assert.True(hid.FourZoneKeyboard);
+        }
 
         Assert.All(
-            catalog.Profiles.Where(p => p.Id != "nitro-v-16-anv16s-41"),
+            catalog.Profiles.Where(p => !declared.Contains(p.Id)),
             p => Assert.False(p.NitroHidKeyboard));
     }
 
