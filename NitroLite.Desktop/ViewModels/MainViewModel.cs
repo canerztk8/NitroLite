@@ -6043,6 +6043,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private int MouseProfileAfterGame() =>
         _settings.DefaultAtkMouseProfile > 0 ? _settings.DefaultAtkMouseProfile : _mouseProfiles?.CurrentProfile ?? 0;
 
+    /// <summary>
+    /// Re-reads the mouse's config for the rail, without touching the card's status line. Quiet when the mouse does
+    /// not answer: the rail keeps the last figure it had.
+    /// </summary>
+    private async Task RefreshMouseFigureAsync()
+    {
+        if (_mouseProfiles == null || !MouseProfileAvailable || _disposed) return;
+
+        try
+        {
+            await _mouseProfiles.QueryCurrentProfileAsync().ConfigureAwait(true);
+            Raise(nameof(SystemMouseText));
+            Raise(nameof(CurrentMouseProfile));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Mouse profile could not be read", ex.Message);
+        }
+    }
+
     /// <summary>Applies a running game's newly chosen mouse config, and logs the outcome like the game-start path.</summary>
     private async Task ApplyMouseForRunningGameAsync(string game, int config)
     {
@@ -6051,6 +6071,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             bool ok = await _mouseProfiles.ApplyProfileAsync(config).ConfigureAwait(true);
             AppLog.Info("Mouse profile applied for the running game", $"{game}: config {config} ok={ok}");
+
+            // The rail's FARE row reads the mouse's own config; it has to hear about this switch too.
+            Raise(nameof(SystemMouseText));
+            Raise(nameof(CurrentMouseProfile));
         }
         catch (Exception ex)
         {
@@ -6100,6 +6124,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             profile.AutoApply = value;
             SaveSettings();
+
+            // Acted on now rather than on the next five-second poll: switching it on while the game runs starts the
+            // session, switching it off ends it and puts the machine back.
+            _ = PollGameAsync();
         }
     }
 
@@ -7377,6 +7405,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // scan builds one Process per process and opens a handle on each, and a measured session paid ~1.5 % of
             // a core for it. Five seconds still notices a game before its first loading screen is over.
             if (++_tick % 5 == 0) await PollGameAsync().ConfigureAwait(true);
+
+            // The rail's mouse figure is asked of the mouse itself now and then, so a config changed from ATK Hub or a
+            // switch the app made through another path cannot leave it showing an old number.
+            if (_tick % 10 == 0) _ = RefreshMouseFigureAsync();
 
             // The refresh-rate policy is transition-driven, so after the first call this is a boolean comparison. It
             // runs on every tick because a replug is not something to notice two seconds late.

@@ -1068,6 +1068,86 @@ public class LinuxFunctionalParityTests
     }
 
     [Fact]
+    public async Task GameDetection_TurningAutoApplyOnWhileTheGameRuns_StartsTheSessionNow()
+    {
+        var fs = Nitro16();
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        settings.GameProfiles[0].AutoApply = false;
+        using var controller = Controller(fs, settings);
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings, controller);
+
+        using var vm = new MainViewModel(
+            settings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"), gameProfiles: service);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        Assert.False(vm.GameActive);
+
+        vm.SelectedGameProfile = vm.GameProfiles.Single(r => r.ExeName == "cs2");
+        vm.GameAutoApply = true;
+        await WaitForAsync(() => vm.GameActive && fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim() == "performance");
+
+        Assert.True(vm.GameActive);
+        Assert.Equal("performance", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+    }
+
+    [Fact]
+    public async Task GameDetection_TurningAutoApplyOffWhileTheGameRuns_PutsTheMachineBack()
+    {
+        var fs = Nitro16();
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        using var controller = Controller(fs, settings);
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings, controller);
+
+        using var vm = new MainViewModel(
+            settings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"), gameProfiles: service);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        Assert.True(vm.GameActive);
+        Assert.Equal("performance", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+
+        vm.SelectedGameProfile = vm.GameProfiles.Single(r => r.ExeName == "cs2");
+        vm.GameAutoApply = false;
+        await WaitForAsync(() => !vm.GameActive && vm.SelectedMode?.Mode == OperatingMode.Default);
+
+        Assert.False(vm.GameActive);
+        Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+        Assert.Equal(OperatingMode.Default, vm.SelectedMode?.Mode);
+    }
+
+    [Fact]
+    public async Task GameDetection_TheRailHearsAboutAMouseSwitchForTheRunningGame()
+    {
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        settings.GameProfiles[0].TargetAtkMouseProfile = 3;
+        var mouse = new FakeMouse();
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"), gameProfiles: service, mouseProfiles: mouse);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.SelectedGameProfile = vm.GameProfiles.Single(r => r.ExeName == "cs2");
+        vm.SelectedGameMouseProfile = vm.MouseProfileOptions.Single(o => o.Index == 4);
+        await WaitForAsync(() => raised.Contains(nameof(MainViewModel.SystemMouseText)));
+
+        Assert.Contains(nameof(MainViewModel.SystemMouseText), raised);
+        Assert.Equal("Config 4", vm.SystemMouseText);
+    }
+
+    [Fact]
     public async Task GameProfiles_EditingAGame_KeepsThatGameInTheEditor()
     {
         var settings = new AppSettings { AutoGameModeEnabled = true };

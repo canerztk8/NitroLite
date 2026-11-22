@@ -171,7 +171,10 @@ public sealed class GameProfileService
             {
                 // The session ends when the game is gone, and also when the user switches automatic game mode off
                 // while playing: leaving the override in place would make the switch look broken.
-                if (_settings.AutoGameModeEnabled && await IsStillRunningAsync(active).ConfigureAwait(false))
+                // The same for the game's own "apply when the game starts" switch: turning it off mid-game used to
+                // leave Performance in place until the game closed.
+                if (_settings.AutoGameModeEnabled && IsStillWanted(active) &&
+                    await IsStillRunningAsync(active).ConfigureAwait(false))
                     return GameDetectionResult.Nothing;
                 return await EndAsync(active).ConfigureAwait(false);
             }
@@ -236,6 +239,22 @@ public sealed class GameProfileService
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// True while the running game still has a rule that asks to be applied: it is still in the list and its
+    /// auto-apply switch is still on.
+    /// </summary>
+    private bool IsStillWanted(GameProfile active)
+    {
+        foreach (var profile in _settings.GameProfiles)
+        {
+            if (profile == null) continue;
+            if (!string.Equals(profile.ExeName, active.ExeName, StringComparison.OrdinalIgnoreCase)) continue;
+            return profile.AutoApply;
+        }
+
+        return false;
     }
 
     /// <summary>True when the profile's executable is still in the process table.</summary>
