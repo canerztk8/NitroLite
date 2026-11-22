@@ -6002,35 +6002,46 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Asks the mouse again to take the game's config, after a first attempt it did not answer. Stops as soon as the
     /// game ends or its config is changed, so a late retry can never undo a newer choice.
     /// </summary>
-    private async Task RetryGameMouseAsync(GameProfile game, int config)
+    private Task RetryGameMouseAsync(GameProfile game, int config) => RetryMouseAsync(
+        config,
+        () => _gameProfiles?.ActiveProfile is GameProfile active &&
+              active.ExeName.Equals(game.ExeName, StringComparison.OrdinalIgnoreCase) &&
+              active.TargetAtkMouseProfile == config,
+        game.DisplayName);
+
+    /// <summary>
+    /// Asks the mouse again for <paramref name="config"/> after a switch it did not answer, while
+    /// <paramref name="stillWanted"/> holds.
+    /// </summary>
+    private async Task RetryMouseAsync(int config, Func<bool> stillWanted, string context)
     {
         if (_mouseProfiles == null) return;
 
         for (int attempt = 0; attempt < MouseRetryWaits.Length; attempt++)
         {
             await MouseRetryDelay(MouseRetryWaits[attempt]).ConfigureAwait(true);
-
-            if (_disposed) return;
-            if (_gameProfiles?.ActiveProfile is not GameProfile active ||
-                !active.ExeName.Equals(game.ExeName, StringComparison.OrdinalIgnoreCase) ||
-                active.TargetAtkMouseProfile != config)
-            {
-                return;
-            }
+            if (_disposed || !stillWanted()) return;
 
             if (await _mouseProfiles.ApplyProfileAsync(config).ConfigureAwait(true))
             {
-                AppLog.Info("Mouse profile applied for the game", $"{game.DisplayName}: config {config} on retry {attempt + 1}");
+                AppLog.Info("Mouse profile applied on retry", $"{context}: config {config}, retry {attempt + 1}");
                 Raise(nameof(SystemMouseText));
                 Raise(nameof(CurrentMouseProfile));
                 return;
             }
         }
 
-        AppLog.Warn("The game's mouse profile could not be applied",
-            $"{game.DisplayName}: config {config} after {MouseRetryWaits.Length + 1} attempts");
+        AppLog.Warn("The mouse profile could not be applied",
+            $"{context}: config {config} after {MouseRetryWaits.Length + 1} attempts");
         MouseProfileStatus = Labels.MouseProfileFailed;
     }
+
+    /// <summary>
+    /// The config the mouse goes back to when a game ends: the default the user picked, or — with no default — the
+    /// config it was in when the game started.
+    /// </summary>
+    private int MouseProfileAfterGame() =>
+        _settings.DefaultAtkMouseProfile > 0 ? _settings.DefaultAtkMouseProfile : _mouseProfiles?.CurrentProfile ?? 0;
 
     /// <summary>Applies a running game's newly chosen mouse config, and logs the outcome like the game-start path.</summary>
     private async Task ApplyMouseForRunningGameAsync(string game, int config)
@@ -6562,7 +6573,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             RestoreFan = true,
             SavedMode = _settings.LastOperatingMode ?? OperatingMode.Default,
             SavedFan = SelectedFanMode?.Mode ?? FanMode.Auto,
-            SavedMouseProfile = _mouseProfiles?.CurrentProfile ?? 0,
+            SavedMouseProfile = MouseProfileAfterGame(),
             Timestamp = DateTime.UtcNow
         };
 
@@ -8582,18 +8593,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(SystemGameText));
             Raise(nameof(ShowSystemGameRow));
 
-            // The recovery record holds the mouse config the user was in before the game, and the call below
-            // clears it, so the value is read first. Without this, ending a session leaves the mouse in the
-            // game's config until the user switches it by hand.
+            // Read before the record is cleared: it is the fallback when no default config is set.
             int savedMouse = _settings.GameSessionRecovery?.SavedMouseProfile ?? 0;
 
             // The session ended cleanly, so there is nothing left to recover on the next launch.
             EndGameSessionRecovery();
 
-            // The mouse goes back the way the mode and the fan do: to what the machine was before the game. The
-            // same value the crash path would have restored, so a clean exit and a crash end in the same place.
-            if (_mouseProfiles != null && savedMouse > 0)
-                await _mouseProfiles.ApplyProfileAsync(savedMouse).ConfigureAwait(true);
+            // A game that switched the mouse hands it back to the default config. It used to restore whatever the
+            // mouse was in when the game started — often the previous game's config, or nothing at all when the mouse
+            // had not answered yet — which is why "the default does not come back after the game".
+            int restore = _settings.DefaultAtkMouseProfile > 0 ? _settings.DefaultAtkMouseProfile : savedMouse;
+            if (_mouseProfiles != null && ended.TargetAtkMouseProfile > 0 && restore > 0)
+            {
+                bool ok = await _mouseProfiles.ApplyProfileAsync(restore).ConfigureAwait(true);
+                AppLog.Info("Mouse profile restored after the game", $"{ended.DisplayName}: config {restore} ok={ok}");
+
+                // No game may own the mouse when a retry fires; a new session's own config wins.
+                if (!ok) _ = RetryMouseAsync(restore, () => _gameProfiles?.ActiveProfile == null, $"{ended.DisplayName} closed");
+
+                Raise(nameof(SystemMouseText));
+                Raise(nameof(CurrentMouseProfile));
+            }
 
             var snapshot = result.Snapshot;
             if (snapshot != null)

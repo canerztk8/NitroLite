@@ -1000,8 +1000,9 @@ public class LinuxFunctionalParityTests
         scanner.Processes.Clear();
         await vm.PollGameAsync();
 
-        // The session ended, so the mouse goes back to the config the user was in before the game.
-        Assert.Equal(new[] { 3, 2 }, mouse.Applied);
+        // The session ended, so the mouse goes back to the default config (1), not to the one it was in when the
+        // game started (2).
+        Assert.Equal(new[] { 3, 1 }, mouse.Applied);
     }
 
 
@@ -1122,6 +1123,54 @@ public class LinuxFunctionalParityTests
         await WaitForAsync(() => vm.SelectedMode?.Mode == OperatingMode.Default && vm.Status.Length > 0);
         Assert.Equal(OperatingMode.Default, vm.SelectedMode?.Mode);
         Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+    }
+
+    [Fact]
+    public async Task GameDetection_TheDefaultComesBackAfterTheGame_EvenWhenTheFirstSwitchIsNotAnswered()
+    {
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        settings.GameProfiles[0].TargetAtkMouseProfile = 4;
+        settings.DefaultAtkMouseProfile = 2;
+        var mouse = new FakeMouse();
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"), gameProfiles: service, mouseProfiles: mouse);
+        vm.MouseRetryDelay = _ => Task.CompletedTask;
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        Assert.Equal(4, mouse.CurrentProfile);
+
+        mouse.FailFirst = 1;
+        scanner.Processes.Clear();
+        await vm.PollGameAsync();
+        await WaitForAsync(() => mouse.CurrentProfile == 2);
+
+        Assert.Equal(2, mouse.CurrentProfile);
+        Assert.Equal(new[] { 4, 2, 2 }, mouse.Applied);
+    }
+
+    [Fact]
+    public async Task GameDetection_AGameThatLeavesTheMouseAlone_DoesNotTouchItWhenItEnds()
+    {
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        var mouse = new FakeMouse();
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"), gameProfiles: service, mouseProfiles: mouse);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        scanner.Processes.Clear();
+        await vm.PollGameAsync();
+
+        Assert.Empty(mouse.Applied);
     }
 
     [Fact]
