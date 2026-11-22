@@ -159,6 +159,7 @@ public class Wave5GpuModeHonestyTests
 
             Assert.Null(vm.PendingGpuMode);
             Assert.False(vm.HasGpuModeNote);
+            Assert.Null(vm.SelectedGpuMode); // The fake has no current-mode read-back.
         }
         finally
         {

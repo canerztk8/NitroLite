@@ -52,8 +52,8 @@ When a setting simply does nothing, the **NitroSense snapshot diff** under **Set
 down to the exact register. Press **Capture state A** in NitroLite, change the one setting in NitroSense, then press
 **Capture state B and diff**: the two read-only captures of the Acer WMI selectors and the vendor HID feature
 reports are compared and only what moved is printed — a changed selector with its old and new value, and for a
-report, the byte offsets that changed. The diff goes to the clipboard with the hardware report and opens the same
-prefilled issue with the diff first. Nothing is written and nothing is elevated: a session with no direct-WMI
+report, the byte offsets that changed. The diff and full hardware report are copied to the clipboard so they can
+be pasted into an existing issue. Nothing is written and nothing is elevated: a session with no direct-WMI
 worker behind it captures the HID half and says so.
 
 The same report is available without the window: `NitroLite.exe --hardware-report` (add `--json` for JSON, or

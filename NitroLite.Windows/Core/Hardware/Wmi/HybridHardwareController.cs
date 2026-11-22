@@ -416,6 +416,8 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </summary>
     public bool AllowElevationForLighting { get; set; } = true;
 
+    public bool PreferDetectedHidKeyboard { get; init; }
+
     /// <summary>
     /// Writes the keyboard lighting, choosing between the service and the firmware.
     /// <para>
@@ -438,8 +440,18 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
 
         // The request in transport-neutral form. The WMI executor and the HID writer both start from this, so a
         // fallback cannot quietly send a different colour than the one the user picked.
-        var frame = KeyboardLightingFrame.Create(effect, brightness, speed, direction, primaryColor, zoneColors);
+        var frame = KeyboardLightingFrame.Create(effect, AcerWmiProtocol.BrightnessLevelToPercent(brightness), speed, direction, primaryColor, zoneColors);
         bool wantsZones = WantsZoneColors(zoneColors);
+
+        // On EV9_SKF the WMI colour can read back unchanged while the actual keyboard runs on KB5130.
+        if (PreferDetectedHidKeyboard && _hidLighting?.Invoke() is { CanWrite: true, Protocol: "ene-kb5130" } keyboard)
+        {
+            var identity = HardwareDetector.Current;
+            var result = KeyboardLightingRuntime.Router.ApplyDetectedHid(identity.ModelCode, identity.BiosVersion, frame, keyboard);
+            LastZoneColorsApplied = wantsZones ? result.Applied : null;
+            if (!result.Applied) AppLog.Warn("Keyboard lighting", result.Detail);
+            return result.Applied;
+        }
 
         if (!_useDirectWmi())
         {

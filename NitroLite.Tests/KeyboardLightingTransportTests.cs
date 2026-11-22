@@ -41,12 +41,14 @@ public class KeyboardLightingTransportTests
         public bool ThrowOnWrite { get; set; }
 
         public int Writes { get; private set; }
+        public int Brightness { get; private set; }
 
         public bool Disposed { get; private set; }
 
         public bool TryWrite(KeyboardLightingFrame frame, out string? error)
         {
             Writes++;
+            Brightness = frame.BrightnessPercent;
             if (ThrowOnWrite) throw new InvalidOperationException("the controller went away");
 
             error = _accepts ? null : "the controller refused the report";
@@ -54,6 +56,19 @@ public class KeyboardLightingTransportTests
         }
 
         public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public async Task An1661DetectedKeyboardGetsFullBrightnessEvenWhenTheAgentWouldAccept()
+    {
+        var writer = new StubWriter();
+        var agent = new Phase3Fakes.StubHardware();
+        using var hybrid = new NitroLite.Core.Hardware.Wmi.HybridHardwareController(agent, hidLighting: () => writer)
+            { PreferDetectedHidKeyboard = true };
+        Assert.True(await hybrid.SetLightingAsync("STATIC", 9, 1, 1, "#0000FF", null));
+        Assert.Equal(100, writer.Brightness);
+        Assert.Equal(1, writer.Writes);
+        Assert.Empty(agent.LightingWrites);
     }
 
     [Fact]

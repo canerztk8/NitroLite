@@ -237,6 +237,18 @@ public sealed class KeyboardLightingRouter
         }
     }
 
+    public KeyboardLightingOutcome ApplyDetectedHid(string model, string bios, KeyboardLightingFrame frame, IHidLightingWriter writer)
+    {
+        var key = CacheKey(model, bios);
+        if (!TryWriteHid(writer, frame, null, out var error))
+        {
+            Forget(key);
+            return new(false, KeyboardLightingTransport.Unknown, error ?? "HID write refused", true);
+        }
+        Remember(key, KeyboardLightingTransport.Hid, writer.Description);
+        return new(true, KeyboardLightingTransport.Hid, writer.Description, true);
+    }
+
     private static bool TryWriteHid(
         IHidLightingWriter writer, KeyboardLightingFrame frame, Action<IHidLightingWriter>? onHidWriter,
         out string? error)

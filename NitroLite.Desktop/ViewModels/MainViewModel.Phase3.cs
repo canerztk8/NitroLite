@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
@@ -911,17 +911,7 @@ public sealed partial class MainViewModel
             var separator = Environment.NewLine + Environment.NewLine;
 
             var clipboard = report.Length == 0 ? diff.Text : report + separator + diff.Text;
-            var urlBody = report.Length == 0 ? diff.Text : diff.Text + separator + report;
-
-            var identity = _platform?.Identity;
-            var model = string.IsNullOrWhiteSpace(identity?.ModelCode) ? identity?.Model : identity?.ModelCode;
-            var board = identity?.BoardProduct;
-
-            var url = CompatibilityReportUrl.Build(model, board, urlBody);
-
-            // The clipboard first: the issue body may be cut, and its note tells the reporter to paste what this holds.
             ClipboardService.SetText(clipboard);
-            OpenUrl(url);
 
             SnapshotDiffStatus = diff.HasChanges
                 ? Labels.SnapshotDiffCaptured(diff.TotalChanges)
@@ -929,7 +919,7 @@ public sealed partial class MainViewModel
 
             AppLog.Info("NitroSense snapshot diff captured",
                 $"{diff.Changed} changed · {diff.Added} added · {diff.Removed} removed · " +
-                $"{diff.Unchanged} unchanged · {CompatibilityReportUrl.DescribeLength(url)}");
+                $"{diff.Unchanged} unchanged");
         }
         catch (Exception ex)
         {

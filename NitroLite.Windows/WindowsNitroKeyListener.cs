@@ -127,7 +127,6 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     private int _loggedReports;
 
     /// <summary>How many unmatched keyboard reports have been logged, for the same reason.</summary>
-    private int _loggedKeys;
 
     public WindowsNitroKeyListener(NitroKeyDebounceGuard? debounce = null) =>
         _debounce = debounce ?? new NitroKeyDebounceGuard();
@@ -561,14 +560,6 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             {
                 Raise($"ham giriş tarama=0x{report.MakeCode:X2} VK=0x{report.VirtualKey:X2}");
                 return;
-            }
-
-            // Logged so a model whose button arrives as an OEM scan code can be identified without guessing at it.
-            if (_loggedKeys < MaxLoggedReports)
-            {
-                _loggedKeys++;
-                AppLog.Info("Acer keyboard report",
-                    $"vk=0x{report.VirtualKey:X2} scan=0x{report.MakeCode:X2} flags=0x{report.Flags:X2}");
             }
 
             return;

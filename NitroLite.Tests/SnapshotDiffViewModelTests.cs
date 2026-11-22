@@ -98,21 +98,15 @@ public class SnapshotDiffViewModelTests
                 Assert.Equal(vm.Labels.SnapshotCapturedA(1), vm.SnapshotDiffStatus);
                 Assert.True(vm.CaptureSnapshotBDiffCommand.CanExecute(null));
 
-                vm.CaptureSnapshotBDiffCommand.Execute(null);
-                await WaitForAsync(() => urls.OpenedUrls.Count > 0);
+                await vm.CaptureSnapshotBDiffCommand.ExecuteAsync(null);
 
-                // The status names the change, the clipboard carries the report and the diff, and the issue is the one
-                // the compatibility builder produces — with the diff in its body.
+                // The complete report can be pasted into the existing support conversation.
                 Assert.Equal(vm.Labels.SnapshotDiffCaptured(1), vm.SnapshotDiffStatus);
                 Assert.Single(copied);
                 Assert.Contains("~ wmi.deviceState.muxRaw = 0 -> 1", copied[0], StringComparison.Ordinal);
                 Assert.Contains("# NitroLite hardware report", copied[0], StringComparison.Ordinal);
 
-                Assert.Single(urls.OpenedUrls);
-                var url = urls.OpenedUrls[0];
-                Assert.True(CompatibilityReportUrl.IsCompatibilityUrl(url));
-                Assert.Contains(
-                    Uri.EscapeDataString("~ wmi.deviceState.muxRaw = 0 -> 1"), url, StringComparison.Ordinal);
+                Assert.Empty(urls.OpenedUrls);
             }
         }
         finally
@@ -136,8 +130,7 @@ public class SnapshotDiffViewModelTests
                 vm.CaptureSnapshotACommand.Execute(null);
                 await WaitForAsync(() => vm.SnapshotBaselineReady);
 
-                vm.CaptureSnapshotBDiffCommand.Execute(null);
-                await WaitForAsync(() => urls.OpenedUrls.Count > 0);
+                await vm.CaptureSnapshotBDiffCommand.ExecuteAsync(null);
 
                 Assert.Equal(vm.Labels.SnapshotDiffSame, vm.SnapshotDiffStatus);
                 Assert.Single(copied);

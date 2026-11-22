@@ -1,4 +1,4 @@
-﻿using NitroLite.Core;
+using NitroLite.Core;
 
 namespace NitroLite.Desktop.ViewModels;
 
@@ -294,7 +294,7 @@ public sealed class ShellLabels
     // ---------------------------------------------------------------- NitroSense snapshot diff
     public string SnapshotDiffTitle => Loc.T("NitroSense anlık görüntü farkı");
 
-    public string SnapshotDiffHint => Loc.T("NitroSense'te başlangıç ayarını yap ve A'yı yakala; ayarı değiştirdikten sonra B'yi yakala. Fark, donanım raporuyla birlikte GitHub'da yeni sorun olarak açılır.");
+    public string SnapshotDiffHint => Loc.T("NitroSense'te başlangıç ayarını yap ve A'yı yakala; ayarı değiştirdikten sonra B'yi yakala. Fark ve rapor panoya kopyalanır.");
 
     public string SnapshotCaptureA => Loc.T("Durum A'yı yakala");
     public string SnapshotCaptureB => Loc.T("Durum B'yi yakala ve karşılaştır");
@@ -303,7 +303,7 @@ public sealed class ShellLabels
         $"Durum A alındı ({entries} kayıt). Şimdi NitroSense'te ayarı değiştir ve B'yi yakala.");
 
     public string SnapshotDiffCaptured(int changes) => Loc.T(
-        $"Fark yakalandı ({changes} değişiklik); panoya kopyalandı ve GitHub'da yeni sorun açıldı.");
+        $"Fark yakalandı ({changes} değişiklik); panoya kopyalandı.");
 
     public string SnapshotDiffSame => Loc.T(
         "İki anlık görüntü arasında fark yok; rapor yine de panoya kopyalandı.");

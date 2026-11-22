@@ -7564,8 +7564,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (timeout is bool backlight) BacklightTimeoutOn = backlight;
             if (charge is BatteryChargeMode battery) BatteryLimitOn = battery == BatteryChargeMode.Optimized80;
 
-            if (gpu is GpuOperatingMode gpuMode)
-                SelectedGpuMode = GpuModes.FirstOrDefault(m => m.Mode == gpuMode) ?? SelectedGpuMode;
+            SelectedGpuMode = GpuModes.FirstOrDefault(m => m.Mode == gpu);
         }
         finally
         {
@@ -8061,6 +8060,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (!ok)
         {
             PendingGpuMode = null;
+            var observed = await _hardware.GetGpuModeAsync().ConfigureAwait(true);
+            SelectedGpuMode = GpuModes.FirstOrDefault(m => m.Mode == observed);
             GpuModeNote = choice.Mode == GpuOperatingMode.Automatic ? Labels.GpuAutomaticNotWritable : "";
             return;
         }

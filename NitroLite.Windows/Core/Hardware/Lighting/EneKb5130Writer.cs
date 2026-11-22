@@ -66,7 +66,9 @@ internal sealed class EneKb5130Writer : IHidLightingWriter
 
         foreach (var report in reports)
         {
-            if (!HidD_SetFeature(_handle, report, (uint)report.Length))
+            var buffer = new byte[_featureReportLength];
+            report.CopyTo(buffer, 0);
+            if (!HidD_SetFeature(_handle, buffer, (uint)buffer.Length))
             {
                 error = $"HidD_SetFeature failed (win32 {Marshal.GetLastWin32Error()})";
                 return false;
