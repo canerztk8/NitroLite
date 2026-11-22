@@ -26,6 +26,24 @@ public static class UnsupportedMethodGate
         ["SetBatteryHealthControl"] = nameof(HardwareCapabilities.BatteryChargeLimit),
     };
 
+    /// <summary>The firmware's operating-mode setter (<c>SetGamingMiscSetting(0x0B)</c>).</summary>
+    public const string OperatingModeMethod = "SetGamingMiscSetting";
+
+    /// <summary>
+    /// Methods whose control is not switched off but moved to another transport, and where it goes. A profile that
+    /// lists the operating-mode setter keeps its mode control, switched through the Windows power mode instead; the
+    /// name is understood by every published build (older ones log it as ignored), so recording it needs no new field.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> RoutedElsewhere { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [OperatingModeMethod] = "the operating mode goes through the Windows power mode"
+        };
+
+    /// <summary>True when the profile moves the operating mode to the Windows power mode.</summary>
+    public static bool ModesThroughWindows(ModelProfile? profile) =>
+        profile?.UnsupportedMethods.Contains(OperatingModeMethod, StringComparer.OrdinalIgnoreCase) == true;
+
     /// <summary>
     /// <paramref name="capabilities"/> with every capability the profile lists a method for switched off.
     /// <paramref name="disabled"/> names what was switched off and why, for the log and the report.
@@ -41,6 +59,12 @@ public static class UnsupportedMethodGate
         var result = capabilities;
         foreach (var method in profile.UnsupportedMethods)
         {
+            if (RoutedElsewhere.TryGetValue(method, out var route))
+            {
+                notes.Add($"{method}: unsupported by the firmware; {route}");
+                continue;
+            }
+
             if (!Methods.TryGetValue(method, out var capability))
             {
                 notes.Add($"{method}: not a method this build maps to a control; ignored");

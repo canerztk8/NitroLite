@@ -438,8 +438,14 @@ Recorded so the next reader does not "fix" these back.
     `GetGamingSysInfo` sensor reads, and answers `GetGamingMiscSetting(0x02)` with `0x0001`, which is
     not a MUX mode. The keyboard is a two-level white backlight with no RGB. The profile lists the
     four fan and lighting methods, marks the sensors unsupported (temperatures come from the Windows
-    thermal zone and NVML), and leaves the operating mode to the read-back policy, which switches it
-    off on its own because no single method name covers it.
+    thermal zone and NVML), and lists `SetGamingMiscSetting`, the operating-mode setter the firmware
+    also refused. That name is in every published build's known-method list, so no new field was
+    needed: current builds read it as "switch the operating mode through the Windows power mode"
+    (Quiet / Balanced / Performance, via `PowerSetActiveOverlayScheme`), older builds log it as
+    ignored. Acer ships no NitroSense or AcerSense for the Nitro Lite line and fixes its power limits
+    in firmware (65 W measured against the processor's 115 W), so the Windows power mode is the only
+    official lever this machine has. No other profile lists the setter, so every other model keeps
+    writing its mode to the firmware.
   - `nitro-16-an16-61` (issue 3) now sets `nitroHidKeyboard: true`: the owner's NitroSense snapshot
     kept the WMI zone colours unchanged while NitroSense switched red to blue, `SetGamingRgbKb` reads
     back what it was given without lighting it, and the HID list carries the ENE KB5130 (`0CF2:5130`).

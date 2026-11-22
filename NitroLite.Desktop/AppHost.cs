@@ -644,6 +644,19 @@ public sealed class AppHost : IDisposable
         var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe, diagnostics);
         var agent = new AgentHardwareController(new AcerAgentClient(), new CareCenterClient());
 
+        var modesThroughWindows = new Lazy<bool>(() =>
+        {
+            try
+            {
+                return UnsupportedMethodGate.ModesThroughWindows(ProfileCatalog.Load().Match(identity));
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The profile table could not be read for the operating-mode route", ex.Message);
+                return false;
+            }
+        });
+
         // The service is the default path; direct WMI is the fallback the settings page can switch on, and it is the
         // only one that can raise an elevation prompt.
         var hybrid = new HybridHardwareController(
@@ -659,7 +672,11 @@ public sealed class AppHost : IDisposable
             // From the matched profile, never from a model name in code: the published table can then declare the
             // quirk for the next board without a release. Read without waiting, so a write during start-up never blocks
             // on the probe; until it lands, the WMI path's own profile check sends the colour to the controller.
-            PreferHidKeyboard = () => probeTask.IsCompletedSuccessfully && probeTask.Result?.NitroHidKeyboard == true
+            PreferHidKeyboard = () => probeTask.IsCompletedSuccessfully && probeTask.Result?.NitroHidKeyboard == true,
+            // Only a profile that lists the firmware's mode setter as unsupported switches modes through Windows; every
+            // other model keeps writing its mode to the laptop's firmware. Read once, on first use.
+            WindowsPowerMode = new NitroLite.Windows.Core.Hardware.WindowsPowerModeService(),
+            ModesThroughWindows = () => modesThroughWindows.Value
         };
 
         // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI

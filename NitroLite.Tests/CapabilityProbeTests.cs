@@ -49,7 +49,8 @@ public class CapabilityProbeTests
             // Issue 11: v1.3.0, elevated worker, every write refused three times; white backlight, no RGB.
             ["nitro-lite-16-nl16-71g"] = new[]
             {
-                "SetGamingFanSpeed", "SetGamingFanBehavior", "SetGamingRgbKb", "SetGamingKBBacklight"
+                "SetGamingFanSpeed", "SetGamingFanBehavior", "SetGamingRgbKb", "SetGamingKBBacklight",
+                "SetGamingMiscSetting"
             }
         };
 
@@ -62,8 +63,9 @@ public class CapabilityProbeTests
                 Assert.Empty(profile.UnsupportedMethods);
         }
 
-        // Every listed name must be one the gate maps to a control, or the entry would enforce nothing.
-        Assert.All(evidence.Values.SelectMany(v => v), m => Assert.True(UnsupportedMethodGate.Methods.ContainsKey(m)));
+        // Every listed name must be one the gate maps to a control or routes elsewhere, or the entry would do nothing.
+        Assert.All(evidence.Values.SelectMany(v => v), m => Assert.True(
+            UnsupportedMethodGate.Methods.ContainsKey(m) || UnsupportedMethodGate.RoutedElsewhere.ContainsKey(m)));
     }
 
     [Fact]
@@ -87,7 +89,18 @@ public class CapabilityProbeTests
         var gated = UnsupportedMethodGate.Apply(all, profile, out _);
         Assert.False(gated.FanControl);
         Assert.False(gated.KeyboardLighting);
-        Assert.True(gated.OperatingModeControl); // left to the read-back policy: no method name covers it alone
+        Assert.True(gated.OperatingModeControl); // kept, and moved to the Windows power mode
+        Assert.True(UnsupportedMethodGate.ModesThroughWindows(profile));
+    }
+
+    [Fact]
+    public void OnlyTheNitroLite_MovesItsModesToWindows()
+    {
+        // Every other shipped profile keeps writing its operating mode to the laptop's own firmware.
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        Assert.Equal(
+            new[] { "nitro-lite-16-nl16-71g" },
+            catalog.Profiles.Where(UnsupportedMethodGate.ModesThroughWindows).Select(p => p.Id));
     }
 
     [Fact]

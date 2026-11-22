@@ -336,6 +336,18 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         var capabilities = await (await ResolveAsync().ConfigureAwait(false))
             .GetCapabilitiesAsync().ConfigureAwait(false);
 
+        if (UseWindowsModes)
+        {
+            // The firmware's own mode list means nothing here: it refuses the command. The three Windows positions are
+            // what this machine can actually switch between.
+            capabilities = capabilities with
+            {
+                OperatingModeControl = WindowsPowerMode!.Read() != null,
+                SupportedOperatingModes = WindowsPowerModeMapping.Modes,
+                SupportedModeMask = null
+            };
+        }
+
         if (capabilities.BatteryChargeLimit || !_activeIsWmi) return capabilities;
 
         var mode = await _agent.GetBatteryChargeModeAsync().ConfigureAwait(false);
@@ -372,11 +384,37 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         return legacy;
     }
 
-    public async Task<OperatingMode?> GetOperatingModeAsync() => await (await ResolveAsync().ConfigureAwait(false))
-        .GetOperatingModeAsync().ConfigureAwait(false);
+    public async Task<OperatingMode?> GetOperatingModeAsync()
+    {
+        if (UseWindowsModes) return WindowsPowerModeMapping.ToMode(WindowsPowerMode!.Read(), _lastWindowsMode);
 
-    public async Task<bool> SetOperatingModeAsync(OperatingMode mode) => await (await ResolveAsync().ConfigureAwait(false))
-        .SetOperatingModeAsync(mode).ConfigureAwait(false);
+        return await (await ResolveAsync().ConfigureAwait(false)).GetOperatingModeAsync().ConfigureAwait(false);
+    }
+
+    public async Task<bool> SetOperatingModeAsync(OperatingMode mode)
+    {
+        if (UseWindowsModes) return SetWindowsPowerMode(mode);
+
+        return await (await ResolveAsync().ConfigureAwait(false)).SetOperatingModeAsync(mode).ConfigureAwait(false);
+    }
+
+    /// <summary>Writes the Windows power mode and confirms it by reading it back, like every other mode write.</summary>
+    private bool SetWindowsPowerMode(OperatingMode mode)
+    {
+        var target = WindowsPowerModeMapping.For(mode);
+        if (!WindowsPowerMode!.Write(target)) return false;
+
+        var observed = WindowsPowerMode.Read();
+        if (observed != target)
+        {
+            AppLog.Warn("The Windows power mode did not change", $"asked for {target}, Windows reports {observed?.ToString() ?? "nothing"}");
+            return false;
+        }
+
+        _lastWindowsMode = mode;
+        AppLog.Info("Operating mode", $"{mode} was set through the Windows power mode ({target}).");
+        return true;
+    }
 
     public async Task<GpuOperatingMode?> GetGpuModeAsync() => await (await ResolveAsync().ConfigureAwait(false))
         .GetGpuModeAsync().ConfigureAwait(false);
@@ -426,6 +464,21 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// so its "applied" is no more true than the WMI read-back, which on these boards echoes the colour back unlit.
     /// </remarks>
     public Func<bool>? PreferHidKeyboard { get; init; }
+
+    /// <summary>The Windows power mode, for a model whose firmware refuses the operating-mode command.</summary>
+    public IWindowsPowerMode? WindowsPowerMode { get; init; }
+
+    /// <summary>
+    /// True when the matched profile moves the operating mode to the Windows power mode (it lists
+    /// <see cref="UnsupportedMethodGate.OperatingModeMethod"/>). False for every other model, whose mode keeps going to
+    /// the laptop's own firmware exactly as before.
+    /// </summary>
+    public Func<bool>? ModesThroughWindows { get; init; }
+
+    private bool UseWindowsModes => WindowsPowerMode != null && ModesThroughWindows?.Invoke() == true;
+
+    /// <summary>The last mode written through the Windows power mode, so Turbo reads back as Turbo.</summary>
+    private OperatingMode? _lastWindowsMode;
 
     /// <summary>
     /// Writes the keyboard lighting, choosing between the service and the firmware.

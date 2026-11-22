@@ -905,9 +905,10 @@
         "SetGamingFanSpeed",
         "SetGamingFanBehavior",
         "SetGamingRgbKb",
-        "SetGamingKBBacklight"
+        "SetGamingKBBacklight",
+        "SetGamingMiscSetting"
       ],
-      "notes": "Acer Nitro Lite 16 NL16-71G (Intel, 2024). From an owner's report (issue 11) on v1.3.0 with the elevated worker running: the firmware refused every fan-behaviour, fan-speed and keyboard-colour write three times in a row and refused all 557 GetGamingSysInfo sensor reads, so those controls are off and temperatures come from the Windows thermal zone and NVML. The keyboard is a two-level white backlight with no RGB, and GetGamingMiscSetting(0x02) answers 0x0001, which is not a MUX mode. Operating-mode writes were refused as well; the read-back policy switches that control off on its own, since no single method name covers it. Fan ceilings are the generic default: no tachometer answered."
+      "notes": "Acer Nitro Lite 16 NL16-71G (Intel, 2024). From an owner's report (issue 11) on v1.3.0 with the elevated worker running: the firmware refused every fan-behaviour, fan-speed and keyboard-colour write three times in a row and refused all 557 GetGamingSysInfo sensor reads, so those controls are off and temperatures come from the Windows thermal zone and NVML. The keyboard is a two-level white backlight with no RGB, and GetGamingMiscSetting(0x02) answers 0x0001, which is not a MUX mode. Operating-mode writes were refused as well, so the operating mode is switched through the Windows power mode instead (Quiet, Balanced, Performance); Acer ships no NitroSense or AcerSense for the Nitro Lite line, and its power limits are fixed in firmware. Fan ceilings are the generic default: no tachometer answered."
     },
     {
       "id": "acer-gaming-default",
