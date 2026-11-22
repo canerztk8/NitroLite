@@ -104,9 +104,18 @@ public class LinuxFunctionalParityTests
 
         public List<int> Applied { get; } = new();
 
+        /// <summary>How many switches to refuse before answering, like a mouse that is asleep.</summary>
+        public int FailFirst { get; set; }
+
         public Task<bool> ApplyProfileAsync(int profile, CancellationToken cancellationToken = default)
         {
             Applied.Add(profile);
+            if (FailFirst > 0)
+            {
+                FailFirst--;
+                return Task.FromResult(false);
+            }
+
             CurrentProfile = profile;
             return Task.FromResult(true);
         }
@@ -1113,6 +1122,58 @@ public class LinuxFunctionalParityTests
         await WaitForAsync(() => vm.SelectedMode?.Mode == OperatingMode.Default && vm.Status.Length > 0);
         Assert.Equal(OperatingMode.Default, vm.SelectedMode?.Mode);
         Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+    }
+
+    [Fact]
+    public async Task GameDetection_AMouseThatDoesNotAnswerTheFirstSwitch_IsAskedAgain()
+    {
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        settings.GameProfiles[0].TargetAtkMouseProfile = 4;
+        var mouse = new FakeMouse { FailFirst = 2 };
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"), gameProfiles: service, mouseProfiles: mouse);
+        vm.MouseRetryDelay = _ => Task.CompletedTask;
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        await WaitForAsync(() => mouse.CurrentProfile == 4);
+
+        Assert.Equal(new[] { 4, 4, 4 }, mouse.Applied);
+        Assert.Equal(4, mouse.CurrentProfile);
+    }
+
+    [Fact]
+    public async Task GameDetection_ChangingTheDefaultDuringAGame_KeepsTheGamesConfig_AndAppliesAfterwards()
+    {
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        settings.GameProfiles[0].TargetAtkMouseProfile = 4;
+        var mouse = new FakeMouse();
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"), gameProfiles: service, mouseProfiles: mouse);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        Assert.Equal(new[] { 4 }, mouse.Applied);
+
+        // The default changes while the game runs: saved, not written over the game's config.
+        vm.SelectedMouseProfile = vm.MouseProfileOptions.Single(o => o.Index == 3);
+        await Task.Delay(50);
+        Assert.Equal(new[] { 4 }, mouse.Applied);
+        Assert.Equal(3, settings.DefaultAtkMouseProfile);
+        Assert.Equal(vm.Labels.MouseDefaultAfterGame("Test Game"), vm.MouseProfileStatus);
+
+        // The game ends: the mouse goes to the new default, not to the config it had before the game.
+        scanner.Processes.Clear();
+        await vm.PollGameAsync();
+        Assert.Equal(new[] { 4, 3 }, mouse.Applied);
     }
 
     // ---------------------------------------------------------------- 10. tray and clean exit

@@ -5990,6 +5990,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>The waits between attempts to switch the mouse for a game. Replaceable so a test does not wait.</summary>
+    public Func<TimeSpan, Task> MouseRetryDelay { get; set; } = Task.Delay;
+
+    private static readonly TimeSpan[] MouseRetryWaits =
+    {
+        TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(10)
+    };
+
+    /// <summary>
+    /// Asks the mouse again to take the game's config, after a first attempt it did not answer. Stops as soon as the
+    /// game ends or its config is changed, so a late retry can never undo a newer choice.
+    /// </summary>
+    private async Task RetryGameMouseAsync(GameProfile game, int config)
+    {
+        if (_mouseProfiles == null) return;
+
+        for (int attempt = 0; attempt < MouseRetryWaits.Length; attempt++)
+        {
+            await MouseRetryDelay(MouseRetryWaits[attempt]).ConfigureAwait(true);
+
+            if (_disposed) return;
+            if (_gameProfiles?.ActiveProfile is not GameProfile active ||
+                !active.ExeName.Equals(game.ExeName, StringComparison.OrdinalIgnoreCase) ||
+                active.TargetAtkMouseProfile != config)
+            {
+                return;
+            }
+
+            if (await _mouseProfiles.ApplyProfileAsync(config).ConfigureAwait(true))
+            {
+                AppLog.Info("Mouse profile applied for the game", $"{game.DisplayName}: config {config} on retry {attempt + 1}");
+                Raise(nameof(SystemMouseText));
+                Raise(nameof(CurrentMouseProfile));
+                return;
+            }
+        }
+
+        AppLog.Warn("The game's mouse profile could not be applied",
+            $"{game.DisplayName}: config {config} after {MouseRetryWaits.Length + 1} attempts");
+        MouseProfileStatus = Labels.MouseProfileFailed;
+    }
+
     /// <summary>Applies a running game's newly chosen mouse config, and logs the outcome like the game-start path.</summary>
     private async Task ApplyMouseForRunningGameAsync(string game, int config)
     {
@@ -6227,6 +6269,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (choice.Index <= 0)
         {
             MouseProfileStatus = Labels.MousePassiveApplied;
+            return;
+        }
+
+        // A running game with its own config keeps it: the default is what the mouse goes back to, not something that
+        // replaces the game's choice mid-session — which is what picking a default during GTAIV did. The new default
+        // becomes what the session restores when the game ends.
+        if (_gameProfiles?.ActiveProfile is { TargetAtkMouseProfile: > 0 } game)
+        {
+            if (_settings.GameSessionRecovery is { IsActive: true } recovery)
+            {
+                recovery.SavedMouseProfile = choice.Index;
+                SaveSettings();
+            }
+
+            MouseProfileStatus = Labels.MouseDefaultAfterGame(game.DisplayName);
+            Status = MouseProfileStatus;
             return;
         }
 
@@ -8506,6 +8564,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 bool ok = await _mouseProfiles.ApplyProfileAsync(started.TargetAtkMouseProfile).ConfigureAwait(true);
                 AppLog.Info("Mouse profile applied for the game", $"{started.DisplayName}: config {started.TargetAtkMouseProfile} ok={ok}");
+
+                // A wireless mouse that is asleep, or busy while the game takes over the screen, does not answer the
+                // first switch: the log showed "config 4 ok=False" three game starts in a row, and the mouse then
+                // stayed on the default config for the whole session. It is asked again a few times instead.
+                if (!ok) _ = RetryGameMouseAsync(started, started.TargetAtkMouseProfile);
+
+                Raise(nameof(SystemMouseText));
+                Raise(nameof(CurrentMouseProfile));
             }
         }
         else if (result.Change == GameDetectionChange.Ended && result.Previous is GameProfile ended)

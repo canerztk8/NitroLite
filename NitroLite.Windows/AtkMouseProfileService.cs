@@ -49,8 +49,13 @@ public sealed class AtkMouseProfileService : IMouseProfileService
         {
             try
             {
-                bool ok = _mouse.SwitchProfile(profile);
-                if (!ok) return false;
+                var result = _mouse.ApplyProfile(profile);
+                if (result != AtkMouseResult.Confirmed)
+                {
+                    // The reason is what tells a sleeping mouse (NoResponse) from a missing receiver or a refusal.
+                    AppLog.Info("The mouse did not switch profile", $"Config {profile}: {result}");
+                    return false;
+                }
 
                 lock (_gate)
                 {

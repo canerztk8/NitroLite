@@ -246,6 +246,8 @@ public sealed class ShellLabels
     public string MousePassive => Loc.T("Değiştirme (Pasif)");
     public string MousePassiveApplied => Loc.T("Fare profili değiştirilmedi.");
     public string MouseProfileApplied(int profile) => Loc.T($"Fare profili uygulandı: Config {profile}");
+
+    public string MouseDefaultAfterGame(string game) => Loc.T($"Varsayılan fare profili kaydedildi; {game} kapanınca uygulanacak.");
     public string MouseProfileFailed => Loc.T("Fare profili uygulanamadı; cihaz yanıt vermedi.");
     public string DefaultMouseProfile => Loc.T("Varsayılan Fare Profili");
 
