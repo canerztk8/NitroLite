@@ -1023,6 +1023,98 @@ public class LinuxFunctionalParityTests
         Assert.Equal(4, settings.GameProfiles[0].TargetAtkMouseProfile);
     }
 
+    [Fact]
+    public async Task GameDetection_TheRunningGamesProfileOpensInTheEditor_AndAnEditAppliesNow()
+    {
+        var fs = Nitro16();
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        using var controller = Controller(fs, settings);
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings, controller);
+
+        using var vm = new MainViewModel(
+            settings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"), gameProfiles: service);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+
+        Assert.Equal("cs2", vm.SelectedGameProfile?.ExeName);
+        Assert.Equal("performance", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+
+        // Changed while the game runs: written now, and the mode card follows.
+        vm.SelectedGameMode = vm.GameModeChoices.Single(m => m.Mode == OperatingMode.Default);
+        await WaitForAsync(() => fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim() == "balanced"
+                                 && vm.SelectedMode?.Mode == OperatingMode.Default);
+
+        Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+        Assert.Equal(OperatingMode.Default, vm.SelectedMode?.Mode);
+        Assert.Equal(OperatingMode.Default, service.ActiveProfile?.TargetMode);
+
+        // The session still ends by restoring what was there before the game.
+        scanner.Processes.Clear();
+        await vm.PollGameAsync();
+        Assert.False(vm.GameActive);
+    }
+
+    [Fact]
+    public async Task GameProfiles_EditingAGame_KeepsThatGameInTheEditor()
+    {
+        var settings = new AppSettings { AutoGameModeEnabled = true };
+        settings.GameProfiles = new List<GameProfile>
+        {
+            new() { ExeName = "first", DisplayName = "First", TargetMode = OperatingMode.Turbo },
+            new() { ExeName = "second", DisplayName = "Second", TargetMode = OperatingMode.Turbo }
+        };
+        using var vm = new MainViewModel(settings, null, null, AppPaths.GetDataFile("settings.json"));
+        await vm.InitializeAsync();
+
+        vm.SelectedGameProfile = vm.GameProfiles.Single(r => r.ExeName == "second");
+        vm.SelectedGameMode = vm.GameModeChoices.First(m => m.Mode != OperatingMode.Turbo);
+
+        // The edit rebuilds the rows; the editor stays on the game that was edited.
+        Assert.Equal("second", vm.SelectedGameProfile?.ExeName);
+        Assert.NotEqual(OperatingMode.Turbo, settings.GameProfiles.Single(p => p.ExeName == "second").TargetMode);
+        Assert.Equal(OperatingMode.Turbo, settings.GameProfiles.Single(p => p.ExeName == "first").TargetMode);
+    }
+
+    [Fact]
+    public async Task Mode_AClickOnTheCardThatLooksSelected_StillWrites()
+    {
+        var fs = Nitro16();
+        var settings = new AppSettings();
+        using var controller = Controller(fs, settings);
+        using var vm = new MainViewModel(settings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"));
+        await vm.InitializeAsync();
+        Assert.Equal(OperatingMode.Default, vm.SelectedMode?.Mode);
+
+        // The machine moved behind the page's back (a hotkey, another app, a write that did not land).
+        fs.WithFile(LinuxPaths.PlatformProfile, "performance\n");
+
+        vm.Modes.Single(m => m.Mode == OperatingMode.Default).SelectCommand.Execute(null);
+        await WaitForAsync(() => fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim() == "balanced");
+
+        Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+    }
+
+    [Fact]
+    public async Task Mode_AWriteThatDoesNotLand_ShowsTheModeTheMachineIsIn()
+    {
+        var fs = Nitro16();
+        var settings = new AppSettings();
+        using var controller = Controller(fs, settings);
+        using var vm = new MainViewModel(settings, controller, controller.Capabilities, AppPaths.GetDataFile("settings.json"));
+        await vm.InitializeAsync();
+
+        fs.DenyWrite(LinuxPaths.PlatformProfile);
+        vm.Modes.Single(m => m.Mode == OperatingMode.Quiet).SelectCommand.Execute(null);
+
+        // The click showed Quiet for a moment; the refused write puts the card back on what the laptop reports.
+        await WaitForAsync(() => vm.SelectedMode?.Mode == OperatingMode.Default && vm.Status.Length > 0);
+        Assert.Equal(OperatingMode.Default, vm.SelectedMode?.Mode);
+        Assert.Equal("balanced", fs.ReadAllText(LinuxPaths.PlatformProfile)?.Trim());
+    }
+
     // ---------------------------------------------------------------- 10. tray and clean exit
 
     [Fact]

@@ -199,6 +199,28 @@ public sealed class GameProfileService
     }
 
     /// <summary>
+    /// Writes the running game's mode and fan targets again, after its profile was edited while the game runs. Returns
+    /// false, and writes nothing, when <paramref name="exeName"/> is not the game in session. The pre-game snapshot is
+    /// kept: the session still ends by putting back what was there before the game, not before the edit.
+    /// </summary>
+    public async Task<bool> ReapplyActiveAsync(string exeName)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var active = ActiveProfile;
+            if (active == null || !string.Equals(active.ExeName, exeName, StringComparison.OrdinalIgnoreCase)) return false;
+
+            await ApplyAsync(active).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
     /// Ends an active session without waiting for the game to exit. Used when the user turns automatic game mode off
     /// or asks for a clean exit.
     /// </summary>

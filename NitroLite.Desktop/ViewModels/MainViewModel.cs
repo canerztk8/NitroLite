@@ -5554,6 +5554,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private void BuildGameProfileRows()
     {
+        // Read before the list is cleared: the rows are rebuilt as new objects, so the old selection is never "still
+        // in the list", and the editor used to jump to the first game every time a target was changed.
+        var selectedExe = SelectedGameProfile?.ExeName;
+
         GameProfiles.Clear();
         foreach (var profile in _settings.GameProfiles)
         {
@@ -5566,9 +5570,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 DeleteGameProfile));
         }
 
-        // The quick picker on the modes page opens on the first rule rather than on nothing, so the delete button
-        // beside it is live from the first frame.
-        if (SelectedGameProfile == null || !GameProfiles.Contains(SelectedGameProfile))
+        // The same game stays selected across the rebuild. The quick picker opens on the first rule only when there is
+        // no previous choice to keep, so the delete button beside it is live from the first frame.
+        var kept = selectedExe == null
+            ? null
+            : GameProfiles.FirstOrDefault(r => r.ExeName.Equals(selectedExe, StringComparison.OrdinalIgnoreCase));
+        if (kept != null) SelectedGameProfile = kept;
+        else if (SelectedGameProfile == null || !GameProfiles.Contains(SelectedGameProfile))
             SelectedGameProfile = GameProfiles.FirstOrDefault();
 
         // The per-game controls follow the selection, so the card never shows one game's mode beside another's name.
@@ -5864,6 +5872,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             profile.TargetMode = value.Mode;
             SaveSettings();
             BuildGameProfileRows();
+            ApplyEditToRunningGame(profile);
         }
     }
 
@@ -5902,6 +5911,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             profile.TargetFanCurveEnabled = value.Mode == FanMode.Custom;
             SaveSettings();
             BuildGameProfileRows();
+            ApplyEditToRunningGame(profile);
         }
     }
 
@@ -5928,6 +5938,55 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 active.TargetAtkMouseProfile = value.Index;
                 _ = ApplyMouseForRunningGameAsync(profile.DisplayName, value.Index);
             }
+        }
+    }
+
+    /// <summary>
+    /// Sends an edit of the game that is running to the machine now, instead of waiting for its next launch. Only the
+    /// game in session is touched, and only for a change the user made (the form's own refresh runs with writes off).
+    /// </summary>
+    private void ApplyEditToRunningGame(GameProfile profile)
+    {
+        if (_suppressWrite || _gameProfiles?.ActiveProfile is not GameProfile active) return;
+        if (!active.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (!ReferenceEquals(active, profile))
+        {
+            active.TargetMode = profile.TargetMode;
+            active.TargetFanMode = profile.TargetFanMode;
+            active.TargetFanCurveEnabled = profile.TargetFanCurveEnabled;
+            active.TargetFanCurvePoints = profile.TargetFanCurvePoints;
+            active.TargetCpuBoost = profile.TargetCpuBoost;
+        }
+
+        _ = ReapplyRunningGameAsync(active);
+    }
+
+    private async Task ReapplyRunningGameAsync(GameProfile active)
+    {
+        if (_gameProfiles == null) return;
+
+        try
+        {
+            if (!await _gameProfiles.ReapplyActiveAsync(active.ExeName).ConfigureAwait(true)) return;
+
+            // The cards follow, exactly as they do when the game starts.
+            var fan = active.TargetFanCurveEnabled ? FanMode.Custom : active.TargetFanMode;
+            SyncControls(() =>
+            {
+                SelectedMode = Modes.FirstOrDefault(m => m.Mode == active.TargetMode) ?? SelectedMode;
+                SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
+            });
+
+            var points = _gameProfiles.ActiveCurvePoints;
+            _curveEvaluator = new FanCurveEvaluator(points != null ? new FanCurve(points) : _settings.BuildFanCurve());
+            _curveEvaluator.Reset();
+
+            AppLog.Info("Game profile applied to the running game", $"{active.DisplayName}: {active.TargetMode} · {fan}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Game profile could not be applied to the running game", $"{active.DisplayName}: {ex.Message}");
         }
     }
 
@@ -7770,12 +7829,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || mode is not OperatingMode target) return;
 
-        await RunWriteAsync(async () =>
+        bool applied = await RunWriteAsync(async () =>
         {
             bool ok = await _hardware.SetOperatingModeAsync(target).ConfigureAwait(true);
             if (ok) _settings.LastOperatingMode = target;
             return ok;
         }, Labels.OperatingMode).ConfigureAwait(true);
+
+        if (!applied) await ShowObservedModeAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Moves the selection to the mode the machine reports, after a write that did not land. Leaving the clicked card
+    /// selected made the page claim a mode the laptop was not in, and the next click on that card looked like a no-op.
+    /// </summary>
+    private async Task ShowObservedModeAsync()
+    {
+        if (_hardware == null) return;
+
+        try
+        {
+            if (await _hardware.GetOperatingModeAsync().ConfigureAwait(true) is not OperatingMode observed) return;
+            if (observed == SelectedMode?.Mode) return;
+
+            SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == observed) ?? SelectedMode);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The operating mode could not be read back", ex.Message);
+        }
     }
 
     private async Task ApplyFanModeAsync()
@@ -8377,7 +8459,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     public async Task PollGameAsync()
     {
-        if (_gameProfiles == null) return;
+        // A poll that lands during shutdown would write through a backend that is already disposed ("Cannot access a
+        // disposed object" in the log at exit).
+        if (_gameProfiles == null || _disposed) return;
 
         var result = await _gameProfiles.PollAsync().ConfigureAwait(true);
         if (!result.IsTransition) return;
@@ -8408,6 +8492,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var points = _gameProfiles.ActiveCurvePoints;
             _curveEvaluator = new FanCurveEvaluator(points != null ? new FanCurve(points) : _settings.BuildFanCurve());
             _curveEvaluator.Reset();
+
+            // The editor opens on the game that is running, so a change can be made the moment it is wanted — and it is
+            // applied to that game straight away (ApplyEditToRunningGame).
+            var runningRow = GameProfiles.FirstOrDefault(
+                r => r.ExeName.Equals(started.ExeName, StringComparison.OrdinalIgnoreCase));
+            if (runningRow != null && !ReferenceEquals(SelectedGameProfile, runningRow)) SelectedGameProfile = runningRow;
 
             // The mouse rides along with the mode and the fan: this is the only consumer of
             // GameProfile.TargetAtkMouseProfile, so without this write the picker's choice never reaches the mouse.
@@ -8986,7 +9076,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ModePolicy.IsModeAllowed(mode, OnAcPower ?? true, BatteryPercent);
 
     /// <summary>A card click. Goes through the setter so the write, the settings file and the accent all follow.</summary>
-    private void SelectMode(ModeChoice card) => SelectedMode = card;
+    private void SelectMode(ModeChoice card)
+    {
+        // A click on the card that already looks selected is still a request. The card can be out of step with the
+        // machine — a write that did not land, a mode changed by a hotkey or another app — and swallowing the click
+        // there was the "pressed Balanced two or three times and it stayed on Performance" report.
+        if (card.Mode == SelectedMode?.Mode)
+        {
+            _ = ApplyModeAsync(card.Mode);
+            return;
+        }
+
+        SelectedMode = card;
+    }
 
     private void SelectFanMode(FanModeChoice card) => SelectedFanMode = card;
 
