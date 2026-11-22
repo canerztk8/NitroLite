@@ -5918,6 +5918,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             profile.TargetAtkMouseProfile = value.Index;
             SaveSettings();
+
+            // The game-start transition is the only other place this value is written to the mouse, so a choice made
+            // while the game is already running waited for the next launch — "config 4 is selected and the game is
+            // open, but the mouse is not on 4". The running game's choice goes to the mouse now.
+            if (!_suppressWrite && value.Index > 0 && _gameProfiles?.ActiveProfile is GameProfile active &&
+                active.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase))
+            {
+                active.TargetAtkMouseProfile = value.Index;
+                _ = ApplyMouseForRunningGameAsync(profile.DisplayName, value.Index);
+            }
+        }
+    }
+
+    /// <summary>Applies a running game's newly chosen mouse config, and logs the outcome like the game-start path.</summary>
+    private async Task ApplyMouseForRunningGameAsync(string game, int config)
+    {
+        if (_mouseProfiles == null) return;
+        try
+        {
+            bool ok = await _mouseProfiles.ApplyProfileAsync(config).ConfigureAwait(true);
+            AppLog.Info("Mouse profile applied for the running game", $"{game}: config {config} ok={ok}");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Mouse profile could not be applied", $"{game}: config {config}: {ex.Message}");
         }
     }
 

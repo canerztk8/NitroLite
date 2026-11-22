@@ -996,6 +996,33 @@ public class LinuxFunctionalParityTests
     }
 
 
+    [Fact]
+    public async Task GameDetection_ChangingTheRunningGamesMouseConfig_AppliesItNow()
+    {
+        var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
+        var mouse = new FakeMouse();
+        var scanner = new FakeScanner();
+        var service = new GameProfileService(scanner, settings);
+
+        using var vm = new MainViewModel(
+            settings, null, null, AppPaths.GetDataFile("settings.json"),
+            gameProfiles: service, mouseProfiles: mouse);
+        await vm.InitializeAsync();
+
+        scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
+        await vm.PollGameAsync();
+        Assert.True(vm.GameActive);
+        Assert.Empty(mouse.Applied);
+
+        // The user picks config 4 for the game that is already open: it must not wait for the next launch.
+        vm.SelectedGameProfile = vm.GameProfiles.Single(r => r.ExeName == "cs2");
+        vm.SelectedGameMouseProfile = vm.MouseProfileOptions.Single(o => o.Index == 4);
+        await WaitForAsync(() => mouse.Applied.Contains(4));
+
+        Assert.Equal(new[] { 4 }, mouse.Applied);
+        Assert.Equal(4, settings.GameProfiles[0].TargetAtkMouseProfile);
+    }
+
     // ---------------------------------------------------------------- 10. tray and clean exit
 
     [Fact]
