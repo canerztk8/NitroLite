@@ -50,6 +50,8 @@ public sealed class ElevatedAutoStartService : IAutoStartService
     /// <summary>Why the last call failed, for the settings page.</summary>
     public string LastError => _service.LastError;
 
+    public AutoStartRefusal LastRefusal => _service.LastRefusal;
+
     public Task<bool> IsEnabledAsync(CancellationToken cancellationToken = default) =>
         _service.IsEnabledAsync(cancellationToken);
 

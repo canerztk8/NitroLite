@@ -148,6 +148,9 @@ public sealed class ElevatedStartupService
     /// <summary>Why the last change failed, for the log and the settings row.</summary>
     public string LastError { get; private set; } = "";
 
+    /// <summary>Set when the last change was refused because of where the executable sits; None otherwise.</summary>
+    public AutoStartRefusal LastRefusal { get; private set; }
+
     /// <summary>
     /// The task's arguments, matching <see cref="DebloatService.BuildAutoStartCommand"/> so the two registrations
     /// start the application the same way.
@@ -385,8 +388,10 @@ public sealed class ElevatedStartupService
         // whatever ends up at that path an elevated logon start.
         if (IsUnsafeAutostartLocation(exePath))
         {
-            return Fail("the executable runs from a temporary or download folder, so it must not be registered " +
-                        $"for autostart: {exePath}");
+            var refused = Fail("the executable runs from a temporary or download folder, so it must not be registered " +
+                               $"for autostart: {exePath}");
+            LastRefusal = AutoStartRefusal.DownloadOrTempFolder;
+            return refused;
         }
 
         // The temp/Downloads test above is a name test, and a name test is not an access test. A folder such as
@@ -401,8 +406,10 @@ public sealed class ElevatedStartupService
         // happily registers a logon task there.
         if (!DirectoryTrust.IsExecutableTrusted(exePath))
         {
-            return Fail("the executable sits in a folder another local account can write to, so it must not be " +
-                        $"registered for an elevated autostart: {exePath}");
+            var refused = Fail("the executable sits in a folder another local account can write to, so it must not be " +
+                               $"registered for an elevated autostart: {exePath}");
+            LastRefusal = AutoStartRefusal.WritableFolder;
+            return refused;
         }
 
         string? userId = _userId();
@@ -524,6 +531,7 @@ public sealed class ElevatedStartupService
         }
 
         LastError = "";
+        LastRefusal = AutoStartRefusal.None;
         AppLog.Info("Elevated auto-start is on", $"task='{TaskName}'");
         return ElevatedStartupResult.Applied_();
     }
@@ -551,6 +559,7 @@ public sealed class ElevatedStartupService
         }
 
         LastError = "";
+        LastRefusal = AutoStartRefusal.None;
         AppLog.Info("Elevated auto-start is off", $"task='{TaskName}'");
         return ElevatedStartupResult.Applied_();
     }
@@ -574,6 +583,7 @@ public sealed class ElevatedStartupService
         }
 
         LastError = "";
+        LastRefusal = AutoStartRefusal.None;
         return ElevatedStartupResult.Applied_();
     }
 
@@ -585,6 +595,7 @@ public sealed class ElevatedStartupService
     private ElevatedStartupResult Fail(string detail)
     {
         LastError = detail;
+        LastRefusal = AutoStartRefusal.None;
         AppLog.Warn("Autostart with administrator rights could not be changed", detail);
         return ElevatedStartupResult.Failed(detail);
     }

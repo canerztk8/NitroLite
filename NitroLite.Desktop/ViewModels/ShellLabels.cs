@@ -127,6 +127,12 @@ public sealed class ShellLabels
     public string AutoStartDisabled => Loc.T("Otomatik başlatma kapatıldı.");
     public string AutoStartFailed => Loc.T("Otomatik başlatma değiştirilemedi.");
 
+    public string AutoStartRefusedDownloadFolder => Loc.T(
+        "NitroLite İndirilenler ya da geçici bir klasörden çalışıyor, bu yüzden otomatik başlatmaya eklenmiyor. NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyıp tekrar deneyin.");
+
+    public string AutoStartRefusedWritableFolder => Loc.T(
+        "NitroLite başka hesapların değiştirebileceği bir klasörde, bu yüzden otomatik başlatmaya eklenmiyor. NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyıp tekrar deneyin.");
+
     public string AutoRefreshRate => Loc.T("Pilde otomatik 60 Hz'e düşür");
     public string AutoRefreshRateHint => Loc.T("Pil gücüne geçildiğinde panel 60 Hz'e iner; prize takılınca önceki hız geri gelir.");
     public string RefreshRateLowered => Loc.T("Pil gücünde panel 60 Hz'e düşürüldü.");

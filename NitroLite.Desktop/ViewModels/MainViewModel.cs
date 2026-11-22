@@ -7698,9 +7698,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ? await _autoStart.EnableAsync().ConfigureAwait(true)
                 : await _autoStart.DisableAsync().ConfigureAwait(true);
 
+            // A refusal the user can fix says how; the issue 11 owner ran the app out of Downloads and was told only
+            // that autostart "could not be changed".
             AutoStartStatus = ok
                 ? (enable ? Labels.AutoStartEnabled : Labels.AutoStartDisabled)
-                : Labels.AutoStartFailed;
+                : _autoStart.LastRefusal switch
+                {
+                    AutoStartRefusal.DownloadOrTempFolder => Labels.AutoStartRefusedDownloadFolder,
+                    AutoStartRefusal.WritableFolder => Labels.AutoStartRefusedWritableFolder,
+                    _ => Labels.AutoStartFailed
+                };
 
             await RefreshAutoStartAsync().ConfigureAwait(true);
         }

@@ -15,6 +15,19 @@ namespace NitroLite.Core;
 /// instead of offering a control that cannot work.
 /// </para>
 /// </remarks>
+/// <summary>A refusal the user can act on by moving NitroLite.</summary>
+public enum AutoStartRefusal
+{
+    /// <summary>Not refused for its location.</summary>
+    None,
+
+    /// <summary>NitroLite runs from Downloads or a temporary folder: a file that will be gone or replaced.</summary>
+    DownloadOrTempFolder,
+
+    /// <summary>NitroLite runs from a folder other local accounts can write to, such as one directly under C:\.</summary>
+    WritableFolder
+}
+
 public interface IAutoStartService
 {
     /// <summary>True when the sign-in entry is registered right now.</summary>
@@ -25,4 +38,10 @@ public interface IAutoStartService
 
     /// <summary>Removes the entry. False when it could not be removed.</summary>
     Task<bool> DisableAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Why the last change was refused, when the reason is one the user can fix by moving the app. None for every
+    /// other outcome, and for a platform that never refuses on location.
+    /// </summary>
+    AutoStartRefusal LastRefusal => AutoStartRefusal.None;
 }
