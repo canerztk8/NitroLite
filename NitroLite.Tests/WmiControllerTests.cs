@@ -101,6 +101,33 @@ public class WmiControllerTests
     }
 
     [Fact]
+    public async Task ReadBack_AMissAfterAConfirmedWrite_IsReported_ButDoesNotSwitchTheControlOff()
+    {
+        // An AN17-51: thirty colours confirmed, then the one written as the charger went in did not read back, and
+        // the session-wide disable that followed made every later colour fail without being tried.
+        var settings = new AppSettings();
+        var policy = new ReadBackPolicy(settings, NoDelay);
+        var stored = 0x111111;
+
+        var first = await policy.ApplyAsync(ReadBackPolicy.KeyboardLighting,
+            write: () => { stored = 0x222222; return Task.FromResult(true); },
+            readBack: () => Task.FromResult<int?>(stored), matches: v => v == 0x222222);
+        var missed = await policy.ApplyAsync(ReadBackPolicy.KeyboardLighting,
+            write: () => Task.FromResult(true),
+            readBack: () => Task.FromResult<int?>(stored), matches: v => v == 0x333333);
+        var next = await policy.ApplyAsync(ReadBackPolicy.KeyboardLighting,
+            write: () => { stored = 0x444444; return Task.FromResult(true); },
+            readBack: () => Task.FromResult<int?>(stored), matches: v => v == 0x444444);
+
+        Assert.True(first.Applied);
+        Assert.False(missed.Applied);
+        Assert.False(missed.DisabledForSession);
+        Assert.True(next.Applied);
+        Assert.False(policy.IsDisabled(ReadBackPolicy.KeyboardLighting));
+        Assert.Equal(0, policy.ConsecutiveSessionFailures(ReadBackPolicy.KeyboardLighting));
+    }
+
+    [Fact]
     public async Task ReadBack_DisabledCapability_IsSkippedWithoutWriting()
     {
         var settings = new AppSettings();

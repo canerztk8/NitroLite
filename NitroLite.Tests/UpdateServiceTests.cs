@@ -339,6 +339,44 @@ public class UpdateServiceTests : IDisposable
     }
 
     [Fact]
+    public void InstallFromStaging_ABackupThatCannotBeDeleted_IsMovedAside_AndTheUpdateStillInstalls()
+    {
+        // What an AN17-51 hit: the previous update's NitroLite.exe.old was still the image of a running process, so it
+        // could be renamed but not deleted, and every later update failed with "the file already exists". A
+        // read-only file behaves the same way for these two calls.
+        var install = InstallFolder();
+        var locked = Path.Combine(install, "NitroLite.exe.old");
+        File.WriteAllText(locked, "the build before");
+        File.SetAttributes(locked, FileAttributes.ReadOnly);
+        try
+        {
+            var target = UpdateService.InstallFromStaging(StagingFolder(), install);
+
+            Assert.Equal("new exe", File.ReadAllText(target));
+            Assert.Equal("old exe", File.ReadAllText(target + ".old"));
+            var stale = Assert.Single(Directory.GetFiles(install, "NitroLite.exe.old-stale-*"));
+            Assert.Equal("the build before", File.ReadAllText(stale));
+        }
+        finally
+        {
+            foreach (var file in Directory.GetFiles(install)) File.SetAttributes(file, FileAttributes.Normal);
+        }
+    }
+
+    [Fact]
+    public void Recovery_SweepsTheBackupsAnUpdateMovedAside()
+    {
+        var install = InstallFolder();
+        var stale = Path.Combine(install, "NitroLite.exe.old-stale-1a2b3c4d");
+        File.WriteAllText(stale, "the build before");
+
+        var report = UpdateService.RecoverInterruptedUpdate(install);
+
+        Assert.False(File.Exists(stale));
+        Assert.Contains(stale, report.Removed);
+    }
+
+    [Fact]
     public void InstallFromStaging_RecreatesTheLicenceFile()
     {
         var install = InstallFolder();

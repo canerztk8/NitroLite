@@ -185,6 +185,18 @@ public sealed class ReadBackPolicy
     private readonly HashSet<string> _countedThisSession = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Capabilities whose write has been confirmed at least once in this session. A later mismatch on one of them is
+    /// a write that did not land that time, not firmware that ignores the control, so it is reported and not used to
+    /// switch the control off.
+    /// </summary>
+    /// <remarks>
+    /// An AN17-51 showed why: some thirty keyboard colours read back exactly, then the one written the moment the
+    /// charger went in — while the firmware handles its own AC event — did not, and the session-wide disable that
+    /// followed made every later colour, including the restore, fail without being tried.
+    /// </remarks>
+    private readonly HashSet<string> _confirmedThisSession = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// <paramref name="delay"/> is injectable so the tests do not spend 320 ms per case waiting for a pause that only
     /// exists to give the EC time it does not need in a fake. <paramref name="verification"/> is the session ledger the
     /// UI and the hardware report read; it defaults to the process-wide instance. <paramref name="diagnostics"/> is
@@ -225,6 +237,7 @@ public sealed class ReadBackPolicy
         _settings.DisabledCapabilities.Clear();
         _sessionDisabled.Clear();
         _countedThisSession.Clear();
+        _confirmedThisSession.Clear();
     }
 
     /// <summary>
@@ -267,6 +280,7 @@ public sealed class ReadBackPolicy
                         // A working capability must never carry a failure count into the next session.
                         _settings.CapabilitySessionFailures.Remove(capability);
                         _countedThisSession.Remove(capability);
+                        _confirmedThisSession.Add(capability);
                         _verification.Confirm(capability);
 
                         return ReadBackResult.Success(attempt) with
@@ -398,6 +412,24 @@ public sealed class ReadBackPolicy
     /// </summary>
     private ReadBackResult Fail(string capability, string error, string observed = "", string requested = "")
     {
+        if (_confirmedThisSession.Contains(capability))
+        {
+            // Proven to work this session: this write missed, the control stays on, and nothing is counted.
+            _verification.Mark(new VerificationNote
+            {
+                Control = capability,
+                Verdict = ControlVerdict.Mismatch,
+                Requested = requested,
+                Observed = observed,
+                Detail = error
+            });
+
+            AppLog.Warn("A hardware write did not apply this time",
+                $"{capability}: read-back did not match in {MaxAttempts} attempts ({error}); it worked earlier this session, so it stays on");
+
+            return new ReadBackResult { Control = capability, Observed = observed, Attempts = MaxAttempts, Error = error };
+        }
+
         _sessionDisabled.Add(capability);
 
         _verification.Mark(new VerificationNote

@@ -568,8 +568,18 @@ public static class UpdateService
                 // process runs from, so it is the one case where a failed delete is tolerated.
                 if (File.Exists(backup))
                 {
-                    if (string.Equals(destination, target, StringComparison.OrdinalIgnoreCase)) TryDelete(backup);
-                    else File.Delete(backup);
+                    if (string.Equals(destination, target, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Still locked: the previous update's process has not exited, or this process runs from it.
+                        // Windows lets a running image be renamed but not deleted, so it is moved out of the way under
+                        // a name of its own and swept at the next start. Leaving it made the move below fail with
+                        // "already exists" on every try until a reboot.
+                        if (!TryDelete(backup)) File.Move(backup, StaleName(backup));
+                    }
+                    else
+                    {
+                        File.Delete(backup);
+                    }
                 }
 
                 if (File.Exists(destination)) File.Move(destination, backup);
@@ -676,7 +686,15 @@ public static class UpdateService
         return new UpdateRecoveryReport(restored, removed, failed);
     }
 
-    /// <summary>Deletes every <c>.old</c> and <c>.new</c> the package owns and reports the ones that went.</summary>
+    /// <summary>The suffix a locked backup is renamed to, followed by a random part so two of them never collide.</summary>
+    private const string StaleSuffix = ".old-stale-";
+
+    private static string StaleName(string backup) => backup + "-stale-" + Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>
+    /// Deletes every <c>.old</c> and <c>.new</c> the package owns, and the locked backups an update had to rename
+    /// aside, and reports the ones that went.
+    /// </summary>
     private static List<string> SweepLeftovers(string installDirectory)
     {
         var removed = new List<string>();
@@ -688,6 +706,18 @@ public static class UpdateService
                 var leftover = path + suffix;
                 if (TryDelete(leftover)) removed.Add(leftover);
             }
+
+            var folder = Path.GetDirectoryName(path);
+            if (folder == null || !Directory.Exists(folder)) continue;
+            try
+            {
+                foreach (var stale in Directory.EnumerateFiles(folder, Path.GetFileName(path) + StaleSuffix + "*"))
+                {
+                    if (TryDelete(stale)) removed.Add(stale);
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
         return removed;
     }
