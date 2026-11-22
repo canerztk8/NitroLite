@@ -79,6 +79,19 @@
         </Border>
       </Grid>
 
+      <!-- ============================================================ helper folder warning -->
+      <!-- The hardware helper was refused because of the install folder. Without this the reason lived only in a
+           settings row, and every control on this page simply failed. -->
+      <Border Classes="card" Margin="0,10,0,0" IsVisible="{Binding ShowHelperFolderWarning}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Classes="cardicon" Text="&#xE7BA;" Foreground="{DynamicResource WarningBrush}" />
+            <TextBlock Classes="section" Text="{Binding Labels.HelperFolderWarningTitle}" />
+          </StackPanel>
+          <TextBlock Classes="hint" Text="{Binding Labels.HelperFolderWarningBody}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
       <!-- ============================================================ power modes -->
 
       <Border Classes="card" Margin="0,10,0,8">

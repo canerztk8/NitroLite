@@ -118,7 +118,8 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
             UsbHid = extras.UsbHid.Count > 0 ? extras.UsbHid : UsbHidInventory.Read(),
             KeyboardLighting = extras.KeyboardLighting.Count > 0
                 ? extras.KeyboardLighting
-                : DescribeKeyboardLighting()
+                : DescribeKeyboardLighting(),
+            MuxWord = extras.MuxWord ?? wmi?.LastMuxWord
         };
 
         return HardwareReport.BuildMarkdown(

@@ -374,6 +374,13 @@ public sealed class WmiHardwareController : IHardwareController
     /// <summary>The last MUX word logged as unrecognised, so the same answer is said once, not on every read.</summary>
     private ulong? _unrecognisedMuxWord;
 
+    /// <summary>
+    /// The last <c>GetGamingMiscSetting(0x02)</c> word the worker answered, or null when nothing has read it this
+    /// session. The hardware report prints it: it is the one number that says what a board's MUX selector holds, and
+    /// the AN16-61 MUX report could not be acted on without it.
+    /// </summary>
+    public ulong? LastMuxWord { get; private set; }
+
     public async Task<GpuOperatingMode?> GetGpuModeAsync()
     {
         var (state, refusal) = await ReadDeviceStateWithReasonAsync().ConfigureAwait(false);
@@ -393,6 +400,8 @@ public sealed class WmiHardwareController : IHardwareController
                 $"the device state carries no GetGamingMiscSetting(0x02) answer ({DescribeRaw(state)})");
             return null;
         }
+
+        LastMuxWord = raw;
 
         var decoded = ParseEnum<GpuOperatingMode>(state, "muxMode");
         if (decoded == null && _unrecognisedMuxWord != raw)

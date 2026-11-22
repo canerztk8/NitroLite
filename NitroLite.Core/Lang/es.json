@@ -1755,5 +1755,7 @@
   "Linux bilgilerini gönder": "Enviar información de Linux",
   "Kayıt dosyası yazılamadı.": "No se pudo escribir el archivo de captura.",
   "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} guardado. Arrastra el archivo de la carpeta que se abrió a la página de GitHub.",
-  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "Este escritorio no muestra iconos en la bandeja (GNOME necesita la extensión AppIndicator). Cerrar la ventana la minimiza y la aplicación sigue en marcha; en lugar de iniciar en la bandeja, se abre la ventana."
+  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "Este escritorio no muestra iconos en la bandeja (GNOME necesita la extensión AppIndicator). Cerrar la ventana la minimiza y la aplicación sigue en marcha; en lugar de iniciar en la bandeja, se abre la ventana.",
+  "Donanım kontrolü kapalı: klasör güvenli değil": "Control de hardware desactivado: la carpeta no es segura",
+  "NitroLite, başka hesapların değiştirebileceği bir klasörden çalışıyor; bu yüzden yönetici yardımcısını başlatmıyor. Fan, mod ve ışık kontrolleri için NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyın veya yönetici olarak başlatın.": "NitroLite se ejecuta desde una carpeta que otras cuentas pueden modificar, así que no inicia su asistente de administrador. Para controlar ventiladores, modos e iluminación, mueve NitroLite a Program Files o a %LOCALAPPDATA%\\NitroLite, o inícialo como administrador."
 }

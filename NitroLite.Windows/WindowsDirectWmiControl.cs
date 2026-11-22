@@ -40,6 +40,9 @@ public sealed class WindowsDirectWmiControl : IDirectWmiControl
         }
     }
 
+    public bool HelperFolderRefused =>
+        !IsAvailable && _hybrid.DirectWmiRefusal == WmiWorkerRefusal.UntrustedLocation;
+
     public async Task<bool> StartAsync(CancellationToken cancellationToken = default)
     {
         try

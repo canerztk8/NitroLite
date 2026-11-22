@@ -1755,5 +1755,7 @@
   "Linux bilgilerini gönder": "Linux जानकारी भेजें",
   "Kayıt dosyası yazılamadı.": "कैप्चर फ़ाइल नहीं लिखी जा सकी।",
   "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} सहेजा गया। खुले फ़ोल्डर से फ़ाइल को GitHub पेज पर खींचें।",
-  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "यह डेस्कटॉप ट्रे आइकन नहीं दिखाता (GNOME को AppIndicator एक्सटेंशन चाहिए)। विंडो बंद करने पर वह मिनिमाइज़ हो जाती है और ऐप चलता रहता है; ट्रे में शुरू होने के बजाय विंडो खुलती है।"
+  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "यह डेस्कटॉप ट्रे आइकन नहीं दिखाता (GNOME को AppIndicator एक्सटेंशन चाहिए)। विंडो बंद करने पर वह मिनिमाइज़ हो जाती है और ऐप चलता रहता है; ट्रे में शुरू होने के बजाय विंडो खुलती है।",
+  "Donanım kontrolü kapalı: klasör güvenli değil": "हार्डवेयर नियंत्रण बंद है: फ़ोल्डर सुरक्षित नहीं है",
+  "NitroLite, başka hesapların değiştirebileceği bir klasörden çalışıyor; bu yüzden yönetici yardımcısını başlatmıyor. Fan, mod ve ışık kontrolleri için NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyın veya yönetici olarak başlatın.": "NitroLite ऐसे फ़ोल्डर से चल रहा है जिसे दूसरे खाते बदल सकते हैं, इसलिए यह अपना व्यवस्थापक सहायक शुरू नहीं करता। फ़ैन, मोड और लाइटिंग नियंत्रण के लिए NitroLite को Program Files या %LOCALAPPDATA%\\NitroLite में ले जाएँ, या इसे व्यवस्थापक के रूप में चलाएँ।"
 }

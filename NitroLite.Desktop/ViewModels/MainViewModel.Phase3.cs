@@ -610,6 +610,25 @@ public sealed partial class MainViewModel
 
     public string DirectWmiStatus => _directWmi?.StatusText ?? "";
 
+    /// <summary>
+    /// True when the hardware helper was refused because of the folder NitroLite runs from. Shown on the dashboard:
+    /// the AN16-61 owner (issue 3) saw every control fail for this reason, and the only place that said why was a
+    /// settings row.
+    /// </summary>
+    public bool ShowHelperFolderWarning => _directWmi?.HelperFolderRefused == true;
+
+    private bool _helperFolderWarningShown;
+
+    /// <summary>Raises the warning only when it changes, so the per-tick check costs nothing.</summary>
+    private void RefreshHelperFolderWarning()
+    {
+        var now = ShowHelperFolderWarning;
+        if (now == _helperFolderWarningShown) return;
+        _helperFolderWarningShown = now;
+        Raise(nameof(ShowHelperFolderWarning));
+        Raise(nameof(DirectWmiStatus));
+    }
+
     // ---------------------------------------------------------------- sign-in entries
 
     /// <summary>True when this platform has an ordinary per-user sign-in entry.</summary>
@@ -1120,6 +1139,7 @@ public sealed partial class MainViewModel
     /// </summary>
     private async Task TickPhase3Async()
     {
+        RefreshHelperFolderWarning();
         if (_batteryHealth == null) return;
 
         // A replug changes the state sentence and the remaining-time row, and waiting up to a minute for it would make
@@ -1543,6 +1563,7 @@ public sealed partial class MainViewModel
         {
             var started = await _directWmi.StartAsync().ConfigureAwait(true);
             Raise(nameof(DirectWmiStatus));
+            RefreshHelperFolderWarning();
             Status = started ? Labels.DirectWmiStarted : Labels.DirectWmiDeclined;
         }
         catch (Exception ex)

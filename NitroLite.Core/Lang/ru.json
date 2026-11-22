@@ -1755,5 +1755,7 @@
   "Linux bilgilerini gönder": "Отправить данные Linux",
   "Kayıt dosyası yazılamadı.": "Не удалось записать файл снимка.",
   "{0} kaydedildi. Açılan klasördeki dosyayı GitHub sayfasına sürükleyin.": "{0} сохранён. Перетащите файл из открывшейся папки на страницу GitHub.",
-  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "Этот рабочий стол не показывает значки в трее (GNOME нужно расширение AppIndicator). Закрытие окна сворачивает его, а приложение продолжает работать; вместо запуска в трее открывается окно."
+  "Bu masaüstü tepsi simgelerini göstermiyor (GNOME'da AppIndicator eklentisi gerekir). Pencereyi kapatmak onu küçültür ve uygulama açık kalır; tepside başlatma yerine pencere açılır.": "Этот рабочий стол не показывает значки в трее (GNOME нужно расширение AppIndicator). Закрытие окна сворачивает его, а приложение продолжает работать; вместо запуска в трее открывается окно.",
+  "Donanım kontrolü kapalı: klasör güvenli değil": "Управление оборудованием выключено: папка небезопасна",
+  "NitroLite, başka hesapların değiştirebileceği bir klasörden çalışıyor; bu yüzden yönetici yardımcısını başlatmıyor. Fan, mod ve ışık kontrolleri için NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyın veya yönetici olarak başlatın.": "NitroLite запущен из папки, которую могут изменять другие учётные записи, поэтому он не запускает помощника с правами администратора. Чтобы управлять вентиляторами, режимами и подсветкой, переместите NitroLite в Program Files или в %LOCALAPPDATA%\\NitroLite либо запустите его от имени администратора."
 }

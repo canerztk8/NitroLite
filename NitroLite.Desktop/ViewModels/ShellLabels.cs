@@ -292,6 +292,11 @@ public sealed class ShellLabels
     public string CompatibilityReportFailed(string error) => Loc.T($"Uyumluluk raporu paylaşılamadı: {error}");
 
     // ---------------------------------------------------------------- NitroSense snapshot diff
+    public string HelperFolderWarningTitle => Loc.T("Donanım kontrolü kapalı: klasör güvenli değil");
+
+    public string HelperFolderWarningBody => Loc.T(
+        "NitroLite, başka hesapların değiştirebileceği bir klasörden çalışıyor; bu yüzden yönetici yardımcısını başlatmıyor. Fan, mod ve ışık kontrolleri için NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyın veya yönetici olarak başlatın.");
+
     public string SnapshotDiffTitle => Loc.T("NitroSense anlık görüntü farkı");
 
     public string SnapshotDiffHint => Loc.T("NitroSense'te başlangıç ayarını yap ve A'yı yakala; ayarı değiştirdikten sonra B'yi yakala. Fark ve rapor panoya kopyalanır.");

@@ -23,6 +23,13 @@ public interface IDirectWmiControl
     string StatusText { get; }
 
     /// <summary>
+    /// True when the elevated helper was refused because NitroLite runs from a folder other accounts can write to.
+    /// The hardware controls stay dark until the folder changes or the app is started as administrator, so the
+    /// dashboard says so instead of leaving the reason in a settings row nobody opens.
+    /// </summary>
+    bool HelperFolderRefused => false;
+
+    /// <summary>
     /// Starts the helper. False when the user declined the prompt or the helper failed to start; declining is a
     /// legitimate answer, not an error.
     /// </summary>

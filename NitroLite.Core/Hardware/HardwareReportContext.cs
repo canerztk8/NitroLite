@@ -24,6 +24,12 @@ public sealed record HardwareReportContext
     /// </summary>
     public IReadOnlyList<string> KeyboardLighting { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// The last <c>GetGamingMiscSetting(0x02)</c> word the worker answered this session, or null when the MUX has not
+    /// been read. The current mode the selector holds, as opposed to the 0x09 "is it switchable" answer.
+    /// </summary>
+    public ulong? MuxWord { get; init; }
+
     /// <summary>True when the context carries nothing to add.</summary>
     public bool IsEmpty => BackendCapabilities == null && SensorTrust == null && UsbHid.Count == 0 && KeyboardLighting.Count == 0;
 

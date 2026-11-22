@@ -262,6 +262,7 @@ public static class HardwareReport
         sb.AppendLine("| Live selector | Answer |");
         sb.AppendLine("| --- | --- |");
         AppendRow(sb, "GetGamingMiscSetting(0x09) MUX", MuxSelectorText(capabilities, probe));
+        AppendRow(sb, "GetGamingMiscSetting(0x02) current", MuxWordText(context?.MuxWord));
         AppendRow(sb, "GetGamingMiscSetting(0x0A) modes", capabilities?.SupportedModeMask is ulong mask
             ? $"0x{mask:X4} -> {FormatModes(capabilities.SupportedOperatingModes)}"
             : "not read (needs elevation)");
@@ -371,6 +372,18 @@ public static class HardwareReport
                 ? "not read (needs elevation)"
                 : "not read (the worker did not report it)"
         };
+    }
+
+    /// <summary>
+    /// The MUX selector's current word: what the board holds now, decoded when it is in the range the encoder writes.
+    /// A word outside that range is printed as it is, because the raw number is how a new numbering gets mapped.
+    /// </summary>
+    internal static string MuxWordText(ulong? word)
+    {
+        if (word is not { } raw) return "not read this session";
+        return AcerWmiProtocol.DecodeMuxMode(raw) is { } mode
+            ? $"0x{raw:X4} -> {mode}"
+            : $"0x{raw:X4} (not a mode this build maps)";
     }
 
     /// <summary>One Markdown table row, skipped entirely when the value is empty so the table has no blank cells.</summary>
