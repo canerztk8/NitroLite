@@ -54,6 +54,17 @@ public class HardwareMonitorService : IDisposable
     private static extern int NvmlDeviceGetPowerUsage(IntPtr device, out uint powerMilliwatts);
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct NvmlUtilization
+    {
+        public uint Gpu;
+        public uint Memory;
+    }
+
+    [DllImport(NvmlDll, EntryPoint = "nvmlDeviceGetUtilizationRates")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int NvmlDeviceGetUtilizationRates(IntPtr device, out NvmlUtilization utilization);
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct NvmlMemory
     {
         public ulong Total;
@@ -402,6 +413,10 @@ public class HardwareMonitorService : IDisposable
                         data.VramUsedMB = Math.Round(mem.Used / (1024.0 * 1024.0), 0);
                         data.VramTotalMB = Math.Round(mem.Total / (1024.0 * 1024.0), 0);
                     }
+
+                    if (data.GpuUsage <= 0 && NvmlDeviceGetUtilizationRates(_gpuDevice, out var utilization) == 0
+                        && utilization.Gpu <= 100)
+                        data.GpuUsage = utilization.Gpu;
 
                     // Query GPU Graphics Clock (Type 0 = Graphics)
                     if (NvmlDeviceGetClockInfo(_gpuDevice, 0, out uint clockMhz) == 0)

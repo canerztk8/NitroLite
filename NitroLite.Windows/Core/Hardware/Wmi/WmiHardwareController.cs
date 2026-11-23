@@ -88,6 +88,17 @@ public sealed class WmiHardwareController : IHardwareController
     /// <summary>The probe result as it stands right now, or null when nothing has been probed yet.</summary>
     private CapabilitySnapshot? Snapshot => _capabilities();
 
+    // This firmware pulses Balanced on every direct mode write. Acer service writes use a separate path.
+    private bool DirectModeWriteAvailable
+    {
+        get
+        {
+            var snapshot = Snapshot;
+            return snapshot?.EcMmioProfile != true
+                && !string.Equals(snapshot?.CacheKey, "AN16-61|1.53", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     public string BackendName => "WMI";
 
     public bool IsAvailable => _client != null;
@@ -145,7 +156,7 @@ public sealed class WmiHardwareController : IHardwareController
             Backend = BackendName,
             ServiceAvailable = true,
             FanControl = ReadBool(data, "fanControl"),
-            OperatingModeControl = ReadBool(data, "operatingMode"),
+            OperatingModeControl = DirectModeWriteAvailable && ReadBool(data, "operatingMode"),
             MuxSwitch = ReadBool(data, "muxSwitch"),
             MuxSwitchOverWmi = ReadNullableBool(data, "wmiMuxSwitch"),
             BatteryChargeLimit = ReadBool(data, "batteryLimit"),
@@ -357,7 +368,7 @@ public sealed class WmiHardwareController : IHardwareController
     {
         // A model whose firmware drives the mode through EC MMIO accepts the WMI write and ignores it. Reporting
         // not-supported is honest; the caller falls back to the Windows power plan, which does work there.
-        if (Snapshot?.EcMmioProfile == true) return false;
+        if (!DirectModeWriteAvailable) return false;
 
         var result = await ApplyAsync(
             ReadBackPolicy.OperatingMode,

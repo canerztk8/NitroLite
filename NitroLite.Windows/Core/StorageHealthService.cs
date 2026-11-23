@@ -290,8 +290,27 @@ public class StorageHealthService
                         {
                             driveTemp = measuredTemp;
                         }
-                        // No reading (SMART counters need administrator rights): leave it unknown instead of
-                        // a per-slot guess (42 / 39 / 40 °C) that looked like a measurement.
+                        else
+                        {
+                            // Some storage providers expose counters only through the disk association.
+                            try
+                            {
+                                using var counters = disk.GetRelated("MSFT_StorageReliabilityCounter",
+                                    "MSFT_PhysicalDiskToStorageReliabilityCounter", null, null, null, null, false, null);
+                                foreach (ManagementObject counter in counters)
+                                {
+                                    using (counter)
+                                    {
+                                        int value = Convert.ToInt32(counter["Temperature"]);
+                                        if (value is <= 0 or >= 120) continue;
+                                        driveTemp = value;
+                                        break;
+                                    }
+                                }
+                            }
+                            catch (ManagementException) { }
+                            catch (UnauthorizedAccessException) { }
+                        }
 
                         list.Add(new StorageDriveInfo
                         {

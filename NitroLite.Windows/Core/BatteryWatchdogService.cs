@@ -403,6 +403,24 @@ public class BatteryWatchdogService : IDisposable
             }
             catch { }
 
+            try
+            {
+                using var query = new ManagementObjectSearcher(@"root\WMI", "SELECT Temperature FROM BatteryTemperature WHERE Active = TRUE");
+                using var rows = query.Get();
+                foreach (ManagementObject row in rows)
+                {
+                    using (row)
+                    {
+                        double degrees = Convert.ToDouble(row["Temperature"]) / 10.0 - 273.15;
+                        if (degrees is < -40 or > 110) continue;
+                        details.TemperatureC = Math.Round(degrees, 1);
+                        break;
+                    }
+                }
+            }
+            catch (ManagementException) { }
+            catch (UnauthorizedAccessException) { }
+
             // No full-charge capacity from Windows: leave it unknown. (The old "design × 0.923" guess happened to
             // match this AN16-41 but would be shown as a measurement anywhere else.)
 

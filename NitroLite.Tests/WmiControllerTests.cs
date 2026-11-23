@@ -306,6 +306,17 @@ public class WmiControllerTests
     // ---------------------------------------------------------------- WmiHardwareController
 
     [Fact]
+    public async Task An16_61_Bios153DoesNotSendTheModeWriteThatSelectsBalanced()
+    {
+        using var launcher = new WmiWorkerLauncher(executablePath: "NitroLite.exe",
+            start: _ => throw new InvalidOperationException(), isTrustedLocation: _ => true);
+        using var controller = new WmiHardwareController(launcher, new ReadBackPolicy(new AppSettings(), NoDelay),
+            () => new CapabilitySnapshot { CacheKey = "AN16-61|1.53" });
+        Assert.False(await controller.SetOperatingModeAsync(OperatingMode.Turbo));
+        Assert.Equal(0, launcher.Attempts);
+    }
+
+    [Fact]
     public async Task WmiController_DeclinedElevation_StaysUsableAndDoesNotRetry()
     {
         using var launcher = new WmiWorkerLauncher(

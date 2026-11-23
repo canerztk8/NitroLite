@@ -162,6 +162,7 @@ public class WmiWorkerTests
     {
         // GetGamingMiscSetting(0x0B) returned 256 = 0x0100 on an AN16-41: mode 1, status 0.
         Assert.Equal(OperatingMode.Default, AcerWmiProtocol.DecodeOperatingMode(256));
+        Assert.Null(AcerWmiProtocol.DecodeOperatingMode(0x0101));
     }
 
     [Fact]

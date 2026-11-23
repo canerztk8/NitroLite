@@ -75,6 +75,29 @@ public class SnapshotDiffViewModelTests
     }
 
     [Fact]
+    public async Task BaselineSurvivesRestartAndCanBeCompared()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nitrolite-restart-{Guid.NewGuid():N}.json");
+        try
+        {
+            using (var first = new MainViewModel(new AppSettings(), null, new FakePlatform("512"), path))
+            {
+                await first.CaptureSnapshotACommand.ExecuteAsync(null);
+                Assert.True(first.SnapshotBaselineReady);
+            }
+
+            using var second = new MainViewModel(new AppSettings(), null, new FakePlatform("768"), path);
+            Assert.True(second.CaptureSnapshotBDiffCommand.CanExecute(null));
+            await second.CaptureSnapshotBDiffCommand.ExecuteAsync(null);
+            Assert.Equal(second.Labels.SnapshotDiffCaptured(1), second.SnapshotDiffStatus);
+        }
+        finally
+        {
+            File.Delete(path + ".snapshot-a.json");
+        }
+    }
+
+    [Fact]
     public async Task TheSecondButtonStaysLockedUntilStateAIsCaptured()
     {
         var (vm, platform, urls) = Create("0", "1");

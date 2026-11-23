@@ -232,6 +232,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 var mode = InvokeGetter(gaming, "GetGamingMiscSetting", AcerWmiProtocol.MiscIndexPlatformProfile);
                 if (mode.HasValue)
                 {
+                    data["operatingModeRaw"] = mode.Value;
                     data["operatingModeStatus"] = AcerWmiProtocol.DecodeStatus(mode.Value);
                     var decoded = AcerWmiProtocol.DecodeOperatingMode(mode.Value);
                     if (decoded.HasValue) data["operatingMode"] = decoded.Value.ToString();

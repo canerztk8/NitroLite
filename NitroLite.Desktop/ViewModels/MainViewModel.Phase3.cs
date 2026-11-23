@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Text.Json;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Snapshot;
@@ -163,6 +164,31 @@ public sealed partial class MainViewModel
 
     // The snapshot pair: A is kept in memory between the two clicks, and is the only state the tool needs.
     private HardwareSnapshot? _snapshotA;
+    private sealed record SavedBaseline(string Model, string Board, string Bios, DateTimeOffset CapturedAt,
+        HardwareSnapshotEntry[] Entries);
+
+    private string BaselinePath => _settingsPath + ".snapshot-a.json";
+
+    private void RestoreSnapshotBaseline()
+    {
+        if (_platform is not IHardwareSnapshotBackend || !File.Exists(BaselinePath)) return;
+        try
+        {
+            var saved = JsonSerializer.Deserialize<SavedBaseline>(File.ReadAllText(BaselinePath));
+            var identity = _platform.Identity;
+            if (saved?.Entries is not { Length: > 0 and <= HardwareSnapshot.MaximumEntries }
+                || saved.Model != (string.IsNullOrWhiteSpace(identity.ModelCode) ? identity.Model : identity.ModelCode)
+                || saved.Board != identity.BoardProduct
+                || saved.Bios != identity.BiosVersion) return;
+
+            _snapshotA = new HardwareSnapshot(saved.Model, saved.Board, saved.Entries, saved.CapturedAt);
+            _snapshotDiffStatus = Labels.SnapshotCapturedA(_snapshotA.Count);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The saved snapshot baseline could not be restored", ex.Message);
+        }
+    }
     private string _snapshotDiffStatus = "";
 
     // ---------------------------------------------------------------- the first-run walkthrough
@@ -467,10 +493,10 @@ public sealed partial class MainViewModel
         : "--";
 
     /// <summary>
-    /// The pack's own temperature. Neither WMI battery class reports one, and the Linux power-supply node only does on
-    /// some machines, so the card prints "--" rather than a number it does not have.
+    /// The pack temperature when provided by the battery driver.
     /// </summary>
-    public string BatteryTemperatureText => "--";
+    public string BatteryTemperatureText => _batterySnapshot.Details?.TemperatureC is double celsius
+        ? $"{celsius:0.#} °C" : "--";
 
     // ---------------------------------------------------------------- storage
 
@@ -888,6 +914,9 @@ public sealed partial class MainViewModel
             var snapshot = await CaptureHardwareSnapshotAsync();
             if (snapshot == null) return;
 
+            var saved = new SavedBaseline(snapshot.Model, snapshot.Board, _platform!.Identity.BiosVersion,
+                snapshot.CapturedAt, snapshot.Entries.ToArray());
+            AtomicFile.WriteAllText(BaselinePath, JsonSerializer.Serialize(saved));
             _snapshotA = snapshot;
             Raise(nameof(SnapshotBaselineReady));
             CaptureSnapshotBDiffCommand.RaiseCanExecuteChanged();

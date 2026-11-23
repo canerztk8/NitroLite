@@ -74,10 +74,10 @@ public partial class OsdOverlayWindow : Window
 
         double margin = EdgeMargin * scale;
         double left = viewModel.OsdCorner is 1 or 3
-            ? area.X + area.Width - width - margin
+            ? area.Right - width * scale - margin
             : area.X + margin;
         double top = viewModel.OsdCorner is 2 or 3
-            ? area.Y + area.Height - height - margin
+            ? area.Bottom - height * scale - margin
             : area.Y + margin;
 
         // Placed before it is shown, never after. Moving a window that is already on screen makes the Windows backend

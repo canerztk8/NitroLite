@@ -35,6 +35,8 @@ internal sealed class WmiSnapshotSource : IHardwareSnapshotSource
     public async Task<IReadOnlyList<HardwareSnapshotEntry>> CaptureAsync(CancellationToken cancellationToken)
     {
         var entries = new List<HardwareSnapshotEntry>();
+        var windowsMode = new NitroLite.Windows.Core.Hardware.WindowsPowerModeService().Read();
+        entries.Add(new HardwareSnapshotEntry("windows", "effectivePowerMode", windowsMode?.ToString() ?? "not read"));
 
         // The raw words first: GetGamingMiscSetting(0x02/0x0B), GetGamingFanBehavior, GetGamingFanSpeed, the battery
         // limit register and the registry-only dGPU capability mask, exactly as the elevated worker answered them.

@@ -342,6 +342,7 @@ public static class AcerWmiProtocol
     /// <summary>The mode out of a <c>GetGamingMiscSetting(0x0B)</c> answer. Null when the value is not a known mode.</summary>
     public static OperatingMode? DecodeOperatingMode(ulong output)
     {
+        if (DecodeStatus(output) != StatusOk) return null;
         var raw = (OperatingMode)(byte)((output >> 8) & 0xFF);
         return Enum.IsDefined(raw) ? raw : null;
     }

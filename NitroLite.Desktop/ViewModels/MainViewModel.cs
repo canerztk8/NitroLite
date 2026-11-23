@@ -1261,6 +1261,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _powerState = powerState;
         _autoRefreshRateOnBattery = settings.AutoRefreshRateSwitching;
         _settingsPath = settingsPath;
+        RestoreSnapshotBaseline();
         _gameProfiles = gameProfiles;
         _schoolMode = schoolMode;
         _rgbProfiles = rgbProfiles ?? new RgbProfileService();

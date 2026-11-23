@@ -224,6 +224,7 @@ public class BatteryStatusInfo
 
 public class BatteryHealthDetails
 {
+    public double? TemperatureC { get; set; }
     public double DesignCapacityMWh { get; set; } = 0;
     public double FullChargeCapacityMWh { get; set; } = 0;
     public double RemainingCapacityMWh { get; set; } = 0;

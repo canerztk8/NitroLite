@@ -186,6 +186,10 @@ public static class HardwareSnapshotDiff
         if (lines.Count == 0)
         {
             text.Append(NoDifferencesNote).AppendLine();
+            foreach (var entry in after.Entries.Where(entry => entry.Label is
+                "wmi.deviceState.operatingModeRaw" or "wmi.deviceState.operatingModeStatus"
+                or "wmi.deviceState.muxRaw" or "windows.effectivePowerMode"))
+                text.Append("unchanged ").Append(entry.Label).Append(" = ").AppendLine(entry.Value);
         }
         else
         {
