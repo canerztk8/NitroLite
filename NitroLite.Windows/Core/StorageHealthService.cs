@@ -159,7 +159,7 @@ public class StorageHealthService
             // 3. Query physical disks via MSFT_PhysicalDisk
             using var diskSearcher = new ManagementObjectSearcher(
                 @"root\Microsoft\Windows\Storage",
-                "SELECT DeviceId, FriendlyName, FirmwareVersion, HealthStatus, Size, BusType FROM MSFT_PhysicalDisk");
+                "SELECT * FROM MSFT_PhysicalDisk");
             using var diskResults = diskSearcher.Get();
             foreach (ManagementObject disk in diskResults)
             {
@@ -310,6 +310,8 @@ public class StorageHealthService
                             }
                             catch (ManagementException) { }
                             catch (UnauthorizedAccessException) { }
+                            catch (InvalidOperationException) { } // Provider returned a disk without an instance path.
+                            catch (System.Runtime.InteropServices.COMException) { }
                         }
 
                         list.Add(new StorageDriveInfo
