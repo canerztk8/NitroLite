@@ -6,7 +6,8 @@ using NitroLite.Core.Hardware.Wmi;
 namespace NitroLite.Windows.Core.Hardware.Snapshot;
 
 /// <summary>
-/// The Acer WMI half of a snapshot: every selector the app can read without writing anything.
+/// The Acer WMI half of a snapshot: only the documented selectors the app already reads at runtime while it is
+/// running, without writing anything.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,6 +19,12 @@ namespace NitroLite.Windows.Core.Hardware.Snapshot;
 /// The raw worker state is captured first and flattened, so a firmware word that this build does not decode still shows
 /// up and still diffs. The typed reads follow, because a decoded value is what tells a reader that the mode actually
 /// changed rather than the status byte.
+/// </para>
+/// <para>
+/// The undocumented selector sweep (<c>ProbeModeSelectors</c>) is deliberately not part of a capture: on one reported
+/// Acer model, poking the undocumented <c>APGeAction</c> subfunctions hard-reset the machine mid-capture. A button
+/// labelled "Capture state A" must be safe on every machine, so the sweep runs only from the separate,
+/// confirmation-gated sweep action, never from here.
 /// </para>
 /// </remarks>
 internal sealed class WmiSnapshotSource : IHardwareSnapshotSource
@@ -110,42 +117,7 @@ internal sealed class WmiSnapshotSource : IHardwareSnapshotSource
                 $"{lighting.Effect} brightness={lighting.Brightness} speed={lighting.Speed} direction={lighting.Direction} zones={string.Join(',', lighting.LEDs)}");
         }).ConfigureAwait(false);
 
-        await AddSelectorProbeAsync(entries).ConfigureAwait(false);
-
         return entries;
-    }
-
-    /// <summary>
-    /// The read-only selector sweep, as four entries: the plan and one line per selector class.
-    /// </summary>
-    /// <remarks>
-    /// This is the entry that answers "the mode write does nothing on this machine". A model can advertise all five
-    /// mode bits and still act on none of them through <c>SetGamingMiscSetting(0x0B)</c> — AN16-61 answers status 0 and
-    /// lands on Balanced every time — and the only way to find where the mode word really lives is to ask every
-    /// selector and compare two captures. It reads and writes nothing, but it is a hundred round trips, so it is the
-    /// last entry captured and a refusal costs one line.
-    /// </remarks>
-    private async Task AddSelectorProbeAsync(List<HardwareSnapshotEntry> entries)
-    {
-        try
-        {
-            var (sweep, refusal) = await _wmi.ProbeModeSelectorsAsync().ConfigureAwait(false);
-            if (sweep == null)
-            {
-                entries.Add(HardwareSnapshotEntry.Unavailable(Section, ModeSelectorProbe.PlanKey, refusal));
-                return;
-            }
-
-            foreach (var (key, value) in ModeSelectorProbe.Summarize(sweep))
-            {
-                entries.Add(new HardwareSnapshotEntry(Section, key, value));
-            }
-        }
-        catch (Exception ex)
-        {
-            entries.Add(HardwareSnapshotEntry.Unavailable(
-                Section, ModeSelectorProbe.PlanKey, HardwareSnapshotService.Describe(ex)));
-        }
     }
 
     /// <summary>One guarded read appended to the capture.</summary>

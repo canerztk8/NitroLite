@@ -56,6 +56,12 @@ report, the byte offsets that changed. The diff and full hardware report are cop
 be pasted into an existing issue. Nothing is written and nothing is elevated: a session with no direct-WMI
 worker behind it captures the HID half and says so.
 
+The captures read only the documented selectors the app already uses at runtime. The **full selector sweep** —
+every undocumented WMI/APGe selector, about 127 queries — is deliberately a separate button, **Sweep all
+selectors**, that asks for confirmation first: on one reported Acer model those undocumented pokes hard-reset
+the machine mid-sweep, so the sweep never runs as part of a capture and never automatically.
+`scripts/probe-mode-selectors.ps1` runs the same sweep from an elevated PowerShell for the same purpose.
+
 The same report is available without the window: `NitroLite.exe --hardware-report` (add `--json` for JSON, or
 `--out <folder>` to write both files).
 

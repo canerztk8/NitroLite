@@ -323,6 +323,21 @@ public sealed class ShellLabels
 
     public string SnapshotDiffFailed(string error) => Loc.T($"Anlık görüntü alınamadı: {error}");
 
+    public string SelectorSweep => Loc.T("Tüm selector'ları tara");
+
+    public string SelectorSweepTitle => Loc.T("Selector taraması");
+
+    public string SelectorSweepConfirm => Loc.T(
+        "Bu tarama belgelenmemiş tüm Acer WMI/APGe selector'larına dokunur (yaklaşık 127 sorgu). Bildirilen bir Acer modelinde bu sorgular makineyi aniden yeniden başlattı (hard reset). Yine de devam etmek istiyor musun?");
+
+    public string SelectorSweepTooltip => Loc.T(
+        "Belgelenmemiş tüm firmware selector'larına dokunur; bildirilen bir modelde makineyi aniden yeniden başlattı. Emin değilsen kullanma.");
+
+    public string SelectorSweepDone(int lines) => Loc.T(
+        $"Selector taraması tamamlandı ({lines} satır); panoya kopyalandı.");
+
+    public string SelectorSweepRefused(string error) => Loc.T($"Selector taraması çalışmadı: {error}");
+
     /// <summary>
     /// The inline hint under a control this session could not confirm. The control names come from the hardware report
     /// vocabulary, so they stay English in every language — they are the same words the issue will be triaged with.

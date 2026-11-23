@@ -78,8 +78,10 @@ public enum WmiWorkerCommand
     SetBacklightTimeout = 17,
 
     /// <summary>
-    /// The read-only selector sweep: every misc and gaming-profile index plus the APGe getters, reported when the
-    /// answer is not zero. Writes nothing; see <see cref="IWmiExecutor.ProbeModeSelectors"/>.
+    /// The selector sweep: every misc and gaming-profile index plus the APGe getters, reported when the answer is not
+    /// zero. No setter is called, but the APGe getters are not proven side-effect-free on every model — one reported
+    /// Acer hard-reset during this sweep — so the window only sends this behind a confirmation. See
+    /// <see cref="IWmiExecutor.ProbeModeSelectors"/>.
     /// </summary>
     ProbeModeSelectors = 18
 }

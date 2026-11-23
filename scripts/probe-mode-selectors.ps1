@@ -17,10 +17,14 @@
     Run it twice, once with the machine in one mode and once in another, and it prints exactly which selectors moved.
     That is the evidence a fix needs.
 
-    HARDWARE SAFETY: no Set method is ever called. Only GetGamingMiscSetting, GetGamingProfile and
-    APGeAction.GetFunction are invoked, which are readers. Nothing on the machine is changed, no setting is written,
-    and the script is safe to run as often as you like. It does have to run elevated: AcerGamingFunction is a dynamic
-    WMI class whose instances need an administrator token.
+    HARDWARE SAFETY: no Set method is ever called - only GetGamingMiscSetting, GetGamingProfile and
+    APGeAction.GetFunction are invoked, so no setting is written. That makes the script WRITE-free, not harmless:
+    APGeAction.GetFunction calls are undocumented ACPI subfunctions straight into the EC, and on one reported Acer
+    model this exact sweep hard-reset the machine mid-run (a reset-button style reboot). Run it only on purpose,
+    once per -Label, never in a loop, and only on a machine you can afford to lose for a minute. NitroLite's
+    "Capture state A" no longer runs this sweep for exactly that reason; this script (or the confirmation-gated
+    "Sweep all selectors" button in the app) is the opt-in path. It does have to run elevated: AcerGamingFunction
+    is a dynamic WMI class whose instances need an administrator token.
 
 .PARAMETER Label
     A name for this capture, used in the file name and in the comparison output, e.g. "balanced" or "turbo".
@@ -39,7 +43,8 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File probe-mode-selectors.ps1 -Label turbo
 
 .NOTES
-    Read-only with respect to firmware. Nothing is written to the machine.
+    Write-free with respect to firmware: no Set method is called. See HARDWARE SAFETY above for why that is
+    not a guarantee of harmlessness on every model.
 #>
 [CmdletBinding()]
 param(
@@ -120,7 +125,9 @@ function Read-ApgeWord {
 
 Write-Host ''
 Write-Host "NitroLite mode-selector probe  (label: $Label)" -ForegroundColor Cyan
-Write-Host 'Read-only: no setting on this machine is written.' -ForegroundColor DarkGray
+Write-Host 'Write-free: no Set method is called.' -ForegroundColor DarkGray
+Write-Host 'WARNING: the APGeAction pokes below are undocumented EC calls and have hard-reset one reported' -ForegroundColor Yellow
+Write-Host 'Acer model mid-sweep. Ctrl+C now to abort; otherwise the sweep starts.' -ForegroundColor Yellow
 
 $gaming = $null
 $apge = $null

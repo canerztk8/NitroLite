@@ -904,8 +904,16 @@ public sealed partial class MainViewModel
     public bool SnapshotBaselineReady => _snapshotA != null;
 
     /// <summary>
-    /// Step one of the pair: the state before the user touches NitroSense. Nothing is written, so this is safe to press
-    /// on any machine and at any time.
+    /// True when the platform can run the full selector sweep on request. Separate from
+    /// <see cref="SnapshotDiffAvailable"/> because the sweep is not part of a capture: it pokes undocumented firmware
+    /// selectors and hard-reset one reported Acer model, so it exists only behind the confirmed sweep button.
+    /// </summary>
+    public bool SelectorSweepAvailable => _platform is IModeSelectorProbeBackend;
+
+    /// <summary>
+    /// Step one of the pair: the state before the user touches NitroSense. Nothing is written, and only the documented
+    /// selectors the app already reads at runtime are read, so this is safe to press on any machine and at any time.
+    /// The undocumented selector sweep is deliberately not part of it — see <see cref="RunSelectorSweepAsync"/>.
     /// </summary>
     private async Task CaptureSnapshotAAsync()
     {
@@ -998,6 +1006,47 @@ public sealed partial class MainViewModel
         return snapshot;
     }
 
+    /// <summary>
+    /// The full selector sweep, run only from its own button and only after a yes/no confirmation. It asks every
+    /// undocumented WMI selector (~127 round trips); no setter is called, but on one reported Acer model the
+    /// undocumented <c>APGeAction</c> pokes hard-reset the machine mid-sweep, so it must never run silently —
+    /// not from a snapshot, not from a poll, not without the dialog. The result goes to the clipboard as
+    /// <c>probe.*</c> lines so it can be pasted into an issue next to an A/B pair.
+    /// </summary>
+    private async Task RunSelectorSweepAsync()
+    {
+        if (_platform is not IModeSelectorProbeBackend probe) return;
+
+        if (_dialogs != null &&
+            !await _dialogs.ConfirmAsync(Labels.SelectorSweepTitle, Labels.SelectorSweepConfirm).ConfigureAwait(true))
+            return;
+
+        try
+        {
+            var (sweep, refusal) = await probe.ProbeModeSelectorsAsync().ConfigureAwait(true);
+            if (sweep == null)
+            {
+                SnapshotDiffStatus = Labels.SelectorSweepRefused(refusal);
+                AppLog.Warn("The selector sweep was refused", refusal);
+                return;
+            }
+
+            var entries = ModeSelectorProbe.Summarize(sweep);
+            var text = string.Join(
+                Environment.NewLine,
+                entries.Select(static entry => $"{entry.Key} = {entry.Value}"));
+            ClipboardService.SetText(text);
+
+            SnapshotDiffStatus = Labels.SelectorSweepDone(entries.Count);
+            AppLog.Info("The selector sweep ran", $"{entries.Count} lines copied to the clipboard");
+        }
+        catch (Exception ex)
+        {
+            SnapshotDiffStatus = Labels.SelectorSweepRefused(ex.Message);
+            AppLog.Warn("The selector sweep failed", ex.Message);
+        }
+    }
+
     // ================================================================================================================
     // The first-run walkthrough
     // ================================================================================================================
@@ -1087,6 +1136,9 @@ public sealed partial class MainViewModel
     /// <summary>Takes state B, diffs it against A and prepares the GitHub compatibility issue.</summary>
     public AsyncCommand CaptureSnapshotBDiffCommand { get; private set; } = null!;
 
+    /// <summary>Runs the full selector sweep after a confirmation. Never part of a snapshot.</summary>
+    public AsyncCommand SelectorSweepCommand { get; private set; } = null!;
+
     /// <summary>
     /// Wires the phase-3 commands. Called from the constructor, after the fields are assigned, so a command can never
     /// capture a null service.
@@ -1124,6 +1176,7 @@ public sealed partial class MainViewModel
         CaptureSnapshotACommand = new AsyncCommand(CaptureSnapshotAAsync, () => SnapshotDiffAvailable);
         CaptureSnapshotBDiffCommand = new AsyncCommand(
             CaptureSnapshotBDiffAsync, () => SnapshotDiffAvailable && _snapshotA != null);
+        SelectorSweepCommand = new AsyncCommand(RunSelectorSweepAsync, () => SelectorSweepAvailable);
     }
 
     // ================================================================================================================

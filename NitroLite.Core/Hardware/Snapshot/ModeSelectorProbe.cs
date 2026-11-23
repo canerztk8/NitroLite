@@ -14,10 +14,12 @@ namespace NitroLite.Core.Hardware.Snapshot;
 /// </para>
 /// <para>
 /// So the sweep asks every selector the interface has and prints the ones that answered with something other than
-/// zero. It is read-only by construction: the worker only calls <c>GetGamingMiscSetting</c>,
-/// <c>GetGamingProfile</c> and <c>APGeAction.GetFunction</c>, never a setter. Two captures taken either side of a mode
-/// change in NitroSense then name the selector that moved, and that is the only honest way to find it: the mode
-/// numbering of an unconfirmed model must be measured, not inferred from a sibling.
+/// zero. No setter is ever called — but that makes it write-free, not harmless: <c>APGeAction.GetFunction</c> is an
+/// undocumented ACPI subfunction call into the EC, and on one reported Acer model this sweep hard-reset the machine
+/// mid-run. Two captures taken either side of a mode change in NitroSense then name the selector that moved, and
+/// that is the only honest way to find it: the mode numbering of an unconfirmed model must be measured, not inferred
+/// from a sibling. For exactly that reason the sweep is not part of a snapshot: it runs only from the explicitly
+/// confirmed sweep action (or <c>scripts/probe-mode-selectors.ps1</c>), never from "Capture state A".
 /// </para>
 /// <para>
 /// The answers are kept to one entry per class rather than one entry per selector. A capture is capped at

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json.Nodes;
 using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Snapshot;
@@ -50,6 +51,48 @@ public class SnapshotDiffViewModelTests
                 "EV9_SKF",
                 [new HardwareSnapshotEntry("wmi", "deviceState.muxRaw", value)],
                 Captures == 1 ? Baseline : AfterChange));
+        }
+    }
+
+    /// <summary>
+    /// A platform that can also run the selector sweep: the sweep answers from a settable result, so a test can
+    /// check both the confirmed path and the refusal path. The sweep must stay reachable here only — never from
+    /// <see cref="CaptureSnapshotAsync"/>.
+    /// </summary>
+    private sealed class ProbePlatform : IPlatformSnapshot, IHardwareSnapshotBackend, IModeSelectorProbeBackend
+    {
+        public int Sweeps { get; private set; }
+        public JsonObject? SweepResult { get; set; }
+        public string Refusal { get; set; } = "";
+
+        public DeviceIdentity Identity { get; } = new()
+        {
+            Manufacturer = "Acer",
+            Model = "Nitro AN16-61",
+            ModelCode = "AN16-61",
+            BoardProduct = "EV9_SKF",
+            BiosVersion = "1.53"
+        };
+
+        public string Tier => "wmi";
+        public bool NeedsUdevRule => false;
+        public IReadOnlyList<string> Notes => Array.Empty<string>();
+        public bool NegativeAnswersAreConclusive => false;
+
+        public string BuildHardwareReport(HardwareReportContext? context = null) =>
+            "# NitroLite hardware report\nModel code: AN16-61";
+
+        public Task<HardwareSnapshot> CaptureSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new HardwareSnapshot(
+                "AN16-61",
+                "EV9_SKF",
+                [new HardwareSnapshotEntry("wmi", "deviceState.muxRaw", "0")],
+                Baseline));
+
+        public Task<(JsonObject? Sweep, string Refusal)> ProbeModeSelectorsAsync()
+        {
+            Sweeps++;
+            return Task.FromResult((SweepResult, Refusal));
         }
     }
 
@@ -181,5 +224,104 @@ public class SnapshotDiffViewModelTests
         vm.CaptureSnapshotACommand.Execute(null);
         Assert.False(vm.SnapshotBaselineReady);
         Assert.False(vm.HasSnapshotDiffStatus);
+    }
+
+    [Fact]
+    public async Task CaptureStateANeverTriggersTheSelectorSweep()
+    {
+        // The hard-reset report: the sweep pokes undocumented APGe subfunctions and reset one Acer mid-capture,
+        // so the A/B capture must not call it even when the platform could run it.
+        var platform = new ProbePlatform { SweepResult = new JsonObject() };
+        var path = Path.Combine(Path.GetTempPath(), $"nitrolite-sweep-{Guid.NewGuid():N}.json");
+        using var vm = new MainViewModel(new AppSettings(), null, platform, path);
+
+        Assert.True(vm.SelectorSweepAvailable);
+        await vm.CaptureSnapshotACommand.ExecuteAsync(null);
+
+        Assert.True(vm.SnapshotBaselineReady);
+        Assert.Equal(0, platform.Sweeps);
+    }
+
+    [Fact]
+    public async Task TheSweepRunsOnlyAfterTheConfirmationAndLandsOnTheClipboard()
+    {
+        var platform = new ProbePlatform
+        {
+            SweepResult = new JsonObject
+            {
+                ["plan"] = "misc 0x00-0x1F",
+                ["misc"] = new JsonObject { ["0x0B"] = "0x0000000200000000" }
+            }
+        };
+        var dialogs = new Phase3Fakes.FakeDialogs { ConfirmResult = true };
+        var path = Path.Combine(Path.GetTempPath(), $"nitrolite-sweep-{Guid.NewGuid():N}.json");
+        var previousClipboard = ClipboardService.Setter;
+        var copied = new List<string>();
+        ClipboardService.Setter = copied.Add;
+
+        try
+        {
+            using var vm = new MainViewModel(new AppSettings(), null, platform, path, dialogs: dialogs);
+            Assert.True(vm.SelectorSweepCommand.CanExecute(null));
+
+            await vm.SelectorSweepCommand.ExecuteAsync(null);
+
+            Assert.Equal(1, platform.Sweeps);
+            Assert.Single(dialogs.Confirms);
+            Assert.Single(copied);
+            Assert.Contains("probe.plan = misc 0x00-0x1F", copied[0], StringComparison.Ordinal);
+            Assert.Contains("probe.misc = 0x0B=0x0000000200000000", copied[0], StringComparison.Ordinal);
+            Assert.Equal(vm.Labels.SelectorSweepDone(4), vm.SnapshotDiffStatus);
+        }
+        finally
+        {
+            ClipboardService.Setter = previousClipboard;
+        }
+    }
+
+    [Fact]
+    public async Task DecliningTheConfirmationRunsNothingAtAll()
+    {
+        var platform = new ProbePlatform { SweepResult = new JsonObject() };
+        var dialogs = new Phase3Fakes.FakeDialogs { ConfirmResult = false };
+        var path = Path.Combine(Path.GetTempPath(), $"nitrolite-sweep-{Guid.NewGuid():N}.json");
+
+        using var vm = new MainViewModel(new AppSettings(), null, platform, path, dialogs: dialogs);
+        await vm.SelectorSweepCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, platform.Sweeps);
+        Assert.Single(dialogs.Confirms);
+        Assert.False(vm.HasSnapshotDiffStatus);
+    }
+
+    [Fact]
+    public async Task ASweepRefusalIsReportedNotHidden()
+    {
+        var platform = new ProbePlatform
+        {
+            SweepResult = null,
+            Refusal = "the elevated WMI worker is not running (start direct WMI, then run the sweep)"
+        };
+        var dialogs = new Phase3Fakes.FakeDialogs { ConfirmResult = true };
+        var path = Path.Combine(Path.GetTempPath(), $"nitrolite-sweep-{Guid.NewGuid():N}.json");
+
+        using var vm = new MainViewModel(new AppSettings(), null, platform, path, dialogs: dialogs);
+        await vm.SelectorSweepCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, platform.Sweeps);
+        Assert.Equal(
+            vm.Labels.SelectorSweepRefused("the elevated WMI worker is not running (start direct WMI, then run the sweep)"),
+            vm.SnapshotDiffStatus);
+    }
+
+    [Fact]
+    public void APlatformWithoutTheProbeBackendHidesTheSweepButton()
+    {
+        var (vm, _, _) = Create("0");
+        using (vm)
+        {
+            Assert.False(vm.SelectorSweepAvailable);
+            Assert.False(vm.SelectorSweepCommand.CanExecute(null));
+        }
     }
 }

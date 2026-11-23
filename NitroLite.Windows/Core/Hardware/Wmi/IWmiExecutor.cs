@@ -205,9 +205,12 @@ public interface IWmiExecutor : IDisposable
     /// <summary>
     /// Reads every selector the interface exposes and reports the ones that answered a non-zero word: all of
     /// <c>GetGamingMiscSetting(0x00..0x1F)</c>, <c>GetGamingProfile(0x00..0x1F)</c> and the
-    /// <c>APGeAction.GetFunction</c> getters in <c>0x01..0x0F</c> and <c>0x200..0x22F</c>. Nothing is written: this is
-    /// the diagnostic that finds the selector a model's operating mode really lives in, which a machine that refuses
-    /// <c>SetGamingMiscSetting(0x0B)</c> will not tell you any other way.
+    /// <c>APGeAction.GetFunction</c> getters in <c>0x01..0x0F</c> and <c>0x200..0x22F</c>. No setter is called — but
+    /// that only makes it write-free, not harmless: the <c>APGeAction</c> getters are undocumented ACPI subfunction
+    /// calls, and on one reported Acer model this sweep hard-reset the machine. This is the diagnostic that finds
+    /// the selector a model's operating mode really lives in, which a machine that refuses
+    /// <c>SetGamingMiscSetting(0x0B)</c> will not tell you any other way — so it exists, but only the explicitly
+    /// confirmed sweep action may call it.
     /// </summary>
     WmiOperationResult ProbeModeSelectors();
 }

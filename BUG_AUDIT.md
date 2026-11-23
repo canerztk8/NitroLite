@@ -963,6 +963,12 @@ owner moved one switch in Acer's own tool. This round adds the tool that can, an
   diff under it, and opens the existing prefilled compatibility issue with the diff *first*, because the body is cut
   when it does not fit and the diff is the half that cannot be reproduced afterwards.
 
+> **Addendum (1.3.3, 2026-11-23):** the `ProbeModeSelectors` sweep added after this round did put new selectors into
+> **Capture state A**, against the rule above — and a user report confirmed why the rule exists: on one Acer model
+> the undocumented `APGeAction` pokes hard-reset the machine mid-capture (twice, reproducibly). The sweep is out of
+> the snapshot entirely now; it runs only from the confirmation-gated **Sweep all selectors** button and from
+> `scripts/probe-mode-selectors.ps1`, both of which say what it does before they do it.
+
 ### 10.2 Evidence
 
 | Check | How | Result |
