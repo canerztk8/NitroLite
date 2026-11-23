@@ -1,4 +1,5 @@
-﻿using NitroLite.Core;
+﻿using System.Text.Json.Nodes;
+using NitroLite.Core;
 using NitroLite.Core.Hardware;
 using NitroLite.Core.Hardware.Lighting;
 using NitroLite.Core.Hardware.Wmi;
@@ -28,7 +29,8 @@ namespace NitroLite.Windows;
 /// path is the elevated worker, and a refused elevation is reported by the controller instead.
 /// </para>
 /// </remarks>
-public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBackend, IHardwareSnapshotBackend
+public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBackend, IHardwareSnapshotBackend,
+    IModeSelectorProbeBackend
 {
     private readonly Func<CapabilitySnapshot?> _probe;
     private readonly Func<string> _backendName;
@@ -144,6 +146,20 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
     /// </remarks>
     public Task<HardwareSnapshot> CaptureSnapshotAsync(CancellationToken cancellationToken = default) =>
         WindowsHardwareSnapshot.CaptureAsync(Identity, _wmi?.Invoke(), null, cancellationToken);
+
+    /// <summary>
+    /// The full undocumented-selector sweep, for the explicitly confirmed sweep action only. Like the snapshot, it
+    /// never starts the worker: a diagnostics button must not put a UAC prompt behind a click, so without an
+    /// already-connected worker it answers with a refusal that says how to get one.
+    /// </summary>
+    public Task<(JsonObject? Sweep, string Refusal)> ProbeModeSelectorsAsync()
+    {
+        var wmi = _wmi?.Invoke();
+        return wmi is { IsAvailable: true }
+            ? wmi.ProbeModeSelectorsAsync()
+            : Task.FromResult<(JsonObject? Sweep, string Refusal)>(
+                (null, "the elevated WMI worker is not running (start direct WMI, then run the sweep)"));
+    }
 
     /// <summary>
     /// What the lighting transports learned this session: the remembered choice per <c>Model|BIOS</c>, and what the

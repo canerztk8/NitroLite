@@ -976,9 +976,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     }
 
     /// <summary>
-    /// The read-only selector sweep: every <c>GetGamingMiscSetting</c> and <c>GetGamingProfile</c> index, plus the
-    /// <c>APGeAction.GetFunction</c> getters, reported when the answer is not zero. Only getters are called; the one
-    /// write the app has ever sent through these classes is deliberately not reachable from here.
+    /// The selector sweep: every <c>GetGamingMiscSetting</c> and <c>GetGamingProfile</c> index, plus the
+    /// <c>APGeAction.GetFunction</c> getters, reported when the answer is not zero. No setter is called — but a Get
+    /// on <c>APGeAction</c> is an undocumented ACPI subfunction call into the EC, and on one reported Acer model this
+    /// sweep hard-reset the machine mid-run. That is why it runs only behind an explicit user confirmation, never
+    /// as part of a snapshot and never from a poll.
     /// </summary>
     /// <remarks>
     /// <para>

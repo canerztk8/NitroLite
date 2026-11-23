@@ -867,12 +867,14 @@ public sealed class WmiHardwareController : IHardwareController
     }
 
     /// <summary>
-    /// The read-only selector sweep, plus the worker's explanation when it could not run. Nothing is written.
+    /// The full selector sweep, plus the worker's explanation when it could not run. No setter is called.
     /// </summary>
     /// <remarks>
-    /// Only the hardware snapshot calls this. It is a hundred-odd firmware round trips — deliberately so: it is what
-    /// turns "the mode write does nothing on this model" into "the mode word lives in selector X", and that question
-    /// is asked once per report, not once per refresh. Nothing that polls may call it.
+    /// Only the explicitly confirmed sweep action calls this — never a snapshot and never a poll. It is a
+    /// hundred-odd firmware round trips over selectors whose behaviour nobody has confirmed, and on one reported
+    /// Acer model the undocumented <c>APGeAction</c> pokes in it hard-reset the machine, which is why it was moved
+    /// out of "Capture state A" and put behind a yes/no dialog. "Read-only by construction" held (only getters are
+    /// called); it was not enough: a Get on an action class is not proven side-effect-free on every firmware.
     /// </remarks>
     public async Task<(JsonObject? Sweep, string Refusal)> ProbeModeSelectorsAsync()
     {

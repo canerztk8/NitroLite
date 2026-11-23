@@ -299,7 +299,9 @@
                   IsVisible="{Binding SnapshotDiffAvailable}" />
 
           <!-- The two-step NitroSense diff: read-only, and the only diagnostic that needs the user to change a setting
-               in Acer's own tool between the two clicks. -->
+               in Acer's own tool between the two clicks. The captures read only documented selectors. The full
+               undocumented selector sweep is a separate, confirmation-gated button: on one reported Acer model it
+               hard-reset the machine, so it must never ride along with Capture state A. -->
           <StackPanel IsVisible="{Binding SnapshotDiffAvailable}">
             <TextBlock Classes="caps" Text="{Binding Labels.SnapshotDiffTitle}" Margin="0,0,0,6" />
             <TextBlock Classes="hint" Text="{Binding Labels.SnapshotDiffHint}" Margin="0,0,0,8" TextWrapping="Wrap" />
@@ -309,6 +311,10 @@
                       FontSize="11" Command="{Binding CaptureSnapshotACommand}" />
               <Button Classes="primary" Content="{Binding Labels.SnapshotCaptureB}" Margin="0,0,6,6" Padding="12,7"
                       FontSize="11" Command="{Binding CaptureSnapshotBDiffCommand}" />
+              <Button Content="{Binding Labels.SelectorSweep}" Margin="0,0,6,6" Padding="12,7"
+                      FontSize="11" Command="{Binding SelectorSweepCommand}"
+                      ToolTip.Tip="{Binding Labels.SelectorSweepTooltip}"
+                      IsVisible="{Binding SelectorSweepAvailable}" />
             </WrapPanel>
 
             <TextBlock Classes="hint" Text="{Binding SnapshotDiffStatus}" Margin="0,4,0,0"
