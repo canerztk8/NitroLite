@@ -843,8 +843,7 @@ public sealed class WmiHardwareController : IHardwareController
 
     /// <summary>
     /// Writes the 30-second backlight timeout and reads it back, as every control with a getter is. A firmware that
-    /// answers status 0 and keeps the old value is reported as a failure; one whose getter answers nothing leaves the
-    /// status byte as the only evidence there is.
+    /// answers status 0 still needs to report the requested timeout state.
     /// </summary>
     public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
     {
@@ -855,7 +854,12 @@ public sealed class WmiHardwareController : IHardwareController
         if (response is not { Ok: true }) return false;
 
         var observed = await GetBacklightTimeoutAsync().ConfigureAwait(false);
-        if (observed == null || observed == enable30s) return true;
+        if (observed == enable30s) return true;
+        if (!observed.HasValue)
+        {
+            AppLog.Warn("The backlight timeout could not be verified after writing");
+            return false;
+        }
 
         AppLog.Warn("The backlight timeout did not change",
             $"requested {(enable30s ? "on" : "off")}, the firmware still reports {(observed.Value ? "on" : "off")}");

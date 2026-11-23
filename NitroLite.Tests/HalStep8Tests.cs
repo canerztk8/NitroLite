@@ -156,6 +156,33 @@ public class HalStep8Tests
     }
 
     [Fact]
+    public void DedicatedTimeoutSelectorAcceptsBothStatesAndUsesTimeoutOnlyPayload()
+    {
+        foreach (bool enabled in new[] { false, true })
+        {
+            var state = AcerWmiExecutor.ReadTimeout(input =>
+            {
+                Assert.Equal(0x88401UL, input);
+                return enabled ? 0x1E0000080000UL : 0x80000UL;
+            });
+            Assert.NotNull(state);
+            Assert.Equal(enabled, state.Enabled);
+            Assert.Equal(enabled ? 0x1E0000088402UL : 0x88402UL,
+                AcerWmiProtocol.EncodeBacklightTimeoutSet(state.Selector, state.Brightness, enabled));
+        }
+    }
+
+    [Fact]
+    public void UnrecognizedDedicatedReplyFallsBackToTheCombinedBrightnessSelector()
+    {
+        var state = AcerWmiExecutor.ReadTimeout(input => input == 0x80001 ? 50UL << 32 : 0UL);
+        Assert.NotNull(state);
+        Assert.Equal(0, state.Selector);
+        Assert.Equal(50, state.Brightness);
+        Assert.Null(AcerWmiExecutor.ReadTimeout(_ => 1UL));
+    }
+
+    [Fact]
     public void BacklightTimeout_Decode_RoundTripsBothFields()
     {
         // Status 0, brightness 50 in bits 32..39, timeout 30 in bits 40..47.

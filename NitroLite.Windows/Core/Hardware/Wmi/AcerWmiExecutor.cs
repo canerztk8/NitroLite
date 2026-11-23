@@ -39,13 +39,6 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     /// <summary>The class that carries CoolBoost and the backlight timeout. Absent on most models.</summary>
     private const string ApgeClass = "APGeAction";
 
-    /// <summary>
-    /// The hotkey index the backlight-timeout calls are addressed to. The reference implementation takes it from the
-    /// caller; NitroLite has one backlight-off hotkey, so it is a constant here rather than a setting nobody can
-    /// change.
-    /// </summary>
-    private const int BacklightHotkey = 0;
-
     /// <summary>WMID_GUID5, the battery charge limit interface. Not registered on an AN16-41.</summary>
     public const string BatteryGuid = "79772EC5-04B1-4BFD-843C-61E7F77B6CC9";
 
@@ -899,6 +892,26 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
     }
 
+    internal sealed record TimeoutReading(int Selector, int Brightness, bool Enabled, ulong Raw);
+
+    internal static TimeoutReading? ReadTimeout(Func<ulong, ulong?> get)
+    {
+        // Linuwu-Sense uses hotkey 0x84 for the dedicated timeout switch. Only its two
+        // documented replies identify that interface. Other boards use selector 0.
+        ulong? raw;
+        try { raw = get(AcerWmiProtocol.EncodeBacklightTimeoutGet(0x84)); }
+        catch (ManagementException) { raw = null; }
+        catch (System.Runtime.InteropServices.COMException) { raw = null; }
+        if (raw is 0x80000UL or 0x1E0000080000UL)
+            return new TimeoutReading(0x84, 0, raw == 0x1E0000080000UL, raw.Value);
+
+        raw = get(AcerWmiProtocol.EncodeBacklightTimeoutGet(0));
+        if (raw is not ulong answer || AcerWmiProtocol.DecodeBacklightTimeout(answer) is not { } state)
+            return null;
+
+        return new TimeoutReading(0, state.BrightnessPercent, state.Enabled, answer);
+    }
+
     /// <summary>Reads the 30-second keyboard backlight timeout from <c>APGeAction.GetFunction</c>.</summary>
     public WmiOperationResult GetBacklightTimeout()
     {
@@ -909,20 +922,15 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
             try
             {
-                var answer = InvokeApgeGetter(
-                    apge, "GetFunction", AcerWmiProtocol.EncodeBacklightTimeoutGet(BacklightHotkey));
-                if (!answer.HasValue) return WmiOperationResult.WmiFailed("GetFunction returned no value");
-
-                var decoded = AcerWmiProtocol.DecodeBacklightTimeout(answer.Value);
-                if (decoded == null)
-                    return WmiOperationResult.NotSupported(
-                        $"backlight selector answered 0x{answer.Value:X16}");
+                var state = ReadTimeout(input => InvokeApgeGetter(apge, "GetFunction", input));
+                if (state == null) return WmiOperationResult.NotSupported("No readable backlight timeout selector");
 
                 return WmiOperationResult.Success(new JsonObject
                 {
-                    ["enabled"] = decoded.Value.Enabled,
-                    ["brightness"] = decoded.Value.BrightnessPercent,
-                    ["raw"] = answer.Value
+                    ["enabled"] = state.Enabled,
+                    ["brightness"] = state.Brightness,
+                    ["raw"] = state.Raw,
+                    ["selector"] = state.Selector
                 });
             }
             catch (Exception ex)
@@ -934,7 +942,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
     /// <summary>
     /// Writes the 30-second keyboard backlight timeout. The brightness the firmware stores alongside it is read
-    /// first so the write does not reset the user's level; when the read fails the current level is left at 100.
+    /// first on the combined selector. An unreadable setting cannot be safely updated.
     /// </summary>
     public WmiOperationResult SetBacklightTimeout(bool enabled)
     {
@@ -945,25 +953,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
             try
             {
-                int brightness = 100;
-                try
-                {
-                    var current = InvokeApgeGetter(
-                        apge, "GetFunction", AcerWmiProtocol.EncodeBacklightTimeoutGet(BacklightHotkey));
-                    if (current.HasValue &&
-                        AcerWmiProtocol.DecodeBacklightTimeout(current.Value) is { } decoded)
-                    {
-                        brightness = decoded.BrightnessPercent;
-                    }
-                }
-                catch
-                {
-                    // A failed read is not a reason to refuse the write; the level simply stays at the default.
-                }
+                var state = ReadTimeout(input => InvokeApgeGetter(apge, "GetFunction", input));
+                if (state == null) return WmiOperationResult.NotSupported("No readable backlight timeout selector");
 
-                var status = InvokeApgeSetter(
-                    apge, "SetFunction",
-                    AcerWmiProtocol.EncodeBacklightTimeoutSet(BacklightHotkey, brightness, enabled));
+                var status = InvokeApgeSetter(apge, "SetFunction",
+                    AcerWmiProtocol.EncodeBacklightTimeoutSet(state.Selector, state.Brightness, enabled));
                 if (!status.HasValue) return WmiOperationResult.WmiFailed("SetFunction returned no status");
                 if (status.Value != AcerWmiProtocol.StatusOk)
                     return WmiOperationResult.StatusError($"SetFunction status 0x{status.Value:X2}");
@@ -971,7 +965,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 return WmiOperationResult.Success(new JsonObject
                 {
                     ["enabled"] = enabled,
-                    ["brightness"] = brightness
+                    ["selector"] = state.Selector
                 });
             }
             catch (Exception ex)
@@ -1134,7 +1128,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
     private static ulong? InvokeApgeGetter(ManagementObject instance, string method, ulong input)
     {
         using var inParams = instance.GetMethodParameters(method);
-        inParams["uiInput"] = input;
+        inParams["uiInput"] = checked((uint)input);
         using var outParams = instance.InvokeMethod(method, inParams, null);
         var raw = outParams?["uiOutput"];
         return raw == null ? null : Convert.ToUInt64(raw, CultureInfo.InvariantCulture);
