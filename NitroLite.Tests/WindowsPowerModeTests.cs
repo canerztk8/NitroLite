@@ -48,6 +48,25 @@ public class WindowsPowerModeTests
     }
 
     [Fact]
+    public async Task FallbackWithoutServiceOffersOnlyTheThreeWindowsModes()
+    {
+        var wmi = new Phase3Fakes.StubHardware();
+        var power = new FakePowerMode();
+        using var hybrid = new HybridHardwareController(new Phase3Fakes.StubHardware(), () => wmi,
+            () => true, () => Task.FromResult(false))
+        {
+            WindowsPowerMode = power,
+            UseWindowsModesWithoutService = () => true
+        };
+
+        Assert.True((await hybrid.GetCapabilitiesAsync()).UsesWindowsPowerMode);
+        Assert.False(await hybrid.SetOperatingModeAsync(OperatingMode.Turbo));
+        Assert.True(await hybrid.SetOperatingModeAsync(OperatingMode.Extreme));
+        Assert.Equal(OperatingMode.Extreme, await hybrid.GetOperatingModeAsync());
+        Assert.Empty(wmi.Writes);
+    }
+
+    [Fact]
     public async Task AFlaggedModel_SwitchesTheWindowsPowerMode_AndNeverTheFirmware()
     {
         var agent = new Phase3Fakes.StubHardware();

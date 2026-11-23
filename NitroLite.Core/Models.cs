@@ -498,6 +498,8 @@ public class AppSettings
 
     [JsonPropertyName("last_operating_mode")]
     public OperatingMode? LastOperatingMode { get; set; }
+    public GpuOperatingMode? RequestedGpuMode { get; set; }
+    public DateTimeOffset? GpuModeRequestedAt { get; set; }
 
     [JsonPropertyName("dc_power_mode")]
     public DcPowerProfilePreference DcPowerMode { get; set; } = DcPowerProfilePreference.Eco;

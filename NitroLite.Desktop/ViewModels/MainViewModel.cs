@@ -1430,6 +1430,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var anchor in GameCurveAnchors) anchor.Labels = value;
             Raise(nameof(CurvePreview));
             Raise(nameof(CapabilitySummaryText));
+            Raise(nameof(PowerModeHeading));
             Raise(nameof(TierDisplay));
             // The rows carry translated names, so they are rebuilt rather than re-raised.
             BuildCapabilityRows();
@@ -2793,6 +2794,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         foreach (var card in Modes) card.IsSelected = card.Mode == _selectedMode?.Mode;
     }
+
+    public string PowerModeHeading => _capabilities.UsesWindowsPowerMode ? "Windows · " + Labels.PowerModes : Labels.PowerModes;
 
     public bool ModeControlAvailable => _capabilities.OperatingModeControl;
 
@@ -7198,6 +7201,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _capabilities = GateByProfile(await _hardware.GetCapabilitiesAsync().ConfigureAwait(true));
 
             BuildModeChoices();
+            Raise(nameof(PowerModeHeading));
             Raise(nameof(ModeControlAvailable));
             Raise(nameof(HasModeLockNote));
             Raise(nameof(FanControlAvailable));
@@ -7728,6 +7732,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (charge is BatteryChargeMode battery) BatteryLimitOn = battery == BatteryChargeMode.Optimized80;
 
             SelectedGpuMode = GpuModes.FirstOrDefault(m => m.Mode == gpu);
+            if (OperatingSystem.IsWindows() && _settings.RequestedGpuMode is { } requested &&
+                _settings.GpuModeRequestedAt is { } requestedAt && gpu.HasValue)
+            {
+                var boot = DateTimeOffset.UtcNow - TimeSpan.FromMilliseconds(Environment.TickCount64);
+                if (requestedAt < boot.AddSeconds(-2))
+                {
+                    GpuModeNote = $"MUX · {requested} → {gpu.Value}";
+                    AppLog.Info("MUX state after reboot", $"Requested {requested}, observed {gpu.Value}");
+                    PendingGpuMode = null;
+                    _settings.RequestedGpuMode = null;
+                    _settings.GpuModeRequestedAt = null;
+                    SaveSettings();
+                }
+                else
+                {
+                    PendingGpuMode = requested;
+                }
+            }
         }
         finally
         {
@@ -8260,6 +8282,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         PendingGpuMode = choice.Mode;
+        if (OperatingSystem.IsWindows())
+        {
+            _settings.RequestedGpuMode = choice.Mode;
+            _settings.GpuModeRequestedAt = DateTimeOffset.UtcNow;
+            SaveSettings();
+        }
         GpuModeNote = choice.Mode switch
         {
             GpuOperatingMode.DiscreteGpu => Labels.GpuPendingDiscrete,
@@ -9067,6 +9095,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         NeedsUdevRule = _rescan.Snapshot.NeedsUdevRule || _rescan.PermissionHintRaised;
 
         Raise(nameof(CapabilitySummaryText));
+        Raise(nameof(PowerModeHeading));
         Raise(nameof(ModeControlAvailable));
         Raise(nameof(HasModeLockNote));
         Raise(nameof(FanControlAvailable));

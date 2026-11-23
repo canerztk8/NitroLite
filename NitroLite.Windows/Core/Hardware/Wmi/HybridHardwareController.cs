@@ -333,16 +333,17 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </remarks>
     public async Task<HardwareCapabilities> GetCapabilitiesAsync()
     {
-        var capabilities = await (await ResolveAsync().ConfigureAwait(false))
-            .GetCapabilitiesAsync().ConfigureAwait(false);
+        var backend = await ResolveAsync().ConfigureAwait(false);
+        var capabilities = await backend.GetCapabilitiesAsync().ConfigureAwait(false);
 
-        if (UseWindowsModes)
+        if (UseWindowsModes(backend))
         {
             // The firmware's own mode list means nothing here: it refuses the command. The three Windows positions are
             // what this machine can actually switch between.
             capabilities = capabilities with
             {
                 OperatingModeControl = WindowsPowerMode!.Read() != null,
+                UsesWindowsPowerMode = true,
                 SupportedOperatingModes = WindowsPowerModeMapping.Modes,
                 SupportedModeMask = null
             };
@@ -386,16 +387,22 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
 
     public async Task<OperatingMode?> GetOperatingModeAsync()
     {
-        if (UseWindowsModes) return WindowsPowerModeMapping.ToMode(WindowsPowerMode!.Read(), _lastWindowsMode);
+        var backend = await ResolveAsync().ConfigureAwait(false);
+        if (UseWindowsModes(backend)) return WindowsPowerModeMapping.ToMode(WindowsPowerMode!.Read(), _lastWindowsMode);
 
-        return await (await ResolveAsync().ConfigureAwait(false)).GetOperatingModeAsync().ConfigureAwait(false);
+        return await backend.GetOperatingModeAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {
-        if (UseWindowsModes) return SetWindowsPowerMode(mode);
+        var backend = await ResolveAsync().ConfigureAwait(false);
+        if (UseWindowsModes(backend))
+        {
+            if (ModesThroughWindows?.Invoke() != true && !WindowsPowerModeMapping.Modes.Contains(mode)) return false;
+            return SetWindowsPowerMode(mode);
+        }
 
-        return await (await ResolveAsync().ConfigureAwait(false)).SetOperatingModeAsync(mode).ConfigureAwait(false);
+        return await backend.SetOperatingModeAsync(mode).ConfigureAwait(false);
     }
 
     /// <summary>Writes the Windows power mode and confirms it by reading it back, like every other mode write.</summary>
@@ -475,7 +482,10 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </summary>
     public Func<bool>? ModesThroughWindows { get; init; }
 
-    private bool UseWindowsModes => WindowsPowerMode != null && ModesThroughWindows?.Invoke() == true;
+    public Func<bool>? UseWindowsModesWithoutService { get; init; }
+
+    private bool UseWindowsModes(IHardwareController backend) => WindowsPowerMode != null &&
+        (ModesThroughWindows?.Invoke() == true || (ReferenceEquals(backend, _wmi) && UseWindowsModesWithoutService?.Invoke() == true));
 
     /// <summary>The last mode written through the Windows power mode, so Turbo reads back as Turbo.</summary>
     private OperatingMode? _lastWindowsMode;
@@ -753,8 +763,10 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
 
     public async Task<bool> SetWinKeyLockAsync(bool enabled)
     {
+        var backend = await ResolveAsync().ConfigureAwait(false);
+        if (backend == _agent && await _agent.SetWinKeyLockAsync(enabled).ConfigureAwait(false)) return true;
         var (reached, applied) = await TryWmiAsync(w => w.SetWinKeyLockAsync(enabled)).ConfigureAwait(false);
-        return reached ? applied : await _agent.SetWinKeyLockAsync(enabled).ConfigureAwait(false);
+        return reached ? applied : backend != _agent && await _agent.SetWinKeyLockAsync(enabled).ConfigureAwait(false);
     }
 
     /// <summary>

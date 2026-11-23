@@ -1191,6 +1191,34 @@ public class AcerAgentClient : IDisposable
     }
 
     /// <summary>Reads the keyboard 30 s idle-off setting (GET_UPDATED_DATA BACKLIGHT_30S → data.status). Null if unknown.</summary>
+    public virtual async Task<bool?> GetWinKeyEnabledAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+            var response = await SendFunctionAsync(PacketGetUpdatedData, "WIN_KEY");
+            return GetSuccessData(response)?["status"]?.GetValue<int>() switch { 0 => false, 1 => true, _ => null };
+        }
+        catch { return null; }
+        finally { _lock.Release(); }
+    }
+
+    public virtual async Task<bool> SetWinKeyEnabledAsync(bool enabled)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return false;
+            var response = await SendFunctionAsync(PacketSetDeviceData, "WIN_KEY", new { status = enabled ? 1 : 0 });
+            if (!IsSuccessResult(response)) return false;
+            var observed = await SendFunctionAsync(PacketGetUpdatedData, "WIN_KEY");
+            return GetSuccessData(observed)?["status"]?.GetValue<int>() == (enabled ? 1 : 0);
+        }
+        catch { return false; }
+        finally { _lock.Release(); }
+    }
+
     public virtual async Task<bool?> GetBacklightTimeoutAsync()
     {
         await _lock.WaitAsync();

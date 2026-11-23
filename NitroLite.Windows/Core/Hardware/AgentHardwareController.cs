@@ -83,6 +83,7 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
             MuxSwitch = mux.HasValue,
             BatteryChargeLimit = chargeMode.HasValue,
             KeyboardLighting = keyboard?.ZoneCount > 0,
+            WinKeyLock = (await ProbeAsync(() => _agent.GetWinKeyEnabledAsync()).ConfigureAwait(false)).HasValue,
             BacklightTimeout = backlight.HasValue
         };
     }
@@ -182,8 +183,8 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
     /// <summary>No LCD overdrive command exists on the service socket.</summary>
     public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
 
-    /// <summary>No Windows-key lock command exists on the service socket.</summary>
-    public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
+    /// <summary>The Acer service stores whether the Windows key is enabled.</summary>
+    public Task<bool> SetWinKeyLockAsync(bool enabled) => WriteAsync(() => _agent.SetWinKeyEnabledAsync(!enabled));
 
     /// <summary>
     /// Runs one write behind the gate. The gate is released in a <c>finally</c>, so a write that throws does not

@@ -513,6 +513,17 @@ public sealed class WmiHardwareController : IHardwareController
                 return false;
             }
 
+            if (Snapshot?.CacheKey == "AN16-61|1.53")
+            {
+                if (_readBack.IsDisabled(ReadBackPolicy.MuxMode) || AcerWmiProtocol.DecodeStatus(raw) != AcerWmiProtocol.StatusOk)
+                    return false;
+                // This BIOS exposes the active mux through the getter until reboot.
+                // A successful setter only acknowledges the restart request.
+                var response = await SendAsync(WmiWorkerCommand.SetMuxMode,
+                    new JsonObject { ["mode"] = (int)mode }).ConfigureAwait(false);
+                return response is { Ok: true };
+            }
+
             var result = await _readBack.ApplyAsync(
                 ReadBackPolicy.MuxMode,
                 write: () => WriteOrThrowAsync(WmiWorkerCommand.SetMuxMode,

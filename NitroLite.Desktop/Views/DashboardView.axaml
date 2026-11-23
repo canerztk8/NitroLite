@@ -98,7 +98,7 @@
         <StackPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
             <TextBlock Classes="cardicon" Text="&#xE945;" Foreground="{DynamicResource TextPrimaryBrush}" />
-            <TextBlock Classes="section" Text="{Binding Labels.PowerModes}" />
+            <TextBlock Classes="section" Text="{Binding PowerModeHeading}" />
           </StackPanel>
 
           <ItemsControl ItemsSource="{Binding Modes}" IsEnabled="{Binding ModeControlAvailable}"

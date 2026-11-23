@@ -676,6 +676,7 @@ public sealed class AppHost : IDisposable
             // Only a profile that lists the firmware's mode setter as unsupported switches modes through Windows; every
             // other model keeps writing its mode to the laptop's firmware. Read once, on first use.
             WindowsPowerMode = new NitroLite.Windows.Core.Hardware.WindowsPowerModeService(),
+            UseWindowsModesWithoutService = () => identity.ModelCode == "AN16-61" && identity.BiosVersion == "1.53",
             ModesThroughWindows = () => modesThroughWindows.Value
         };
 

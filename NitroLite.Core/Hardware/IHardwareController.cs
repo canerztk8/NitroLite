@@ -21,6 +21,7 @@ public sealed record HardwareCapabilities
 
     /// <summary>Operating modes (Silent/Balanced/Performance/Turbo) can be written.</summary>
     public bool OperatingModeControl { get; init; }
+    public bool UsesWindowsPowerMode { get; init; }
 
     /// <summary>A GPU mode switch exists and reports a capability value.</summary>
     public bool MuxSwitch { get; init; }
