@@ -201,4 +201,13 @@ public interface IWmiExecutor : IDisposable
 
     /// <summary>Writes the 30-second keyboard backlight timeout through <c>APGeAction.SetFunction</c>.</summary>
     WmiOperationResult SetBacklightTimeout(bool enabled);
+
+    /// <summary>
+    /// Reads every selector the interface exposes and reports the ones that answered a non-zero word: all of
+    /// <c>GetGamingMiscSetting(0x00..0x1F)</c>, <c>GetGamingProfile(0x00..0x1F)</c> and the
+    /// <c>APGeAction.GetFunction</c> getters in <c>0x01..0x0F</c> and <c>0x200..0x22F</c>. Nothing is written: this is
+    /// the diagnostic that finds the selector a model's operating mode really lives in, which a machine that refuses
+    /// <c>SetGamingMiscSetting(0x0B)</c> will not tell you any other way.
+    /// </summary>
+    WmiOperationResult ProbeModeSelectors();
 }

@@ -866,6 +866,21 @@ public sealed class WmiHardwareController : IHardwareController
         return false;
     }
 
+    /// <summary>
+    /// The read-only selector sweep, plus the worker's explanation when it could not run. Nothing is written.
+    /// </summary>
+    /// <remarks>
+    /// Only the hardware snapshot calls this. It is a hundred-odd firmware round trips — deliberately so: it is what
+    /// turns "the mode write does nothing on this model" into "the mode word lives in selector X", and that question
+    /// is asked once per report, not once per refresh. Nothing that polls may call it.
+    /// </remarks>
+    public async Task<(JsonObject? Sweep, string Refusal)> ProbeModeSelectorsAsync()
+    {
+        var response = await SendAsync(WmiWorkerCommand.ProbeModeSelectors).ConfigureAwait(false);
+        if (response is { Ok: true } && response.Data is JsonObject sweep) return (sweep, "");
+        return (null, DescribeWorkerRefusal(response));
+    }
+
     // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
 
     public async Task<bool?> GetCoolBoostAsync()

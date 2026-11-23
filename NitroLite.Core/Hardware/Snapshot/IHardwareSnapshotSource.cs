@@ -69,8 +69,11 @@ public static class HardwareSnapshotService
         return new HardwareSnapshot(model, board, entries, capturedAt);
     }
 
-    /// <summary><c>ManagementException: …</c> — the type and the message, which is what a maintainer reads.</summary>
-    internal static string Describe(Exception ex) => $"{ex.GetType().Name}: {ex.Message}";
+    /// <summary>
+    /// <c>ManagementException: …</c> — the type and the message, which is what a maintainer reads. Public because a
+    /// source that reads several selectors in one go, such as the selector sweep, guards them itself.
+    /// </summary>
+    public static string Describe(Exception ex) => $"{ex.GetType().Name}: {ex.Message}";
 
     /// <summary>
     /// A guard for one selector inside a source: the value, or an <c>unavailable</c> entry naming what went wrong. The

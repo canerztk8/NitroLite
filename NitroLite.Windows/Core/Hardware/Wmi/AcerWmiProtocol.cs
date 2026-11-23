@@ -85,6 +85,48 @@ public static class AcerWmiProtocol
     /// <summary>The value <see cref="MiscIndexGpuModeSupport"/> answers when the MUX is switchable over WMI.</summary>
     public const int GpuModeSupportSwitchable = 3;
 
+    // ---------------------------------------------------------------- mode-selector probe (a read-only sweep)
+
+    /// <summary>
+    /// First misc selector the probe reads, and the one the sweep starts at. The probe exists because a model can
+    /// advertise all five mode bits in <see cref="MiscIndexSupportedModes"/> and still not act on
+    /// <see cref="MiscIndexPlatformProfile"/>: AN16-61 answers status 0 to every
+    /// <c>SetGamingMiscSetting(0x0B)</c> write and lands on Balanced regardless. Which selector actually carries the
+    /// mode is then a fact to be measured, not guessed.
+    /// </summary>
+    public const byte ProbeMiscFirst = 0x00;
+
+    /// <summary>Last misc selector the probe reads. <c>0x1F</c> is the end of the byte-indexed range Acer uses.</summary>
+    public const byte ProbeMiscLast = 0x1F;
+
+    /// <summary>
+    /// First selector the probe reads through <c>GetGamingProfile</c>. The gaming-profile methods take a selector in
+    /// the same way the misc methods do — overdrive is <c>0x10</c> — so the mode word can hide there too.
+    /// </summary>
+    public const uint ProbeProfileFirst = 0x00;
+
+    /// <summary>Last selector the probe reads through <c>GetGamingProfile</c>.</summary>
+    public const uint ProbeProfileLast = 0x1F;
+
+    /// <summary>
+    /// First <c>APGeAction.GetFunction</c> selector the probe reads. The low range is where the backlight-timeout
+    /// getter lives (<see cref="ApgeBacklightGetBase"/>), so the numbered getters start here.
+    /// </summary>
+    public const uint ProbeApgeLowFirst = 0x01;
+
+    /// <summary>Last getter selector in the low range.</summary>
+    public const uint ProbeApgeLowLast = 0x0F;
+
+    /// <summary>
+    /// First getter selector in the <c>0x2xx</c> range, where CoolBoost lives
+    /// (<see cref="ApgeCoolBoostGet"/>). A platform-profile step, if this firmware exposes it through APGe at all, is
+    /// a numbered getter in this range: the <c>0x200</c> bit marks "read" and the low byte is the function number.
+    /// </summary>
+    public const uint ProbeApgeHighFirst = 0x200;
+
+    /// <summary>Last getter selector in the <c>0x2xx</c> range.</summary>
+    public const uint ProbeApgeHighLast = 0x22F;
+
     // ---------------------------------------------------------------- operating-mode bitmask (misc 0x0A)
 
     /// <summary>Mode bit for Quiet / Silent.</summary>

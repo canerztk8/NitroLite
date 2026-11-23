@@ -975,6 +975,111 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         }
     }
 
+    /// <summary>
+    /// The read-only selector sweep: every <c>GetGamingMiscSetting</c> and <c>GetGamingProfile</c> index, plus the
+    /// <c>APGeAction.GetFunction</c> getters, reported when the answer is not zero. Only getters are called; the one
+    /// write the app has ever sent through these classes is deliberately not reachable from here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It exists because AN16-61 advertises all five mode bits and refuses the write: status 0, then Balanced, every
+    /// time. When the firmware says "yes" and does "no", the question stops being "did the write fail" and becomes
+    /// "which selector is the mode in", and only the machine can answer that.
+    /// </para>
+    /// <para>
+    /// Each selector is read on its own, so one index that throws — a class that answers
+    /// <c>WBEM_E_INVALID_METHOD_PARAMETERS</c> for an index it does not implement is common — costs its own line and
+    /// nothing else. An index that answers zero is left out: zero is the answer for "no such setting", and printing
+    /// thirty of those would bury the two words that matter.
+    /// </para>
+    /// </remarks>
+    public WmiOperationResult ProbeModeSelectors()
+    {
+        lock (_gate)
+        {
+            var gaming = EnsureGaming();
+            var apge = EnsureApge();
+            if (gaming == null && apge == null)
+                return WmiOperationResult.Unavailable(
+                    "neither AcerGamingFunction nor APGeAction is registered");
+
+            var data = new JsonObject
+            {
+                ["plan"] = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"misc 0x{AcerWmiProtocol.ProbeMiscFirst:X2}-0x{AcerWmiProtocol.ProbeMiscLast:X2}, " +
+                    $"profile 0x{AcerWmiProtocol.ProbeProfileFirst:X2}-0x{AcerWmiProtocol.ProbeProfileLast:X2}, " +
+                    $"apge 0x{AcerWmiProtocol.ProbeApgeLowFirst:X2}-0x{AcerWmiProtocol.ProbeApgeLowLast:X2}" +
+                    $"+0x{AcerWmiProtocol.ProbeApgeHighFirst:X3}-0x{AcerWmiProtocol.ProbeApgeHighLast:X3}")
+            };
+
+            if (gaming != null)
+            {
+                var misc = new JsonObject();
+                for (int selector = AcerWmiProtocol.ProbeMiscFirst;
+                     selector <= AcerWmiProtocol.ProbeMiscLast;
+                     selector++)
+                {
+                    var word = TryRead(() => InvokeGetter(gaming, "GetGamingMiscSetting", (uint)selector));
+                    if (word.HasValue && word.Value != 0)
+                        misc[$"0x{selector:X2}"] = $"0x{word.Value:X16}";
+                }
+
+                data["misc"] = misc;
+
+                var profile = new JsonObject();
+                for (uint selector = AcerWmiProtocol.ProbeProfileFirst;
+                     selector <= AcerWmiProtocol.ProbeProfileLast;
+                     selector++)
+                {
+                    var word = TryRead(() => InvokeGetter(gaming, "GetGamingProfile", selector));
+                    if (word.HasValue && word.Value != 0)
+                        profile[$"0x{selector:X2}"] = $"0x{word.Value:X16}";
+                }
+
+                data["profile"] = profile;
+            }
+
+            if (apge != null)
+            {
+                var functions = new JsonObject();
+                foreach (var (first, last) in new[]
+                         {
+                             (AcerWmiProtocol.ProbeApgeLowFirst, AcerWmiProtocol.ProbeApgeLowLast),
+                             (AcerWmiProtocol.ProbeApgeHighFirst, AcerWmiProtocol.ProbeApgeHighLast)
+                         })
+                {
+                    for (uint selector = first; selector <= last; selector++)
+                    {
+                        var word = TryRead(() => InvokeApgeGetter(apge, "GetFunction", selector));
+                        if (word.HasValue && word.Value != 0)
+                            functions[$"0x{selector:X3}"] = $"0x{word.Value:X16}";
+                    }
+                }
+
+                data["apge"] = functions;
+            }
+
+            return WmiOperationResult.Success(data);
+        }
+    }
+
+    /// <summary>
+    /// One probe read, with a throw turned into no answer. The probe's whole value is that it covers selectors whose
+    /// behaviour nobody has confirmed, so a refusal is expected and must not end the sweep.
+    /// </summary>
+    private static ulong? TryRead(Func<ulong?> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ---------------------------------------------------------------- WMI plumbing
 
     /// <summary>
