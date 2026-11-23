@@ -48,22 +48,25 @@ public class WindowsPowerModeTests
     }
 
     [Fact]
-    public async Task FallbackWithoutServiceOffersOnlyTheThreeWindowsModes()
+    public async Task NativeAcerProfilesNeverWriteTheWindowsOverlay()
     {
-        var wmi = new Phase3Fakes.StubHardware();
         var power = new FakePowerMode();
-        using var hybrid = new HybridHardwareController(new Phase3Fakes.StubHardware(), () => wmi,
-            () => true, () => Task.FromResult(false))
+        using var hybrid = new HybridHardwareController(new Phase3Fakes.StubHardware(),
+            serviceHealthy: () => Task.FromResult(true))
         {
-            WindowsPowerMode = power,
-            UseWindowsModesWithoutService = () => true
+            UseAcerNativeProfiles = () => true,
+            ModesThroughWindows = () => true,
+            WindowsPowerMode = power
         };
-
-        Assert.True((await hybrid.GetCapabilitiesAsync()).UsesWindowsPowerMode);
-        Assert.False(await hybrid.SetOperatingModeAsync(OperatingMode.Turbo));
-        Assert.True(await hybrid.SetOperatingModeAsync(OperatingMode.Extreme));
-        Assert.Equal(OperatingMode.Extreme, await hybrid.GetOperatingModeAsync());
-        Assert.Empty(wmi.Writes);
+        var caps = await hybrid.GetCapabilitiesAsync();
+        Assert.False(caps.UsesWindowsPowerMode);
+        Assert.Equal(new[] { OperatingMode.Eco, OperatingMode.Default, OperatingMode.Extreme, OperatingMode.Turbo },
+            caps.SupportedOperatingModes);
+        Assert.True(await hybrid.SetOperatingModeAsync(OperatingMode.Default));
+        Assert.False(await hybrid.SetOperatingModeAsync(OperatingMode.Turbo)); // stub still reports Balanced
+        Assert.Empty(power.Writes);
+        Assert.Equal(new byte[] { 0x14, 0, 0 }, AcerNativeProfiles.Request(null));
+        Assert.Equal(new byte[] { 0x15, 0, 1, 4, 0, 0, 0, 5, 0, 0, 0 }, AcerNativeProfiles.Request(OperatingMode.Turbo));
     }
 
     [Fact]

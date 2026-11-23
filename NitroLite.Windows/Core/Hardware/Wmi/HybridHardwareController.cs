@@ -336,7 +336,17 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         var backend = await ResolveAsync().ConfigureAwait(false);
         var capabilities = await backend.GetCapabilitiesAsync().ConfigureAwait(false);
 
-        if (UseWindowsModes(backend))
+        if (UseAcerNativeProfiles?.Invoke() == true)
+        {
+            var current = await ReadNativeModeAsync(backend).ConfigureAwait(false);
+            capabilities = capabilities with
+            {
+                UsesWindowsPowerMode = false,
+                OperatingModeControl = current.HasValue,
+                SupportedOperatingModes = AcerNativeProfiles.Modes
+            };
+        }
+        else if (UseWindowsModes)
         {
             // The firmware's own mode list means nothing here: it refuses the command. The three Windows positions are
             // what this machine can actually switch between.
@@ -388,7 +398,8 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     public async Task<OperatingMode?> GetOperatingModeAsync()
     {
         var backend = await ResolveAsync().ConfigureAwait(false);
-        if (UseWindowsModes(backend)) return WindowsPowerModeMapping.ToMode(WindowsPowerMode!.Read(), _lastWindowsMode);
+        if (UseAcerNativeProfiles?.Invoke() == true) return await ReadNativeModeAsync(backend).ConfigureAwait(false);
+        if (UseWindowsModes) return WindowsPowerModeMapping.ToMode(WindowsPowerMode!.Read(), _lastWindowsMode);
 
         return await backend.GetOperatingModeAsync().ConfigureAwait(false);
     }
@@ -396,11 +407,15 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     public async Task<bool> SetOperatingModeAsync(OperatingMode mode)
     {
         var backend = await ResolveAsync().ConfigureAwait(false);
-        if (UseWindowsModes(backend))
+        if (UseAcerNativeProfiles?.Invoke() == true)
         {
-            if (ModesThroughWindows?.Invoke() != true && !WindowsPowerModeMapping.Modes.Contains(mode)) return false;
-            return SetWindowsPowerMode(mode);
+            if (!AcerNativeProfiles.Modes.Contains(mode)) return false;
+            if (backend == _agent && await _agent.GetOperatingModeAsync().ConfigureAwait(false) != null)
+                return await _agent.SetOperatingModeAsync(mode).ConfigureAwait(false)
+                    && await _agent.GetOperatingModeAsync().ConfigureAwait(false) == mode;
+            return await AcerNativeProfiles.SetAsync(mode).ConfigureAwait(false);
         }
+        if (UseWindowsModes) return SetWindowsPowerMode(mode);
 
         return await backend.SetOperatingModeAsync(mode).ConfigureAwait(false);
     }
@@ -482,10 +497,15 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </summary>
     public Func<bool>? ModesThroughWindows { get; init; }
 
-    public Func<bool>? UseWindowsModesWithoutService { get; init; }
+    public Func<bool>? UseAcerNativeProfiles { get; init; }
 
-    private bool UseWindowsModes(IHardwareController backend) => WindowsPowerMode != null &&
-        (ModesThroughWindows?.Invoke() == true || (ReferenceEquals(backend, _wmi) && UseWindowsModesWithoutService?.Invoke() == true));
+    private async Task<OperatingMode?> ReadNativeModeAsync(IHardwareController backend)
+    {
+        if (backend == _agent && await backend.GetOperatingModeAsync().ConfigureAwait(false) is { } mode) return mode;
+        return await AcerNativeProfiles.ReadAsync().ConfigureAwait(false);
+    }
+
+    private bool UseWindowsModes => WindowsPowerMode != null && ModesThroughWindows?.Invoke() == true;
 
     /// <summary>The last mode written through the Windows power mode, so Turbo reads back as Turbo.</summary>
     private OperatingMode? _lastWindowsMode;
