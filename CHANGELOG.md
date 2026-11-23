@@ -10,6 +10,32 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-23
+
+Fixes from the second round of reports, and the diagnostic a machine that answers its own mode command and then ignores
+it needs. 2 commits since 1.3.2.
+
+**Games**
+- Turning "Apply this profile when the game starts" on while a game is running starts the session immediately instead
+  of on the next poll (5 s, 25 s minimised).
+- Turning it off while a game is running ends the session and puts the pre-game mode and fan back; the session used to
+  stay alive until the game closed, so Performance stayed on.
+- The rail's MOUSE row follows a config switched for the running game, and is re-read every ten ticks, so a change made
+  in ATK Hub or anywhere else cannot leave it showing an old one.
+
+**Diagnostics**
+- The hardware snapshot now carries a read-only selector sweep — `probe.plan`, `probe.misc`, `probe.profile`,
+  `probe.apge`. It reads every `GetGamingMiscSetting` and `GetGamingProfile` index and the `APGeAction` getters, so two
+  captures taken either side of a mode change in NitroSense name the selector that actually moved.
+- `scripts/probe-mode-selectors.ps1` runs the same sweep on its own, needs no install, and prints exactly which
+  selectors changed between two runs. It only calls getters; nothing on the machine is written.
+
+**Known, not yet fixed**
+- Nitro 16 AN16-61: operating-mode switching stays disabled in this build. The firmware offers every mode in
+  `GetGamingMiscSetting(0x0A)` and accepts `SetGamingMiscSetting(0x0B)` with status 0, then reports Balanced whatever
+  was asked for. Writing a different selector on a guess would replace "nothing happens" with a silent lie, so the
+  sweep above is how the real one gets measured. See ACER_COMPATIBILITY.md §6.
+
 ## [1.3.2] - 2026-11-22
 
 Game profiles that follow the game you are playing, and fixes from the first reports on new models. 11 commits since
