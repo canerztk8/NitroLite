@@ -495,19 +495,6 @@ public class HalStep8Tests
     }
 
     [Fact]
-    public void Dispatch_ProbeModeSelectors_ForwardsToTheExecutorWithNoArguments()
-    {
-        var executor = new FakeExtraExecutor();
-        using var server = ServerWith(executor);
-
-        var response = server.Dispatch(new WmiWorkerRequest { Command = WmiWorkerCommand.ProbeModeSelectors });
-
-        Assert.True(response.Ok);
-        Assert.Equal(1, executor.ProbeModeSelectorsCalls);
-        Assert.Equal("0x0000000000000100", response.Data?["misc"]?["0x0B"]?.GetValue<string>());
-    }
-
-    [Fact]
     public void Dispatch_NotSupported_IsReportedAsSuchRatherThanAsAFailure()
     {
         var executor = new FakeExtraExecutor { CoolBoostSupported = false };
@@ -654,20 +641,6 @@ public class HalStep8Tests
         {
             LastBacklightTimeout = enabled;
             return WmiOperationResult.Success();
-        }
-
-        public int ProbeModeSelectorsCalls { get; private set; }
-
-        public WmiOperationResult ProbeModeSelectors()
-        {
-            ProbeModeSelectorsCalls++;
-            return WmiOperationResult.Success(new JsonObject
-            {
-                ["plan"] = "misc 0x00-0x1F, profile 0x00-0x1F, apge 0x01-0x0F+0x200-0x22F",
-                ["misc"] = new JsonObject { ["0x0B"] = "0x0000000000000100" },
-                ["profile"] = new JsonObject(),
-                ["apge"] = new JsonObject { ["0x207"] = "0x0000000000000001" }
-            });
         }
 
         public void Dispose() { }

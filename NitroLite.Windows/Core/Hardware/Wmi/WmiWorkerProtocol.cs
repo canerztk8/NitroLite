@@ -75,13 +75,7 @@ public enum WmiWorkerCommand
     GetBacklightTimeout = 16,
 
     /// <summary>The 30-second keyboard backlight timeout, through <c>APGeAction.SetFunction</c>.</summary>
-    SetBacklightTimeout = 17,
-
-    /// <summary>
-    /// The read-only selector sweep: every misc and gaming-profile index plus the APGe getters, reported when the
-    /// answer is not zero. Writes nothing; see <see cref="IWmiExecutor.ProbeModeSelectors"/>.
-    /// </summary>
-    ProbeModeSelectors = 18
+    SetBacklightTimeout = 17
 }
 
 /// <summary>

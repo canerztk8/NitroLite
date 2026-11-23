@@ -10,6 +10,10 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+- Withdrawn the firmware selector sweep and its standalone script after two reports of a hard reset
+  when capturing state on AN16-61. Both snapshot buttons now stop before hardware access on that model.
+  On 1.3.3, avoid both buttons on AN16-61 and discard previously downloaded copies of the probe script.
+
 ## [1.3.3] - 2026-11-23
 
 Fixes from the second round of reports, and the diagnostic a machine that answers its own mode command and then ignores

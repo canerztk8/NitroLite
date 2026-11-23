@@ -1078,8 +1078,6 @@ public class HalStep7Tests
 
         public WmiOperationResult SetBacklightTimeout(bool enabled) => WmiOperationResult.NotSupported("APGeAction is not registered");
 
-        public WmiOperationResult ProbeModeSelectors() => WmiOperationResult.NotSupported("no selector sweep in this fake");
-
         public void Dispose() { }
     }
 }

@@ -34,6 +34,10 @@ public static class WindowsHardwareSnapshot
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
+        if (string.Equals(identity.ModelCode?.Trim(), "AN16-61", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(identity.Model?.Trim(), "Nitro AN16-61", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(identity.Model?.Trim(), "AN16-61", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("Snapshot capture is disabled on AN16-61 after reports of unexpected restarts.");
 
         var sources = new List<IHardwareSnapshotSource>();
         sources.Add(wmi is { IsAvailable: true }

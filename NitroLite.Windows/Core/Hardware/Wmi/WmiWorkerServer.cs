@@ -431,11 +431,6 @@ public sealed class WmiWorkerServer : IDisposable
                     return WmiWorkerResponse.FromResult(_executor.SetBacklightTimeout(enabled));
                 }
 
-                case WmiWorkerCommand.ProbeModeSelectors:
-                    // No arguments: the sweep ranges are constants in the worker, so nothing a caller sends can widen
-                    // what is read or aim it at a setter.
-                    return WmiWorkerResponse.FromResult(_executor.ProbeModeSelectors());
-
                 default:
                     return Invalid($"unknown command {(int)request.Command}");
             }
