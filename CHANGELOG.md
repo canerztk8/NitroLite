@@ -8,11 +8,11 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
-## [Unreleased]
+## [1.3.4] - 2026-11-24
 
-- Withdrawn the firmware selector sweep and its standalone script after two reports of a hard reset
-  when capturing state on AN16-61. Both snapshot buttons now stop before hardware access on that model.
-  On 1.3.3, avoid both buttons on AN16-61 and discard previously downloaded copies of the probe script.
+- On the AN16-61, Capture A/B now reads the GPU driving the internal display through Windows. The firmware selector sweep that triggered unexpected restarts has been removed. A completed baseline survives the reboot required for a MUX change.
+- On the AN16-61 with BIOS 1.53, operating mode selections use Acer services. Confirmation on the affected laptop is still pending.
+- Windows diagnostics record capture progress, results and baseline recovery. The diagnostics ZIP includes installed display driver versions and the previous log when available.
 
 ## [1.3.3] - 2026-11-23
 
