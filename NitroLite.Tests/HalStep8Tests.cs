@@ -77,15 +77,25 @@ public class HalStep8Tests
     }
 
     [Fact]
-    public void MuxSwitch_TheWmiSignalCanOnlyAddSupport()
+    public void MuxSwitch_FollowsTheRegistryMaskTheWriteNeeds_AndTheWmiSignalAloneIsDetectedButNotWritable()
     {
         var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
 
-        // The registry says zero, which on its own is a "no". The firmware saying 3 is the stronger answer.
+        // The registry says zero. The firmware saying 3 means a switch exists, but SetMuxMode refuses without the
+        // mask, so advertising it would offer a control whose every write is refused.
         var registrySaysNo = Schema(new AcerRegistrySnapshot { KeyPresent = true, DgpuModeCapability = 0 });
         var withSignal = CapabilityProbe.Probe(Identity("AN16-41"), catalog, registrySaysNo, wmiMuxSignal: true);
-        Assert.True(withSignal.IsSupported(CapabilitySnapshot.MuxSwitch));
+        Assert.False(withSignal.IsSupported(CapabilitySnapshot.MuxSwitch));
         Assert.True(withSignal.WmiMuxSignal);
+        var mux = withSignal.Find(CapabilitySnapshot.MuxSwitch);
+        Assert.NotNull(mux);
+        Assert.Equal(HardwareProbeOutcome.Unsupported, mux!.Outcome);
+        Assert.Contains("not writable", mux.Detail, StringComparison.Ordinal);
+
+        // Same with no readable mask at all.
+        var registryUnreadable = Schema(new AcerRegistrySnapshot { KeyPresent = true });
+        var unreadableWithSignal = CapabilityProbe.Probe(Identity("AN16-41"), catalog, registryUnreadable, wmiMuxSignal: true);
+        Assert.False(unreadableWithSignal.IsSupported(CapabilitySnapshot.MuxSwitch));
 
         // And the other way round: a selector this build does not recognise is not evidence that the switch is gone.
         var registrySaysYes = Schema(new AcerRegistrySnapshot { KeyPresent = true, DgpuModeCapability = 7 });

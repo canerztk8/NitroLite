@@ -28,10 +28,17 @@ public partial class App : Application, IDisposable
     public static SingleInstanceGuard? SingleInstance { get; set; }
 
     /// <summary>
-    /// How many unhandled UI exceptions in a row are survived before the process gives up. A control that throws on
-    /// every layout pass would otherwise spin the dispatcher forever.
+    /// How many unhandled UI exceptions inside <see cref="UiExceptionWindow"/> are survived before the process gives
+    /// up. A control that throws on every layout pass would otherwise spin the dispatcher forever.
     /// </summary>
     private const int MaxSurvivedUiExceptions = 5;
+
+    /// <summary>
+    /// The window the limit above is counted over. A throwing control hits the limit within a second; a tray app that
+    /// runs for days and meets six unrelated exceptions in that time is not spinning, and used to be shut down anyway
+    /// because the count never went back down.
+    /// </summary>
+    private static readonly TimeSpan UiExceptionWindow = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// How long the NitroSense sweep runs after a key press. Long enough to catch a launch the Acer service delays,
@@ -51,7 +58,8 @@ public partial class App : Application, IDisposable
     /// </remarks>
     private static readonly TimeSpan ShutdownHandbackTimeout = TimeSpan.FromSeconds(5);
 
-    private int _survivedUiExceptions;
+    /// <summary>When each recent UI exception arrived, oldest first. Only entries inside the window are kept.</summary>
+    private readonly Queue<DateTime> _recentUiExceptions = new();
 
     public override void Initialize()
     {
@@ -71,6 +79,15 @@ public partial class App : Application, IDisposable
             // window that explains why instead of failing to start. The dialog service takes the window as a delegate
             // because the window does not exist yet.
             _host = AppHost.Create(new AvaloniaDialogService(() => _window));
+
+            // The fan loop and the shutdown hand-back finish on pool threads, and the controls they update belong to
+            // this one. Posted rather than invoked when called off the UI thread, so a hand-back running while the UI
+            // thread waits for it cannot deadlock.
+            _host.ViewModel.UiDispatch = action =>
+            {
+                if (Dispatcher.UIThread.CheckAccess()) action();
+                else Dispatcher.UIThread.Post(action);
+            };
 
             // A language change is the one setting that cannot be applied to a live window: the catalogues are read
             // through a static, and half the shell — the tray menu, the window title, the OSD — is built once. The
@@ -371,10 +388,16 @@ public partial class App : Application, IDisposable
     {
         AppLog.Error("UI exception", e.Exception?.ToString() ?? "unknown");
 
-        if (++_survivedUiExceptions <= MaxSurvivedUiExceptions)
+        // Raised on the UI thread only, so the queue needs no lock.
+        var now = DateTime.UtcNow;
+        while (_recentUiExceptions.Count > 0 && now - _recentUiExceptions.Peek() > UiExceptionWindow)
+            _recentUiExceptions.Dequeue();
+        _recentUiExceptions.Enqueue(now);
+
+        if (_recentUiExceptions.Count <= MaxSurvivedUiExceptions)
         {
-            // Handled: the window stays open and the user can keep working. The counter is what stops a control that
-            // throws on every layout pass from spinning the dispatcher forever.
+            // Handled: the window stays open and the user can keep working. The windowed count is what stops a control
+            // that throws on every layout pass from spinning the dispatcher forever.
             e.Handled = true;
             return;
         }

@@ -22,17 +22,26 @@ namespace NitroLite.Linux;
 public sealed class LinuxPlatformSetup : IPlatformSetup
 {
     /// <summary>
-    /// The grant script. <c>$1</c> is the user, <c>$2</c> the rule file. Every step is idempotent, so pressing the
-    /// button twice is harmless.
+    /// The grant script. <c>$1</c> is the user, <c>$2</c> the rule file, <c>$3</c> the SHA-256 the app computed for
+    /// that file's content just before the prompt. The rule file lives in the user's data folder, which any process of
+    /// that user can write during the password prompt, so root never installs it from there directly: it copies the
+    /// file into a root-only temporary directory, checks the copy against the digest, and installs the verified copy
+    /// (the same scheme as the update installer). Every step is idempotent, so pressing the button twice is harmless.
     /// </summary>
     public const string GrantScript =
         "set -e\n" +
-        "user=\"$1\"; rule=\"$2\"\n" +
+        "user=\"$1\"; rule=\"$2\"; sha=\"$3\"\n" +
         "[ -n \"$user\" ] && [ -f \"$rule\" ] || exit 2\n" +
+        "case \"$sha\" in ''|*[!0-9a-f]*) exit 3 ;; esac\n" +
+        "[ \"${#sha}\" -eq 64 ] || exit 3\n" +
+        "dir=\"$(mktemp -d /var/tmp/nitrolite-setup.XXXXXXXX)\"\n" +
+        "trap 'rm -rf -- \"$dir\"' EXIT\n" +
+        "cp -- \"$rule\" \"$dir/rule\"\n" +
+        "echo \"$sha  $dir/rule\" | sha256sum -c --status - || exit 4\n" +
         "groupadd -f nitrolite\n" +
         "getent group input >/dev/null || groupadd -f -r input\n" +
         "usermod -aG nitrolite,input \"$user\"\n" +
-        "install -m 644 \"$rule\" /etc/udev/rules.d/99-nitrolite.rules\n" +
+        "install -m 644 \"$dir/rule\" /etc/udev/rules.d/99-nitrolite.rules\n" +
         "udevadm control --reload-rules\n" +
         "udevadm trigger\n" +
         "if [ -e /sys/firmware/acpi/platform_profile ]; then\n" +
@@ -54,6 +63,7 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
     private readonly ICommandRunner _runner;
     private readonly ISysfsFileSystem _fs;
     private readonly Func<string?> _rulePath;
+    private readonly Func<string?>? _ruleDigest;
     private readonly string _user;
     private readonly string? _pkexec;
     private readonly KernelSetupHint _hint;
@@ -63,9 +73,11 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         Func<string?> rulePath,
         ICommandRunner? runner = null,
         ISysfsFileSystem? fs = null,
-        string? user = null)
+        string? user = null,
+        Func<string?>? ruleDigest = null)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
+        _ruleDigest = ruleDigest;
         _rulePath = rulePath ?? throw new ArgumentNullException(nameof(rulePath));
         _runner = runner ?? ProcessCommandRunner.Instance;
         _fs = fs ?? RealSysfsFileSystem.Instance;
@@ -116,9 +128,26 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
             return new PlatformSetupResult(false, Loc.T("udev kuralı dosyası hazırlanamadı."));
         }
 
-        return Run(GrantScript, new[] { _user, rule },
+        // The digest comes from the trusted embedded rule when a provider is given, so a file swapped in the user's data
+        // folder at any time fails root's check. Without a provider it is hashed from the file as a fallback. A missing
+        // or empty digest is refused by the script (exit 3), so nothing is installed.
+        var digest = _ruleDigest != null ? (_ruleDigest() ?? string.Empty).ToLowerInvariant() : RuleDigest(rule);
+        return Run(GrantScript, new[] { _user, rule, digest },
             Loc.T("İzinler verildi. Değişikliklerin tamamen geçerli olması için oturumu kapatıp yeniden açın."));
     });
+
+    /// <summary>Lower-case hex SHA-256 of the rule file's bytes, or an empty string when it cannot be read.</summary>
+    internal static string RuleDigest(string path)
+    {
+        try
+        {
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
 
     public Task<PlatformSetupResult> EnablePredatorV4Async() => Task.Run(() =>
         Run(PredatorV4Script, Array.Empty<string>(),

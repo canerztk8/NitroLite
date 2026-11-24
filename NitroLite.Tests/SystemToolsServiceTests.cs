@@ -144,28 +144,8 @@ public class SystemToolsServiceTests : IDisposable
         Assert.Contains("başarıyla", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public async Task OptimizePcAsync_WritesTheUndoRecordBeforeChangingAnything()
-    {
-        var script = await CaptureScriptAsync(() => SystemToolsService.OptimizePcAsync());
-
-        int save = script.IndexOf("try { Save-Backup }", StringComparison.Ordinal);
-        int firstChange = script.IndexOf("Set-Service -Name 'SysMain'", StringComparison.Ordinal);
-        Assert.True(save >= 0, "the script never writes the undo record");
-        Assert.True(firstChange >= 0, "the script never disables SysMain");
-        Assert.True(save < firstChange, "the undo record must be written before the first change");
-    }
-
-    [Fact]
-    public async Task OptimizePcAsync_KeepsTheFirstUndoRecordWhenItRunsAgain()
-    {
-        var script = await CaptureScriptAsync(() => SystemToolsService.OptimizePcAsync());
-
-        // A second run must not record the already-optimized state as the machine's original one.
-        Assert.Contains("if (Test-Path -LiteralPath $backupPath)", script);
-        Assert.Contains("$services.ContainsKey('SysMain')", script);
-        Assert.Contains("$services.ContainsKey($s)", script);
-    }
+    // The undo record is now written by the unelevated side before the prompt (AuditG3SecurityTests covers the order
+    // and the first-record-wins merge), so the elevated script no longer contains Save-Backup or reads $backupPath.
 
     [Fact]
     public async Task OptimizePcAsync_LeavesTheEdgeUpdaterAndTheAudioStackAlone()

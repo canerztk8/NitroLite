@@ -140,7 +140,8 @@ public sealed class LinuxSelfTest
         yield return ("CoolBoost", n.CoolBoost, true);
         yield return ("LCD overdrive", n.LcdOverride, true);
         yield return ("backlight timeout", n.BacklightTimeout, true);
-        yield return ("GPU mode (MUX)", n.DgpuMode, true);
+        // Never written back: a MUX write schedules a GPU switch that takes effect on the next boot.
+        yield return ("GPU mode (MUX)", n.DgpuMode, false);
         // Both are listed; the one the kernel does not have reads as absent and is skipped.
         yield return ("CPU boost", LinuxPaths.CpuFreqBoost, true);
         yield return ("CPU boost (Intel)", LinuxPaths.IntelNoTurbo, true);
@@ -155,6 +156,20 @@ public sealed class LinuxSelfTest
         {
             Check(name, fs.CanWrite(path), fs.CanWrite(path) ? "writable (not written: a speed write can leave automatic mode)" : "not writable");
             return;
+        }
+
+        // charge_types reads "[Standard] Long Life" (the active type in brackets), which the kernel and the helper policy
+        // both refuse as input; only the active type's name is a value that can be written.
+        if (path.EndsWith("/charge_types", StringComparison.Ordinal))
+        {
+            var active = LinuxChargeTypes.Parse(current)?.Active;
+            if (active == null)
+            {
+                Info(name, "no active charge type to write back");
+                return;
+            }
+
+            current = active;
         }
 
         var result = fs.WriteAllText(path, current + "\n");

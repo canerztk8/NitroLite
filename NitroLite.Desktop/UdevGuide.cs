@@ -56,6 +56,30 @@ public static class UdevGuide
     }
 
     /// <summary>
+    /// Lower-case hex SHA-256 of the embedded rule, LF-normalised: the exact bytes <see cref="EnsureRuleFile"/> writes.
+    /// Null when the resource is missing. The root setup script checks its private copy of the file against this, so a
+    /// file swapped in the data folder is refused.
+    /// </summary>
+    public static string? EmbeddedRuleDigest()
+    {
+        try
+        {
+            using var stream = typeof(UdevGuide).Assembly.GetManifestResourceStream(ResourceName);
+            if (stream == null) return null;
+
+            using var reader = new StreamReader(stream);
+            var rule = reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(new System.Text.UTF8Encoding(false).GetBytes(rule)))
+                .ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The embedded udev rule could not be hashed", ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// The install command for <paramref name="rulePath"/>. Quoted because a data folder can contain a space, and
     /// chained with <c>&amp;&amp;</c> so a failed copy does not reload a udev daemon that has nothing new to read. The group
     /// steps come first: the rule hands <c>platform_profile</c> to the <c>nitrolite</c> group, and without the group the

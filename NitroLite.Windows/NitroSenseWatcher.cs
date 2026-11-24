@@ -522,12 +522,24 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     internal ForegroundWindowInfo CachedForegroundWindow(IntPtr handle, Func<IntPtr, ForegroundWindowInfo> read)
     {
         if (handle == IntPtr.Zero) return ForegroundWindowInfo.None;
-        if (handle == _lastHwnd && _lastWindow is { } cached) return cached;
+        if (handle == _lastHwnd && _lastWindow is { } cached && !NeedsReRead(cached)) return cached;
 
         var info = read(handle);
         _lastHwnd = handle;
         _lastWindow = info;
         return info;
+    }
+
+    /// <summary>
+    /// A cached window that was classified as "not NitroSense" can still turn into one: a dialog or a packaged-app
+    /// frame is often created with an empty title and given its text a moment later, on the same handle. Those two
+    /// shapes are read again while they classify as <see cref="NitroSenseWindowKind.None"/>; everything else keeps
+    /// the one-read-per-handle rule.
+    /// </summary>
+    private static bool NeedsReRead(ForegroundWindowInfo cached)
+    {
+        if (!IsDialogClass(cached.ClassName) && !IsApplicationFrameHost(cached.ProcessName)) return false;
+        return Classify(cached, IsNitroSenseProcessName(cached.ProcessName)) == NitroSenseWindowKind.None;
     }
 
     /// <summary>

@@ -218,6 +218,12 @@ public sealed class LinuxHardwareMonitor : IHardwareMonitor
     /// <summary>
     /// Package watts from the kernel's running-energy counter. The node is <c>intel-rapl:0</c> on Intel and
     /// <c>amd-rapl:0</c> on recent AMD parts; a machine with neither reports 0, which the page shows as no reading.
+    /// <para>
+    /// Since Linux 5.10 <c>energy_uj</c> is readable by root only (the Platypus power side channel), so for a normal
+    /// user the read below fails and the value stays 0, that is "unavailable", not "idle". The helper deliberately does
+    /// not expose it: raising the node's permissions would bring the side channel back. A 0 here must therefore never
+    /// be presented as a measured 0 W.
+    /// </para>
     /// </summary>
     private double ReadCpuPackageWatts()
     {

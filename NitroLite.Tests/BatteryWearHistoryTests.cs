@@ -307,9 +307,10 @@ public class BatteryWearHistoryTests : IDisposable
     }
 
     [Fact]
-    public void ANullPathKeepsEverythingInMemory()
+    public void AnInMemoryHistoryKeepsEverythingInMemory()
     {
-        var history = new BatteryWearHistory(null);
+        // Not `new BatteryWearHistory(null)`: that is the production file in AppData, and Clear() below deleted it.
+        var history = BatteryWearHistory.InMemory();
         Assert.True(history.TryRecord(Details(96.0), Day0));
         Assert.Single(history.GetSamples());
         Assert.True(history.Clear());

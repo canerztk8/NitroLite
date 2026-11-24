@@ -387,9 +387,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             mode == FanMode.Custom ? ReadBackPolicy.FanSpeed : ReadBackPolicy.FanBehavior,
             write: () => WriteNodeAsync(node, line),
             readBack: () => Task.FromResult(ReadFanState()),
-            matches: observed => observed.Mode == target.Mode &&
-                                 (target.Mode != FanMode.Custom ||
-                                  (observed.CpuPercent == target.CpuPercent && observed.GpuPercent == target.GpuPercent)))
+            matches: observed => FanMatches(observed, target, 0))
             .ConfigureAwait(false);
 
         return result.Applied;
@@ -427,29 +425,72 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
 
         async Task<bool> Write()
         {
-            if (!await WriteNodeAsync(nodes.AcerPwmCpuEnable!, enable).ConfigureAwait(false)) return false;
+            // The enable nodes already switched. If a later write fails, the fan would stay in manual mode at whatever
+            // pwm it held (possibly 0), so every enable written so far goes back to automatic.
+            var written = new List<string>(2);
+
+            async Task<bool> Step(string path, string value, bool isEnable)
+            {
+                if (!await WriteNodeAsync(path, value).ConfigureAwait(false)) return false;
+                if (isEnable) written.Add(path);
+                return true;
+            }
+
+            async Task<bool> Fail()
+            {
+                if (enable != "2")
+                {
+                    var hint = (PermissionHintRaised, _lastWriteDenied, LastError);
+                    foreach (var path in written) await WriteNodeAsync(path, "2").ConfigureAwait(false);
+                    // The failure that caused the rollback is the one to report, not the rollback's own result.
+                    (PermissionHintRaised, _lastWriteDenied, LastError) = hint;
+                }
+
+                return false;
+            }
+
+            if (!await Step(nodes.AcerPwmCpuEnable!, enable, true).ConfigureAwait(false)) return await Fail().ConfigureAwait(false);
             if (nodes.AcerPwmGpuEnable != null &&
-                !await WriteNodeAsync(nodes.AcerPwmGpuEnable, enable).ConfigureAwait(false)) return false;
+                !await Step(nodes.AcerPwmGpuEnable, enable, true).ConfigureAwait(false)) return await Fail().ConfigureAwait(false);
             if (mode != FanMode.Custom) return true;
 
-            if (!await WriteNodeAsync(nodes.AcerPwmCpu!, PercentToPwm(cpu).ToString(CultureInfo.InvariantCulture))
-                    .ConfigureAwait(false)) return false;
-            return nodes.AcerPwmGpu == null ||
-                   await WriteNodeAsync(nodes.AcerPwmGpu, PercentToPwm(gpu).ToString(CultureInfo.InvariantCulture))
-                       .ConfigureAwait(false);
+            if (!await Step(nodes.AcerPwmCpu!, PercentToPwm(cpu).ToString(CultureInfo.InvariantCulture), false)
+                    .ConfigureAwait(false)) return await Fail().ConfigureAwait(false);
+            if (nodes.AcerPwmGpu != null &&
+                !await Step(nodes.AcerPwmGpu, PercentToPwm(gpu).ToString(CultureInfo.InvariantCulture), false)
+                    .ConfigureAwait(false)) return await Fail().ConfigureAwait(false);
+            return true;
         }
 
         var result = await ApplyAsync(
             mode == FanMode.Custom ? ReadBackPolicy.FanSpeed : ReadBackPolicy.FanBehavior,
             write: Write,
             readBack: () => Task.FromResult(ReadFanState()),
-            matches: observed => observed.Mode == mode &&
-                                 (mode != FanMode.Custom ||
-                                  (Math.Abs(observed.CpuPercent - cpu) <= 1 &&
-                                   (nodes.AcerPwmGpu == null || Math.Abs(observed.GpuPercent - gpu) <= 1))))
+            matches: observed => FanMatches(observed, new FanState(mode, cpu, gpu), 1, nodes.AcerPwmGpu == null))
             .ConfigureAwait(false);
 
         return result.Applied;
+    }
+
+    /// <summary>
+    /// Whether a read-back fan state is the one that was asked for. A custom 100 % / 100 % request is written as
+    /// <c>100,100</c>, which is exactly what the firmware reports for maximum, so the read-back classifies it as
+    /// <see cref="FanMode.Max"/>; that is the same state, not a refusal.
+    /// </summary>
+    private static bool FanMatches(FanState observed, FanState target, int tolerance, bool ignoreGpu = false)
+    {
+        var observedMode = observed.Mode;
+        if (target.Mode == FanMode.Custom && observedMode == FanMode.Max &&
+            target.CpuPercent >= 100 && target.GpuPercent >= 100)
+        {
+            observedMode = FanMode.Custom;
+        }
+
+        if (observedMode != target.Mode) return false;
+        if (target.Mode != FanMode.Custom) return true;
+
+        return Math.Abs(observed.CpuPercent - target.CpuPercent) <= tolerance &&
+               (ignoreGpu || Math.Abs(observed.GpuPercent - target.GpuPercent) <= tolerance);
     }
 
     /// <summary>A percentage on hwmon's 0..255 scale.</summary>

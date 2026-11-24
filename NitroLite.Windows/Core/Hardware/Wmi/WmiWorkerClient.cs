@@ -149,8 +149,24 @@ public sealed class WmiWorkerClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// How long one command may take, from the moment it owns the pipe until its answer has been read. The slowest
+    /// legitimate exchange (the four-zone lighting sequence, or the capability scan) finishes in well under a second;
+    /// a method that has not returned after ten has hung in ACPI, and without a bound every later call would queue
+    /// behind it for the rest of the session.
+    /// </summary>
+    public static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>The bound one exchange gets on this connection. Settable so a test can use a short one.</summary>
+    public TimeSpan CommandTimeout { get; set; } = DefaultCommandTimeout;
+
     /// <summary>Sends one command and waits for its answer.</summary>
     /// <exception cref="IOException">The worker went away. The caller drops the client and falls back.</exception>
+    /// <exception cref="TimeoutException">
+    /// The worker did not answer within <see cref="CommandTimeout"/>. The
+    /// pipe is closed before this is thrown — a late answer would otherwise be read as the reply to the next command —
+    /// so the caller must drop the client.
+    /// </exception>
     public async Task<WmiWorkerResponse> SendAsync(
         WmiWorkerCommand command,
         JsonObject? args = null,
@@ -161,15 +177,41 @@ public sealed class WmiWorkerClient : IDisposable
         await _exchange.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
-            {
-                Type = WmiWorkerProtocol.TypeCommand,
-                Command = command,
-                Args = args
-            }, cancellationToken).ConfigureAwait(false);
+            if (_disposed) throw new IOException("the worker connection is closed");
 
-            return await WmiWorkerProtocol.ReadResponseAsync(_pipe, cancellationToken).ConfigureAwait(false)
-                   ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
+            // The clock starts once this exchange owns the pipe, so a caller queued behind a slow one is not charged
+            // for the wait. A hung exchange still releases the queue: it times out, closes the pipe, and every caller
+            // behind it fails fast on the closed pipe instead of waiting.
+            var limit = CommandTimeout;
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(limit);
+
+            WmiWorkerResponse? response;
+            try
+            {
+                await WmiWorkerProtocol.WriteAsync(_pipe, new WmiWorkerRequest
+                {
+                    Type = WmiWorkerProtocol.TypeCommand,
+                    Command = command,
+                    Args = args
+                }, timeoutCts.Token).ConfigureAwait(false);
+
+                response = await WmiWorkerProtocol.ReadResponseAsync(_pipe, timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                Dispose();
+                throw new TimeoutException($"the worker did not answer {command} within {limit.TotalSeconds:0} s");
+            }
+
+            // A cancelled pipe read can surface as an aborted I/O (a null frame) rather than as a cancellation.
+            if (response == null && timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                Dispose();
+                throw new TimeoutException($"the worker did not answer {command} within {limit.TotalSeconds:0} s");
+            }
+
+            return response ?? throw new IOException("the worker closed the pipe or sent a malformed reply");
         }
         finally
         {

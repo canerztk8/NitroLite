@@ -43,7 +43,8 @@ public sealed record OpenRgbWriteResult(OpenRgbWriteOutcome Outcome, string? Det
 /// <para>
 /// Writes are read back. OpenRGB is a shared bus: the user's own OpenRGB window, a game's lighting plugin and this
 /// client can all write the same device, and the last writer wins silently. Reading the device description after a
-/// write is the only way to tell "the colour is on the keyboard" from "the colour was sent".
+/// write is the only way to tell "the colour is on the keyboard" from "the colour was sent" — and below protocol 6
+/// the server does not answer a write at all, so the read-back is the only confirmation there is.
 /// </para>
 /// </summary>
 public sealed class OpenRgbClient : IDisposable
@@ -53,6 +54,13 @@ public sealed class OpenRgbClient : IDisposable
 
     /// <summary>How many times a write is read back before it is called unverified.</summary>
     public const int ReadBackAttempts = 3;
+
+    /// <summary>
+    /// Packets a reply may be preceded by before the client gives up on it. A server pushes
+    /// <c>DEVICE_LIST_UPDATED</c> on its own whenever its device list changes, so a reply can arrive behind one; a
+    /// server that only ever sends packets of the wrong kind is not answering.
+    /// </summary>
+    public const int MaxUnrelatedPackets = 16;
 
     /// <summary>Gap between read-back attempts. OpenRGB applies colours on its own thread.</summary>
     public static readonly TimeSpan ReadBackDelay = TimeSpan.FromMilliseconds(60);
@@ -92,12 +100,16 @@ public sealed class OpenRgbClient : IDisposable
     /// <summary>True while a server is connected.</summary>
     public bool IsConnected => _stream != null && _client?.Connected == true;
 
+    /// <summary>The protocol version agreed with the server; meaningful while connected.</summary>
+    public uint ProtocolVersion { get; private set; }
+
     /// <summary>Why the last operation failed, for the status line and the log.</summary>
     public string? LastError { get; private set; }
 
     /// <summary>
-    /// Connects and registers the client name. False when nothing is listening, which is the normal state on a machine
-    /// that does not run OpenRGB.
+    /// Connects, agrees a protocol version and registers the client name. False when nothing is listening, which is
+    /// the normal state on a machine that does not run OpenRGB, and when the server does not answer the version
+    /// request (an OpenRGB older than 0.5 speaks protocol 0, which this client does not drive).
     /// </summary>
     public async Task<bool> ConnectAsync(TimeSpan? timeout = null, CancellationToken ct = default)
     {
@@ -116,13 +128,28 @@ public sealed class OpenRgbClient : IDisposable
             await client.ConnectAsync(_host, _port, cts.Token).ConfigureAwait(false);
             _client = client;
             _stream = client.GetStream();
+            LastError = null;
 
-            // The name is what the OpenRGB window shows in its client list. Registering it is also the handshake:
-            // a server that answers this is a server that speaks the protocol. The answer is read here rather than
-            // left in the stream, because the next request would otherwise read it as its own reply.
+            // The version request is the handshake: every server since protocol 1 answers it, and the answer decides
+            // the layout of every controller description that follows.
+            await SendAsync(0, OpenRgbProtocol.PacketType.RequestProtocolVersion,
+                OpenRgbProtocol.BuildProtocolVersionPayload(OpenRgbProtocol.ClientProtocolVersion), cts.Token)
+                .ConfigureAwait(false);
+            var answer = await ReadReplyAsync(OpenRgbProtocol.PacketType.RequestProtocolVersion, cts.Token)
+                .ConfigureAwait(false);
+            if (answer == null || OpenRgbProtocol.ParseProtocolVersion(answer) is not uint serverVersion)
+            {
+                LastError ??= "OpenRGB sunucusu protokol sürümünü bildirmedi.";
+                Disconnect();
+                return false;
+            }
+
+            ProtocolVersion = OpenRgbProtocol.NegotiateVersion(serverVersion);
+
+            // The name is what the OpenRGB window shows in its client list. The server never answers it, so nothing
+            // is read: waiting here would only run out the timeout.
             await SendAsync(0, OpenRgbProtocol.PacketType.SetClientName,
                 OpenRgbProtocol.BuildClientNamePayload(_clientName), cts.Token).ConfigureAwait(false);
-            await ReadPayloadAsync(cts.Token).ConfigureAwait(false);
 
             LastError = null;
             return true;
@@ -159,17 +186,24 @@ public sealed class OpenRgbClient : IDisposable
     public async Task<OpenRgbController?> GetControllerAsync(int index, CancellationToken ct = default)
     {
         if (index < 0) return null;
-        var response = await RequestAsync((uint)index, OpenRgbProtocol.PacketType.RequestControllerData, [], ct)
-            .ConfigureAwait(false);
-        return response == null ? null : OpenRgbProtocol.ParseController(index, response);
+        if (!await ConnectAsync(ct: ct).ConfigureAwait(false)) return null;
+
+        // The answer is laid out for the version named in the request, so the same value parses it.
+        uint version = ProtocolVersion;
+        var response = await RequestAsync((uint)index, OpenRgbProtocol.PacketType.RequestControllerData,
+            OpenRgbProtocol.BuildControllerDataRequestPayload(version), ct).ConfigureAwait(false);
+        return response == null ? null : OpenRgbProtocol.ParseController(index, response, version);
     }
 
-    /// <summary>Puts the device in direct mode, which is what a per-LED write needs.</summary>
+    /// <summary>
+    /// Puts the device in direct mode, which is what a per-LED write needs. The server does not answer this packet,
+    /// so true means it was sent, not that the device changed mode.
+    /// </summary>
     public async Task<bool> SetCustomModeAsync(int deviceIndex, CancellationToken ct = default)
     {
-        var response = await RequestAsync((uint)deviceIndex, OpenRgbProtocol.PacketType.SetCustomMode, [], ct)
+        if (deviceIndex < 0) return false;
+        return await SendOnlyAsync((uint)deviceIndex, OpenRgbProtocol.PacketType.SetCustomMode, [], ct)
             .ConfigureAwait(false);
-        return response != null;
     }
 
     /// <summary>Writes every LED on the device and reads the result back.</summary>
@@ -180,6 +214,7 @@ public sealed class OpenRgbClient : IDisposable
     {
         ArgumentNullException.ThrowIfNull(colors);
         if (colors.Count == 0) return new OpenRgbWriteResult(OpenRgbWriteOutcome.Failed, "Renk listesi boş.");
+        if (colors.Count > ushort.MaxValue) return TooManyColors();
 
         var payload = OpenRgbProtocol.BuildUpdateLedsPayload(colors);
         return await WriteAndVerifyAsync(deviceIndex, OpenRgbProtocol.PacketType.UpdateLeds, payload, colors, ct)
@@ -196,16 +231,21 @@ public sealed class OpenRgbClient : IDisposable
         ArgumentNullException.ThrowIfNull(colors);
         if (colors.Count == 0) return new OpenRgbWriteResult(OpenRgbWriteOutcome.Failed, "Renk listesi boş.");
         if (zoneIndex < 0) return new OpenRgbWriteResult(OpenRgbWriteOutcome.Failed, "Bölge numarası negatif.");
+        if (colors.Count > ushort.MaxValue) return TooManyColors();
 
         var payload = OpenRgbProtocol.BuildUpdateZoneLedsPayload(zoneIndex, colors);
         return await WriteAndVerifyAsync(deviceIndex, OpenRgbProtocol.PacketType.UpdateZoneLeds, payload, colors, ct)
             .ConfigureAwait(false);
     }
 
+    private static OpenRgbWriteResult TooManyColors() =>
+        new(OpenRgbWriteOutcome.Failed, "OpenRGB tek pakette en fazla 65535 renk taşır.");
+
     /// <summary>
-    /// Sends one write and confirms it. A device whose description does not parse is reported as
-    /// <see cref="OpenRgbWriteOutcome.Unverified"/> rather than failed: the write may well have landed, and claiming
-    /// otherwise would make the app turn a working keyboard into a broken one.
+    /// Sends one write and confirms it by reading the device back; the server does not answer the write itself. A
+    /// device whose description does not parse is reported as <see cref="OpenRgbWriteOutcome.Unverified"/> rather
+    /// than failed: the write may well have landed, and claiming otherwise would make the app turn a working keyboard
+    /// into a broken one.
     /// </summary>
     private async Task<OpenRgbWriteResult> WriteAndVerifyAsync(
         int deviceIndex,
@@ -219,10 +259,11 @@ public sealed class OpenRgbClient : IDisposable
             return OpenRgbWriteResult.NotSupported(LastError);
         }
 
-        var response = await RequestAsync((uint)deviceIndex, type, payload, ct).ConfigureAwait(false);
-        if (response == null)
+        if (deviceIndex < 0) return new OpenRgbWriteResult(OpenRgbWriteOutcome.Failed, "Cihaz numarası negatif.");
+
+        if (!await SendOnlyAsync((uint)deviceIndex, type, payload, ct).ConfigureAwait(false))
         {
-            return new OpenRgbWriteResult(OpenRgbWriteOutcome.Failed, LastError ?? "OpenRGB yanıt vermedi.");
+            return new OpenRgbWriteResult(OpenRgbWriteOutcome.Failed, LastError ?? "OpenRGB'ye yazılamadı.");
         }
 
         for (int attempt = 0; attempt < ReadBackAttempts; attempt++)
@@ -269,7 +310,7 @@ public sealed class OpenRgbClient : IDisposable
         try
         {
             await SendAsync(deviceIndex, type, payload, ct).ConfigureAwait(false);
-            return await ReadPayloadAsync(ct).ConfigureAwait(false);
+            return await ReadReplyAsync(type, ct).ConfigureAwait(false);
         }
         catch (SocketException ex)
         {
@@ -291,6 +332,40 @@ public sealed class OpenRgbClient : IDisposable
         }
     }
 
+    /// <summary>Sends a packet the server does not answer. False when the connection is gone.</summary>
+    private async Task<bool> SendOnlyAsync(
+        uint deviceIndex,
+        OpenRgbProtocol.PacketType type,
+        byte[] payload,
+        CancellationToken ct)
+    {
+        if (!await ConnectAsync(ct: ct).ConfigureAwait(false)) return false;
+
+        try
+        {
+            await SendAsync(deviceIndex, type, payload, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (SocketException ex)
+        {
+            LastError = ex.Message;
+            Disconnect();
+            return false;
+        }
+        catch (IOException ex)
+        {
+            LastError = ex.Message;
+            Disconnect();
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            LastError = "OpenRGB isteği zaman aşımına uğradı.";
+            Disconnect();
+            return false;
+        }
+    }
+
     private async Task SendAsync(
         uint deviceIndex,
         OpenRgbProtocol.PacketType type,
@@ -306,31 +381,51 @@ public sealed class OpenRgbClient : IDisposable
         await stream.FlushAsync(cts.Token).ConfigureAwait(false);
     }
 
-    /// <summary>Reads one packet and returns its payload. A header this client cannot follow ends the connection.</summary>
-    private async Task<byte[]?> ReadPayloadAsync(CancellationToken ct)
+    /// <summary>
+    /// Reads packets until one of type <paramref name="expected"/> arrives and returns its payload. Packets the
+    /// server pushes on its own (a device-list change) are read and dropped, at most
+    /// <see cref="MaxUnrelatedPackets"/> of them. A header this client cannot follow ends the connection.
+    /// </summary>
+    private async Task<byte[]?> ReadReplyAsync(OpenRgbProtocol.PacketType expected, CancellationToken ct)
     {
         var stream = _stream ?? throw new IOException("OpenRGB bağlantısı yok.");
 
-        // One deadline for the whole packet, not one per read: a server that dribbles a byte at a time would
-        // otherwise hold the caller for as long as it liked.
+        // One deadline for the whole reply, not one per read: a server that dribbles a byte at a time, or one that
+        // sends nothing but unrelated packets, would otherwise hold the caller for as long as it liked.
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(IoTimeout);
 
         var header = new byte[OpenRgbProtocol.HeaderBytes];
-        if (!await ReadExactlyAsync(stream, header, cts.Token).ConfigureAwait(false)) return null;
-
-        if (!OpenRgbProtocol.TryParseHeader(header, out _, out _, out int payloadBytes))
+        for (int packet = 0; packet <= MaxUnrelatedPackets; packet++)
         {
-            LastError = "OpenRGB sunucusu tanınmayan bir paket gönderdi.";
-            Disconnect();
-            return null;
+            if (!await ReadExactlyAsync(stream, header, cts.Token).ConfigureAwait(false))
+            {
+                LastError = "OpenRGB bağlantıyı kapattı.";
+                Disconnect();
+                return null;
+            }
+
+            if (!OpenRgbProtocol.TryParseHeader(header, out _, out var type, out int payloadBytes))
+            {
+                LastError = "OpenRGB sunucusu tanınmayan bir paket gönderdi.";
+                Disconnect();
+                return null;
+            }
+
+            var payload = payloadBytes == 0 ? Array.Empty<byte>() : new byte[payloadBytes];
+            if (payloadBytes > 0 && !await ReadExactlyAsync(stream, payload, cts.Token).ConfigureAwait(false))
+            {
+                LastError = "OpenRGB bağlantıyı kapattı.";
+                Disconnect();
+                return null;
+            }
+
+            if (type == expected) return payload;
         }
 
-        if (payloadBytes == 0) return [];
-
-        var payload = new byte[payloadBytes];
-        if (!await ReadExactlyAsync(stream, payload, cts.Token).ConfigureAwait(false)) return null;
-        return payload;
+        LastError = "OpenRGB beklenen yanıtı göndermedi.";
+        Disconnect();
+        return null;
     }
 
     private static async Task<bool> ReadExactlyAsync(NetworkStream stream, byte[] buffer, CancellationToken ct)
@@ -351,6 +446,7 @@ public sealed class OpenRgbClient : IDisposable
         try { _client?.Dispose(); } catch { }
         _stream = null;
         _client = null;
+        ProtocolVersion = 0;
     }
 
     public void Dispose()

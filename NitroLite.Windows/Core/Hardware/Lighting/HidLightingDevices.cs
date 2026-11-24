@@ -28,16 +28,90 @@ public static class HidLightingDevices
     private static IHidLightingWriter? _cached;
     private static bool _probed;
     private static string _lastProbeDetail = "";
+    private static DateTime _nullProbedAtUtc;
 
-    /// <summary>The controller found last, or null when none was found. Probes once per process.</summary>
+    /// <summary>How long a "no controller" answer is trusted before the next request walks the HID stack again.</summary>
+    internal static readonly TimeSpan NullProbeLifetime = TimeSpan.FromSeconds(30);
+
+    /// <summary>Test seam: replaces the SetupAPI walk. Null in production.</summary>
+    internal static Func<IHidLightingWriter?>? ProbeOverride { get; set; }
+
+    /// <summary>Test seam: the clock for the "no controller" lifetime.</summary>
+    internal static Func<DateTime> UtcNow { get; set; } = static () => DateTime.UtcNow;
+
+    /// <summary>
+    /// The controller found last, or null when none was found. A found controller is cached until a write through it
+    /// fails; a "none found" answer is trusted for <see cref="NullProbeLifetime"/> only, so a keyboard that is plugged
+    /// in or re-enumerated later is picked up without a restart.
+    /// </summary>
     public static IHidLightingWriter? FindWriter()
     {
         lock (Gate)
         {
-            if (_probed) return _cached;
+            if (_probed)
+            {
+                if (_cached != null) return _cached;
+                if (UtcNow() - _nullProbedAtUtc < NullProbeLifetime) return null;
+            }
+
             _probed = true;
-            _cached = Probe();
+            var found = ProbeOverride != null ? ProbeOverride() : Probe();
+            _cached = found == null ? null : new InvalidatingWriter(found);
+            if (_cached == null) _nullProbedAtUtc = UtcNow();
             return _cached;
+        }
+    }
+
+    /// <summary>
+    /// Drops the cached writer (disposing its handle) so the next <see cref="FindWriter"/> probes again. Called by the
+    /// cached writer itself when a write fails, which is how a router's "forget the HID path" reaches this cache.
+    /// </summary>
+    internal static void Invalidate(IHidLightingWriter? only = null)
+    {
+        lock (Gate)
+        {
+            if (only != null && !ReferenceEquals(_cached, only)) return;
+            _cached?.Dispose();
+            _cached = null;
+            _probed = false;
+        }
+    }
+
+    /// <summary>Wraps the probed writer so a failed or throwing write invalidates the cache.</summary>
+    private sealed class InvalidatingWriter : IHidLightingWriter
+    {
+        private readonly IHidLightingWriter _inner;
+        private bool _disposed;
+
+        public InvalidatingWriter(IHidLightingWriter inner) => _inner = inner;
+
+        public string Description => _inner.Description;
+        public string Protocol => _inner.Protocol;
+        public bool CanWrite => _inner.CanWrite;
+        public string? Refusal => _inner.Refusal;
+
+        public bool TryWrite(KeyboardLightingFrame frame, out string? error)
+        {
+            bool ok;
+            try
+            {
+                ok = _inner.TryWrite(frame, out error);
+            }
+            catch
+            {
+                Invalidate(this);
+                throw;
+            }
+
+            if (!ok && _inner.CanWrite) Invalidate(this);
+            return ok;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _inner.Dispose();
         }
     }
 

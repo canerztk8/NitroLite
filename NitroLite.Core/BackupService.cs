@@ -221,31 +221,13 @@ public static class BackupService
         // before the first restore existed nowhere on disk. The same applies to the RGB presets below, which had no
         // safety copy at all.
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
-        try
-        {
-            if (File.Exists(settingsPath))
-            {
-                AtomicFile.WriteAllText(
-                    $"{settingsPath}{PreRestoreSuffix}-{stamp}", BoundedTextFile.ReadAllText(settingsPath));
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn("The safety backup before the restore could not be written", $"{settingsPath}: {ex.Message}");
-        }
+        SetAside(settingsPath, stamp, "The safety backup before the restore could not be written");
+        SetAside(rgbPresetsPath, stamp, "The RGB presets could not be set aside before the restore");
 
-        try
-        {
-            if (File.Exists(rgbPresetsPath))
-            {
-                AtomicFile.WriteAllText(
-                    $"{rgbPresetsPath}{PreRestoreSuffix}-{stamp}", BoundedTextFile.ReadAllText(rgbPresetsPath));
-            }
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn("The RGB presets could not be set aside before the restore", $"{rgbPresetsPath}: {ex.Message}");
-        }
+        // The game profiles are overwritten below exactly like the presets, and they are the part a user spends the
+        // most time on: every per-game fan, power and RGB rule. Without this copy a wrong backup replaced them with no
+        // way back.
+        SetAside(gameProfilesPath, stamp, "The game profiles could not be set aside before the restore");
 
         try
         {
@@ -308,6 +290,28 @@ public static class BackupService
             AppLog.Warn(string.Format(CultureInfo.InvariantCulture, "Could not add {0} to backup — {1}", Loc.English(label), $"{path}: {ex.Message}"));
             result.Skipped.Add(Loc.T(label));
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Copies a live file to <c>&lt;path&gt;.pre-restore-&lt;stamp&gt;</c> before a restore overwrites it. A failure is
+    /// logged and the restore still goes ahead: refusing to restore because the safety copy could not be made would
+    /// be a worse answer than restoring without one.
+    /// </summary>
+    private static void SetAside(string? path, string stamp, string logTitle)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                AtomicFile.WriteAllText($"{path}{PreRestoreSuffix}-{stamp}", BoundedTextFile.ReadAllText(path));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(logTitle, $"{path}: {ex.Message}");
         }
     }
 

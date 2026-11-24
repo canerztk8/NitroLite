@@ -469,7 +469,7 @@ public class HalStep5Tests
         Assert.Equal((byte)'G', packet[2]);
         Assert.Equal((byte)'B', packet[3]);
         Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(packet.AsSpan(4)));
-        Assert.Equal(1000u, BinaryPrimitives.ReadUInt32LittleEndian(packet.AsSpan(8)));
+        Assert.Equal(1050u, BinaryPrimitives.ReadUInt32LittleEndian(packet.AsSpan(8)));
         Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(packet.AsSpan(12)));
         Assert.Equal(0xAA, packet[16]);
         Assert.Equal(0xBB, packet[17]);
@@ -497,24 +497,24 @@ public class HalStep5Tests
     }
 
     [Fact]
-    public void OpenRgb_ClientNamePayload_IsLengthPrefixedUtf8()
+    public void OpenRgb_ClientNamePayload_IsNulTerminatedUtf8()
     {
         var payload = OpenRgbProtocol.BuildClientNamePayload("NitroLite");
 
-        Assert.Equal(4 + 9, payload.Length);
-        Assert.Equal(9u, BinaryPrimitives.ReadUInt32LittleEndian(payload));
-        Assert.Equal("NitroLite", Encoding.UTF8.GetString(payload, 4, 9));
+        Assert.Equal(9 + 1, payload.Length);
+        Assert.Equal("NitroLite", Encoding.UTF8.GetString(payload, 0, 9));
+        Assert.Equal(0, payload[9]);
     }
 
     [Fact]
-    public void OpenRgb_UpdateLedsPayload_CarriesSizeCountAndTriples()
+    public void OpenRgb_UpdateLedsPayload_CarriesSizeCountAndFourByteColours()
     {
         var payload = OpenRgbProtocol.BuildUpdateLedsPayload([new RgbColor(0x11, 0x22, 0x33), new RgbColor(0x44, 0x55, 0x66)]);
 
-        Assert.Equal(4 + 4 + 6, payload.Length);
-        Assert.Equal(10u, BinaryPrimitives.ReadUInt32LittleEndian(payload));
-        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(4)));
-        Assert.Equal(new byte[] { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 }, payload[8..]);
+        Assert.Equal(4 + 2 + 8, payload.Length);
+        Assert.Equal((uint)payload.Length, BinaryPrimitives.ReadUInt32LittleEndian(payload));
+        Assert.Equal((ushort)2, BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(4)));
+        Assert.Equal(new byte[] { 0x11, 0x22, 0x33, 0x00, 0x44, 0x55, 0x66, 0x00 }, payload[6..]);
     }
 
     [Fact]
@@ -522,11 +522,11 @@ public class HalStep5Tests
     {
         var payload = OpenRgbProtocol.BuildUpdateZoneLedsPayload(3, [new RgbColor(1, 2, 3)]);
 
-        Assert.Equal(4 + 8 + 3, payload.Length);
-        Assert.Equal(11u, BinaryPrimitives.ReadUInt32LittleEndian(payload));
+        Assert.Equal(4 + 4 + 2 + 4, payload.Length);
+        Assert.Equal((uint)payload.Length, BinaryPrimitives.ReadUInt32LittleEndian(payload));
         Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(4)));
-        Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(8)));
-        Assert.Equal(new byte[] { 1, 2, 3 }, payload[12..]);
+        Assert.Equal((ushort)1, BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(8)));
+        Assert.Equal(new byte[] { 1, 2, 3, 0 }, payload[10..]);
     }
 
     [Fact]
@@ -545,7 +545,7 @@ public class HalStep5Tests
     [Fact]
     public void OpenRgb_ParseController_ReadsNameLedsAndColours()
     {
-        var payload = BuildControllerPayload("Acer Keyboard", [new RgbColor(0x10, 0x20, 0x30), new RgbColor(0x40, 0x50, 0x60)]);
+        var payload = OpenRgbWire.BuildController("Acer Keyboard", [new RgbColor(0x10, 0x20, 0x30), new RgbColor(0x40, 0x50, 0x60)]);
 
         var controller = OpenRgbProtocol.ParseController(0, payload);
 
@@ -561,7 +561,7 @@ public class HalStep5Tests
     [Fact]
     public void OpenRgb_ParseController_TruncatedPayloadIsNotTrusted()
     {
-        var payload = BuildControllerPayload("Acer Keyboard", [new RgbColor(1, 2, 3)]);
+        var payload = OpenRgbWire.BuildController("Acer Keyboard", [new RgbColor(1, 2, 3)]);
         var truncated = payload[..(payload.Length - 2)];
 
         var controller = OpenRgbProtocol.ParseController(0, truncated);
@@ -607,7 +607,7 @@ public class HalStep5Tests
     [Fact]
     public async Task OpenRgb_LoopbackServer_AppliesAndVerifiesTheWrite()
     {
-        using var server = new FakeOpenRgbServer();
+        using var server = new OpenRgbFakeServer();
         await server.StartAsync();
 
         using var client = new OpenRgbClient(OpenRgbClient.DefaultHost, server.Port, delay: (_, _) => Task.CompletedTask);
@@ -631,7 +631,7 @@ public class HalStep5Tests
     [Fact]
     public async Task OpenRgb_LoopbackServer_ZoneWriteCarriesTheZoneIndex()
     {
-        using var server = new FakeOpenRgbServer();
+        using var server = new OpenRgbFakeServer();
         await server.StartAsync();
 
         using var client = new OpenRgbClient(OpenRgbClient.DefaultHost, server.Port, delay: (_, _) => Task.CompletedTask);
@@ -646,7 +646,7 @@ public class HalStep5Tests
     [Fact]
     public async Task OpenRgb_LoopbackServer_WriteThatDoesNotStickIsReportedAsFailed()
     {
-        using var server = new FakeOpenRgbServer { IgnoreWrites = true };
+        using var server = new OpenRgbFakeServer { IgnoreWrites = true };
         await server.StartAsync();
 
         using var client = new OpenRgbClient(OpenRgbClient.DefaultHost, server.Port, delay: (_, _) => Task.CompletedTask);
@@ -656,228 +656,5 @@ public class HalStep5Tests
 
         Assert.Equal(OpenRgbWriteOutcome.Failed, result.Outcome);
         Assert.NotNull(result.Detail);
-    }
-
-    // ------------------------------------------------------------------ helpers
-
-    /// <summary>Builds a controller description in the layout <c>REQUEST_CONTROLLER_DATA</c> answers with.</summary>
-    private static byte[] BuildControllerPayload(string name, IReadOnlyList<RgbColor> colors)
-    {
-        var data = new List<byte>();
-
-        void U32(uint value)
-        {
-            var buffer = new byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer, value);
-            data.AddRange(buffer);
-        }
-
-        void Fixed(string text)
-        {
-            var field = new byte[OpenRgbProtocol.NameFieldBytes];
-            Encoding.UTF8.GetBytes(text).CopyTo(field, 0);
-            data.AddRange(field);
-        }
-
-        U32(0);                       // controller type
-        Fixed(name);
-        Fixed("Acer");                // vendor
-        Fixed("Keyboard");            // description
-        Fixed("1.0");                 // version
-        Fixed("");                    // serial
-        Fixed("");                    // location
-
-        U32(0);                       // mode count
-
-        U32(1);                       // zone count
-        Fixed("Zone 1");
-        U32(1);                       // type
-        U32(1);                       // leds min
-        U32((uint)colors.Count);      // leds max
-        U32((uint)colors.Count);      // leds count
-        U32(0);                       // matrix size
-        U32(0);                       // segment count
-
-        U32((uint)colors.Count);      // led count
-        for (int i = 0; i < colors.Count; i++)
-        {
-            Fixed($"LED {i}");
-            U32((uint)i);
-        }
-
-        U32((uint)colors.Count);      // colour count
-        foreach (var color in colors)
-        {
-            data.Add(color.R);
-            data.Add(color.G);
-            data.Add(color.B);
-        }
-
-        var payload = new byte[4 + data.Count];
-        BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)data.Count);
-        data.CopyTo(payload, 4);
-        return payload;
-    }
-
-    /// <summary>
-    /// A loopback OpenRGB server: enough of the protocol to prove the client's framing, its handshake and its
-    /// read-back. It keeps the colours it was sent, so a write that does not stick is a real failure rather than a
-    /// mock that always agrees.
-    /// </summary>
-    private sealed class FakeOpenRgbServer : IDisposable
-    {
-        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-        private readonly CancellationTokenSource _cts = new();
-        private Task? _loop;
-
-        public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
-        public List<RgbColor> Colors { get; } = new();
-        public List<OpenRgbProtocol.PacketType> PacketTypes { get; } = new();
-        public int LastZoneIndex { get; private set; } = -1;
-        public bool IgnoreWrites { get; init; }
-
-        public Task StartAsync()
-        {
-            _listener.Start();
-            _loop = Task.Run(AcceptLoopAsync);
-            return Task.CompletedTask;
-        }
-
-        private async Task AcceptLoopAsync()
-        {
-            try
-            {
-                while (!_cts.IsCancellationRequested)
-                {
-                    var client = await _listener.AcceptTcpClientAsync(_cts.Token);
-                    _ = Task.Run(() => ServeAsync(client));
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (SocketException) { }
-            catch (ObjectDisposedException) { }
-        }
-
-        private async Task ServeAsync(TcpClient client)
-        {
-            using (client)
-            {
-                var stream = client.GetStream();
-                try
-                {
-                    while (!_cts.IsCancellationRequested)
-                    {
-                        var header = new byte[OpenRgbProtocol.HeaderBytes];
-                        if (!await ReadExactlyAsync(stream, header)) return;
-                        if (!OpenRgbProtocol.TryParseHeader(header, out uint device, out var type, out int length)) return;
-
-                        var payload = new byte[length];
-                        if (length > 0 && !await ReadExactlyAsync(stream, payload)) return;
-
-                        lock (PacketTypes) PacketTypes.Add(type);
-
-                        switch (type)
-                        {
-                            case OpenRgbProtocol.PacketType.SetClientName:
-                                await SendAsync(stream, device, type, []);
-                                break;
-
-                            case OpenRgbProtocol.PacketType.RequestControllerCount:
-                            {
-                                var answer = new byte[4];
-                                BinaryPrimitives.WriteUInt32LittleEndian(answer, 1);
-                                await SendAsync(stream, device, type, answer);
-                                break;
-                            }
-
-                            case OpenRgbProtocol.PacketType.RequestControllerData:
-                                await SendAsync(stream, device, type, BuildControllerPayload("Acer Keyboard", Snapshot()));
-                                break;
-
-                            case OpenRgbProtocol.PacketType.SetCustomMode:
-                                await SendAsync(stream, device, type, []);
-                                break;
-
-                            case OpenRgbProtocol.PacketType.UpdateLeds:
-                            {
-                                if (!IgnoreWrites) ApplyColors(payload, offset: 8);
-                                await SendAsync(stream, device, type, []);
-                                break;
-                            }
-
-                            case OpenRgbProtocol.PacketType.UpdateZoneLeds:
-                            {
-                                LastZoneIndex = (int)BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(4));
-                                if (!IgnoreWrites) ApplyColors(payload, offset: 12);
-                                await SendAsync(stream, device, type, []);
-                                break;
-                            }
-
-                            default:
-                                await SendAsync(stream, device, type, []);
-                                break;
-                        }
-                    }
-                }
-                catch (IOException) { }
-                catch (SocketException) { }
-                catch (ObjectDisposedException) { }
-            }
-        }
-
-        private RgbColor[] Snapshot()
-        {
-            lock (Colors)
-            {
-                if (Colors.Count == 0)
-                {
-                    Colors.Add(new RgbColor(0, 0, 0));
-                    Colors.Add(new RgbColor(0, 0, 0));
-                }
-                return Colors.ToArray();
-            }
-        }
-
-        private void ApplyColors(byte[] payload, int offset)
-        {
-            int count = (int)BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(offset - 4));
-            lock (Colors)
-            {
-                Colors.Clear();
-                for (int i = 0; i < count; i++)
-                {
-                    int at = offset + i * 3;
-                    if (at + 2 >= payload.Length) break;
-                    Colors.Add(new RgbColor(payload[at], payload[at + 1], payload[at + 2]));
-                }
-            }
-        }
-
-        private static async Task SendAsync(NetworkStream stream, uint device, OpenRgbProtocol.PacketType type, byte[] payload)
-        {
-            var packet = OpenRgbProtocol.BuildPacket(device, type, payload);
-            await stream.WriteAsync(packet);
-            await stream.FlushAsync();
-        }
-
-        private static async Task<bool> ReadExactlyAsync(NetworkStream stream, byte[] buffer)
-        {
-            int offset = 0;
-            while (offset < buffer.Length)
-            {
-                int read = await stream.ReadAsync(buffer.AsMemory(offset));
-                if (read <= 0) return false;
-                offset += read;
-            }
-            return true;
-        }
-
-        public void Dispose()
-        {
-            _cts.Cancel();
-            try { _listener.Stop(); } catch { }
-            try { _loop?.Wait(TimeSpan.FromSeconds(2)); } catch { }
-            _cts.Dispose();
-        }
     }
 }

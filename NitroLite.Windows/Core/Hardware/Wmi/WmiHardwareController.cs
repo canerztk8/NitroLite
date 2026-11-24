@@ -135,12 +135,33 @@ public sealed class WmiHardwareController : IHardwareController
         {
             if (_client != null) return true;
             _client = await _launcher.StartAsync().ConfigureAwait(false);
+
+            // Disposed while the helper was starting: the connection is closed rather than left behind.
+            if (_disposed)
+            {
+                DropClient();
+                return false;
+            }
+
+            if (_client != null) _readReconnectBlocked = false;
             return _client != null;
         }
         finally
         {
             _connectGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Connects because the user asked for it: the settings page's button, or the elevated auto-start. Unlike
+    /// <see cref="EnsureConnectedAsync"/> it clears the launcher's memory of an earlier start or handshake failure, so
+    /// this is the one path that may try again after the helper could not be reached.
+    /// </summary>
+    public Task<bool> ConnectOnRequestAsync()
+    {
+        if (_disposed) return Task.FromResult(false);
+        _launcher.AllowRetry();
+        return EnsureConnectedAsync();
     }
 
     public async Task<HardwareCapabilities> GetCapabilitiesAsync()
@@ -229,10 +250,16 @@ public sealed class WmiHardwareController : IHardwareController
         // are put through the plausibility window, and only a machine that answered like a machine is trusted with
         // the tachometer. A failed probe costs nothing: the readings still show, and the stall watchdog stays in
         // standby instead of judging a real die against a number that was never a speed.
+        // The probe only counts as run once the worker actually answered: a dropped transport is not the machine
+        // saying "no", and recording it as such would leave the session without a tachometer for good.
         if (!layout.Verified && !_sensorProbeDone)
         {
-            _sensorProbeDone = true;
-            _discoveredSensors = await ProbeSensorsAsync(layout).ConfigureAwait(false);
+            var (answered, discovered) = await ProbeSensorsAsync(layout).ConfigureAwait(false);
+            if (answered)
+            {
+                _discoveredSensors = discovered;
+                _sensorProbeDone = true;
+            }
         }
 
         var tachometerConfirmed = layout.Verified || _discoveredSensors != null;
@@ -258,9 +285,10 @@ public sealed class WmiHardwareController : IHardwareController
 
     /// <summary>
     /// Asks the firmware for every sensor id in <paramref name="layout"/> and decides whether the answers describe a
-    /// real machine. Returns the confirmed layout, or null when the machine did not answer plausibly.
+    /// real machine. <c>Answered</c> is false when no response arrived at all (no worker, or the pipe dropped); the
+    /// layout is the confirmed one, or null when the machine did not answer plausibly.
     /// </summary>
-    private async Task<SensorLayout?> ProbeSensorsAsync(SensorLayout layout)
+    private async Task<(bool Answered, SensorLayout? Layout)> ProbeSensorsAsync(SensorLayout layout)
     {
         var response = await SendAsync(WmiWorkerCommand.ReadTelemetry, new JsonObject
         {
@@ -271,8 +299,9 @@ public sealed class WmiHardwareController : IHardwareController
             ["gpuTempSensor"] = layout.GpuTempSensor
         }).ConfigureAwait(false);
 
-        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
-        if (data["sensors"] is not JsonObject sensors) return null;
+        if (response is null) return (false, null);
+        if (!response.Ok || response.Data is not JsonObject data) return (true, null);
+        if (data["sensors"] is not JsonObject sensors) return (true, null);
 
         var answered = new Dictionary<string, int?>(StringComparer.Ordinal)
         {
@@ -283,7 +312,7 @@ public sealed class WmiHardwareController : IHardwareController
             [SensorDiscovery.GpuTemp] = ReadSensorValue(sensors, SensorDiscovery.GpuTemp)
         };
 
-        return SensorDiscovery.Resolve(answered, layout);
+        return (true, SensorDiscovery.Resolve(answered, layout));
     }
 
     /// <summary>
@@ -467,6 +496,7 @@ public sealed class WmiHardwareController : IHardwareController
     {
         // Automatic is a firmware decision (Advanced Optimus); it is not a value that can be written.
         if (mode is not (GpuOperatingMode.Optimus or GpuOperatingMode.DiscreteGpu)) return false;
+        if (_disposed) return false;
 
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
@@ -1003,6 +1033,9 @@ public sealed class WmiHardwareController : IHardwareController
         Func<T, bool> matches,
         string requested = "") where T : struct
     {
+        // A disposed controller writes nothing. Not counted against the capability: nothing reached the hardware.
+        if (_disposed) return ReadBackResult.NoTransport("the WMI backend has been disposed");
+
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -1062,6 +1095,13 @@ public sealed class WmiHardwareController : IHardwareController
     {
         var response = await SendAsync(command, args).ConfigureAwait(false);
         if (response is null) throw new WmiTransportUnavailableException(_launcher.LastError);
+
+        // "This machine does not have it" is not the firmware ignoring a write, and must not be counted as one: the
+        // MUX setter answers not_supported when the Acer registry mask is missing, and three of those used to switch
+        // the control off for good.
+        if (!response.Ok && string.Equals(response.ErrorCode, WmiOperationResult.CodeNotSupported, StringComparison.Ordinal))
+            throw new WmiCapabilityNotSupportedException(string.IsNullOrWhiteSpace(response.Error) ? null : response.Error);
+
         return response.Ok;
     }
 
@@ -1072,6 +1112,12 @@ public sealed class WmiHardwareController : IHardwareController
     private async Task<WmiWorkerResponse?> SendAsync(WmiWorkerCommand command, JsonObject? args = null)
     {
         if (_disposed) return null;
+
+        // After a timeout dropped the worker, a read does not start a new one: the very next read in the same
+        // telemetry poll would otherwise launch a fresh helper — and raise UAC — with nobody having asked. A write or
+        // the explicit start path reconnects, and a successful connection lifts this again.
+        if (_readReconnectBlocked && _client == null && IsReadOnly(command)) return null;
+
         if (!await EnsureConnectedAsync().ConfigureAwait(false)) return null;
 
         var client = _client;
@@ -1081,6 +1127,16 @@ public sealed class WmiHardwareController : IHardwareController
         {
             return await client.SendAsync(command, args).ConfigureAwait(false);
         }
+        catch (TimeoutException ex)
+        {
+            // A hung ACPI method would otherwise hold the pipe, and every later call behind it, forever. The client has
+            // already closed its end; dropping it lets the worker exit once the method returns, and the next call
+            // starts a fresh one.
+            AppLog.Warn("--wmi-worker did not answer in time", $"{command}: {ex.Message}");
+            _readReconnectBlocked = true;
+            DropClient();
+            return null;
+        }
         catch (Exception ex)
         {
             AppLog.Warn("--wmi-worker connection lost", $"{command}: {ex.Message}");
@@ -1088,6 +1144,23 @@ public sealed class WmiHardwareController : IHardwareController
             return null;
         }
     }
+
+    /// <summary>
+    /// Set when a command timed out and the worker was dropped; cleared by the next successful connection. While set,
+    /// read-only commands answer "no worker" instead of starting a new helper.
+    /// </summary>
+    private volatile bool _readReconnectBlocked;
+
+    /// <summary>The commands that only read. Everything else writes and may reconnect.</summary>
+    private static bool IsReadOnly(WmiWorkerCommand command) => command is
+        WmiWorkerCommand.Ping or
+        WmiWorkerCommand.GetWorkerCapabilities or
+        WmiWorkerCommand.ReadTelemetry or
+        WmiWorkerCommand.ReadDeviceState or
+        WmiWorkerCommand.GetKeyboardBacklight or
+        WmiWorkerCommand.GetCoolBoost or
+        WmiWorkerCommand.GetLcdOverdrive or
+        WmiWorkerCommand.GetBacklightTimeout;
 
     private void DropClient()
     {
@@ -1179,8 +1252,10 @@ public sealed class WmiHardwareController : IHardwareController
         if (_disposed) return;
         _disposed = true;
         DropClient();
-        _writeGate.Dispose();
-        _connectGate.Dispose();
+
+        // The two gates are not disposed: a call already inside one still releases it in its finally, and releasing a
+        // disposed SemaphoreSlim throws ObjectDisposedException on that caller's thread. They hold no unmanaged
+        // resource unless AvailableWaitHandle is read, which this class never does; _disposed stops new callers.
         _launcher.Dispose();
     }
 }

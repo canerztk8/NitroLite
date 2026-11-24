@@ -443,11 +443,22 @@ public class CpuPowerService : ICpuBoostAccess, IDisposable
                         uint val = (uint)mode;
                         bool success = true;
 
+                        // Snapshot before the first native write: the powercfg fallback below snapshots again, and if
+                        // it did that after a native AC write it would "roll back" to the value just written.
+                        var previousAc = targetAc ? QueryBoostModeExact(true) : null;
+                        var previousDc = targetDc ? QueryBoostModeExact(false) : null;
+                        bool wroteAc = false;
+                        bool wroteDc = false;
+
                         if (targetAc)
                         {
                             if (PowerWriteACValueIndex(IntPtr.Zero, ref schemeGuid, ref subGroup, ref setting, val) != 0)
                             {
                                 success = false;
+                            }
+                            else
+                            {
+                                wroteAc = true;
                             }
                         }
 
@@ -456,6 +467,10 @@ public class CpuPowerService : ICpuBoostAccess, IDisposable
                             if (PowerWriteDCValueIndex(IntPtr.Zero, ref schemeGuid, ref subGroup, ref setting, val) != 0)
                             {
                                 success = false;
+                            }
+                            else
+                            {
+                                wroteDc = true;
                             }
                         }
 
@@ -474,6 +489,23 @@ public class CpuPowerService : ICpuBoostAccess, IDisposable
                             UpdateCurrentModeAfterSuccess(mode, targetAc, targetDc);
                             return true;
                         }
+
+                        // A native write landed but the sequence did not finish: put the AC value back before the
+                        // powercfg fallback runs, so the fallback starts from the user's real value.
+                        bool restored = false;
+                        if (wroteAc && previousAc.HasValue)
+                        {
+                            restored |= PowerWriteACValueIndex(
+                                IntPtr.Zero, ref schemeGuid, ref subGroup, ref setting, (uint)previousAc.Value) == 0;
+                        }
+
+                        if (wroteDc && previousDc.HasValue)
+                        {
+                            restored |= PowerWriteDCValueIndex(
+                                IntPtr.Zero, ref schemeGuid, ref subGroup, ref setting, (uint)previousDc.Value) == 0;
+                        }
+
+                        if (restored) _ = PowerSetActiveScheme(IntPtr.Zero, ref schemeGuid);
                     }
                 }
                 catch (Exception ex)

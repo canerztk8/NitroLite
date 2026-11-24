@@ -162,10 +162,34 @@ public static class Loc
     /// Translated text for use inside a single-quoted PowerShell string (the elevated scripts report errors with
     /// <c>throw '…'</c>): apostrophes are doubled so a translation such as "n'a pas" cannot end the string.
     /// </summary>
-    public static string Ps(string source) => T(source).Replace("'", "''");
+    public static string Ps(string source) => PsQuote(T(source));
 
     /// <inheritdoc cref="Ps(string)"/>
-    public static string Ps(LocInterpolation text) => text.Resolve(CultureInfo.CurrentCulture).Replace("'", "''");
+    public static string Ps(LocInterpolation text) => PsQuote(text.Resolve(CultureInfo.CurrentCulture));
+
+    /// <summary>
+    /// <paramref name="text"/> made safe to place between single quotes in a PowerShell script, without translating
+    /// it. Use this for paths and other data; <see cref="Ps(string)"/> is the same escape for translated text.
+    /// <para>
+    /// PowerShell treats four Unicode characters as single quotes as well as the ASCII one: U+2018 and U+2019 (the
+    /// curly quotes an autocorrecting keyboard produces, as in <c>O’Brien</c>), U+201A and U+201B. Doubling only the
+    /// ASCII apostrophe left a profile folder or a translation containing any of the others able to end the string
+    /// and run the rest as code — in a script that runs elevated. Each of the five is doubled, which PowerShell reads
+    /// back as one literal character of the same kind.
+    /// </para>
+    /// </summary>
+    public static string PsQuote(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+
+        var sb = new System.Text.StringBuilder(text.Length + 8);
+        foreach (var c in text)
+        {
+            sb.Append(c);
+            if (c is '\'' or '‘' or '’' or '‚' or '‛') sb.Append(c);
+        }
+        return sb.ToString();
+    }
 
     /// <summary>Translates <paramref name="source"/> when a translation exists; otherwise null. Used for XAML text.</summary>
     public static string? TryT(string? source)

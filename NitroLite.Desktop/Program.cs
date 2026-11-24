@@ -282,14 +282,31 @@ internal static class Program
 
             hardware.EnsureConnectedAsync().GetAwaiter().GetResult();
 
+            // A fixed speed goes through the same thermal floor as the window's sliders, and is resolved before
+            // anything is written: a command that is going to be refused must not leave half of itself applied.
+            // Without a temperature there is no floor to apply, so the fixed write is refused rather than sent blind.
+            int customCpu = 0, customGpu = 0;
+            if (command.Fan == FanMode.Custom)
+            {
+                var sample = hardware.GetMonitorDataAsync().GetAwaiter().GetResult();
+                if (!CliCommands.TryResolveFixedFanSpeed(
+                        command.FanPercent ?? services.Settings.CustomFanCpuPercent,
+                        command.FanPercent ?? services.Settings.CustomFanGpuPercent,
+                        sample, out customCpu, out customGpu, out var fanError))
+                {
+                    Console.Error.WriteLine(fanError);
+                    return 1;
+                }
+            }
+
             bool ok = true;
             if (command.Mode is OperatingMode mode)
                 ok &= hardware.SetOperatingModeAsync(mode).GetAwaiter().GetResult();
 
             if (command.Fan is FanMode fan)
             {
-                ok &= command.FanPercent is int percent
-                    ? hardware.SetFanModeAsync(fan, percent, percent).GetAwaiter().GetResult()
+                ok &= fan == FanMode.Custom
+                    ? hardware.SetFanModeAsync(fan, customCpu, customGpu).GetAwaiter().GetResult()
                     : hardware.SetFanModeAsync(fan).GetAwaiter().GetResult();
             }
 

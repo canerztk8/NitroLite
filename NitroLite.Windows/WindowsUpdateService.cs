@@ -70,11 +70,13 @@ public sealed class WindowsUpdateService : IUpdateService
             package = await UpdateService.DownloadAsync(url, result.SizeBytes, progress, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!UpdateService.VerifyDigest(package, result.Sha256))
+            // One open handle for the digest check and the extraction, so the file that was verified is the file that
+            // is unpacked; every staged file is checked again as it is copied into the install folder.
+            if (!UpdateService.TryExtractVerifiedToStaging(package, result.Sha256, out var staged) || staged == null)
                 return UpdateInstallResult.Fail(Loc.T("İndirilen paket yayınlanan özetle eşleşmiyor; kurulmadı."));
 
-            staging = UpdateService.ExtractToStaging(package);
-            var executable = UpdateService.InstallFromStaging(staging, AppContext.BaseDirectory);
+            staging = staged.Directory;
+            var executable = UpdateService.InstallFromStaging(staged, AppContext.BaseDirectory);
 
             AppLog.Info("Update installed", $"{result.DisplayVersion} → {executable}");
             return UpdateInstallResult.Installed(executable);

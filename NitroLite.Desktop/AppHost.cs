@@ -223,11 +223,12 @@ public sealed class AppHost : IDisposable
             var capture = LoadLinuxCapture();
             if (capture != null)
             {
-                return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile, capture.Runner, capture.FileSystem);
+                return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile, capture.Runner, capture.FileSystem,
+                    ruleDigest: UdevGuide.EmbeddedRuleDigest);
             }
 
             if (!OperatingSystem.IsLinux()) return null;
-            return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile);
+            return new LinuxPlatformSetup(linux, UdevGuide.EnsureRuleFile, ruleDigest: UdevGuide.EmbeddedRuleDigest);
         }
         catch (Exception ex)
         {
@@ -362,8 +363,9 @@ public sealed class AppHost : IDisposable
                 (hardware, platform, rescan, autoStart, gameProfiles, schoolMode, refreshRate, powerState, probeTask) =
                     CreateWindows(settings);
 
-                // The same object school mode writes through, so the segmented control and the state machine can never
-                // disagree about which boost mode the scheme is holding.
+                // Not the object school mode writes through: CreateWindowsSchoolMode builds its own, on purpose. Each one
+                // owns its own hung-powercfg slot and is disposed by its own owner (this host and SchoolModeService),
+                // so a powercfg that hangs on one path does not block the other. Both read the same power scheme.
                 cpuBoost = new CpuPowerService();
 
                 // The library scan reads the Steam registry and the Epic manifests; the mouse is a USB HID device.

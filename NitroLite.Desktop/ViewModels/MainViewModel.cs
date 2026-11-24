@@ -763,6 +763,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private static readonly TimeSpan FanHandbackGateTimeout = TimeSpan.FromSeconds(1);
 
+    /// <summary>How long a clean exit waits for the game session to end before it hands the fans back regardless.</summary>
+    private static readonly TimeSpan GameSessionStopTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// The three sliders that write to the machine. A drag raises a change per pixel, and each change would otherwise
     /// be a settings file write and a firmware call; the pause collapses the burst into one of each.
@@ -4868,7 +4871,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void BuildDirectionChoices()
     {
         var effect = SelectedEffect?.Id ?? "STATIC";
-        var allowed = LightingPolicy.AllowedDirections(effect);
+        // A keyboard written over the ENE HID report has no up/down WAVE byte, so it is offered left and right only.
+        var allowed = LightingPolicy.AllowedDirections(effect, _gateProfile?.NitroHidKeyboard == true);
 
         DirectionChoices.Clear();
         foreach (var direction in allowed)
@@ -5982,9 +5986,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
             });
 
+            // An edit from a curve to Auto or Max: a curve step already inside the write gate could otherwise land its
+            // fixed speed after the service's write. The same re-write the end of a session does.
+            if (fan != FanMode.Custom) await RewriteServiceFanModeAsync(fan).ConfigureAwait(true);
+
             var points = _gameProfiles.ActiveCurvePoints;
             _curveEvaluator = new FanCurveEvaluator(points != null ? new FanCurve(points) : _settings.BuildFanCurve());
             _curveEvaluator.Reset();
+            _manualFanFloor.Reset();
 
             AppLog.Info("Game profile applied to the running game", $"{active.DisplayName}: {active.TargetMode} · {fan}");
         }
@@ -7201,6 +7210,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _capabilities = GateByProfile(await _hardware.GetCapabilitiesAsync().ConfigureAwait(true));
 
             BuildModeChoices();
+            BuildDirectionChoices();
             Raise(nameof(PowerModeHeading));
             Raise(nameof(ModeControlAvailable));
             Raise(nameof(HasModeLockNote));
@@ -7349,6 +7359,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // monitor. Enriching here rather than in the backend keeps the Acer transport free of OS-specific reads.
             _monitor?.Enrich(data);
 
+            // The fan loop reads the temperature and where it came from as one immutable pair, published before the
+            // page's property moves. Two separate fields let a step on the loop's thread pair a new thermal-zone value
+            // with the previous sample's "firmware" flag and follow it for one step.
+            bool fromFallback = IsCpuTemperatureFromFallback(data);
+            _fanReading = new FanReading(data.CpuTemperature, fromFallback);
+
             CpuTemperature = data.CpuTemperature;
             GpuTemperature = data.GpuTemperature;
             SysTemperature = data.SysTemperature;
@@ -7358,10 +7374,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // ask for a third of full speed while the die is at 95 °C. The page keeps the number, the curve does not.
             _temperatureConfirmed = data.IsTemperatureMeasured;
 
+            // The fallback flag is remembered per sample (_fanReading above), because the runtime promotion below is
+            // permanent for the session: once it has been granted, a later sample whose CPU figure is the OS thermal
+            // zone would otherwise be followed by the curve as if it were the die. The fan step treats such a sample as
+            // a lost reading.
+
             // The live check runs on every sample, including the ones that will be refused: the refusal is what the
             // report prints, and a machine that answers nothing has to be visible as one. A promotion is logged once,
             // because it changes what the fans are allowed to do and the log is where that has to be reviewable.
-            _sensorTrust.Observe(data, DateTime.UtcNow, data.IsTemperatureMeasured);
+            // A thermal-zone sample never counts towards the promotion: it is a plausible number about the wrong part.
+            _sensorTrust.Observe(data, DateTime.UtcNow, data.IsTemperatureMeasured && !fromFallback);
             if (_sensorTrust.RuntimeVerified && !_sensorTrustLogged)
             {
                 _sensorTrustLogged = true;
@@ -7507,25 +7529,50 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // transport that is still opening, so the loop stays quiet instead of logging a refused hand-back every step.
         if (!FanControlAvailable && PlatformSaidNo) return;
 
-        // A game's own fan rule owns the fans while it runs; writing here would fight it.
-        if (GameActive) return;
+        // The firmware was just given the fans back and the card has not caught up yet (HandBackOnLostTemperatureAsync).
+        if (_handBackPending) return;
 
-        int temperature = CpuTemperature;
+        // A game's own fan rule decides what this step does while it runs. A fixed Auto or Max rule is the firmware's
+        // to hold, and writing here would fight it. A curve rule is not: the service only puts the fans under software
+        // control at the slider's speed and leaves the curve to this loop (GameProfileService.ApplyAsync). Returning
+        // for every game used to leave that speed in place for the whole session, with the 85/90/95 °C floor never
+        // firing — the one session the curve exists for. A fixed Custom rule still goes through the floor below.
+        bool followCurve = CurveEnabled;
+        bool gameStep = GameActive;
+        if (gameStep)
+        {
+            if (_gameProfiles?.ActiveProfile is not GameProfile game) return;
+
+            if (game.TargetFanCurveEnabled) followCurve = true;
+            else if (game.TargetFanMode == FanMode.Custom) followCurve = false;
+            else return;
+        }
+
+        // A temperature that came from the OS thermal-zone fallback is not the die: it is often a static board value
+        // around 28 °C. Following it would hold the fans at the curve's idle speed while the CPU heats up, so it is
+        // treated exactly like a lost reading and the firmware gets the fans back.
+        var reading = _fanReading;
+        bool fromFallback = reading?.FromFallback == true;
+        int temperature = fromFallback ? 0 : reading?.TemperatureC ?? 0;
         if (temperature <= 0)
         {
             // A sensor that stops answering must not leave the fans at the last speed the curve wrote. This loop is
             // the only thing that would ever change them again, and it has nothing to act on, so the firmware's own
             // control is handed back — once, not on every step.
             //
-            // Only after a reading has actually been seen. A machine that has just started has no reading yet, and
-            // handing back then would take the fans out of the mode the user picked before the first tick arrived.
-            if (_hadTemperatureReading) await HandBackOnLostTemperatureAsync().ConfigureAwait(false);
+            // Only after a reading has actually been seen, or when the sample says outright that there is no die
+            // reading. A machine that has just started has no reading yet, and handing back then would take the fans
+            // out of the mode the user picked before the first tick arrived. A thermal-zone sample is not "not yet":
+            // it is the backend reporting that the firmware's value is unusable, and a machine that answers that way
+            // from the first sample on would otherwise sit at a fixed speed with no floor for the whole session.
+            if (_hadTemperatureReading || fromFallback) await HandBackOnLostTemperatureAsync().ConfigureAwait(false);
             return;
         }
 
         // The reading is back, so the next loss is a new event and gets its own hand-back.
         _hadTemperatureReading = true;
         _handedBackOnLostTemperature = false;
+        _warnedLostTemperature = false;
 
         // The curve follows the temperature, so it may only follow a temperature whose sensor ids were confirmed.
         // An unconfirmed layout is a guess about which id answers what, and a guess that reads the 55 °C system
@@ -7541,21 +7588,45 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         var now = DateTime.UtcNow;
 
-        if (CurveEnabled)
+        if (followCurve)
         {
             // Captured once: the UI thread can replace the evaluator when the curve is edited, and a step that read
             // the field twice could evaluate against one curve and commit to another.
             var evaluator = _curveEvaluator;
             if (evaluator.Evaluate(temperature, now) is not int percent) return;
 
-            await WriteFanPercentAsync(percent, () => evaluator.Commit(percent, temperature, now)).ConfigureAwait(false);
+            await WriteFanPercentAsync(percent, () => evaluator.Commit(percent, temperature, now),
+                () => FanStepStillWanted(gameStep, followCurve: true)).ConfigureAwait(false);
             return;
         }
 
         var floor = _manualFanFloor;
         if (floor.Evaluate(CustomCpuPercent, temperature) is not int manual) return;
 
-        await WriteFanPercentAsync(manual, () => floor.Commit(manual, temperature)).ConfigureAwait(false);
+        await WriteFanPercentAsync(manual, () => floor.Commit(manual, temperature),
+            () => FanStepStillWanted(gameStep, followCurve: false)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Whether the reason a fan step was taken for still holds. Checked inside the write gate, because the step
+    /// decides before it waits for the gate and the world can change in between.
+    /// </summary>
+    /// <remarks>
+    /// A step taken for a game's curve must not land after the game ended and the service put the pre-game fan mode
+    /// back, nor after the running game's rule was edited to Max. A step taken for the user's own setting must not land
+    /// after a game started and the service wrote the game's mode. The service writes without this gate, so the check
+    /// is what keeps a step already past its own checks from writing over either.
+    /// </remarks>
+    private bool FanStepStillWanted(bool gameStep, bool followCurve)
+    {
+        var active = _gameProfiles?.ActiveProfile;
+
+        if (!gameStep) return !GameActive && active == null;
+        if (!GameActive || active == null) return false;
+
+        return followCurve
+            ? active.TargetFanCurveEnabled
+            : !active.TargetFanCurveEnabled && active.TargetFanMode == FanMode.Custom;
     }
 
     /// <summary>
@@ -7575,10 +7646,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task HandBackOnLostTemperatureAsync()
     {
         if (_handedBackOnLostTemperature) return;
-        _handedBackOnLostTemperature = true;
 
-        AppLog.Warn("The fan curve lost the temperature reading",
-            "the fans were handed back to the firmware rather than left at the last speed the curve wrote");
+        // The flag is set only once the firmware has taken the fans back. It used to be set here, before the write,
+        // so a gate that timed out or a write that threw left it true and the hand-back was never tried again: the
+        // fans stayed at the curve's last speed with no reading to change them. Every failure below now leaves it
+        // false and the next step tries again.
+        if (!_warnedLostTemperature)
+        {
+            _warnedLostTemperature = true;
+            AppLog.Warn("The fan curve lost the temperature reading",
+                "the fans were handed back to the firmware rather than left at the last speed the curve wrote");
+        }
 
         bool ok;
         try
@@ -7608,30 +7686,64 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (!ok)
         {
             // Not remembered as done: the next step tries again, which is what makes a transient refusal recover.
-            _handedBackOnLostTemperature = false;
             AppLog.Warn("The fans could not be set to automatic", "the hardware write was refused");
             return;
         }
 
+        _handedBackOnLostTemperature = true;
         _curveEvaluator.Reset();
         _manualFanFloor.Reset();
 
-        // The card follows the hand-back, but a binding that cannot be updated from this thread must not turn a
-        // successful hand-back into a failed step.
-        try
+        // The card follows the hand-back. This runs on the loop's thread, so the update is handed to the UI thread:
+        // SyncControls flips the write guard, and a flip raced against the UI thread's own could leave the guard on
+        // for good, silently dropping every later click.
+        //
+        // Until that update has run the loop stays out: the card still says Custom, and a reading that came back in
+        // between would otherwise put a fixed speed back over the Auto just written, a moment before the card stops
+        // the loop. A dispatcher that never runs the update leaves the fans in Auto, which is the safe side.
+        _handBackPending = true;
+        RunOnUi(() =>
         {
-            SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn("The fan controls could not be updated", ex.Message);
-        }
+            try
+            {
+                SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
+            }
+            finally
+            {
+                _handBackPending = false;
+            }
+        });
     }
 
-    private bool _handedBackOnLostTemperature;
+    /// <summary>True between a lost-reading hand-back and the card catching up with it on the UI thread.</summary>
+    private volatile bool _handBackPending;
+
+    private volatile bool _handedBackOnLostTemperature;
+
+    /// <summary>True once the loss has been logged, so a hand-back that keeps failing is not one warning per step.</summary>
+    private bool _warnedLostTemperature;
 
     /// <summary>True once a usable temperature has been seen, so "no reading yet" is not mistaken for "sensor died".</summary>
     private bool _hadTemperatureReading;
+
+    /// <summary>
+    /// The provenance the Windows monitor stamps on a CPU temperature it took from the ACPI thermal zone because the
+    /// firmware's own reading was implausible (<c>HardwareMonitorService</c>).
+    /// </summary>
+    private const string ThermalZoneProvenance = "PDH thermal zone";
+
+    /// <summary>
+    /// The last sample's CPU temperature and whether it was the thermal-zone fallback rather than the firmware's, as
+    /// one reference so the fan loop never sees half of an update. Null before the first sample.
+    /// </summary>
+    private volatile FanReading? _fanReading;
+
+    /// <summary>One sample's CPU temperature as the fan loop sees it.</summary>
+    private sealed record FanReading(int TemperatureC, bool FromFallback);
+
+    private static bool IsCpuTemperatureFromFallback(MonitorData data) =>
+        data.Provenance.TryGetValue("cpu-temp", out var source) &&
+        string.Equals(source, ThermalZoneProvenance, StringComparison.Ordinal);
 
     /// <summary>
     /// Logs the unconfirmed-sensor refusal once per session, not once per 1.5 s step.
@@ -7655,7 +7767,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Writes one fixed speed to both fans and records it only when the firmware accepted it. The commit is a
     /// callback rather than a value because the two callers track different state.
     /// </summary>
-    private async Task WriteFanPercentAsync(int percent, Action commit)
+    private async Task WriteFanPercentAsync(int percent, Action commit, Func<bool> stillWanted)
     {
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
@@ -7665,6 +7777,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // switched away from Custom — or after the shutdown hand-back wrote Auto. Writing then would put a fixed
             // speed back over the firmware's own control with no loop left to correct it.
             if (_disposed || _handingBackFans || SelectedFanMode?.Mode != FanMode.Custom) return;
+
+            // The same for the reason the step was taken: a game that ended or changed its rule, or a game that
+            // started under a user step (FanStepStillWanted).
+            if (!stillWanted()) return;
 
             bool ok = await _hardware!.SetFanModeAsync(FanMode.Custom, percent, percent).ConfigureAwait(false);
             if (ok)
@@ -7992,9 +8108,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // from the slider: the floor is a property of the temperature, not of which control asked for the write.
         var (cpu, gpu) = choice.Mode == FanMode.Custom ? EffectiveCustomPercents() : (CustomCpuPercent, CustomGpuPercent);
 
+        bool handedBack = false;
         await RunWriteAsync(
-            () => _hardware.SetFanModeAsync(choice.Mode, cpu, gpu),
+            () =>
+            {
+                // Checked inside the gate. On a machine with no usable die reading the fan loop hands the fans back
+                // the moment Custom is picked, and its step can take the gate first: this write would then put the
+                // fixed speed back over that Auto, with the card already on Auto (or about to be) and the loop stopped.
+                if (choice.Mode == FanMode.Custom &&
+                    (_handBackPending || SelectedFanMode?.Mode != FanMode.Custom))
+                {
+                    handedBack = true;
+                    return Task.FromResult(true);
+                }
+
+                return _hardware.SetFanModeAsync(choice.Mode, cpu, gpu);
+            },
             Labels.FanMode).ConfigureAwait(true);
+
+        // RunWriteAsync would report the skipped write as applied. What the machine actually did is go to the
+        // firmware's own control, so that is what the status line says. The card is left alone: it follows the
+        // hand-back by itself.
+        if (handedBack) Status = $"{Labels.FanMode}: {Labels.Auto}";
     }
 
     /// <summary>Sanitises the sliders into a curve, stores it, arms it and writes it to the firmware.</summary>
@@ -8004,7 +8139,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _settings.FanCurvePoints = points;
         SaveSettings();
 
-        _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
+        RearmUserCurve();
         Raise(nameof(CurvePreview));
 
         await ApplyCurveToHardwareAsync().ConfigureAwait(true);
@@ -8623,12 +8758,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The service already wrote the mode and the fan; the controls follow so the window does not show the
             // user's old selection while the machine is in the game's.
+            bool cardWasCustom = SelectedFanMode?.Mode == FanMode.Custom;
             SyncControls(() =>
             {
                 SelectedMode = Modes.FirstOrDefault(m => m.Mode == started.TargetMode) ?? SelectedMode;
                 var fan = started.TargetFanCurveEnabled ? FanMode.Custom : started.TargetFanMode;
                 SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
             });
+
+            // The start-side mirror of the re-write at the end of a session. The user's own Custom step may have been
+            // inside the write gate while the service wrote the game's Auto or Max, and its fixed speed can land after
+            // that write; the loop then stops with the card on Max and the fans at the user's speed, with no floor,
+            // for the whole game. The game's mode is written once more through the gate, after any such step.
+            if (cardWasCustom && !LetsTheLoopWrite(started))
+                await RewriteServiceFanModeAsync(started.TargetFanMode).ConfigureAwait(true);
 
             // A game that brought its own curve replaces the shape the loop follows; one that did not keeps the
             // user's curve, which is what "follow the curve set on the fan card" means.
@@ -8673,22 +8816,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The session ended cleanly, so there is nothing left to recover on the next launch.
             EndGameSessionRecovery();
 
-            // A game that switched the mouse hands it back to the default config. It used to restore whatever the
-            // mouse was in when the game started — often the previous game's config, or nothing at all when the mouse
-            // had not answered yet — which is why "the default does not come back after the game".
-            int restore = _settings.DefaultAtkMouseProfile > 0 ? _settings.DefaultAtkMouseProfile : savedMouse;
-            if (_mouseProfiles != null && ended.TargetAtkMouseProfile > 0 && restore > 0)
-            {
-                bool ok = await _mouseProfiles.ApplyProfileAsync(restore).ConfigureAwait(true);
-                AppLog.Info("Mouse profile restored after the game", $"{ended.DisplayName}: config {restore} ok={ok}");
-
-                // No game may own the mouse when a retry fires; a new session's own config wins.
-                if (!ok) _ = RetryMouseAsync(restore, () => _gameProfiles?.ActiveProfile == null, $"{ended.DisplayName} closed");
-
-                Raise(nameof(SystemMouseText));
-                Raise(nameof(CurrentMouseProfile));
-            }
-
+            // The fan controls follow the restore before anything else is awaited. They used to be synced after the
+            // mouse switch below, and for the length of that await the card still said Custom, so the fan loop kept
+            // writing the game's curve over the mode the service had just put back.
             var snapshot = result.Snapshot;
             if (snapshot != null)
             {
@@ -8707,11 +8837,79 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 _curveEvaluator = new FanCurveEvaluator(
                     snapshot.CurvePoints is { Count: > 0 } points ? new FanCurve(points) : _settings.BuildFanCurve());
                 _curveEvaluator.Reset();
+
+                // Forgotten as well, so a pre-game Custom gets its slider speed written again on the next step: the card
+                // can stay on Custom across the session, which is no mode change, and the floor would otherwise believe
+                // the fans were still where a game-curve step left them.
+                _manualFanFloor.Reset();
+
+                // A game whose rule let the fan loop write may have had a step inside the write gate while the service
+                // restored the pre-game mode, and that step's fixed speed can land after the restore. The service does
+                // not take this gate, so the restored mode is written once more through it, after any such step.
+                if (snapshot.Fan != FanMode.Custom && LetsTheLoopWrite(ended))
+                {
+                    await RewriteServiceFanModeAsync(
+                        snapshot.Fan, snapshot.CustomCpuPercent, snapshot.CustomGpuPercent).ConfigureAwait(true);
+                }
+            }
+
+            // A game that switched the mouse hands it back to the default config. It used to restore whatever the
+            // mouse was in when the game started — often the previous game's config, or nothing at all when the mouse
+            // had not answered yet — which is why "the default does not come back after the game".
+            int restore = _settings.DefaultAtkMouseProfile > 0 ? _settings.DefaultAtkMouseProfile : savedMouse;
+            if (_mouseProfiles != null && ended.TargetAtkMouseProfile > 0 && restore > 0)
+            {
+                bool ok = await _mouseProfiles.ApplyProfileAsync(restore).ConfigureAwait(true);
+                AppLog.Info("Mouse profile restored after the game", $"{ended.DisplayName}: config {restore} ok={ok}");
+
+                // No game may own the mouse when a retry fires; a new session's own config wins.
+                if (!ok) _ = RetryMouseAsync(restore, () => _gameProfiles?.ActiveProfile == null, $"{ended.DisplayName} closed");
+
+                Raise(nameof(SystemMouseText));
+                Raise(nameof(CurrentMouseProfile));
             }
         }
 
         Raise(nameof(GameStatusText));
         Status = _gameStatus;
+    }
+
+    /// <summary>True when a game's fan rule hands the fans to the loop: a curve, or a fixed Custom speed.</summary>
+    private static bool LetsTheLoopWrite(GameProfile profile) =>
+        profile.TargetFanCurveEnabled || profile.TargetFanMode == FanMode.Custom;
+
+    /// <summary>
+    /// Writes a fan mode the game service has already written, again, through the write gate. The gate is held by a
+    /// fan-loop step for the whole of its write, so taking it waits out a step that decided before the service wrote;
+    /// writing afterwards makes the service's mode the last word on the hardware. Later steps refuse on their own
+    /// (FanStepStillWanted, and the card no longer says Custom).
+    /// </summary>
+    private async Task RewriteServiceFanModeAsync(FanMode fan, int cpuPercent = -1, int gpuPercent = -1)
+    {
+        var hardware = _hardware;
+        if (hardware == null || _disposed) return;
+
+        try
+        {
+            // No control is touched between the wait and the release, so nothing here resumes on the UI thread.
+            await _writeGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                // Something newer owns the fans: the exit hand-back, or a selection that moved on (a new game).
+                if (_disposed || _handingBackFans || SelectedFanMode?.Mode != fan) return;
+
+                if (!await hardware.SetFanModeAsync(fan, cpuPercent, gpuPercent).ConfigureAwait(false))
+                    AppLog.Warn("The fan mode could not be written again after the game", fan.ToString());
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The fan mode could not be written again after the game", ex.Message);
+        }
     }
 
     /// <summary>
@@ -8729,6 +8927,45 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally
         {
             _suppressWrite = previous;
+        }
+    }
+
+    /// <summary>
+    /// Runs a control update on the UI thread. The host sets this to the dispatcher; the default runs inline, which is
+    /// what a test without a dispatcher needs.
+    /// </summary>
+    /// <remarks>
+    /// The fan loop and the shutdown hand-back finish on pool threads. <see cref="SyncControls"/> saves and restores
+    /// <see cref="_suppressWrite"/>, and that save/restore is only safe on one thread: interleaved with the UI thread's
+    /// own, the restore can put back a stale "true" and every later click is silently dropped.
+    /// </remarks>
+    public Action<Action> UiDispatch { get; set; } = static action => action();
+
+    /// <summary>
+    /// Hands a control update to <see cref="UiDispatch"/> and keeps a failure out of the caller: a binding that cannot
+    /// be updated must not turn a successful hardware write into a failed one.
+    /// </summary>
+    private void RunOnUi(Action update)
+    {
+        void Guarded()
+        {
+            try
+            {
+                update();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The fan controls could not be updated", ex.Message);
+            }
+        }
+
+        try
+        {
+            UiDispatch(Guarded);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The fan controls could not be updated", ex.Message);
         }
     }
 
@@ -8819,20 +9056,54 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // platform whose "no" is conclusive (Linux) skips the write.
         if (_hardware == null || LightingUnsupported) return;
 
-        // An automatic re-assertion must never start the elevated helper: it uses a transport that is already open, or
-        // does nothing until the user changes a colour themselves.
-        var elevation = _hardware as ILightingElevationControl;
-        var allowed = elevation?.AllowElevationForLighting ?? false;
-        if (elevation != null) elevation.AllowElevationForLighting = false;
+        // One re-assertion at a time. The elevation switch below is captured and restored, and two overlapping calls
+        // (every ShowWindow used to start one) interleave that pair: the second captures the first's "false" and puts
+        // it back last, which leaves the switch off for the rest of the session and every user colour change unable
+        // to start the helper. A call that finds one in flight has nothing to add and skips.
+        if (Interlocked.CompareExchange(ref _reassertingLighting, 1, 0) != 0) return;
         try
         {
-            await ReassertKeyboardLightingCoreAsync().ConfigureAwait(true);
+            // Inside the write gate, which every lighting write takes: the switch is then off only while no user write
+            // can be running, so a colour the user picks is never sent with elevation wrongly forbidden.
+            //
+            // Nothing from here to the release touches a control, so no await resumes on the UI thread. With the
+            // context captured, a shutdown that blocks the UI thread on the fan hand-back would leave this holding the
+            // gate with its continuation queued behind that very wait, and the hand-back would time out.
+            if (!await _writeGate.WaitAsync(WriteGateTimeout).ConfigureAwait(false))
+            {
+                AppLog.Warn("The keyboard lighting could not be reapplied", "the write gate timed out");
+                return;
+            }
+
+            try
+            {
+                // An automatic re-assertion must never start the elevated helper: it uses a transport that is already
+                // open, or does nothing until the user changes a colour themselves.
+                var elevation = _hardware as ILightingElevationControl;
+                var allowed = elevation?.AllowElevationForLighting ?? false;
+                if (elevation != null) elevation.AllowElevationForLighting = false;
+                try
+                {
+                    await ReassertKeyboardLightingCoreAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (elevation != null) elevation.AllowElevationForLighting = allowed;
+                }
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
         finally
         {
-            if (elevation != null) elevation.AllowElevationForLighting = allowed;
+            Interlocked.Exchange(ref _reassertingLighting, 0);
         }
     }
+
+    /// <summary>1 while a lighting re-assertion is running; see <see cref="ReassertKeyboardLightingAsync"/>.</summary>
+    private int _reassertingLighting;
 
     private async Task ReassertKeyboardLightingCoreAsync()
     {
@@ -8842,7 +9113,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             try
             {
-                await _hardware.TurnOffLightingAsync().ConfigureAwait(true);
+                await _hardware.TurnOffLightingAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -8865,7 +9136,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 last.Speed,
                 last.Direction,
                 last.Color,
-                zones).ConfigureAwait(true);
+                zones).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -8943,17 +9214,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _manualFanFloor.Reset();
         SaveSettings();
 
-        // The controls follow the handback, but a binding that cannot be updated from this thread must not turn a
-        // successful handback into a failed exit.
-        try
+        // The controls follow the handback. This finishes on a pool thread, so the update is handed to the UI thread:
+        // SyncControls flips the write guard, and a flip raced against the UI thread's own could leave it on for good.
+        // RunOnUi also keeps a binding that cannot be updated from turning a successful handback into a failed exit.
+        RunOnUi(() =>
         {
             Raise(nameof(CurveEnabled));
             SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn("The fan controls could not be updated", ex.Message);
-        }
+        });
 
         return true;
     }
@@ -8970,11 +9238,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            if (_gameProfiles != null) await _gameProfiles.StopAsync().ConfigureAwait(false);
+            if (_gameProfiles != null)
+            {
+                // Bounded: ending the session takes the service's gate and writes the pre-game mode, and a detection
+                // pass stuck in a WMI call would otherwise hold the exit — and the fan hand-back after it — forever.
+                var stop = _gameProfiles.StopAsync();
+                if (await Task.WhenAny(stop, Task.Delay(GameSessionStopTimeout)).ConfigureAwait(false) != stop)
+                {
+                    AppLog.Warn("The game session could not be closed",
+                        $"it did not finish within {GameSessionStopTimeout.TotalSeconds:F0} s; the fans are handed back anyway");
+                }
+                else
+                {
+                    await stop.ConfigureAwait(false);
+                }
+            }
         }
         catch (Exception ex)
         {
             AppLog.Warn("The game session could not be closed", ex.Message);
+        }
+        finally
+        {
+            // From here on the fans are the exit's. A session that is still stuck must not write the pre-game mode
+            // or the game's Custom speed after the hand-back below.
+            _gameProfiles?.StopWriting();
         }
 
         bool ok = false;
@@ -9338,12 +9626,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // once per pixel and each one is a whole settings file and a WMI call.
         _settings.FanCurvePoints = FanCurve.Sanitize(
             CurveAnchors.Select(a => new FanCurvePoint(a.TemperatureC, a.Percent)));
-        _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
+        RearmUserCurve();
         _curveDebounce.Run(() =>
         {
             SaveSettings();
             _ = ApplyCurveToHardwareAsync();
         });
+    }
+
+    /// <summary>
+    /// Points the fan loop at the user's curve after it was edited. Not while a game that brought its own curve is
+    /// running: the loop drives that game's curve for the session (StepFanAsync), and an edit on the fan card would
+    /// otherwise swap it out from under the game until the session ended.
+    /// </summary>
+    private void RearmUserCurve()
+    {
+        if (GameActive && _gameProfiles?.ActiveCurvePoints != null) return;
+        _curveEvaluator = new FanCurveEvaluator(_settings.BuildFanCurve());
     }
 
     private FanCurve CurrentCurve() =>
@@ -9359,6 +9658,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </returns>
     private bool SaveSettings()
     {
+        // A backup was restored over the file this session. Writing the in-memory copy would undo it, so every save is
+        // refused until the restart that loads the restored file (RestoreBackupAsync).
+        if (_settingsSavesBlocked)
+        {
+            if (!_settingsSaveBlockLogged)
+            {
+                _settingsSaveBlockLogged = true;
+                AppLog.Info("A settings save was skipped", "a backup was restored and takes effect on the next launch");
+            }
+
+            return false;
+        }
+
         try
         {
             SettingsManager.SaveSettingsAtomic(_settingsPath, _settings);
@@ -9369,6 +9681,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             AppLog.Warn("The settings could not be saved", ex.Message);
             return false;
         }
+    }
+
+    /// <summary>Set once a backup has replaced the settings file; see <see cref="SaveSettings"/>.</summary>
+    private volatile bool _settingsSavesBlocked;
+
+    private bool _settingsSaveBlockLogged;
+
+    /// <summary>True once a restored backup is waiting for the next launch and this session no longer saves settings.</summary>
+    public bool SettingsSavesBlocked => _settingsSavesBlocked;
+
+    /// <summary>Stops every settings save for the rest of the process, so a restored file survives until it is read.</summary>
+    private void BlockSettingsSavesAfterRestore()
+    {
+        _settingsSavesBlocked = true;
+        AppLog.Info("Settings saves are off until the next launch", "a backup was restored over the settings file");
     }
 
     /// <summary>

@@ -274,8 +274,10 @@ public class WmiControllerTests
     }
 
     [Fact]
-    public async Task Launcher_OtherStartFailure_DoesNotLockTheSession()
+    public async Task Launcher_OtherStartFailure_IsNotRecordedAsADeclinedPrompt()
     {
+        // Not a "no" from the user: UserDeclined stays false. The launch is still not repeated automatically after it
+        // (AuditG2aWmiStackTests covers that); only the explicit start path may retry it.
         using var launcher = new WmiWorkerLauncher(
             executablePath: "NitroLite.exe",
             start: _ => throw new Win32Exception(5),
@@ -646,9 +648,12 @@ public class WmiControllerTests
         await hybrid.TurnOffLightingAsync();
         await hybrid.SetBacklightTimeoutAsync(true);
 
-        // The service is down, so colour writes go to the WMI backend, which can drive the zones directly.
-        Assert.Equal(1, wmi.SetLightingCalls);
-        Assert.Equal(1, wmi.TurnOffLightingCalls);
+        // The service is down, so colour writes go to the WMI backend, which can drive the zones directly. Turning
+        // the lights off travels the same chain as a colour write (so a HID-keyboard profile can catch it too), as
+        // the OFF request both backends use for their own turn-off: a second lighting write with four black zones.
+        Assert.Equal(2, wmi.SetLightingCalls);
+        Assert.Equal(new[] { "#000000", "#000000", "#000000", "#000000" }, wmi.LastZoneColors);
+        Assert.Equal(0, wmi.TurnOffLightingCalls);
         Assert.Equal(0, agent.SetLightingCalls);
 
         // The 30-second backlight timeout lives on APGeAction, which only the WMI backend can reach, so it goes

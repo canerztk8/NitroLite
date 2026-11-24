@@ -31,16 +31,28 @@ public sealed record OpenRgbController(
     bool Parsed);
 
 /// <summary>
-/// The OpenRGB SDK wire format, version 0 through 4.
+/// The OpenRGB SDK wire format, protocol versions 0 through <see cref="ClientProtocolVersion"/>.
 /// <para>
-/// Every packet is a 16-byte header — the ASCII magic <c>ORGB</c>, the device index, the packet type and the payload
-/// length — followed by that many bytes. Both directions use the same header, so a client that can build one can read
-/// the other.
+/// Sources: OpenRGB's <c>Documentation/OpenRGBSDK.md</c>, <c>NetworkProtocol.h</c>, <c>NetworkServer.cpp</c> and
+/// <c>RGBController/RGBControllerInterface.h</c> (master branch). Every packet is a 16-byte header — the ASCII magic
+/// <c>ORGB</c>, the device index, the packet id and the payload length, each field four bytes little-endian (OpenRGB
+/// copies native unsigned ints, and every machine it runs on is little-endian) — followed by that many bytes.
 /// </para>
 /// <para>
-/// This is a re-implementation from the protocol description, not a port of OpenRGB's C++. It is deliberately
-/// defensive: a payload that does not parse returns null rather than throwing, because the server on the other end is
-/// a third-party process the user may be running at any version.
+/// Strings are a <c>u16</c> length that counts the terminating NUL, then the bytes and the NUL. Counts are
+/// <c>u16</c>. A colour is OpenRGB's <c>RGBColor</c>, an <c>unsigned int</c> laid out <c>0x00BBGGRR</c>, so on the wire
+/// it is the four bytes <c>R G B 00</c>. A block that starts with <c>data_size</c> counts those four bytes too:
+/// <c>data_size</c> equals the packet's payload length.
+/// </para>
+/// <para>
+/// Only the server answers some packets. <c>SET_CLIENT_NAME</c>, <c>SETCUSTOMMODE</c>, <c>UPDATELEDS</c> and
+/// <c>UPDATEZONELEDS</c> get no reply below protocol 6 (6 added an ACK), and this client never asks for 6, so it never
+/// waits for one.
+/// </para>
+/// <para>
+/// This is a re-implementation from that description, not a port of OpenRGB's C++. It is deliberately defensive: a
+/// payload that does not parse returns null rather than throwing, because the server on the other end is a
+/// third-party process the user may be running at any version.
 /// </para>
 /// </summary>
 public static class OpenRgbProtocol
@@ -48,27 +60,32 @@ public static class OpenRgbProtocol
     /// <summary>Bytes in front of every payload.</summary>
     public const int HeaderBytes = 16;
 
-    /// <summary>Fixed-width string field in the controller description.</summary>
-    public const int NameFieldBytes = 60;
+    /// <summary>
+    /// The highest protocol version this client parses. Version 4 (OpenRGB 0.9) is the newest layout whose controller
+    /// description this codec reads: 5 adds zone and controller flags and 6 removes fields, and neither is needed to
+    /// light a keyboard. A newer server is asked for 4 and answers in the version-4 layout.
+    /// </summary>
+    public const uint ClientProtocolVersion = 4;
 
     /// <summary>Refuse a payload larger than this. A wrong length field must not become a 4 GB allocation.</summary>
     public const int MaxPayloadBytes = 4 * 1024 * 1024;
 
-    /// <summary>Packet types this client uses. The numbers are OpenRGB's, not ours.</summary>
+    /// <summary>Packet ids this client uses or must recognise. The numbers are OpenRGB's (<c>NetworkProtocol.h</c>).</summary>
     public enum PacketType : uint
     {
         RequestControllerCount = 0,
         RequestControllerData = 1,
-        RequestProtocolVersion = 2,
-        SetClientName = 3,
-        DeviceListUpdated = 4,
-        UpdateLeds = 1000,
-        UpdateZoneLeds = 1001,
-        UpdateSingleLed = 1002,
-        SetCustomMode = 1005,
-        ResizeZone = 1050,
-        UpdateMode = 1100,
-        UpdateProfile = 1101
+        Ack = 10,
+        RequestProtocolVersion = 40,
+        SetClientName = 50,
+        SetServerName = 51,
+        DeviceListUpdated = 100,
+        ResizeZone = 1000,
+        UpdateLeds = 1050,
+        UpdateZoneLeds = 1051,
+        UpdateSingleLed = 1052,
+        SetCustomMode = 1100,
+        UpdateMode = 1101
     }
 
     /// <summary>Builds one packet: magic, device index, type, payload length, payload.</summary>
@@ -110,56 +127,90 @@ public static class OpenRgbProtocol
         return true;
     }
 
-    /// <summary>The <c>SET_CLIENT_NAME</c> payload: a length-prefixed UTF-8 name with no terminator.</summary>
+    /// <summary>The <c>REQUEST_PROTOCOL_VERSION</c> payload: one <c>u32</c>, the highest version the client speaks.</summary>
+    public static byte[] BuildProtocolVersionPayload(uint version)
+    {
+        var payload = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(payload, version);
+        return payload;
+    }
+
+    /// <summary>The server's answer to <c>REQUEST_PROTOCOL_VERSION</c>: its own highest version. Null when short.</summary>
+    public static uint? ParseProtocolVersion(ReadOnlySpan<byte> payload) =>
+        payload.Length < 4 ? null : BinaryPrimitives.ReadUInt32LittleEndian(payload);
+
+    /// <summary>The version both sides speak: the lower of the two. The server clamps the same way.</summary>
+    public static uint NegotiateVersion(uint serverVersion) => Math.Min(serverVersion, ClientProtocolVersion);
+
+    /// <summary>The <c>SET_CLIENT_NAME</c> payload: the UTF-8 name followed by a NUL. The server sends no reply.</summary>
     public static byte[] BuildClientNamePayload(string name)
     {
-        var bytes = Encoding.UTF8.GetBytes(name ?? string.Empty);
-        var payload = new byte[4 + bytes.Length];
-        BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)bytes.Length);
-        bytes.CopyTo(payload, 4);
+        var bytes = Encoding.UTF8.GetBytes((name ?? string.Empty).Replace("\0", string.Empty, StringComparison.Ordinal));
+        var payload = new byte[bytes.Length + 1];
+        bytes.CopyTo(payload, 0);
         return payload;
     }
 
     /// <summary>
-    /// The <c>RGBCONTROLLER_UPDATELEDS</c> payload: total size, colour count, then one RGB triple per LED.
+    /// The <c>REQUEST_CONTROLLER_DATA</c> payload: nothing at protocol 0, the negotiated version as a <c>u32</c> from 1
+    /// on. The answer is laid out for that version.
+    /// </summary>
+    public static byte[] BuildControllerDataRequestPayload(uint protocolVersion) =>
+        protocolVersion == 0 ? Array.Empty<byte>() : BuildProtocolVersionPayload(protocolVersion);
+
+    /// <summary>
+    /// The <c>RGBCONTROLLER_UPDATELEDS</c> payload: <c>u32 data_size</c> (the whole payload, itself included),
+    /// <c>u16 num_colors</c>, then four bytes <c>R G B 00</c> per LED.
     /// </summary>
     public static byte[] BuildUpdateLedsPayload(IReadOnlyList<RgbColor> colors)
     {
         ArgumentNullException.ThrowIfNull(colors);
-        int dataSize = 4 + colors.Count * 3;
-        var payload = new byte[4 + dataSize];
-        BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)dataSize);
-        BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4), (uint)colors.Count);
-        int offset = 8;
-        foreach (var color in colors)
-        {
-            payload[offset++] = color.R;
-            payload[offset++] = color.G;
-            payload[offset++] = color.B;
-        }
+        CheckColorCount(colors.Count);
+
+        int total = 4 + 2 + colors.Count * 4;
+        var payload = new byte[total];
+        BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)total);
+        BinaryPrimitives.WriteUInt16LittleEndian(payload.AsSpan(4), (ushort)colors.Count);
+        WriteColors(payload.AsSpan(6), colors);
         return payload;
     }
 
     /// <summary>
-    /// The <c>RGBCONTROLLER_UPDATEZONELEDS</c> payload: total size, zone index, colour count, then the RGB triples.
+    /// The <c>RGBCONTROLLER_UPDATEZONELEDS</c> payload: <c>u32 data_size</c> (the whole payload), <c>u32 zone_idx</c>,
+    /// <c>u16 num_colors</c>, then four bytes <c>R G B 00</c> per LED.
     /// </summary>
     public static byte[] BuildUpdateZoneLedsPayload(int zoneIndex, IReadOnlyList<RgbColor> colors)
     {
         ArgumentNullException.ThrowIfNull(colors);
         ArgumentOutOfRangeException.ThrowIfNegative(zoneIndex);
-        int dataSize = 8 + colors.Count * 3;
-        var payload = new byte[4 + dataSize];
-        BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)dataSize);
+        CheckColorCount(colors.Count);
+
+        int total = 4 + 4 + 2 + colors.Count * 4;
+        var payload = new byte[total];
+        BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)total);
         BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4), (uint)zoneIndex);
-        BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(8), (uint)colors.Count);
-        int offset = 12;
+        BinaryPrimitives.WriteUInt16LittleEndian(payload.AsSpan(8), (ushort)colors.Count);
+        WriteColors(payload.AsSpan(10), colors);
+        return payload;
+    }
+
+    private static void CheckColorCount(int count)
+    {
+        // num_colors is a u16 on the wire; more than that cannot be described, so it is refused rather than wrapped.
+        if (count > ushort.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(count), count, "OpenRGB carries at most 65535 colours.");
+    }
+
+    private static void WriteColors(Span<byte> target, IReadOnlyList<RgbColor> colors)
+    {
+        int offset = 0;
         foreach (var color in colors)
         {
-            payload[offset++] = color.R;
-            payload[offset++] = color.G;
-            payload[offset++] = color.B;
+            target[offset++] = color.R;
+            target[offset++] = color.G;
+            target[offset++] = color.B;
+            target[offset++] = 0;
         }
-        return payload;
     }
 
     /// <summary>Reads the controller count out of a <c>REQUEST_CONTROLLER_COUNT</c> answer.</summary>
@@ -171,71 +222,83 @@ public static class OpenRgbProtocol
     }
 
     /// <summary>
-    /// Reads a <c>REQUEST_CONTROLLER_DATA</c> answer. Returns null when the payload is not a controller description;
-    /// a description this client cannot follow comes back with <see cref="OpenRgbController.Parsed"/> false and the
-    /// fields it did read, so a caller can still name the device without trusting the colour list.
+    /// Reads a <c>REQUEST_CONTROLLER_DATA</c> answer laid out for <paramref name="protocolVersion"/> (the version
+    /// sent in the request). Returns null when the payload is not a controller description or the version is newer
+    /// than this client parses; a description whose colour list is cut short comes back with
+    /// <see cref="OpenRgbController.Parsed"/> false and the fields it did read, so a caller can still name the device
+    /// without trusting the colour list.
     /// </summary>
-    public static OpenRgbController? ParseController(int index, ReadOnlySpan<byte> payload)
+    public static OpenRgbController? ParseController(
+        int index, ReadOnlySpan<byte> payload, uint protocolVersion = ClientProtocolVersion)
     {
+        if (protocolVersion > ClientProtocolVersion) return null;
         if (payload.Length < 4) return null;
 
+        // data_size counts itself, so it is the payload length. A larger one points past the packet; a smaller one
+        // is honoured as the end of the block.
         uint dataSize = BinaryPrimitives.ReadUInt32LittleEndian(payload);
-        if (dataSize > MaxPayloadBytes || 4L + dataSize > payload.Length) return null;
+        if (dataSize < 4 || dataSize > MaxPayloadBytes || dataSize > payload.Length) return null;
 
-        var cursor = new Cursor(payload[4..(4 + (int)dataSize)]);
+        var cursor = new Cursor(payload[4..(int)dataSize]);
 
-        if (!cursor.TryUInt32(out _)) return null;                       // controller type
-        if (!cursor.TryFixedString(out string name)) return null;
-        for (int i = 0; i < 5; i++)                                      // vendor, description, version, serial, location
+        if (!cursor.TryUInt32(out _)) return null;                          // type
+        if (!cursor.TryString(out string name)) return null;                 // name
+        if (protocolVersion >= 1 && !cursor.TryString(out _)) return null;   // vendor (v1+)
+        for (int i = 0; i < 4; i++)                                         // description, version, serial, location
         {
-            if (!cursor.TryFixedString(out _)) return null;
+            if (!cursor.TryString(out _)) return null;
         }
 
-        if (!cursor.TryUInt32(out uint modeCount)) return null;
-        for (uint mode = 0; mode < modeCount; mode++)
+        if (!cursor.TryUInt16(out ushort modeCount)) return null;
+        if (!cursor.TryUInt32(out _)) return null;                          // active_mode
+        for (int mode = 0; mode < modeCount; mode++)
         {
-            if (!cursor.TryFixedString(out _)) return null;
-            // value, flags, speed min/max, brightness min/max, colours min/max, speed, brightness, direction, colour mode
-            if (!cursor.Skip(12 * 4)) return null;
-            if (!cursor.TryUInt32(out uint modeColors)) return null;
-            if (!cursor.Skip((long)modeColors * 3)) return null;
+            if (!cursor.TryString(out _)) return null;                      // mode name
+            // value, flags, speed min, speed max, [brightness min, brightness max (v3+)], colours min, colours max,
+            // speed, [brightness (v3+)], direction, colour mode
+            int fields = protocolVersion >= 3 ? 12 : 9;
+            if (!cursor.Skip(fields * 4L)) return null;
+            if (!cursor.TryUInt16(out ushort modeColors)) return null;
+            if (!cursor.Skip(modeColors * 4L)) return null;
         }
 
-        if (!cursor.TryUInt32(out uint zoneCount)) return null;
-        for (uint zone = 0; zone < zoneCount; zone++)
+        if (!cursor.TryUInt16(out ushort zoneCount)) return null;
+        for (int zone = 0; zone < zoneCount; zone++)
         {
-            if (!cursor.TryFixedString(out _)) return null;
-            // type, leds min, leds max, leds count
-            if (!cursor.Skip(4 * 4)) return null;
-            if (!cursor.TryUInt32(out uint matrixSize)) return null;
-            if (!cursor.Skip((long)matrixSize * 4)) return null;
-            if (!cursor.TryUInt32(out uint segmentCount)) return null;
-            for (uint segment = 0; segment < segmentCount; segment++)
+            if (!cursor.TryString(out _)) return null;                      // zone name
+            if (!cursor.Skip(4 * 4)) return null;                           // type, leds min, leds max, leds count
+            if (!cursor.TryUInt16(out ushort matrixBytes)) return null;     // zone_matrix_len, in bytes
+            if (!cursor.Skip(matrixBytes)) return null;                     // height, width, height*width u32
+            if (protocolVersion >= 4)
             {
-                if (!cursor.TryFixedString(out _)) return null;
-                if (!cursor.Skip(3 * 4)) return null;                    // type, start index, led count
+                if (!cursor.TryUInt16(out ushort segmentCount)) return null;
+                for (int segment = 0; segment < segmentCount; segment++)
+                {
+                    if (!cursor.TryString(out _)) return null;              // segment name
+                    if (!cursor.Skip(3 * 4)) return null;                   // type, start index, led count
+                }
             }
         }
 
-        if (!cursor.TryUInt32(out uint ledCount)) return null;
-        for (uint led = 0; led < ledCount; led++)
+        if (!cursor.TryUInt16(out ushort ledCount)) return null;
+        for (int led = 0; led < ledCount; led++)
         {
-            if (!cursor.TryFixedString(out _)) return null;
-            if (!cursor.Skip(4)) return null;                            // value
+            if (!cursor.TryString(out _)) return null;                      // led name
+            if (!cursor.Skip(4)) return null;                               // value
         }
 
-        if (!cursor.TryUInt32(out uint colorCount)) return null;
-        var colors = new List<RgbColor>((int)Math.Min(colorCount, 4096));
-        for (uint color = 0; color < colorCount; color++)
+        if (!cursor.TryUInt16(out ushort colorCount)) return null;
+        var colors = new List<RgbColor>(colorCount);
+        for (int color = 0; color < colorCount; color++)
         {
-            if (!cursor.TryByte(out byte r) || !cursor.TryByte(out byte g) || !cursor.TryByte(out byte b))
+            if (!cursor.TryColor(out var rgb))
             {
-                return new OpenRgbController(index, name, (int)ledCount, (int)zoneCount, colors, Parsed: false);
+                return new OpenRgbController(index, name, ledCount, zoneCount, colors, Parsed: false);
             }
-            colors.Add(new RgbColor(r, g, b));
+            colors.Add(rgb);
         }
 
-        return new OpenRgbController(index, name, (int)ledCount, (int)zoneCount, colors, Parsed: true);
+        return new OpenRgbController(index, name, ledCount, zoneCount, colors, Parsed: true);
     }
 
     /// <summary>A bounds-checked reader over one payload. Every read reports failure instead of throwing.</summary>
@@ -250,17 +313,27 @@ public static class OpenRgbProtocol
             _offset = 0;
         }
 
-        public bool TryByte(out byte value)
+        public bool TryUInt16(out ushort value)
         {
-            if (_offset + 1 > _data.Length) { value = 0; return false; }
-            value = _data[_offset++];
+            if ((long)_offset + 2 > _data.Length) { value = 0; return false; }
+            value = BinaryPrimitives.ReadUInt16LittleEndian(_data[_offset..]);
+            _offset += 2;
             return true;
         }
 
         public bool TryUInt32(out uint value)
         {
-            if (_offset + 4 > _data.Length) { value = 0; return false; }
+            if ((long)_offset + 4 > _data.Length) { value = 0; return false; }
             value = BinaryPrimitives.ReadUInt32LittleEndian(_data[_offset..]);
+            _offset += 4;
+            return true;
+        }
+
+        /// <summary>One <c>RGBColor</c>: <c>R G B</c> and a padding byte.</summary>
+        public bool TryColor(out RgbColor value)
+        {
+            if ((long)_offset + 4 > _data.Length) { value = default; return false; }
+            value = new RgbColor(_data[_offset], _data[_offset + 1], _data[_offset + 2]);
             _offset += 4;
             return true;
         }
@@ -272,18 +345,19 @@ public static class OpenRgbProtocol
             return true;
         }
 
-        /// <summary>A fixed-width field: UTF-8 up to the first NUL, the rest padding.</summary>
-        public bool TryFixedString(out string value)
+        /// <summary>A <c>u16</c> length (NUL included), then the bytes. The text stops at the first NUL.</summary>
+        public bool TryString(out string value)
         {
             value = string.Empty;
-            if (_offset + NameFieldBytes > _data.Length) return false;
+            if (!TryUInt16(out ushort length)) return false;
+            if ((long)_offset + length > _data.Length) return false;
 
-            var field = _data.Slice(_offset, NameFieldBytes);
-            _offset += NameFieldBytes;
+            var field = _data.Slice(_offset, length);
+            _offset += length;
 
-            int length = field.IndexOf((byte)0);
-            if (length < 0) length = field.Length;
-            value = Encoding.UTF8.GetString(field[..length]);
+            int end = field.IndexOf((byte)0);
+            if (end < 0) end = field.Length;
+            value = Encoding.UTF8.GetString(field[..end]);
             return true;
         }
     }

@@ -15,10 +15,11 @@ namespace NitroLite.Linux;
 /// cannot be in.
 /// </para>
 /// <para>
-/// Three nodes are tried, in order of how directly they express "boost":
-/// <c>cpufreq/boost</c> (0/1), <c>intel_pstate/no_turbo</c> (0/1, inverted) and <c>amd_pstate/status</c>
-/// (<c>active</c>/<c>passive</c>). A machine with none of them reports <see cref="IsSupported"/> false and school mode
-/// leaves the processor alone instead of logging a failure.
+/// Two nodes are tried, in order of how directly they express "boost":
+/// <c>cpufreq/boost</c> (0/1) and <c>intel_pstate/no_turbo</c> (0/1, inverted). A machine with neither reports
+/// <see cref="IsSupported"/> false and school mode leaves the processor alone instead of logging a failure.
+/// <c>amd_pstate/status</c> is deliberately not used: switching it to <c>passive</c> restarts the whole frequency
+/// driver, which is far heavier than a boost switch, and the helper policy and the udev rule do not allow that node.
 /// </para>
 /// </remarks>
 public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
@@ -26,7 +27,6 @@ public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
     private readonly ISysfsFileSystem _fs;
     private readonly string? _boostNode;
     private readonly string? _noTurboNode;
-    private readonly string? _pstateNode;
 
     public LinuxCpuBoostAccess(ISysfsFileSystem fs)
     {
@@ -34,14 +34,13 @@ public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
 
         _boostNode = Existing(LinuxPaths.CpuFreqBoost);
         _noTurboNode = Existing(LinuxPaths.IntelNoTurbo);
-        _pstateNode = Existing(LinuxPaths.AmdPstateStatus);
     }
 
     /// <summary>True when at least one boost node exists, so a write has somewhere to go.</summary>
-    public bool IsSupported => _boostNode != null || _noTurboNode != null || _pstateNode != null;
+    public bool IsSupported => _boostNode != null || _noTurboNode != null;
 
     /// <summary>The node a write would use, for the hardware report. Null when there is none.</summary>
-    public string? Node => _boostNode ?? _noTurboNode ?? _pstateNode;
+    public string? Node => _boostNode ?? _noTurboNode;
 
     /// <summary>
     /// The stored boost state. <see cref="CpuBoostMode.Enabled"/> is what a 1 on <c>cpufreq/boost</c> means: the
@@ -69,17 +68,6 @@ public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
             };
         }
 
-        if (_pstateNode != null)
-        {
-            var status = _fs.ReadAllText(_pstateNode)?.Trim().ToLowerInvariant();
-            return status switch
-            {
-                "passive" => CpuBoostMode.Disabled,
-                "active" or "guided" => CpuBoostMode.Enabled,
-                _ => null
-            };
-        }
-
         return null;
     }
 
@@ -96,8 +84,7 @@ public sealed class LinuxCpuBoostAccess : ICpuBoostAccess
         var expected = enable ? CpuBoostMode.Enabled : CpuBoostMode.Disabled;
 
         if (_boostNode != null) return Task.FromResult(Write(_boostNode, enable ? "1" : "0", expected));
-        if (_noTurboNode != null) return Task.FromResult(Write(_noTurboNode, enable ? "0" : "1", expected));
-        return Task.FromResult(Write(_pstateNode!, enable ? "active" : "passive", expected));
+        return Task.FromResult(Write(_noTurboNode!, enable ? "0" : "1", expected));
     }
 
     /// <summary>

@@ -106,8 +106,9 @@ public class RuntimeVerificationTests
         Assert.False(trust.RuntimeVerified);
     }
 
+    // Zero is not in this list: a CPU zero is still refused, but a GPU zero is a sleeping dGPU and is covered by
+    // AuditG5SensorTests.
     [Theory]
-    [InlineData(0)]
     [InlineData(1)]
     [InlineData(14)]
     [InlineData(116)]

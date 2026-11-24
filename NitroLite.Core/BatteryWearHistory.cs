@@ -110,11 +110,41 @@ public sealed class BatteryWearHistory
     private readonly object _lock = new();
     private List<BatteryWearSample>? _samples;
 
-    /// <summary>Null disables persistence (unit tests).</summary>
+    /// <summary>The file name of the history in the app's data folder.</summary>
+    public const string DefaultFileName = "battery_wear_history.json";
+
+    /// <summary>The production history file, in the user's data folder.</summary>
+    public static string DefaultPath => AppPaths.GetDataFile(DefaultFileName);
+
+    /// <summary>
+    /// A history stored in <paramref name="path"/>, or in <see cref="DefaultPath"/> when <paramref name="path"/> is
+    /// null.
+    /// </summary>
+    /// <remarks>
+    /// Null does <em>not</em> disable persistence here, whatever an older comment said: it falls back to the real
+    /// file in the user's data folder, and the battery services rely on that. A test that wants no file must use
+    /// <see cref="InMemory"/> — a test that passed null used to write to, and <see cref="Clear"/> to delete, the
+    /// user's real history.
+    /// </remarks>
     public BatteryWearHistory(string? path = null)
+        : this(path ?? DefaultPath, persist: true)
     {
-        _path = path ?? AppPaths.GetDataFile("battery_wear_history.json");
     }
+
+    private BatteryWearHistory(string? path, bool persist)
+    {
+        _path = persist ? path : null;
+    }
+
+    /// <summary>A history that is never read from or written to disk.</summary>
+    public static BatteryWearHistory InMemory() => new(null, persist: false);
+
+    /// <summary>
+    /// A history stored in <paramref name="path"/>; null means no persistence at all. This is the form new callers
+    /// should use, with <see cref="DefaultPath"/> passed explicitly for the production file.
+    /// </summary>
+    public static BatteryWearHistory ForFile(string? path) =>
+        string.IsNullOrEmpty(path) ? InMemory() : new(path, persist: true);
 
     public string? Path => _path;
 

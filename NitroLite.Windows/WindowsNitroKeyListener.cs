@@ -567,6 +567,10 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
         if (report.Payload.Length == 0) return;
 
+        // Vendor-page reports from third-party peripherals (Logitech HID++, RGB mice and keyboards) are full of
+        // arbitrary byte pairs; scanning them at any offset produced Nitro key presses that nobody made.
+        if (!ShouldScanForNitroUsage(report.UsagePage, report.VendorId)) return;
+
         // The report layout is the device's own, so the match is on the 16-bit consumer usage rather than on a byte
         // offset: a report that carries AL Launch Application 1 or 2 is the button, whatever else it carries.
         for (int i = 0; i + 1 < report.Payload.Length; i++)
@@ -586,6 +590,33 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             AppLog.Info("Acer HID report",
                 $"page=0x{report.UsagePage:X4} usage=0x{report.Usage:X4} data={Convert.ToHexString(report.Payload)}");
         }
+    }
+
+    /// <summary>USB vendor ids of third-party peripheral makers whose vendor-page reports are never the Nitro key.</summary>
+    private static readonly uint[] PeripheralVendorIds =
+    {
+        0x046D, // Logitech (HID++)
+        0x1532, // Razer
+        0x1B1C, // Corsair
+        0x1038, // SteelSeries
+        0x0951, // HyperX / Kingston
+        0x03F0, // HP / HyperX
+        0x1E7D, // Roccat
+        0x3299, // Glorious
+        0x258A, // Sinowealth RGB mice
+        0x0B05, // ASUS (Aura / ROG peripherals)
+        0x1462  // MSI
+    };
+
+    /// <summary>
+    /// Whether a HID report's payload may be scanned for the Nitro key's consumer usage. The standard consumer page
+    /// and an unidentified device are scanned as before; a vendor page (0xFF00 and up) is skipped when it belongs
+    /// to a known third-party peripheral vendor. Built-in Acer boards are not on that list, so the real key is kept.
+    /// </summary>
+    internal static bool ShouldScanForNitroUsage(ushort usagePage, uint vendorId)
+    {
+        if (usagePage < 0xFF00) return true;
+        return Array.IndexOf(PeripheralVendorIds, vendorId) < 0;
     }
 
     /// <summary>
@@ -629,7 +660,8 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         ushort Flags,
         ushort UsagePage,
         ushort Usage,
-        byte[] Payload);
+        byte[] Payload,
+        uint VendorId = 0);
 
     /// <summary>
     /// A hidden window whose only job is to receive <c>WM_INPUT</c>.
@@ -679,6 +711,12 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         private uint _threadId;
         private string? _error;
 
+        /// <summary>
+        /// Set when Start timed out or the window was disposed. A thread that was only slow, not dead, checks it after
+        /// creating its window and tears the window down instead of raising events nobody is listening for.
+        /// </summary>
+        private volatile bool _cancelled;
+
         public RawInputWindow(Action<RawInputReport> onReport) => _onReport = onReport;
 
         public void Start()
@@ -695,6 +733,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             // bounded so a wedged thread cannot hang startup.
             if (!_ready.Wait(TimeSpan.FromSeconds(2)))
             {
+                _cancelled = true;
                 throw new TimeoutException("the raw-input window did not start");
             }
 
@@ -738,6 +777,15 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 if (_hwnd == IntPtr.Zero)
                 {
                     _error = $"CreateWindowEx failed ({Marshal.GetLastWin32Error()})";
+                    return;
+                }
+
+                // Start gave up on this thread (or the listener was disposed) while the window was being created.
+                // Destroying it ends the message loop below through WM_DESTROY, so nothing is registered or raised.
+                if (_cancelled)
+                {
+                    DestroyWindow(_hwnd);
+                    _hwnd = IntPtr.Zero;
                     return;
                 }
 
@@ -810,6 +858,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
             switch (message)
             {
                 case WmInput:
+                    if (_cancelled) return IntPtr.Zero;
                     try
                     {
                         ReadReport(lParam);
@@ -877,9 +926,9 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 var bytes = new byte[length];
                 Marshal.Copy(buffer + dataStart, bytes, 0, length);
 
-                var (usagePage, usage) = ReadDeviceUsage(header.hDevice);
+                var (usagePage, usage, vendorId) = ReadDeviceUsage(header.hDevice);
 
-                _onReport(new RawInputReport(false, 0, 0, 0, usagePage, usage, bytes));
+                _onReport(new RawInputReport(false, 0, 0, 0, usagePage, usage, bytes, vendorId));
             }
             finally
             {
@@ -891,21 +940,22 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         /// The usage page and usage of the device that sent a report. <c>RAWHID</c> does not carry them, and without
         /// them the log line cannot say which collection the button arrived on.
         /// </summary>
-        private static (ushort Page, ushort Usage) ReadDeviceUsage(IntPtr device)
+        private static (ushort Page, ushort Usage, uint VendorId) ReadDeviceUsage(IntPtr device)
         {
             var info = new RawDeviceInfo { cbSize = RidDeviceInfoBytes };
             uint size = RidDeviceInfoBytes;
 
             // The call returns the number of bytes copied, or (UINT)-1 on failure. It used to be declared as a BOOL,
             // so a successful 32-byte copy read as false and every usage came back as zero.
-            if (GetRawInputDeviceInfo(device, RidiDeviceInfo, ref info, ref size) == uint.MaxValue) return (0, 0);
-            if (info.dwType != RimTypeHid) return (0, 0);
+            if (GetRawInputDeviceInfo(device, RidiDeviceInfo, ref info, ref size) == uint.MaxValue) return (0, 0, 0);
+            if (info.dwType != RimTypeHid) return (0, 0, 0);
 
-            return (info.usUsagePage, info.usUsage);
+            return (info.usUsagePage, info.usUsage, info.dwVendorId);
         }
 
         public void Dispose()
         {
+            _cancelled = true;
             try
             {
                 if (_hwnd != IntPtr.Zero) PostMessage(_hwnd, WmClose, IntPtr.Zero, IntPtr.Zero);

@@ -507,17 +507,18 @@ public class LinuxFunctionalParityTests
     }
 
     [Fact]
-    public async Task CpuBoost_UsesAmdPstateStatusWhenThatIsAllThereIs()
+    public async Task CpuBoost_AmdPstateStatusAloneIsNotSupported_AndIsNeverWritten()
     {
         var fs = new InMemorySysfsFileSystem();
         fs.WithFile(LinuxPaths.AmdPstateStatus, "active\n");
 
         var boost = new LinuxCpuBoostAccess(fs);
 
-        Assert.Equal(CpuBoostMode.Enabled, boost.QueryBoostModeExact(true));
+        Assert.False(boost.IsSupported);
+        Assert.Null(boost.QueryBoostModeExact(true));
 
-        Assert.True(await boost.SetBoostModeAsync(CpuBoostMode.Disabled));
-        Assert.Equal("passive", fs.Peek(LinuxPaths.AmdPstateStatus)?.Trim());
+        Assert.False(await boost.SetBoostModeAsync(CpuBoostMode.Disabled));
+        Assert.Equal("active", fs.Peek(LinuxPaths.AmdPstateStatus)?.Trim());
     }
 
     [Fact]

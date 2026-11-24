@@ -141,6 +141,20 @@ public sealed class LinuxHelperServer : IDisposable
 
     public static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// How long one authorization may take. <c>pkcheck</c> has its own 10 s limit; this one also covers a runner that
+    /// hangs, so a connection that stalls the check is dropped instead of held.
+    /// </summary>
+    public static readonly TimeSpan DefaultAuthorizationTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// How long an authorized connection may stay silent. The socket is world-connectable, so without this a handful of
+    /// idle connections would hold every slot. A connection that owns a manual fan mode is exempt: the app is allowed
+    /// to leave a fixed speed in place for as long as it likes, and closing that connection would hand the fans back.
+    /// The client reconnects on its own when the helper has closed an idle one.
+    /// </summary>
+    public static readonly TimeSpan DefaultConnectionIdleTimeout = TimeSpan.FromSeconds(60);
+
     private readonly Socket _listener;
     private readonly LinuxHelperPolicy _policy;
     private readonly ISysfsFileSystem _fs;
@@ -155,16 +169,22 @@ public sealed class LinuxHelperServer : IDisposable
     private int _nextConnection;
 
     public LinuxHelperServer(Socket listener, LinuxHelperPolicy policy, ISysfsFileSystem fs, ICallerAuthorizer authorizer,
-        TimeSpan? idleTimeout = null)
+        TimeSpan? idleTimeout = null, TimeSpan? connectionIdleTimeout = null, TimeSpan? authorizationTimeout = null)
     {
         _listener = listener ?? throw new ArgumentNullException(nameof(listener));
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _authorizer = authorizer ?? throw new ArgumentNullException(nameof(authorizer));
         IdleTimeout = idleTimeout ?? DefaultIdleTimeout;
+        ConnectionIdleTimeout = connectionIdleTimeout ?? DefaultConnectionIdleTimeout;
+        AuthorizationTimeout = authorizationTimeout ?? DefaultAuthorizationTimeout;
     }
 
     public TimeSpan IdleTimeout { get; }
+
+    public TimeSpan ConnectionIdleTimeout { get; }
+
+    public TimeSpan AuthorizationTimeout { get; }
 
     /// <summary>Serves until the idle timeout passes with no connection open, or <paramref name="cancel"/> fires.</summary>
     public async Task RunAsync(CancellationToken cancel = default)
@@ -250,15 +270,33 @@ public sealed class LinuxHelperServer : IDisposable
             await using (var stream = new NetworkStream(client, ownsSocket: false))
             {
                 // Authorized as soon as it connects, so an unauthorized connection cannot sit on one of the slots.
-                if (!_authorizer.IsAuthorized(client))
+                // The check (pkcheck, up to 10 s) runs on the thread pool and under a timeout: run inline it would
+                // hold the accept loop, and any local process could stall every other client by connecting.
+                if (!await AuthorizeAsync(client, cancel).ConfigureAwait(false))
                 {
                     await stream.WriteAsync(Encoding.UTF8.GetBytes(Error("not-authorized") + "\n"), cancel).ConfigureAwait(false);
+                    await LingerAsync(client, cancel).ConfigureAwait(false);
                     return;
                 }
 
                 while (!cancel.IsCancellationRequested)
                 {
-                    var line = await ReadLineAsync(stream, cancel).ConfigureAwait(false);
+                    string? line;
+                    using (var idle = CancellationTokenSource.CreateLinkedTokenSource(cancel))
+                    {
+                        if (!OwnsManual(id)) idle.CancelAfter(ConnectionIdleTimeout);
+
+                        try
+                        {
+                            line = await ReadLineAsync(stream, idle.Token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
+                        {
+                            // Silent for too long: free the slot.
+                            break;
+                        }
+                    }
+
                     if (line == null) break;
                     Touch();
 
@@ -277,6 +315,54 @@ public sealed class LinuxHelperServer : IDisposable
             Interlocked.Decrement(ref _active);
             Touch();
             await ReleaseManualAsync(id).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Closes our side of the stream and waits briefly for the peer to finish. Closing a socket that still has unread
+    /// request bytes in it sends a reset, which can throw away the answer the client has not read yet: it would see a
+    /// broken connection instead of "not-authorized".
+    /// </summary>
+    private static async Task LingerAsync(Socket client, CancellationToken cancel)
+    {
+        try
+        {
+            client.Shutdown(SocketShutdown.Send);
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+            limit.CancelAfter(TimeSpan.FromSeconds(1));
+            var sink = new byte[256];
+            while (await client.ReceiveAsync(sink, SocketFlags.None, limit.Token).ConfigureAwait(false) > 0)
+            {
+            }
+        }
+        catch (Exception ex) when (ex is SocketException or ObjectDisposedException or OperationCanceledException)
+        {
+            // The peer is gone or slow; the slot is freed either way.
+        }
+    }
+
+    private bool OwnsManual(int id)
+    {
+        lock (_manualOwners) return _manualOwners.Contains(id);
+    }
+
+    /// <summary>True when the authorizer says yes within <see cref="AuthorizationTimeout"/>; a timeout or a throw is a no.</summary>
+    private async Task<bool> AuthorizeAsync(Socket client, CancellationToken cancel)
+    {
+        try
+        {
+            return await Task.Run(() => _authorizer.IsAuthorized(client), CancellationToken.None)
+                .WaitAsync(AuthorizationTimeout, cancel).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            AppLog.Warn("The helper dropped a connection", "authorization took too long");
+            return false;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppLog.Warn("The helper could not authorize a connection", ex.Message);
+            return false;
         }
     }
 

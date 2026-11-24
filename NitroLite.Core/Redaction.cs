@@ -34,9 +34,17 @@ public static partial class Redaction
     private const int MinimumMachineNameLength = 3;
 
     /// <summary>
-    /// <c>C:\Users\name</c> or <c>C:/Users/name</c>, keeping the drive and the <c>Users</c> segment.
+    /// <c>C:\Users\name</c>, <c>C:/Users/name</c> or the JSON-escaped <c>C:\\Users\\name</c>, keeping the drive and
+    /// the <c>Users</c> segment.
+    /// <para>
+    /// The name runs up to the next character a folder name cannot contain (<c>\ / : * ? " &lt; &gt; |</c> or a line
+    /// break), not up to the next space: a profile called <c>John Smith</c> used to come out as <c>&lt;user&gt; Smith</c>.
+    /// An apostrophe is part of the name (<c>O'Brien</c>) unless it is followed by a space, punctuation or the end of
+    /// the text, which is how a quoted path such as <c>'C:\Users\name'</c> closes. Running a little too far on a bare
+    /// profile path followed by prose is the accepted cost: the line loses a few words, the name never leaks.
+    /// </para>
     /// </summary>
-    [GeneratedRegex(@"(?<drive>[A-Za-z]:[\\/]Users[\\/])[^\\/\s""'<>]+", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<drive>[A-Za-z]:(?:\\{1,2}|/)Users(?:\\{1,2}|/))(?:[^\\/:*?""<>|\r\n']|'(?![\s,;:.)\]}]|$))+", RegexOptions.IgnoreCase)]
     private static partial Regex WindowsProfile();
 
     /// <summary><c>/home/name</c>, keeping the <c>/home</c> segment.</summary>

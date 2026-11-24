@@ -45,6 +45,9 @@ public sealed class RuntimeSensorVerification
     /// <summary>Highest fan speed accepted for a promotion.</summary>
     public const int MaximumFanRpm = 10000;
 
+    /// <summary>The GPU temperature a sleeping dGPU answers. Treated as "no GPU sample", never as a reading.</summary>
+    public const int GpuAsleepTemperature = 0;
+
     /// <summary>Why the last sample did not count, or <see cref="SensorTrustRefusal.None"/>.</summary>
     public SensorTrustRefusal LastRefusal { get; private set; } = SensorTrustRefusal.None;
 
@@ -102,7 +105,8 @@ public sealed class RuntimeSensorVerification
         }
 
         // Both temperatures, not just the CPU one: the curve follows the CPU, the page shows both, and a GPU sensor
-        // that answers nothing is the shape a machine with a bad mapping takes.
+        // that answers garbage is the shape a machine with a bad mapping takes. A GPU zero is the exception — see
+        // Classify.
         var refusal = Classify(sample.CpuTemperature, sample.GpuTemperature, sample.CpuFanSpeed, sample.GpuFanSpeed);
         if (refusal != SensorTrustRefusal.None)
         {
@@ -136,7 +140,12 @@ public sealed class RuntimeSensorVerification
             return SensorTrustRefusal.SentinelValue;
         }
 
-        if (!IsUsableTemperature(cpuTemperature) || !IsUsableTemperature(gpuTemperature))
+        // The CPU reading is what the curve follows, so it has to be inside the window on every sample. A GPU reading
+        // of exactly zero is a different thing: a dGPU that is asleep (iGPU or hybrid mode) answers zero for as long
+        // as it sleeps, and refusing that kept such a machine unverified for the whole session. Zero is therefore "no
+        // GPU sample" — it neither counts for nor against — while any other out-of-window GPU number still refuses.
+        if (!IsUsableTemperature(cpuTemperature)) return SensorTrustRefusal.TemperatureOutOfRange;
+        if (gpuTemperature != GpuAsleepTemperature && !IsUsableTemperature(gpuTemperature))
             return SensorTrustRefusal.TemperatureOutOfRange;
 
         if (!IsUsableFanRpm(cpuFanRpm) || !IsUsableFanRpm(gpuFanRpm)) return SensorTrustRefusal.FanOutOfRange;
@@ -203,7 +212,7 @@ public enum SensorTrustRefusal
     /// <summary>A reading was one of the documented "no data" constants.</summary>
     SentinelValue,
 
-    /// <summary>A temperature was outside 15..115 °C, including the zero a silent sensor answers.</summary>
+    /// <summary>A temperature was outside 15..115 °C, including a CPU zero. A GPU zero is a sleeping dGPU and is not refused.</summary>
     TemperatureOutOfRange,
 
     /// <summary>A fan speed was outside 0..10000 RPM.</summary>

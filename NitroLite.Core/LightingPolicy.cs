@@ -225,6 +225,23 @@ public static class LightingPolicy
         _ => Array.Empty<int>()
     };
 
+    /// <summary>
+    /// <see cref="AllowedDirections(string)"/> for a keyboard that is driven over the ENE KB5130 HID report. That
+    /// report has documented direction bytes only for right (1) and left (2); up and down have none, and the frame
+    /// would send them as "right". Offering them there would let the user pick a direction the keys never play.
+    /// </summary>
+    /// <param name="effect">The app effect name.</param>
+    /// <param name="hidTransport">
+    /// True when the keyboard is written through the HID report: the model profile declares
+    /// <c>nitroHidKeyboard</c>, or the Linux backend writes through hidraw.
+    /// </param>
+    public static IReadOnlyList<int> AllowedDirections(string effect, bool hidTransport)
+    {
+        var allowed = AllowedDirections(effect);
+        if (!hidTransport) return allowed;
+        return allowed.Where(d => d is 1 or 2).ToArray();
+    }
+
     public static string DirectionName(int direction) => direction switch
     {
         1 => Loc.T("Sağa"),

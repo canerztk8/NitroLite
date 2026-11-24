@@ -416,8 +416,20 @@ public partial class MainWindow : Window
         UpdateTelemetryPollingRate();
         UpdateChartVisibility();
 
-        if (_viewModel != null) _ = ReassertLightingAsync(_viewModel);
+        // Only a window that was actually off screen re-asserts. This runs on every ShowWindow — every Nitro key press
+        // and every second launch — and a window already in front has been through no suspend the firmware could have
+        // dropped the lighting on; re-writing it each time only multiplied overlapping re-assertions.
+        bool wasOffScreen = _offScreenBeforeBringToFront;
+        _offScreenBeforeBringToFront = false;
+
+        if (wasOffScreen && _viewModel != null) _ = ReassertLightingAsync(_viewModel);
     }
+
+    /// <summary>
+    /// Whether the window was hidden or minimised when <see cref="BringToFront"/> last ran. Read by
+    /// <see cref="RestoreFromTray"/>, which the tray calls straight after it, once the window is already visible.
+    /// </summary>
+    private bool _offScreenBeforeBringToFront;
 
     /// <summary>
     /// Copies text and swallows what the clipboard throws. A platform clipboard can refuse for reasons the app cannot
@@ -462,6 +474,8 @@ public partial class MainWindow : Window
     /// </remarks>
     public void BringToFront()
     {
+        _offScreenBeforeBringToFront = !IsWindowOnScreen;
+
         Show();
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
@@ -627,6 +641,15 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         if (AllowClose) return;
+
+        // Only the user's own close goes to the tray. A sign-out, a shutdown or the application shutting itself down
+        // must be allowed to close the window: cancelling those holds up the session end on a window nobody can see.
+        // The fans are handed back by the lifetime's ShutdownRequested handler, not here.
+        if (e.CloseReason is WindowCloseReason.OSShutdown or WindowCloseReason.ApplicationShutdown)
+        {
+            SaveWindowPosition();
+            return;
+        }
 
         e.Cancel = true;
         SaveWindowPosition();

@@ -30,6 +30,9 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
     private const string AcerNameFragment = "acer";
     private const string WmiNameFragment = "wmi";
 
+    /// <summary>How long one wait for an event lasts before the reader looks at the stop flag again.</summary>
+    private static readonly TimeSpan ReadSlice = TimeSpan.FromMilliseconds(250);
+
     private readonly IEvdevSource _source;
     private readonly NitroKeyDebounceGuard _debounce;
     private readonly object _gate = new();
@@ -108,8 +111,9 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
 
         try { stop?.Cancel(); } catch (ObjectDisposedException) { /* already stopped */ }
 
-        // Closing the device is what unblocks a pending read; cancelling the token alone would leave the reader
-        // waiting for a key that may never come.
+        // The readers wait in short slices and look at the token between them, so cancelling is enough for the real
+        // devices. Closing the devices afterwards also wakes a device that can only block (a test double), and a real
+        // device waits for its reader to leave before it closes the descriptor.
         lock (_gate)
         {
             foreach (var device in _devices)
@@ -118,11 +122,14 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
             }
 
             _devices.Clear();
-            _probed = false;
         }
 
         try { loop?.Wait(TimeSpan.FromSeconds(1)); } catch { /* a wedged reader must not block exit */ }
         stop?.Dispose();
+
+        // Only now may the devices be probed (opened) again: the old readers are gone, so a restart cannot end up with
+        // two readers on one device.
+        lock (_gate) _probed = false;
     }
 
     private void EnsureProbed()
@@ -202,7 +209,7 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
             int read;
             try
             {
-                read = device.Read(buffer);
+                read = device.Read(buffer, ReadSlice);
             }
             catch (Exception ex)
             {
@@ -211,7 +218,8 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
                 return;
             }
 
-            if (read <= 0) return;
+            if (read == 0) return;
+            if (read < 0) continue; // nothing arrived in this slice; the loop re-checks the token
 
             for (int offset = 0; offset + eventSize <= read; offset += eventSize)
             {

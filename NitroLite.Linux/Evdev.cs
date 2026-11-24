@@ -61,6 +61,14 @@ public interface IEvdevDevice : IDisposable
 
     /// <summary>Reads raw bytes, blocking until at least one event is available. Zero means the device closed.</summary>
     int Read(Span<byte> buffer);
+
+    /// <summary>
+    /// Reads raw bytes, waiting at most <paramref name="timeout"/>: zero means the device closed, a negative number
+    /// means nothing arrived in time. A reader that loops on this can notice a stop request between waits instead of
+    /// depending on the close to wake a blocked read. The default is the blocking read, for devices that cannot time
+    /// out.
+    /// </summary>
+    int Read(Span<byte> buffer, TimeSpan timeout) => Read(buffer);
 }
 
 /// <summary>Finds and opens the input devices on this machine.</summary>
@@ -158,8 +166,15 @@ public sealed class RealEvdevSource : IEvdevSource
         private const ushort EvKey = 0x01;
         private const int KeyMax = 0x2FF;
 
+        private const short PollIn = 0x001;
+        private const short PollErr = 0x008;
+        private const short PollHup = 0x010;
+        private const short PollNval = 0x020;
+
         private readonly FileStream _stream;
         private readonly int _fd;
+        private readonly object _readGate = new();
+        private volatile bool _closing;
 
         private RealEvdevDevice(FileStream stream, string name)
         {
@@ -174,7 +189,7 @@ public sealed class RealEvdevSource : IEvdevSource
 
         public static RealEvdevDevice Open(string path)
         {
-            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.None);
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 0, FileOptions.None);
             try
             {
                 return new RealEvdevDevice(stream, ReadName(stream));
@@ -255,9 +270,65 @@ public sealed class RealEvdevSource : IEvdevSource
         /// <summary><c>_IOC(_IOC_READ, 'E', nr, size)</c>, which is how every evdev ioctl number is built.</summary>
         private static nuint Request(uint nr, int size) => IoctlRequest(nr, size);
 
-        public int Read(Span<byte> buffer) => _stream.Read(buffer);
+        public int Read(Span<byte> buffer)
+        {
+            // Never an unbounded read(): the wait is a poll in short slices, so a close is noticed within one slice.
+            while (true)
+            {
+                var read = Read(buffer, TimeSpan.FromMilliseconds(250));
+                if (read >= 0) return read;
+            }
+        }
 
-        public void Dispose() => _stream.Dispose();
+        /// <summary>
+        /// Waits in <c>poll()</c> for an event and reads only when one is there, so the call never sits in a blocking
+        /// <c>read()</c> that holds the descriptor: closing a descriptor another thread is blocked on does not wake it.
+        /// </summary>
+        public int Read(Span<byte> buffer, TimeSpan timeout)
+        {
+            lock (_readGate)
+            {
+                if (_closing) return 0;
+
+                var fds = new PollFd { Fd = _fd, Events = PollIn };
+                var ms = (int)Math.Clamp(timeout.TotalMilliseconds, 0, 5000);
+                var ready = Poll(ref fds, 1, ms);
+                if (ready < 0) return -1; // EINTR and friends: try again on the next slice
+                if (ready == 0) return -1;
+                if ((fds.Revents & (PollErr | PollHup | PollNval)) != 0 && (fds.Revents & PollIn) == 0) return 0;
+
+                return _stream.Read(buffer);
+            }
+        }
+
+        public void Dispose()
+        {
+            _closing = true;
+
+            // A reader inside Read(…, timeout) leaves within one poll slice. Waiting for it here means the descriptor
+            // is never closed under a thread that still uses it (and the number cannot be reused by another open).
+            var taken = false;
+            try
+            {
+                taken = Monitor.TryEnter(_readGate, TimeSpan.FromSeconds(1));
+                _stream.Dispose();
+            }
+            finally
+            {
+                if (taken) Monitor.Exit(_readGate);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PollFd
+        {
+            public int Fd;
+            public short Events;
+            public short Revents;
+        }
+
+        [DllImport("libc", EntryPoint = "poll", SetLastError = true)]
+        private static extern int Poll(ref PollFd fds, nuint count, int timeoutMs);
 
         [DllImport("libc", EntryPoint = "ioctl", SetLastError = true)]
         private static extern int Ioctl(int fd, nuint request, IntPtr argument);

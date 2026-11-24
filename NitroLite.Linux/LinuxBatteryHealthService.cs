@@ -123,10 +123,11 @@ public sealed class LinuxBatteryHealthService : IBatteryHealthService
         var remaining = ReadEnergyMWh(directory, "energy_now", "charge_now");
         if (remaining > 0) status.RemainingCapacityMWh = remaining;
 
-        // The kernel's own estimate, in minutes. Absent on most drivers, which is why the page hides the row when the
+        // The kernel's own estimate. time_to_empty_now is in seconds (power_supply ABI), the model carries minutes.
+        // Absent on most drivers, which is why the page hides the row when the
         // machine is on the adapter rather than printing a placeholder.
-        var minutes = ReadInt(directory, "time_to_empty_now");
-        status.EstimatedRemainingMinutes = minutes ?? 0;
+        var seconds = ReadInt(directory, "time_to_empty_now");
+        status.EstimatedRemainingMinutes = seconds is > 0 ? seconds.Value / 60 : 0;
 
         status.IsWatchdogActive = WatchdogEnabled;
         status.IsOvercharged = WatchdogEnabled && status.IsPluggedIn && status.BatteryPercent >= 80;

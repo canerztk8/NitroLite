@@ -150,7 +150,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 ["methods"] = methods,
                 ["fanControl"] = gaming != null,
                 ["operatingMode"] = gaming != null,
-                ["muxSwitch"] = registry.DgpuModeCapability is > 0 || wmiMux,
+                // Only what SetMuxMode will actually write. It refuses without the Acer registry mask (and must keep
+                // refusing: the mask is what says which modes exist), so advertising the switch from the WMI signal
+                // alone offered a control whose every write came back not-supported. The signal is still reported on
+                // its own line for the hardware report.
+                ["muxSwitch"] = registry.DgpuModeCapability is > 0,
                 ["wmiMuxSwitch"] = wmiMux,
                 ["batteryLimit"] = battery != null,
                 ["keyboardLighting"] = keyboardLighting,

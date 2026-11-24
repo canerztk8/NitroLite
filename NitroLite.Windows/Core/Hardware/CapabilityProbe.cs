@@ -197,8 +197,9 @@ public static class CapabilityProbe
 
     /// <summary>
     /// Layer 1 and 2, with the elevated <c>GetGamingMiscSetting(0x09)</c> answer supplied when a worker has already
-    /// read it. The signal can only ever add MUX support, never remove it: a machine whose registry advertises the
-    /// switch keeps it even when the WMI selector answers something this build does not recognise.
+    /// read it. The signal neither adds nor removes MUX support: support follows the registry mask the MUX write
+    /// requires, and a signal without that mask is reported as detected but not writable. A machine whose registry
+    /// advertises the switch keeps it even when the WMI selector answers something this build does not recognise.
     /// </summary>
     public static CapabilitySnapshot Probe(
         DeviceIdentity identity, ProfileCatalog catalog, SchemaProbeResult schema, bool? wmiMuxSignal)
@@ -389,26 +390,35 @@ public static class CapabilityProbe
 
     private static HardwareProbeResult DescribeMuxSwitch(AcerRegistrySnapshot registry, bool? wmiMuxSignal)
     {
-        // The WMI selector is the stronger signal: it is the firmware answering about itself, where the registry is
-        // the Acer agent's opinion. It can only add support, never remove it, because a selector this build does not
-        // recognise is not evidence that the switch is gone.
-        if (wmiMuxSignal == true)
-            return HardwareProbeResult.Supported(CapabilitySnapshot.MuxSwitch, "GetGamingMiscSetting(0x09)=3");
-
+        // Supported means "SetMuxMode will write it", and SetMuxMode needs the registry mask: it is what says which
+        // modes exist, and the writer refuses without it. The WMI selector (0x09 = 3) is the firmware saying it has a
+        // switch, which is worth reporting, but on its own it used to advertise a control whose every write came back
+        // not-supported. So the signal no longer adds support; it only explains a "no". It still never removes
+        // support either: a selector this build does not recognise is not evidence that the switch is gone.
         if (registry.DgpuModeCapability is not int mask)
         {
+            if (wmiMuxSignal == true)
+                return HardwareProbeResult.Unsupported(CapabilitySnapshot.MuxSwitch,
+                    "detected but not writable: GetGamingMiscSetting(0x09)=3, but dgpu_mode_capability is not readable and the MUX write requires it");
+
             return wmiMuxSignal == false
                 ? HardwareProbeResult.Unsupported(CapabilitySnapshot.MuxSwitch,
                     "GetGamingMiscSetting(0x09) is not 3 and dgpu_mode_capability is not readable")
                 : HardwareProbeResult.Unknown(CapabilitySnapshot.MuxSwitch, "dgpu_mode_capability not readable");
         }
 
-        if (mask <= 0) return HardwareProbeResult.Unsupported(CapabilitySnapshot.MuxSwitch, "dgpu_mode_capability=0");
+        if (mask <= 0)
+        {
+            return HardwareProbeResult.Unsupported(CapabilitySnapshot.MuxSwitch, wmiMuxSignal == true
+                ? "detected but not writable: GetGamingMiscSetting(0x09)=3, but dgpu_mode_capability=0 and the MUX write requires a mask"
+                : "dgpu_mode_capability=0");
+        }
 
         var modes = registry.SupportedGpuModes;
         var detail = modes.Count > 0
             ? $"dgpu_mode_capability={mask} ({string.Join(", ", modes)})"
             : $"dgpu_mode_capability={mask}";
+        if (wmiMuxSignal == true) detail += "; GetGamingMiscSetting(0x09)=3";
         return HardwareProbeResult.Supported(CapabilitySnapshot.MuxSwitch, detail);
     }
 

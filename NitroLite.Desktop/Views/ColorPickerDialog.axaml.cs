@@ -145,12 +145,34 @@ public partial class ColorPickerDialog : Window
     /// Types a hex into the box. A half-typed value is left alone rather than snapped to a default: the box is the one
     /// place a colour can be entered exactly, and rewriting it mid-keystroke would make it unusable.
     /// </summary>
+    /// <remarks>
+    /// Only a complete <c>#RRGGBB</c> (or the six digits alone) is taken. <c>Color.TryParse</c>
+    /// also accepts the short <c>#RGB</c> form, so "#00E" on the way to "#00E5FF" parsed as #0000EE and the box was
+    /// rewritten under the user's cursor. And the box is not written back from its own edit: the colour round-trips
+    /// through hue/saturation/value, and a rounding step there would otherwise replace what was typed.
+    /// </remarks>
     private void OnHexChanged(object? sender, TextChangedEventArgs e)
     {
         if (_syncingHex) return;
-        if (!Color.TryParse(HexBox.Text, out var color)) return;
+        if (!TryParseFullHex(HexBox.Text, out var color)) return;
 
-        SetColor(color);
+        _typingHex = true;
+        try { SetColor(color); }
+        finally { _typingHex = false; }
+    }
+
+    /// <summary>True while the colour is being adopted from the hex box, so the box is not rewritten from itself.</summary>
+    private bool _typingHex;
+
+    /// <summary>Parses exactly six hex digits, with or without a leading '#'. Anything shorter is still being typed.</summary>
+    private static bool TryParseFullHex(string? text, out Color color)
+    {
+        color = default;
+        var hex = text?.Trim() ?? "";
+        if (hex.StartsWith('#')) hex = hex[1..];
+        if (hex.Length != 6 || !hex.All(Uri.IsHexDigit)) return false;
+
+        return Color.TryParse("#" + hex, out color);
     }
 
     // ---------------------------------------------------------------- painting
@@ -214,6 +236,9 @@ public partial class ColorPickerDialog : Window
 
     private void WriteHexBox(Color color)
     {
+        // The user's own text stays as typed; see OnHexChanged.
+        if (_typingHex) return;
+
         var hex = Format(color);
         if (HexBox.Text == hex) return;
 

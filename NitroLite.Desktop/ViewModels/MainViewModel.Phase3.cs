@@ -1887,6 +1887,13 @@ public sealed partial class MainViewModel
                 AppPaths.GetDataFile("game_profiles.json"),
                 AppPaths.GetDataFile("rgb_presets.json"))).ConfigureAwait(true);
 
+            // The settings file now holds the backup, but _settings still holds what was loaded at startup, and the
+            // next save — the window placement on close, a slider, the fan hand-back at exit — would write that copy
+            // straight back over the restore. Settings are read once at startup, so the restore only takes effect on
+            // the next launch, and until then nothing in this process may write the file. A partial restore counts:
+            // the settings part is written first, so anything in Written means the file was replaced.
+            if (result.Success || result.Written.Count > 0) BlockSettingsSavesAfterRestore();
+
             Status = result.Success ? Labels.BackupRestored : result.Error ?? Labels.BackupRestoreFailed;
         }
         catch (Exception ex)

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Text.Json.Nodes;
 
 namespace NitroLite.Core;
 
@@ -253,70 +254,142 @@ exit 0
     /// <summary>Where the previous values of every setting OptimizePcAsync changes are stored.</summary>
     public static string OptimizeBackupPath => AppPaths.GetDataFile("optimize_backup.json");
 
+    /// <summary>The services <see cref="OptimizePcAsync"/> changes, and the only ones the restore acts on.</summary>
+    internal static readonly string[] OptimizedServices = { "SysMain", "ClickToRunSvc", "Plastic Server 6" };
+
+    /// <summary>The CEIP tasks <see cref="OptimizePcAsync"/> disables.</summary>
+    internal static readonly string[] OptimizedTasks = { "Consolidator", "UsbCeip" };
+
+    /// <summary>The Task Scheduler folder of <see cref="OptimizedTasks"/>.</summary>
+    internal const string CeipTaskPath = @"\Microsoft\Windows\Customer Experience Improvement Program\";
+
+    /// <summary>
+    /// The machine's state before an optimization: each service's start type (by name), the HwSchMode value (-1 when it
+    /// does not exist) and each task's state ("Ready" or "Disabled").
+    /// </summary>
+    internal sealed record OptimizeSnapshot(
+        IReadOnlyDictionary<string, string> Services,
+        int Hags,
+        IReadOnlyDictionary<string, string> Tasks);
+
+    /// <summary>The undo record, in the shape <c>optimize_backup.json</c> has always had.</summary>
+    internal sealed class OptimizeBackupRecord
+    {
+        public Dictionary<string, string> Services { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public int Hags { get; set; } = -1;
+        public List<(string Name, string Path, string State)> Tasks { get; } = new();
+    }
+
+    /// <summary>Test seam for the unelevated state read, so a test never depends on this machine's services.</summary>
+    internal static Func<OptimizeSnapshot>? CurrentStateSeam { get; set; }
+
     /// <summary>
     /// Applies elevated performance, telemetry debloat and system tuning optimizations. Every value that is
     /// changed is written to <see cref="OptimizeBackupPath"/> first, so <see cref="RestoreOptimizePcAsync"/> can
     /// put the machine back the way it was.
     /// </summary>
+    /// <remarks>
+    /// The undo record is written here, unelevated, through <see cref="AtomicFile"/>, before the elevation prompt is
+    /// shown. The elevated script used to write it itself with <c>Out-File -Force</c> to a fixed path in the user's
+    /// data folder — a folder any same-user process can replace with a junction or a link, which turned the write
+    /// into "overwrite any file on the machine with administrator rights". The elevated script now writes nothing
+    /// into a folder the user can write to; it only receives the list of tasks it may disable.
+    /// <para>
+    /// Everything the record needs is readable without administrator rights: a service's start type and HwSchMode
+    /// from HKLM, a task's state from <c>schtasks /query /xml</c>. A task whose state cannot be read is not recorded,
+    /// and is therefore not disabled either: the tool never changes what it could not undo.
+    /// </para>
+    /// </remarks>
     public static async Task<ToolExecutionResult> OptimizePcAsync()
     {
         string backupPath = OptimizeBackupPath;
-        string script = @"
+
+        // The undo record is read first and written before the first change. A second run must not replace the
+        // original state with the already-optimized one, and a run that is cut short must still be undoable.
+        OptimizeBackupRecord record;
+        try
+        {
+            record = File.Exists(backupPath)
+                ? ParseOptimizeBackup(BoundedTextFile.ReadAllText(backupPath))
+                : new OptimizeBackupRecord();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The optimization backup could not be read", $"{backupPath}: {ex.Message}");
+            string reason = Loc.T("Optimizasyon yedeği okunamadı; üzerine yazılmadı.");
+            return new ToolExecutionResult
+            {
+                Success = false,
+                Message = Loc.T($"Optimizasyon sırasında hata: {reason}")
+            };
+        }
+
+        OptimizeSnapshot current;
+        try
+        {
+            // Off the caller's thread: two schtasks queries can take a few seconds on a slow machine.
+            current = await Task.Run(CurrentStateSeam ?? ReadCurrentOptimizeState);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The state before the optimization could not be read", ex.Message);
+            current = new OptimizeSnapshot(
+                new Dictionary<string, string>(), -1, new Dictionary<string, string>());
+        }
+
+        MergeMissing(record, current);
+
+        try
+        {
+            var directory = Path.GetDirectoryName(backupPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            AtomicFile.WriteAllText(backupPath, SerializeOptimizeBackup(record, indented: true));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The optimization backup could not be written", $"{backupPath}: {ex.Message}");
+            string reason = Loc.T("Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.") + " " + ex.Message;
+            return new ToolExecutionResult
+            {
+                Success = false,
+                Message = Loc.T($"Optimizasyon sırasında hata: {reason}")
+            };
+        }
+
+        string script = BuildOptimizeScript(record.Tasks.Select(t => t.Name));
+        var (ok, err) = await RunElevatedScriptAsync(script, "nl_optimize_pc");
+        return new ToolExecutionResult
+        {
+            Success = ok,
+            Message = ok
+                ? Loc.T($"Sistem ve arka plan optimizasyonları başarıyla uygulandı. Önceki ayarlar yedeklendi: {backupPath}")
+                : Loc.T($"Optimizasyon sırasında hata: {err}")
+        };
+    }
+
+    /// <summary>
+    /// The elevated optimization script. <paramref name="tasksToDisable"/> is filtered against
+    /// <see cref="OptimizedTasks"/>, so nothing but those two constant names can reach the script text.
+    /// </summary>
+    internal static string BuildOptimizeScript(IEnumerable<string> tasksToDisable)
+    {
+        var wanted = new HashSet<string>(tasksToDisable, StringComparer.OrdinalIgnoreCase);
+        var tasks = OptimizedTasks
+            .Where(wanted.Contains)
+            .Select(name => "'" + Loc.PsQuote(name) + "'");
+        string taskList = "@(" + string.Join(", ", tasks) + ")";
+
+        return @"
 $ErrorActionPreference = 'Stop'
 $errs = @()
-$backupPath = '" + backupPath.Replace("'", "''") + @"'
 
-# The undo record is read first and written before the first change. A second run must not replace the original
-# state with the already-optimized one, and a run that is cut short must still be undoable.
-$services = @{}
-$tasks = @()
-$hags = -1
-if (Test-Path -LiteralPath $backupPath) {
-    try { $existing = Get-Content -LiteralPath $backupPath -Raw | ConvertFrom-Json }
-    catch { throw '" + Loc.Ps("Optimizasyon yedeği okunamadı; üzerine yazılmadı.") + @"' }
-    if ($null -ne $existing.services) {
-        foreach ($p in $existing.services.PSObject.Properties) { $services[$p.Name] = [string]$p.Value }
-    }
-    if ($null -ne $existing.tasks) { $tasks = @($existing.tasks) }
-    if ($null -ne $existing.hags) { $hags = [int]$existing.hags }
-}
-
-function Save-Backup {
-    [ordered]@{ services = $services; hags = $hags; tasks = $tasks } |
-        ConvertTo-Json -Depth 5 | Out-File -FilePath $backupPath -Encoding utf8 -Force
-}
-
+# The undo record was written by the unelevated app before this script was started. This script writes nothing
+# into the user's data folder.
 $gfxPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
-$ceip = '\Microsoft\Windows\Customer Experience Improvement Program\'
+$ceip = '" + Loc.PsQuote(CeipTaskPath) + @"'
 $idleServices = 'ClickToRunSvc', 'Plastic Server 6'
+$tasksToDisable = " + taskList + @"
 
-# 1. Record the current state. Only values that are not in the backup yet are taken, so the first run keeps
-#    the machine's real starting point. -1 means HwSchMode did not exist and must be removed on restore.
-$svc = Get-Service -Name 'SysMain' -ErrorAction SilentlyContinue
-if ($svc -and -not $services.ContainsKey('SysMain')) { $services['SysMain'] = [string]$svc.StartType }
-
-if ($hags -eq -1 -and (Test-Path -LiteralPath $gfxPath)) {
-    $existingHags = Get-ItemProperty -Path $gfxPath -Name 'HwSchMode' -ErrorAction SilentlyContinue
-    if ($null -ne $existingHags) { $hags = [int]$existingHags.HwSchMode }
-}
-
-foreach ($t in 'Consolidator', 'UsbCeip') {
-    $task = Get-ScheduledTask -TaskName $t -TaskPath $ceip -ErrorAction SilentlyContinue
-    if ($task -and -not ($tasks | Where-Object { $_.name -eq $t })) {
-        $tasks += @{ name = $t; path = $ceip; state = [string]$task.State }
-    }
-}
-
-foreach ($s in $idleServices) {
-    $idle = Get-Service -Name $s -ErrorAction SilentlyContinue
-    if ($idle -and -not $services.ContainsKey($s)) { $services[$s] = [string]$idle.StartType }
-}
-
-# 2. Write the undo record before anything is changed.
-try { Save-Backup }
-catch { throw ('" + Loc.Ps("Optimizasyon yedeği yazılamadı; hiçbir ayar değiştirilmedi.") + @" ' + $_.Exception.Message) }
-
-# 3. Apply.
 try {
     $svc = Get-Service -Name 'SysMain' -ErrorAction Stop
     Set-Service -Name 'SysMain' -StartupType Disabled -ErrorAction Stop
@@ -329,7 +402,7 @@ try {
     }
 } catch { $errs += ('HAGS: ' + $_.Exception.Message) }
 
-foreach ($t in 'Consolidator', 'UsbCeip') {
+foreach ($t in $tasksToDisable) {
     try { Disable-ScheduledTask -TaskName $t -TaskPath $ceip -ErrorAction Stop | Out-Null }
     catch { $errs += ($t + ': ' + $_.Exception.Message) }
 }
@@ -359,19 +432,218 @@ foreach ($s in $idleServices) {
 
 " + ElevatedErrorLog.WriteStatement + @"
 ";
-        var (ok, err) = await RunElevatedScriptAsync(script, "nl_optimize_pc");
-        return new ToolExecutionResult
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="record"/> every value it does not hold yet. Values already in it are the machine's
+    /// real starting point from an earlier run and are never replaced.
+    /// </summary>
+    internal static void MergeMissing(OptimizeBackupRecord record, OptimizeSnapshot current)
+    {
+        foreach (var (name, startType) in current.Services)
         {
-            Success = ok,
-            Message = ok
-                ? Loc.T($"Sistem ve arka plan optimizasyonları başarıyla uygulandı. Önceki ayarlar yedeklendi: {backupPath}")
-                : Loc.T($"Optimizasyon sırasında hata: {err}")
+            if (!OptimizedServices.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            record.Services.TryAdd(name, startType);
+        }
+
+        if (record.Hags == -1) record.Hags = current.Hags;
+
+        foreach (var (name, state) in current.Tasks)
+        {
+            if (!OptimizedTasks.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            if (record.Tasks.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))) continue;
+            record.Tasks.Add((name, CeipTaskPath, state));
+        }
+    }
+
+    /// <summary>
+    /// Reads an undo record. Accepts both what this class writes and what the elevated script used to write
+    /// (<c>ConvertTo-Json</c> may emit a one-element task list as a bare object). Throws when the text is not a
+    /// JSON object.
+    /// </summary>
+    internal static OptimizeBackupRecord ParseOptimizeBackup(string json)
+    {
+        var root = JsonNode.Parse(json.TrimStart('\uFEFF')) as JsonObject
+                   ?? throw new InvalidDataException("The optimization backup is not a JSON object.");
+
+        var record = new OptimizeBackupRecord();
+
+        if (root["services"] is JsonObject services)
+        {
+            foreach (var (name, value) in services)
+            {
+                if (value is JsonValue v && v.TryGetValue<string>(out var startType))
+                    record.Services[name] = startType;
+            }
+        }
+
+        if (root["hags"] is JsonValue hags)
+        {
+            if (hags.TryGetValue<int>(out var number)) record.Hags = number;
+            else if (hags.TryGetValue<string>(out var text)
+                     && int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                record.Hags = parsed;
+        }
+
+        IEnumerable<JsonNode?> taskNodes = root["tasks"] switch
+        {
+            JsonArray array => array,
+            JsonObject single => new[] { single },
+            _ => Array.Empty<JsonNode?>()
         };
+        foreach (var node in taskNodes)
+        {
+            if (node is not JsonObject task) continue;
+            string? name = ReadString(task["name"]);
+            string? path = ReadString(task["path"]);
+            string? state = ReadString(task["state"]);
+            if (string.IsNullOrEmpty(name)) continue;
+            record.Tasks.Add((name, path ?? "", state ?? ""));
+        }
+
+        return record;
+    }
+
+    private static string? ReadString(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    /// <summary>Writes an undo record in the shape the restore script reads.</summary>
+    internal static string SerializeOptimizeBackup(OptimizeBackupRecord record, bool indented)
+    {
+        var services = new JsonObject();
+        foreach (var (name, startType) in record.Services) services[name] = startType;
+
+        var tasks = new JsonArray();
+        foreach (var (name, path, state) in record.Tasks)
+        {
+            tasks.Add(new JsonObject
+            {
+                ["name"] = name,
+                ["path"] = path,
+                ["state"] = state
+            });
+        }
+
+        var root = new JsonObject
+        {
+            ["services"] = services,
+            ["hags"] = record.Hags,
+            ["tasks"] = tasks
+        };
+        return indented ? root.ToJsonString(JsonDefaults.Indented) : root.ToJsonString();
+    }
+
+    /// <summary>
+    /// The current state of everything <see cref="OptimizePcAsync"/> changes, read without administrator rights.
+    /// </summary>
+    private static OptimizeSnapshot ReadCurrentOptimizeState()
+    {
+        var services = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in OptimizedServices)
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Services\" + name);
+                // The names Get-Service reports as StartType in Windows PowerShell 5.1, which is what the restore
+                // script validates and passes back to Set-Service.
+                string? startType = key?.GetValue("Start") switch
+                {
+                    0 => "Boot",
+                    1 => "System",
+                    2 => "Automatic",
+                    3 => "Manual",
+                    4 => "Disabled",
+                    _ => null
+                };
+                if (startType != null) services[name] = startType;
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                // Not installed or not readable: not recorded, and the script's own Get-Service check skips it.
+            }
+        }
+
+        int hags = -1;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers");
+            if (key?.GetValue("HwSchMode") is int value) hags = value;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+        }
+
+        var tasks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in OptimizedTasks)
+        {
+            var enabled = QueryTaskEnabled(CeipTaskPath + name);
+            if (enabled.HasValue) tasks[name] = enabled.Value ? "Ready" : "Disabled";
+        }
+
+        return new OptimizeSnapshot(services, hags, tasks);
+    }
+
+    /// <summary>
+    /// Whether a scheduled task is enabled, from <c>schtasks /query /xml</c> (the XML is the same in every display
+    /// language). Null when the task does not exist, cannot be read or schtasks does not answer in time.
+    /// </summary>
+    private static bool? QueryTaskEnabled(string taskPath)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = WindowsPaths.SystemTool("schtasks.exe"),
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }.WithArguments("/query", "/tn", taskPath, "/xml"));
+            if (process == null) return null;
+
+            var read = process.StandardOutput.ReadToEndAsync();
+            if (!read.Wait(3000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                return null;
+            }
+            if (!process.WaitForExit(500)) return null;
+            return ParseTaskEnabled(read.Result, process.ExitCode);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads the enabled flag out of <c>schtasks /query /xml</c> output. Null when schtasks failed or the output is not
+    /// a task definition.
+    /// </summary>
+    /// <remarks>
+    /// schtasks <em>omits</em> <c>&lt;Enabled&gt;</c> for an enabled task — the Task Scheduler schema default is true —
+    /// and only writes <c>&lt;Enabled&gt;false&lt;/Enabled&gt;</c> for a disabled one. Treating a missing element as
+    /// "unknown" made every enabled CEIP task unrecordable, so PC Optimize silently stopped disabling them.
+    /// </remarks>
+    internal static bool? ParseTaskEnabled(string? xml, int exitCode)
+    {
+        if (exitCode != 0 || string.IsNullOrWhiteSpace(xml)) return null;
+
+        var explicitFlag = DebloatService.ParseTaskEnabledFromXml(xml);
+        if (explicitFlag.HasValue) return explicitFlag;
+
+        // A task definition with no <Enabled> element is an enabled task.
+        return System.Text.RegularExpressions.Regex.IsMatch(xml, @"<Task[\s>]") ? true : null;
     }
 
     /// <summary>
     /// Puts back every value <see cref="OptimizePcAsync"/> changed, using the backup it wrote.
     /// </summary>
+    /// <remarks>
+    /// The record is read here, unelevated, and handed to the script as data. The elevated script no longer opens a
+    /// path in the user's data folder at all, so a link planted there cannot point it at another file.
+    /// </remarks>
     public static async Task<ToolExecutionResult> RestoreOptimizePcAsync()
     {
         string backupPath = OptimizeBackupPath;
@@ -384,12 +656,29 @@ foreach ($s in $idleServices) {
             };
         }
 
+        string backupJson;
+        try
+        {
+            // Parsed and written out again, so only the three fields the script reads reach it.
+            backupJson = SerializeOptimizeBackup(
+                ParseOptimizeBackup(BoundedTextFile.ReadAllText(backupPath)), indented: false);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The optimization backup could not be read", $"{backupPath}: {ex.Message}");
+            string reason = ex.Message;
+            return new ToolExecutionResult
+            {
+                Success = false,
+                Message = Loc.T($"Ayarlar geri yüklenemedi: {reason}")
+            };
+        }
+
         string script = @"
 $ErrorActionPreference = 'Stop'
 $errs = @()
-$backupPath = '" + backupPath.Replace("'", "''") + @"'
-if (-not (Test-Path -LiteralPath $backupPath)) { throw '" + Loc.Ps("Optimizasyon yedegi bulunamadi.") + @"' }
-$backup = Get-Content -LiteralPath $backupPath -Raw | ConvertFrom-Json
+$backup = '" + Loc.PsQuote(backupJson) + @"' | ConvertFrom-Json
+if ($null -eq $backup) { throw '" + Loc.Ps("Optimizasyon yedegi bulunamadi.") + @"' }
 
 # The undo record is a file in the user's data folder, so its contents are not trusted. Only the names this tool
 # itself records are acted on, and only with a start type Windows accepts: without that, editing the file would make
@@ -500,8 +789,86 @@ if ($null -ne $backup.tasks) {
         }
     }
 
+    /// <summary>
+    /// How long the caller waits for an elevated script before it reports the script as still running.
+    /// </summary>
+    internal const int ElevatedTimeoutSeconds = 35;
+
+    /// <summary>How long one service is given to reach Running or Stopped inside an elevated script.</summary>
+    internal const int ServiceWaitSeconds = 20;
+
+    /// <summary>
+    /// Bounded replacements for <c>Start-Service</c> and <c>Stop-Service</c>, prepended to every script.
+    /// <para>
+    /// The cmdlets wait without a limit for a service that sits in StartPending or StopPending. An elevated script
+    /// stuck there never reaches its <c>finally</c> block, so a repair that stopped AASSvc and changed its image path
+    /// could neither finish nor put either back. A PowerShell function takes precedence over a cmdlet of the same
+    /// name, so every existing call — including the ones in the <c>finally</c> blocks — becomes a call with a
+    /// <see cref="ServiceWaitSeconds"/>-second limit without each site having to remember it. <c>-ErrorAction</c>
+    /// keeps its meaning: <c>Stop</c> (or the scripts' default) throws, <c>SilentlyContinue</c> swallows.
+    /// </para>
+    /// </summary>
+    internal static readonly string BoundedServiceCommands = @"
+Add-Type -AssemblyName System.ServiceProcess
+function Start-Service {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true, Position = 0)][string[]]$Name)
+    foreach ($n in $Name) {
+        $sc = $null
+        try {
+            $sc = New-Object System.ServiceProcess.ServiceController -ArgumentList $n
+            if ($sc.Status -ne 'Running') {
+                if ($sc.Status -ne 'StartPending') { $sc.Start() }
+                $sc.WaitForStatus('Running', [TimeSpan]::FromSeconds(" + ServiceWaitSeconds + @"))
+            }
+        } catch {
+            if ($ErrorActionPreference -eq 'Stop') { throw } else { Write-Error -ErrorRecord $_ }
+        } finally {
+            if ($null -ne $sc) { $sc.Dispose(); $sc = $null }
+        }
+    }
+}
+function Stop-Service {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true, Position = 0)][string[]]$Name, [switch]$Force)
+    foreach ($n in $Name) {
+        $sc = $null
+        try {
+            $sc = New-Object System.ServiceProcess.ServiceController -ArgumentList $n
+            if ($sc.Status -ne 'Stopped') {
+                # ServiceController.Stop() stops running dependents first and waits for them without a limit, so
+                # they are stopped here, bounded, beforehand. The list comes back in stop order.
+                foreach ($d in $sc.DependentServices) {
+                    if ($d.Status -ne 'Stopped') {
+                        if ($d.Status -ne 'StopPending') { $d.Stop() }
+                        $d.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(" + ServiceWaitSeconds + @"))
+                    }
+                }
+                if ($sc.Status -ne 'StopPending') { $sc.Stop() }
+                $sc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(" + ServiceWaitSeconds + @"))
+            }
+        } catch {
+            if ($ErrorActionPreference -eq 'Stop') { throw } else { Write-Error -ErrorRecord $_ }
+        } finally {
+            if ($null -ne $sc) { $sc.Dispose(); $sc = $null }
+        }
+    }
+}
+";
+
+    private static readonly object ActiveScriptLock = new();
+
+    /// <summary>
+    /// The elevated script that outlived <see cref="ElevatedTimeoutSeconds"/>. It is left to finish rather than
+    /// killed, and no other script starts while it runs: two repairs editing the same service keys at once is how a
+    /// machine ends up with neither the old nor the new image path.
+    /// </summary>
+    private static Process? _activeScript;
+
     private static async Task<(bool ok, string? error)> RunElevatedScriptAsync(string script, string prefix)
     {
+        script = BoundedServiceCommands + script;
+
         if (ElevatedRunnerSeam != null)
         {
             try
@@ -515,9 +882,27 @@ if ($null -ne $backup.tasks) {
             }
         }
 
+        lock (ActiveScriptLock)
+        {
+            if (_activeScript != null)
+            {
+                bool stillRunning;
+                try { stillRunning = !_activeScript.HasExited; }
+                catch { stillRunning = false; }
+
+                if (stillRunning)
+                {
+                    return (false, Loc.T($"PowerShell işlemi {ElevatedTimeoutSeconds} saniye içinde tamamlanamadı ve arka planda devam ediyor. Süreç sonlanana kadar yeni işlem başlatılamaz."));
+                }
+
+                _activeScript.Dispose();
+                _activeScript = null;
+            }
+        }
+
         string errorLog = AppPaths.UniqueTempFile(prefix + "_err", ".log");
         string wrappedScript = ElevatedErrorLog.Function + " " +
-            $"$errLog = '{errorLog.Replace("'", "''")}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
+            $"$errLog = '{Loc.PsQuote(errorLog)}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
             $"try {{ {script} }} catch {{ {ElevatedErrorLog.WriteException}; exit 1 }}";
         // -EncodedCommand keeps the multi-line script out of the command line: there are no quoting rules to
         // escape and no character in the script text can break out of the argument.
@@ -534,20 +919,22 @@ if ($null -ne $backup.tasks) {
                 WindowStyle = ProcessWindowStyle.Hidden
             };
 
-            using var p = Process.Start(psi);
-            if (p == null) return (false, Loc.T("Süreç başlatılamadı."));
+            var started = Process.Start(psi);
+            if (started == null) return (false, Loc.T("Süreç başlatılamadı."));
 
-            bool finished = await Task.Run(() => p.WaitForExit(35000));
+            bool finished = await Task.Run(() => started.WaitForExit(ElevatedTimeoutSeconds * 1000));
             if (!finished)
             {
-                // An unelevated caller cannot terminate an elevated process. Only claim it was stopped when the
-                // exit is actually observed.
-                bool killed = false;
-                try { p.Kill(); killed = p.WaitForExit(2000); } catch { }
-                return (false, killed
-                    ? Loc.T("İşlem 35 saniye içinde tamamlanamadı ve durduruldu.")
-                    : Loc.T("İşlem 35 saniye içinde tamamlanamadı; yönetici işlemi arka planda devam ediyor."));
+                // Not killed. Terminating the script half-way is the one outcome worse than waiting: FixAcerServices
+                // would leave AASSvc stopped with its image path already rewritten, and a TRIM on a large drive
+                // legitimately takes longer than this. The script's own catch/finally blocks are what put things
+                // back, and they only run if it is allowed to finish. The process is remembered so the next request
+                // is refused until it has.
+                lock (ActiveScriptLock) { _activeScript = started; }
+                return (false, Loc.T("İşlem 35 saniye içinde tamamlanamadı; yönetici işlemi arka planda devam ediyor."));
             }
+
+            using var p = started;
 
             if (p.ExitCode == 0)
             {

@@ -547,7 +547,9 @@ public class DebloatService
             if (xmlProcess != null)
             {
                 var xml = ReadOutputWithTimeout(xmlProcess, 2000);
-                var enabled = ParseTaskEnabledFromXml(xml);
+                // schtasks omits <Enabled> for an enabled task (the schema default is true), so a task definition
+                // with no element is enabled, not unknown.
+                var enabled = SystemToolsService.ParseTaskEnabled(xml, xmlProcess.HasExited ? xmlProcess.ExitCode : 1);
                 if (enabled.HasValue) return enabled.Value ? "Enabled" : "Disabled";
             }
         }
@@ -643,7 +645,7 @@ public class DebloatService
     public string GenerateDebloatScript(Dictionary<string, string>? recordedState = null, string? errorLogPath = null)
     {
         errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_debloat_err", ".log");
-        var logEscaped = errorLogPath.Replace("'", "''");
+        var logEscaped = Loc.PsQuote(errorLogPath);
         var targetServices = recordedState != null
             ? Tier1Services.Where(s => recordedState.ContainsKey(s)).ToArray()
             : Tier1Services;
@@ -714,7 +716,7 @@ public class DebloatService
     public string GenerateFactoryRestoreScript(string? errorLogPath = null)
     {
         errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
-        var logEscaped = errorLogPath.Replace("'", "''");
+        var logEscaped = Loc.PsQuote(errorLogPath);
         var sb = new System.Text.StringBuilder();
         sb.Append(ElevatedErrorLog.Function + " ");
         sb.Append($"$errLog = '{logEscaped}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
@@ -771,7 +773,7 @@ public class DebloatService
     public string GenerateRestoreScript(Dictionary<string, string>? backupState = null, string? errorLogPath = null)
     {
         errorLogPath ??= AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
-        var logEscaped = errorLogPath.Replace("'", "''");
+        var logEscaped = Loc.PsQuote(errorLogPath);
         backupState ??= LoadBackupState();
 
         var sb = new System.Text.StringBuilder();
@@ -1443,15 +1445,15 @@ public class DebloatService
         var errLog = AppPaths.UniqueTempFile("nitrolite_launcher_err", ".log");
         var script =
             ElevatedErrorLog.Function + " " +
-            "$errLog = '" + Loc.Ps(errLog) + "'; " +
+            "$errLog = '" + Loc.PsQuote(errLog) + "'; " +
             "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
             "$ok = $false; " +
             "try { " +
-            "  if (Test-Path -LiteralPath '" + Loc.Ps(path) + "') { " +
-            "    Rename-Item -LiteralPath '" + Loc.Ps(path) + "' -NewName '" + Loc.Ps(Path.GetFileName(blocked)) + "' -ErrorAction Stop; " +
+            "  if (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "') { " +
+            "    Rename-Item -LiteralPath '" + Loc.PsQuote(path) + "' -NewName '" + Loc.PsQuote(Path.GetFileName(blocked)) + "' -ErrorAction Stop; " +
             "  }; " +
-            "  if (Test-Path -LiteralPath '" + Loc.Ps(path) + "') { throw '" + Loc.Ps("NitroSense başlatıcısı hâlâ yerinde.") + "' }; " +
-            "  if (-not (Test-Path -LiteralPath '" + Loc.Ps(blocked) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı taşınamadı.") + "' }; " +
+            "  if (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "') { throw '" + Loc.Ps("NitroSense başlatıcısı hâlâ yerinde.") + "' }; " +
+            "  if (-not (Test-Path -LiteralPath '" + Loc.PsQuote(blocked) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı taşınamadı.") + "' }; " +
             "  $ok = $true " +
             "} catch { " + ElevatedErrorLog.WriteException + " }; " +
             "if ($ok) { exit 0 } else { exit 1 }";
@@ -1476,14 +1478,14 @@ public class DebloatService
         var errLog = AppPaths.UniqueTempFile("nitrolite_launcher_err", ".log");
         var script =
             ElevatedErrorLog.Function + " " +
-            "$errLog = '" + Loc.Ps(errLog) + "'; " +
+            "$errLog = '" + Loc.PsQuote(errLog) + "'; " +
             "Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; " +
             "$ok = $false; " +
             "try { " +
-            "  if (Test-Path -LiteralPath '" + Loc.Ps(blocked) + "') { " +
-            "    Rename-Item -LiteralPath '" + Loc.Ps(blocked) + "' -NewName '" + Loc.Ps(Path.GetFileName(path)) + "' -ErrorAction Stop; " +
+            "  if (Test-Path -LiteralPath '" + Loc.PsQuote(blocked) + "') { " +
+            "    Rename-Item -LiteralPath '" + Loc.PsQuote(blocked) + "' -NewName '" + Loc.PsQuote(Path.GetFileName(path)) + "' -ErrorAction Stop; " +
             "  }; " +
-            "  if (-not (Test-Path -LiteralPath '" + Loc.Ps(path) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı geri konamadı.") + "' }; " +
+            "  if (-not (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı geri konamadı.") + "' }; " +
             "  $ok = $true " +
             "} catch { " + ElevatedErrorLog.WriteException + " }; " +
             "if ($ok) { exit 0 } else { exit 1 }";

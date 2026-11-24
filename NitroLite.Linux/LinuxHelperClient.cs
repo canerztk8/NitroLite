@@ -6,6 +6,22 @@ using NitroLite.Linux.Sysfs;
 
 namespace NitroLite.Linux;
 
+/// <summary>How the root helper answered the last <c>list</c> request.</summary>
+public enum HelperState
+{
+    /// <summary>Not asked yet.</summary>
+    Unknown,
+
+    /// <summary>The helper answered with its list (which may be empty).</summary>
+    Ready,
+
+    /// <summary>The helper answered but polkit refused this session (<c>not-authorized</c>).</summary>
+    NotAuthorized,
+
+    /// <summary>No answer: the socket is missing, the helper is not ready, or the reply was unreadable.</summary>
+    Unreachable
+}
+
 /// <summary>
 /// Talks to the root helper over its Unix socket. Every call is short and synchronous: a sysfs write is a few
 /// milliseconds, and the callers already run off the UI thread.
@@ -19,20 +35,46 @@ public sealed class LinuxHelperClient : IDisposable
     public const string DefaultSocketPath = "/run/nitrolite/helper.sock";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(30);
+    private static readonly IReadOnlySet<string> Empty = new HashSet<string>(StringComparer.Ordinal);
 
     private readonly string _socketPath;
     private readonly object _gate = new();
     private Socket? _socket;
     private NetworkStream? _stream;
     private HashSet<string>? _allowed;
+    private HelperState _state = HelperState.Unknown;
+    private long _retryAt;
+    private TimeSpan _backoff = InitialBackoff;
     private bool _disposed;
 
-    public LinuxHelperClient(string socketPath = DefaultSocketPath) => _socketPath = socketPath;
+    private readonly Func<long> _clock;
+
+    public LinuxHelperClient(string socketPath = DefaultSocketPath) : this(socketPath, null) { }
+
+    /// <summary>A test seam: <paramref name="clock"/> is the millisecond clock the retry backoff reads.</summary>
+    internal LinuxHelperClient(string socketPath, Func<long>? clock)
+    {
+        _socketPath = socketPath;
+        _clock = clock ?? (() => Environment.TickCount64);
+    }
 
     /// <summary>True when the helper's socket exists, which is when the package (or install.sh --system) set it up.</summary>
     public bool IsInstalled => File.Exists(_socketPath) || IsSocket(_socketPath);
 
-    /// <summary>The attributes the helper will write, asked once. Empty when the helper is absent or refused us.</summary>
+    /// <summary>What the last <c>list</c> request found out about the helper.</summary>
+    public HelperState State
+    {
+        get { lock (_gate) return _state; }
+    }
+
+    /// <summary>
+    /// The attributes the helper will write. Only a real list answer is remembered (an empty list included): a helper
+    /// that is not reachable yet, or that answered <c>not-authorized</c>, is asked again after a short, growing
+    /// pause, so a helper that was still starting does not stay "absent" for the whole session. Until then the
+    /// answer is empty and <see cref="State"/> says why.
+    /// </summary>
     public IReadOnlySet<string> Allowed
     {
         get
@@ -40,28 +82,52 @@ public sealed class LinuxHelperClient : IDisposable
             lock (_gate)
             {
                 if (_allowed != null) return _allowed;
-                _allowed = new HashSet<string>(StringComparer.Ordinal);
+                if (_disposed || _clock() < _retryAt) return Empty;
 
                 var answer = Send("{\"op\":\"list\"}");
-                if (answer is { } doc)
+                if (answer is not { } doc)
                 {
-                    using (doc)
-                    {
-                        if (IsOk(doc) && doc.RootElement.TryGetProperty("paths", out var paths) &&
-                            paths.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var p in paths.EnumerateArray())
-                            {
-                                if (p.ValueKind == JsonValueKind.String && p.GetString() is { } s) _allowed.Add(s);
-                            }
-                        }
-                    }
+                    return Failed(HelperState.Unreachable);
                 }
 
-                if (_allowed.Count > 0) AppLog.Info("The NitroLite helper is available", $"{_allowed.Count} settings");
-                return _allowed;
+                using (doc)
+                {
+                    if (!IsOk(doc))
+                    {
+                        var error = doc.RootElement.ValueKind == JsonValueKind.Object &&
+                                    doc.RootElement.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String
+                            ? e.GetString()
+                            : null;
+                        return Failed(error == "not-authorized" ? HelperState.NotAuthorized : HelperState.Unreachable);
+                    }
+
+                    var list = new HashSet<string>(StringComparer.Ordinal);
+                    if (!doc.RootElement.TryGetProperty("paths", out var paths) || paths.ValueKind != JsonValueKind.Array)
+                    {
+                        return Failed(HelperState.Unreachable);
+                    }
+
+                    foreach (var p in paths.EnumerateArray())
+                    {
+                        if (p.ValueKind == JsonValueKind.String && p.GetString() is { } s) list.Add(s);
+                    }
+
+                    _allowed = list;
+                    _state = HelperState.Ready;
+                    _backoff = InitialBackoff;
+                    if (list.Count > 0) AppLog.Info("The NitroLite helper is available", $"{list.Count} settings");
+                    return list;
+                }
             }
         }
+    }
+
+    private IReadOnlySet<string> Failed(HelperState state)
+    {
+        _state = state;
+        _retryAt = _clock() + (long)_backoff.TotalMilliseconds;
+        _backoff = TimeSpan.FromTicks(Math.Min(_backoff.Ticks * 2, MaxBackoff.Ticks));
+        return Empty;
     }
 
     /// <summary>Asks the helper to write one attribute. The result uses the same statuses as a direct write.</summary>

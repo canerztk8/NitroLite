@@ -92,10 +92,16 @@ public static class DirectoryTrust
         FileSystemRights.TakeOwnership |
         FileSystemRights.ChangePermissions;
 
+    /// <summary>
+    /// <c>GENERIC_ALL</c>. <see cref="FileSystemRights"/> has no member for it, and an entry written by a tool rather
+    /// than through the Explorer dialog can carry it unmapped; it includes every right the masks here look for.
+    /// </summary>
+    private const FileSystemRights GenericAll = (FileSystemRights)0x10000000;
+
     private static bool GrantsRights(FileSystemAccessRule rule, FileSystemRights mask)
     {
         if (rule.AccessControlType != AccessControlType.Allow) return false;
-        if ((rule.FileSystemRights & mask) == 0) return false;
+        if ((rule.FileSystemRights & (mask | GenericAll)) == 0) return false;
         if (rule.IdentityReference is not SecurityIdentifier sid) return false;
         return sid.Value is UsersSid or EveryoneSid or AuthenticatedUsersSid or InteractiveSid;
     }
@@ -119,48 +125,157 @@ public static class DirectoryTrust
     /// and send the user to a location where the answer is yes.
     /// </para>
     /// <para>
-    /// False only when a wider principal verifiably holds a replacing right on the file or on its folder. When
+    /// False only when a wider principal verifiably holds a replacing right on the file, on its folder, or on any
+    /// folder above it up to the volume root (see <see cref="IsExecutableTrusted(string?, out string?)"/>). When
     /// neither exists yet, or the ACL cannot be read, the answer is true — an unreadable ACL is not evidence of a
     /// hole, and refusing on it would break installs on machines with unusual inheritance.
     /// </para>
     /// </summary>
-    public static bool IsExecutableTrusted(string? executablePath)
+    public static bool IsExecutableTrusted(string? executablePath) => IsExecutableTrusted(executablePath, out _);
+
+    /// <summary>
+    /// The same answer, with the reason when it is no: which path grants which right to which principal. The two
+    /// callers that refuse (the WMI helper launch and the elevated autostart) surface their own sentence; this text is
+    /// for the log line next to it, so a user running from <c>C:\WinTools</c> can see that the grant is inherited
+    /// from the drive root rather than something they did.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The executable and its folder are not the whole story. Whoever can rename or delete <em>any</em> ancestor
+    /// folder can move the whole tree aside and put a folder of the same name, with a binary of their choosing, in
+    /// its place — and the launch by path then runs that. So every ancestor up to the volume root is read:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><c>DELETE</c>, <c>WRITE_DAC</c> or <c>WRITE_OWNER</c> on an ancestor folder itself — the folder can be
+    /// renamed away, or its ACL rewritten to allow it.</item>
+    /// <item><c>FILE_DELETE_CHILD</c>, <c>WRITE_DAC</c> or <c>WRITE_OWNER</c> on the folder above it — its parent
+    /// can remove or rename it whatever the folder's own ACL says.</item>
+    /// </list>
+    /// <para>
+    /// "Create folders" (<c>FILE_ADD_SUBDIRECTORY</c>) on a parent is deliberately not a refusal on its own. It only
+    /// lets a principal add a <em>new</em> folder next to the existing one, not replace it, and every stock
+    /// <c>C:\</c> grants it to Authenticated Users — counting it would refuse Program Files. The replacement still
+    /// needs the old folder gone, which is the delete right above.
+    /// </para>
+    /// <para>
+    /// Inherit-only entries are skipped: they describe what children receive, not a right on the folder itself (the
+    /// drive root's <c>Authenticated Users:(OI)(CI)(IO)(M)</c> is the example). The children that do receive it carry
+    /// it as an inherited entry of their own, which is read when the walk reaches them. A folder whose ACL cannot be
+    /// read is skipped rather than refused, for the same reason the rest of this class gives.
+    /// </para>
+    /// </remarks>
+    public static bool IsExecutableTrusted(string? executablePath, out string? reason)
     {
-        if (string.IsNullOrWhiteSpace(executablePath)) return false;
+        reason = null;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            reason = "no executable path";
+            return false;
+        }
         if (IsUnderUserProfile(executablePath)) return true;
+
+        FileInfo file;
+        try
+        {
+            file = new FileInfo(Path.GetFullPath(executablePath));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException
+                                      or System.Security.SecurityException)
+        {
+            return true;
+        }
 
         try
         {
-            var file = new FileInfo(Path.GetFullPath(executablePath));
             if (file.Exists)
             {
                 var fileSecurity = file.GetAccessControl(AccessControlSections.Access);
                 foreach (FileSystemAccessRule rule in fileSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)))
                 {
-                    if (GrantsRights(rule, ReplacingRights)) return false;
+                    if (GrantsRights(rule, ReplacingRights))
+                    {
+                        reason = Describe(file.FullName, rule, "can modify or replace the file");
+                        return false;
+                    }
                 }
             }
-
-            // Deleting the file out from under the launcher is the other way to swap the binary, and that right
-            // lives on the parent directory, not on the file. Creating new files in the folder is not enough to
-            // replace an existing one, so the directory check uses only the child-replacing subset.
-            var directory = file.Directory;
-            if (directory is { Exists: true })
-            {
-                var dirSecurity = directory.GetAccessControl(AccessControlSections.Access);
-                foreach (FileSystemAccessRule rule in dirSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)))
-                {
-                    if (GrantsRights(rule, ReplacingChildRights)) return false;
-                }
-            }
-
-            return true;
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException
-                                      or InvalidOperationException or ArgumentException or System.Security.SecurityException)
+        catch (Exception ex) when (IsUnreadableAcl(ex))
+        {
+            // Unreadable is not evidence of a hole; the folders above are still checked.
+        }
+
+        // Deleting the file out from under the launcher is the other way to swap the binary, and that right lives on
+        // the parent directory, not on the file. Creating new files in the folder is not enough to replace an existing
+        // one, so the directory check uses only the child-replacing subset. The same subset is then read on every
+        // folder further up, each of which could remove the folder below it, and each folder below the root is also
+        // checked for a right to delete, rename or re-permission itself.
+        DirectoryInfo? directory;
+        try
+        {
+            directory = file.Directory;
+        }
+        catch (Exception ex) when (IsUnreadableAcl(ex))
         {
             return true;
         }
+
+        while (directory != null)
+        {
+            bool isRoot = directory.Parent == null;
+            try
+            {
+                if (directory.Exists)
+                {
+                    var dirSecurity = directory.GetAccessControl(AccessControlSections.Access);
+                    foreach (FileSystemAccessRule rule in dirSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+                    {
+                        // An inherit-only entry is a template for children, not a right on this folder.
+                        if ((rule.PropagationFlags & PropagationFlags.InheritOnly) != 0) continue;
+
+                        if (GrantsRights(rule, ReplacingChildRights))
+                        {
+                            reason = Describe(directory.FullName, rule, "can delete or replace what is inside it");
+                            return false;
+                        }
+
+                        // A volume root cannot be renamed or deleted, so DELETE on it means nothing.
+                        if (!isRoot && GrantsRights(rule, FileSystemRights.Delete))
+                        {
+                            reason = Describe(directory.FullName, rule, "can rename or delete the folder");
+                            return false;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (IsUnreadableAcl(ex))
+            {
+                // One unreadable ancestor is not a reason to refuse, or to stop reading the ones above it.
+            }
+
+            directory = directory.Parent;
+        }
+
+        return true;
+    }
+
+    private static bool IsUnreadableAcl(Exception ex) =>
+        ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException
+            or InvalidOperationException or ArgumentException or System.Security.SecurityException;
+
+    /// <summary>"<c>path</c>: Authenticated Users (inherited) can …" — the principal by its well-known name.</summary>
+    private static string Describe(string path, FileSystemAccessRule rule, string what)
+    {
+        string who = rule.IdentityReference.Value switch
+        {
+            UsersSid => "Users",
+            EveryoneSid => "Everyone",
+            AuthenticatedUsersSid => "Authenticated Users",
+            InteractiveSid => "Interactive",
+            var other => other
+        };
+        string inherited = rule.IsInherited ? " (inherited)" : "";
+        return $"{path}: {who}{inherited} {what} ({rule.FileSystemRights})";
     }
 
     /// <summary>

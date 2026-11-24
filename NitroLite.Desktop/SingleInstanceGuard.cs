@@ -187,6 +187,8 @@ public sealed class SingleInstanceGuard : IDisposable
 
         _listener = Task.Run(async () =>
         {
+            int failures = 0;
+
             while (!_stop.IsCancellationRequested)
             {
                 try
@@ -208,16 +210,39 @@ public sealed class SingleInstanceGuard : IDisposable
                     _server.Dispose();
                     _server = null;
 
+                    failures = 0;
                     if (read == 1) ActivationRequested?.Invoke();
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
                 {
                     return;
                 }
                 catch (Exception ex)
                 {
-                    AppLog.Warn("The single-instance listener stopped", ex.Message);
-                    return;
+                    // Only a stop ends the listener. A client that broke the pipe mid-write, or a pipe instance the
+                    // previous iteration had not quite released yet, used to end it for good, and from then on a
+                    // second launch could no longer bring the window forward. The wait grows on repeated failures so a
+                    // pipe that keeps refusing costs a log line now and then rather than one a second.
+                    if (_stop.IsCancellationRequested) return;
+
+                    failures++;
+                    if (failures == 1 || failures % 30 == 0)
+                        AppLog.Warn("The single-instance listener failed and will retry", ex.Message);
+
+                    // The broken instance is released before the pause, not after it, so the name is free again
+                    // when the next iteration opens it.
+                    try { _server?.Dispose(); } catch { /* already gone */ }
+                    _server = null;
+
+                    try
+                    {
+                        await Task.Delay(ListenerRetryDelay(failures), _stop.Token).ConfigureAwait(false);
+                    }
+                    catch (Exception delayEx) when (delayEx is OperationCanceledException or ObjectDisposedException)
+                    {
+                        // Stopped, or disposed, while waiting.
+                        return;
+                    }
                 }
                 finally
                 {
@@ -229,6 +254,10 @@ public sealed class SingleInstanceGuard : IDisposable
             }
         });
     }
+
+    /// <summary>The pause before the listener opens the pipe again after a failure: 250 ms, doubling, at most 10 s.</summary>
+    private static TimeSpan ListenerRetryDelay(int failures) =>
+        TimeSpan.FromMilliseconds(Math.Min(10_000, 250 * Math.Pow(2, Math.Min(failures - 1, 6))));
 
     /// <summary>
     /// Tells the running instance to come forward. Returns false when nobody answered, which is what a stale lock

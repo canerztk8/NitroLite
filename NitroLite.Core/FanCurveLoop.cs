@@ -27,6 +27,14 @@ public sealed class FanCurveLoop : IDisposable
     private readonly TimeSpan _interval;
     private readonly object _gate = new();
 
+    /// <summary>
+    /// Held for the length of one step, across every run of the loop. <see cref="Stop"/> does not wait, so a stop
+    /// followed at once by a start used to leave the old run's step still inside a WMI call while the new run started
+    /// its own: two steps writing the same fans at once, each committing what it wrote. The gate makes a step from a
+    /// new run wait for the old one to finish.
+    /// </summary>
+    private readonly SemaphoreSlim _stepGate = new(1, 1);
+
     private CancellationTokenSource? _cts;
     private Task? _loop;
     private bool _disposed;
@@ -103,6 +111,8 @@ public sealed class FanCurveLoop : IDisposable
 
         Stop();
 
+        var deadline = DateTime.UtcNow + timeout;
+
         try
         {
             loop?.Wait(timeout);
@@ -111,6 +121,14 @@ public sealed class FanCurveLoop : IDisposable
         {
             // The loop already logs its own failures; a cancelled wait is not worth a second report.
         }
+
+        // The run that was current is not the only one that can hold a step: an earlier run that was stopped without
+        // waiting may still be inside its last one. Taking the step gate, within what is left of the bound, waits for
+        // that too. Every run is cancelled by now, so no new step can start once the gate is released.
+        var remaining = deadline - DateTime.UtcNow;
+        if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
+
+        if (_stepGate.Wait(remaining)) _stepGate.Release();
     }
 
     private async Task RunAsync(CancellationTokenSource cts)
@@ -121,11 +139,11 @@ public sealed class FanCurveLoop : IDisposable
         {
             // The first step runs at once: the machine may already be hot when the curve is armed, and waiting a
             // second and a half to notice would be a second and a half of the fans at whatever the last write left.
-            await StepAsync().ConfigureAwait(false);
+            await StepAsync(cts.Token).ConfigureAwait(false);
 
             while (await timer.WaitForNextTickAsync(cts.Token).ConfigureAwait(false))
             {
-                await StepAsync().ConfigureAwait(false);
+                await StepAsync(cts.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -138,15 +156,25 @@ public sealed class FanCurveLoop : IDisposable
         }
     }
 
-    private async Task StepAsync()
+    private async Task StepAsync(CancellationToken token)
     {
+        // Throws OperationCanceledException when this run is stopped while it waits, which RunAsync treats as a stop.
+        await _stepGate.WaitAsync(token).ConfigureAwait(false);
         try
         {
+            // A run that was stopped while it waited for the previous step has nothing left to do: the run that
+            // replaced it owns the fans now.
+            if (token.IsCancellationRequested) return;
+
             await _step().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             AppLog.Warn("The fan curve step failed", ex.Message);
+        }
+        finally
+        {
+            _stepGate.Release();
         }
     }
 

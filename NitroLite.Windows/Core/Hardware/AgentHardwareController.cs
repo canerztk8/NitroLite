@@ -192,6 +192,9 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
     /// </summary>
     private async Task<bool> WriteAsync(Func<Task<bool>> write)
     {
+        // A disposed backend writes nothing; see Dispose for why the gate itself is left alone.
+        if (_disposed) return false;
+
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -207,7 +210,10 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
     {
         if (_disposed) return;
         _disposed = true;
-        _writeGate.Dispose();
+
+        // The write gate is not disposed: a write already inside it still releases it in its finally, and releasing a
+        // disposed SemaphoreSlim throws ObjectDisposedException on that caller's thread. It holds no unmanaged
+        // resource unless AvailableWaitHandle is read, which this class never does; _disposed stops new writes.
         _agent.Dispose();
     }
 }

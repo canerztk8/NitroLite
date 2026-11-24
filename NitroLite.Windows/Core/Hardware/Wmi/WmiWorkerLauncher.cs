@@ -65,6 +65,13 @@ public sealed class WmiWorkerLauncher : IDisposable
     private bool _locationRefused;
 
     /// <summary>
+    /// True once a launch failed to start or to complete the handshake in this session. Every later automatic call
+    /// is answered from memory instead of raising another UAC prompt and waiting another <see cref="ConnectTimeout"/>;
+    /// only <see cref="AllowRetry"/>, which the settings page's explicit start path calls, clears it.
+    /// </summary>
+    private bool _failedThisSession;
+
+    /// <summary>
     /// <paramref name="start"/> and <paramref name="connect"/> are injectable so the UAC-cancelled path can be tested
     /// without a UAC prompt and the pipe path without an elevated process. <paramref name="isElevated"/> decides
     /// whether the helper needs a prompt at all, and <paramref name="isTrustedLocation"/> decides whether the
@@ -105,6 +112,16 @@ public sealed class WmiWorkerLauncher : IDisposable
 
     /// <summary>How many times a helper was started. Used by the tests and the log.</summary>
     public int Attempts { get; private set; }
+
+    /// <summary>True once a launch failed to start or to finish the handshake in this session.</summary>
+    public bool FailedThisSession => _failedThisSession;
+
+    /// <summary>
+    /// Lets the next <see cref="StartAsync"/> try again after a start or handshake failure. Called only by the explicit
+    /// start path (the settings page's button, or the elevated auto-start), never by a hardware read or write, so a
+    /// helper that cannot connect raises at most one prompt per user request. A declined prompt stays declined.
+    /// </summary>
+    public void AllowRetry() => _failedThisSession = false;
 
     /// <summary>
     /// The command line the helper is started with. Exposed so the argument shape can be asserted against
@@ -154,6 +171,10 @@ public sealed class WmiWorkerLauncher : IDisposable
             LastError = "the user declined elevation earlier in this session";
             return null;
         }
+
+        // A launch that already failed this session is not repeated on the next automatic call: each repeat was a
+        // fresh runas prompt and another thirty-second connect wait. Refusal and LastError keep the original reason.
+        if (_failedThisSession) return null;
 
         // An already-elevated parent passes its token to the child, so asking for runas would raise a prompt for a
         // privilege the process already holds. That is the whole point of the optional Task Scheduler entry: the
@@ -216,6 +237,7 @@ public sealed class WmiWorkerLauncher : IDisposable
         }
         catch (Exception ex)
         {
+            _failedThisSession = true;
             Refusal = WmiWorkerRefusal.StartFailed;
             LastError = $"{ex.GetType().Name}: {ex.Message}";
             AppLog.Warn("--wmi-worker could not be started", LastError);
@@ -224,6 +246,7 @@ public sealed class WmiWorkerLauncher : IDisposable
 
         if (process == null)
         {
+            _failedThisSession = true;
             Refusal = WmiWorkerRefusal.StartFailed;
             LastError = "the helper process did not start";
             return null;
@@ -246,6 +269,7 @@ public sealed class WmiWorkerLauncher : IDisposable
             }
             catch (Exception ex)
             {
+                _failedThisSession = true;
                 Refusal = WmiWorkerRefusal.HandshakeFailed;
                 LastError = $"{ex.GetType().Name}: {ex.Message}";
                 AppLog.Warn("--wmi-worker handshake failed", LastError);

@@ -81,7 +81,47 @@ public sealed record ReadBackResult
         Error = string.IsNullOrWhiteSpace(reason)
             ? "no WMI transport: the elevated worker is not running"
             : reason
-    };}
+    };
+
+    /// <summary>
+    /// True when the write path answered that this machine does not have the control at all. Like
+    /// <see cref="TransportMissing"/> this is not a firmware failure and is not counted against the capability.
+    /// </summary>
+    public bool NotSupported { get; init; }
+
+    /// <summary>The write path said this machine does not have the control; nothing was written.</summary>
+    public static ReadBackResult Unsupported(string control, string reason) => new()
+    {
+        Control = control,
+        Skipped = true,
+        NotSupported = true,
+        Error = string.IsNullOrWhiteSpace(reason) ? "not supported on this machine" : reason
+    };
+}
+
+/// <summary>
+/// Thrown by a write when the path answered "this machine does not have it" — for example the MUX setter when the Acer
+/// registry mask is missing. <see cref="ReadBackPolicy"/> turns it into <see cref="ReadBackResult.Unsupported"/>
+/// instead of counting it as a failed session: a deterministic "not supported" repeated three times would otherwise
+/// switch the control off for good on evidence that says nothing about the firmware ignoring a write.
+/// </summary>
+public sealed class WmiCapabilityNotSupportedException : Exception
+{
+    public WmiCapabilityNotSupportedException()
+        : base("the control is not supported on this machine")
+    {
+    }
+
+    public WmiCapabilityNotSupportedException(string? reason)
+        : base(string.IsNullOrWhiteSpace(reason) ? "the control is not supported on this machine" : reason)
+    {
+    }
+
+    public WmiCapabilityNotSupportedException(string? reason, Exception? innerException)
+        : base(string.IsNullOrWhiteSpace(reason) ? "the control is not supported on this machine" : reason, innerException)
+    {
+    }
+}
 
 /// <summary>
 /// The rule that makes a direct-WMI write trustworthy: never believe the status byte, always read the value back.
@@ -309,6 +349,10 @@ public sealed class ReadBackPolicy
 
                 return ReadBackResult.NoTransport(ex.Message);
             }
+            catch (WmiCapabilityNotSupportedException ex)
+            {
+                return NotSupported(capability, requested, ex.Message);
+            }
             catch (Exception ex)
             {
                 lastError = $"{ex.GetType().Name}: {ex.Message}";
@@ -355,6 +399,10 @@ public sealed class ReadBackPolicy
             });
 
             return ReadBackResult.NoTransport(ex.Message);
+        }
+        catch (WmiCapabilityNotSupportedException ex)
+        {
+            return NotSupported(capability, requested, ex.Message);
         }
         catch (Exception ex)
         {
@@ -405,6 +453,24 @@ public sealed class ReadBackPolicy
 
         var mismatch = $"read-back returned {Show(observed.Value)} after writing {requested}";
         return Fail(capability, mismatch, Show(observed.Value), requested);
+    }
+
+    /// <summary>
+    /// Records a "not supported on this machine" answer. Nothing reached the firmware, so no session is counted and the
+    /// capability is not disabled; the note marks the control unverified so the UI does not claim the change.
+    /// </summary>
+    private ReadBackResult NotSupported(string capability, string requested, string reason)
+    {
+        _verification.Mark(new VerificationNote
+        {
+            Control = capability,
+            Verdict = ControlVerdict.Unverifiable,
+            Requested = requested,
+            Detail = $"not supported on this machine: {reason}"
+        });
+
+        AppLog.Info("A hardware write was not attempted", $"{capability}: not supported on this machine ({reason})");
+        return ReadBackResult.Unsupported(capability, reason);
     }
 
     /// <summary>

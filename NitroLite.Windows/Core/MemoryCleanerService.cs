@@ -191,16 +191,46 @@ public class MemoryCleanerService
     /// </summary>
     public static string? FindVerifiedTool()
     {
+        using var held = OpenVerifiedTool();
+        return held?.Name;
+    }
+
+    /// <summary>
+    /// The first candidate whose contents match a build NitroLite recognises, returned <em>open</em>: read access,
+    /// shared for reading only. Null when there is none. The caller keeps it open until the launched process has
+    /// started.
+    /// </summary>
+    /// <remarks>
+    /// Hashing a path and then launching the same path is a check and a use with a gap between them, and the data
+    /// folder candidate is one any same-user process can write to: swap the file after the hash and the elevated
+    /// launch runs the replacement. The handle closes that gap. It is opened once, the digest is read through it,
+    /// and while it stays open nobody can open the file for writing, delete it or rename it — <see cref="FileShare.Read"/>
+    /// grants neither write nor delete sharing — while the loader can still open it to run it, because it only asks
+    /// to read.
+    /// </remarks>
+    internal static FileStream? OpenVerifiedTool()
+    {
         foreach (string candidate in ToolCandidates())
         {
+            FileStream? stream = null;
             try
             {
                 if (!File.Exists(candidate)) continue;
-                if (IsKnownGood(candidate)) return candidate;
+                stream = new FileStream(candidate, FileMode.Open, FileAccess.Read, FileShare.Read);
+                if (IsKnownGoodContent(stream))
+                {
+                    var verified = stream;
+                    stream = null;
+                    return verified;
+                }
             }
             catch
             {
                 // An unreadable candidate is not a candidate.
+            }
+            finally
+            {
+                stream?.Dispose();
             }
         }
         return null;
@@ -216,7 +246,22 @@ public class MemoryCleanerService
 
         try
         {
-            using var stream = File.OpenRead(path);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return IsKnownGoodContent(stream);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+                                      or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The same check, over an already opened stream, read from its start.</summary>
+    internal static bool IsKnownGoodContent(Stream stream)
+    {
+        try
+        {
+            if (stream.CanSeek) stream.Position = 0;
             var digest = System.Security.Cryptography.SHA256.HashData(stream);
             var hex = Convert.ToHexString(digest).ToLowerInvariant();
 
@@ -226,7 +271,7 @@ public class MemoryCleanerService
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
-                                      or ArgumentException)
+                                      or ArgumentException or ObjectDisposedException)
         {
             return false;
         }
@@ -296,7 +341,10 @@ public class MemoryCleanerService
     {
         var result = new MemoryCleanerResult();
 
-        string? tool = FindVerifiedTool();
+        // Held open from the digest check until this method returns, which is after the process has started: see
+        // OpenVerifiedTool for why the path alone is not enough.
+        using var verifiedTool = OpenVerifiedTool();
+        string? tool = verifiedTool?.Name;
         if (tool == null)
         {
             // "Not installed" and "installed but not a build we trust" are different answers: the first offers a

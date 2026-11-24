@@ -145,6 +145,9 @@ public class HardwareMonitorService : IDisposable
 
     private TimeSpan _lastThermalProbeAt = TimeSpan.MinValue;
     private double? _lastThermalCelsius;
+
+    /// <summary>Test seam: replaces the PDH thermal-zone read. Null in production.</summary>
+    internal Func<double?>? ThermalZoneProvider { get; set; }
     private TimeSpan _lastNvmlRetryAt = TimeSpan.MinValue;
     private int _nvmlFailureCount;
 
@@ -496,6 +499,11 @@ public class HardwareMonitorService : IDisposable
             {
                 data.CpuTemperature = (int)Math.Round(celsius, MidpointRounding.AwayFromZero);
                 data.Provenance["cpu-temp"] = "PDH thermal zone";
+
+                // The page shows the number, but an ACPI zone is often a static ~28 degC board value and says
+                // nothing about the die. Marking it unconfirmed keeps the fan curve from following it and lets the
+                // lost-sensor hand-back to firmware work.
+                data.IsTemperatureMeasured = false;
             }
         }
 
@@ -535,6 +543,8 @@ public class HardwareMonitorService : IDisposable
     /// </summary>
     private double? ThermalZoneCelsius()
     {
+        if (ThermalZoneProvider != null) return ThermalZoneProvider();
+
         if (_lastThermalProbeAt != TimeSpan.MinValue
             && (_nvmlClock.Elapsed - _lastThermalProbeAt) < ThermalProbeInterval)
         {

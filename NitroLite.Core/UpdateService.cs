@@ -26,6 +26,12 @@ public sealed record UpdateInfo(
 }
 
 /// <summary>
+/// A package extracted from a verified download: the staging folder, and the SHA-256 of each file written into it,
+/// keyed by its <see cref="UpdateService.PackageFiles"/> name.
+/// </summary>
+public sealed record StagedPackage(string Directory, IReadOnlyDictionary<string, string> Digests);
+
+/// <summary>
 /// What the startup recovery pass found: the files it put back from a backup, the leftovers it swept, and the
 /// files it could not repair.
 /// </summary>
@@ -419,11 +425,49 @@ public static class UpdateService
 
     public static string ExtractToStaging(string zipPath)
     {
+        using var package = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return ExtractToStaging(package, out _);
+    }
+
+    /// <summary>
+    /// Verifies the downloaded package against <paramref name="expectedSha256"/> and extracts it, both from one open
+    /// handle. Returns false, with nothing extracted, when the digest does not match; throws when the package itself is
+    /// refused.
+    /// </summary>
+    /// <remarks>
+    /// Verifying a path and then reopening the same path to extract it is a check and a use with a gap between them,
+    /// and the package sits in %TEMP%, which every process running as the user can write to. A file swapped in that
+    /// gap would be extracted under the digest of the one that was checked. Here the file is opened once with no
+    /// write or delete sharing, hashed, rewound and extracted from that same handle, so the bytes that were verified
+    /// are the bytes that are unpacked.
+    /// <para>
+    /// The staged files are in %TEMP% too, so their digests are recorded as they are written and travel in the
+    /// returned <see cref="StagedPackage"/>; <see cref="InstallFromStaging(StagedPackage, string)"/> checks each one
+    /// again as it copies it.
+    /// </para>
+    /// </remarks>
+    public static bool TryExtractVerifiedToStaging(string packagePath, string? expectedSha256, out StagedPackage? staged)
+    {
+        staged = null;
+        if (string.IsNullOrWhiteSpace(expectedSha256)) return false;
+
+        using var package = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var actual = Convert.ToHexString(SHA256.HashData(package)).ToLowerInvariant();
+        if (!string.Equals(actual, expectedSha256.Trim().ToLowerInvariant(), StringComparison.Ordinal)) return false;
+
+        package.Position = 0;
+        var directory = ExtractToStaging(package, out var digests);
+        staged = new StagedPackage(directory, digests);
+        return true;
+    }
+
+    private static string ExtractToStaging(Stream package, out IReadOnlyDictionary<string, string> digests)
+    {
         var staging = Path.Combine(Path.GetTempPath(), $"NitroLite-stage-{Guid.NewGuid():N}");
         Directory.CreateDirectory(staging);
         try
         {
-            ExtractInto(staging, zipPath);
+            digests = ExtractInto(staging, package);
             return staging;
         }
         catch
@@ -436,12 +480,16 @@ public static class UpdateService
         }
     }
 
-    /// <summary>Unpacks a package into an already created staging folder, or throws with the reason.</summary>
-    private static void ExtractInto(string staging, string zipPath)
+    /// <summary>
+    /// Unpacks a package into an already created staging folder, or throws with the reason. Returns the SHA-256 of
+    /// every file written, keyed by its <see cref="PackageFiles"/> name.
+    /// </summary>
+    private static Dictionary<string, string> ExtractInto(string staging, Stream package)
     {
         var stagingRoot = Path.GetFullPath(staging) + Path.DirectorySeparatorChar;
+        var digests = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        using var archive = ZipFile.OpenRead(zipPath);
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
 
         // The release script archives the staging folder itself, so entries sit under "NitroLite/". Find the folder
         // that holds NitroLite.exe and use it as the root; a flat archive has an empty prefix.
@@ -462,7 +510,8 @@ public static class UpdateService
 
             var relative = entry.FullName[prefix.Length..].Replace('\\', '/');
             if (relative.Length == 0) continue;
-            if (!PackageFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+            var packageName = PackageFiles.FirstOrDefault(name => string.Equals(name, relative, StringComparison.OrdinalIgnoreCase));
+            if (packageName == null)
                 throw new InvalidDataException($"Unexpected file in the package: {relative}");
 
             if (entry.Length > MaxEntryBytes)
@@ -473,18 +522,35 @@ public static class UpdateService
                 throw new InvalidDataException($"Package entry escapes the staging folder: {relative}");
 
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            entry.ExtractToFile(destination, overwrite: true);
 
             // The declared length is what the archive claims, and a crafted one can claim a few kilobytes while
-            // expanding to gigabytes. The size that matters is the one on the file that was just written, and the
-            // running total is what the package cap is applied to.
-            long written = new FileInfo(destination).Length;
-            if (written > MaxEntryBytes)
-                throw new InvalidDataException($"Package entry is too large: {relative} ({written} bytes)");
+            // expanding to gigabytes. The bytes actually written are what is counted, as they are written, and the
+            // running total is what the package cap is applied to. The digest is taken over the same bytes.
+            long written = 0;
+            using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+            {
+                using (var source = entry.Open())
+                using (var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    var buffer = new byte[81920];
+                    int read;
+                    while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        written += read;
+                        if (written > MaxEntryBytes)
+                            throw new InvalidDataException($"Package entry is too large: {relative} ({written} bytes)");
+                        if (totalBytes + written > MaxPackageBytes)
+                            throw new InvalidDataException($"Package expands to more than {MaxPackageBytes / (1024 * 1024)} MB.");
+
+                        hash.AppendData(buffer, 0, read);
+                        target.Write(buffer, 0, read);
+                    }
+                }
+
+                digests[packageName] = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+            }
 
             totalBytes += written;
-            if (totalBytes > MaxPackageBytes)
-                throw new InvalidDataException($"Package expands to more than {MaxPackageBytes / (1024 * 1024)} MB.");
         }
 
         foreach (var required in new[] { "NitroLite.exe" })
@@ -492,6 +558,8 @@ public static class UpdateService
             if (!File.Exists(Path.Combine(staging, required)))
                 throw new InvalidDataException($"The package does not contain {required}.");
         }
+
+        return digests;
     }
 
     /// <summary>
@@ -511,7 +579,28 @@ public static class UpdateService
     /// from; <see cref="CleanUpPreviousVersion"/> deletes that one at the next start.</item>
     /// </list>
     /// </remarks>
-    public static string InstallFromStaging(string staging, string installDirectory)
+    public static string InstallFromStaging(string staging, string installDirectory) =>
+        InstallFromStaging(staging, installDirectory, expectedDigests: null);
+
+    /// <summary>
+    /// The install the updater uses: the same two-phase commit, and every staged file's SHA-256 checked against the
+    /// digest recorded when it was extracted, over the very bytes that are copied into the install folder.
+    /// </summary>
+    /// <remarks>
+    /// The staging folder is under %TEMP%, which any process running as the user can write to, and the install that
+    /// follows may run with an administrator token (the app can start elevated from its logon task). A file replaced
+    /// between extraction and this copy would otherwise land next to NitroLite.exe unchecked. A file that does not
+    /// match, or a package file the extraction did not record, fails the prepare phase, which leaves the install
+    /// folder exactly as it was.
+    /// </remarks>
+    public static string InstallFromStaging(StagedPackage staged, string installDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(staged);
+        return InstallFromStaging(staged.Directory, installDirectory, staged.Digests);
+    }
+
+    private static string InstallFromStaging(
+        string staging, string installDirectory, IReadOnlyDictionary<string, string>? expectedDigests)
     {
         // Only a folder this class created may be installed from. Without this, a caller that passed the wrong path
         // (or a path an attacker could write to) would copy arbitrary files over the install folder.
@@ -525,29 +614,55 @@ public static class UpdateService
 
         var target = Path.Combine(installDirectory, "NitroLite.exe");
 
-        var staged = Directory.GetFiles(staging, "*", SearchOption.AllDirectories)
-            .Select(file => (Source: file, Relative: Path.GetRelativePath(staging, file)))
+        // Only the package's own files, by their allowlisted names. Enumerating the folder instead copied whatever
+        // else had appeared in it — and the folder is in %TEMP%, where any same-user process can add a DLL that the
+        // next start of NitroLite.exe would then load from its own folder.
+        var staged = PackageFiles
+            .Select(relative => (
+                Name: relative,
+                Source: Path.Combine(staging, relative.Replace('/', Path.DirectorySeparatorChar)),
+                Relative: relative.Replace('/', Path.DirectorySeparatorChar)))
+            .Where(f => File.Exists(f.Source))
             .ToList();
 
-        if (!staged.Any(f => string.Equals(f.Relative, "NitroLite.exe", StringComparison.OrdinalIgnoreCase)))
+        if (!staged.Any(f => string.Equals(f.Name, "NitroLite.exe", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("The staging folder does not contain NitroLite.exe.");
+
+        if (expectedDigests != null)
+        {
+            // A package file the extraction did not write is not part of the verified package.
+            foreach (var file in staged)
+            {
+                if (!expectedDigests.ContainsKey(file.Name))
+                    throw new InvalidDataException($"The staged file was not part of the verified package: {file.Name}");
+            }
+        }
 
         // Phase 1 — prepare. Nothing in the install folder is touched yet.
         var prepared = new List<(string Pending, string Destination)>();
         try
         {
-            foreach (var (source, relative) in staged)
+            foreach (var (name, source, relative) in staged)
             {
                 var destination = Path.Combine(installDirectory, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 var pending = destination + ".new";
                 TryDelete(pending);
 
-                // Durable, not File.Copy: the commit below renames this file over the live one, and a copy that is
-                // still sitting in the write cache when the rename lands leaves a correctly named, correctly sized,
-                // zero-content executable. See AtomicFile.CopyDurable for why that is unrecoverable here.
-                AtomicFile.CopyDurable(source, pending);
+                // Recorded before the copy, so a copy that fails half-way is still removed below.
                 prepared.Add((pending, destination));
+
+                if (expectedDigests != null)
+                {
+                    CopyDurableVerified(source, pending, expectedDigests[name], name);
+                }
+                else
+                {
+                    // Durable, not File.Copy: the commit below renames this file over the live one, and a copy that
+                    // is still sitting in the write cache when the rename lands leaves a correctly named, correctly
+                    // sized, zero-content executable. See AtomicFile.CopyDurable for why that is unrecoverable here.
+                    AtomicFile.CopyDurable(source, pending);
+                }
             }
         }
         catch
@@ -615,6 +730,40 @@ public static class UpdateService
         }
 
         return target;
+    }
+
+    /// <summary>
+    /// Copies <paramref name="source"/> to <paramref name="destination"/> durably (as <see cref="AtomicFile.CopyDurable"/>
+    /// does) while hashing what is copied, and throws when the copy's digest is not <paramref name="expectedSha256"/>.
+    /// </summary>
+    /// <remarks>
+    /// The source is opened with no write or delete sharing, so it cannot change while it is read, and the digest is
+    /// computed over the bytes written to the destination — not over a separate read of the same path, which would
+    /// reopen the gap this exists to close. A mismatching copy is left for the caller's cleanup, which deletes every
+    /// <c>.new</c> file of a failed prepare phase.
+    /// </remarks>
+    private static void CopyDurableVerified(string source, string destination, string expectedSha256, string name)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using (var input = new FileStream(
+                   source, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, FileOptions.SequentialScan))
+        using (var output = new FileStream(
+                   destination, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920,
+                   FileOptions.WriteThrough))
+        {
+            var buffer = new byte[81920];
+            int read;
+            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                hash.AppendData(buffer, 0, read);
+                output.Write(buffer, 0, read);
+            }
+            output.Flush(flushToDisk: true);
+        }
+
+        var actual = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"The staged file changed after it was verified: {name}");
     }
 
     /// <summary>Deletes a file if it is there. Returns true only when something was actually removed.</summary>

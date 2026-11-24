@@ -18,6 +18,61 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
   then. A blackout the keyboard refuses now puts the page and both switches back instead of leaving them dark over a
   lit keyboard.
 
+**Fans (full-project audit)**
+- Game profiles that use a fan curve now follow it during the game, including the 85/90/95 °C safety floor. The loop
+  used to stop for every running game, so the fans stayed at the slider's fixed speed for the whole session.
+- When a game with a fan curve closes, the fans return to the pre-game mode; a curve step still in flight can no
+  longer write over it.
+- When the CPU temperature can only be read from a Windows thermal-zone stand-in, the fans are handed back to the
+  firmware instead of following it. A lost reading is retried until the hand-back succeeds.
+- `--fan <percent>` and `--fan custom` apply the thermal floor and refuse a fixed speed when no CPU temperature is
+  available.
+- Restarting the curve quickly can no longer run two fan updates at once; a clean exit no longer waits indefinitely
+  for a closing game session, and that session can no longer write after the exit hand-back.
+- The custom fan curve can be enabled while the dedicated GPU sleeps in iGPU/hybrid mode (its 0 °C reading no longer
+  blocks sensor verification).
+
+**Windows**
+- Opening NitroLite no longer raises a UAC prompt to read CoolBoost, LCD overdrive or the backlight timeout, and a
+  timed-out read no longer starts a new helper. A helper that failed to start is not relaunched on every call; only
+  "Start direct WMI" retries it. Every worker command times out after 10 s instead of freezing later calls.
+- The MUX switch is offered only where the write it needs is possible, and a "not supported" answer no longer
+  disables a control permanently.
+- "Turn off lighting" really turns off keyboards driven over the vendor HID controller, and the HID controller is
+  found again after resume or a late start instead of once per process. On HID keyboards WAVE offers left and right only.
+- A CPU temperature from the thermal-zone fallback is no longer marked as measured; battery watts refresh immediately
+  on plug/unplug; a half-applied CPU boost change is rolled back on both AC and DC.
+- Vendor reports from Logitech, Razer and other peripherals no longer trigger the Nitro key; NitroSense dialogs that
+  get their title late are recognised.
+- NitroLite no longer holds up sign-out or shutdown by hiding to the tray; a tray session no longer exits after a
+  handful of unrelated UI errors spread over days; the colour picker's hex box no longer rewrites itself while typing;
+  a restored backup is no longer overwritten when the window closes.
+
+**Security**
+- The elevated helper and autostart refuse an install when any folder above it can be renamed, deleted or
+  re-permissioned by another local account, and the log names the folder.
+- Updates are hashed and unpacked from one open file, only the package's own files are installed, and each is checked
+  again as it is copied.
+- WinMemoryCleaner is held open from its hash check until it starts; PC Optimize writes its undo record before asking
+  for elevation, and the elevated step no longer writes into the data folder. Enabled CEIP tasks are recognised again.
+- Repairs and optimisations are no longer killed half-way after 35 s; every service start/stop inside them gives up
+  after 20 s.
+- Elevated scripts escape the curly apostrophes PowerShell treats as quotes; logs hide profile names with spaces and
+  JSON-escaped paths; restoring a backup also keeps a dated copy of the current game profiles.
+
+**Linux**
+- The one-click access setup installs the udev rule only after root verifies it against the digest of the rule built
+  into NitroLite.
+- The privileged helper authorises off its accept loop and drops idle connections; the client retries instead of
+  staying "absent" for the session.
+- A failed kernel fan write returns the fan to automatic; Custom 100 %/100 % no longer disables fan control; battery
+  time-to-empty is correct (the kernel reports seconds); the self-test no longer writes the MUX node; CPU boost no
+  longer switches the amd_pstate driver mode; the Nitro key listener stops cleanly.
+- OpenRGB lighting speaks the documented SDK protocol and no longer times out waiting for replies OpenRGB never sends.
+
+**Tests**
+- The test suite no longer writes to, or deletes, the real battery wear history in AppData.
+
 ## [1.3.4] - 2026-11-24
 
 - On the AN16-61, Capture A/B now reads the GPU driving the internal display through Windows. The firmware selector sweep that triggered unexpected restarts has been removed. A completed baseline survives the reboot required for a MUX change.

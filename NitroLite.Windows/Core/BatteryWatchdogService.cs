@@ -150,6 +150,32 @@ public class BatteryWatchdogService : IDisposable
         return info;
     }
 
+    /// <summary>True when the next status read will go to WMI regardless of the 30 s clock. For tests.</summary>
+    internal bool ForceRefreshPending => _forceWmiRefresh;
+
+    /// <summary>True when the discharge smoothing will start over on the next WMI read. For tests.</summary>
+    internal bool SmoothingInitialized => _emaInitialized;
+
+    /// <summary>Test seam: marks the smoothing as warmed up.</summary>
+    internal void MarkSmoothingWarmForTest(double milliwatts)
+    {
+        _smoothedDischargeRateMw = milliwatts;
+        _emaInitialized = true;
+        _forceWmiRefresh = false;
+    }
+
+    /// <summary>
+    /// Plugging or unplugging flips the sign of the wattage. When the adapter state differs from the previous status,
+    /// the WMI read is forced and the smoothing restarts, so the old direction is never shown next to the new state.
+    /// </summary>
+    internal void ObserveAdapterState(bool isPluggedIn, bool previousIsPluggedIn)
+    {
+        if (isPluggedIn == previousIsPluggedIn) return;
+        _emaInitialized = false;
+        _smoothedDischargeRateMw = 0.0;
+        _forceWmiRefresh = true;
+    }
+
     private BatteryStatusInfo ComputeStatus()
     {
         var info = new BatteryStatusInfo();
@@ -162,6 +188,9 @@ public class BatteryWatchdogService : IDisposable
             info.IsCharging = status.BatteryFlag != 255 && (status.BatteryFlag & 8) != 0;
             info.EstimatedRemainingMinutes = status.BatteryLifeTime > 0 ? status.BatteryLifeTime / 60 : -1;
             info.IsWatchdogActive = WatchdogEnabled;
+            // Production builds this service without the system power events, so the adapter flip has to be noticed
+            // here, on the tick that sees it, not 30 s later when the scheduled WMI read comes round.
+            ObserveAdapterState(info.IsPluggedIn, CurrentStatus.IsPluggedIn);
             // Only meaningful while the 80 % limit is on: with it off, charging to 100 % is the user's choice.
             info.IsOvercharged = WatchdogEnabled && info.IsPluggedIn && info.BatteryPercent > 80;
         }

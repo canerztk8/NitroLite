@@ -104,6 +104,9 @@ public sealed class GameProfileService
     private GameProfile? _active;
     private GameSessionSnapshot? _snapshot;
 
+    /// <summary>Set by <see cref="StopWriting"/>; checked before every hardware write.</summary>
+    private volatile bool _writesStopped;
+
     /// <summary>
     /// <paramref name="hardware"/> is optional so the detection half can be tested on its own. Without it the service
     /// still reports transitions; it simply has nothing to write them to.
@@ -240,6 +243,17 @@ public sealed class GameProfileService
             _gate.Release();
         }
     }
+
+    /// <summary>
+    /// Stops this service from writing to the hardware for the rest of the process. Called by the clean exit once it
+    /// has stopped waiting for <see cref="StopAsync"/>: a session stuck in a slow call would otherwise go on to write
+    /// the pre-game fan mode, or the game's Custom speed, after the exit had handed the fans back to the firmware.
+    /// Detection keeps answering; only the writes stop. A write already in progress is not interrupted.
+    /// </summary>
+    public void StopWriting() => _writesStopped = true;
+
+    /// <summary>True once <see cref="StopWriting"/> has been called.</summary>
+    public bool WritesStopped => _writesStopped;
 
     /// <summary>
     /// True while the running game still has a rule that asks to be applied: it is still in the list and its
@@ -440,8 +454,10 @@ public sealed class GameProfileService
 
         try
         {
+            if (_writesStopped) return;
             await _hardware.SetOperatingModeAsync(target).ConfigureAwait(false);
 
+            if (_writesStopped) return;
             if (profile.TargetFanCurveEnabled)
             {
                 // The curve itself is driven by the caller's telemetry loop; all this has to do is put the fans under
@@ -469,7 +485,10 @@ public sealed class GameProfileService
 
         try
         {
+            if (_writesStopped) return;
             await _hardware.SetOperatingModeAsync(snapshot.Mode).ConfigureAwait(false);
+
+            if (_writesStopped) return;
             await _hardware.SetFanModeAsync(
                 snapshot.Fan,
                 snapshot.CustomCpuPercent,

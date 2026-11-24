@@ -112,6 +112,49 @@ public static class CliCommands
         return true;
     }
 
+    /// <summary>
+    /// The fixed speed a <c>--fan &lt;percent&gt;</c> or <c>--fan custom</c> command may write: the requested targets
+    /// raised to the thermal floor for the CPU temperature in <paramref name="sample"/>, the same floor the window's
+    /// sliders go through (<see cref="ManualFanFloor"/>).
+    /// </summary>
+    /// <remarks>
+    /// Returns false, with a message, when the sample carries no usable temperature. A fixed speed is the one write
+    /// that takes the fans away from the firmware, and the command exits straight after it with nothing left to raise
+    /// the speed when the die heats up; writing 20 % without knowing whether the die is at 40 °C or 95 °C is exactly
+    /// the write the floor exists to prevent, so the command refuses instead of guessing.
+    /// </remarks>
+    public static bool TryResolveFixedFanSpeed(
+        int cpuTargetPercent,
+        int gpuTargetPercent,
+        MonitorData? sample,
+        out int cpuPercent,
+        out int gpuPercent,
+        out string error)
+    {
+        cpuPercent = 0;
+        gpuPercent = 0;
+        error = string.Empty;
+
+        // The Windows monitor substitutes the ACPI thermal zone when the firmware's CPU reading is implausible. That is
+        // often a static board value near 28 °C, so it is no basis for a floor and counts as no reading at all.
+        bool fromThermalZone = sample != null &&
+                               sample.Provenance.TryGetValue("cpu-temp", out var source) &&
+                               string.Equals(source, "PDH thermal zone", StringComparison.Ordinal);
+
+        int temperature = fromThermalZone ? 0 : sample?.CpuTemperature ?? 0;
+        if (temperature <= 0)
+        {
+            var reason = Loc.T("Sıcaklık sensörü bildirilmiyor");
+            error = $"{FanFlag}: {reason}";
+            return false;
+        }
+
+        var floor = new ManualFanFloor();
+        cpuPercent = floor.EffectivePercent(cpuTargetPercent, temperature);
+        gpuPercent = floor.EffectivePercent(gpuTargetPercent, temperature);
+        return true;
+    }
+
     /// <summary>The value that follows a flag, or false when the flag was the last thing on the line.</summary>
     private static bool TryTakeValue(string[] args, ref int index, out string value)
     {

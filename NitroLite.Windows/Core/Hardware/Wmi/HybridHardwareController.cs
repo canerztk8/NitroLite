@@ -314,7 +314,11 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         var wmi = EnsureWmi();
         if (wmi == null) return false;
 
-        var connected = await wmi.EnsureConnectedAsync().ConfigureAwait(false);
+        // The explicit path is the only one allowed to try again after the helper failed to start or to finish its
+        // handshake; every automatic call is answered from the launcher's memory of that failure.
+        var connected = wmi is WmiHardwareController direct
+            ? await direct.ConnectOnRequestAsync().ConfigureAwait(false)
+            : await wmi.EnsureConnectedAsync().ConfigureAwait(false);
         SetActive(connected);
         return connected;
     }
@@ -723,8 +727,17 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         return false;
     }
 
-    public async Task<bool> TurnOffLightingAsync() =>
-        await (await ResolveAsync().ConfigureAwait(false)).TurnOffLightingAsync().ConfigureAwait(false);
+    /// <summary>The four zone colours that mean "off", the same request both backends send for their own turn-off.</summary>
+    private static readonly string[] AllZonesOff = { "#000000", "#000000", "#000000", "#000000" };
+
+    /// <summary>
+    /// Turns the backlight off through the same chain as <see cref="SetLightingAsync"/>, with an OFF frame. Both
+    /// backends implement their own turn-off as exactly this request, so the service and WMI paths are unchanged; what
+    /// the shared chain adds is the HID route, without which a profile that declares a HID keyboard was told "off"
+    /// over an interface the keys ignore.
+    /// </summary>
+    public Task<bool> TurnOffLightingAsync() =>
+        SetLightingAsync("OFF", 0, 1, 1, "#000000", AllZonesOff);
 
     /// <summary>
     /// The backlight timeout, from whichever backend actually answers.
@@ -739,7 +752,7 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </remarks>
     public async Task<bool?> GetBacklightTimeoutAsync()
     {
-        var (reached, value) = await TryWmiAsync(w => w.GetBacklightTimeoutAsync()).ConfigureAwait(false);
+        var (reached, value) = await TryWmiAsync(w => w.GetBacklightTimeoutAsync(), mayStart: false).ConfigureAwait(false);
         if (reached && value.HasValue) return value;
 
         return await _agent.GetBacklightTimeoutAsync().ConfigureAwait(false);
@@ -751,7 +764,7 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// </summary>
     public async Task<bool> SetBacklightTimeoutAsync(bool enable30s)
     {
-        var (reached, applied) = await TryWmiAsync(w => w.SetBacklightTimeoutAsync(enable30s)).ConfigureAwait(false);
+        var (reached, applied) = await TryWmiAsync(w => w.SetBacklightTimeoutAsync(enable30s), mayStart: true).ConfigureAwait(false);
         if (reached && applied) return true;
 
         return await _agent.SetBacklightTimeoutAsync(enable30s).ConfigureAwait(false);
@@ -759,25 +772,25 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
 
     public async Task<bool?> GetCoolBoostAsync()
     {
-        var (reached, value) = await TryWmiAsync(w => w.GetCoolBoostAsync()).ConfigureAwait(false);
+        var (reached, value) = await TryWmiAsync(w => w.GetCoolBoostAsync(), mayStart: false).ConfigureAwait(false);
         return reached ? value : await _agent.GetCoolBoostAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> SetCoolBoostAsync(bool on)
     {
-        var (reached, applied) = await TryWmiAsync(w => w.SetCoolBoostAsync(on)).ConfigureAwait(false);
+        var (reached, applied) = await TryWmiAsync(w => w.SetCoolBoostAsync(on), mayStart: true).ConfigureAwait(false);
         return reached ? applied : await _agent.SetCoolBoostAsync(on).ConfigureAwait(false);
     }
 
     public async Task<bool?> GetLcdOverdriveAsync()
     {
-        var (reached, value) = await TryWmiAsync(w => w.GetLcdOverdriveAsync()).ConfigureAwait(false);
+        var (reached, value) = await TryWmiAsync(w => w.GetLcdOverdriveAsync(), mayStart: false).ConfigureAwait(false);
         return reached ? value : await _agent.GetLcdOverdriveAsync().ConfigureAwait(false);
     }
 
     public async Task<bool> SetLcdOverdriveAsync(bool on)
     {
-        var (reached, applied) = await TryWmiAsync(w => w.SetLcdOverdriveAsync(on)).ConfigureAwait(false);
+        var (reached, applied) = await TryWmiAsync(w => w.SetLcdOverdriveAsync(on), mayStart: true).ConfigureAwait(false);
         return reached ? applied : await _agent.SetLcdOverdriveAsync(on).ConfigureAwait(false);
     }
 
@@ -785,7 +798,7 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     {
         var backend = await ResolveAsync().ConfigureAwait(false);
         if (backend == _agent && await _agent.SetWinKeyLockAsync(enabled).ConfigureAwait(false)) return true;
-        var (reached, applied) = await TryWmiAsync(w => w.SetWinKeyLockAsync(enabled)).ConfigureAwait(false);
+        var (reached, applied) = await TryWmiAsync(w => w.SetWinKeyLockAsync(enabled), mayStart: true).ConfigureAwait(false);
         return reached ? applied : backend != _agent && await _agent.SetWinKeyLockAsync(enabled).ConfigureAwait(false);
     }
 
@@ -793,14 +806,30 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// Runs one call against the WMI backend and reports whether that backend was reachable at all, so the caller can
     /// tell "the hardware said no" from "there was nothing to ask". A helper that is already running is used without
     /// asking; starting one is only allowed for a write the user asked for, so a boot-time read cannot raise a prompt.
+    /// <para>
+    /// <paramref name="mayStart"/> is what enforces that. A read passes false and only ever uses a backend whose
+    /// helper is already connected: it may look the backend object up (creating it starts nothing), but it never calls
+    /// <see cref="IHardwareController.EnsureConnectedAsync"/> on one that is not, whatever
+    /// <see cref="AllowElevationForLighting"/> says — that flag defaults to true, and the boot-time state read
+    /// (CoolBoost, overdrive, backlight timeout) runs before the user has asked for anything.
+    /// </para>
     /// </summary>
-    private async Task<(bool Reached, T Value)> TryWmiAsync<T>(Func<IHardwareController, Task<T>> call)
+    private async Task<(bool Reached, T Value)> TryWmiAsync<T>(Func<IHardwareController, Task<T>> call, bool mayStart)
     {
         if (!_useDirectWmi()) return (false, default!);
 
-        var wmi = _wmi is { IsAvailable: true } ? _wmi : (AllowElevationForLighting ? EnsureWmi() : null);
-        if (wmi == null) return (false, default!);
-        if (!await wmi.EnsureConnectedAsync().ConfigureAwait(false)) return (false, default!);
+        IHardwareController? wmi;
+        if (mayStart)
+        {
+            wmi = _wmi is { IsAvailable: true } ? _wmi : (AllowElevationForLighting ? EnsureWmi() : null);
+            if (wmi == null) return (false, default!);
+            if (!await wmi.EnsureConnectedAsync().ConfigureAwait(false)) return (false, default!);
+        }
+        else
+        {
+            wmi = EnsureWmi();
+            if (wmi is not { IsAvailable: true }) return (false, default!);
+        }
 
         try
         {
