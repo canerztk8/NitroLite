@@ -24,6 +24,9 @@ public sealed class HardwareSnapshot
     /// </summary>
     public const int MaximumEntries = 240;
 
+    public const string DisplayRouteSection = "windows.display";
+    public bool IsDisplayRouteOnly => Entries.Count > 0 && Entries.All(entry => entry.Section == DisplayRouteSection);
+
     public HardwareSnapshot(
         string? model,
         string? board,

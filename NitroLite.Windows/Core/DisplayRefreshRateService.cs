@@ -110,6 +110,33 @@ public class DisplayRefreshRateService : IDisplayRefreshRateService
         return null;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DisplayDevice
+    {
+        public uint Size;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string Name;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Description;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceId;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string RegistryKey;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplayDevices(string? parent, uint index, ref DisplayDevice device, uint flags);
+
+    internal static string? FindInternalPanelAdapter()
+    {
+        var panel = FindInternalPanelDeviceName();
+        if (panel == null) return null;
+        for (uint index = 0; ; index++)
+        {
+            var device = new DisplayDevice { Size = (uint)Marshal.SizeOf<DisplayDevice>() };
+            if (!EnumDisplayDevices(null, index, ref device, 0)) return null;
+            if (string.Equals(panel, device.Name, StringComparison.OrdinalIgnoreCase))
+                return device.Description;
+        }
+    }
+
     /// <summary>Internal panel name for the current call; resolved each time so docking/lid changes are followed.</summary>
     private static string? Target => FindInternalPanelDeviceName();
 

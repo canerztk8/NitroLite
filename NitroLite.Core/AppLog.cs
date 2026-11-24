@@ -80,6 +80,7 @@ public static class AppLog
     public static string LogFilePath => LogFile;
 
     public static void Info(string title, string? details = null) => Write("INFO", title, details);
+    public static void Checkpoint(string title, string details) => Write("INFO", title, details, durable: true);
     public static void Warn(string title, string? details = null) => Write("WARN", title, details);
     public static void Error(string title, string? details = null) => Write("ERROR", title, details);
 
@@ -127,7 +128,7 @@ public static class AppLog
         }
     }
 
-    private static void Write(string level, string title, string? details)
+    private static void Write(string level, string title, string? details, bool durable = false)
     {
         try
         {
@@ -151,6 +152,8 @@ public static class AppLog
 
                 var writer = _writer ??= OpenWriter(path);
                 writer?.Write(line);
+                if (durable && writer?.BaseStream is FileStream stream)
+                    stream.Flush(flushToDisk: true);
             }
         }
         catch

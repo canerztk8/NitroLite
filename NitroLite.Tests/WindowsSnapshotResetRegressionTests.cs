@@ -9,11 +9,20 @@ public class WindowsSnapshotResetRegressionTests
     [Theory]
     [InlineData("AN16-61", "")]
     [InlineData("", "Nitro AN16-61")]
-    public async Task CaptureStopsBeforeAnyHardwareSourceRuns(string code, string model)
+    [InlineData("AN16-61-R123", "")]
+    public async Task ProtectedModelUsesOnlyWindowsDisplayRoute(string code, string model)
     {
         var identity = new DeviceIdentity { ModelCode = code, Model = model };
-        var error = await Assert.ThrowsAsync<NotSupportedException>(
-            () => WindowsHardwareSnapshot.CaptureAsync(identity, null));
-        Assert.Contains("AN16-61", error.Message);
+        try
+        {
+            var snapshot = await WindowsHardwareSnapshot.CaptureAsync(identity, null);
+            Assert.True(snapshot.IsDisplayRouteOnly);
+            Assert.Equal("internalPanelAdapter", Assert.Single(snapshot.Entries).Key);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // CI can run without an active internal display.
+            Assert.Contains("Windows could not identify the active internal display adapter", ex.Message);
+        }
     }
 }

@@ -86,7 +86,10 @@ public static class DiagnosticsBundle
             capabilities,
             Redaction.Scrub(ReadIfExists(settingsPath)),
             Redaction.Scrub(ReadIfExists(logPath)),
-            now);
+            now).ToList();
+        var previousLog = logPath == null ? null : ReadIfExists(logPath + ".old");
+        if (!string.IsNullOrWhiteSpace(previousLog))
+            entries.Add(new(LogFileName + ".old", Redaction.Scrub(previousLog)));
 
         // Create rather than CreateDirectory-overwrite: a second export in the same second must not silently replace
         // the first one, because the user may already have attached it to a report.
@@ -148,6 +151,7 @@ public static class DiagnosticsBundle
         // The machine name is not part of a diagnosis, and the archive is a file a user attaches to a public issue.
         builder.AppendLine($"Machine          : {Redaction.MachinePlaceholder}");
         builder.AppendLine($"Processors       : {Environment.ProcessorCount}");
+        AppendDisplayDrivers(builder);
         builder.AppendLine($"Data directory   : {Redaction.Scrub(SafeDataDirectory())}");
         // Scrubbed for the same reason the line above is: the message is built from the data directory's full path,
         // which carries the Windows user name, and this archive is a file a user attaches to a public issue.
@@ -292,6 +296,26 @@ public static class DiagnosticsBundle
     {
         try { return AppPaths.DataDirectory; }
         catch (Exception ex) { return $"unavailable ({ex.GetType().Name})"; }
+    }
+
+    private static void AppendDisplayDrivers(StringBuilder builder)
+    {
+        try
+        {
+            using var drivers = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+            if (drivers == null) return;
+            foreach (var name in drivers.GetSubKeyNames().Where(name => name.Length == 4 && name.All(char.IsAsciiDigit)))
+            {
+                using var driver = drivers.OpenSubKey(name);
+                if (driver?.GetValue("DriverDesc") is string description)
+                    builder.AppendLine($"Installed display driver: {Redaction.Scrub(description)} ({Redaction.Scrub(driver.GetValue("DriverVersion") as string)})");
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            builder.AppendLine("Installed display driver details unavailable.");
+        }
     }
 
     private static string? ReadIfExists(string? path)

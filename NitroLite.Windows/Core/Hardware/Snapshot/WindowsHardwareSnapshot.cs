@@ -34,10 +34,18 @@ public static class WindowsHardwareSnapshot
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
-        if (string.Equals(identity.ModelCode?.Trim(), "AN16-61", StringComparison.OrdinalIgnoreCase)
+        var model = string.IsNullOrWhiteSpace(identity.ModelCode) ? identity.Model : identity.ModelCode;
+        if (string.Equals(identity.BaseModelCode, "AN16-61", StringComparison.OrdinalIgnoreCase)
             || string.Equals(identity.Model?.Trim(), "Nitro AN16-61", StringComparison.OrdinalIgnoreCase)
             || string.Equals(identity.Model?.Trim(), "AN16-61", StringComparison.OrdinalIgnoreCase))
-            throw new NotSupportedException("Snapshot capture is disabled on AN16-61 after reports of unexpected restarts.");
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var adapter = NitroLite.Core.DisplayRefreshRateService.FindInternalPanelAdapter();
+            if (string.IsNullOrWhiteSpace(adapter))
+                throw new InvalidOperationException("Windows could not identify the active internal display adapter. Open the laptop display and retry.");
+            return Task.FromResult(new HardwareSnapshot(model, identity.BoardProduct,
+                [new HardwareSnapshotEntry(HardwareSnapshot.DisplayRouteSection, "internalPanelAdapter", adapter)], capturedAt));
+        }
 
         var sources = new List<IHardwareSnapshotSource>();
         sources.Add(wmi is { IsAvailable: true }
@@ -48,7 +56,6 @@ public static class WindowsHardwareSnapshot
 
         sources.Add(new HidSnapshotSource());
 
-        var model = string.IsNullOrWhiteSpace(identity.ModelCode) ? identity.Model : identity.ModelCode;
         return HardwareSnapshotService.CaptureAsync(model, identity.BoardProduct, sources, capturedAt, cancellationToken);
     }
 

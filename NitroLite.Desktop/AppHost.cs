@@ -710,7 +710,9 @@ public sealed class AppHost : IDisposable
         var schoolMode = CreateWindowsSchoolMode(settings, hybrid);
 
         AppLog.Info("The Windows hardware backend was attached",
-            $"{identity.ModelCode} · direct WMI {(settings.UseDirectWmiBackend ? "enabled" : "fallback only")}");
+            $"model={identity.ModelCode} board={identity.BoardProduct} BIOS={identity.BiosVersion} CPU={identity.CpuName} " +
+            $"OS={Environment.OSVersion.Version} runtime={Environment.Version} uptimeSeconds={Environment.TickCount64 / 1000} " +
+            $"direct WMI {(settings.UseDirectWmiBackend ? "enabled" : "fallback only")}");
 
         // The Task Scheduler entry is the only way to start elevated without a UAC prompt, and it is what makes the
         // direct-WMI path usable at sign-in.

@@ -182,6 +182,7 @@ public sealed partial class MainViewModel
                 || saved.Bios != identity.BiosVersion) return;
 
             _snapshotA = new HardwareSnapshot(saved.Model, saved.Board, saved.Entries, saved.CapturedAt);
+            AppLog.Info("Restored snapshot A", $"captured={saved.CapturedAt:O} entries={_snapshotA.Count}");
             _snapshotDiffStatus = Labels.SnapshotCapturedA(_snapshotA.Count);
         }
         catch (Exception ex)
@@ -911,6 +912,7 @@ public sealed partial class MainViewModel
     {
         try
         {
+            AppLog.Checkpoint("Starting snapshot A", $"model={_platform?.Identity.ModelCode}");
             var snapshot = await CaptureHardwareSnapshotAsync();
             if (snapshot == null) return;
 
@@ -921,7 +923,7 @@ public sealed partial class MainViewModel
             Raise(nameof(SnapshotBaselineReady));
             CaptureSnapshotBDiffCommand.RaiseCanExecuteChanged();
             SnapshotDiffStatus = Labels.SnapshotCapturedA(snapshot.Count);
-            AppLog.Info("NitroSense snapshot A was captured", $"{snapshot.Describe()} · {snapshot.Count} entries");
+            AppLog.Checkpoint("NitroSense snapshot A saved", snapshot.ToText());
         }
         catch (Exception ex)
         {
@@ -951,11 +953,18 @@ public sealed partial class MainViewModel
 
         try
         {
+            AppLog.Checkpoint("Starting snapshot B", $"model={before.Model} baseline={before.CapturedAt:O}");
             var after = await CaptureHardwareSnapshotAsync();
             if (after == null) return;
 
+            if (before.IsDisplayRouteOnly != after.IsDisplayRouteOnly)
+                throw new InvalidOperationException("The capture method changed. Capture a new state A first.");
+
             var diff = HardwareSnapshotDiff.Compare(before, after);
-            var report = HardwareReportText;
+            AppLog.Checkpoint("Snapshot B comparison", diff.Text);
+            var report = after.IsDisplayRouteOnly
+                ? $"Windows internal display route only. BIOS {_platform!.Identity.BiosVersion}. Acer firmware was not queried."
+                : HardwareReportText;
             var separator = Environment.NewLine + Environment.NewLine;
 
             var clipboard = report.Length == 0 ? diff.Text : report + separator + diff.Text;
