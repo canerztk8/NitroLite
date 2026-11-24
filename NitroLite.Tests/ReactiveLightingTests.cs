@@ -329,6 +329,77 @@ public class ReactiveLightingTests
     }
 
     [Fact]
+    public async Task TheBlackoutIsDarkBeforeTheWriteAnswers_SoAQueuedColourCannotLightTheKeysAgain()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 80;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+        Assert.Single(ReactiveWrites(hardware, ReactiveLighting.ColorFor(80)));
+
+        // Hold the keyboard's own "off" write in flight. That is the moment a repaint can arrive: the telemetry tick
+        // and the mode's own controls both come through while the write is on its way.
+        hardware.TurnOffGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        hardware.LightingWrites.Clear();
+        vm.TurnOffLightingCommand.Execute(null);
+        await hardware.TurnOffStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        // The state the write is about to create is already the state the page describes, and the mode is already
+        // suspended. Both used to be set after the write answered, which left a window: a colour that queued behind
+        // the write passed the "is the keyboard dark" check and painted the keys a moment after "off", so the page
+        // said dark and the keyboard stayed lit. The second press of the button worked because by then the mode really
+        // was down — which is what made the first one look like a one-off.
+        Assert.True(vm.IsLightingBlackedOut);
+        Assert.False(vm.LightingControlsEnabled);
+        Assert.False(vm.ReactiveLightingEnabled);
+
+        // A repaint that arrives during the blackout asks for nothing at all — a forced one, like the slider's.
+        vm.ReactiveBrightness = 5;
+        await vm.ReactiveLightingTask;
+        Assert.DoesNotContain(hardware.LightingWrites, w => w.StartsWith("STATIC|5|", StringComparison.Ordinal));
+
+        hardware.TurnOffGate.SetResult();
+        await Phase3Fakes.WaitUntilAsync(() => hardware.LightingWrites.Contains("OFF"), 3000);
+
+        // The keyboard's last word is the blackout, not a colour.
+        Assert.DoesNotContain(hardware.LightingWrites, w => w.StartsWith("STATIC|5|", StringComparison.Ordinal));
+        Assert.Equal("OFF", hardware.LightingWrites[^1]);
+    }
+
+    [Fact]
+    public async Task ABlackoutTheKeyboardRefuses_PutsThePageAndTheSwitchBack()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 80;
+        hardware.TurnOffSucceeds = false;
+
+        var settings = new AppSettings();
+        using var vm = Create(hardware, settings);
+        await vm.InitializeAsync();
+
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+        await vm.ReactiveLightingTask;
+
+        vm.TurnOffLightingCommand.Execute(null);
+        await Task.Delay(50);
+
+        // Nothing was turned off, so nothing may stay dark: the state that keeps a queued colour off the keyboard is
+        // also the state that locks the page, and it must not survive a write the keyboard refused.
+        Assert.False(vm.IsLightingBlackedOut);
+        Assert.False(settings.IsBacklightOff);
+        Assert.True(vm.LightingControlsEnabled);
+        Assert.True(vm.ReactiveLightingEnabled);
+        Assert.True(settings.ReactiveLightingEnabled);
+        Assert.DoesNotContain("OFF", hardware.LightingWrites);
+    }
+
+    [Fact]
     public async Task BringingTheLightsBack_RevivesTheModeWithoutTogglingIt()
     {
         var hardware = new Phase3Fakes.StubHardware();

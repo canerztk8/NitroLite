@@ -8,6 +8,16 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
+## [Unreleased]
+
+**Fixes**
+- The blackout button now puts the page, the backlight-off flag and both automatic colours down *before* the "off"
+  write leaves, not after it answers. A temperature colour that had queued behind that write passed the "is the
+  keyboard dark" check and painted the keys a moment after "off", so the page said the lights were off while the
+  keyboard stayed lit; pressing the button a second time worked only because the first press had suspended the mode by
+  then. A blackout the keyboard refuses now puts the page and both switches back instead of leaving them dark over a
+  lit keyboard.
+
 ## [1.3.4] - 2026-11-24
 
 - On the AN16-61, Capture A/B now reads the GPU driving the internal display through Windows. The firmware selector sweep that triggered unexpected restarts has been removed. A completed baseline survives the reboot required for a MUX change.

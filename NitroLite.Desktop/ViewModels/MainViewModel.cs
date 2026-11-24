@@ -8179,26 +8179,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         var off = OffLightingConfig();
 
+        // The dark state goes up before the write leaves, not after it answers. Both automatic colours ask these flags
+        // once they hold the write gate — the charging colour passes exactly that test as its "still wanted" predicate
+        // — so setting them afterwards left a window open: a temperature tick that had queued its colour behind the
+        // "off" write passed the check, painted the keys a moment after the blackout landed, and left a lit keyboard
+        // under a page that said the lights were off. Pressing the button a second time worked only because the first
+        // one had suspended the mode by then, which is what made it look like a one-off.
+        bool wasBlackedOut = _lightingBlackedOut;
+        bool wasBacklightOff = _settings.IsBacklightOff;
+        _settings.IsBacklightOff = true;
+        SuspendAutomaticColours();
+        IsLightingBlackedOut = true;
+
         // Same rule as the rest of the page: turning the lights off is visible on the keyboard, so it does not need
         // a banner. A refusal still reaches the log.
         bool ok = await RunQuietWriteAsync(() => _hardware.TurnOffLightingAsync(), Labels.KeyboardLighting).ConfigureAwait(true);
-        if (!ok) return;
-
-        // The page goes dark with the keyboard, and every control on it goes with the page. Both automatic colours are
-        // switched off here rather than left showing "on" over a dark keyboard — a switch that stays on and does
-        // nothing is what made the temperature ramp look broken, and switching it off and on again was the only way to
-        // make it work. Their preferences are kept, so the button that restores the lights puts them back.
-        SuspendAutomaticColours();
+        if (!ok)
+        {
+            // Nothing was turned off, so nothing may stay dark: the page and both switches go back to what they were.
+            // The preferences were never changed, so the modes come back as the user left them.
+            _settings.IsBacklightOff = wasBacklightOff;
+            IsLightingBlackedOut = wasBlackedOut;
+            ResumeSuspendedAutomaticColours();
+            return;
+        }
 
         // The page shows the state the keyboard is in, so the controls go to "off" as well. Without this the effect
         // list and the brightness slider kept describing a configuration the keyboard was not running.
         SyncControls(() => ApplyLightingState(off));
-        IsLightingBlackedOut = true;
 
         // "Off" is a preference, not a moment. It is written to the settings file so the next launch knows the
         // keyboard is meant to stay dark, and the recovery copy is overwritten with the same state: leaving the last
-        // lit configuration there is what made the re-assert after a resume turn the lights back on.
-        _settings.IsBacklightOff = true;
+        // lit configuration there is what made the re-assert after a resume turn the lights back on. The flag itself
+        // went up before the write, which is what keeps a queued colour off the keyboard.
         _settings.KeyboardLighting = off;
         ActiveRgbStateStore.Save(_settingsPath, off);
         SaveSettings();

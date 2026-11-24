@@ -480,6 +480,19 @@ internal static class Phase3Fakes
         public TimeSpan LightingWriteDelay { get; set; } = TimeSpan.Zero;
 
         /// <summary>
+        /// When set, the blackout's own write waits on it before it answers. A test that holds the write can look at
+        /// what the page does while it is still on its way, which is exactly where a queued colour used to slip in
+        /// behind it and leave a lit keyboard under a dark page.
+        /// </summary>
+        public TaskCompletionSource? TurnOffGate { get; set; }
+
+        /// <summary>Completed as soon as the blackout's write is asked for, gate or no gate.</summary>
+        public TaskCompletionSource TurnOffStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>What the blackout's write answers. False models a keyboard that refused to go dark.</summary>
+        public bool TurnOffSucceeds { get; set; } = true;
+
+        /// <summary>
         /// Records the write only once it has gone through, which is the order the keyboard sees: a write that is
         /// abandoned on the way, or that the backend refuses, never reaches the list.
         /// </summary>
@@ -496,8 +509,17 @@ internal static class Phase3Fakes
 
         public Task<bool> TurnOffLightingAsync()
         {
+            TurnOffStarted.TrySetResult();
+            return TurnOffAfterGateAsync();
+        }
+
+        private async Task<bool> TurnOffAfterGateAsync()
+        {
+            if (TurnOffGate is { } gate) await gate.Task.ConfigureAwait(false);
+            if (!TurnOffSucceeds) return false;
+
             LightingWrites.Add("OFF");
-            return Task.FromResult(true);
+            return true;
         }
 
         public Task<bool?> GetBacklightTimeoutAsync() => Task.FromResult<bool?>(false);
