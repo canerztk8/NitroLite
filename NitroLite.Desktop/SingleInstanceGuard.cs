@@ -317,6 +317,7 @@ public sealed class SingleInstanceGuard : IDisposable
     private static readonly string[] NonWindowFlags =
     [
         "--cli", "--wmi-worker", "--mode", "--fan", "--profile", "--hardware-report", "--pssvc-sensors",
+        "--agent-capabilities",
         "--fix-lighting", "--fix-services", "--restore-mux", "--optimize-pc", "--restore-optimize", "--uninstall-cleanup"
     ];
 

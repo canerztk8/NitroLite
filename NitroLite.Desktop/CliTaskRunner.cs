@@ -63,6 +63,7 @@ public static class CliTaskRunner
     [
         "--cli", "--autostart", "--minimized", "--restart", "--hardware-report", "--linux-capture",
         "--linux-helper", "--linux-selftest", "--wmi-worker", "--pipe", "--parent-pid", "--pssvc-sensors",
+        "--agent-capabilities",
         "--mode", "--fan", "--profile", "--yes", "-y", "--force", "--socket"
     ];
 

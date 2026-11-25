@@ -38,6 +38,7 @@ public class AcerAgentClient : IDisposable
     private const uint PacketGetMonitorData = 10;
     private const uint PacketGetUpdatedData = 20;
     private const uint PacketGetConnectedDevice = 30;
+    private const uint PacketGetLightingEffectCapability = 40;
     private const uint PacketSetDeviceData = 100;
 
     public const string ResultSuccess = "0";
@@ -612,6 +613,73 @@ public class AcerAgentClient : IDisposable
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// The questions the capability dump asks, in order: what NitroSense asks the service at start-up to learn what a
+    /// machine has. Every one is a read — packet 0 (INITIALIZATION), 20 (GET_UPDATED_DATA), 30 (GET_CONNECTED_DEVICE)
+    /// or 40 (GET_LIGHTING_EFFECT_CAPABILITY). SET_DEVICE_DATA (100) is never in this list.
+    /// </summary>
+    public static IReadOnlyList<(uint Packet, string Function)> CapabilityQuestions { get; } = new (uint, string)[]
+    {
+        (PacketInitialization, "SUPPORT_OPERATING_MODE_CAPABILITY"),
+        (PacketInitialization, "SUPPORT_GPU_MODE"),
+        (PacketInitialization, "SUPPORT_GPU_MODE_CAPABILITY"),
+        (PacketInitialization, "SUPPORT_FAN_CONTROL"),
+        (PacketInitialization, "SUPPORT_LCD_OVERDRIVE"),
+        (PacketInitialization, "SUPPORT_KEYBOARD_INFO"),
+        (PacketInitialization, "SUPPORT_CPU_INFO"),
+        (PacketInitialization, "SUPPORT_GPU_INFO"),
+        (PacketInitialization, "SUPPORT_AUDIO_MODE"),
+        (PacketInitialization, "SUPPORT_CUSTOM_BOOT_LOGO"),
+        (PacketInitialization, "SUPPORT_OVERCLOCKING_MODE_CAPABILITY"),
+        (PacketGetUpdatedData, "BATTERY_BOOST"),
+        (PacketGetConnectedDevice, "GET_CONNECTED_DEVICE"),
+        (PacketGetLightingEffectCapability, "GET_LIGHTING_EFFECT_CAPABILITY")
+    };
+
+    /// <summary>
+    /// Asks the service every <see cref="CapabilityQuestions"/> question and returns the raw answers, null for one that
+    /// was not answered. Read-only: nothing here changes a setting. Used by <c>--agent-capabilities</c> to record what
+    /// a model's service reports before NitroLite relies on any of it.
+    /// </summary>
+    public virtual async Task<IReadOnlyList<(string Function, string? Answer)>?> QueryCapabilityAnswersAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+
+            var answers = new List<(string, string?)>();
+            bool connected = true;
+            for (int i = 0; i < CapabilityQuestions.Count; i++)
+            {
+                var (packet, function) = CapabilityQuestions[i];
+
+                // Once the service is gone the remaining questions are still listed, unanswered, so the dump never
+                // looks shorter than it is.
+                if (!connected)
+                {
+                    answers.Add((function, null));
+                    continue;
+                }
+
+                // Packets 30 and 40 take an empty body in NitroSense; the function name is still sent so the reply can
+                // be matched, which the service ignores for those packets. SendRawAsync answers null on any failure.
+                answers.Add((function, await SendFunctionAsync(packet, function).ConfigureAwait(false)));
+
+                // A question that dropped the connection must not stop the rest: reconnect for the next one, unless
+                // this was the last.
+                bool more = i < CapabilityQuestions.Count - 1;
+                if (more && _stream == null) connected = await EnsureConnectedInternalAsync();
+            }
+
+            return answers;
+        }
+        finally
+        {
+            _lock.Release();
         }
     }
 

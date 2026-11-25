@@ -80,3 +80,71 @@ From string tables of the service binaries (names only):
   arguments.
 - Acer's software license applies to these binaries; this document records facts about the installed files and does not
   reproduce Acer code.
+
+## How NitroSense controls the hardware (2026-11-26)
+
+Read-only reading of NitroSense's own app code (`main.js` and the renderer bundle inside `app.asar`; the native
+service binaries still need Ghidra, which is not installed). The answer to "how does it work on every model" is that
+**NitroSense keeps no model table for its controls: it asks Acer's service what the machine has.**
+
+- Transport: TCP `127.0.0.1:46933` (AASSvc), frames `"ACER"` + 32-bit length + JSON — the same service and framing
+  NitroLite's `AcerAgentClient` already uses.
+- Packet ids: `0` INITIALIZATION (capability questions), `10` GET_MONITOR_DATA, `20` GET_UPDATED_DATA (read one
+  setting), `30` GET_CONNECTED_DEVICE (lighting devices), `40` GET_LIGHTING_EFFECT_CAPABILITY, `100` SET_DEVICE_DATA
+  (`{Function, Parameter}`).
+- Capability questions it sends at start-up (`{Function: …}` on packet 0): `SUPPORT_OPERATING_MODE_CAPABILITY`,
+  `SUPPORT_GPU_MODE`, `SUPPORT_GPU_MODE_CAPABILITY`, `SUPPORT_FAN_CONTROL`, `SUPPORT_LCD_OVERDRIVE`,
+  `SUPPORT_KEYBOARD_INFO`, `SUPPORT_CPU_INFO`, `SUPPORT_GPU_INFO`, `SUPPORT_AUDIO_MODE`, `SUPPORT_CUSTOM_BOOT_LOGO`,
+  `SUPPORT_OVERCLOCKING_MODE_CAPABILITY`, plus `BATTERY_BOOST` on packet 20.
+- `SUPPORT_FAN_CONTROL` answers a **list of fans**, each with `fan_index`, `fan_custom_min_speed` and
+  `fan_custom_max_speed`. The fan setting it writes is `{mode, custom_fan_data: [{fan_custom_auto, fan_custom_speed,
+  fan_index, fan_name}]}` with names `CPU`, `GPU` and **`GPU2`** (index 1) — a third fan on some models.
+- Lighting: devices come from `GET_CONNECTED_DEVICE` and their effects from `GET_LIGHTING_EFFECT_CAPABILITY`
+  (device types keyboard, lightbar, logo …; lightbar via EC or USB).
+
+### NitroLite today (AcerAgentClient)
+
+Already used: `VERSION`, `GET_MONITOR_DATA`, `SUPPORT_OPERATING_MODE_CAPABILITY`, `SUPPORT_GPU_MODE_CAPABILITY`,
+`FAN_CONTROL`, `OPERATING_MODE`, `GPU_MODE`, `LIGHTING`, `BACKLIGHT_30S`, `WIN_KEY`, `GET_CONNECTED_DEVICE`.
+
+Not used, and each one is a place where NitroLite guesses from its own table while NitroSense asks the machine:
+`SUPPORT_FAN_CONTROL` (fan count, the third `GPU2` fan, per-fan minimum and maximum), `SUPPORT_LCD_OVERDRIVE`,
+`SUPPORT_KEYBOARD_INFO`, `SUPPORT_GPU_MODE`, `GET_LIGHTING_EFFECT_CAPABILITY`, `BATTERY_BOOST`,
+`SUPPORT_OVERCLOCKING_MODE_CAPABILITY`. NitroLite always writes exactly two fans (CPU, GPU) with its own floor.
+
+### Proposed order (none implemented)
+
+1. **Done (2026-11-26):** a read-only capability dump, `NitroLite.Desktop.exe --agent-capabilities`, that asks every
+   question above and prints the raw answers; the reference AN16-41's answers are in the next section.
+2. Use those answers as the capability source when the service answers, and the profile table only as the fallback
+   (direct WMI, Linux): fan list and limits, overdrive, keyboard type, GPU modes.
+3. Write the third fan (`GPU2`) and respect each fan's min/max from `SUPPORT_FAN_CONTROL` — R3, needs a test on a
+   three-fan Predator before release.
+4. Install Ghidra 12.2+ (`GHIDRA_INSTALL_DIR`) to read the service binaries: that is where the service maps each
+   model to WMI calls (`SetGamingFanGroup*` and the rest), which matters for machines without the service.
+
+### First capability dump: reference AN16-41 (2026-11-26)
+
+`NitroLite.Desktop.exe --agent-capabilities` (read-only; packets 0, 20, 30, 40 only) on the maintainer's AN16-41,
+BIOS V1.27, AASSvc running:
+
+| Question | Answer |
+|---|---|
+| SUPPORT_OPERATING_MODE_CAPABILITY | `[0,1,4,5,6]` — Quiet, Default, Extreme, Turbo, Eco |
+| SUPPORT_GPU_MODE | `[0]` |
+| SUPPORT_GPU_MODE_CAPABILITY | `[7]` (Optimus, Discrete, Automatic) |
+| SUPPORT_FAN_CONTROL | two fans, `CPU` and `GPU`, both `fan_index 0`, custom range **0–100 %** |
+| SUPPORT_LCD_OVERDRIVE | `[1]` |
+| SUPPORT_KEYBOARD_INFO | `backlight_color_control 2`, `keyboard_language 3`, `keyboard_led_type 4`, `lightbar_type 2` |
+| SUPPORT_CPU_INFO | AMD Ryzen 7 7840HS, max 5000 MHz |
+| SUPPORT_GPU_INFO | NVIDIA GeForce RTX 4070 Laptop GPU |
+| SUPPORT_AUDIO_MODE | result `1` (not supported) |
+| SUPPORT_CUSTOM_BOOT_LOGO | `[0]` |
+| SUPPORT_OVERCLOCKING_MODE_CAPABILITY | result `3` |
+| BATTERY_BOOST | `{status: 1}` |
+| GET_CONNECTED_DEVICE | `AcerECKeyboard Device`, type 5, brightness 5, modes from `DIRECT` (4 colours) upwards |
+| GET_LIGHTING_EFFECT_CAPABILITY | result `0`, no data |
+
+Notes: the service's own fan floor is 0 %, so NitroLite's minimum stays its own safety rule, not the firmware's.
+The answers match what NitroLite's profile says for this model (MUX 7, overdrive on, four zones) — the first time that
+has been read from the machine itself rather than from the table. The third fan (`GPU2`) does not exist here.

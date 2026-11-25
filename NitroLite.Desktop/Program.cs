@@ -45,6 +45,8 @@ internal static class Program
         var mode = StartupMode.Parse(args);
         if (args.Length == 1 && args[0] == "--pssvc-sensors")
             return NitroLite.Windows.Core.Hardware.LegacySenseSensors.RunAsync(Console.Out).GetAwaiter().GetResult();
+        if (args.Length == 1 && args[0] == "--agent-capabilities")
+            return NitroLite.Windows.Core.AgentCapabilityDump.RunAsync(Console.Out).GetAwaiter().GetResult();
         if (mode.IsWmiWorker)
         {
             return WmiWorkerHost.Run(mode);
