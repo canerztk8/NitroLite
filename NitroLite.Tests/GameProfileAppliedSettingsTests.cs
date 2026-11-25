@@ -465,7 +465,7 @@ public class GameProfileAppliedSettingsTests
             Assert.Equal(CpuBoostMode.Disabled, boost.Dc);
 
             vm.SchoolModeOn = true;
-            await WaitUntilAsync(() => settings.SchoolModeEnabled);
+            await WaitUntilAsync(() => settings.SchoolModeEnabled && boost.Dc == CpuBoostMode.Disabled);
             Assert.Equal(CpuBoostMode.Disabled, boost.Dc);
 
             scanner.Processes.Clear();
@@ -503,7 +503,7 @@ public class GameProfileAppliedSettingsTests
             Assert.Equal(CpuBoostMode.Disabled, boost.Ac);
 
             vm.SchoolModeOn = true;
-            await WaitUntilAsync(() => settings.SchoolModeEnabled);
+            await WaitUntilAsync(() => settings.SchoolModeEnabled && boost.Ac == CpuBoostMode.Disabled);
 
             scanner.Processes.Clear();
             await vm.PollGameAsync();

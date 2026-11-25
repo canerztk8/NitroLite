@@ -70,6 +70,8 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
   a rate the user picked meanwhile is left alone; "no internal panel" is no longer retried every second.
 - Turbo and Performance are refused from the cards and the top bar as well as the tray when the battery rule
   forbids them, and the top-bar mode menu is disabled on machines without mode control.
+- A game that closes while school mode is still switching on no longer puts the pre-game mode back over
+  school mode's Eco.
 - The CPU-boost picker no longer overwrites school mode's battery value.
 - The "battery power mode" picker is removed: nothing acted on it since the move from WPF.
 

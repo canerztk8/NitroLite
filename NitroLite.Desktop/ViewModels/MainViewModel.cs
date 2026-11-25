@@ -9482,6 +9482,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         bool switchedOff = false;
+        Action? undoGameHandOver = null;
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
@@ -9505,6 +9506,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 }
             }
 
+            // The running game's end-of-session restore is pointed at school mode's values BEFORE school mode writes
+            // anything. The game service ends a session on its own gate, not this one, and switching school mode on
+            // takes seconds (power plan, display): a game that closed in that window restored its pre-game Balanced
+            // over the Eco school mode had just written, with the switch on. Undone below if school mode refuses.
+            if (enable) undoGameHandOver = PointGameRestoreAtSchoolMode();
+
             var outcome = enable
                 ? await _schoolMode.EnableAsync(baselineMode, baselineFan).ConfigureAwait(true)
                 : await _schoolMode.DisableAsync().ConfigureAwait(true);
@@ -9513,6 +9520,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             if (outcome.Refused)
             {
+                undoGameHandOver?.Invoke();
+                undoGameHandOver = null;
+
                 // Nothing was changed, so the switch must not stay on: it would claim a state the machine is not in.
                 _schoolModeOn = false;
                 Raise(nameof(SchoolModeOn));
@@ -9525,6 +9535,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // of the game wrote Balanced or Turbo over school mode's Eco with the switch still on. Switched off again,
             // it puts back what school mode restored.
             HandOverGameSessionRestore(enable, outcome);
+            undoGameHandOver = null;
 
             // School mode darkened the keys (or put them back), so whatever an automatic colour had painted is no
             // longer on them.
@@ -9541,6 +9552,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
+            // When school mode did not take over, the game's restore goes back to the pre-game values it had. A
+            // failure after the switch was recorded leaves school mode on, and the restore stays pointed at it.
+            if (!_settings.SchoolModeEnabled) undoGameHandOver?.Invoke();
+
             AppLog.Warn("School mode could not be changed", ex.Message);
             Status = Labels.SchoolModeRefused;
         }
@@ -9563,6 +9578,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (switchedOff) ApplyRefreshRate(force: true);
 
         if (switchedOff && _chargingColorEnabled) ChargingLightingTask = SyncChargingLightingAsync(force: true);
+    }
+
+    /// <summary>
+    /// The enabling half of <see cref="HandOverGameSessionRestore"/>, done before school mode starts writing. Returns
+    /// the action that puts the game's restore back where it was, or null when no game is running.
+    /// </summary>
+    private Action? PointGameRestoreAtSchoolMode()
+    {
+        if (_gameProfiles is not { IsGameActive: true } games || games.Snapshot is not { } snapshot) return null;
+
+        var previousMode = snapshot.Mode;
+        var previousFan = snapshot.Fan;
+        var recovery = _settings.GameSessionRecovery is { IsActive: true } record ? record : null;
+        var previousSavedMode = recovery?.SavedMode;
+        var previousSavedFan = recovery?.SavedFan;
+
+        snapshot.Mode = _schoolMode?.TargetOperatingMode ?? OperatingMode.Eco;
+        snapshot.Fan = FanMode.Auto;
+        if (recovery != null)
+        {
+            recovery.SavedMode = snapshot.Mode;
+            recovery.SavedFan = snapshot.Fan;
+        }
+
+        return () =>
+        {
+            snapshot.Mode = previousMode;
+            snapshot.Fan = previousFan;
+            if (recovery != null && previousSavedMode is OperatingMode savedMode && previousSavedFan is FanMode savedFan)
+            {
+                recovery.SavedMode = savedMode;
+                recovery.SavedFan = savedFan;
+            }
+        };
     }
 
     /// <summary>

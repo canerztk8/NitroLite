@@ -310,9 +310,68 @@ public class CleanupA3PowerTests
 
             // Switching school mode off puts back the pre-game state, not the game's Turbo and Max.
             vm.SchoolModeOn = false;
-            await WaitUntilAsync(() => !settings.SchoolModeEnabled);
-            await Task.Delay(200);
-            Assert.Equal(OperatingMode.Default, hardware.ReportedMode);
+            await WaitUntilAsync(() => !settings.SchoolModeEnabled && hardware.ReportedMode == OperatingMode.Default);
+            Assert.Equal(FanMode.Auto, hardware.ReportedFan);
+        }
+        finally
+        {
+            File.Delete(school.BackupPath!);
+        }
+    }
+
+    [Fact]
+    public async Task AGameThatClosesWhileSchoolModeIsStillSwitchingOn_DoesNotUndoSchoolModesEco()
+    {
+        // The window the CI run fell into: school mode has written Eco but is still switching on (its lighting step
+        // comes after the mode), and the game closes right then. The game service ends the session on its own gate,
+        // so its restore lands in the middle of the switch; it has to write school mode's values, not the pre-game
+        // Balanced, or the machine ends up out of Eco with the switch on.
+        var settings = new AppSettings
+        {
+            AutoGameModeEnabled = true,
+            GameProfiles = new List<GameProfile>
+            {
+                new()
+                {
+                    ExeName = "a3race.exe", DisplayName = "A3 Race", TargetMode = OperatingMode.Turbo,
+                    TargetFanMode = FanMode.Max, TargetCpuBoost = CpuBoostMode.Aggressive, AutoApply = true
+                }
+            }
+        };
+        var hardware = new A3Hardware { ReportedMode = OperatingMode.Default, ReportedFan = FanMode.Auto };
+        var scanner = new ScannerFake();
+        var games = new GameProfileService(scanner, settings, hardware);
+        var school = School(hardware, settings);
+
+        // The game ends from inside school mode's lighting step, which runs after school mode's mode write.
+        var modeWhenTheGameEnded = OperatingMode.Default;
+        var gameEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        school.TurnLightingOffAsync = async () =>
+        {
+            modeWhenTheGameEnded = hardware.ReportedMode;
+            scanner.Processes.Clear();
+            await games.PollAsync();
+            gameEnded.TrySetResult();
+            return false;
+        };
+
+        try
+        {
+            using var vm = new MainViewModel(settings, hardware, null, TempSettingsPath(), gameProfiles: games,
+                schoolMode: school, powerState: () => (true, 80));
+            await vm.InitializeAsync();
+
+            scanner.Processes.Add(new RunningProcess(4343, "a3race.exe", @"C:\Games\a3race.exe"));
+            await vm.PollGameAsync();
+            Assert.Equal(OperatingMode.Turbo, hardware.ReportedMode);
+
+            vm.SchoolModeOn = true;
+            await WaitUntilAsync(() => settings.SchoolModeEnabled && gameEnded.Task.IsCompleted);
+            Assert.False(games.IsGameActive);
+
+            // School mode had already written Eco when the game closed, and the game's restore left it there.
+            Assert.Equal(OperatingMode.Eco, modeWhenTheGameEnded);
+            Assert.Equal(OperatingMode.Eco, hardware.ReportedMode);
             Assert.Equal(FanMode.Auto, hardware.ReportedFan);
         }
         finally
