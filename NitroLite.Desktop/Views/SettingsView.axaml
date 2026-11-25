@@ -151,12 +151,14 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.NitroKeyToggle}" VerticalAlignment="Center" />
                 <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding NitroKeyEnabled}"
+                          AutomationProperties.Name="{Binding Labels.NitroKeyToggle}"
                               VerticalAlignment="Center" />
               </Grid>
 
               <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
                 <TextBlock Classes="rowtitle" Text="{Binding Labels.RedirectNitroSense}" VerticalAlignment="Center" />
                 <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding RedirectNitroSenseEnabled}"
+                          AutomationProperties.Name="{Binding Labels.RedirectNitroSense}"
                               IsEnabled="{Binding CanRedirectNitroSense}" VerticalAlignment="Center" />
               </Grid>
 
@@ -197,6 +199,7 @@
             <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowRunAtStartupRow}">
               <TextBlock Classes="rowtitle" Text="{Binding Labels.RunAtStartup}" VerticalAlignment="Center" />
               <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding RunAtStartupOn}"
+                          AutomationProperties.Name="{Binding Labels.RunAtStartup}"
                             VerticalAlignment="Center" />
             </Grid>
 
@@ -207,6 +210,7 @@
                            VerticalAlignment="Center" />
               </StackPanel>
               <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding AutoStartOn}"
+                          AutomationProperties.Name="{Binding Labels.AutoStart}"
                             VerticalAlignment="Center" />
             </Grid>
 
@@ -218,6 +222,7 @@
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="rowtitle" Text="{Binding Labels.StartMinimized}" VerticalAlignment="Center" />
               <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding StartMinimizedOn}"
+                          AutomationProperties.Name="{Binding Labels.StartMinimized}"
                             VerticalAlignment="Center" />
             </Grid>
 
@@ -229,6 +234,7 @@
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Classes="rowtitle" Text="{Binding Labels.AtkMouseIntegration}" VerticalAlignment="Center" />
               <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding AtkMouseIntegrationOn}"
+                          AutomationProperties.Name="{Binding Labels.AtkMouseIntegration}"
                             VerticalAlignment="Center" />
             </Grid>
           </StackPanel>
@@ -252,6 +258,7 @@
             <TextBlock Grid.Column="1" Classes="mono" Text="{Binding UpdateVersionText}" Margin="10,0,0,0"
                        VerticalAlignment="Center" />
             <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AutoUpdateCheckOn}"
+                          AutomationProperties.Name="{Binding Labels.AutoUpdateCheck}"
                           VerticalAlignment="Center" />
           </Grid>
 
@@ -389,6 +396,7 @@
             <TextBlock Grid.Column="1" Classes="hint" Text="{Binding Labels.UseDirectWmiBackendHint}"
                        Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
             <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding UseDirectWmiBackend}"
+                          AutomationProperties.Name="{Binding Labels.UseDirectWmiBackend}"
                           VerticalAlignment="Center" />
           </Grid>
 
@@ -431,6 +439,11 @@
                     Command="{Binding CopyUdevCommand}" />
           </StackPanel>
 
+          <!-- A permission problem the grant button cannot fix (the root helper refused, or the Nitro key is still
+               unreadable after the grant ran): one line that says what will fix it instead. -->
+          <TextBlock Classes="hint" Text="{Binding LinuxPermissionNote}" TextWrapping="Wrap"
+                     IsVisible="{Binding HasLinuxPermissionNote}" />
+
           <StackPanel Spacing="8" IsVisible="{Binding ShowPredatorV4}" Margin="0,6,0,0">
             <TextBlock Classes="rowtitle" Text="{Binding Labels.LinuxPredatorV4Title}" />
             <TextBlock Classes="hint" Text="{Binding Labels.LinuxPredatorV4Hint}" TextWrapping="Wrap" />
@@ -438,6 +451,14 @@
                     IsVisible="{Binding CanElevate}" IsEnabled="{Binding LinuxSetupIdle}"
                     AutomationProperties.AutomationId="EnablePredatorV4"
                     Command="{Binding EnablePredatorV4Command}" />
+          </StackPanel>
+
+          <!-- The undo for the option above, offered whenever NitroLite's option file is in place. -->
+          <StackPanel Spacing="8" IsVisible="{Binding ShowPredatorV4Undo}" Margin="0,6,0,0">
+            <Button Content="{Binding Labels.LinuxPredatorV4DisableButton}" HorizontalAlignment="Left"
+                    IsVisible="{Binding CanElevate}" IsEnabled="{Binding LinuxSetupIdle}"
+                    AutomationProperties.AutomationId="DisablePredatorV4"
+                    Command="{Binding DisablePredatorV4Command}" />
           </StackPanel>
 
           <StackPanel Spacing="8" IsVisible="{Binding ShowLinuwuSense}" Margin="0,6,0,0">

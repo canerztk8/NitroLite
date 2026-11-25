@@ -45,15 +45,7 @@ public class BatteryWatchdogService : IDisposable
     public bool WatchdogEnabled { get; set; } = true;
     public bool IsGameSessionActive { get; set; } = false;
 
-    /// <summary>
-    /// Set while school mode is on. Only the system sound is skipped, because a quiet mode that beeps is not quiet.
-    /// </summary>
-    public bool SuppressSounds { get; set; }
-
     public BatteryStatusInfo CurrentStatus { get; private set; } = new();
-
-    public event Action<BatteryStatusInfo>? StatusUpdated;
-    public event Action<int>? OverchargeAlert;
 
     public BatteryWatchdogService(bool attachSystemEvents = true)
     {
@@ -132,21 +124,17 @@ public class BatteryWatchdogService : IDisposable
     private readonly object _statusLock = new();
 
     /// <summary>
-    /// Reads the battery state. Serialised (the main loop and the discharge loop both call it, and the discharge
-    /// rate smoothing is stateful); events are raised outside the lock so a UI handler cannot deadlock it.
+    /// Reads the battery state. Serialised: the main loop and the discharge loop both call it, and the discharge
+    /// rate smoothing is stateful.
     /// </summary>
     public BatteryStatusInfo UpdateStatus()
     {
         BatteryStatusInfo info;
-        bool raiseOvercharge;
         lock (_statusLock)
         {
             info = ComputeStatus();
-            raiseOvercharge = info.IsOvercharged && !CurrentStatus.IsOvercharged;
             CurrentStatus = info;
         }
-        if (raiseOvercharge) OverchargeAlert?.Invoke(info.BatteryPercent);
-        StatusUpdated?.Invoke(info);
         return info;
     }
 

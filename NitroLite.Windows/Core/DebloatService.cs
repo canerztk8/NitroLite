@@ -622,6 +622,28 @@ public class DebloatService
         return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// True when the backup file is well-formed JSON that records no Tier 1 service at all — the "{}" an earlier run
+    /// on a machine with nothing to disable left behind. Such a file protects nothing and may be replaced; a file that
+    /// does not parse, or names a service with a bad entry, is still refused.
+    /// </summary>
+    internal bool IsValidButEmptyBackupFile()
+    {
+        try
+        {
+            var json = BoundedTextFile.ReadAllText(BackupStateFilePath);
+            var map = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            if (map == null) return false;
+            var keys = new HashSet<string>(map.Keys, StringComparer.OrdinalIgnoreCase);
+            return !Tier1Services.Any(keys.Contains);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException
+                                      or InvalidDataException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
     public bool SaveBackupState(Dictionary<string, string> state)
     {
         try
@@ -779,7 +801,7 @@ public class DebloatService
         var sb = new System.Text.StringBuilder();
         sb.Append(ElevatedErrorLog.Function + " ");
         sb.Append($"$errLog = '{logEscaped}'; Remove-Item -Path $errLog -Force -ErrorAction SilentlyContinue; ");
-        sb.Append("$errs = @(); ");
+        sb.Append("$errs = @(); $warns = @(); ");
 
         if (backupState == null || backupState.Count == 0 || !(Tier1Services.Any(s => backupState.ContainsKey(s) && !string.IsNullOrWhiteSpace(backupState[s])) || (backupState.TryGetValue("Task:NitroSenseLauncher", out var onlyTask) && (IsActiveTaskState(onlyTask) || IsDisabledTaskState(onlyTask)))))
         {
@@ -810,15 +832,17 @@ public class DebloatService
             }
 
             sb.Append("try { ");
-            sb.Append($"$svc = Get-Service -Name '{s}' -ErrorAction Stop; ");
-            sb.Append($"if (-not $svc) {{ throw '{Loc.Ps($"Servis bulunamadı: {s}")}' }}; ");
+            // A service an Acer update removed or renamed cannot be restored, and treating it as an error made the
+            // undo fail on every attempt for as long as the record existed. It is skipped; the caller logs it.
+            sb.Append($"$svc = Get-Service -Name '{s}' -ErrorAction SilentlyContinue; ");
+            sb.Append("if ($svc) { ");
             if (canonicalType.Equals("Disabled", StringComparison.OrdinalIgnoreCase) && shouldStart)
             {
                 // Windows SCM prohibits starting a Disabled service (Error 1058).
                 // To restore a service recorded as Disabled + Running, temporarily set to Manual,
                 // start the service, and then switch startup type back to Disabled.
                 sb.Append($"Set-Service -Name '{s}' -StartupType Manual -ErrorAction Stop; ");
-                sb.Append($"Start-Service -Name '{s}' -ErrorAction Stop; ");
+                sb.Append($"Start-Service -Name '{s}' -ErrorAction SilentlyContinue; ");
                 sb.Append($"Set-Service -Name '{s}' -StartupType Disabled -ErrorAction Stop; ");
             }
             else
@@ -826,23 +850,26 @@ public class DebloatService
                 sb.Append($"Set-Service -Name '{s}' -StartupType {canonicalType} -ErrorAction Stop; ");
                 if (shouldStart)
                 {
-                    sb.Append($"Start-Service -Name '{s}' -ErrorAction Stop; ");
+                    sb.Append($"Start-Service -Name '{s}' -ErrorAction SilentlyContinue; ");
                 }
                 else
                 {
-                    sb.Append($"Stop-Service -Name '{s}' -Force -ErrorAction Stop; ");
+                    sb.Append($"Stop-Service -Name '{s}' -Force -ErrorAction SilentlyContinue; ");
                 }
             }
             sb.Append($"$vSvc = Get-Service -Name '{s}' -ErrorAction Stop; ");
+            // Only the start type is required. The running state is best effort: a service recorded as Running that
+            // stops by itself (many Acer helpers exit when idle) is not something the undo can or should insist on.
             sb.Append($"if ($vSvc.StartType -ne '{canonicalType}') {{ throw '{Loc.Ps($"Servis başlangıç türü doğrulanamadı: {s}")}' }}; ");
             if (shouldStart)
             {
-                sb.Append($"if ($vSvc.Status -ne 'Running') {{ throw '{Loc.Ps($"Servis çalışma durumu doğrulanamadı: {s}")}' }}; ");
+                sb.Append($"if ($vSvc.Status -ne 'Running') {{ $warns += '{s}' }}; ");
             }
             else
             {
-                sb.Append($"if ($vSvc.Status -ne 'Stopped') {{ throw '{Loc.Ps($"Servis çalışma durumu doğrulanamadı: {s}")}' }}; ");
+                sb.Append($"if ($vSvc.Status -ne 'Stopped') {{ $warns += '{s}' }}; ");
             }
+            sb.Append("} ");
             sb.Append("} catch { ");
             sb.Append($"$errs += ('{s}: ' + $_.Exception.Message); ");
             sb.Append("}; ");
@@ -884,6 +911,11 @@ public class DebloatService
     internal async Task<bool> RunElevatedPowerShellAsync(string script, string? errorLogPath = null)
     {
         LastError = null;
+
+        // The bounded Start-Service / Stop-Service functions the repair scripts use. Without them a service stuck in
+        // StartPending or StopPending hangs the elevated script past its timeout, and the next operation is refused
+        // until it exits. A function takes precedence over the cmdlet of the same name, so every call below is bounded.
+        script = SystemToolsService.BoundedServiceCommands + "\n" + script;
 
         if (PowerShellRunner != null)
         {
@@ -1046,8 +1078,10 @@ public class DebloatService
 
             if (!hasExistingValidBackup)
             {
-                // If backup file exists on disk but is invalid / corrupt, do NOT overwrite it!
-                if (File.Exists(BackupStateFilePath))
+                // If backup file exists on disk but is invalid / corrupt, do NOT overwrite it! A file that parses but
+                // records no service (a run on a machine with no Tier 1 service wrote "{}") holds nothing worth
+                // protecting, so it may be replaced; its entries are kept below so nothing in it is lost.
+                if (File.Exists(BackupStateFilePath) && !IsValidButEmptyBackupFile())
                 {
                     LastError = Loc.T($"İşlem iptal: '{BackupStateFilePath}' konumundaki servis yedeği geçersiz veya bozuk; üzerine yazılmadı. Dosyayı kontrol edin.");
                     return false;
@@ -1074,9 +1108,23 @@ public class DebloatService
                 {
                     existingBackup[kvp.Key + ":Status"] = kvp.Value;
                 }
-                if (!string.IsNullOrEmpty(taskState) && !taskState.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+                // A task state already in an earlier (service-less) record is the original one and is kept.
+                if (!string.IsNullOrEmpty(taskState) && !taskState.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+                    && !existingBackup.ContainsKey("Task:NitroSenseLauncher"))
                 {
                     existingBackup["Task:NitroSenseLauncher"] = taskState;
+                }
+
+                // Nothing installed and no launcher task to disable: there is nothing to do and nothing to undo, so no
+                // record is written. Writing "{}" here used to report success and then make every later attempt fail
+                // with "backup invalid".
+                bool anyService = Tier1Services.Any(s => existingBackup.ContainsKey(s));
+                bool taskToDisable = existingBackup.TryGetValue("Task:NitroSenseLauncher", out var recordedTask)
+                                     && IsActiveTaskState(recordedTask);
+                if (!anyService && !taskToDisable)
+                {
+                    LastError = AlreadyDisabledMessage;
+                    return false;
                 }
 
                 // Completeness verification, BEFORE the file is written:
@@ -1179,6 +1227,29 @@ public class DebloatService
             var errLog = AppPaths.UniqueTempFile("nitrolite_restore_err", ".log");
             var script = GenerateRestoreScript(backup, errLog);
             bool success = await RunElevatedPowerShellAsync(script, errLog);
+
+            // Recorded services that are no longer installed were skipped by the script. That is not a failure — an
+            // Acer update removed or renamed them — but it is worth a line in the log.
+            var installed = RecordCurrentStartupTypes();
+            var missing = Tier1Services.Where(s => backup.ContainsKey(s) && !installed.ContainsKey(s)).ToList();
+            if (missing.Count > 0)
+            {
+                AppLog.Warn("Services in the debloat backup are no longer installed and were skipped", string.Join(", ", missing));
+            }
+
+            if (!success)
+            {
+                // Only the services that still failed stay in the record, so the next attempt retries exactly those
+                // instead of failing again on the ones that were already put back.
+                var remaining = PruneBackupToFailures(backup, LastError);
+                if (remaining != null)
+                {
+                    var keepError = LastError;
+                    if (!SaveBackupState(remaining)) AppLog.Warn("The debloat backup could not be narrowed", LastError);
+                    LastError = keepError;
+                }
+            }
+
             if (success)
             {
                 try
@@ -1206,6 +1277,41 @@ public class DebloatService
         {
             _debloatLock.Release();
         }
+    }
+
+    /// <summary>
+    /// The part of <paramref name="backup"/> the restore script reported as failed, read from its error lines
+    /// (<c>"&lt;service&gt;: message"</c>, <c>"Task:NitroSenseLauncher: message"</c>). Null when no line names a
+    /// recorded entry — a refused elevation, a timeout — in which case the record is kept as it is.
+    /// </summary>
+    internal static Dictionary<string, string>? PruneBackupToFailures(Dictionary<string, string> backup, string? errorText)
+    {
+        if (string.IsNullOrWhiteSpace(errorText)) return null;
+
+        var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in errorText.Split(LineBreaks, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = raw.Trim();
+            int colon = line.IndexOf(": ", StringComparison.Ordinal);
+            if (colon <= 0) continue;
+            var name = line[..colon].Trim();
+            if (Tier1Services.Contains(name, StringComparer.OrdinalIgnoreCase)
+                || string.Equals(name, "Task:NitroSenseLauncher", StringComparison.OrdinalIgnoreCase))
+            {
+                failed.Add(name);
+            }
+        }
+
+        if (failed.Count == 0) return null;
+
+        var remaining = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in failed)
+        {
+            if (backup.TryGetValue(name, out var value)) remaining[name] = value;
+            if (backup.TryGetValue(name + ":Status", out var status)) remaining[name + ":Status"] = status;
+        }
+
+        return remaining.Count > 0 ? remaining : null;
     }
 
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -1364,18 +1470,6 @@ public class DebloatService
         return !IsNitroSenseRunning();
     }
 
-    /// <summary>
-    /// State of the "NitroSenseLauncher" scheduled task, which starts NitroSense at sign-in:
-    /// true = enabled, false = disabled, null = not found / unreadable.
-    /// </summary>
-    public bool? IsNitroSenseLauncherEnabled()
-    {
-        var state = RecordCurrentScheduledTaskState("NitroSenseLauncher");
-        if (IsActiveTaskState(state)) return true;
-        if (IsDisabledTaskState(state)) return false;
-        return null;
-    }
-
     // ---------------------------------------------------------------- the Nitro key's launcher
 
     /// <summary>
@@ -1450,6 +1544,10 @@ public class DebloatService
             "$ok = $false; " +
             "try { " +
             "  if (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "') { " +
+            // An Acer update that reinstalled the launcher leaves the old blocked copy beside the new one, and the
+            // rename would then fail on the existing name forever. The stale copy is the older file; the fresh launcher
+            // takes its place.
+            "    if (Test-Path -LiteralPath '" + Loc.PsQuote(blocked) + "') { Remove-Item -LiteralPath '" + Loc.PsQuote(blocked) + "' -Force -ErrorAction Stop }; " +
             "    Rename-Item -LiteralPath '" + Loc.PsQuote(path) + "' -NewName '" + Loc.PsQuote(Path.GetFileName(blocked)) + "' -ErrorAction Stop; " +
             "  }; " +
             "  if (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "') { throw '" + Loc.Ps("NitroSense başlatıcısı hâlâ yerinde.") + "' }; " +
@@ -1483,7 +1581,9 @@ public class DebloatService
             "$ok = $false; " +
             "try { " +
             "  if (Test-Path -LiteralPath '" + Loc.PsQuote(blocked) + "') { " +
-            "    Rename-Item -LiteralPath '" + Loc.PsQuote(blocked) + "' -NewName '" + Loc.PsQuote(Path.GetFileName(path)) + "' -ErrorAction Stop; " +
+            // The launcher is already back (an Acer update reinstalled it): the blocked copy is stale and only has to go.
+            "    if (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "') { Remove-Item -LiteralPath '" + Loc.PsQuote(blocked) + "' -Force -ErrorAction Stop } " +
+            "    else { Rename-Item -LiteralPath '" + Loc.PsQuote(blocked) + "' -NewName '" + Loc.PsQuote(Path.GetFileName(path)) + "' -ErrorAction Stop }; " +
             "  }; " +
             "  if (-not (Test-Path -LiteralPath '" + Loc.PsQuote(path) + "')) { throw '" + Loc.Ps("NitroSense başlatıcısı geri konamadı.") + "' }; " +
             "  $ok = $true " +

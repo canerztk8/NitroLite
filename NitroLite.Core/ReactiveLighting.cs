@@ -526,9 +526,6 @@ public sealed class ReactiveLightingThrottle
     private string? _lastColor;
     private DateTime _lastWrite = DateTime.MinValue;
 
-    /// <summary>The colour of the last write, or null before the first one.</summary>
-    public string? LastColor => _lastColor;
-
     /// <summary>
     /// True when this colour should be written now, and records the write when it says yes.
     /// </summary>

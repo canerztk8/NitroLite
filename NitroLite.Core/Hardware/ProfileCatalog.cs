@@ -107,9 +107,46 @@ public sealed class ProfileCatalog
         var rejections = new List<string>();
         var embedded = ReadEmbeddedJson();
         var user = ReadOptional(UserProfilePath, "profiles.user.json", rejections);
-        var remote = ReadOptional(RemoteProfilePath, "profiles.remote.json", rejections);
+        var remote = IsRemoteCacheCurrent(RemoteProfilePath, UpdateService.CurrentVersion)
+            ? ReadOptional(RemoteProfilePath, "profiles.remote.json", rejections)
+            : null;
 
         return Build(embedded, user, remote, rejections);
+    }
+
+    /// <summary>The file beside a downloaded table that names the app version which accepted it.</summary>
+    public static string RemoteStampPathFor(string remotePath) => remotePath + ".appversion";
+
+    /// <summary>What <see cref="RemoteStampPathFor"/> holds: this build's version, without the revision.</summary>
+    public static string CurrentAppVersionText => UpdateService.Normalize(UpdateService.CurrentVersion).ToString();
+
+    /// <summary>
+    /// True when the downloaded table at <paramref name="remotePath"/> was accepted by <paramref name="appVersion"/> or
+    /// a later build, and may therefore outrank the embedded table.
+    /// </summary>
+    /// <remarks>
+    /// The downloaded table outranks the embedded one, and the cache outlives the build that fetched it. Without this
+    /// check a table fetched by an older version kept overriding the fixes a newer version shipped in its own embedded
+    /// table for as long as the refresh kept failing — offline, or with network access turned off. The published table
+    /// carries no version of its own and cannot be given one (an older build rejects a document with an unknown field),
+    /// so the stamp is the app version that wrote the cache. A cache without a stamp predates this check and is ignored
+    /// too; the next successful refresh writes both again.
+    /// </remarks>
+    public static bool IsRemoteCacheCurrent(string remotePath, Version appVersion)
+    {
+        ArgumentNullException.ThrowIfNull(appVersion);
+        try
+        {
+            var stampPath = RemoteStampPathFor(remotePath);
+            if (!File.Exists(stampPath)) return false;
+            var text = File.ReadAllText(stampPath).Trim();
+            return Version.TryParse(text, out var stamped)
+                && UpdateService.Normalize(stamped) >= UpdateService.Normalize(appVersion);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Reads an optional profile file. A failure is recorded and treated as "no file".</summary>

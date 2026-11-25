@@ -7,7 +7,7 @@
   "notes": [
     "NitroLite uses the Acer services that ship with NitroSense when they are installed, and the firmware's own WMI class when they are not. The NitroSense window does not have to be open.",
     "Settings, game profiles and the log live in %LOCALAPPDATA%\\NitroLite, so uninstalling keeps them.",
-    "If you used Windows & system optimisation, run 'NitroLite.exe --uninstall-cleanup --yes' before removing the app."
+    "Before removing the app, run 'NitroLite.exe --uninstall-cleanup --yes': it undoes school mode, system optimisation, the Acer service changes, the NitroSense launcher block and the sign-in entries."
   ],
   "architecture": {
     "64bit": {

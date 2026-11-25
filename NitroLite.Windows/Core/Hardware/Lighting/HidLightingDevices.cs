@@ -92,6 +92,16 @@ public static class HidLightingDevices
 
         public bool TryWrite(KeyboardLightingFrame frame, out string? error)
         {
+            // A frame the protocol cannot express (METEOR, TWINKLING on the ENE controller) is a refusal of the
+            // effect, not a failed device. Treating it as a failure disposed a working handle and walked SetupAPI again
+            // on every attempt; it is answered here, before the device is touched, and the cache is left alone.
+            if (string.Equals(_inner.Protocol, "ene-kb5130", StringComparison.Ordinal) &&
+                !EneKb5130Protocol.TryBuild(frame, out _, out var buildError))
+            {
+                error = buildError;
+                return false;
+            }
+
             bool ok;
             try
             {

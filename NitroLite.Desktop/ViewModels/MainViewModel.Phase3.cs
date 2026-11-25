@@ -34,9 +34,6 @@ public sealed class StorageDriveRow
     public string HealthText { get; }
     public bool Healthy { get; }
 
-    /// <summary>The tick or cross the health badge prints.</summary>
-    public string HealthGlyph => Healthy ? "\u2713" : "\u2715";
-
     // The column headings live on the row rather than on the page: a compiled binding inside the item template cannot
     // reach the parent's Labels, and a heading that is not translated is worse than one that repeats.
     public string FreeLabel => Loc.T("Boş alan");
@@ -68,23 +65,6 @@ public sealed class AcerServiceRow
     /// it only repeated the answer in a second language.
     /// </summary>
     public string StateText => Status;
-}
-
-/// <summary>One entry in the DC power-profile picker.</summary>
-public sealed class DcProfileChoice
-{
-    public DcProfileChoice(DcPowerProfilePreference value, string label, string description)
-    {
-        Value = value;
-        Label = label;
-        Description = description;
-    }
-
-    public DcPowerProfilePreference Value { get; }
-    public string Label { get; }
-    public string Description { get; }
-
-    public override string ToString() => Label;
 }
 
 /// <summary>
@@ -131,7 +111,6 @@ public sealed partial class MainViewModel
     private string _wearTrendSummary = "";
     private string _wearTrendNote = "";
     private bool _wearTrendVisible;
-    private DcProfileChoice? _selectedDcProfile;
     private bool _watchdogOn;
     private bool _batteryBusy;
     private bool? _lastBatteryOnAc;
@@ -394,19 +373,6 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>The battery's own name, e.g. <c>LGC AP18E8M</c>, or the generic word when it has none.</summary>
-    public string BatteryNameText
-    {
-        get
-        {
-            if (_batterySnapshot.Details is not { } details) return Labels.Battery;
-
-            var text = string.Join(" ", new[] { details.Manufacturer, details.ModelName }
-                .Where(part => !string.IsNullOrWhiteSpace(part)));
-            return text.Length > 0 ? text : Labels.Battery;
-        }
-    }
-
     /// <summary>The 80 % watchdog. It decides whether the overcharge banner is raised, not what the firmware does.</summary>
     public bool WatchdogOn
     {
@@ -424,34 +390,6 @@ public sealed partial class MainViewModel
     }
 
     public bool WatchdogAvailable => BatteryHealthAvailable;
-
-    /// <summary>The DC power-profile picker: what the machine does when the charger is pulled.</summary>
-    /// <remarks>
-    /// The descriptions name the four settings the two profiles actually differ in — operating mode, fan mode, CPU
-    /// boost and panel refresh rate — because "Eco" and "Dengeli" on their own tell nobody which of them moves.
-    /// </remarks>
-    public IReadOnlyList<DcProfileChoice> DcProfileChoices { get; } =
-    [
-        new(DcPowerProfilePreference.Eco, Loc.T("Eco"),
-            Loc.T("Pilde çalışma modu Sessiz'e döner, fan otomatiğe geçer, CPU Boost kapanır ve ekran 60 Hz'e iner. Pil belirgin şekilde daha uzun gider; oyunlarda ve ağır işlerde performans düşer.")),
-        new(DcPowerProfilePreference.Balanced, Loc.T("Dengeli"),
-            Loc.T("Pilde hiçbir ayar değişmez: çalışma modu, fan eğrisi, CPU Boost ve ekran yenileme hızı olduğu gibi kalır. Performans tam kalır; pil daha çabuk biter."))
-    ];
-
-    public DcProfileChoice? SelectedDcProfile
-    {
-        get => _selectedDcProfile;
-        set
-        {
-            if (!Set(ref _selectedDcProfile, value) || value == null) return;
-            _settings.DcPowerMode = value.Value;
-            SaveSettings();
-            Raise(nameof(SelectedDcProfileDescription));
-        }
-    }
-
-    /// <summary>What the selected profile changes, in the card under the picker.</summary>
-    public string SelectedDcProfileDescription => _selectedDcProfile?.Description ?? "";
 
     // ---------------------------------------------------------------- the wear trend
 
@@ -504,8 +442,6 @@ public sealed partial class MainViewModel
     public bool StorageAvailable => _storageHealth?.IsSupported == true;
 
     public IReadOnlyList<StorageDriveRow> StorageDrives => _storageDrives;
-
-    public bool HasStorageDrives => _storageDrives.Count > 0;
 
     public bool HasNoStorageDrives => StorageAvailable && _storageDrives.Count == 0;
 
@@ -568,8 +504,6 @@ public sealed partial class MainViewModel
     }
 
     public IReadOnlyList<AcerServiceRow> AcerServices => _acerServices;
-
-    public bool HasAcerServices => _acerServices.Count > 0;
 
     public bool HasNoAcerServices => ServicesAvailable && _acerServices.Count == 0;
 
@@ -1157,11 +1091,6 @@ public sealed partial class MainViewModel
         // write the value back to the settings file it was just read from.
         Raise(nameof(WatchdogOn));
 
-        _selectedDcProfile = DcProfileChoices.FirstOrDefault(c => c.Value == _settings.DcPowerMode)
-                             ?? DcProfileChoices[0];
-        Raise(nameof(SelectedDcProfile));
-        Raise(nameof(SelectedDcProfileDescription));
-
         await RefreshBatteryHealthAsync().ConfigureAwait(true);
         await RefreshStorageAsync().ConfigureAwait(true);
         await RefreshServicesAsync().ConfigureAwait(true);
@@ -1313,7 +1242,6 @@ public sealed partial class MainViewModel
         Raise(nameof(HasBatteryCycle));
         Raise(nameof(BatteryVoltageText));
         Raise(nameof(BatteryChemistryText));
-        Raise(nameof(BatteryNameText));
         Raise(nameof(WatchdogAvailable));
         Raise(nameof(WearTrendPoints));
         Raise(nameof(WearTrendSummary));
@@ -1380,14 +1308,23 @@ public sealed partial class MainViewModel
         await RefreshBatteryHealthAsync().ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// How long one of the slow first reads (storage, services) may take before the page gives up on it. Generous: a
+    /// cold storage query on a machine with several disks takes seconds, and a refusal here only empties a card.
+    /// </summary>
+    private static readonly TimeSpan Phase3ReadTimeout = TimeSpan.FromSeconds(30);
+
     private async Task RefreshStorageAsync()
     {
         if (_storageHealth == null || !_storageHealth.IsSupported) return;
 
         try
         {
-            // The storage namespace is slow: a cold query walks every physical disk and every partition.
-            var drives = await Task.Run(() => _storageHealth.GetDrives()).ConfigureAwait(true);
+            // The storage namespace is slow: a cold query walks every physical disk and every partition. Bounded, because
+            // the WMI call has no timeout of its own and a storage stack that never answers must not leave the page
+            // waiting for the rest of the session; the pool thread is left to finish on its own.
+            var drives = await Task.Run(() => _storageHealth.GetDrives())
+                .WaitAsync(Phase3ReadTimeout).ConfigureAwait(true);
             _storageDrives = drives.Select(d => new StorageDriveRow(d)).ToList();
         }
         catch (Exception ex)
@@ -1398,7 +1335,6 @@ public sealed partial class MainViewModel
 
         Raise(nameof(StorageAvailable));
         Raise(nameof(StorageDrives));
-        Raise(nameof(HasStorageDrives));
         Raise(nameof(HasNoStorageDrives));
         Raise(nameof(Disk1TemperatureText));
         Raise(nameof(Disk2TemperatureText));
@@ -1414,9 +1350,10 @@ public sealed partial class MainViewModel
 
         try
         {
+            // Bounded for the same reason as the storage read: the service controller can hang on a stuck service.
             var (statuses, running, launcherBlocked) = await Task.Run(() =>
                 (_debloat.GetServiceStatuses(), _debloat.IsNitroSenseRunning(), _debloat.IsNitroSenseLauncherBlocked))
-                .ConfigureAwait(true);
+                .WaitAsync(Phase3ReadTimeout).ConfigureAwait(true);
 
             _acerServices = statuses.Select(s => new AcerServiceRow(s)).ToList();
             _nitroSenseRunning = running;
@@ -1430,7 +1367,6 @@ public sealed partial class MainViewModel
 
         Raise(nameof(ServicesAvailable));
         Raise(nameof(AcerServices));
-        Raise(nameof(HasAcerServices));
         Raise(nameof(HasNoAcerServices));
         Raise(nameof(NitroSenseRunning));
         Raise(nameof(NitroSenseStateText));
@@ -1686,7 +1622,18 @@ public sealed partial class MainViewModel
         _updateBusy = true;
         try
         {
-            var info = await _updates.CheckAsync().ConfigureAwait(true);
+            // The outcome, not the bare release: "could not ask" (offline, rate-limited) used to be folded into "already
+            // current", and the card told a machine that never reached GitHub that it was up to date. A failed check
+            // leaves a release found earlier in place.
+            var outcome = await _updates.CheckForUpdateAsync().ConfigureAwait(true);
+            if (outcome.Status == UpdateCheckStatus.Failed)
+            {
+                AppLog.Warn("The update check failed", $"{outcome.Failure}: {outcome.Detail ?? "-"}");
+                if (!silent) UpdateStatus = Labels.UpdateCheckFailed;
+                return;
+            }
+
+            var info = outcome.Update;
             _pendingUpdate = info;
             Raise(nameof(HasPendingUpdate));
             Raise(nameof(UpdateNowText));
@@ -1887,6 +1834,13 @@ public sealed partial class MainViewModel
             return;
         }
 
+        // The settings file now holds the backup, but _settings still holds what was loaded at startup, and the next
+        // save — the window placement on close, a slider, the fan hand-back at exit — would write that copy straight
+        // back over the restore. Settings are read once at startup, so the restore only takes effect on the next
+        // launch, and until then nothing in this process may write the file. The block goes up before the restore
+        // starts, not after it: a save on the UI thread while the restore ran on the pool could land in between.
+        BlockSettingsSavesAfterRestore();
+
         try
         {
             var result = await Task.Run(() => BackupService.Restore(
@@ -1895,12 +1849,9 @@ public sealed partial class MainViewModel
                 AppPaths.GetDataFile("game_profiles.json"),
                 AppPaths.GetDataFile("rgb_presets.json"))).ConfigureAwait(true);
 
-            // The settings file now holds the backup, but _settings still holds what was loaded at startup, and the
-            // next save — the window placement on close, a slider, the fan hand-back at exit — would write that copy
-            // straight back over the restore. Settings are read once at startup, so the restore only takes effect on
-            // the next launch, and until then nothing in this process may write the file. A partial restore counts:
-            // the settings part is written first, so anything in Written means the file was replaced.
-            if (result.Success || result.Written.Count > 0) BlockSettingsSavesAfterRestore();
+            // A restore that wrote nothing replaced nothing, so the session may save again. A partial restore keeps
+            // the block: the settings part is written first, so anything in Written means the file was replaced.
+            if (!result.Success && result.Written.Count == 0) LiftSettingsSaveBlock();
 
             Status = result.Success ? Labels.BackupRestored : result.Error ?? Labels.BackupRestoreFailed;
         }
@@ -1908,6 +1859,19 @@ public sealed partial class MainViewModel
         {
             AppLog.Warn("The backup could not be restored", ex.ToString());
             Status = Labels.BackupRestoreFailedDetail(ex.Message);
+            LiftSettingsSaveBlock();
+        }
+
+        // The presets file may have been rewritten under the running service, whose in-memory list would otherwise be
+        // saved straight back over it by the next preset save or delete.
+        try
+        {
+            _rgbProfiles.Reload();
+            RefreshRgbProfiles();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The lighting presets could not be read again after the restore", ex.Message);
         }
     }
 

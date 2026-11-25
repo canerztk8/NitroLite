@@ -18,6 +18,22 @@ public interface IPowerSchemeAccess
 
     bool TryReadDc(Guid subGroup, Guid setting, out uint value);
     bool TryWriteDc(Guid subGroup, Guid setting, uint value);
+
+    /// <summary>
+    /// The scheme <see cref="TryReadDc"/> and <see cref="TryWriteDc(Guid, Guid, uint)"/> reach right now, or null when
+    /// it cannot be told. Null keeps the old behaviour: every write goes to whichever scheme is active at that moment.
+    /// </summary>
+    Guid? ActiveScheme => null;
+
+    /// <summary>True when <paramref name="scheme"/> still exists on the machine.</summary>
+    bool SchemeExists(Guid scheme) => ActiveScheme == scheme;
+
+    /// <summary>
+    /// Writes a battery value into <paramref name="scheme"/> whether or not it is the active one. A scheme that is not
+    /// active is written without being activated: switching the user's plan back would be a change of its own.
+    /// </summary>
+    bool TryWriteDc(Guid scheme, Guid subGroup, Guid setting, uint value) =>
+        ActiveScheme == scheme && TryWriteDc(subGroup, setting, value);
 }
 
 public sealed class SchoolModePowerBackup
@@ -34,6 +50,15 @@ public sealed class SchoolModePowerBackup
 public sealed class SchoolModeBackup
 {
     public List<SchoolModePowerBackup> PowerSettings { get; set; } = new();
+
+    /// <summary>
+    /// The power scheme <see cref="PowerSettings"/> were read from and written to. The undo goes back into this scheme,
+    /// not into whichever one is active when school mode is switched off: a plan changed in between used to receive the
+    /// old values while the original kept school mode's battery limits for good. Null in a record written before the
+    /// field existed, or where the scheme could not be told; those keep the old behaviour.
+    /// </summary>
+    public string? Scheme { get; set; }
+
     public OperatingMode Mode { get; set; } = OperatingMode.Default;
     public FanMode Fan { get; set; } = FanMode.Auto;
     public CpuBoostMode? DcBoost { get; set; }
@@ -57,6 +82,16 @@ public sealed class SchoolModeOutcome
     /// changed. The caller must leave the switch off and hand the machine back exactly as it found it.
     /// </summary>
     public bool Refused { get; set; }
+
+    /// <summary>
+    /// The operating mode and fan mode a switch-off put back, from the undo record. Null when nothing was restored. A
+    /// game that is still running reads them: its own end-of-session restore must put back these, not the values it
+    /// captured while school mode held the machine.
+    /// </summary>
+    public OperatingMode? RestoredMode { get; set; }
+
+    /// <inheritdoc cref="RestoredMode"/>
+    public FanMode? RestoredFan { get; set; }
 
     public bool Success => Failed.Count == 0;
 }
@@ -194,7 +229,13 @@ public sealed class SchoolModeService : IDisposable
     public bool IsEnabled => _settings.SchoolModeEnabled;
 
     /// <summary>Applies school mode, recording what it replaces first. Already on: re-applies without re-recording.</summary>
-    public async Task<SchoolModeOutcome> EnableAsync()
+    /// <param name="baselineMode">
+    /// The mode to record instead of the one the machine is in now. A game that is running has replaced the user's mode
+    /// with its own; the caller passes the session's pre-game value so switching school mode off later does not write
+    /// the game's Turbo back with no game running.
+    /// </param>
+    /// <param name="baselineFan">The same, for the fan mode.</param>
+    public async Task<SchoolModeOutcome> EnableAsync(OperatingMode? baselineMode = null, FanMode? baselineFan = null)
     {
         if (_settings.SchoolModeEnabled) return await ReapplyAsync();
 
@@ -205,10 +246,10 @@ public sealed class SchoolModeService : IDisposable
         {
             var state = new SchoolModeBackup
             {
-                Mode = GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
-                Fan = GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
+                Mode = baselineMode ?? GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
+                Fan = baselineFan ?? GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
                 DcBoost = _cpuBoost.IsSupported ? TryQueryDcBoost() : null,
-                RefreshRate = _displayService.IsSupported ? TryQueryRefreshRate() : null,
+                RefreshRate = _displayService.IsSupported ? PreBatteryRefreshRate() : null,
                 Brightness = _brightnessService.GetBrightness()
             };
 
@@ -216,6 +257,8 @@ public sealed class SchoolModeService : IDisposable
             // undo record honest: switching school mode off will not try to write settings that were never read.
             if (_scheme.IsSupported)
             {
+                state.Scheme = _scheme.ActiveScheme?.ToString();
+
                 foreach (var setting in PowerSettings)
                 {
                     if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
@@ -245,7 +288,7 @@ public sealed class SchoolModeService : IDisposable
 
         _settings.SchoolModeEnabled = true;
 
-        var outcome = await ApplyAsync(BackedUpSettings(backup));
+        var outcome = await ApplyAsync(BackedUpSettings(backup), RecordedScheme(backup));
         if (TurnLightingOffAsync != null)
         {
             // A keyboard that refuses the command must not undo the rest: the power settings are already written and
@@ -280,7 +323,7 @@ public sealed class SchoolModeService : IDisposable
     {
         if (_settings.SchoolModeEnabled) return false;
 
-        var backup = ReadBackup();
+        var backup = ReadBackup(out _);
         if (backup == null) return false;
 
         AppLog.Warn("An orphaned school mode backup was found", "Rolling back an unfinished school-mode change.");
@@ -292,13 +335,17 @@ public sealed class SchoolModeService : IDisposable
     /// <summary>Puts back every value school mode replaced.</summary>
     public async Task<SchoolModeOutcome> DisableAsync()
     {
-        var backup = ReadBackup();
+        var backup = ReadBackup(out bool unreadable);
 
         // The record is deleted only when it was actually read. A null here means the file is missing — nothing to
         // delete — or unreadable, and deleting an unreadable record throws away the only copy of the values the
         // machine was in before school mode, which is the one thing that could still be repaired by hand.
         var outcome = backup == null ? new SchoolModeOutcome() : await RestoreFromBackupAsync(backup);
         if (backup != null) DeleteBackup();
+
+        // An unreadable record restored nothing. Reporting that as a clean switch-off left the machine on school mode's
+        // battery limits under a status line that said everything was put back.
+        if (unreadable) outcome.Failed.Add(Loc.T("Okul modu geri alma kaydı okunamadı; önceki ayarlar geri yüklenmedi"));
 
         _settings.SchoolModeEnabled = false;
         return outcome;
@@ -311,8 +358,13 @@ public sealed class SchoolModeService : IDisposable
 
         if (backup != null)
         {
+            // The scheme the record names, when it names one. A scheme that has since been deleted is reported rather
+            // than written around: its values cannot go anywhere else without changing a plan school mode never touched.
+            var scheme = RecordedScheme(backup);
+            bool schemeGone = scheme is Guid recorded && backup.PowerSettings.Count > 0 && !_scheme.SchemeExists(recorded);
+
             // One powercfg process per recorded setting: off the UI thread, like the forward pass.
-            var (restored, restoreFailed) = await Task.Run(() =>
+            var (restored, restoreFailed) = schemeGone ? (new List<string>(), new List<string>()) : await Task.Run(() =>
             {
                 var ok = new List<string>();
                 var bad = new List<string>();
@@ -322,13 +374,20 @@ public sealed class SchoolModeService : IDisposable
                         continue;
                     string label = PowerSettings.FirstOrDefault(s => s.SubGroup == subGroup && s.Setting == setting)?.Label
                                    ?? Loc.T("Güç planı ayarı");
-                    if (_scheme.TryWriteDc(subGroup, setting, saved.PreviousDc)) ok.Add(label);
+                    if (WriteDc(scheme, subGroup, setting, saved.PreviousDc)) ok.Add(label);
                     else bad.Add(label);
                 }
                 return (ok, bad);
             });
             outcome.Applied.AddRange(restored);
             outcome.Failed.AddRange(restoreFailed);
+
+            if (schemeGone)
+            {
+                AppLog.Warn("School mode: the power plan it changed no longer exists",
+                    $"{backup.Scheme}: {backup.PowerSettings.Count} battery values were not written anywhere else");
+                outcome.Failed.Add(Loc.T("Güç planı ayarları (okul modunun değiştirdiği plan artık yok)"));
+            }
 
             if (backup.DcBoost.HasValue && _cpuBoost.IsSupported)
             {
@@ -343,7 +402,16 @@ public sealed class SchoolModeService : IDisposable
             if (await _hardware.SetFanModeAsync(backup.Fan)) outcome.Applied.Add(Loc.T("Fan"));
             else outcome.Failed.Add(Loc.T("Fan"));
 
-            if (backup.RefreshRate is int rate && rate > 0 && _displayService.IsSupported)
+            outcome.RestoredMode = backup.Mode;
+            outcome.RestoredFan = backup.Fan;
+
+            // While the battery automation still owes a rate (it lowered the panel and holds what it replaced), the
+            // machine is on battery with the panel at 60 Hz on purpose: that rate is the automation's to put back on
+            // the adapter. Writing it here raised the panel on battery, and the automation — still holding its saved
+            // rate — never lowered it again until the next plug-in.
+            bool automationOwesRate = _settings.AutoRefreshRateSwitching && _settings.RefreshRateBeforeBattery is > 0;
+
+            if (backup.RefreshRate is int rate && rate > 0 && _displayService.IsSupported && !automationOwesRate)
             {
                 if (_displayService.SetRefreshRate(rate)) outcome.Applied.Add(Loc.T("Ekran tazeleme hızı"));
                 else outcome.Failed.Add(Loc.T("Ekran tazeleme hızı"));
@@ -371,8 +439,9 @@ public sealed class SchoolModeService : IDisposable
         // The undo record from the first enable decides what may be written. A setting it does not hold was never
         // readable, so re-applying it would change a value switching school mode off cannot restore. A missing
         // record means the machine is already in school-mode values, so writing them again loses nothing.
-        var backup = ReadBackup();
-        var outcome = await ApplyAsync(backup == null ? null : BackedUpSettings(backup));
+        var backup = ReadBackup(out _);
+        var outcome = await ApplyAsync(backup == null ? null : BackedUpSettings(backup),
+            backup == null ? null : RecordedScheme(backup));
         if (TurnLightingOffAsync != null)
         {
             try { await TurnLightingOffAsync(); } catch { }
@@ -401,7 +470,12 @@ public sealed class SchoolModeService : IDisposable
     /// Applies the school-mode values. <paramref name="only"/> restricts the power-scheme writes to the settings
     /// whose previous value is in the undo record; null means "no record to respect" and every setting is written.
     /// </summary>
-    private async Task<SchoolModeOutcome> ApplyAsync(IReadOnlySet<(Guid SubGroup, Guid Setting)>? only = null)
+    /// <param name="scheme">
+    /// The scheme the undo record was read from; the school-mode values go into the same one, so the record and the
+    /// values it undoes can never be in two different plans. Null writes into the active scheme, as before.
+    /// </param>
+    private async Task<SchoolModeOutcome> ApplyAsync(IReadOnlySet<(Guid SubGroup, Guid Setting)>? only = null,
+        Guid? scheme = null)
     {
         var outcome = new SchoolModeOutcome();
 
@@ -424,7 +498,7 @@ public sealed class SchoolModeService : IDisposable
                         skipped.Add(Loc.T(setting.Label));
                         continue;
                     }
-                    if (_scheme.TryWriteDc(setting.SubGroup, setting.Setting, setting.TargetDc)) applied.Add(Loc.T(setting.Label));
+                    if (WriteDc(scheme, setting.SubGroup, setting.Setting, setting.TargetDc)) applied.Add(Loc.T(setting.Label));
                     else failed.Add(Loc.T(setting.Label));
                 }
                 return (applied, failed, skipped);
@@ -488,6 +562,25 @@ public sealed class SchoolModeService : IDisposable
         catch { return null; }
     }
 
+    /// <summary>
+    /// The rate to put back when school mode is switched off: the one the battery automation replaced with 60 Hz when
+    /// it holds one, otherwise the panel's current rate. Recording the automation's 60 Hz instead was how the two
+    /// features left a 165 Hz panel at 60 Hz for good — school mode then wrote 60 back on the adapter, and the
+    /// automation had already handed its saved rate back and had nothing left to restore.
+    /// </summary>
+    private int? PreBatteryRefreshRate() =>
+        _settings.RefreshRateBeforeBattery is int saved && saved > 0 ? saved : TryQueryRefreshRate();
+
+    /// <summary>The scheme named in <paramref name="backup"/>, or null for an old record or one without a scheme.</summary>
+    private static Guid? RecordedScheme(SchoolModeBackup backup) =>
+        Guid.TryParse(backup.Scheme, out var scheme) && scheme != Guid.Empty ? scheme : null;
+
+    /// <summary>One battery value, into <paramref name="scheme"/> when one is known and into the active scheme otherwise.</summary>
+    private bool WriteDc(Guid? scheme, Guid subGroup, Guid setting, uint value) =>
+        scheme is Guid explicitScheme
+            ? _scheme.TryWriteDc(explicitScheme, subGroup, setting, value)
+            : _scheme.TryWriteDc(subGroup, setting, value);
+
     /// <summary>The current refresh rate, or null when the panel does not report one.</summary>
     private int? TryQueryRefreshRate()
     {
@@ -529,17 +622,22 @@ public sealed class SchoolModeService : IDisposable
         }
     }
 
-    private SchoolModeBackup? ReadBackup()
+    /// <param name="unreadable">True when a record exists but could not be read: a different answer from "no record".</param>
+    private SchoolModeBackup? ReadBackup(out bool unreadable)
     {
+        unreadable = false;
         var path = BackupPath;
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
         try
         {
-            return JsonSerializer.Deserialize<SchoolModeBackup>(BoundedTextFile.ReadAllText(path));
+            var backup = JsonSerializer.Deserialize<SchoolModeBackup>(BoundedTextFile.ReadAllText(path));
+            unreadable = backup == null;
+            return backup;
         }
         catch (Exception ex)
         {
             AppLog.Warn("The school mode backup could not be read", $"{path}: {ex.Message}");
+            unreadable = true;
             return null;
         }
     }

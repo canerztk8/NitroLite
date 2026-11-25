@@ -68,6 +68,50 @@ fi
 
 if [ "$MODE" = "system" ]; then
     APP_DIR="${PREFIX:-/opt/nitrolite}"
+
+    # The helper runs $APP_DIR/NitroLite.Desktop as root. If anyone but root can replace that file, or any folder on
+    # the way to it, that is a local root for them; so the folder is resolved to its real path (a symbolic link a user
+    # owns could otherwise be pointed elsewhere later) and every existing folder on it must be root's and writable by
+    # nobody else. The characters are limited too: the path is written into a systemd unit and a sed expression, and a
+    # space, a quote, '%', '|' or '&' would break the one or the other.
+    case "$APP_DIR" in
+        /*) ;;
+        *) echo "error: --prefix must be an absolute path with --system." >&2; exit 2 ;;
+    esac
+    if ! command -v realpath >/dev/null 2>&1 || ! command -v stat >/dev/null 2>&1; then
+        echo "error: --system needs realpath and stat to check the install folder." >&2
+        exit 2
+    fi
+    APP_DIR="$(realpath -m -- "$APP_DIR")"
+    case "$APP_DIR" in
+        /|*[!A-Za-z0-9._/+-]*)
+            echo "error: '$APP_DIR' cannot hold the helper: use a root-owned folder whose path has only letters," >&2
+            echo "       digits and . _ + - / in it (the default is /opt/nitrolite)." >&2
+            exit 2
+            ;;
+    esac
+    check_dir="$APP_DIR"
+    while [ -n "$check_dir" ]; do
+        if [ -e "$check_dir" ]; then
+            owner_mode="$(stat -L -c '%u %a' -- "$check_dir")"
+            owner="${owner_mode%% *}"
+            mode="${owner_mode##* }"
+            # The last two octal digits are group and other; 2, 3, 6 and 7 carry the write bit.
+            case "$mode" in
+                *[2367]?|*[2367]) writable=1 ;;
+                *) writable=0 ;;
+            esac
+            if [ "$owner" != "0" ] || [ "$writable" -eq 1 ]; then
+                echo "error: '$check_dir' is not owned by root, or others may write to it (owner $owner, mode $mode)." >&2
+                echo "       The root helper must never run a file a normal user can replace. Use a root-owned folder" >&2
+                echo "       such as the default /opt/nitrolite." >&2
+                exit 2
+            fi
+        fi
+        [ "$check_dir" = "/" ] && break
+        check_dir="$(dirname -- "$check_dir")"
+    done
+
     BIN_DIR="/usr/local/bin"
     DESKTOP_DIR="/usr/share/applications"
     ICON_DIR="/usr/share/icons/hicolor/scalable/apps"
@@ -104,8 +148,10 @@ $SUDO ln -sf "$APP_DIR/$BIN_NAME" "$BIN_DIR/nitrolite"
 $SUDO mkdir -p "$DESKTOP_DIR"
 desktop_tmp="$(mktemp)"
 trap 'rm -f "$desktop_tmp"' EXIT
-sed -e "s|^Exec=.*|Exec=\"$APP_DIR/$BIN_NAME\"|" \
-    -e "s|^TryExec=.*|TryExec=\"$APP_DIR/$BIN_NAME\"|" \
+# '\', '&' and '|' mean something in a sed replacement; a home folder may contain them, so they are escaped.
+bin_sed="$(printf '%s' "$APP_DIR/$BIN_NAME" | sed -e 's/[\\&|]/\\&/g')"
+sed -e "s|^Exec=.*|Exec=\"$bin_sed\"|" \
+    -e "s|^TryExec=.*|TryExec=\"$bin_sed\"|" \
     "$SHARE_DIR/$DESKTOP_NAME" > "$desktop_tmp"
 $SUDO install -m 644 "$desktop_tmp" "$DESKTOP_DIR/$DESKTOP_NAME"
 

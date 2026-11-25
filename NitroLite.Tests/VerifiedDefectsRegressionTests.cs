@@ -952,7 +952,7 @@ public class VerifiedDefectsRegressionTests
     }
 
     [Fact]
-    public void DebloatService_GenerateRestoreScript_MissingService_ThrowsAndPopulatesErrors()
+    public void DebloatService_GenerateRestoreScript_MissingService_IsSkipped_FailuresStillPopulateErrors()
     {
         var debloat = new DebloatService();
         var backup = new Dictionary<string, string>
@@ -962,8 +962,10 @@ public class VerifiedDefectsRegressionTests
 
         string script = debloat.GenerateRestoreScript(backup);
 
-        Assert.Contains("Get-Service -Name 'AcerServiceSvc' -ErrorAction Stop", script);
-        Assert.Contains("if (-not $svc) { throw 'Servis bulunamadı: AcerServiceSvc' }", script);
+        // A service an Acer update removed is skipped (cleanup B, 5c) instead of failing the undo forever; a real
+        // failure on an installed service is still collected.
+        Assert.Contains("$svc = Get-Service -Name 'AcerServiceSvc' -ErrorAction SilentlyContinue; if ($svc) {", script);
+        Assert.DoesNotContain("throw 'Servis bulunamadı: AcerServiceSvc'", script);
         Assert.Contains("$errs += ('AcerServiceSvc: ' + $_.Exception.Message)", script);
     }
 

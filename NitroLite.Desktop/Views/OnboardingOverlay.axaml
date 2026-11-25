@@ -12,7 +12,9 @@
     elevated sign-in entry. The last step is skipped on a platform with no such entry, which is why the switch is
     hidden rather than disabled.
   -->
-  <Grid Background="#99000000">
+  <!-- Tab cycles inside the walkthrough: the shell underneath is taken out of the tab order while it is open (see
+       MainWindow), and Enter / Escape move on / skip (see the code-behind). -->
+  <Grid Background="#99000000" KeyboardNavigation.TabNavigation="Cycle">
 
     <Border MaxWidth="560" VerticalAlignment="Center" HorizontalAlignment="Center"
             Background="{DynamicResource CardBrush}"
@@ -64,7 +66,7 @@
               IsVisible="{Binding OnboardingAutoStartAvailable}">
           <TextBlock Classes="hint" Text="{Binding Labels.AutoStart}" VerticalAlignment="Center" />
           <ToggleButton Grid.Column="1" Classes="toggle" IsChecked="{Binding OnboardingAutoStartOn}"
-                        VerticalAlignment="Center" />
+                        VerticalAlignment="Center" AutomationProperties.Name="{Binding Labels.AutoStart}" />
         </Grid>
 
         <Border Height="1" Background="{DynamicResource CardBorderBrush}" Margin="0,18,0,12" />
@@ -73,9 +75,9 @@
           <Button Classes="primary" Content="{Binding Labels.OnboardingBack}" Padding="14,7" FontSize="11"
                   Command="{Binding OnboardingBackCommand}" IsVisible="{Binding !IsOnboardingFirstStep}" />
           <StackPanel Grid.Column="2" Orientation="Horizontal">
-            <Button Classes="primary" Content="{Binding Labels.OnboardingNext}" Padding="14,7" FontSize="11"
+            <Button x:Name="NextButton" Classes="primary" Content="{Binding Labels.OnboardingNext}" Padding="14,7" FontSize="11"
                     Command="{Binding OnboardingNextCommand}" IsVisible="{Binding !IsOnboardingLastStep}" />
-            <Button Classes="primary" Content="{Binding Labels.OnboardingFinish}" Padding="14,7" FontSize="11"
+            <Button x:Name="FinishButton" Classes="primary" Content="{Binding Labels.OnboardingFinish}" Padding="14,7" FontSize="11"
                     Command="{Binding OnboardingFinishCommand}" IsVisible="{Binding IsOnboardingLastStep}" />
           </StackPanel>
         </Grid>

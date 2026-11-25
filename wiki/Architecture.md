@@ -47,7 +47,6 @@ NitroLite.Windows/                  net10.0-windows — the Windows backends
 │   ├── CareCenterClient.cs         # Acer Care Center WebSocket client (80 % charge limit)
 │   ├── AtkMouseService.cs          # ATK / VXE mouse HID protocol
 │   ├── CpuPowerService.cs          # Windows power plan CPU boost setting
-│   ├── PowerAutomationService.cs   # AC/battery transitions and Eco recovery
 │   ├── DebloatService.cs           # Acer background services, autostart
 │   ├── SystemToolsService.cs       # Keyboard, Acer service, MUX and Windows repair engine
 │   ├── ElevatedStartupService.cs   # Optional Task Scheduler entry, XML-based, kept off the disk
@@ -58,7 +57,7 @@ NitroLite.Windows/                  net10.0-windows — the Windows backends
 │       ├── SmbiosProbe.cs               # Read-only SMBIOS queries that never throw
 │       ├── HardwareReport.cs            # The text and JSON report users attach to issues
 │       └── Wmi/                         # Backend 2: the firmware's own WMI class
-│           ├── HybridHardwareController.cs  # Picks a backend per call, reconciles on handover
+│           ├── HybridHardwareController.cs  # Picks a backend per call
 │           ├── WmiHardwareController.cs     # IHardwareController over the worker pipe
 │           ├── AcerWmiExecutor.cs           # The byte-level protocol, in the elevated process
 │           ├── AcerWmiProtocol.cs           # Method ids and the (value << 8) | status encoding
@@ -66,8 +65,7 @@ NitroLite.Windows/                  net10.0-windows — the Windows backends
 │           ├── WmiWorkerLauncher.cs         # Starts the helper, once per session
 │           ├── WmiWorkerServer.cs           # CurrentUserOnly pipe, nonce handshake, typed commands
 │           ├── WmiWorkerClient.cs           # The parent side of that pipe
-│           ├── WmiWorkerValidation.cs       # Bounds the worker re-checks before touching hardware
-│           └── JobObjectGuard.cs            # Ties the helper's lifetime to the window
+│           └── WmiWorkerValidation.cs       # Bounds the worker re-checks before touching hardware
 └── Windows*.cs                     # Monitor, battery, storage, debloat, update, Nitro key, autostart
 
 NitroLite.Linux/                    net10.0 — the Linux backends

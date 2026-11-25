@@ -239,7 +239,7 @@ public sealed class AuditG3SecurityTests : IDisposable
     // ---------------------------------------------------------------- g: game profiles get a safety copy
 
     [Fact]
-    public void Restore_SetsTheLiveGameProfilesAsideBeforeOverwritingThem()
+    public void Restore_LeavesTheUnreadGameProfilesFileAlone_AndKeepsTheSettingsCopy()
     {
         var settingsPath = Path_("settings.json");
         File.WriteAllText(settingsPath, """{"language":"de"}""");
@@ -258,10 +258,11 @@ public sealed class AuditG3SecurityTests : IDisposable
         var result = BackupService.Restore(backupPath, settingsPath, liveProfiles, rgbPresetsPath: null);
         Assert.True(result.Success, result.Error);
 
-        var copy = Assert.Single(Directory.GetFiles(
+        // The game rules travel inside the settings file, which is where the app reads them. game_profiles.json is read
+        // by nothing, so the restore no longer overwrites it — and the settings copy below is the rules' safety copy.
+        Assert.Empty(Directory.GetFiles(
             _temp, Path.GetFileName(liveProfiles) + BackupService.PreRestoreSuffix + "-*"));
-        Assert.Contains("current.exe", File.ReadAllText(copy), StringComparison.Ordinal);
-        Assert.Contains("old.exe", File.ReadAllText(liveProfiles), StringComparison.Ordinal);
+        Assert.Contains("current.exe", File.ReadAllText(liveProfiles), StringComparison.Ordinal);
 
         // The settings copy is still taken as before.
         Assert.Single(Directory.GetFiles(_temp, Path.GetFileName(settingsPath) + BackupService.PreRestoreSuffix + "-*"));
@@ -410,7 +411,10 @@ public sealed class AuditG3SecurityTests : IDisposable
 
         var record = SystemToolsService.ParseOptimizeBackup(File.ReadAllText(SystemToolsService.OptimizeBackupPath));
         Assert.Equal("Automatic", record.Services["SysMain"]);
-        Assert.Equal(2, record.Hags);
+        // The first run recorded "HwSchMode did not exist" (-1). The optimized 2 read now must not replace it, or the
+        // undo would write 2 instead of removing the value (cleanup B, item 6).
+        Assert.True(record.HagsRecorded);
+        Assert.Equal(-1, record.Hags);
         Assert.Contains("$tasksToDisable = @('Consolidator')", script, StringComparison.Ordinal);
         Assert.DoesNotContain("'UsbCeip'", script, StringComparison.Ordinal);
     }

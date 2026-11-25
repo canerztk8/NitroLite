@@ -23,13 +23,26 @@ public partial class ConfirmDialog : Window
     /// Builds the dialog. <paramref name="confirmLabel"/> is the destructive verb ("Sil"), so the button says what it
     /// will do rather than "Tamam".
     /// </summary>
-    public ConfirmDialog(string title, string message, string confirmLabel, string cancelLabel) : this()
+    /// <param name="destructive">
+    /// True (every caller today: the confirm button is drawn in the danger colour and says "Sil") puts Enter on Cancel,
+    /// so a stray Enter never deletes anything; Escape cancels either way, and a focused button still answers Enter
+    /// itself. False puts Enter on the confirm button, as a system dialog does.
+    /// </param>
+    public ConfirmDialog(string title, string message, string confirmLabel, string cancelLabel, bool destructive = true)
+        : this()
     {
         TitleText.Text = title;
         MessageText.Text = message;
         ConfirmButton.Content = confirmLabel;
         CancelButton.Content = cancelLabel;
+
+        bool enterConfirms = EnterConfirms(destructive);
+        ConfirmButton.IsDefault = enterConfirms;
+        CancelButton.IsDefault = !enterConfirms;
     }
+
+    /// <summary>Whether Enter presses the confirm button: only for a confirmation that destroys nothing.</summary>
+    public static bool EnterConfirms(bool destructive) => !destructive;
 
     /// <summary>True when the user agreed. A window closed with Escape or the title bar is a no.</summary>
     public bool Confirmed { get; private set; }

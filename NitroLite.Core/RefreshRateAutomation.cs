@@ -64,15 +64,33 @@ public sealed class RefreshRateAutomation
     private bool? _lastOnAc;
 
     /// <summary>
-    /// True when the last evaluation failed. A failure is retried on the next tick instead of being remembered as
-    /// "nothing to do".
+    /// True when the last evaluation failed or found no panel. It is tried again instead of being remembered as
+    /// "nothing to do" — but not on every tick: see <see cref="_skipTicks"/>.
     /// </summary>
     private bool _lastFailed;
+
+    /// <summary>How many evaluations in a row failed or found no panel.</summary>
+    private int _failures;
+
+    /// <summary>
+    /// Ticks to sit out before the next retry. A lid closed on an external monitor, or a panel without a 60 Hz mode,
+    /// answers the same way every second, and retrying it every second cost a display walk per tick for as long as the
+    /// machine ran. The first retry is immediate (a transient read failure is the common case); after that the wait
+    /// doubles up to <see cref="MaxRetrySkip"/> ticks. A power change, a forced pass or a success starts over.
+    /// </summary>
+    private int _skipTicks;
+
+    /// <summary>The longest wait between two retries, in evaluations (about five minutes at one tick a second).</summary>
+    internal const int MaxRetrySkip = 300;
 
     public RefreshRateAutomation(IDisplayRefreshRateService display, AppSettings settings)
     {
         _display = display ?? throw new ArgumentNullException(nameof(display));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+
+        // A rate replaced in an earlier run that ended on battery (an exit, a crash) is still owed: the first evaluation
+        // on the adapter puts it back.
+        if (settings.RefreshRateBeforeBattery is int saved && saved > 0) _savedRate = saved;
     }
 
     /// <summary>False on a platform that cannot change the refresh rate, which is the Linux case today.</summary>
@@ -98,22 +116,35 @@ public sealed class RefreshRateAutomation
             bool sameState = _lastOnAc == onAc;
             _lastOnAc = onAc;
 
+            // A real change of power source, or a pass the user asked for, is worth trying at once.
+            if (force || !sameState) _skipTicks = 0;
+
             // The early return is what makes a repeated tick free, and it used to swallow the retry as well: one
             // transient read failure on battery left the panel at its full rate for the rest of the session, because
             // the power state never changed again and nothing ever asked a second time.
             if (!force && sameState && !_savedRate.HasValue && !_lastFailed) return RefreshRateResult.Nothing();
 
+            // A retry that is not due yet.
+            if (_lastFailed && _skipTicks > 0)
+            {
+                _skipTicks--;
+                return RefreshRateResult.Nothing();
+            }
+
             // Switched off while the panel was already lowered: put it back rather than leaving the user at 60 Hz with
             // nothing left to raise it until the adapter returns.
-            if (!_settings.AutoRefreshRateSwitching) return Remember(RestoreLocked());
+            if (!_settings.AutoRefreshRateSwitching) return Remember(RestoreLocked(), retry: _savedRate.HasValue);
 
-            if (onAc) return Remember(RestoreLocked());
+            if (onAc) return Remember(RestoreLocked(), retry: _savedRate.HasValue);
 
             // Already lowered. A second drop would overwrite the saved rate with 60 and lose the user's own value.
             if (_savedRate.HasValue) return RefreshRateResult.Nothing(_display.GetCurrentRefreshRate());
 
             int current = _display.GetCurrentRefreshRate();
-            if (current <= 0) return Remember(new RefreshRateResult(RefreshRateAction.Failed, 0, 0));
+
+            // No internal panel right now (lid closed on an external monitor) is not a failure: there is nothing to
+            // lower. It is looked at again later, on the back-off, in case the panel comes back on the same battery.
+            if (current <= 0) return Remember(RefreshRateResult.Nothing(), retry: true);
 
             // A panel already at or below 60 Hz has nothing to save: restoring it later would be a no-op that still
             // counted as a change.
@@ -125,21 +156,36 @@ public sealed class RefreshRateAutomation
             }
 
             _savedRate = current;
-            _lastFailed = false;
-            return new RefreshRateResult(RefreshRateAction.LoweredToBattery, current, BatteryRefreshRate);
+            _settings.RefreshRateBeforeBattery = current;
+            return Remember(new RefreshRateResult(RefreshRateAction.LoweredToBattery, current, BatteryRefreshRate));
         }
     }
 
-    /// <summary>Puts the user's rate back without consulting the power state. Used on a clean exit.</summary>
+    /// <summary>
+    /// Puts the user's rate back without consulting the power state. Used on a clean exit; a rate that cannot be put
+    /// back now stays in <see cref="AppSettings.RefreshRateBeforeBattery"/> for the next start.
+    /// </summary>
     public RefreshRateResult Restore()
     {
         lock (_gate) return RestoreLocked();
     }
 
-    /// <summary>Records whether the evaluation failed, so the next tick knows to try again.</summary>
-    private RefreshRateResult Remember(RefreshRateResult result)
+    /// <summary>
+    /// Records whether the evaluation has to be tried again, and when. <paramref name="retry"/> marks an answer that is
+    /// not a failure but is not final either (no panel right now).
+    /// </summary>
+    private RefreshRateResult Remember(RefreshRateResult result, bool retry = false)
     {
-        _lastFailed = result.Action == RefreshRateAction.Failed;
+        _lastFailed = retry || result.Action == RefreshRateAction.Failed;
+        if (!_lastFailed)
+        {
+            _failures = 0;
+            _skipTicks = 0;
+            return result;
+        }
+
+        _failures++;
+        _skipTicks = _failures <= 1 ? 0 : Math.Min(1 << Math.Min(_failures - 1, 9), MaxRetrySkip);
         return result;
     }
 
@@ -150,6 +196,19 @@ public sealed class RefreshRateAutomation
         int saved = _savedRate.Value;
         int current = _display.GetCurrentRefreshRate();
 
+        // The panel is not there (lid closed on an external monitor): nothing failed, and the saved rate waits for it.
+        if (current <= 0) return RefreshRateResult.Nothing();
+
+        // The panel is no longer at the battery rate: someone chose another rate since (in Windows, perhaps while the
+        // app was closed after a run that ended on battery). That choice is newer than the saved rate, so the saved one
+        // is dropped without a write rather than forced over it.
+        if (current > BatteryRefreshRate)
+        {
+            _savedRate = null;
+            _settings.RefreshRateBeforeBattery = null;
+            return RefreshRateResult.Nothing(current);
+        }
+
         if (!_display.SetRefreshRate(saved))
         {
             // The saved rate is kept: the driver may refuse while the lid is closed, and the next evaluation should
@@ -158,6 +217,7 @@ public sealed class RefreshRateAutomation
         }
 
         _savedRate = null;
+        _settings.RefreshRateBeforeBattery = null;
         return new RefreshRateResult(RefreshRateAction.RestoredToMaximum, current, saved);
     }
 }

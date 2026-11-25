@@ -50,8 +50,28 @@ public sealed record StartupMode
     /// </summary>
     public bool IsValidWorkerRequest =>
         IsWmiWorker
-        && !string.IsNullOrWhiteSpace(PipeName)
+        && IsValidPipeName(PipeName)
         && ParentProcessId > 0;
+
+    /// <summary>Longest pipe name the helper accepts. The launcher's names are about 50 characters.</summary>
+    public const int MaxPipeNameLength = 128;
+
+    /// <summary>
+    /// True when the name is a plain pipe name: 1..<see cref="MaxPipeNameLength"/> characters of ASCII letters,
+    /// digits, '-', '_' and '.'. No separators, so the value cannot name a path, another namespace
+    /// (<c>\\.\pipe\…</c>, <c>\\?\…</c>) or a pipe on another machine.
+    /// </summary>
+    public static bool IsValidPipeName(string? name)
+    {
+        if (string.IsNullOrEmpty(name) || name.Length > MaxPipeNameLength) return false;
+        foreach (var c in name)
+        {
+            bool ok = c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or '_' or '.';
+            if (!ok) return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Reads the role out of the command line. Unknown arguments are ignored: this only answers "am I the helper",
@@ -78,7 +98,10 @@ public sealed record StartupMode
 
             // Both "--pipe name" and "--pipe=name" are accepted: a launcher written by hand tends to use the first
             // form, a generated command line the second.
-            if (TryReadValue(args, ref i, arg, "--pipe", out var pipeValue)) { pipe = pipeValue; continue; }
+            // One pair of surrounding quotes is dropped: the launcher quotes the name, and a caller that splits the
+            // command line itself (rather than letting Windows do it) hands the quotes through. The allow-list then
+            // still refuses any quote left inside the name.
+            if (TryReadValue(args, ref i, arg, "--pipe", out var pipeValue)) { pipe = StripQuotes(pipeValue); continue; }
             if (TryReadValue(args, ref i, arg, "--parent-pid", out var pidValue))
             {
                 parentPid = int.TryParse(pidValue, out var parsed) && parsed > 0 ? parsed : 0;
@@ -123,6 +146,9 @@ public sealed record StartupMode
 
         return false;
     }
+
+    private static string StripQuotes(string value) =>
+        value.Length >= 2 && value[0] == '"' && value[^1] == '"' ? value[1..^1] : value;
 
     /// <summary>True when the text is at least <see cref="MinNonceLength"/> characters of plain hexadecimal.</summary>
     public static bool IsHexNonce(string? nonce)

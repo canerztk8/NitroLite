@@ -81,12 +81,6 @@ public sealed class KeyboardLightingRouter
         lock (_gate) return _transports.TryGetValue(key, out var transport) ? transport : null;
     }
 
-    /// <summary>The remembered one-line reason for a machine's transport, when one was recorded.</summary>
-    public string? CachedDetail(string key)
-    {
-        lock (_gate) return _details.TryGetValue(key, out var detail) ? detail : null;
-    }
-
     /// <summary>Forgets one machine. Used when its remembered transport stops working.</summary>
     public void Forget(string key)
     {

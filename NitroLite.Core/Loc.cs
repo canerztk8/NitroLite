@@ -47,17 +47,11 @@ public static class Loc
     private static IReadOnlyDictionary<string, string> _english = new Dictionary<string, string>();
     private static string _language = SourceLanguage;
 
-    /// <summary>Set NITROLITE_LOC_DEBUG=1 to collect every text that had no translation (see <see cref="Misses"/>).</summary>
-    private static readonly bool TrackMisses = Environment.GetEnvironmentVariable("NITROLITE_LOC_DEBUG") == "1";
-    private static readonly ConcurrentDictionary<string, byte> MissSet = new();
-
     /// <summary>
     /// The active language code. It starts as the source language, so code that runs before
     /// <see cref="SetLanguage"/> (and the test suite) sees the original text.
     /// </summary>
     public static string Language => _language;
-
-    public static IReadOnlyCollection<string> Misses => MissSet.Keys.ToArray();
 
     public static bool IsSupported(string? code) =>
         !string.IsNullOrWhiteSpace(code) && Languages.Any(l => l.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
@@ -234,7 +228,6 @@ public static class Loc
     internal static string Lookup(string source)
     {
         if (_current.TryGetValue(source, out var hit)) return hit;
-        if (TrackMisses) MissSet.TryAdd(source, 0);
         return _english.TryGetValue(source, out var en) ? en : source;
     }
 

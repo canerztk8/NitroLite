@@ -3,41 +3,6 @@ using Xunit;
 
 namespace NitroLite.Tests;
 
-public class ModeSwitchKeyTests
-{
-    [Theory]
-    [InlineData(OperatingMode.Default, OperatingMode.Extreme)]
-    [InlineData(OperatingMode.Extreme, OperatingMode.Turbo)]
-    [InlineData(OperatingMode.Turbo, OperatingMode.Quiet)]
-    [InlineData(OperatingMode.Quiet, OperatingMode.Default)]
-    [InlineData(OperatingMode.Eco, OperatingMode.Default)]
-    public void OnAdapter_FollowsNitroSenseCycle(OperatingMode current, OperatingMode expected)
-    {
-        Assert.Equal(expected, ModeSwitchKey.Next(current, onAc: true, batteryPercent: 80));
-    }
-
-    [Theory]
-    [InlineData(OperatingMode.Default, OperatingMode.Eco)]
-    [InlineData(OperatingMode.Eco, OperatingMode.Default)]
-    [InlineData(OperatingMode.Turbo, OperatingMode.Default)]
-    [InlineData(OperatingMode.Quiet, OperatingMode.Default)]
-    public void OnBattery_TogglesDefaultAndEco_LikeNitroSense(OperatingMode current, OperatingMode expected)
-    {
-        var next = ModeSwitchKey.Next(current, onAc: false, batteryPercent: 70);
-        Assert.Equal(expected, next);
-        Assert.False(ModePolicy.IsHighPowerMode(next));
-    }
-
-    [Theory]
-    [InlineData(OperatingMode.Default, OperatingMode.Quiet)]
-    [InlineData(OperatingMode.Quiet, OperatingMode.Default)]
-    [InlineData(OperatingMode.Turbo, OperatingMode.Default)]
-    public void OnAdapterBelow40Percent_SkipsHighPowerModes(OperatingMode current, OperatingMode expected)
-    {
-        Assert.Equal(expected, ModeSwitchKey.Next(current, onAc: true, batteryPercent: 25));
-    }
-}
-
 public class ModePolicyTests
 {
     [Theory]

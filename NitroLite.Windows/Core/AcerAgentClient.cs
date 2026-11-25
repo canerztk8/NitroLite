@@ -38,7 +38,6 @@ public class AcerAgentClient : IDisposable
     private const uint PacketGetMonitorData = 10;
     private const uint PacketGetUpdatedData = 20;
     private const uint PacketGetConnectedDevice = 30;
-    private const uint PacketGetLightingCapability = 40;
     private const uint PacketSetDeviceData = 100;
 
     public const string ResultSuccess = "0";
@@ -958,64 +957,6 @@ public class AcerAgentClient : IDisposable
         catch
         {
             return false;
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-
-    /// <summary>
-    /// Hands the fans back to the firmware from a process that is about to die. Blocking on purpose: the crash
-    /// handler has no dispatcher, no cancellation token and no time to await anything, and the live client may be
-    /// the reason the process is going down, so a fresh one is used.
-    /// <para>
-    /// The budget has to cover the 3 s connect timeout plus the round trip; anything shorter returns false while
-    /// the connection is still being made, which is the one case where the fans stay where they were.
-    /// </para>
-    /// </summary>
-    public static bool TryRestoreFanAutoBlocking(TimeSpan timeout)
-    {
-        try
-        {
-            var task = Task.Run(async () =>
-            {
-                using var client = new AcerAgentClient();
-                return await client.SetFanModeAsync(FanMode.Auto);
-            });
-
-            // Short-circuit: Result is only read once the wait succeeded, so a timeout never blocks here.
-            return task.Wait(timeout) && task.Result;
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn("Fans could not be returned to automatic mode", ex.GetBaseException().Message);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Asks the agent whether this machine has controllable keyboard lighting (packet 40). Returns null when the
-    /// agent does not answer or answers in an unexpected shape: an unknown capability must never disable the tab.
-    /// </summary>
-    public virtual async Task<bool?> GetLightingCapabilityAsync()
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            if (!await EnsureConnectedInternalAsync()) return null;
-
-            var resp = await SendFunctionAsync(PacketGetLightingCapability, "LIGHTING_CAPABILITY");
-            var data = GetSuccessData(resp);
-            if (data == null) return null;
-
-            // Depending on the model the agent answers with a bare flag or a one-element array.
-            if (data is JsonArray arr) return arr.Count > 0 && arr[0] != null && ReadCapabilityFlag(arr[0]!);
-            return ReadCapabilityFlag(data);
-        }
-        catch
-        {
-            return null;
         }
         finally
         {

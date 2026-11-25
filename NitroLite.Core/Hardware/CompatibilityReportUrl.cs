@@ -72,7 +72,7 @@ public static class CompatibilityReportUrl
         var title = BuildTitle(model, board);
         var prefix = $"{NewIssueUrl}?title={Uri.EscapeDataString(title)}&body=";
         var budget = MaximumUrlLength - prefix.Length;
-        var body = Clean(report);
+        var body = Clean(SanitizeReport(report));
 
         if (body.Length == 0) return prefix;
 
@@ -145,12 +145,23 @@ public static class CompatibilityReportUrl
         var body =
             $"Please drag **{Clean(fileName)}** into this box to attach it. It is in the folder NitroLite just opened." +
             "\n\nThe capture only records what NitroLite reads; it contains no serial numbers, host name or user name." +
-            (string.IsNullOrWhiteSpace(summary) ? "" : "\n\n" + Clean(summary));
+            (string.IsNullOrWhiteSpace(summary) ? "" : "\n\n" + Clean(SanitizeReport(summary)));
 
         var prefix = $"{NewIssueUrl}?title={Uri.EscapeDataString(title)}&labels=linux&body=";
         var budget = MaximumUrlLength - prefix.Length;
         return prefix + Uri.EscapeDataString(Fit(body, budget));
     }
+
+    /// <summary>
+    /// The report as it may leave the machine: user profile folders and the machine name replaced by
+    /// <see cref="Redaction.Scrub"/>. <see cref="Build"/> applies it to the body itself; a caller that also puts the
+    /// report on the clipboard passes it through this first, so the clipboard and the issue carry the same text.
+    /// </summary>
+    /// <remarks>
+    /// The Windows report is built to contain no path or name, and the Linux one is scrubbed where it is built, but this
+    /// link is the last step before a public issue, so it does not rely on either.
+    /// </remarks>
+    public static string SanitizeReport(string? report) => Redaction.Scrub(report);
 
     /// <summary>For a log line: how long the link turned out, without printing the report again.</summary>
     public static string DescribeLength(string url) =>

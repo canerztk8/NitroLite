@@ -84,7 +84,7 @@ public static class DiagnosticsBundle
         var entries = BuildEntries(
             snapshot,
             capabilities,
-            Redaction.Scrub(ReadIfExists(settingsPath)),
+            Redaction.ScrubJson(ReadIfExists(settingsPath)),
             Redaction.Scrub(ReadIfExists(logPath)),
             now).ToList();
         var previousLog = logPath == null ? null : ReadIfExists(logPath + ".old");

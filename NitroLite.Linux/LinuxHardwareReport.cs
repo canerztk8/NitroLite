@@ -128,6 +128,9 @@ public static class LinuxHardwareReport
         AppendNode(text, "dgpu_mode", nodes.DgpuMode);
         AppendNode(text, "per_zone_mode", nodes.PerZoneMode);
         AppendNode(text, "four_zone_mode", nodes.FourZoneMode);
+        // Which panel backlight school mode dims, and the ones it passed over: a hybrid laptop can carry a dead
+        // acpi_video0 beside the one that works.
+        text.AppendLine($"- screen backlight: {Clean(capabilities.Backlight ?? "absent")}");
         text.AppendLine();
 
         text.AppendLine("## Capabilities");

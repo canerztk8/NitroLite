@@ -19,6 +19,13 @@ public sealed class WindowsUpdateService : IUpdateService
 
     public string ReleasePageUrl => UpdateService.ReleasePageUrl;
 
+    /// <summary>
+    /// The check that tells "no newer release" apart from "the check failed". The interface default maps a null from
+    /// <see cref="CheckAsync"/> to "up to date", which told an offline machine it had the latest version.
+    /// </summary>
+    public Task<UpdateCheckOutcome> CheckForUpdateAsync(CancellationToken cancellationToken = default) =>
+        UpdateService.CheckForUpdateAsync(UpdateService.WindowsAssetSuffix, cancellationToken);
+
     public async Task<UpdateCheckResult?> CheckAsync(CancellationToken cancellationToken = default)
     {
         try

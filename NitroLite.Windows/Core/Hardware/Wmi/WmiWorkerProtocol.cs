@@ -75,7 +75,15 @@ public enum WmiWorkerCommand
     GetBacklightTimeout = 16,
 
     /// <summary>The 30-second keyboard backlight timeout, through <c>APGeAction.SetFunction</c>.</summary>
-    SetBacklightTimeout = 17
+    SetBacklightTimeout = 17,
+
+    /// <summary>
+    /// Whether the worker hands manual fans back to the firmware when this client disappears (<c>handBack</c>, a
+    /// boolean). The default is true: the window's fan curve is what makes a fixed speed safe, and a crashed window
+    /// leaves nothing watching. Only the one-shot <c>--fan</c> command sends false, because leaving the speed in place
+    /// after it exits is what it is documented to do. Touches no hardware.
+    /// </summary>
+    SetFanHandBack = 18
 }
 
 /// <summary>
@@ -205,18 +213,6 @@ public static class WmiWorkerProtocol
         try
         {
             return JsonSerializer.Deserialize<WmiWorkerRequest>(json, Options);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    public static WmiWorkerResponse? DeserializeResponse(string json)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<WmiWorkerResponse>(json, Options);
         }
         catch (JsonException)
         {

@@ -40,36 +40,6 @@ public class CultureAndInstanceScenarios
     [Theory]
     [InlineData("tr-TR")]
     [InlineData("de-DE")]
-    [InlineData("en-US")]
-    public void Measurements_KeepADecimalPointInEveryCulture(string culture)
-    {
-        // The UI shows "1.5 W" everywhere. A German or Turkish Windows would otherwise print "1,5 W" in one
-        // place and "1.5 W" in another, and the two would sit next to each other on the same page.
-        InCulture(culture, () =>
-        {
-            Assert.Equal("1.5 W", TelemetryFormatter.FormatCpuPower(1.5));
-            Assert.Equal("0.0 W", TelemetryFormatter.FormatCpuPower(0));
-        });
-    }
-
-    [Theory]
-    [InlineData("tr-TR")]
-    [InlineData("de-DE")]
-    public void FanPercent_HasNoDecimalSeparatorToGetWrong(string culture)
-    {
-        // The percentage is rounded to a whole number, so the separator never appears. This pins that: a change
-        // to one decimal place would start printing "66,7" on a Turkish machine.
-        InCulture(culture, () =>
-        {
-            Assert.Equal("%66", TelemetryFormatter.FormatFanSpeedPercent(3960));
-            Assert.Equal("%0", TelemetryFormatter.FormatFanSpeedPercent(0));
-            Assert.Equal("%100", TelemetryFormatter.FormatFanSpeedPercent(6000));
-        });
-    }
-
-    [Theory]
-    [InlineData("tr-TR")]
-    [InlineData("de-DE")]
     public void TranslatedTemplates_FollowTheCultureOnlyWhenAskedTo(string culture)
     {
         // Loc.T formats with the current culture, Loc.TInv with the invariant one. Call sites that print a

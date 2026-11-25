@@ -47,7 +47,8 @@ the reading barely moves. The curve trades noise against temperature; it does no
   does not report are labelled "(estimated)".
 - **Wear trend**: the change over the recorded period, and a per-year rate once there are seven days of history. Only
   measured values are stored.
-- **Automatic Eco on battery**, and **School mode**: one switch for Eco, 60 Hz, low brightness and the backlight off.
+- **60 Hz on battery** (optional: the panel is lowered when the adapter is pulled and put back when it returns), and
+  **School mode**: one switch for Eco, 60 Hz, low brightness and the backlight off.
   Every value it replaces is saved first, so turning it off puts the machine back exactly as it was. The card reports
   what it changed rather than promising a number of extra hours.
 

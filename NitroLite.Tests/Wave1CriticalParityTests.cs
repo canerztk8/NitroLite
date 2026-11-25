@@ -58,9 +58,10 @@ public class Wave1CriticalParityTests
     [Fact]
     public void AnExplicitCommand_WinsOverALegacyFlagOnTheSameLine()
     {
-        var args = new[] { "--fix-lighting", "--cli", "restore-mux" };
+        // restore-mux asks for --yes in both spellings since cleanup B (13d), so a command that does not is used here.
+        var args = new[] { "--fix-lighting", "--cli", "fix-services" };
 
-        Assert.Equal("restore-mux", CliTaskRunner.ParseCommand(args));
+        Assert.Equal("fix-services", CliTaskRunner.ParseCommand(args));
         Assert.False(CliTaskRunner.RequiresConfirmation(args));
     }
 
@@ -180,15 +181,6 @@ public class Wave1CriticalParityTests
         {
             CultureInfo.CurrentCulture = original;
         }
-    }
-
-    [Fact]
-    public void TheRawFanFormatter_KeepsItsOwnContract()
-    {
-        // FormatFanSpeedRpm is the raw figure and still prints 0: the window uses FormatFanRpm, but a caller that
-        // wants the number itself must not be silently given a placeholder.
-        Assert.Equal("0 RPM", TelemetryFormatter.FormatFanSpeedRpm(0));
-        Assert.Equal("2436 RPM", TelemetryFormatter.FormatFanSpeedRpm(2436));
     }
 
     // ---------------------------------------------------------------- package C: the lighting speed floor

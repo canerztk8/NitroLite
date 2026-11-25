@@ -503,8 +503,6 @@ public sealed class CurveAnchorViewModel : ObservableObject
     /// <summary>The floor this anchor sits on, or 0 below the first band.</summary>
     public int SafetyFloor => FanCurve.SafetyFloorAt(TemperatureC);
 
-    public string SafetyText => SafetyFloor > 0 ? Labels.SafetyFloor(SafetyFloor) : "";
-
     /// <summary>Replaced with the active language's labels when the language changes.</summary>
     public ShellLabels Labels { get; set; } = new();
 
@@ -869,7 +867,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private readonly SparklineHistory _cpuTemperatureHistory = new();
     private readonly SparklineHistory _gpuTemperatureHistory = new();
-    private readonly SparklineHistory _sysTemperatureHistory = new();
     private readonly SparklineHistory _cpuFanHistory = new();
     private readonly SparklineHistory _gpuFanHistory = new();
 
@@ -1296,6 +1293,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The crash record is written before the game's first write, not after the whole apply (see StartAsync).
         if (gameProfiles != null) gameProfiles.BeforeApply = OnGameAboutToApply;
         _schoolMode = schoolMode;
+        if (schoolMode != null) GuardSchoolModeLighting(schoolMode);
         _rgbProfiles = rgbProfiles ?? new RgbProfileService();
         _themeApplier = themeApplier;
         _cpuBoost = cpuBoost;
@@ -1769,8 +1767,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => _onAcPower;
         private set
         {
+            bool? previous = _onAcPower;
             if (!Set(ref _onAcPower, value)) return;
             Raise(nameof(BatteryStateText));
+
+            // A real plug change, not the first read: the firmware may have changed the mode by itself (Turbo is
+            // dropped on battery), and the card has to follow it rather than offer a stale mode to click.
+            if (previous != null && value != null)
+            {
+                _ = RefreshObservedModeAfterPlugChangeAsync();
+
+                // The pills show the value of the source the machine is on, and that source just changed: the battery
+                // value is not the adapter's (school mode holds it at Disabled, for one), so it is read again.
+                _ = RefreshCpuBoostChoiceSafelyAsync();
+            }
             Raise(nameof(ChargingColorStateText));
 
             // Eco is a battery mode and Turbo/Performance are charger modes, so plugging the charger in changes which
@@ -1996,10 +2006,32 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task WriteCpuBoostAsync(CpuBoostMode mode)
     {
         if (_cpuBoost == null || !_cpuBoost.IsSupported) return;
+        if (WritesRefusedForSecondSession()) return;
+
+        // School mode holds the battery value at Disabled. The pills used to write both halves, which silently undid
+        // that with the school-mode switch still on; now the adapter's value is written alone, and the status says the
+        // battery's was left. A single-switch control (Linux) has no adapter half to write on its own, so nothing is.
+        bool schoolOwnsBattery = _settings.SchoolModeEnabled;
+        bool perPowerSource = _gameProfiles?.CpuBoostPerPowerSource ?? true;
+        if (schoolOwnsBattery && !perPowerSource)
+        {
+            Status = Labels.BoostHeldBySchoolMode;
+            await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
+            return;
+        }
+
         try
         {
-            bool ok = await _cpuBoost.SetBoostModeAsync(mode).ConfigureAwait(true);
-            Status = ok ? Labels.Applied : Labels.WriteFailed;
+            bool ok = schoolOwnsBattery
+                ? await _cpuBoost.SetBoostModeAsync(mode, targetAc: true, targetDc: false).ConfigureAwait(true)
+                : await _cpuBoost.SetBoostModeAsync(mode).ConfigureAwait(true);
+            Status = !ok ? Labels.WriteFailed : schoolOwnsBattery ? Labels.BoostAdapterOnlySchoolMode : Labels.Applied;
+
+            // On battery the pills show the battery's value, which this write left alone: they go back to it.
+            if (ok && schoolOwnsBattery && OnAcPower == false) await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
+
+            // A boost the user set wins over a kept crash record's old one.
+            if (ok) ForgetKeptRecoveryPart(boost: true);
         }
         catch (Exception ex)
         {
@@ -2029,6 +2061,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(IsZone2Active));
             Raise(nameof(IsZone3Active));
             Raise(nameof(IsZone4Active));
+
+            // The palette's readout and the hex box describe the active target, so a new target is a new colour to show.
+            RaiseActiveColor();
             SyncSwatchSelection();
         }
     }
@@ -2245,8 +2280,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<double> GpuTemperatureHistory => _gpuTemperatureHistory.Snapshot();
 
-    public IReadOnlyList<double> SysTemperatureHistory => _sysTemperatureHistory.Snapshot();
-
     public IReadOnlyList<double> CpuFanHistory => _cpuFanHistory.Snapshot();
 
     public IReadOnlyList<double> GpuFanHistory => _gpuFanHistory.Snapshot();
@@ -2260,7 +2293,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (data.CpuTemperature > 0) _cpuTemperatureHistory.Add(data.CpuTemperature);
         if (data.GpuTemperature > 0) _gpuTemperatureHistory.Add(data.GpuTemperature);
-        if (data.SysTemperature > 0) _sysTemperatureHistory.Add(data.SysTemperature);
         _cpuFanHistory.Add(data.CpuFanSpeed);
         _gpuFanHistory.Add(data.GpuFanSpeed);
 
@@ -2296,7 +2328,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         Raise(nameof(CpuTemperatureHistory));
         Raise(nameof(GpuTemperatureHistory));
-        Raise(nameof(SysTemperatureHistory));
         Raise(nameof(CpuFanHistory));
         Raise(nameof(GpuFanHistory));
         Raise(nameof(SparklineRangeText));
@@ -2503,15 +2534,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         : "-- MB / -- MB";
 
     public double RamBarPercent => RamTotalMb > 0 ? Math.Clamp(RamUsage, 0, 100) : 0;
-
-    /// <summary>
-    /// Temperature is the one metric where colour carries meaning rather than decoration: the bar and its reading turn
-    /// red once the part runs hot, so the panel answers "is anything wrong" at a glance. The threshold is the first
-    /// thermal safety floor, not a number invented for the page.
-    /// </summary>
-    public bool CpuTempHot => CpuTemperature >= FanCurve.SafetyTemperatureC;
-
-    public bool GpuTempHot => GpuTemperature >= FanCurve.SafetyTemperatureC;
 
     // ---------------------------------------------------------------- the telemetry chart
 
@@ -2813,13 +2835,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => _selectedMode;
         set
         {
+            var previous = _selectedMode;
             if (!Set(ref _selectedMode, value)) return;
+            _modeBeforeSelection = previous;
             SyncModeSelection();
             Raise(nameof(ModeBadgeText));
             if (value != null) RecordModeMark(value.Mode);
             if (!_suppressWrite) _ = ApplyModeAsync(value?.Mode);
         }
     }
+
+    /// <summary>The card that was selected before the last change of <see cref="SelectedMode"/>; see ApplyModeAsync.</summary>
+    private ModeChoice? _modeBeforeSelection;
 
     /// <summary>Paints the accent on exactly one card. Called whenever the selection moves, including from a game.</summary>
     private void SyncModeSelection()
@@ -2855,6 +2882,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // this the loop would compare against a speed the previous mode left behind and skip the first write.
             _curveEvaluator.Reset();
             _manualFanFloor.Reset();
+
+            // A new mode also starts its own counts: the wait for a first reading and the run of refused writes both
+            // describe the previous selection, not this one.
+            Interlocked.Exchange(ref _noReadingSinceMs, 0);
+            Volatile.Write(ref _fanWriteRefusals, 0);
             SyncFanLoop();
 
             if (!_suppressWrite) _ = ApplyFanModeAsync();
@@ -2873,7 +2905,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // has, so a machine that boots in custom mode still gets its curve without the user touching a card.
         if (!_hardwareReady) return;
 
-        if (_hardware != null && SelectedFanMode?.Mode == FanMode.Custom) _curveLoop.Start();
+        if (_hardware != null && _hardwareWritesAllowed && SelectedFanMode?.Mode == FanMode.Custom) _curveLoop.Start();
         else _curveLoop.Stop();
     }
 
@@ -2938,7 +2970,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (_hardware == null || GameActive) return;
         if (SelectedFanMode?.Mode != FanMode.Custom) return;
 
-        int temperature = CpuTemperature;
+        // The hotter of the two dies, the same figure the loop decides on (FanActingTemperature).
+        int temperature = FanActingTemperature();
 
         // Each fan gets its own slider. This used to pass the processor's percentage twice, so the graphics fan
         // followed the processor slider and the graphics slider did nothing at all — the bug the report described as
@@ -2951,7 +2984,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // The loop must not immediately rewrite what this call just wrote, and a refused write must not be recorded
         // as applied, so the tracker is updated only on success, with the pair that was written.
-        if (ok) _manualFanFloor.Commit(cpuPercent, gpuPercent, temperature);
+        if (ok)
+        {
+            _manualFanFloor.Commit(cpuPercent, gpuPercent, temperature);
+            ForgetKeptRecoveryPart(fan: true);
+        }
     }
 
     /// <summary>
@@ -2960,7 +2997,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private (int Cpu, int Gpu) EffectiveCustomPercents()
     {
-        int temperature = CpuTemperature;
+        int temperature = FanActingTemperature();
         return (_manualFanFloor.EffectivePercent(CustomCpuPercent, temperature),
                 _manualFanFloor.EffectivePercent(CustomGpuPercent, temperature));
     }
@@ -3113,7 +3150,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => _directionLevel;
         set
         {
-            if (!Set(ref _directionLevel, Math.Clamp(value, 1, LightingLimits.MaxDirection))) return;
+            // Clamped to what this keyboard can play, not to LightingLimits.MaxDirection: that constant is the Linux
+            // protocol's left/right pair, and clamping to it turned the WAVE up/down the list offers (and a direction
+            // set in NitroSense) into "left" on every keyboard the WMI path drives.
+            if (!Set(ref _directionLevel, Math.Clamp(value, 1, MaxPlayableDirection))) return;
+
+            // The list follows the level, so a direction read back from the keyboard (or a preset's) is the one the
+            // list shows: the effect is applied first and rebuilds the list on the old level, which left "Right"
+            // selected over a keyboard playing "Down".
+            var shown = DirectionChoices.FirstOrDefault(d => d.Direction == _directionLevel);
+            if (shown != null && !ReferenceEquals(shown, _selectedDirection))
+            {
+                _selectedDirection = shown;
+                Raise(nameof(SelectedDirection));
+            }
+
             if (_suppressWrite) return;
             MarkProfileCustom();
             _lightingDebounce.Run(ApplyLightingAsync);
@@ -3126,7 +3177,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _primaryColor, value)) return;
-            Raise(nameof(ActiveColor));
+            RaiseActiveColor();
             if (_suppressWrite) return;
 
             MarkProfileCustom();
@@ -3148,7 +3199,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone1, value)) return;
-            Raise(nameof(ActiveColor));
+            RaiseActiveColor();
             RefreshDeckPreview();
             if (_suppressWrite) return;
 
@@ -3170,7 +3221,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone2, value)) return;
-            Raise(nameof(ActiveColor));
+            RaiseActiveColor();
             RefreshDeckPreview();
             if (_suppressWrite) return;
 
@@ -3192,7 +3243,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone3, value)) return;
-            Raise(nameof(ActiveColor));
+            RaiseActiveColor();
             RefreshDeckPreview();
             if (_suppressWrite) return;
 
@@ -3214,7 +3265,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (!Set(ref _zone4, value)) return;
-            Raise(nameof(ActiveColor));
+            RaiseActiveColor();
             RefreshDeckPreview();
             if (_suppressWrite) return;
 
@@ -3535,6 +3586,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // keyboard here means the user pressed "turn off" afterwards, and nothing in a colour mode may overrule that.
         if (_lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0) return;
 
+        // School mode holds the keys dark; the temperature is no reason to light them.
+        if (SchoolModeKeepsKeysDark) return;
+
         // One ramp per half: the processor's half and the graphics half can be painted on different scales, which is
         // what stops both halves looking like one colour in two shades while the split is on.
         var pair = ReactiveLighting.ColorsForSensors(ActiveReactiveStops(gpu: false), ActiveReactiveStops(gpu: true),
@@ -3599,7 +3653,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task WriteReactiveLightingAsync(string left, string right)
     {
         var hardware = _hardware;
-        if (hardware == null || LightingUnsupported) return;
+        if (hardware == null || LightingUnsupported || !_hardwareWritesAllowed) return;
 
         var brightness = _reactiveBrightness;
         var speed = SpeedLevel;
@@ -3615,14 +3669,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The switch can come down while this write waits for the gate: the mode was turned off, the page blacked
             // out, the user's own colour put back. Sending the colour anyway would overwrite that colour a moment
             // later, which is exactly the "the keyboard keeps the temperature colour after I turned it off" report.
-            if (!_reactiveLightingEnabled || _lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0)
+            if (!_reactiveLightingEnabled || _lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0
+                || SchoolModeKeepsKeysDark)
             {
                 return;
             }
 
             // STATIC with four zones that disagree is the backend's DIRECT: the keyboard addresses each zone itself,
-            // so the left half can follow the processor while the right half follows the graphics chip.
-            var ok = await Task.Run(() => hardware.SetLightingAsync("STATIC", brightness, speed, direction, left, zones))
+            // so the left half can follow the processor while the right half follows the graphics chip. A tick is not
+            // a click, so it never starts the elevated helper.
+            var ok = await WithoutLightingElevationAsync(
+                    () => Task.Run(() => hardware.SetLightingAsync("STATIC", brightness, speed, direction, left, zones)))
                 .ConfigureAwait(true);
 
             if (!ok)
@@ -3955,7 +4012,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The adapter, not the charge current: a pack parked at the 80 % limit reports "not charging" while the
             // machine is very much plugged in, and a colour keyed off the current would go out at the cap.
-            if (ChargingLighting.ShouldPaint(ChargingLighting.Read(OnAcPower, BatteryPercent, BatteryLimitOn)))
+            if (OnAdapterForChargingColour() && !SchoolModeKeepsKeysDark)
             {
                 if (_chargingColorPainted && !force) return;
 
@@ -3970,8 +4027,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 // must not be recorded as the level the keys received.
                 var level = _chargingBrightness;
                 var charging = ChargingLighting.ConfigFor(_chargingColor, baseline, level);
+                // The adapter is asked again once the gate is free: a plug pulled while this paint waited behind another
+                // write must not have the charging colour painted onto a machine already on battery.
                 var outcome = await WriteLightingConfigAsync(charging,
-                    () => _chargingColorEnabled && !_lightingBlackedOut).ConfigureAwait(true);
+                    () => _chargingColorEnabled && !_lightingBlackedOut && OnAdapterForChargingColour()
+                          && !SchoolModeKeepsKeysDark,
+                    automatic: true).ConfigureAwait(true);
 
                 if (outcome == LightingWriteResult.Abandoned) return;
                 if (outcome == LightingWriteResult.Refused)
@@ -3982,12 +4043,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
                 _chargingColorPainted = true;
                 _chargingBrightnessPainted = level;
+
+                // And once more after the write: the plug can come out while the paint is on its way, and the unplug's
+                // own pass ran while this mark was still false, so it found nothing to take back. Without this the
+                // charging colour stayed on the keys on battery until the next plug change.
+                if (!OnAdapterForChargingColour())
+                {
+                    _chargingColorPainted = false;
+                    await RestoreOwnLightingAsync().ConfigureAwait(true);
+                }
+
                 return;
             }
 
             // On battery, and nothing of this mode's is on the keys: nothing to take back.
             if (!_chargingColorPainted) return;
             _chargingColorPainted = false;
+
+            // School mode holds the keys dark, so there is no own colour to hand back to.
+            if (SchoolModeKeepsKeysDark) return;
             await RestoreOwnLightingAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
@@ -4009,12 +4083,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null) return;
 
+        // A hand-back is not a click: it never starts the elevated helper.
         var config = CurrentLightingConfig();
-        if (await WriteLightingConfigAsync(config).ConfigureAwait(true) != LightingWriteResult.Written)
+        if (await WriteLightingConfigAsync(config, automatic: true).ConfigureAwait(true) != LightingWriteResult.Written)
         {
             AppLog.Warn("The keyboard lighting could not be restored", config.Effect);
         }
     }
+
+    /// <summary>True while the adapter is in, by the same reading the charging card uses.</summary>
+    private bool OnAdapterForChargingColour() =>
+        ChargingLighting.ShouldPaint(ChargingLighting.Read(OnAcPower, BatteryPercent, BatteryLimitOn));
 
     // ---------------------------------------------------------------- temp-reactive profiles
 
@@ -4691,6 +4770,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public int MaxDirection => LightingLimits.MaxDirection;
 
     /// <summary>
+    /// The highest direction this keyboard plays: up and down (3, 4) through WMI, left and right only over the ENE HID
+    /// report. The same list <see cref="BuildDirectionChoices"/> offers, read for the effect that has the most.
+    /// </summary>
+    private int MaxPlayableDirection =>
+        LightingPolicy.AllowedDirections("WAVE", _gateProfile?.NitroHidKeyboard == true).Max();
+
+    /// <summary>
     /// True when the page is describing a keyboard that is dark. Read from the same policy the write uses, so the deck
     /// and the firmware cannot disagree about what "off" means.
     /// </summary>
@@ -4860,6 +4946,65 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 default: PrimaryColor = value; break;
             }
         }
+    }
+
+    /// <summary>
+    /// The hex box beside the palette. It is its own text, not <see cref="ActiveColor"/>: bound straight to the colour,
+    /// every keystroke went through the setter, a half-typed "#FF00" was normalised to the default cyan once the pause
+    /// ran out and that cyan was written to the keyboard and saved, and a word like "red" left the keys cyan for good.
+    /// </summary>
+    /// <remarks>
+    /// Only a complete <c>#RRGGBB</c> (the '#' optional, the same rule the picker's own box uses) reaches the colour.
+    /// Anything shorter is still being typed and changes nothing, and the box is not rewritten while the user types in
+    /// it; a colour set anywhere else replaces the text.
+    /// </remarks>
+    public string ActiveColorText
+    {
+        get => _activeColorDraft ?? ActiveColor;
+        set
+        {
+            var text = value ?? "";
+            if (_activeColorDraft == text) return;
+            _activeColorDraft = text;
+            Raise();
+
+            if (!TryParseFullHex(text, out var hex)) return;
+
+            _typingActiveColor = true;
+            try { ActiveColor = hex; }
+            finally { _typingActiveColor = false; }
+        }
+    }
+
+    /// <summary>What the hex box holds while it differs from the colour, or null when it simply shows the colour.</summary>
+    private string? _activeColorDraft;
+
+    /// <summary>True while the colour is being set from the hex box, so the box is not rewritten from itself.</summary>
+    private bool _typingActiveColor;
+
+    /// <summary>
+    /// Raised wherever <see cref="ActiveColor"/> is: the colour moved, so the hex box follows it — unless the move came
+    /// from the box, whose text is the user's and stays as typed.
+    /// </summary>
+    private void RaiseActiveColor()
+    {
+        Raise(nameof(ActiveColor));
+        if (_typingActiveColor) return;
+
+        _activeColorDraft = null;
+        Raise(nameof(ActiveColorText));
+    }
+
+    /// <summary>Exactly six hex digits, with or without a leading '#', as <c>#RRGGBB</c>. Anything else is still being typed.</summary>
+    internal static bool TryParseFullHex(string? text, out string hex)
+    {
+        hex = "";
+        var digits = text?.Trim() ?? "";
+        if (digits.StartsWith('#')) digits = digits[1..];
+        if (digits.Length != 6 || !digits.All(Uri.IsHexDigit)) return false;
+
+        hex = "#" + digits.ToUpperInvariant();
+        return true;
     }
 
     /// <summary>
@@ -5478,8 +5623,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Set when the presets file existed but could not be read, so the page can say so.</summary>
     public string? RgbProfileLoadError => _rgbProfiles.LoadError;
-
-    public bool HasRgbProfileLoadError => !string.IsNullOrWhiteSpace(RgbProfileLoadError);
 
     // ---------------------------------------------------------------- game detection
 
@@ -6612,13 +6755,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private Action? _toastAction;
 
-    /// <summary>Attaches an action to the message that is about to be shown.</summary>
-    private void SetToastAction(string label, Action action)
-    {
-        _toastAction = action;
-        ToastActionLabel = label;
-    }
-
     private void RunToastAction()
     {
         var action = _toastAction;
@@ -6636,25 +6772,179 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// mid-session. Restoring it is what stops a machine from booting into Turbo with no game running and no
     /// explanation.
     /// </remarks>
-    private async Task RecoverGameSessionAsync()
+    /// <param name="retry">
+    /// True for a later attempt in the same session (<see cref="RetryGameSessionRecoveryAsync"/>): a part that still
+    /// does not land is not announced again, only a recovery that completes is.
+    /// </param>
+    private async Task RecoverGameSessionAsync(bool retry = false)
     {
         var recovery = _settings.GameSessionRecovery;
-        if (recovery is not { IsActive: true }) return;
+        if (recovery is not { IsActive: true })
+        {
+            _gameRecoveryPending = false;
+            return;
+        }
 
+        if (!HardwareWritesAllowed) return;
+        if (_gameRecoveryBusy) return;
+
+        // No age limit. A laptop that died mid-game and is opened a week later still has the game's Turbo and its boost
+        // (which lives in the power plan) to undo, and an age rule measured from the game's start dropped exactly that
+        // record without a single write. The record carries no field for "first failed at", so a limit on failed
+        // attempts cannot be kept across launches without changing its type. What bounds it instead: every launch
+        // tries it once (as the code before the round-1 change did), the session retries it, and every mode, fan or
+        // boost the user sets strikes that part off (ForgetKeptRecoveryPart), so it can never replay over a newer choice.
+
+        // A retry runs while the window is live, so it takes the write gate like every other write and steps aside
+        // when one is in flight: a click that is mid-write must not be overwritten by the record's old mode.
+        bool gated = false;
+        if (retry)
+        {
+            if (!_writeGate.Wait(0)) return;
+            gated = true;
+        }
+
+        bool modeOwed = recovery.RestoreMode;
+        bool fanOwed = recovery.RestoreFan;
+
+        _gameRecoveryBusy = true;
+        try
+        {
+            await RecoverGameSessionCoreAsync(recovery, retry).ConfigureAwait(true);
+
+            // A retry that landed changed the mode or the fans behind the cards; they follow what the machine now holds
+            // (a fan card left on Custom would keep the loop writing over the restored Auto). Read while the gate is
+            // still held, as school mode does: a click that was waiting for the gate would otherwise write first and
+            // have this read put the card back on the value from before it.
+            if (retry && ((modeOwed && !recovery.RestoreMode) || (fanOwed && !recovery.RestoreFan)) && !_disposed)
+            {
+                try
+                {
+                    await ReadStateAsync().ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warn("The state could not be read after the game session was rolled back", ex.Message);
+                }
+            }
+        }
+        finally
+        {
+            _gameRecoveryBusy = false;
+            if (gated) _writeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// True while a crash record from an earlier run is kept because part of it did not land. The session retries it
+    /// once the backend answers, and a write the user makes in the meantime strikes the matching part off.
+    /// </summary>
+    private bool _gameRecoveryPending;
+
+    private bool _gameRecoveryBusy;
+
+    /// <summary>
+    /// True once the capabilities have actually been read from the backend this session. Until then every flag is the
+    /// "unknown" default, which says nothing about whether the machine has a control.
+    /// </summary>
+    private bool _capabilitiesRead;
+
+    /// <summary>How many telemetry ticks pass between two in-session retries of a kept crash record.</summary>
+    private const int GameRecoveryRetryTickInterval = 30;
+
+    /// <summary>
+    /// Tries a kept crash record again, in the same session: the Acer service that was not up at sign-in usually is a
+    /// minute later. Never during a game, whose own record has replaced the old one by then.
+    /// </summary>
+    private async Task RetryGameSessionRecoveryAsync()
+    {
+        if (!_gameRecoveryPending || _disposed || GameActive || _gameProfiles?.ActiveProfile != null) return;
+        if (_hardware is not { IsAvailable: true }) return;
+
+        try
+        {
+            // The capabilities may never have been read (the read threw at start-up); without them no control can be
+            // told apart from an unknown one, so they are read first.
+            if (!_capabilitiesRead) await RefreshCapabilitiesAsync().ConfigureAwait(true);
+            await RecoverGameSessionAsync(retry: true).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The interrupted game session could not be rolled back", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The user has just written <paramref name="mode"/>, <paramref name="fan"/> or <paramref name="boost"/> themselves.
+    /// A kept crash record must not put its old value back over that choice at the next attempt, so the matching part
+    /// is struck off; a record with nothing left is deleted.
+    /// </summary>
+    private void ForgetKeptRecoveryPart(bool mode = false, bool fan = false, bool boost = false)
+    {
+        if (!_gameRecoveryPending || GameActive || _gameProfiles?.ActiveProfile != null) return;
+
+        var recovery = _settings.GameSessionRecovery;
+        if (recovery is not { IsActive: true })
+        {
+            _gameRecoveryPending = false;
+            return;
+        }
+
+        if (mode) recovery.RestoreMode = false;
+        if (fan) recovery.RestoreFan = false;
+        if (boost)
+        {
+            recovery.SavedAcBoost = null;
+            recovery.SavedDcBoost = null;
+        }
+
+        if (!recovery.RestoreMode && !recovery.RestoreFan && recovery.SavedAcBoost == null && recovery.SavedDcBoost == null)
+        {
+            _settings.GameSessionRecovery = null;
+            _gameRecoveryPending = false;
+            AppLog.Info("The interrupted game session record was closed", "the user has set everything it was still owed");
+        }
+
+        SaveSettings();
+    }
+
+    private async Task RecoverGameSessionCoreAsync(GameSessionRecoveryState recovery, bool retry)
+    {
         // The boost first, and on its own: it lives in the power plan and survives a reboot, so it is the one value
         // that stays wrong for good if it is skipped. A mode or fan write that throws at boot used to take it down
         // with it, and the record was deleted all the same. Each source on its own, nothing that was not written, and
         // never the battery value while school mode owns it — the same rule the end of a session uses.
+        //
+        // Every part is checked, and only a part that landed is struck off the record. The record used to be deleted
+        // whatever the writes answered, so a machine whose Acer service was not up yet at sign-in stayed in Turbo with
+        // the fans at Max for good, under a banner that said everything had been restored. What did not land stays in
+        // the record and is tried again at the next launch.
+        string logLine =
+            $"{recovery.SavedMode} · {recovery.SavedFan} · boost AC={recovery.SavedAcBoost?.ToString() ?? "-"} " +
+            $"DC={recovery.SavedDcBoost?.ToString() ?? "-"}";
+
         if (recovery.SavedAcBoost != null || recovery.SavedDcBoost != null)
         {
             try
             {
-                await GameProfileService.RestoreBoostAsync(
+                bool boostRestored = await GameProfileService.RestoreBoostAsync(
                     _cpuBoost,
                     recovery.SavedAcBoost,
                     recovery.SavedDcBoost,
                     _gameProfiles?.CpuBoostPerPowerSource ?? true,
                     _settings.SchoolModeEnabled).ConfigureAwait(true);
+
+                if (boostRestored)
+                {
+                    recovery.SavedAcBoost = null;
+                    recovery.SavedDcBoost = null;
+                }
+                else
+                {
+                    AppLog.Warn("The CPU boost of the interrupted game session could not be restored",
+                        "a boost write was refused; it is kept for the next launch");
+                }
+
                 await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
             }
             catch (Exception ex)
@@ -6663,49 +6953,125 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
+        // Each hardware write on its own, so a mode write that throws does not take the fan write down with it.
+        if (recovery.RestoreMode)
+        {
+            if (await TryRecoverHardwareAsync("operating mode", ModeControlAvailable,
+                    hardware => hardware.SetOperatingModeAsync(recovery.SavedMode)).ConfigureAwait(true))
+            {
+                recovery.RestoreMode = false;
+                _settings.LastOperatingMode = recovery.SavedMode;
+            }
+        }
+
+        // A pre-game Custom gets the user's slider speed back, which the settings file still holds: written without the
+        // percentages it got the backend's default speed.
+        if (recovery.RestoreFan)
+        {
+            var savedFan = recovery.SavedFan;
+            if (await TryRecoverHardwareAsync("fan mode", FanControlAvailable,
+                    hardware => savedFan == FanMode.Custom
+                        ? hardware.SetFanModeAsync(FanMode.Custom, _settings.CustomFanCpuPercent, _settings.CustomFanGpuPercent)
+                        : hardware.SetFanModeAsync(savedFan)).ConfigureAwait(true))
+            {
+                recovery.RestoreFan = false;
+            }
+        }
+
+        // The mouse is a convenience, not a machine state: a mouse that is unplugged now is not a reason to keep the
+        // record, so it is tried once and struck off either way.
+        if (recovery.SavedMouseProfile > 0 && _mouseProfiles != null)
+        {
+            try
+            {
+                if (!await _mouseProfiles.ApplyProfileAsync(recovery.SavedMouseProfile).ConfigureAwait(true))
+                    AppLog.Warn("The mouse profile of the interrupted game session could not be restored", "refused");
+
+                // The rail's mouse row was read before this write.
+                await RefreshMouseProfileAsync().ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The mouse profile of the interrupted game session could not be restored", ex.Message);
+            }
+        }
+
+        recovery.SavedMouseProfile = 0;
+
+        bool complete = !recovery.RestoreMode && !recovery.RestoreFan &&
+                        recovery.SavedAcBoost == null && recovery.SavedDcBoost == null;
+
+        if (complete)
+        {
+            _settings.GameSessionRecovery = null;
+            _gameRecoveryPending = false;
+            Status = Labels.GameSessionRecovered;
+            AppLog.Info("The interrupted game session was rolled back", logLine);
+        }
+        else
+        {
+            // The record stays active with only what is still owed, so a later attempt does not replay a write that
+            // already landed. It is tried again in this session once the backend answers, and at the next launch.
+            _gameRecoveryPending = true;
+            if (!retry)
+            {
+                Status = Labels.GameSessionRecoveryIncomplete;
+                AppLog.Warn("The interrupted game session was only partly rolled back",
+                    $"{logLine} · still owed: mode={recovery.RestoreMode} fan={recovery.RestoreFan} " +
+                    $"boost={recovery.SavedAcBoost != null || recovery.SavedDcBoost != null}");
+            }
+        }
+
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// One hardware write of the crash recovery. True when the write landed, or when there is nothing to write because
+    /// the machine has no such control: a part the hardware cannot take would otherwise keep the record alive forever.
+    /// </summary>
+    /// <remarks>
+    /// A backend that is not available yet is the opposite case. The control may well exist, the service is simply
+    /// not answering (sign-in, a service still starting), so the part is kept. So is every part while the capabilities
+    /// have not been read: their defaults are all "no", and a read that threw is not a machine without the control.
+    /// Only a "no" the platform calls conclusive drops the part; an inconclusive one (Windows, where the transport may
+    /// still be opening) still gets the write tried.
+    /// </remarks>
+    private async Task<bool> TryRecoverHardwareAsync(string what, bool controlAvailable, Func<IHardwareController, Task<bool>> write)
+    {
+        // No backend at all means no game session could have written this control either.
+        var hardware = _hardware;
+        if (hardware == null) return true;
+
+        if (!hardware.IsAvailable)
+        {
+            AppLog.Warn("The interrupted game session could not be rolled back", $"{what}: no hardware backend is available yet");
+            return false;
+        }
+
+        if (!_capabilitiesRead)
+        {
+            AppLog.Warn("The interrupted game session could not be rolled back", $"{what}: the capabilities could not be read yet");
+            return false;
+        }
+
+        if (!controlAvailable && PlatformSaidNo)
+        {
+            AppLog.Info("The interrupted game session was not rolled back for one control",
+                $"{what}: this machine does not offer the control");
+            return true;
+        }
+
         try
         {
-            if (_hardware != null)
-            {
-                if (recovery.RestoreMode) await _hardware.SetOperatingModeAsync(recovery.SavedMode).ConfigureAwait(true);
-
-                // A pre-game Custom gets the user's slider speed back, which the settings file still holds: written
-                // without the percentages it got the backend's default speed.
-                if (recovery.RestoreFan)
-                {
-                    if (recovery.SavedFan == FanMode.Custom)
-                    {
-                        await _hardware.SetFanModeAsync(
-                            FanMode.Custom, _settings.CustomFanCpuPercent, _settings.CustomFanGpuPercent).ConfigureAwait(true);
-                    }
-                    else
-                    {
-                        await _hardware.SetFanModeAsync(recovery.SavedFan).ConfigureAwait(true);
-                    }
-                }
-            }
-
-            if (recovery.RestoreMode) _settings.LastOperatingMode = recovery.SavedMode;
-
-            if (recovery.SavedMouseProfile > 0 && _mouseProfiles != null)
-            {
-                await _mouseProfiles.ApplyProfileAsync(recovery.SavedMouseProfile).ConfigureAwait(true);
-            }
-
-            Status = Labels.GameSessionRecovered;
-            AppLog.Info("The interrupted game session was rolled back",
-                $"{recovery.SavedMode} · {recovery.SavedFan} · boost AC={recovery.SavedAcBoost?.ToString() ?? "-"} " +
-                $"DC={recovery.SavedDcBoost?.ToString() ?? "-"}");
+            if (await write(hardware).ConfigureAwait(true)) return true;
+            AppLog.Warn("The interrupted game session could not be rolled back", $"{what}: the hardware write was refused");
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Game session could not be rolled back", ex.Message);
+            AppLog.Warn("The interrupted game session could not be rolled back", $"{what}: {ex.Message}");
         }
-        finally
-        {
-            _settings.GameSessionRecovery = null;
-            SaveSettings();
-        }
+
+        return false;
     }
 
     /// <summary>
@@ -6727,6 +7093,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     private void BeginGameSessionRecovery(GameProfile profile, GameSessionSnapshot? snapshot)
     {
+        // A record kept from an earlier crash is replaced here; it is no longer this session's to retry.
+        _gameRecoveryPending = false;
+
         _settings.GameSessionRecovery = new GameSessionRecoveryState
         {
             IsActive = true,
@@ -6801,6 +7170,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// is set directly: the pills' setter writes the boost, and it does not look at the write suppression
     /// <see cref="SyncControls"/> sets.
     /// </remarks>
+    private async Task RefreshCpuBoostChoiceSafelyAsync()
+    {
+        try
+        {
+            await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("CPU boost mode could not be read", ex.Message);
+        }
+    }
+
     private async Task RefreshCpuBoostChoiceAsync()
     {
         if (!CpuBoostAvailable || CpuBoostChoices.Count == 0) return;
@@ -7082,7 +7463,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private set
         {
             if (!Set(ref _needsUdevRule, value)) return;
-            Raise(nameof(ShowGrantAccess));
+            RaiseLinuxPermissionState();
             Raise(nameof(ShowLinuxSetupCard));
         }
     }
@@ -7111,7 +7492,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool HasLinuxModelNote => !string.IsNullOrEmpty(_platformSetup?.ModelNote);
 
     /// <summary>The permissions half: the udev rule and the two groups, behind one password prompt.</summary>
-    public bool ShowGrantAccess => _platformSetup != null && (NeedsUdevRule || _platformSetup.NeedsInputGroup);
+    /// <remarks>
+    /// Only offered when the grant can fix what is wrong. A refusal by the root helper (session not active, helper not
+    /// answering, attribute not listed yet) and a Nitro key that is still unreadable after the grant already ran get a
+    /// one-line reason instead (<see cref="LinuxPermissionNote"/>): the button would run the same prompt to no effect.
+    /// </remarks>
+    public bool ShowGrantAccess => _platformSetup != null &&
+                                   (UdevGrantNeeded || (_platformSetup.NeedsInputGroup && !NitroKeyOnlyAfterGrant));
 
     /// <summary>True when the desktop has a password prompt, so the button can do the work itself.</summary>
     public bool CanElevate => _platformSetup?.CanElevate == true;
@@ -7209,6 +7596,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally
         {
             LinuxSetupIdle = true;
+
+            // The option file is now in place, so its undo appears.
+            Raise(nameof(ShowPredatorV4Undo));
         }
     }
 
@@ -7368,6 +7758,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // saving the setting leaves the machine at 60 % processor and a dim screen with nothing in the UI to say so.
         if (_schoolMode != null)
         {
+            // Under the write gate, like the switch: the recovery may put the keyboard back, and that write runs with the
+            // elevated helper forbidden, which is only safe while no other lighting write can be in flight.
+            await _writeGate.WaitAsync().ConfigureAwait(true);
             try
             {
                 if (await _schoolMode.RecoverOrphanedBackupAsync().ConfigureAwait(true))
@@ -7381,26 +7774,38 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 AppLog.Warn("School mode recovery failed", ex.Message);
             }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
 
         // Read before the hardware guard: the sign-in entry is a Windows task, not a hardware capability, and a
         // machine with no Acer nodes still has one.
         await RefreshAutoStartAsync().ConfigureAwait(true);
 
-        // A game session that is still marked active means the process died while a game was running. The mode and
-        // fan the game overrode have to be put back, or the machine boots into Turbo with nothing on screen to say why.
-        await RecoverGameSessionAsync().ConfigureAwait(true);
-
         // The mouse answers on its own schedule, so the rail's FARE row is filled in after the first read rather than
         // blocking the window on a USB control transfer.
         await RefreshMouseProfileAsync().ConfigureAwait(true);
 
+        // A game session that is still marked active means the process died while a game was running. The mode and
+        // fan the game overrode have to be put back, or the machine boots into Turbo with nothing on screen to say why.
+        // It runs after the backend is connected (below), not before: at sign-in the Acer service may not be up yet,
+        // and a write sent before the connection was opened failed while the record was deleted all the same.
+        bool gameSessionRecovered = false;
+
         if (_hardware == null)
         {
+            await RecoverGameSessionAsync().ConfigureAwait(true);
+
+            // The controls work from here on, before the slow first reads below: the battery, the storage and the
+            // services are a page the user may never open, and they must not hold the window read-only meanwhile.
+            _suppressWrite = false;
+            _controlsReady.TrySetResult(true);
+
             // No backend is not a reason to leave the battery, the services and the walkthrough unread: a machine whose
             // Acer nodes are missing still has a battery, and a first run still deserves the walkthrough.
-            await InitializePhase3Async().ConfigureAwait(true);
-            _suppressWrite = false;
+            await InitializePhase3SafelyAsync().ConfigureAwait(true);
             return;
         }
 
@@ -7408,9 +7813,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             await _hardware.EnsureConnectedAsync().ConfigureAwait(true);
             _capabilities = GateByProfile(await _hardware.GetCapabilitiesAsync().ConfigureAwait(true));
+            _capabilitiesRead = true;
+
+            gameSessionRecovered = true;
+            await RecoverGameSessionAsync().ConfigureAwait(true);
 
             BuildModeChoices();
             BuildDirectionChoices();
+
+            // A lighting path that cannot animate is offered the fixed-colour effects only, before the first read
+            // selects one.
+            ApplyLightingEffectSupport();
             Raise(nameof(PowerModeHeading));
             Raise(nameof(ModeControlAvailable));
             Raise(nameof(HasModeLockNote));
@@ -7442,7 +7855,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // The first read is done, so an armed charging colour can be painted over it. The plug state was read
             // before this and has not changed since, which is why the transition in the property setter saw nothing
-            // to do and the first paint has to be asked for here.
+            // to do and the first paint has to be asked for here. The re-assertion above may already have started that
+            // paint; it is awaited first, so the call below finds it done instead of painting a second time.
+            await ChargingLightingTask.ConfigureAwait(true);
             await SyncChargingLightingAsync().ConfigureAwait(true);
 
             // A Linux machine whose kernel exposes no Acer node is not an error and not a crash: the window stays
@@ -7476,7 +7891,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // disposed with the window, and a continuation that outlived it has nothing left to initialise.
             if (!_disposed)
             {
-                await InitializePhase3Async().ConfigureAwait(true);
+                // The connection threw before the recovery was reached. It is still attempted: the boost and the mouse
+                // need no backend, and a hardware write that fails now keeps its part of the record for the next launch.
+                if (!gameSessionRecovered) await RecoverGameSessionAsync().ConfigureAwait(true);
 
                 // Whatever happened above, the controls must work from now on: a failed initial read is not a reason to
                 // leave the window read-only for the rest of the session.
@@ -7486,15 +7903,54 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 // running before the first telemetry sample rather than after the user touches a card.
                 SyncFanLoop();
 
+                // The window starts its telemetry timer on this, not on the end of InitializeAsync. The battery, storage
+                // and service reads below can take seconds (a cold storage query walks every disk), and until telemetry
+                // runs the fan loop has no temperature: no floor, no curve, no hand-back.
+                _controlsReady.TrySetResult(true);
+
+                // A copy in a second user session shows the machine but leaves it to the first copy; it says so once.
+                if (!_hardwareWritesAllowed) Status = Labels.SecondSessionReadOnly;
+
+                await InitializePhase3SafelyAsync().ConfigureAwait(true);
+
                 // Last, and in the background: a profile table published after this build shipped lets a laptop nobody
                 // had at release time work without a new binary. It never blocks the window, and being offline is not
-                // an event.
-                if (!_remoteProfilesChecked)
+                // an event. Gated on the same switch as the update check: the README promises that turning it off stops
+                // the app from contacting GitHub, and this fetch is a GitHub request too.
+                if (!_remoteProfilesChecked && _settings.AutoUpdateCheck)
                 {
                     _remoteProfilesChecked = true;
                     _ = RefreshRemoteProfilesAsync();
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Completes once <see cref="InitializeAsync"/> has released the controls and started the fan loop, which is before
+    /// the slow first reads of the battery, storage and service pages. The window starts its telemetry timer on this.
+    /// </summary>
+    /// <remarks>
+    /// Never completes when the window was closed before the probe answered; a caller waits for it together with
+    /// <see cref="InitializeAsync"/> itself, never on its own.
+    /// </remarks>
+    public Task ControlsReady => _controlsReady.Task;
+
+    private readonly TaskCompletionSource<bool> _controlsReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// The battery, storage, services and autostart reads, with a failure logged rather than thrown. They run after the
+    /// controls and the fan loop are live, so a read that throws must not turn into a failed start-up.
+    /// </summary>
+    private async Task InitializePhase3SafelyAsync()
+    {
+        try
+        {
+            await InitializePhase3Async().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The battery, storage and service pages could not be read", ex.Message);
         }
     }
 
@@ -7563,7 +8019,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // page's property moves. Two separate fields let a step on the loop's thread pair a new thermal-zone value
             // with the previous sample's "firmware" flag and follow it for one step.
             bool fromFallback = IsCpuTemperatureFromFallback(data);
-            _fanReading = new FanReading(data.CpuTemperature, fromFallback);
+            int fanGpu = GpuTemperatureForFans(data);
+            _fanGpuTemperatureC = fanGpu;
+            _fanReading = new FanReading(data.CpuTemperature, fromFallback, fanGpu, FanClock());
 
             CpuTemperature = data.CpuTemperature;
             GpuTemperature = data.GpuTemperature;
@@ -7636,6 +8094,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The rail's mouse figure is asked of the mouse itself now and then, so a config changed from ATK Hub or a
             // switch the app made through another path cannot leave it showing an old number.
             if (_tick % 10 == 0) _ = RefreshMouseFigureAsync();
+
+            // The operating mode can be changed behind the app's back (NitroSense, the mode key), so it is read back now
+            // and then; read-only, and skipped whenever a write or a game owns the answer (RefreshObservedModeAsync).
+            if (_tick % ModeReadTickInterval == 0) _ = RefreshObservedModeAsync();
+
+            // A crash record that did not fully land at start-up is tried again once the backend answers.
+            if (_gameRecoveryPending && _tick % GameRecoveryRetryTickInterval == 0) _ = RetryGameSessionRecoveryAsync();
 
             // The refresh-rate policy is transition-driven, so after the first call this is a boolean comparison. It
             // runs on every tick because a replug is not something to notice two seconds late.
@@ -7732,6 +8197,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The firmware was just given the fans back and the card has not caught up yet (HandBackOnLostTemperatureAsync).
         if (_handBackPending) return;
 
+        // The firmware has refused the fixed speed several steps in a row. On the direct-WMI backend that means the fan
+        // capability was switched off for the session and the fans are already in Auto underneath a card that still says
+        // Custom; on any backend, the speed this loop thinks it is holding is not the one the fans run at. The card
+        // follows the firmware instead of logging a refused write every 1.5 s for the rest of the session.
+        if (Volatile.Read(ref _fanWriteRefusals) >= FanWriteRefusalLimit)
+        {
+            _handedBackOnLostTemperature = false;
+            await HandBackOnLostTemperatureAsync(refused: true).ConfigureAwait(false);
+            return;
+        }
+
         // A game's own fan rule decides what this step does while it runs. A fixed Auto or Max rule is the firmware's
         // to hold, and writing here would fight it. A curve rule is not: the service only puts the fans under software
         // control at the slider's speed and leaves the curve to this loop (GameProfileService.ApplyAsync). Returning
@@ -7752,8 +8228,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // around 28 °C. Following it would hold the fans at the curve's idle speed while the CPU heats up, so it is
         // treated exactly like a lost reading and the firmware gets the fans back.
         var reading = _fanReading;
+        long nowMs = FanClock();
         bool fromFallback = reading?.FromFallback == true;
-        int temperature = fromFallback ? 0 : reading?.TemperatureC ?? 0;
+
+        // A reading that has not been refreshed for a while is not the temperature now. Telemetry that throws on every
+        // tick, or a tick stuck inside an await, used to leave the last good value here for good: a machine that was at
+        // 50 °C when it stopped answering kept the fans at the 50 °C speed while the die climbed to 95 °C. Too old is
+        // treated exactly like no reading.
+        bool stale = IsFanReadingStale(reading, nowMs);
+        if (stale && !_warnedStaleTemperature)
+        {
+            _warnedStaleTemperature = true;
+            AppLog.Warn("The temperature reading stopped updating",
+                $"the last sample is more than {FanReadingMaxAge.TotalSeconds:F0} s old, so the fan loop treats it as lost");
+        }
+        else if (!stale)
+        {
+            _warnedStaleTemperature = false;
+        }
+
+        int temperature = fromFallback || stale ? 0 : reading?.TemperatureC ?? 0;
         if (temperature <= 0)
         {
             // A sensor that stops answering must not leave the fans at the last speed the curve wrote. This loop is
@@ -7765,7 +8259,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // out of the mode the user picked before the first tick arrived. A thermal-zone sample is not "not yet":
             // it is the backend reporting that the firmware's value is unusable, and a machine that answers that way
             // from the first sample on would otherwise sit at a fixed speed with no floor for the whole session.
-            if (_hadTemperatureReading || fromFallback)
+            //
+            // "Not yet" is bounded, though. A Linux machine whose temperature node is missing answers 0, and a Windows
+            // machine whose firmware answers 0 with no thermal zone to fall back on says nothing at all; neither ever
+            // produces a reading or a fallback flag, and a Custom speed used to run there with no floor and no
+            // hand-back for the whole session. Once Custom has gone a while without a single usable reading, that is a
+            // lost reading too.
+            if (_hadTemperatureReading || fromFallback || NoReadingGraceExpired(nowMs))
             {
                 // This step only runs while the card says Custom, and a hand-back moves the card to Auto. So a
                 // hand-back that is already recorded, with the card on Custom again, means Custom was entered once
@@ -7782,6 +8282,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _hadTemperatureReading = true;
         _handedBackOnLostTemperature = false;
         _warnedLostTemperature = false;
+        Interlocked.Exchange(ref _noReadingSinceMs, 0);
+
+        // The floor and the curve act on the hotter of the two dies. The two sensors do not share a die on a laptop
+        // with a discrete GPU: in a GPU-bound game the CPU can sit at 70 °C while the GPU is at 92 °C, and deciding on
+        // the CPU figure alone left the GPU fan at the 70 °C answer with the 85/90/95 °C floor never firing for it. A
+        // GPU figure outside the plausible window is ignored — a sleeping dGPU reads 0 — so a machine without one
+        // behaves exactly as before. Only the decision uses it; the runtime sensor verification and the page do not.
+        temperature = FanActingTemperature(temperature, reading?.GpuTemperatureC ?? 0);
 
         // The curve follows the temperature, so it may only follow a temperature whose sensor ids were confirmed.
         // An unconfirmed layout is a guess about which id answers what, and a guess that reads the 55 °C system
@@ -7791,16 +8299,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // long enough. Both are the same permission; neither relaxes the floors below, which read the live value.
         //
         // Only the curve is held back. The fixed-speed floor still runs on an unconfirmed reading: it can only raise
-        // the speed, so a wrong sensor costs noise, never cooling.
-        if (followCurve && !_temperatureConfirmed && !_sensorTrust.RuntimeVerified)
+        // the speed, so a wrong sensor costs noise, never cooling. The step used to return here, which left an armed
+        // curve on an unconfirmed layout with no floor at all — a fixed speed at 95 °C. It falls through to the
+        // sliders and their floor instead. The reason the step was taken (a curve rule) is still what FanStepStillWanted
+        // checks.
+        bool useCurve = followCurve;
+        if (useCurve && !_temperatureConfirmed && !_sensorTrust.RuntimeVerified)
         {
             WarnTemperatureUnconfirmedOnce();
-            return;
+            useCurve = false;
         }
 
         var now = DateTime.UtcNow;
 
-        if (followCurve)
+        if (useCurve)
         {
             // Captured once: the UI thread can replace the evaluator when the curve is edited, and a step that read
             // the field twice could evaluate against one curve and commit to another.
@@ -7819,7 +8331,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (floor.EvaluatePair(CustomCpuPercent, CustomGpuPercent, temperature) is not var (manual, manualGpu)) return;
 
         await WriteFanPercentAsync(manual, manualGpu, () => floor.Commit(manual, manualGpu, temperature),
-            () => FanStepStillWanted(gameStep, followCurve: false)).ConfigureAwait(false);
+            () => FanStepStillWanted(gameStep, followCurve)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -7858,19 +8370,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// blocks would stop the loop from ever noticing the sensor coming back.
     /// </para>
     /// </remarks>
-    private async Task HandBackOnLostTemperatureAsync()
+    /// <param name="refused">
+    /// True when the hand-back is not about the reading but about a fixed speed the firmware keeps refusing. Both say
+    /// so on the banner once the card has followed: the user's Custom becoming Auto must never be silent.
+    /// </param>
+    private async Task HandBackOnLostTemperatureAsync(bool refused = false)
     {
         if (_handedBackOnLostTemperature) return;
+
+        string statusLine = refused ? Labels.FanSpeedRefusedHandedBack : Labels.FanTemperatureLostHandedBack;
 
         // The flag is set only once the firmware has taken the fans back. It used to be set here, before the write,
         // so a gate that timed out or a write that threw left it true and the hand-back was never tried again: the
         // fans stayed at the curve's last speed with no reading to change them. Every failure below now leaves it
         // false and the next step tries again.
-        if (!_warnedLostTemperature)
+        if (!refused && !_warnedLostTemperature)
         {
             _warnedLostTemperature = true;
             AppLog.Warn("The fan curve lost the temperature reading",
                 "the fans were handed back to the firmware rather than left at the last speed the curve wrote");
+        }
+        else if (refused && !_warnedFanSpeedRefused)
+        {
+            _warnedFanSpeedRefused = true;
+            AppLog.Warn("The fan speed was refused repeatedly",
+                $"{FanWriteRefusalLimit} fixed-speed writes in a row were refused, so the fans were handed back to the firmware");
         }
 
         bool ok;
@@ -7908,6 +8432,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _handedBackOnLostTemperature = true;
         _curveEvaluator.Reset();
         _manualFanFloor.Reset();
+        Volatile.Write(ref _fanWriteRefusals, 0);
+        _warnedFanSpeedRefused = false;
 
         // The card follows the hand-back. This runs on the loop's thread, so the update is handed to the UI thread:
         // SyncControls flips the write guard, and a flip raced against the UI thread's own could leave the guard on
@@ -7922,6 +8448,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             try
             {
                 SyncControls(() => SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == FanMode.Auto) ?? SelectedFanMode);
+                Status = statusLine;
             }
             finally
             {
@@ -7953,8 +8480,131 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private volatile FanReading? _fanReading;
 
-    /// <summary>One sample's CPU temperature as the fan loop sees it.</summary>
-    private sealed record FanReading(int TemperatureC, bool FromFallback);
+    /// <summary>
+    /// One sample's temperatures as the fan loop sees it, with the moment it was taken on <see cref="FanClock"/>. The
+    /// GPU figure is carried for the decision only (see <see cref="FanActingTemperature"/>).
+    /// </summary>
+    private sealed record FanReading(int TemperatureC, bool FromFallback, int GpuTemperatureC, long TakenAtMs);
+
+    /// <summary>True once the stale reading has been logged, so a telemetry outage is one line and not one per step.</summary>
+    private bool _warnedStaleTemperature;
+
+    /// <summary>True once a run of refused fixed-speed writes has been logged; cleared by a successful hand-back.</summary>
+    private bool _warnedFanSpeedRefused;
+
+    /// <summary>
+    /// The milliseconds the fan loop reads its time from: monotonic, and the same clock the readings are stamped with.
+    /// </summary>
+    /// <remarks>
+    /// A seam for the tests, like <see cref="UiDispatch"/>: a reading that goes stale after thirty seconds is not
+    /// something a test should wait thirty seconds for. Production never sets it.
+    /// </remarks>
+    public Func<long> FanClock { get; set; } = static () => Environment.TickCount64;
+
+    /// <summary>
+    /// How old the last reading may be before the fan loop treats it as lost: six of the slowest telemetry ticks (the
+    /// window polls every five seconds while it is hidden). Three was too tight: the same serial tick also awaits the
+    /// game-start writes and the battery read, and a tick still running skips the next ones, so one slow game start
+    /// could turn the user's Custom into Auto.
+    /// </summary>
+    private static readonly TimeSpan FanReadingMaxAge = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long Custom may run without a single usable reading before the fans are handed back. Long enough for the
+    /// first telemetry tick after start-up to arrive, short enough that a fixed speed never runs unwatched for long.
+    /// </summary>
+    private static readonly TimeSpan NoReadingGrace = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// A gap between two fan steps longer than this means the process was not running them — the machine slept, or
+    /// the process was suspended — not that the readings stopped. The loop's own period is 1.5 s.
+    /// </summary>
+    private static readonly TimeSpan FanStepGapForSleep = TimeSpan.FromSeconds(10);
+
+    /// <summary>How many fixed-speed writes in a row the firmware may refuse before the fans are handed back.</summary>
+    private const int FanWriteRefusalLimit = 3;
+
+    /// <summary>Refused fixed-speed writes in a row; reset by an accepted write, a hand-back and a new fan mode.</summary>
+    private int _fanWriteRefusals;
+
+    /// <summary>When Custom started waiting for its first usable reading, on <see cref="FanClock"/>; 0 when not waiting.</summary>
+    private long _noReadingSinceMs;
+
+    /// <summary>When the previous fan step ran, on <see cref="FanClock"/>; 0 before the first one.</summary>
+    private long _lastFanStepMs;
+
+    /// <summary>
+    /// A reading's age is counted from this moment when it is later than the reading itself: set after a sleep or a
+    /// resume, when every reading is old because nothing ran, not because the sensor stopped answering.
+    /// </summary>
+    private long _readingAgeBaselineMs;
+
+    /// <summary>
+    /// Whether the reading is too old to act on. Also notices a sleep: a long gap since the previous step restarts the
+    /// age count, so the first step after a resume does not hand the fans back over a reading nobody could refresh.
+    /// </summary>
+    private bool IsFanReadingStale(FanReading? reading, long nowMs)
+    {
+        long previousStep = _lastFanStepMs;
+        _lastFanStepMs = nowMs;
+        if (previousStep != 0 && nowMs - previousStep > (long)FanStepGapForSleep.TotalMilliseconds)
+            Interlocked.Exchange(ref _readingAgeBaselineMs, nowMs);
+
+        if (reading == null) return false;
+
+        long since = Math.Max(reading.TakenAtMs, Interlocked.Read(ref _readingAgeBaselineMs));
+        return nowMs - since > (long)FanReadingMaxAge.TotalMilliseconds;
+    }
+
+    /// <summary>
+    /// True once Custom has waited <see cref="NoReadingGrace"/> without a usable reading. The first call starts the wait.
+    /// </summary>
+    private bool NoReadingGraceExpired(long nowMs)
+    {
+        long since = Interlocked.Read(ref _noReadingSinceMs);
+        if (since == 0)
+        {
+            Interlocked.CompareExchange(ref _noReadingSinceMs, nowMs, 0);
+            return false;
+        }
+
+        return nowMs - since >= (long)NoReadingGrace.TotalMilliseconds;
+    }
+
+    /// <summary>
+    /// The temperature the floor and the curve act on: the CPU's, or the GPU's when that is plausible and hotter.
+    /// </summary>
+    /// <remarks>
+    /// Only ever raises the figure, so it can only raise the fan speed. The GPU figure has already been filtered by
+    /// <see cref="GpuTemperatureForFans"/>; 0 means "no usable GPU reading" and the CPU figure is used as it always was.
+    /// </remarks>
+    private static int FanActingTemperature(int cpuC, int gpuC) =>
+        gpuC is > 0 and <= MaxFanGpuTemperatureC ? Math.Max(cpuC, gpuC) : cpuC;
+
+    /// <summary>The same decision on the page's own CPU figure, for the writes the UI thread makes.</summary>
+    private int FanActingTemperature() => CpuTemperature > 0 ? FanActingTemperature(CpuTemperature, _fanGpuTemperatureC) : 0;
+
+    /// <summary>The last sample's GPU figure as the fan decision may use it; 0 when it may not.</summary>
+    private volatile int _fanGpuTemperatureC;
+
+    /// <summary>
+    /// Above this a GPU figure is not believed: a real die shuts down before it reports more, and the EC's byte sentinels
+    /// 0x7F (127) and 0x80 (128) sit inside the plausibility window that the page uses.
+    /// </summary>
+    private const int MaxFanGpuTemperatureC = 110;
+
+    /// <summary>
+    /// The sample's GPU temperature when the fan decision may act on it, otherwise 0: a measured reading (the monitor did
+    /// not mark it unavailable), inside 1–110 °C and not a sentinel. A sleeping dGPU reads 0 and is ignored.
+    /// </summary>
+    private static int GpuTemperatureForFans(MonitorData data)
+    {
+        int gpu = data.GpuTemperature;
+        if (data.Provenance.TryGetValue("gpu-temp", out var source) &&
+            string.Equals(source, "unavailable", StringComparison.Ordinal)) return 0;
+        if (gpu is 0x7F or 0x80 || !SensorPlausibility.IsPlausibleTemperature(gpu)) return 0;
+        return gpu <= MaxFanGpuTemperatureC ? gpu : 0;
+    }
 
     private static bool IsCpuTemperatureFromFallback(MonitorData data) =>
         data.Provenance.TryGetValue("cpu-temp", out var source) &&
@@ -8000,12 +8650,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             bool ok = await _hardware!.SetFanModeAsync(FanMode.Custom, cpuPercent, gpuPercent).ConfigureAwait(false);
             if (ok)
             {
+                Volatile.Write(ref _fanWriteRefusals, 0);
                 commit();
                 return;
             }
 
             // Not committed: the next step proposes the same speed again, which is what makes a transient refusal
-            // recover instead of leaving the fans at the previous value until the temperature happens to move.
+            // recover instead of leaving the fans at the previous value until the temperature happens to move. A run of
+            // refusals is counted, and the step hands the fans back once it is long enough (StepFanAsync).
+            Interlocked.Increment(ref _fanWriteRefusals);
             AppLog.Warn("The fan speed was not applied", $"%{cpuPercent} / %{gpuPercent}");
         }
         catch (Exception ex)
@@ -8123,7 +8776,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (own == null || string.Equals(own.Color, charging, StringComparison.OrdinalIgnoreCase)) return;
 
         SyncControls(() => ApplyLightingState(own));
-        _ = WriteLightingConfigAsync(own);
+
+        // A repair found at start-up, not a click: it never starts the elevated helper, and school mode's dark keyboard
+        // is left dark.
+        if (!SchoolModeKeepsKeysDark) _ = WriteLightingConfigAsync(own, automatic: true);
 
         AppLog.Info("The keys were still wearing the charging colour",
             $"{charging} went back to {own.Color}");
@@ -8243,7 +8899,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var (onAc, _) = _powerState();
+            var savedBefore = _settings.RefreshRateBeforeBattery;
             var result = _refreshRate.Apply(onAc, force);
+
+            // A saved rate dropped without a write (the user chose another rate meanwhile) is a settings change too.
+            if (!result.Changed && savedBefore != _settings.RefreshRateBeforeBattery) SaveSettings();
 
             RefreshRateStatus = result.Action switch
             {
@@ -8253,11 +8913,55 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 _ => RefreshRateStatus
             };
 
-            if (result.Changed) AppLog.Info("The screen refresh rate changed", $"{result.From} Hz -> {result.To} Hz");
+            if (result.Changed)
+            {
+                AppLog.Info("The screen refresh rate changed", $"{result.From} Hz -> {result.To} Hz");
+
+                // The replaced rate lives in the settings file now, so a drop and a restore are both saved at once.
+                SaveSettings();
+            }
         }
         catch (Exception ex)
         {
             AppLog.Warn("The screen refresh rate could not be changed", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Puts the panel back to the rate the battery automation replaced, on the clean exit. Nothing else would: with the
+    /// app gone, plugging the adapter in left a 165 Hz panel at 60 Hz for good. A rate that cannot be put back now (no
+    /// panel, a refusal) stays in the settings file and the next start restores it on the adapter.
+    /// </summary>
+    /// <remarks>
+    /// Only on the adapter, or when the automation has been switched off. On battery the 60 Hz is still wanted, and the
+    /// exit is often a restart (a language change, an update) that lowers it again a moment later; raising it there was
+    /// a 60→165→60 flicker, or 165 Hz on battery. The saved rate stays on disk and the next start on AC restores it.
+    /// </remarks>
+    private void RestoreRefreshRateForExit()
+    {
+        if (_refreshRate == null) return;
+
+        try
+        {
+            bool onAc = _powerState?.Invoke().OnAc ?? true;
+            if (!onAc && _settings.AutoRefreshRateSwitching) return;
+
+            var savedBefore = _settings.RefreshRateBeforeBattery;
+            var result = _refreshRate.Restore();
+            if (!result.Changed)
+            {
+                // A saved rate dropped without a write (the user chose another rate meanwhile) still has to leave the
+                // settings file, or the next start would try to put it back over that choice.
+                if (savedBefore != _settings.RefreshRateBeforeBattery) SaveSettings();
+                return;
+            }
+
+            AppLog.Info("The screen refresh rate was put back on exit", $"{result.From} Hz -> {result.To} Hz");
+            SaveSettings();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The screen refresh rate could not be put back on exit", ex.Message);
         }
     }
 
@@ -8284,12 +8988,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || mode is not OperatingMode target) return;
 
+        // The battery rule is enforced here, where every user path meets — the cards, the top-bar menu, the tray —
+        // rather than only in the tray's disabled rows: some Linux tray hosts never raise the menu's Opening event, and
+        // the cards and the top-bar menu never checked at all, so Turbo was written on battery and on a nearly empty
+        // pack. The card goes back to the mode the machine is in, and the status says why.
+        if (!IsModeAllowed(target))
+        {
+            Status = ModePolicy.HighPowerBlockedMessage;
+            AppLog.Info("A high-power mode was refused by the battery rule",
+                $"{target} · adapter={OnAcPower?.ToString() ?? "-"} · battery={BatteryPercent?.ToString(CultureInfo.InvariantCulture) ?? "-"}%");
+            await ShowObservedModeAsync().ConfigureAwait(true);
+
+            // A machine that does not report its mode leaves the refused card selected under a status line that says it
+            // was refused. The selection from before the click is the honest answer then.
+            if (SelectedMode?.Mode == target && _modeBeforeSelection is { } before && before.Mode != target)
+            {
+                SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == before.Mode) ?? before);
+            }
+
+            return;
+        }
+
         bool applied = await RunWriteAsync(async () =>
         {
             bool ok = await _hardware.SetOperatingModeAsync(target).ConfigureAwait(true);
             if (ok) _settings.LastOperatingMode = target;
             return ok;
         }, Labels.OperatingMode).ConfigureAwait(true);
+
+        // A mode the user set wins over a kept crash record's old one.
+        if (applied) ForgetKeptRecoveryPart(mode: true);
 
         if (!applied) await ShowObservedModeAsync().ConfigureAwait(true);
     }
@@ -8324,7 +9052,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var (cpu, gpu) = choice.Mode == FanMode.Custom ? EffectiveCustomPercents() : (CustomCpuPercent, CustomGpuPercent);
 
         bool handedBack = false;
-        await RunWriteAsync(
+        bool fanApplied = await RunWriteAsync(
             () =>
             {
                 // Checked inside the gate. On a machine with no usable die reading the fan loop hands the fans back
@@ -8345,6 +9073,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // firmware's own control, so that is what the status line says. The card is left alone: it follows the
         // hand-back by itself.
         if (handedBack) Status = $"{Labels.FanMode}: {Labels.Auto}";
+        else if (fanApplied) ForgetKeptRecoveryPart(fan: true);
     }
 
     /// <summary>Sanitises the sliders into a curve, stores it, arms it and writes it to the firmware.</summary>
@@ -8382,9 +9111,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // The curve is what the user just edited, so the speed written is the curve's own answer at the current
         // temperature. Writing the manual slider here put the fans at a speed the curve never asked for and left them
         // there until the next step, which is the mismatch this method used to have.
-        int temperature = CpuTemperature;
+        // The hotter of the two dies, the same figure the loop decides on (FanActingTemperature); 0 without a CPU reading.
+        int temperature = FanActingTemperature();
         var evaluator = _curveEvaluator;
-        var (cpu, gpu) = CurveEnabled && temperature > 0
+
+        // The same gate the loop applies: on an unconfirmed sensor layout the curve's answer follows a guess, so the
+        // sliders and their thermal floor are written instead. This path used to write curve.PercentAt on any reading.
+        bool followCurve = CurveEnabled && temperature > 0 && (_temperatureConfirmed || _sensorTrust.RuntimeVerified);
+        var (cpu, gpu) = followCurve
             ? (evaluator.Curve.PercentAt(temperature), evaluator.Curve.PercentAt(temperature))
             : EffectiveCustomPercents();
 
@@ -8395,12 +9129,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         // Committed only when the firmware accepted it, so the loop does not immediately write the same speed again
         // and a refused write is proposed again on the next step.
-        if (ok && CurveEnabled && temperature > 0) evaluator.Commit(cpu, temperature, now);
+        if (ok && followCurve) evaluator.Commit(cpu, temperature, now);
+        if (ok) ForgetKeptRecoveryPart(fan: true);
     }
 
-    private async Task ApplyLightingAsync()
+    /// <summary>
+    /// Writes the page's lighting and records it. True when the keyboard took it and it is still the newest lighting
+    /// the page asked for; false when it was refused, abandoned, or overtaken on the way.
+    /// </summary>
+    private async Task<bool> ApplyLightingAsync()
     {
-        if (_hardware == null || SelectedEffect == null || LightingUnsupported) return;
+        if (_hardware == null || SelectedEffect == null || LightingUnsupported) return false;
 
         // A manual apply wins over the automatic colours: someone who reaches for a swatch is asking for that colour,
         // not for the temperature's and not for the charging one. Both modes are turned off without a restore, because
@@ -8410,17 +9149,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         var config = CurrentLightingConfig();
 
+        // This write's place in line. The blackout button and every later write move the counter on, and a write that
+        // has been overtaken must neither reach the keyboard nor do its bookkeeping: a debounced colour still in flight
+        // when the blackout was pressed used to clear the blackout's flags afterwards — a dark keyboard, a page out of
+        // blackout, and a settings file saying the lights were on.
+        int generation = ++_lightingGeneration;
+
         try
         {
-            bool ok = await WriteLightingConfigAsync(config).ConfigureAwait(true) == LightingWriteResult.Written;
+            var result = await WriteLightingConfigAsync(config, () => generation == _lightingGeneration)
+                .ConfigureAwait(true);
+
+            if (generation != _lightingGeneration) return false;
 
             // No banner on success: the keyboard is the confirmation, and a toast on every slider step would cover
             // the page the user is working on. A refusal is still reported, because a silent one looks like a bug.
-            if (!ok)
+            if (result != LightingWriteResult.Written)
             {
                 AppLog.Warn("Keyboard lighting", "The hardware write was not applied.");
                 Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
-                return;
+                return false;
             }
 
             // The recovery copy is written only after the firmware accepted the write, so a resume puts back the
@@ -8447,13 +9195,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // The deck is redrawn from the write that was just accepted rather than from the next tick: the bars are the
             // picture of this payload, and a tick later they would show the colour before the user's last click.
             RefreshDeckPreview();
+            return true;
         }
         catch (Exception ex)
         {
             AppLog.Warn("The hardware write failed", $"Keyboard lighting: {ex.Message}");
             Status = $"{Labels.WriteFailed}: {Labels.KeyboardLighting}";
+            return false;
         }
     }
+
+    /// <summary>
+    /// Moved on by every lighting write the page makes and by the blackout button; see <see cref="ApplyLightingAsync"/>.
+    /// Read and written on the UI thread only.
+    /// </summary>
+    private int _lightingGeneration;
 
     /// <summary>What became of one lighting write.</summary>
     private enum LightingWriteResult
@@ -8477,14 +9233,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// be gone by then — the mode's switch flicked off, the page blacked out — and a write made anyway would land on top
     /// of the colour the user asked for, which is the "the lights ignore my off switch for a second" report.
     /// </param>
+    /// <param name="automatic">
+    /// True for a write nobody clicked for: the charging colour, the hand-back after it, the "still in the charging
+    /// colour" repair. Such a write never starts the elevated helper (see <see cref="WithoutLightingElevationAsync"/>).
+    /// </param>
     /// <remarks>
     /// Every lighting write goes through here, which is what makes the shared rules — the gate, the shape the backend
     /// takes, the "the keyboard accepted it" answer — live in one place instead of in each caller.
     /// </remarks>
-    private async Task<LightingWriteResult> WriteLightingConfigAsync(LightingConfig config, Func<bool>? stillWanted = null)
+    private async Task<LightingWriteResult> WriteLightingConfigAsync(LightingConfig config, Func<bool>? stillWanted = null,
+        bool automatic = false)
     {
         var hardware = _hardware;
         if (hardware == null) return LightingWriteResult.Refused;
+
+        // A copy in a second user session leaves the keyboard to the first one (HardwareWritesAllowed).
+        if (WritesRefusedForSecondSession()) return LightingWriteResult.Abandoned;
 
         // A keyboard the platform has no path to: nothing is sent, and nothing is reported as a refusal either, because
         // the page already says why in words.
@@ -8497,14 +9261,47 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (stillWanted is not null && !stillWanted()) return LightingWriteResult.Abandoned;
 
-            return await hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
-                config.Direction, config.Color, zones).ConfigureAwait(true)
-                ? LightingWriteResult.Written
-                : LightingWriteResult.Refused;
+            Task<bool> Send() => hardware.SetLightingAsync(config.Effect, config.Brightness, config.Speed,
+                config.Direction, config.Color, zones);
+
+            bool written = automatic
+                ? await WithoutLightingElevationAsync(Send).ConfigureAwait(true)
+                : await Send().ConfigureAwait(true);
+
+            return written ? LightingWriteResult.Written : LightingWriteResult.Refused;
         }
         finally
         {
             _writeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs one automatic lighting write with the elevated helper forbidden, and puts the switch back afterwards.
+    /// The caller must hold <see cref="_writeGate"/>: every lighting write takes it, so the switch is then off only while
+    /// no write the user started can be running.
+    /// </summary>
+    /// <remarks>
+    /// Only the re-assertion used to do this. Every other automatic write — the temperature tick, the charging colour at
+    /// start and on a plug change, the hand-back after it, school mode's — could start the elevated WMI helper and raise
+    /// a UAC prompt nobody asked for, mid-game as easily as anywhere. A prompt declined there is remembered for the
+    /// session, so the user's own colour changes then stopped reaching WMI as well. Writes the user started from the
+    /// page may still elevate.
+    /// </remarks>
+    private async Task<T> WithoutLightingElevationAsync<T>(Func<Task<T>> write)
+    {
+        var elevation = _hardware as ILightingElevationControl;
+        if (elevation == null) return await write().ConfigureAwait(true);
+
+        var allowed = elevation.AllowElevationForLighting;
+        elevation.AllowElevationForLighting = false;
+        try
+        {
+            return await write().ConfigureAwait(true);
+        }
+        finally
+        {
+            elevation.AllowElevationForLighting = allowed;
         }
     }
 
@@ -8522,6 +9319,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // A slider moved a moment ago still has its colour waiting out the debounce. Turning the lights off overrules
         // it; left queued, it would run after the "off" write and light the keys again.
         _lightingDebounce.Cancel();
+
+        // And one that already left: it is overtaken, so it neither reaches the keyboard after this nor undoes this
+        // button's bookkeeping when it answers (see ApplyLightingAsync).
+        _lightingGeneration++;
 
         // Keep what was lit so raising the brightness or picking an effect can bring it back later.
         var current = CurrentLightingConfig();
@@ -8671,21 +9472,41 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task SetSchoolModeAsync(bool enable)
     {
         if (_schoolMode == null) return;
+        if (WritesRefusedForSecondSession())
+        {
+            // Nothing was changed, so the switch goes back to where it was.
+            _schoolModeOn = !enable;
+            Raise(nameof(SchoolModeOn));
+            Raise(nameof(SchoolModeStateText));
+            return;
+        }
 
+        bool switchedOff = false;
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
             // A game that is running gives the battery's boost value back first, so school mode backs up the user's
             // value and not the game's: otherwise switching school mode off after the game would leave the game's boost
             // in the power plan for good.
-            if (enable && _gameProfiles is { IsGameActive: true } games)
+            OperatingMode? baselineMode = null;
+            FanMode? baselineFan = null;
+            if (enable && !_settings.SchoolModeEnabled && _gameProfiles is { IsGameActive: true } games)
             {
                 await games.ReleaseBatteryBoostAsync().ConfigureAwait(true);
                 RecordGameSessionBoost(games.Snapshot);
+
+                // The same for the mode and the fan: the machine is in the game's Turbo and Max/Custom now, and
+                // recording those as "before school mode" made switching school mode off write them back with no game
+                // running. The session's pre-game values are what school mode replaces.
+                if (games.Snapshot is { } preGame)
+                {
+                    baselineMode = preGame.Mode;
+                    baselineFan = preGame.Fan;
+                }
             }
 
             var outcome = enable
-                ? await _schoolMode.EnableAsync().ConfigureAwait(true)
+                ? await _schoolMode.EnableAsync(baselineMode, baselineFan).ConfigureAwait(true)
                 : await _schoolMode.DisableAsync().ConfigureAwait(true);
 
             SchoolModeDetail = DescribeOutcome(outcome);
@@ -8699,7 +9520,20 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            Status = enable ? Labels.SchoolModeApplied : Labels.SchoolModeDisabled;
+            // The game that is running owns an end-of-session restore of the mode and the fan. While school mode is on,
+            // that restore has to put back school mode's values, not the pre-game ones it captured: otherwise the end
+            // of the game wrote Balanced or Turbo over school mode's Eco with the switch still on. Switched off again,
+            // it puts back what school mode restored.
+            HandOverGameSessionRestore(enable, outcome);
+
+            // School mode darkened the keys (or put them back), so whatever an automatic colour had painted is no
+            // longer on them.
+            _chargingColorPainted = false;
+            _reactiveThrottle.Reset();
+            switchedOff = !enable;
+
+            Status = enable ? Labels.SchoolModeApplied
+                : outcome.Success ? Labels.SchoolModeDisabled : Labels.SchoolModeDisabledPartial;
 
             // The state machine changed the mode and the fan behind the view model's back, so the controls are read
             // back instead of being assumed.
@@ -8713,6 +9547,88 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally
         {
             _writeGate.Release();
+
+            // The switch is a setting like any other and is written at once, refused or not. It used to reach the file
+            // only with the next unrelated change: a restart then read "off" beside an undo record and silently rolled
+            // school mode back as an orphan, or read "on" for a machine that was no longer in school mode.
+            SaveSettings();
+        }
+
+        // Back from school mode: an armed charging colour goes back on the keys it had left. Outside the gate, which the
+        // paint takes itself.
+        // School mode held the panel at its own rate, and the automation saw nothing to lower while it did (the panel
+        // was already at the battery rate, so nothing was saved). Switched off on battery, the restore above put the
+        // full rate back and no later tick would lower it again: one forced pass does, and saves the rate it replaced.
+        // On the adapter, and with the automation off, that pass changes nothing.
+        if (switchedOff) ApplyRefreshRate(force: true);
+
+        if (switchedOff && _chargingColorEnabled) ChargingLightingTask = SyncChargingLightingAsync(force: true);
+    }
+
+    /// <summary>
+    /// Points the running game's end-of-session restore at school mode's values while school mode is on, and back at
+    /// the restored ones when it is switched off. Nothing to do when no game is running.
+    /// </summary>
+    /// <remarks>
+    /// The same idea as <see cref="GameProfileService.ReleaseBatteryBoostAsync"/>, for the mode and the fan: whatever
+    /// owns the value when the game ends is what the end of the session must leave in place. The crash record follows,
+    /// so a crash mid-game replays the same values.
+    /// </remarks>
+    private void HandOverGameSessionRestore(bool enabled, SchoolModeOutcome outcome)
+    {
+        if (_gameProfiles is not { IsGameActive: true } games || games.Snapshot is not { } snapshot) return;
+
+        if (enabled)
+        {
+            snapshot.Mode = _schoolMode?.TargetOperatingMode ?? OperatingMode.Eco;
+            snapshot.Fan = FanMode.Auto;
+        }
+        else if (outcome.RestoredMode is OperatingMode mode)
+        {
+            snapshot.Mode = mode;
+            snapshot.Fan = outcome.RestoredFan ?? snapshot.Fan;
+        }
+        else
+        {
+            return;
+        }
+
+        if (_settings.GameSessionRecovery is { IsActive: true } recovery)
+        {
+            recovery.SavedMode = snapshot.Mode;
+            recovery.SavedFan = snapshot.Fan;
+        }
+
+        AppLog.Info("The running game's restore follows school mode", $"{snapshot.Mode} · {snapshot.Fan}");
+    }
+
+    /// <summary>
+    /// Routes school mode's two lighting hooks through the view model's rules: they never start the elevated helper
+    /// (they are not a colour the user picked), and switching school mode off never lights a keyboard the user turned
+    /// off themselves meanwhile — the page said OFF and the keys came back on.
+    /// </summary>
+    /// <remarks>
+    /// Both hooks run with <see cref="_writeGate"/> held — the switch holds it for the whole transition, and the orphan
+    /// recovery at start takes it for the same reason — which is what <see cref="WithoutLightingElevationAsync"/> needs.
+    /// </remarks>
+    private void GuardSchoolModeLighting(SchoolModeService school)
+    {
+        if (school.TurnLightingOffAsync is { } turnOff)
+        {
+            school.TurnLightingOffAsync = () => WithoutLightingElevationAsync(turnOff);
+        }
+
+        if (school.RestoreLightingAsync is { } restore)
+        {
+            school.RestoreLightingAsync = async () =>
+            {
+                if (_settings.IsBacklightOff) return;
+                await WithoutLightingElevationAsync(async () =>
+                {
+                    await restore().ConfigureAwait(true);
+                    return true;
+                }).ConfigureAwait(true);
+            };
         }
     }
 
@@ -8834,7 +9750,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (preset.LEDs.Count > 3) Zone4 = preset.LEDs[3];
         });
 
-        await ApplyLightingAsync().ConfigureAwait(true);
+        // The preset's name is stored and announced only when the keyboard took it. A write that was refused, abandoned
+        // or overtaken used to leave "Applied: <preset>" under a keyboard that was still showing the old colours, and
+        // the next start then selected a preset the keys had never run.
+        if (!await ApplyLightingAsync().ConfigureAwait(true))
+        {
+            RgbProfileStatus = $"{Labels.WriteFailed}: {preset.DisplayName}";
+            return;
+        }
 
         _settings.SelectedRgbPreset = preset.Name;
         SaveSettings();
@@ -8925,7 +9848,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     private void ReportCompatibility()
     {
-        var report = HardwareReportText;
+        // Scrubbed the same way the issue body is (CompatibilityReportUrl.Build), so the clipboard the note asks the
+        // user to paste carries nothing the URL left out.
+        var report = CompatibilityReportUrl.SanitizeReport(HardwareReportText);
         if (string.IsNullOrEmpty(report))
         {
             Status = Labels.NoBackend;
@@ -8964,6 +9889,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // A poll that lands during shutdown would write through a backend that is already disposed ("Cannot access a
         // disposed object" in the log at exit).
         if (_gameProfiles == null || _disposed) return;
+
+        // Game profiles write the mode, the fans and the boost; a copy in a second user session does not.
+        if (!_hardwareWritesAllowed) return;
 
         var result = await _gameProfiles.PollAsync().ConfigureAwait(true);
         if (!result.IsTransition) return;
@@ -9231,6 +10159,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null) return;
 
+        // Refused before the card moves: a disabled tray row is not a guarantee (a tray host that never opens the menu
+        // through Opening never refreshes it), and the card must not jump to a mode that is not going to be written.
+        if (!IsModeAllowed(mode))
+        {
+            Status = ModePolicy.HighPowerBlockedMessage;
+            return;
+        }
+
         SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == mode) ?? SelectedMode);
         await ApplyModeAsync(mode).ConfigureAwait(true);
     }
@@ -9285,18 +10221,164 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private ModelProfile? _gateProfile;
 
+    // ---------------------------------------------------------------- resume and the mode read-back
+
+    /// <summary>
+    /// The machine came back from sleep. Called by the shell from the operating system's resume event, on the UI
+    /// thread.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The firmware may have reset the Custom fan speed and the keyboard lighting while the machine slept. The fan
+    /// trackers only write when the target changes, so an unchanged target was never written again and the fans stayed
+    /// at whatever the firmware chose on wake-up; both forget what they wrote, so the next step writes it once more.
+    /// The lighting used to be put back only when the window came forward from the tray.
+    /// </para>
+    /// <para>
+    /// The reading's age restarts here too: every reading is old after a sleep because nothing ran, not because the
+    /// sensor stopped, and the first step after wake-up must not hand the fans back for that.
+    /// </para>
+    /// </remarks>
+    public async Task OnSystemResumedAsync()
+    {
+        if (_disposed || !_hardwareReady) return;
+
+        AppLog.Info("The machine resumed from sleep", "the fan speed, the lighting and the mode are applied or read again");
+
+        Interlocked.Exchange(ref _readingAgeBaselineMs, FanClock());
+        _curveEvaluator.Reset();
+        _manualFanFloor.Reset();
+
+        try
+        {
+            // The keyboard controller and the Acer service take a moment to answer after wake-up; a write sent at once
+            // is the one most likely to be lost.
+            await Task.Delay(ResumeSettleDelay).ConfigureAwait(true);
+            if (_disposed) return;
+
+            await ReassertKeyboardLightingAsync().ConfigureAwait(true);
+            await RefreshObservedModeAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The state could not be applied again after sleep", ex.Message);
+        }
+    }
+
+    /// <summary>How long the resume handler waits before it writes the lighting and reads the mode again.</summary>
+    private static readonly TimeSpan ResumeSettleDelay = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// How many telemetry ticks pass between two reads of the operating mode: ten seconds while the window is on screen,
+    /// fifty while it sits in the tray.
+    /// </summary>
+    private const int ModeReadTickInterval = 10;
+
+    /// <summary>True while a mode read-back is in flight, so a slow read is not stacked behind the next trigger.</summary>
+    private bool _modeReadBusy;
+
+    /// <summary>
+    /// Reads the operating mode back and moves the card to it, without writing anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The mode used to be read only at start-up, on a school-mode change and on a rescan. A mode changed in NitroSense
+    /// or with the mode key, or a Turbo the firmware dropped when the charger was pulled, left the card, the tray and
+    /// the stored last mode on the old value — and a click on that stale Turbo card wrote Turbo again.
+    /// </para>
+    /// <para>
+    /// Skipped whenever the answer could fight something: a game session or a write in flight (school mode holds the
+    /// write gate for its whole transition), a selection that moved while the read was out, a machine without mode
+    /// control. It also never runs on a direct-WMI setup whose elevated helper is not up yet, because resolving the
+    /// backend there may start the helper — a UAC prompt raised by a timer.
+    /// </para>
+    /// </remarks>
+    private async Task RefreshObservedModeAsync()
+    {
+        var hardware = _hardware;
+        if (hardware == null || _disposed || !_hardwareReady || _modeReadBusy) return;
+        if (!ModeControlAvailable || !hardware.IsAvailable) return;
+        if (GameActive || _gameProfiles?.ActiveProfile != null) return;
+        if (_settings.UseDirectWmiBackend && _directWmi is { IsAvailable: false }) return;
+        if (_writeGate.CurrentCount == 0) return;
+
+        var before = SelectedMode;
+        _modeReadBusy = true;
+        try
+        {
+            if (await hardware.GetOperatingModeAsync().ConfigureAwait(true) is not OperatingMode observed) return;
+
+            // Re-checked after the read: anything that wrote or started meanwhile owns the answer.
+            if (_disposed || !ReferenceEquals(before, SelectedMode) || _writeGate.CurrentCount == 0) return;
+            if (GameActive || _gameProfiles?.ActiveProfile != null) return;
+            if (observed == SelectedMode?.Mode) return;
+
+            var card = Modes.FirstOrDefault(m => m.Mode == observed);
+            if (card == null) return;
+
+            // Shown, not stored: LastOperatingMode is the mode the user chose (the CLI's optimize/restore pair, the game
+            // restore and the crash recovery all read it as that), and an observation is not a choice.
+            AppLog.Info("The operating mode was changed outside NitroLite", $"{SelectedMode?.Mode.ToString() ?? "-"} -> {observed}");
+            SyncControls(() => SelectedMode = card);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The operating mode could not be read back", ex.Message);
+        }
+        finally
+        {
+            _modeReadBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// The charger was plugged in or pulled. The firmware drops Turbo on battery on its own, a moment after the plug
+    /// changes, so the mode is read after a short wait rather than at once.
+    /// </summary>
+    private async Task RefreshObservedModeAfterPlugChangeAsync()
+    {
+        try
+        {
+            await Task.Delay(PlugChangeModeReadDelay).ConfigureAwait(true);
+            await RefreshObservedModeAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The operating mode could not be read back", ex.Message);
+        }
+    }
+
+    private static readonly TimeSpan PlugChangeModeReadDelay = TimeSpan.FromSeconds(2);
+
     public async Task ReassertKeyboardLightingAsync()
+    {
+        if (!await ReassertKeyboardLightingGatedAsync().ConfigureAwait(true)) return;
+
+        // The re-assertion wrote the user's own colour (or "off") over whatever an automatic colour had on the keys. The
+        // charging colour's "it is painted" mark is therefore no longer true, and the temperature throttle would refuse
+        // to repaint the very colour it believes is still there. Both are reset, and an armed charging colour is
+        // painted again over the user's one: without this the card said the charging colour was active while the keys
+        // wore the user's colour until the next plug change.
+        _chargingColorPainted = false;
+        _reactiveThrottle.Reset();
+        if (_chargingColorEnabled) ChargingLightingTask = SyncChargingLightingAsync(force: true);
+    }
+
+    /// <summary>
+    /// The re-assertion itself. True when it ran (whatever the keyboard answered), false when it was skipped.
+    /// </summary>
+    private async Task<bool> ReassertKeyboardLightingGatedAsync()
     {
         // Not gated on LightingAvailable: on Windows that flag comes from a probe that needs elevation and answers
         // "no keyboard" on machines whose keyboard the write path paints (the reference AN16-41 among them). Only a
         // platform whose "no" is conclusive (Linux) skips the write.
-        if (_hardware == null || LightingUnsupported) return;
+        if (_hardware == null || LightingUnsupported || !_hardwareWritesAllowed) return false;
 
         // One re-assertion at a time. The elevation switch below is captured and restored, and two overlapping calls
         // (every ShowWindow used to start one) interleave that pair: the second captures the first's "false" and puts
         // it back last, which leaves the switch off for the rest of the session and every user colour change unable
         // to start the helper. A call that finds one in flight has nothing to add and skips.
-        if (Interlocked.CompareExchange(ref _reassertingLighting, 1, 0) != 0) return;
+        if (Interlocked.CompareExchange(ref _reassertingLighting, 1, 0) != 0) return false;
         try
         {
             // Inside the write gate, which every lighting write takes: the switch is then off only while no user write
@@ -9308,7 +10390,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!await _writeGate.WaitAsync(WriteGateTimeout).ConfigureAwait(false))
             {
                 AppLog.Warn("The keyboard lighting could not be reapplied", "the write gate timed out");
-                return;
+                return false;
             }
 
             try
@@ -9331,6 +10413,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 _writeGate.Release();
             }
+
+            return true;
         }
         finally
         {
@@ -9341,11 +10425,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>1 while a lighting re-assertion is running; see <see cref="ReassertKeyboardLightingAsync"/>.</summary>
     private int _reassertingLighting;
 
+    /// <summary>
+    /// True while school mode is on and holds the keyboard dark. School mode turns the backlight off when it is switched
+    /// on and again every session (<see cref="SchoolModeService.ReapplyAsync"/>), without touching the user's own
+    /// lighting preference — so nothing automatic may light the keys while it is on: not the re-assertion at start-up,
+    /// on a restore from the tray or after sleep, and not either automatic colour.
+    /// </summary>
+    private bool SchoolModeKeepsKeysDark =>
+        _schoolMode is { TurnLightingOffAsync: not null } && _settings.SchoolModeEnabled;
+
     private async Task ReassertKeyboardLightingCoreAsync()
     {
         if (_hardware == null) return;
 
-        if (_settings.IsBacklightOff)
+        // School mode's dark keyboard is re-asserted as dark. Writing the user's lit configuration here is what lit the
+        // keys at every start and every restore from the tray while school mode was on.
+        if (_settings.IsBacklightOff || SchoolModeKeepsKeysDark)
         {
             try
             {
@@ -9396,9 +10491,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// unbounded wait would hang it if a step were stuck in a WMI call.
     /// </para>
     /// </remarks>
-    public async Task<bool> RestoreFansToAutoAsync()
+    public Task<bool> RestoreFansToAutoAsync() => RestoreFansToAutoAsync(gameSessionWasActive: false);
+
+    /// <summary>
+    /// True when the fans are in a state NitroLite put them in and nothing would take them out of once it has exited: a
+    /// fixed speed (the card on Custom, or the curve armed), or anything a game session wrote.
+    /// </summary>
+    /// <remarks>
+    /// Auto is already the firmware's, and Max is the firmware's own full speed: neither needs a program to keep it
+    /// safe. Every exit and every restart (a language change, an update) used to write Auto over them all the same, so
+    /// a user who had chosen Max came back from a language change to the firmware's quiet curve.
+    /// </remarks>
+    private bool FansNeedHandBack(bool gameSessionWasActive) =>
+        gameSessionWasActive || GameActive || _gameProfiles?.ActiveProfile != null ||
+        SelectedFanMode?.Mode == FanMode.Custom || CurveEnabled;
+
+    private async Task<bool> RestoreFansToAutoAsync(bool gameSessionWasActive)
     {
-        if (_hardware == null) return true;
+        // A copy in a second user session never wrote the fans, so it has nothing to hand back.
+        if (_hardware == null || !_hardwareWritesAllowed) return true;
+
+        if (!FansNeedHandBack(gameSessionWasActive))
+        {
+            // Nothing of NitroLite's to undo. The loop is stopped all the same, so nothing can write after the exit.
+            _handingBackFans = true;
+            _curveLoop.StopAndWait(FanHandbackLoopTimeout);
+            AppLog.Info("The fans were left as they are on exit",
+                $"{SelectedFanMode?.Mode.ToString() ?? "unknown"} is the firmware's own control");
+            return true;
+        }
 
         // Set before the loop is stopped, so a step already queued on the gate sees it. Cleared only if the hand-back
         // fails, because a failed hand-back leaves the curve armed and the loop has to be able to run again.
@@ -9472,6 +10593,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </remarks>
     public async Task CleanExitAsync()
     {
+        // Read before the session is ended: a session that closes cleanly puts the pre-game mode back, and one that does
+        // not leaves the game's mode in the EC. Either way the hand-back below must not mistake the game's Max for a
+        // choice the user made.
+        bool gameSessionWasActive = GameActive || _gameProfiles?.ActiveProfile != null;
+
         try
         {
             if (_gameProfiles != null)
@@ -9504,12 +10630,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         bool ok = false;
         try
         {
-            ok = await RestoreFansToAutoAsync().ConfigureAwait(false);
+            ok = await RestoreFansToAutoAsync(gameSessionWasActive).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             AppLog.Warn("Clean exit failed", ex.Message);
         }
+
+        RestoreRefreshRateForExit();
 
         try
         {
@@ -9538,7 +10666,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var task = Task.Run(RestoreFansToAutoAsync);
+            var task = Task.Run(() => RestoreFansToAutoAsync());
 
             if (!task.Wait(timeout))
             {
@@ -9563,11 +10691,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task<bool> RunWriteAsync(Func<Task<bool>> write, string what)
     {
+        // A copy in a second user session leaves the hardware to the first one (HardwareWritesAllowed).
+        if (WritesRefusedForSecondSession()) return false;
+
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
             bool ok = await write().ConfigureAwait(true);
             Status = ok ? $"{Labels.Applied}: {what}" : $"{Labels.WriteFailed}: {what}";
+
+            // A refusal for lack of permission is what the Linux card explains; it used to wait for a rescan to appear.
+            if (!ok) RefreshPermissionHint();
             return ok;
         }
         catch (Exception ex)
@@ -9594,11 +10728,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task<bool> RunQuietWriteAsync(Func<Task<bool>> write, string what)
     {
+        if (!_hardwareWritesAllowed) return false;
+
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
             bool ok = await write().ConfigureAwait(true);
-            if (!ok) AppLog.Warn("The hardware write failed", Loc.English(what));
+            if (!ok)
+            {
+                AppLog.Warn("The hardware write failed", Loc.English(what));
+                RefreshPermissionHint();
+            }
+
             return ok;
         }
         catch (Exception ex)
@@ -9609,6 +10750,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         finally
         {
             _writeGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Brings the Linux card up to date after a refused write: the backend has just said whether the refusal was for
+    /// lack of permission and why. Cheap property reads, and nothing at all on a platform without the card.
+    /// </summary>
+    private void RefreshPermissionHint()
+    {
+        if (_platformSetup == null || _rescan == null) return;
+
+        try
+        {
+            NeedsUdevRule = _rescan.Snapshot.NeedsUdevRule || _rescan.PermissionHintRaised;
+            RaiseLinuxPermissionState();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The permission state could not be read", ex.Message);
         }
     }
 
@@ -9627,33 +10787,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_hardware == null || _rescan == null) return;
 
-        _rescan.ResetReadBackCounters();
-        _capabilities = GateByProfile(await _hardware.GetCapabilitiesAsync().ConfigureAwait(true));
-        NeedsUdevRule = _rescan.Snapshot.NeedsUdevRule || _rescan.PermissionHintRaised;
+        // Off the UI thread: on Linux the reset probes the machine again and asks the root helper, which can wait on
+        // polkit for seconds.
+        // Only where it can block, though: on Windows the reset clears plain settings collections, and doing that on the
+        // pool while the UI thread serialises the settings file would race the save.
+        var rescan = _rescan;
+        if (OperatingSystem.IsWindows()) rescan.ResetReadBackCounters();
+        else await Task.Run(rescan.ResetReadBackCounters).ConfigureAwait(true);
 
-        Raise(nameof(CapabilitySummaryText));
-        Raise(nameof(PowerModeHeading));
-        Raise(nameof(ModeControlAvailable));
-        Raise(nameof(HasModeLockNote));
-        Raise(nameof(FanControlAvailable));
-        Raise(nameof(LightingAvailable));
-        Raise(nameof(LightingUnsupported));
-        Raise(nameof(LightingControlsEnabled));
-        Raise(nameof(CoolBoostAvailable));
-        Raise(nameof(LcdOverdriveAvailable));
-        Raise(nameof(BacklightTimeoutAvailable));
-        Raise(nameof(WinKeyLockAvailable));
-        Raise(nameof(HasAnyExtra));
-        Raise(nameof(NoExtrasAvailable));
-        Raise(nameof(ShowExtrasCard));
-        Raise(nameof(BatteryLimitAvailable));
-        Raise(nameof(MuxAvailable));
-        Raise(nameof(SchoolModeColumnSpan));
-        Raise(nameof(HardwareReportText));
-        Raise(nameof(TierDisplay));
-        BuildCapabilityRows();
-
-        await ReadStateAsync().ConfigureAwait(true);
+        await RefreshCapabilitiesAsync().ConfigureAwait(true);
     }
 
     // ---------------------------------------------------------------- setup helpers
@@ -9932,6 +11074,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         _settingsSavesBlocked = true;
         AppLog.Info("Settings saves are off until the next launch", "a backup was restored over the settings file");
+    }
+
+    /// <summary>
+    /// Lifts the block for a restore that wrote nothing: the block goes up before the restore starts, and a restore
+    /// that replaced no file must not leave the session unable to save.
+    /// </summary>
+    private void LiftSettingsSaveBlock()
+    {
+        _settingsSavesBlocked = false;
+        AppLog.Info("Settings saves are on again", "the backup restore did not replace the settings file");
     }
 
     /// <summary>

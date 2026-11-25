@@ -22,16 +22,16 @@ public static class CliTaskRunner
     /// <summary>The commands the <c>--cli</c> flag accepts.</summary>
     public static readonly string[] Commands =
     [
-        "fix-lighting", "fix-services", "restore-mux", "optimize", "restore-optimize", "uninstall-cleanup"
+        "fix-lighting", "fix-services", "restore-mux", "optimize", "restore-optimize", "uninstall-cleanup",
+        "undo-repair"
     ];
 
     /// <summary>
     /// The spellings the Windows front end accepted before <c>--cli</c> existed, mapped to the command each one runs.
     /// </summary>
     /// <remarks>
-    /// A shortcut, a scheduled task or a <c>.bat</c> file written against the old spelling is the reason this table
-    /// exists: those files ship in <c>tools/</c> and are documented in the README, so dropping the flags would break
-    /// every one of them at once. <c>--optimize-pc</c> maps to <c>optimize</c> because the command was renamed, not
+    /// A shortcut, a scheduled task or a <c>.bat</c> file a user wrote against the old spelling is the reason this
+    /// table exists: dropping the flags would break every one of them at once. <c>--optimize-pc</c> maps to <c>optimize</c> because the command was renamed, not
     /// because the behaviour changed.
     /// </remarks>
     public static readonly IReadOnlyDictionary<string, string> LegacyFlags =
@@ -47,6 +47,49 @@ public static class CliTaskRunner
 
     /// <summary>The flags that answer the confirmation a state-changing command asks for.</summary>
     public static readonly string[] ConfirmationFlags = ["--yes", "-y", "--force"];
+
+    /// <summary>
+    /// The <c>--cli</c> commands that ask for <c>--yes</c> even in the explicit spelling. <c>restore-mux</c> writes the
+    /// GPU switch, a change that leaves the machine on the other GPU after the next restart, so it asks in both
+    /// spellings, as the older <c>--restore-mux</c> always did.
+    /// </summary>
+    public static readonly string[] AlwaysConfirmedCommands = ["restore-mux", "undo-repair"];
+
+    /// <summary>
+    /// Every flag any part of the program reads. A flag outside this list is a typo or a flag from another build; it is
+    /// reported on stderr instead of being ignored, because an ignored typo opens the window when a command was meant.
+    /// </summary>
+    public static readonly string[] KnownFlags =
+    [
+        "--cli", "--autostart", "--minimized", "--restart", "--hardware-report", "--linux-capture",
+        "--linux-helper", "--linux-selftest", "--wmi-worker", "--pipe", "--parent-pid", "--pssvc-sensors",
+        "--mode", "--fan", "--profile", "--yes", "-y", "--force", "--socket"
+    ];
+
+    /// <summary>The flags on the line that nothing reads. Values (anything not starting with '-') are not flags.</summary>
+    public static IReadOnlyList<string> FindUnknownFlags(string[]? args)
+    {
+        var unknown = new List<string>();
+        if (args == null) return unknown;
+
+        foreach (var raw in args)
+        {
+            var arg = raw?.Trim();
+            if (string.IsNullOrEmpty(arg) || !arg.StartsWith('-')) continue;
+
+            // "--pipe=name" is read by its name.
+            var name = arg.Split('=', 2)[0];
+            if (KnownFlags.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+            if (LegacyFlags.ContainsKey(name)) continue;
+            unknown.Add(arg);
+        }
+
+        return unknown;
+    }
+
+    /// <summary>True when <paramref name="command"/> is one of <see cref="Commands"/>.</summary>
+    public static bool IsKnownCommand(string? command) =>
+        !string.IsNullOrWhiteSpace(command) && Commands.Contains(command.Trim(), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True when the command line asks for a one-shot task rather than the window.</summary>
     public static bool IsCliTask(string[]? args) =>
@@ -98,8 +141,14 @@ public static class CliTaskRunner
     /// without a second flag; <c>--fix-lighting</c> is the spelling a stray shortcut can carry, so it asks first —
     /// exactly the contract the Windows front end had.
     /// </remarks>
-    public static bool RequiresConfirmation(string[]? args) =>
-        ParseExplicitCommand(args).Length == 0 && ParseLegacyCommand(args).Length > 0;
+    public static bool RequiresConfirmation(string[]? args)
+    {
+        var explicitCommand = ParseExplicitCommand(args);
+        if (explicitCommand.Length > 0)
+            return AlwaysConfirmedCommands.Contains(explicitCommand, StringComparer.OrdinalIgnoreCase);
+
+        return ParseLegacyCommand(args).Length > 0;
+    }
 
     /// <summary>The command named after <c>--cli</c>, or empty when the flag was the last thing on the line.</summary>
     private static string ParseExplicitCommand(string[]? args)
@@ -135,12 +184,37 @@ public static class CliTaskRunner
         IHardwareController? hardware,
         AppSettings settings,
         IAutoStartService? autoStart = null,
+        IReadOnlyList<CliCleanupStep>? cleanupSteps = null,
+        TextWriter? output = null,
         CancellationToken cancellationToken = default)
     {
         if (!Commands.Contains(command, StringComparer.OrdinalIgnoreCase))
         {
             AppLog.Warn("Unknown CLI command", command);
             return 2;
+        }
+
+        // The undo steps need no Acer backend: only the last one, the fans, does. They run even when the backend is
+        // missing or does not connect, so an uninstall on a machine whose Acer stack is already gone still cleans up.
+        if (command.Equals("uninstall-cleanup", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                return await UninstallCleanupAsync(hardware, settings, autoStart, cleanupSteps, output, cancellationToken)
+                    .ConfigureAwait(false) ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("CLI command failed", $"{command}: {ex}");
+                return 1;
+            }
+        }
+
+        // undo-repair is run by the entry point, which can see the platform's repair tools; this runner cannot.
+        if (command.Equals("undo-repair", StringComparison.OrdinalIgnoreCase))
+        {
+            AppLog.Warn("The CLI command is not available here", command);
+            return 1;
         }
 
         if (hardware == null)
@@ -160,8 +234,6 @@ public static class CliTaskRunner
                 "restore-mux" => await hardware.SetGpuModeAsync(GpuOperatingMode.Optimus).ConfigureAwait(false) ? 0 : 1,
                 "optimize" => await OptimizeAsync(hardware, settings).ConfigureAwait(false) ? 0 : 1,
                 "restore-optimize" => await RestoreOptimizeAsync(hardware, settings).ConfigureAwait(false) ? 0 : 1,
-                "uninstall-cleanup" => await UninstallCleanupAsync(hardware, settings, autoStart, cancellationToken)
-                    .ConfigureAwait(false) ? 0 : 1,
                 _ => 2
             };
         }
@@ -219,23 +291,151 @@ public static class CliTaskRunner
     }
 
     /// <summary>
-    /// What an uninstall leaves behind: fans back under firmware control, and no sign-in entry pointing at a program
-    /// that is about to be deleted.
+    /// What an uninstall leaves behind: every system change the app made undone, fans back under firmware control,
+    /// and no sign-in entry pointing at a program that is about to be deleted.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="steps"/> are the platform's undo actions (school mode, PC Optimize, the Run value, the Acer
+    /// services, the NitroSense launcher, the administrator task), run in order, each reported on its own line. One
+    /// that fails does not stop the rest. Without steps (a platform that has none, or a test) only the sign-in entry
+    /// is removed through <paramref name="autoStart"/>, as before. The fans go back to the firmware last, after school
+    /// mode has put its own fan value back.
+    /// </remarks>
     private static async Task<bool> UninstallCleanupAsync(
-        IHardwareController hardware, AppSettings settings, IAutoStartService? autoStart, CancellationToken cancellationToken)
+        IHardwareController? hardware, AppSettings settings, IAutoStartService? autoStart,
+        IReadOnlyList<CliCleanupStep>? steps, TextWriter? output, CancellationToken cancellationToken)
     {
-        bool fan = await hardware.SetFanModeAsync(FanMode.Auto).ConfigureAwait(false);
+        bool ok = true;
+
+        // Said up front, so a series of UAC prompts is expected rather than alarming. "At most": a step whose state is
+        // already right (no task registered, for instance) returns without asking.
+        int prompts = steps?.Count(s => s.Elevates) ?? 0;
+        if (prompts > 0 && output != null)
+            output.WriteLine(Loc.T($"Bu işlem en fazla {prompts} kez yönetici izni (UAC) isteyebilir."));
+
+        if (steps != null)
+        {
+            foreach (var step in steps)
+            {
+                bool stepOk;
+                string? detail;
+                try
+                {
+                    (stepOk, detail) = await step.Run(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    (stepOk, detail) = (false, ex.Message);
+                }
+
+                ok &= stepOk;
+                Report(output, step.Label, stepOk, detail);
+                if (!stepOk) AppLog.Warn("An uninstall cleanup step failed", $"{step.Label}: {detail}");
+            }
+        }
+
+        bool fan = false;
+        string? fanDetail = null;
+        if (hardware == null)
+        {
+            fanDetail = Loc.T("Donanım arka ucu yok.");
+        }
+        else
+        {
+            try
+            {
+                await hardware.EnsureConnectedAsync().ConfigureAwait(false);
+                fan = await hardware.SetFanModeAsync(FanMode.Auto).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                fanDetail = ex.Message;
+            }
+        }
+
+        Report(output, Loc.T("Fan"), fan, fanDetail);
 
         settings.FanCurveEnabled = false;
         settings.SchoolModeEnabled = false;
 
-        if (autoStart != null)
+        if (steps == null && autoStart != null)
         {
             try { await autoStart.DisableAsync(cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) { AppLog.Warn("Autostart could not be removed", ex.Message); }
         }
 
-        return fan;
+        return ok && fan;
+    }
+
+    /// <summary>
+    /// The undo actions of <c>--cli uninstall-cleanup</c>, in the order they run: school mode, PC Optimize and the
+    /// Run value (<paramref name="systemCleanup"/>), the Acer services, the NitroSense launcher, the administrator task
+    /// (<paramref name="elevatedTask"/>). The fans go back to the firmware after these. Each Acer step is only added
+    /// when there is something to undo, so a machine that never used a feature is not asked for administrator rights
+    /// on its behalf. The two platform steps are built by the entry point, which can see the platform's types.
+    /// </summary>
+    public static List<CliCleanupStep> BuildUninstallCleanupSteps(
+        AppSettings settings,
+        SchoolModeService? schoolMode,
+        IDebloatService? debloat,
+        CliCleanupStep? systemCleanup,
+        CliCleanupStep? elevatedTask)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var steps = new List<CliCleanupStep>();
+
+        if (schoolMode is { } school &&
+            (settings.SchoolModeEnabled || (school.BackupPath is { } backup && File.Exists(backup))))
+        {
+            steps.Add(new CliCleanupStep(Loc.T("Okul modu"), async _ =>
+            {
+                var outcome = await school.DisableAsync().ConfigureAwait(false);
+                return (outcome.Success, outcome.Success ? null : string.Join(", ", outcome.Failed));
+            }));
+        }
+
+        if (systemCleanup != null) steps.Add(systemCleanup);
+
+        if (debloat is { IsSupported: true })
+        {
+            if (debloat.HasRestorableBackup)
+            {
+                steps.Add(new CliCleanupStep(Loc.T("Acer arka plan servisleri"), async ct =>
+                {
+                    var result = await debloat.RestoreServicesAsync(ct).ConfigureAwait(false);
+                    return (result.Success, result.Error);
+                }, Elevates: true));
+            }
+
+            if (debloat.IsNitroSenseLauncherBlocked)
+            {
+                steps.Add(new CliCleanupStep(Loc.T("NitroSense başlatıcısı"), async ct =>
+                {
+                    var result = await debloat.UnblockNitroSenseLauncherAsync(ct).ConfigureAwait(false);
+                    return (result.Success, result.Error);
+                }, Elevates: true));
+            }
+        }
+
+        if (elevatedTask != null) steps.Add(elevatedTask);
+
+        return steps;
+    }
+
+    private static void Report(TextWriter? output, string label, bool ok, string? detail)
+    {
+        if (output == null) return;
+        var line = (ok ? "  ok    " : "  FAIL  ") + label;
+        if (!string.IsNullOrWhiteSpace(detail)) line += ": " + detail.Trim();
+        output.WriteLine(line);
     }
 }
+
+/// <summary>
+/// One undo action of <c>--cli uninstall-cleanup</c>: a label the user reads and the action, which answers whether it
+/// worked and, optionally, a sentence about it. Built by the entry point, which is the only place that can see the
+/// platform's services.
+/// </summary>
+/// <param name="Elevates">True when the step may raise a UAC prompt; counted for the notice printed first.</param>
+public sealed record CliCleanupStep(
+    string Label, Func<CancellationToken, Task<(bool Ok, string? Detail)>> Run, bool Elevates = false);

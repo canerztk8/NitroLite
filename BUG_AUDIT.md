@@ -477,20 +477,20 @@ Removal was verified the same way as every other group: `dotnet build NitroLite.
 | Item | Why it stays |
 | --- | --- |
 | `unsupportedMethods` in `profiles.json` and `ModelProfile` | Nothing reads it, which makes it look dead — but `ProfileCatalog` validates user profiles against an allow-list of known keys. Dropping the key would make an existing `profiles.user.json` that carries it fail validation. A dead field is cheaper than rejecting a user's file. |
-| `CleanExitMarker`, `ModeSwitchKey` | Referenced only by tests. They are tested behaviour that the app does not yet call, so deleting them would delete tests and a design decision rather than dead weight. Recorded in §3.3 instead. |
+| `CleanExitMarker`, `ModeSwitchKey` | Removed in the dead-code clean-up: neither was ever wired into the app. |
 | `TestDisplayRefreshRateServiceStub`, `TestScreenBrightnessService` | Test doubles that live in the Windows assembly because the tests need the same `internal` surface. Moving them is a refactor, not a cleanup. |
 | `scripts/research/` (24 files) | The record of how the Acer WMI surface was reverse-engineered, and the source for `ACER_COMPATIBILITY.md`. Two of the `verify_*` scripts assert "201 tests" and would fail today; they are stale documentation, not build inputs, and deleting them would lose provenance. |
-| `autonomous-cleanup.ps1` | A generic agent-workflow template the author committed on purpose. It is not app code and not referenced by anything, but it is the author's process, not dead product code. |
+| `autonomous-cleanup.ps1` | Removed in the dead-code clean-up: a foreign agent-loop script that nothing referenced. |
 | `tools/lighting_fixed.log` | Untracked and already covered by `*.log`. A 101-byte debug capture from 2026-11-05. Left in place: it is not in the repository, and untracked files are the user's. |
 | `artifacts/` (2.0 GB, 0 tracked files) | Gitignored, and it is the documented output directory for `scripts/publish-release.ps1` and both workflows. It also holds the only local copy of `NitroLite-v1.2.7-win-x64.zip`. Reproducible, but not mine to delete. |
-| `docs/video/nitrolite-tour.mp4`, `trailer/` media | 48.6 MB of tracked files in total, most of it the trailer project and the README's demo video. Both are referenced and both are the author's. |
+| `docs/video/nitrolite-tour.mp4`, `trailer/` media | The tour video and its poster were unreferenced and are removed; `trailer/` is the author's and stays. |
 
 ### 3.3 Found while cleaning, not fixed
 
 | Item | State |
 | --- | --- |
 | The diagnostics bundle never carries live capabilities | `WindowsDiagnosticsService` is constructed with no arguments at `AppHost.cs:319`, so its `_capabilities` falls back to `() => new DeviceCapabilities()`. `hardware-report.txt` and `capabilities.json` inside the bundle therefore describe an empty device. `DeviceCapabilityProbe` was written to fill exactly this and was never called; it has been removed rather than left as a decoy. Wiring it needs an async capability read at bundle time — `CreateBundle()` is synchronous and is called from the UI thread, so a `GetAwaiter().GetResult()` there would be a deadlock risk. Left as open work with the evidence recorded. |
-| `CleanExitMarker` is not wired | `MarkRunning()` and `MarkCleanExit()` have no production caller, so `PreviousRunWasUnclean()` can never report anything. The crash-recovery feature it was written for does not exist yet. |
+| `CleanExitMarker` is not wired | Removed in the dead-code clean-up; the start path re-takes a machine found in Custom and the exit/crash paths hand the fans back. |
 | Dead public methods | `GameLibraryRules.IsPathCompatible`, `ModePolicy.FanDisplayName`, `UpdateService.StartInstalled`, `AppHost.WhenReadyAsync`, `HardwareReport.WriteToDirectory`, `DebloatService.IsNitroSenseLauncherEnabled`, `SystemToolsService.FindDriverStoreFolder`, `Loc.AppendLiteral`, `DirectoryTrust.IsWorldWritable` (referenced only from `<see cref>` in its own file). Each has zero call sites, but each is public API surface and removing it is a product decision rather than a cleanup. Listed here so the next pass does not have to rediscover them. |
 
 ---

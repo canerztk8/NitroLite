@@ -65,7 +65,8 @@
                  that would write nowhere. -->
             <StackPanel IsVisible="{Binding BatteryLimitAvailable}">
               <StackPanel Orientation="Horizontal">
-                <ToggleButton Classes="toggle" IsChecked="{Binding BatteryLimitOn}" VerticalAlignment="Center" />
+                <ToggleButton Classes="toggle" IsChecked="{Binding BatteryLimitOn}"
+                          AutomationProperties.Name="{Binding Labels.BatteryLimit}" VerticalAlignment="Center" />
                 <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimit}" Margin="8,0,0,0" />
               </StackPanel>
               <TextBlock Classes="hint" Text="{Binding Labels.BatteryLimitHint}" Margin="0,6,0,0" />
@@ -85,6 +86,7 @@
             <StackPanel IsVisible="{Binding AutoRefreshRateAvailable}">
               <StackPanel Orientation="Horizontal">
                 <ToggleButton Classes="toggle" IsChecked="{Binding AutoRefreshRateOnBattery}"
+                          AutomationProperties.Name="{Binding Labels.AutoRefreshRate}"
                               VerticalAlignment="Center" />
                 <TextBlock Classes="hint" Text="{Binding Labels.AutoRefreshRate}" Margin="8,0,0,0" />
               </StackPanel>
@@ -111,6 +113,7 @@
                          Margin="10,0,0,0" VerticalAlignment="Center"
                          Foreground="{DynamicResource TextSecondaryBrush}" />
               <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding SchoolModeOn}"
+                          AutomationProperties.Name="{Binding Labels.SchoolMode}"
                             VerticalAlignment="Center" IsEnabled="{Binding SchoolModeAvailable}" />
             </Grid>
 
@@ -120,7 +123,7 @@
         </Border>
       </Grid>
 
-      <!-- ============================================================ saving: DC profile and watchdog -->
+      <!-- ============================================================ saving: the watchdog -->
 
       <Border Classes="card" Margin="0,0,0,14" IsVisible="{Binding BatteryHealthAvailable}">
         <StackPanel>
@@ -130,27 +133,11 @@
           </StackPanel>
 
           <Grid ColumnDefinitions="*,14,*">
-            <StackPanel Grid.Column="0">
-              <TextBlock Classes="caps" Text="{Binding Labels.DcProfile}" Margin="0,0,0,4" />
-              <ComboBox ItemsSource="{Binding DcProfileChoices}" SelectedItem="{Binding SelectedDcProfile}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DcProfileChoice">
-                    <TextBlock Text="{Binding Label}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-
-              <!-- What the choice actually changes. The two profiles differ in four settings, and a name alone
-                   ("Eco", "Dengeli") tells nobody which of them moves. -->
-              <TextBlock Classes="hint" Text="{Binding SelectedDcProfileDescription}" Margin="0,6,0,0"
-                         TextWrapping="Wrap" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="2">
+            <StackPanel Grid.Column="0" Grid.ColumnSpan="3">
               <StackPanel Orientation="Horizontal">
                 <ToggleButton Classes="toggle" IsChecked="{Binding WatchdogOn}" VerticalAlignment="Center"
-                              IsEnabled="{Binding WatchdogAvailable}" />
+                              IsEnabled="{Binding WatchdogAvailable}"
+                              AutomationProperties.Name="{Binding Labels.Watchdog}" />
                 <TextBlock Classes="hint" Text="{Binding Labels.Watchdog}" Margin="8,0,0,0" />
               </StackPanel>
               <TextBlock Classes="hint" Text="{Binding Labels.WatchdogHint}" Margin="0,6,0,0" TextWrapping="Wrap" />

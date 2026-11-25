@@ -186,8 +186,6 @@ public class HardwareMonitorService : IDisposable
     private long _prevUserTime = 0;
     private double _lastCpuUsage = 0.0;
 
-    public bool IsNvmlAvailable => _nvmlInitialized && _gpuDevice != IntPtr.Zero;
-
     public HardwareMonitorService(bool initNvml = true)
     {
         _allowNvml = initNvml;

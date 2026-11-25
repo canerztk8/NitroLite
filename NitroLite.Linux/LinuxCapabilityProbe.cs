@@ -153,6 +153,7 @@ public sealed class LinuxCapabilityProbe
             AcerWmiLoaded = _fs.DirectoryExists(LinuxPaths.AcerWmiModule),
             PredatorV4 = _fs.ReadAllText(LinuxPaths.AcerWmiPredatorV4)?.Trim(),
             PlatformProfileChoicesText = choices?.Trim(),
+            Backlight = LinuxScreenBrightnessService.Describe(_fs),
             Tier = (hasAcpi, hasSense) switch
             {
                 (true, true) => "both",

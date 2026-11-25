@@ -307,7 +307,9 @@ public sealed class WmiWorkerServer : IDisposable
                         !WmiWorkerValidation.TryParseFanMode(gpuValue, out var gpu))
                         return Invalid("gpu fan mode is missing or not a known mode");
 
-                    return WmiWorkerResponse.FromResult(_executor.SetFanBehavior(cpu, gpu));
+                    var behaviourResult = _executor.SetFanBehavior(cpu, gpu);
+                    TrackFanOwnership(manualRequested: cpu == FanMode.Custom || gpu == FanMode.Custom, behaviourResult.Ok);
+                    return WmiWorkerResponse.FromResult(behaviourResult);
                 }
 
                 case WmiWorkerCommand.SetFanSpeed:
@@ -322,7 +324,11 @@ public sealed class WmiWorkerServer : IDisposable
                     if (!WmiWorkerValidation.IsValidFanPercent(gpuPercent))
                         return Invalid($"gpuPercent {gpuPercent} is outside 0 or 30..100");
 
-                    return WmiWorkerResponse.FromResult(_executor.SetFanSpeed(cpuPercent, gpuPercent));
+                    var route = AcerWmiExecutor.RouteFanSpeed(cpuPercent, gpuPercent);
+                    var speedResult = _executor.SetFanSpeed(cpuPercent, gpuPercent);
+                    if (route != FanSpeedRoute.Invalid)
+                        TrackFanOwnership(manualRequested: route == FanSpeedRoute.FixedSpeed, speedResult.Ok);
+                    return WmiWorkerResponse.FromResult(speedResult);
                 }
 
                 case WmiWorkerCommand.SetOperatingMode:
@@ -431,6 +437,15 @@ public sealed class WmiWorkerServer : IDisposable
                     return WmiWorkerResponse.FromResult(_executor.SetBacklightTimeout(enabled));
                 }
 
+                case WmiWorkerCommand.SetFanHandBack:
+                {
+                    if (!TryReadBool(request.Args, "handBack", out var handBack))
+                        return Invalid("handBack is missing or not a boolean");
+
+                    _handBackOnDisconnect = handBack;
+                    return WmiWorkerResponse.FromResult(WmiOperationResult.Success(new JsonObject { ["handBack"] = handBack }));
+                }
+
                 default:
                     return Invalid($"unknown command {(int)request.Command}");
             }
@@ -447,6 +462,67 @@ public sealed class WmiWorkerServer : IDisposable
 
     private static WmiWorkerResponse Invalid(string error) =>
         WmiWorkerResponse.Failure(WmiOperationResult.CodeInvalidArgument, error);
+
+    private volatile bool _holdsManualFans;
+
+    /// <summary>
+    /// False only when the client declared, with <see cref="WmiWorkerCommand.SetFanHandBack"/>, that a fixed speed is
+    /// to stay after it disconnects (the one-shot <c>--fan</c> command). The window never sends it.
+    /// </summary>
+    private volatile bool _handBackOnDisconnect = true;
+
+    /// <summary>True unless the client opted out of the hand-back on disconnect.</summary>
+    public bool HandBackOnDisconnect => _handBackOnDisconnect;
+
+    /// <summary>
+    /// True when the last fan write this worker ran left the fans on a fixed (custom) speed. Mirrors the Linux
+    /// helper's "manual owner": manual speeds are only safe while the window is watching the temperature, so the
+    /// host hands the fans back when the window disappears with this set.
+    /// </summary>
+    public bool HoldsManualFans => _holdsManualFans;
+
+    /// <summary>
+    /// A request for a manual speed counts even if the call failed — it may have reached the EC half way, and handing
+    /// the fans back is always the safe answer. Leaving manual only counts once the firmware accepted it.
+    /// </summary>
+    private void TrackFanOwnership(bool manualRequested, bool ok)
+    {
+        if (manualRequested) _holdsManualFans = true;
+        else if (ok) _holdsManualFans = false;
+    }
+
+    /// <summary>
+    /// Hands the fans back to the firmware if this worker left them on a manual speed. Runs the same
+    /// <c>SetFanBehavior(Auto, Auto)</c> the window uses for Auto, once, and waits at most <paramref name="timeout"/>.
+    /// Returns false when the call did not finish in time (the executor is then still busy and must not be disposed).
+    /// </summary>
+    public bool ReleaseManualFans(TimeSpan timeout)
+    {
+        if (!_holdsManualFans || !_handBackOnDisconnect) return true;
+
+        var release = Task.Run(() => _executor.SetFanBehavior(FanMode.Auto, FanMode.Auto));
+        bool finished;
+        try
+        {
+            finished = release.Wait(timeout);
+        }
+        catch (AggregateException ex)
+        {
+            AppLog.Warn("--wmi-worker could not hand the fans back", ex.InnerException?.Message ?? ex.Message);
+            return true;
+        }
+
+        if (!finished)
+        {
+            AppLog.Warn("--wmi-worker could not hand the fans back", "the firmware call did not finish in time");
+            return false;
+        }
+
+        var result = release.Result;
+        if (result.Ok) _holdsManualFans = false;
+        AppLog.Info("--wmi-worker handed the fans back to the firmware", result.Ok ? "ok" : result.Error);
+        return true;
+    }
 
     /// <summary>
     /// Reads a boolean argument. A JSON string is refused rather than coerced: <c>"false"</c> is a truthy string in

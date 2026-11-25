@@ -425,7 +425,9 @@ public class SchoolModeServiceTests
 
         var outcome = await h.Service.DisableAsync();
 
-        Assert.True(outcome.Success, string.Join(", ", outcome.Failed));
+        // Nothing was restored, so the switch-off is not a success (clean-up round 3, P1): it used to report one while
+        // the machine stayed on school mode's battery values.
+        Assert.False(outcome.Success);
         Assert.False(h.Settings.SchoolModeEnabled);
         Assert.True(File.Exists(h.Service.BackupPath), "an unreadable undo record must survive the switch-off");
     }
@@ -487,47 +489,6 @@ public class SchoolModeServiceTests
         {
             try { File.Delete(blocker); } catch { }
         }
-    }
-
-    [Fact]
-    public async Task PowerAutomation_WhileSchoolModeHoldsTheMachine_ChangesNothing()
-    {
-        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = true };
-        var agent = new MockAcerAgentClient();
-        var cpu = new MockCpuPowerService();
-        var display = new TestDisplayRefreshRateServiceStub();
-        var automation = new PowerAutomationService(agent, cpu, display, settings, attachSystemEvents: false)
-        {
-            AutomationSuspended = true
-        };
-
-        await automation.ProcessPowerTransitionAsync(isAc: false);
-
-        Assert.False(automation.IsDcEcoActive);
-        Assert.Equal(0, display.SetRefreshRateCalls);
-        Assert.Empty(cpu.BoostHistory);
-        Assert.Empty(agent.ModeChangeHistory);
-        Assert.False(automation.LastAcStatus);
-    }
-
-    [Fact]
-    public async Task PowerAutomation_AfterSchoolModeEnds_AppliesEcoAgain()
-    {
-        var settings = new AppSettings { DcPowerMode = DcPowerProfilePreference.Eco, AutoRefreshRateSwitching = true };
-        var agent = new MockAcerAgentClient();
-        var cpu = new MockCpuPowerService();
-        var display = new TestDisplayRefreshRateServiceStub();
-        var automation = new PowerAutomationService(agent, cpu, display, settings, attachSystemEvents: false)
-        {
-            AutomationSuspended = true
-        };
-
-        await automation.ProcessPowerTransitionAsync(isAc: false);
-        automation.AutomationSuspended = false;
-        await automation.EvaluatePowerStateAsync(forceAcStatus: false);
-
-        Assert.True(automation.IsDcEcoActive);
-        Assert.Equal(60, display.LastSetRefreshRate);
     }
 
     [Fact]

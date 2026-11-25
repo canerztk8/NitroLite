@@ -30,10 +30,8 @@ public sealed class ShellLabels
     public string NoAcerNodes => Loc.T("Bu makinede Acer donanım düğümü bulunamadı.");
 
     // ---------------------------------------------------------------- dashboard
-    public string ThermalAndFans => Loc.T("Sıcaklık ve fan");
     public string Cpu => Loc.T("CPU");
     public string Gpu => Loc.T("GPU");
-    public string Sys => Loc.T("Sistem (SYS1)");
     public string FanRpm => Loc.T("Fan devri");
     public string Measured => Loc.T("ölçüldü");
     public string Derived => Loc.T("tahmini");
@@ -42,18 +40,12 @@ public sealed class ShellLabels
     public string Auto => Loc.T("Otomatik");
     public string Max => Loc.T("Maksimum");
     public string CustomCurve => Loc.T("Özel eğri");
-    public string CustomFanSpeed => Loc.T("Özel fan hızı");
 
     // The one line under each fan card's title.
     public string FanAutoHint => Loc.T("Firmware sıcaklığa göre kendi hızını seçer.");
     public string FanMaxHint => Loc.T("Fanlar sürekli en yüksek devirde döner.");
     public string FanCustomHint => Loc.T("Hızı aşağıdaki eğri belirler; eğriyi sen çizersin.");
-    public string CpuFanPercent => Loc.T("CPU fan yüzdesi");
-    public string GpuFanPercent => Loc.T("GPU fan yüzdesi");
     public string FanCurve => Loc.T("FAN EĞRİSİ");
-    public string EnableCurve => Loc.T("Eğriyi etkinleştir");
-    public string ApplyCurve => Loc.T("Eğriyi uygula");
-    public string ThermalFloors => Loc.T("Termal güvenlik tabanları");
     public string ThermalFloorSummary => Loc.T("85 °C → %60 · 90 °C → %80 · 95 °C → %100");
     public string Apply => Loc.T("Uygula");
 
@@ -69,14 +61,12 @@ public sealed class ShellLabels
     public string Zone3 => Zone(3);
     public string Zone4 => Zone(4);
     public string PrimaryColor => Loc.T("Ana renk");
-    public string TurnOff => Loc.T("Kapat");
     public string Extras => Loc.T("Ekstralar");
     public string CoolBoost => Loc.T("CoolBoost");
     public string LcdOverdrive => Loc.T("LCD Overdrive");
     public string BacklightTimeout => Loc.T("Arka ışık zaman aşımı (30 sn)");
     public string BatteryLimit => Loc.T("Pil şarj sınırı (%80)");
     public string BatteryLimitHint => Loc.T("Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.");
-    public string NotOnThisMachine => Loc.T("Bu cihazda yok");
 
     // ---------------------------------------------------------------- settings
     public string Device => Loc.T("Cihaz");
@@ -89,11 +79,9 @@ public sealed class ShellLabels
     public string TierBoth => Loc.T("acer-wmi + Linuwu-Sense");
     public string TierWmi => Loc.T("Doğrudan WMI (yükseltilmiş yardımcı)");
     public string TierAassvc => Loc.T("Acer hizmeti (AASSvc)");
-    public string CapabilitySummary => Loc.T("Yetenek özeti");
     public string Language => Loc.T("Dil");
     public string DataFolder => Loc.T("Veri klasörü");
     public string Rescan => Loc.T("Yeniden tara");
-    public string UdevNeeded => Loc.T("udev kuralı gerekli");
     public string UdevInstruction => Loc.T("Ya da bu komutu terminalde çalıştırın:");
     public string LinuxSetupTitle => Loc.T("Linux kurulumu");
     public string LinuxGrantHint => Loc.T("Uygulama çalışma modu, klavye ve Nitro tuşu gibi ayarları değiştirebilmek için bir kez izin istiyor. Düğme yönetici şifrenizi sorar; ardından oturumu kapatıp yeniden açın.");
@@ -101,6 +89,24 @@ public sealed class ShellLabels
     public string LinuxPredatorV4Title => Loc.T("Fan devri ve Acer modları (deneysel)");
     public string LinuxPredatorV4Hint => Loc.T("Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Yeniden başlatma gerekir; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.");
     public string LinuxPredatorV4Button => Loc.T("predator_v4'ü aç");
+
+    /// <summary>The undo for the button above, shown while NitroLite's option file is in place.</summary>
+    public string LinuxPredatorV4DisableButton => Loc.T("predator_v4'ü kapat");
+
+    /// <summary>The root helper refused because this session is not active or not authorised yet.</summary>
+    public string LinuxHelperNotAuthorized =>
+        Loc.T("Bu oturum henüz yetkili değil; oturum etkin olduğunda Yeniden tara'ya basın.");
+
+    /// <summary>The root helper did not answer.</summary>
+    public string LinuxHelperUnreachable =>
+        Loc.T("NitroLite yardımcı hizmeti yanıt vermiyor; hizmet çalıştıktan sonra Yeniden tara'ya basın.");
+
+    /// <summary>The root helper does not list the attribute yet; a rescan lets it look again.</summary>
+    public string LinuxHelperNotListed => Loc.T("Yardımcı bu ayarı henüz tanımıyor; Yeniden tara'ya basın.");
+
+    /// <summary>The grant already ran, and the desktop still does not hand the Nitro key's device to the user.</summary>
+    public string LinuxNitroKeyAfterGrant =>
+        Loc.T("Erişim izni zaten verildi, ancak bu masaüstü Nitro tuşunun aygıtını kullanıcıya açmıyor; düğmeye yeniden basmak bunu değiştirmez.");
     public string LinuxLinuwuTitle => Loc.T("Fan hızı, klavye RGB ve şarj sınırı");
     public string LinuxLinuwuHint => Loc.T("Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.");
     public string LinuxLinuwuButton => Loc.T("Linuwu-Sense'i aç");
@@ -134,7 +140,6 @@ public sealed class ShellLabels
         "NitroLite başka hesapların değiştirebileceği bir klasörde, bu yüzden otomatik başlatmaya eklenmiyor. NitroLite'ı Program Files'a ya da %LOCALAPPDATA%\\NitroLite klasörüne taşıyıp tekrar deneyin.");
 
     public string AutoRefreshRate => Loc.T("Pilde otomatik 60 Hz'e düşür");
-    public string AutoRefreshRateHint => Loc.T("Pil gücüne geçildiğinde panel 60 Hz'e iner; prize takılınca önceki hız geri gelir.");
     public string RefreshRateLowered => Loc.T("Pil gücünde panel 60 Hz'e düşürüldü.");
     public string RefreshRateRestored => Loc.T("Prize takıldı, önceki yenileme hızı geri getirildi.");
     public string RefreshRateFailed => Loc.T("Ekran yenileme hızı değiştirilemedi.");
@@ -169,20 +174,28 @@ public sealed class ShellLabels
     public string SchoolModePartial => Loc.T("Okul modu kısmen uygulandı");
     public string SchoolModeRecovered => Loc.T("Yarım kalan okul modu geri alındı.");
 
+    /// <summary>Switched off, but not everything came back; the detail line names what did not.</summary>
+    public string SchoolModeDisabledPartial => Loc.T("Okul modu kapatıldı; bazı ayarlar geri yüklenemedi.");
+
+    /// <summary>A boost pill pressed while school mode holds the battery value: only the adapter's was written.</summary>
+    public string BoostAdapterOnlySchoolMode =>
+        Loc.T("Uygulandı (yalnızca adaptör): okul modu açıkken pildeki CPU Boost değeri değiştirilmez.");
+
+    /// <summary>A boost pill pressed on a single-switch control while school mode holds it.</summary>
+    public string BoostHeldBySchoolMode => Loc.T("Okul modu açıkken CPU Boost değiştirilemez.");
+
+    /// <summary>The overlay window's title, which is what a screen reader and the window list announce.</summary>
+    public string OsdWindowTitle => Loc.T("NitroLite ekran göstergesi");
+
     // ---------------------------------------------------------------- game detection
-    public string GameMode => Loc.T("Oyun modu");
     public string GameIdle => Loc.T("Oyun yok; kullanıcı ayarları geçerli.");
-    public string AutoGameMode => Loc.T("Otomatik oyun modu");
 
     // ---------------------------------------------------------------- game profiles page
     public string GameProfiles => Loc.T("Oyun Profilleri");
-    public string GameProfilesHint => Loc.T("Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.");
     public string NewGameExe => Loc.T("Süreç adı");
     public string NewGameName => Loc.T("Görünen ad (isteğe bağlı)");
-    public string AddGame => Loc.T("Oyun ekle");
     public string TargetMode => Loc.T("Hedef mod");
     public string TargetFanMode => Loc.T("Hedef fan modu");
-    public string NoGameProfiles => Loc.T("Henüz tanımlı oyun yok.");
     public string GameExeRequired => Loc.T("Süreç adı gerekli.");
     public string GameAlreadyDefined => Loc.T("Bu süreç için zaten bir kural var.");
     public string GameAdded(string name) => Loc.T($"Oyun eklendi: {name}");
@@ -204,11 +217,7 @@ public sealed class ShellLabels
     public string GameScanFailed => Loc.T("Oyun kitaplığı taranamadı.");
     public string GameScanUnavailable => Loc.T("Bu platformda oyun kitaplığı taraması yok.");
     public string GameToConfigure => Loc.T("Yapılandırılacak Oyun");
-    public string GameExePath => Loc.T("Çalıştırılabilir dosya");
-    public string GameTargets => Loc.T("Oyun hedefleri");
     public string GameCpuBoost => Loc.T("CPU Boost Davranışı");
-    public string GameFanProfile => Loc.T("Fan Profili");
-    public string GameOwnCurve => Loc.T("Bu oyun için özel fan eğrisi");
     public string CopyDesktopCurve => Loc.T("Masaüstü eğrisini kopyala");
     public string GameCurveCopied(string name) => Loc.T($"Masaüstü eğrisi kopyalandı: {name}");
 
@@ -223,6 +232,28 @@ public sealed class ShellLabels
     public string DeleteProfileTitle => Loc.T("Profili sil");
     public string DeleteProfileConfirm(string name) => Loc.T($"'{name}' profili silinsin mi? Bu işlem geri alınamaz.");
     public string GameSessionRecovered => Loc.T("Yarım kalan oyun oturumu geri alındı; önceki mod ve fan ayarları geri yüklendi.");
+
+    /// <summary>
+    /// Shown when part of a crashed game session could not be put back. The record is kept, so the message says the
+    /// next launch tries again rather than claiming the machine is restored.
+    /// </summary>
+    public string GameSessionRecoveryIncomplete =>
+        Loc.T("Yarım kalan oyun oturumu tam olarak geri alınamadı; bir sonraki açılışta yeniden denenecek.");
+
+    /// <summary>Shown when the temperature reading was lost (or stopped updating) and the fans went back to automatic.</summary>
+    public string FanTemperatureLostHandedBack =>
+        Loc.T("Sıcaklık okunamıyor; fanlar otomatik moda geri verildi.");
+
+    /// <summary>Shown by a copy in a second user session, which leaves the hardware to the first one.</summary>
+    public string SecondSessionReadOnly =>
+        Loc.T("NitroLite başka bir kullanıcı oturumunda zaten çalışıyor; bu kopya donanıma yazmaz.");
+
+    /// <summary>Shown when the firmware kept refusing the fixed fan speed and the fans went back to automatic.</summary>
+    public string FanSpeedRefusedHandedBack =>
+        Loc.T("Fan hızı donanım tarafından kabul edilmedi; fanlar otomatik moda geri verildi.");
+
+    /// <summary>Shown by a manual update check that could not reach the release server, instead of "up to date".</summary>
+    public string UpdateCheckFailed => Loc.T("Güncelleme denetlenemedi");
 
     /// <summary>
     /// Shown when the record that undoes a game session could not be written. The session still starts, so the
@@ -273,7 +304,6 @@ public sealed class ShellLabels
     /// POST, and it is what made a staged switch look like one that had already happened.
     /// </summary>
     public string GpuModeStaged => Loc.T("GPU modu kaydedildi; yeniden başlatınca etkin olur.");
-    public string GpuPendingBadge => Loc.T("YENİDEN BAŞLAT");
     public string DesktopRestoreDone => Loc.T("Masaüstü ayarları yeniden uygulandı.");
     public string DesktopRestoreFailed => Loc.T("Masaüstü ayarları hâlâ uygulanamıyor.");
     public string TrayRetryDesktop => Loc.T("Masaüstü ayarlarını yeniden dene");
@@ -344,12 +374,10 @@ public sealed class ShellLabels
     public string CapBatteryLimit => Loc.T("Pil şarj sınırı");
     public string CapKeyboard => Loc.T("Klavye aydınlatma bölgeleri");
     public string CapBacklightTimeout => Loc.T("Arka ışık zaman aşımı");
-    public string CapGpuOverclock => Loc.T("GPU hız aşırtma");
 
     // ---------------------------------------------------------------- status
     public string Applied => Loc.T("Uygulandı");
     public string WriteFailed => Loc.T("Yazma başarısız");
-    public string LightingFailed => Loc.T("Aydınlatma ayarı uygulanamadı");
     public string CurveEnabled => Loc.T("Fan eğrisi etkin: fan hızı CPU sıcaklığını izliyor.");
     public string CurveDisabled => Loc.T("Fan eğrisi kapandı; fanlar otomatik moda döndü.");
 
@@ -469,25 +497,11 @@ public sealed class ShellLabels
     public string BoostEfficient => Loc.T("Verimli");
     public string BoostDisabled => Loc.T("Devre Dışı");
     public string ApplyMode => Loc.T("Modu Uygula");
-    public string GameStatusIdle => Loc.T("Durum: Beklemede (Aktif oyun yok)");
     public string AutoGameDetect => Loc.T("Otomatik oyun algılamayı etkinleştir");
-    public string QuickGame => Loc.T("Hızlı oyun seçici");
-
-    // The one-line label under a compact mode tile. Shorter than the hint the tall card carried, because the tile is
-    // a quarter of the width.
-    public string ModeShortQuiet => Loc.T("Hafif kullanım");
-    public string ModeShortBalanced => Loc.T("Günlük önerilen");
-    public string ModeShortPerformance => Loc.T("Yüksek oyun gücü");
-    public string ModeShortTurbo => Loc.T("Maksimum performans");
-    public string ModeShortEco => Loc.T("Pil ömrü odaklı");
 
     // ---------------------------------------------------------------- page 2: monitoring
 
-    public string Temperatures => Loc.T("Sıcaklıklar");
-    public string FanSpeeds => Loc.T("Fan Devirleri");
-    public string BatteryAndPower => Loc.T("Pil ve Güç");
     public string TelemetryCharts => Loc.T("Telemetri Geçmiş Grafiği");
-    public string WindowsOnly => Loc.T("Yalnızca Windows");
 
     // ---------------------------------------------------------------- page 3: lighting
 
@@ -497,21 +511,15 @@ public sealed class ShellLabels
     // ---------------------------------------------------------------- page 4: battery and thermal
 
     public string BatteryStatus => Loc.T("Pil durumu");
-    public string FanCurveEditor => Loc.T("Özel fan eğrisi");
     public string PluggedIn => Loc.T("Prize takılı");
     public string OnBattery => Loc.T("Pilde");
     public string Unknown => Loc.T("Bilinmiyor");
-    public string ThermalSafety => Loc.T("Termal güvenlik");
-    public string ThermalSafetyHint => Loc.T("Bu tabanların altına inilmez; sıcaklık yükseldikçe fan hızı en az bu değere çıkar.");
 
     // ---------------------------------------------------------------- page 5: services and tools
 
     public string DeviceCapabilities => Loc.T("Cihaz & Yetenek Özeti");
     public string Appearance => Loc.T("Görünüm");
     // ---------------------------------------------------------------- page 2: the monitoring cards
-
-    public string Processor => Loc.T("İşlemci");
-    public string GraphicsCard => Loc.T("Ekran Kartı");
 
     /// <summary>
     /// "Sistem Belleği (RAM)". The parenthetical is the WPF page's own wording, kept because "Sistem Belleği" alone
@@ -521,7 +529,6 @@ public sealed class ShellLabels
 
     public string SystemTemperature => Loc.T("Sistem Sıcaklığı");
     public string Cores => Loc.T("Çekirdek");
-    public string Threads => Loc.T("İş parçacığı");
 
     // The row labels carry their colon, as the WPF page wrote them: a label and its figure sit on one line, and the
     // colon is what makes the figure read as the answer rather than as a second label.
@@ -554,7 +561,6 @@ public sealed class ShellLabels
 
     // ---------------------------------------------------------------- page 2: the chart and the mode trace
 
-    public string ChartMetric => Loc.T("Grafik ölçütü");
     public string Current => Loc.T("Mevcut");
     public string Minimum => Loc.T("Min");
     public string Maximum => Loc.T("Maks");
@@ -706,7 +712,6 @@ public sealed class ShellLabels
     public string PowerFlow => Loc.T("Anlık Güç Akışı");
     public string RemainingTime => Loc.T("Kalan Süre");
     public string BatteryProtection => Loc.T("Pil Tasarrufu");
-    public string DcProfile => Loc.T("Pilde Çalışma Güç Profili (DC Modu)");
     public string Watchdog => Loc.T("Pil Bekçisi (Watchdog)");
     public string WatchdogHint => Loc.T("Pil %80 sınırını aştığında uyarı bandı gösterir; firmware'e yazmaz.");
     public string CapacityAndWear => Loc.T("Batarya Kapasite ve Aşınma Durumu");
@@ -720,8 +725,6 @@ public sealed class ShellLabels
     public string Disk1 => Loc.T("Disk 1");
     public string Disk2 => Loc.T("Disk 2");
     public string BusType => Loc.T("Veri yolu");
-    public string FreeSpace => Loc.T("Boş alan");
-    public string Health => Loc.T("Sağlık");
     public string StorageDrives => Loc.T("Depolama Sürücüleri");
     public string NoStorageDrives => Loc.T("Depolama bilgisi okunamadı.");
 
@@ -942,6 +945,5 @@ public sealed class ShellLabels
     public string OnboardingBack => Loc.T("Geri");
     public string OnboardingNext => Loc.T("İleri");
     public string OnboardingFinish => Loc.T("Tamamla");
-    public string OnboardingSection => Loc.T("İlk Kurulum");
     public string OnboardingReopen => Loc.T("İlk kurulum sihirbazını yeniden aç");
 }

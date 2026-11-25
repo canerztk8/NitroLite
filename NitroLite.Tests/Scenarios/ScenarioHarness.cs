@@ -200,11 +200,4 @@ internal sealed class ScenarioRig
             GetCurrentOperatingMode = () => Agent.CurrentMode,
             GetCurrentFanMode = () => Agent.CurrentFanMode
         };
-
-    public PowerAutomationService BuildPowerAutomation() =>
-        new(Agent, Cpu, Display, Settings, attachSystemEvents: false)
-        {
-            GetCurrentOperatingMode = () => Agent.CurrentMode,
-            GetCurrentFanMode = () => Agent.CurrentFanMode
-        };
 }

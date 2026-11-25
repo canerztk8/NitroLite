@@ -182,14 +182,53 @@ if ($signCert) {
     $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
     if (-not $signtool) { throw 'NITROLITE_SIGN_CERT is set but signtool.exe is not on PATH.' }
 
-    $signTarget = Join-Path $stage 'NitroLite.Desktop.exe'
-    $signArgs = @('sign', '/fd', 'SHA256', '/f', $signCert, '/tr', 'http://timestamp.digicert.com', '/td', 'SHA256')
-    if ($env:NITROLITE_SIGN_PASSWORD) { $signArgs += @('/p', $env:NITROLITE_SIGN_PASSWORD) }
-    $signArgs += $signTarget
+    # The executable was renamed to NitroLite.exe above; signing the published name signed a file that no longer
+    # exists, so the step could never have worked.
+    $signTarget = Join-Path $stage 'NitroLite.exe'
+    if (-not (Test-Path -LiteralPath $signTarget -PathType Leaf)) { throw "The file to sign does not exist: $signTarget" }
 
-    Write-Host '==> Signing NitroLite.Desktop.exe' -ForegroundColor Cyan
-    & $signtool.Source @signArgs
-    if ($LASTEXITCODE -ne 0) { throw "signtool failed (exit $LASTEXITCODE)" }
+    $signArgs = @('sign', '/fd', 'SHA256', '/tr', 'http://timestamp.digicert.com', '/td', 'SHA256')
+    # The store's thumbprints before the import, or null when nothing was imported. The cleanup removes every
+    # certificate the import added (the signing certificate and any chain certificate the .pfx carries) and nothing
+    # that was there before the build, also when the import or a check after it failed half way.
+    $before = $null
+    try {
+        if ($env:NITROLITE_SIGN_PASSWORD) {
+            # The password does not go on signtool's command line, where any process can read it: the certificate is
+            # selected from the current user's store by its thumbprint instead. The thumbprint is read from the .pfx
+            # first. When that certificate is already in the store (the developer installed it) it is used as it is and
+            # left alone; only a certificate this script imported is removed again, so the cleanup can never delete a
+            # certificate and private key the developer had before the build.
+            $securePassword = ConvertTo-SecureString -String $env:NITROLITE_SIGN_PASSWORD -AsPlainText -Force
+            $pfx = Get-PfxData -FilePath $signCert -Password $securePassword
+            $thumbprint = @($pfx.EndEntityCertificates)[0].Thumbprint
+            if (-not $thumbprint) { throw 'The .pfx did not contain an end-entity certificate.' }
+
+            if (-not (Test-Path -LiteralPath ('Cert:\CurrentUser\My\' + $thumbprint))) {
+                $before = @(Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' | ForEach-Object { $_.Thumbprint })
+                $imported = Import-PfxCertificate -FilePath $signCert -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword
+                if (-not (@($imported) | Where-Object { $_.Thumbprint -eq $thumbprint -and $_.HasPrivateKey })) {
+                    throw 'The .pfx did not contain a certificate with a private key.'
+                }
+            }
+            $signArgs += @('/s', 'My', '/sha1', $thumbprint)
+        } else {
+            $signArgs += @('/f', $signCert)
+        }
+        $signArgs += $signTarget
+
+        Write-Host '==> Signing NitroLite.exe' -ForegroundColor Cyan
+        & $signtool.Source @signArgs
+        if ($LASTEXITCODE -ne 0) { throw "signtool failed (exit $LASTEXITCODE)" }
+    } finally {
+        if ($null -ne $before) {
+            $addedThumbprints = @(Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' |
+                ForEach-Object { $_.Thumbprint } | Where-Object { $before -notcontains $_ })
+            foreach ($added in $addedThumbprints) {
+                Remove-Item -LiteralPath ('Cert:\CurrentUser\My\' + $added) -DeleteKey -ErrorAction SilentlyContinue
+            }
+        }
+    }
 
     $signed = Get-AuthenticodeSignature -LiteralPath $signTarget
     if ($signed.Status -ne 'Valid') { throw "The signature did not verify: $($signed.Status)" }

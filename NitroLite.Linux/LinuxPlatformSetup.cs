@@ -5,8 +5,8 @@ using NitroLite.Linux.Sysfs;
 namespace NitroLite.Linux;
 
 /// <summary>
-/// The one-time Linux setup, behind one <c>pkexec</c> password prompt: the udev rule, the <c>nitrolite</c> and
-/// <c>input</c> groups, and — only when the user asks — the <c>acer_wmi predator_v4</c> option.
+/// The one-time Linux setup, behind one <c>pkexec</c> password prompt: the udev rule and the <c>nitrolite</c> group, and
+/// — only when the user asks — the <c>acer_wmi predator_v4</c> option (and its undo).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,6 +17,13 @@ namespace NitroLite.Linux;
 /// <para>
 /// Group membership is read by the session at login, so the result always says to log out and back in. The udev
 /// trigger applies the seat ACLs right away, which is what makes most controls work before that.
+/// </para>
+/// <para>
+/// The user is no longer added to the <c>input</c> group. That group reads every keyboard and mouse on the machine, from
+/// every process of the user, which is a keylogger's whole wish list; the Nitro key needs one device, and the udev rule
+/// now hands exactly that one (<c>Acer WMI hotkeys</c>) to the user at the seat. A membership an older version added is
+/// left in place — removing a group from a user is not something to do behind their back — and can be dropped with
+/// <c>sudo gpasswd -d "$USER" input</c>.
 /// </para>
 /// </remarks>
 public sealed class LinuxPlatformSetup : IPlatformSetup
@@ -39,8 +46,7 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         "cp -- \"$rule\" \"$dir/rule\"\n" +
         "echo \"$sha  $dir/rule\" | sha256sum -c --status - || exit 4\n" +
         "groupadd -f nitrolite\n" +
-        "getent group input >/dev/null || groupadd -f -r input\n" +
-        "usermod -aG nitrolite,input \"$user\"\n" +
+        "usermod -aG nitrolite \"$user\"\n" +
         "install -m 644 \"$dir/rule\" /etc/udev/rules.d/99-nitrolite.rules\n" +
         "udevadm control --reload-rules\n" +
         "udevadm trigger\n" +
@@ -58,6 +64,11 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         "set -e\n" +
         "printf 'options acer_wmi predator_v4=1\\n' > " + PredatorV4ConfPath + "\n";
 
+    /// <summary>The undo of <see cref="PredatorV4Script"/>: removes the option file, nothing else.</summary>
+    public const string DisablePredatorV4Script =
+        "set -e\n" +
+        "rm -f -- " + PredatorV4ConfPath + "\n";
+
     private static readonly TimeSpan PromptTimeout = TimeSpan.FromMinutes(3);
 
     private readonly ICommandRunner _runner;
@@ -67,14 +78,22 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
     private readonly string _user;
     private readonly string? _pkexec;
     private readonly KernelSetupHint _hint;
+    private readonly Func<string, bool> _canReadDevice;
 
+    private static readonly Func<string, bool> RealCanRead = CanOpenForReading;
+
+    /// <param name="canReadDevice">
+    /// Whether this process may open a <c>/dev/input/eventN</c> node for reading. Defaults to really opening it (read
+    /// only, closed at once) on Linux and to "yes" elsewhere, so a capture replayed on Windows never asks for a fix.
+    /// </param>
     public LinuxPlatformSetup(
         LinuxCapabilities capabilities,
         Func<string?> rulePath,
         ICommandRunner? runner = null,
         ISysfsFileSystem? fs = null,
         string? user = null,
-        Func<string?>? ruleDigest = null)
+        Func<string?>? ruleDigest = null,
+        Func<string, bool>? canReadDevice = null)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
         _ruleDigest = ruleDigest;
@@ -85,6 +104,7 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         _pkexec = _runner.Find("pkexec");
         _hint = capabilities.KernelHint;
         ModelNote = capabilities.ModelNote;
+        _canReadDevice = canReadDevice ?? (OperatingSystem.IsLinux() ? RealCanRead : static _ => true);
     }
 
     public string? ModelNote { get; }
@@ -116,7 +136,51 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
 
     public bool CanElevate => _pkexec != null && _runner.Find("sh") != null;
 
-    public bool NeedsInputGroup => !IsInGroup("input");
+    /// <summary>
+    /// True when the Nitro key's input device exists and this process cannot read it: the one thing the setup still has
+    /// to fix for the key. The name is the interface's. It used to mean "not in the input group", which the setup no
+    /// longer adds anyone to, so a user outside that group would have been offered the button for ever.
+    /// </summary>
+    public bool NeedsInputGroup => HotkeyEventNode() is { } node && !_canReadDevice(node);
+
+    /// <summary>
+    /// <c>/dev/input/eventN</c> of the <c>Acer WMI hotkeys</c> device, found through <c>/sys/class/input</c> (which
+    /// anyone may read), or null when the kernel registered no such device.
+    /// </summary>
+    internal string? HotkeyEventNode()
+    {
+        foreach (var directory in _fs.EnumerateDirectories(InputClassRoot))
+        {
+            var name = Path.GetFileName(directory);
+            if (!name.StartsWith("event", StringComparison.Ordinal)) continue;
+
+            var deviceName = _fs.ReadAllText(directory + "/device/name")?.Trim();
+            if (string.Equals(deviceName, LinuxNitroKeyListener.AcerDeviceName, StringComparison.Ordinal))
+            {
+                return "/dev/input/" + name;
+            }
+        }
+
+        return null;
+    }
+
+    internal const string InputClassRoot = "/sys/class/input";
+
+    private static bool CanOpenForReading(string path)
+    {
+        try
+        {
+            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>True when the <c>predator_v4</c> option file NitroLite writes is in place, so the undo can be offered.</summary>
+    public bool PredatorV4OptionInstalled => _fs.FileExists(PredatorV4ConfPath);
 
     public KernelSetupHint KernelHint => _hint;
 
@@ -153,6 +217,14 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         Run(PredatorV4Script, Array.Empty<string>(),
             Loc.T("predator_v4 açıldı. Etkili olması için bilgisayarı yeniden başlatın.")));
 
+    /// <summary>
+    /// Takes the <c>predator_v4</c> option back out: removes <see cref="PredatorV4ConfPath"/>, behind the same password
+    /// prompt. The running kernel keeps the option until the next boot, as it did when it was turned on.
+    /// </summary>
+    public Task<PlatformSetupResult> DisablePredatorV4Async() => Task.Run(() =>
+        Run(DisablePredatorV4Script, Array.Empty<string>(),
+            Loc.T("predator_v4 kapatıldı. Etkili olması için bilgisayarı yeniden başlatın.")));
+
     private PlatformSetupResult Run(string script, IReadOnlyList<string> arguments, string success)
     {
         if (!CanElevate)
@@ -167,7 +239,8 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         var result = _runner.Run(_pkexec!, args, PromptTimeout);
         if (result.Ok)
         {
-            AppLog.Info("The Linux setup step completed", script == GrantScript ? "access" : "predator_v4");
+            AppLog.Info("The Linux setup step completed",
+                script == GrantScript ? "access" : script == DisablePredatorV4Script ? "predator_v4 off" : "predator_v4");
             return new PlatformSetupResult(true, success);
         }
 
@@ -180,16 +253,6 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
             127 => Loc.T("Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın."),
             _ => Loc.T("Kurulum tamamlanamadı; aşağıdaki komutu terminalde çalıştırın.")
         });
-    }
-
-    /// <summary>True when this process carries the group's id among its supplementary groups.</summary>
-    private bool IsInGroup(string name)
-    {
-        var gid = GroupId(_fs.ReadAllText("/etc/group"), name);
-        if (gid == null) return false;
-
-        var status = _fs.ReadAllText("/proc/self/status");
-        return ProcessGroups(status).Contains(gid.Value);
     }
 
     /// <summary>The numeric id of <paramref name="name"/> in an <c>/etc/group</c> file, or null.</summary>

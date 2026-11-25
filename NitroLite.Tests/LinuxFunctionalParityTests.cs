@@ -393,7 +393,7 @@ public class LinuxFunctionalParityTests
     }
 
     [Fact]
-    public async Task GameProfile_RaisesTheEventsTheShellListensTo()
+    public async Task GameProfile_ReportsTheStartAndTheEndTheShellActsOn()
     {
         var fs = Nitro16();
         var settings = SettingsWithGame("cs2", OperatingMode.Turbo);
@@ -401,18 +401,15 @@ public class LinuxFunctionalParityTests
         var scanner = new FakeScanner();
         var service = new GameProfileService(scanner, settings, controller);
 
-        var started = new List<string>();
-        var ended = new List<string>();
-        service.GameStarted += profile => started.Add(profile.DisplayName);
-        service.GameEnded += profile => ended.Add(profile.DisplayName);
-
         scanner.Processes.Add(new RunningProcess(1234, "cs2", "/usr/bin/cs2"));
-        await service.PollAsync();
+        var start = await service.PollAsync();
         scanner.Processes.Clear();
-        await service.PollAsync();
+        var end = await service.PollAsync();
 
-        Assert.Equal(new[] { "Test Game" }, started);
-        Assert.Equal(new[] { "Test Game" }, ended);
+        Assert.Equal(GameDetectionChange.Started, start.Change);
+        Assert.Equal("Test Game", start.Profile?.DisplayName);
+        Assert.Equal(GameDetectionChange.Ended, end.Change);
+        Assert.Equal("Test Game", end.Previous?.DisplayName);
     }
 
     // ---------------------------------------------------------------- 3. school mode backends

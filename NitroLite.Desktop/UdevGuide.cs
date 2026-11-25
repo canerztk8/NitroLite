@@ -83,10 +83,11 @@ public static class UdevGuide
     /// The install command for <paramref name="rulePath"/>. Quoted because a data folder can contain a space, and
     /// chained with <c>&amp;&amp;</c> so a failed copy does not reload a udev daemon that has nothing new to read. The group
     /// steps come first: the rule hands <c>platform_profile</c> to the <c>nitrolite</c> group, and without the group the
-    /// rule installs cleanly and still leaves mode switching root-only.
+    /// rule installs cleanly and still leaves mode switching root-only. The <c>input</c> group is not added: it would let
+    /// every program of the user read every keyboard, and the rule itself hands the Nitro key's one device to the seat.
     /// </summary>
     public static string InstallCommand(string rulePath) =>
-        "sudo groupadd -f nitrolite && sudo usermod -aG nitrolite,input \"$USER\" " +
+        "sudo groupadd -f nitrolite && sudo usermod -aG nitrolite \"$USER\" " +
         $"&& sudo install -m 644 \"{rulePath}\" /etc/udev/rules.d/{RuleFileName} " +
         "&& sudo udevadm control --reload && sudo udevadm trigger";
 }

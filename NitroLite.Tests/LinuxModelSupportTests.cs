@@ -270,9 +270,12 @@ public class LinuxModelSupportTests
         var rule = File.ReadAllText(Path.Combine(RepoRoot(), "packaging", "linux", "99-nitrolite.rules"));
         var active = rule.Split('\n').Where(l => !l.TrimStart().StartsWith('#') && l.Contains("==", StringComparison.Ordinal)).ToList();
 
-        // uaccess only reaches /dev nodes, so the only rule that may use it is the hidraw one.
+        // uaccess only reaches /dev nodes, so the only rules that may use it are the hidraw ones and the one input
+        // device of the Nitro key, matched by its exact name so no other keyboard is handed out.
         Assert.All(active.Where(l => l.Contains("uaccess", StringComparison.Ordinal)),
-            l => Assert.Contains("SUBSYSTEM==\"hidraw\"", l));
+            l => Assert.True(l.Contains("SUBSYSTEM==\"hidraw\"", StringComparison.Ordinal) ||
+                             (l.Contains("SUBSYSTEM==\"input\"", StringComparison.Ordinal) &&
+                              l.Contains("ATTRS{name}==\"Acer WMI hotkeys\"", StringComparison.Ordinal)), l));
 
         // Fans are the helper's alone: a group write could stop them, and nothing would hand them back.
         Assert.DoesNotContain(active, l => l.Contains("pwm", StringComparison.Ordinal));

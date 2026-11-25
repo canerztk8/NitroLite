@@ -132,26 +132,10 @@ sealed class Program
             t.CalculateFanPercent_NormalValues_ReturnsExpectedPercentage();
             t.CalculateFanPercent_OverMaxRpm_ClampsTo100Percent();
             t.CalculateFanPercent_ZeroOrNegative_ReturnsZero();
-            t.FormatFanSpeed_FormatsRpmAndPercentageCorrectly();
-            t.FormatFanSpeedRpm_FormatsRpmCorrectly();
-            t.FormatFanSpeedPercent_FormatsPercentageCorrectly();
             t.FormatCpuTemperature_ActiveAndIdleValues_FormatsExpectedText();
             t.FormatGpuTemperature_SleepAndActiveStates_FormatsAccurately();
-            t.FormatCpuPower_PositiveAndZeroValues_FormatsExpectedText();
-            t.FormatGpuPower_SleepAndActiveStates_FormatsAccurately();
-            t.FormatCpuFrequency_ActiveAndZeroClocks_FormatsExpectedText();
-            t.FormatGpuFrequency_ActiveAndSleepClocks_FormatsExpectedText();
-            t.FormatRamUsage_NormalAndZeroFallback_FormatsExpectedText();
-            t.FormatVramUsage_NormalAndSleepFallback_FormatsExpectedText();
-            t.FormatBatteryPowerFlow_DischargingState_ReturnsDesarjOluyor();
-            t.FormatBatteryPowerFlow_ChargingState_ReturnsSarjOluyor();
-            t.FormatBatteryPowerFlow_PluggedInSaturated_ReturnsAdaptordeDoygun();
-            t.FormatBatteryPowerFlow_OnBatteryZeroDischarge_ReturnsPildeBosta();
-            t.FormatBatteryPowerFlow_NullStatus_ReturnsZeroWatts();
-            t.FormatRemainingTime_VariousConditions_FormatsAccurately();
-            t.FormatDiskCapacity_NormalAndZero_FormatsAccurately();
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("PASS: All 21 TelemetryFormatter tests passed.");
+            Console.WriteLine("PASS: All 5 TelemetryFormatter tests passed.");
             Console.ResetColor();
         }
         catch (Exception ex)

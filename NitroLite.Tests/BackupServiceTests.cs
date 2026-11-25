@@ -209,21 +209,22 @@ public class BackupServiceTests : IDisposable
 
         var result = Restore();
         Assert.True(result.Success);
+        // The game rules come back inside the settings file, which is where the app reads them; game_profiles.json
+        // is read by nothing and is no longer written.
         Assert.Contains("Oyun profilleri", result.Written);
         Assert.Contains("RGB profilleri", result.Written);
-        Assert.Contains("old.exe", File.ReadAllText(_gameProfilesPath));
+        Assert.Contains("changed.exe", File.ReadAllText(_gameProfilesPath));
         Assert.Contains("Old", File.ReadAllText(_rgbPresetsPath));
     }
 
     [Fact]
-    public void RestoreLeavesTheLiveProfilesAloneWhenTheBackupHasNone()
+    public void RestoreNeverWritesTheUnreadGameProfilesFile()
     {
         Create();
         File.WriteAllText(_gameProfilesPath, "[{\"exe_name\":\"keep.exe\"}]");
 
         var result = Restore();
         Assert.True(result.Success);
-        Assert.Contains("Oyun profilleri", result.Skipped);
         Assert.Contains("keep.exe", File.ReadAllText(_gameProfilesPath));
     }
 

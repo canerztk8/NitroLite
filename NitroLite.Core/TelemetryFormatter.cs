@@ -1,6 +1,4 @@
-﻿using System.Globalization;
-
-namespace NitroLite.Core;
+﻿namespace NitroLite.Core;
 
 /// <summary>
 /// Pure, testable formatting utility for sensor metrics, battery states, power flow, and hardware telemetry.
@@ -11,16 +9,6 @@ public static class TelemetryFormatter
     internal const string EstimatedSuffixSource = " (tahmini)";
 
     public static string EstimatedSuffix => Loc.T(EstimatedSuffixSource);
-
-    /// <summary>
-    /// Marks a value that comes from a model or a fixed baseline instead of a sensor reading.
-    /// Empty and placeholder ("--") texts are returned unchanged.
-    /// </summary>
-    public static string MarkEstimated(string text, bool isEstimated = true)
-    {
-        if (!isEstimated || string.IsNullOrWhiteSpace(text) || text.Contains("--")) return text;
-        return "~" + text + EstimatedSuffix;
-    }
 
     /// <summary>
     /// Highest temperature a laptop CPU or GPU can report. Anything above it is a sentinel from a sensor that did
@@ -58,20 +46,11 @@ public static class TelemetryFormatter
     }
 
     /// <summary>
-    /// Formats fan speed in RPM (e.g. "3960 RPM").
-    /// </summary>
-    public static string FormatFanSpeedRpm(int rpm)
-    {
-        return $"{Math.Max(0, rpm)} RPM";
-    }
-
-    /// <summary>
     /// Formats a tachometer reading, or the placeholder when the fan reported nothing.
     /// </summary>
     /// <remarks>
     /// A fan that is not turning reports 0, and 0 is not a reading: showing "0 RPM" would claim the fan has stopped,
-    /// which is the one thing the number must never say by accident. <see cref="FormatFanSpeedRpm"/> keeps its own
-    /// contract for the callers that want the raw figure; this is the one the window uses.
+    /// which is the one thing the number must never say by accident.
     /// </remarks>
     public static string FormatFanRpm(int rpm, string defaultText = "-- RPM")
     {
@@ -91,88 +70,6 @@ public static class TelemetryFormatter
     {
         if (percent <= 0 || double.IsNaN(percent) || double.IsInfinity(percent)) return defaultText;
         return $"{percent:F1} %";
-    }
-
-    /// <summary>
-    /// Formats fan speed percentage (e.g. "%66").
-    /// </summary>
-    public static string FormatFanSpeedPercent(int rpm, int maxRpm = 6000)
-    {
-        double pct = CalculateFanPercent(rpm, maxRpm);
-        return $"%{Math.Round(pct):F0}";
-    }
-
-    /// <summary>
-    /// Formats fan speed with both RPM and calculated percentage (e.g. "3960 RPM (%66)").
-    /// </summary>
-    public static string FormatFanSpeed(int rpm, int maxRpm = 6000)
-    {
-        double pct = CalculateFanPercent(rpm, maxRpm);
-        return $"{Math.Max(0, rpm)} RPM (%{Math.Round(pct):F0})";
-    }
-
-    /// <summary>
-    /// Formats CPU package power consumption in Watts.
-    /// </summary>
-    public static string FormatCpuPower(double watts)
-    {
-        if (watts <= 0) return "0.0 W";
-        return string.Format(CultureInfo.InvariantCulture, "{0:F1} W", watts);
-    }
-
-    /// <summary>
-    /// Formats GPU power consumption in Watts, handling D3cold state.
-    /// </summary>
-    public static string FormatGpuPower(double watts, bool isSleeping = false, bool available = true)
-    {
-        if (isSleeping) return "0.0 W (D3cold)";
-        // A running GPU is never at 0 W: that value means the sensor could not be read.
-        if (!available || watts <= 0) return "-- W";
-        return string.Format(CultureInfo.InvariantCulture, "{0:F1} W", watts);
-    }
-
-    /// <summary>
-    /// Formats CPU clock frequency in GHz (e.g. "4.25 GHz").
-    /// </summary>
-    public static string FormatCpuFrequency(double freqMhz)
-    {
-        if (freqMhz <= 0) return "-- GHz"; // no reading
-        double ghz = freqMhz / 1000.0;
-        return string.Format(CultureInfo.InvariantCulture, "{0:F2} GHz", ghz);
-    }
-
-    /// <summary>
-    /// Formats GPU core clock in MHz (e.g. "2100 MHz" or "0 MHz (Uyku)").
-    /// </summary>
-    public static string FormatGpuFrequency(double freqMhz, bool isSleeping = false, bool available = true)
-    {
-        if (isSleeping) return "0 MHz (Uyku)";
-        if (!available || freqMhz <= 0) return "-- MHz";
-        return $"{Math.Round(freqMhz):F0} MHz";
-    }
-
-    /// <summary>
-    /// Formats system RAM usage (e.g. "12.4 GB / 31.9 GB (%38.9)").
-    /// </summary>
-    public static string FormatRamUsage(double usedMB, double totalMB)
-    {
-        if (totalMB <= 0) return "0.0 GB / 0.0 GB (%0.0)";
-        double usedGB = Math.Round(usedMB / 1024.0, 1);
-        double totalGB = Math.Round(totalMB / 1024.0, 1);
-        double pct = Math.Round((usedMB / totalMB) * 100.0, 1);
-        return string.Format(CultureInfo.InvariantCulture, "{0:F1} GB / {1:F1} GB (%{2:F1})", usedGB, totalGB, pct);
-    }
-
-    /// <summary>
-    /// Formats GPU VRAM usage (e.g. "2048 MB / 8192 MB (%25)").
-    /// </summary>
-    public static string FormatVramUsage(double usedMB, double totalMB, bool isSleeping = false, bool available = true)
-    {
-        if (isSleeping) return "0 MB / 0 MB (D3cold)";
-        if (!available || (totalMB <= 0 && usedMB <= 0)) return "-- MB";
-        if (totalMB <= 0) return $"{Math.Round(usedMB):F0} MB";
-        double pct = Math.Round((usedMB / totalMB) * 100.0, 0);
-        return $"{Math.Round(usedMB):F0} MB / {Math.Round(totalMB):F0} MB (%{pct:F0})";
     }
 
     /// <summary>
@@ -208,75 +105,6 @@ public static class TelemetryFormatter
         }
 
         return (alpha * instant) + ((1.0 - alpha) * current);
-    }
-
-    /// <summary>
-    /// Formats battery power flow rate distinguishing discharging, AC charging, AC saturated, and idle on battery.
-    /// When discharging with known milliwatts, renders dual-unit format: "{0:F1} W ({1:F0} mW)".
-    /// Preserves full backward-compatible output if milliwatts are not provided.
-    /// </summary>
-    public static string FormatBatteryPowerFlow(BatteryStatusInfo? status, bool includeMilliwatts = true)
-    {
-        if (status == null) return "0.0 W";
-
-        if (status.IsDischarging && (status.DischargeRateWatts > 0 || status.DischargeRateMilliwatts > 0))
-        {
-            // Prefer the smoothed rate: the raw value jumps on every 3 s sample.
-            double watts = status.SmoothedDischargeRateWatts > 0
-                ? status.SmoothedDischargeRateWatts
-                : (status.DischargeRateWatts > 0 ? status.DischargeRateWatts : status.DischargeRateMilliwatts / 1000.0);
-
-            if (includeMilliwatts && status.DischargeRateMilliwatts > 0)
-            {
-                // F0, not N0: a thousands separator here reads as a decimal comma in Turkish.
-                return string.Format(CultureInfo.InvariantCulture, "{0:F1} W ({1:F0} mW)", watts, (long)status.DischargeRateMilliwatts);
-            }
-
-            return string.Format(CultureInfo.InvariantCulture, Loc.T("{0:F1} W (Deşarj Oluyor)"), watts);
-        }
-
-        if (status.IsCharging && status.ChargeRateWatts > 0)
-        {
-            return string.Format(CultureInfo.InvariantCulture, Loc.T("{0:F1} W (Şarj Oluyor)"), status.ChargeRateWatts);
-        }
-
-        if (status.IsPluggedIn)
-        {
-            return Loc.T("0.0 W (Adaptörde / Doygun)");
-        }
-
-        return Loc.T("0.0 W (Pilde / Boşta)");
-    }
-
-    /// <summary>
-    /// Formats battery estimated runtime or time to full charge.
-    /// </summary>
-    public static string FormatRemainingTime(int minutes, bool isPluggedIn, bool isCharging)
-    {
-        if (minutes <= 0 || minutes > 1440)
-        {
-            if (isCharging) return Loc.T("Hesaplanıyor...");
-            if (isPluggedIn) return Loc.T("Adaptöre Bağlı");
-            return Loc.T("Hesaplanıyor...");
-        }
-
-        int hours = minutes / 60;
-        int mins = minutes % 60;
-        if (hours > 0)
-        {
-            return $"{hours} sa {mins} dk";
-        }
-        return $"{mins} dk";
-    }
-
-    /// <summary>
-    /// Formats storage capacity and usage details (e.g. "483.3 GB / 1863.0 GB (%25.9 Dolu)").
-    /// </summary>
-    public static string FormatDiskCapacity(double usedGB, double totalGB)
-    {
-        if (totalGB <= 0) return "0.0 GB";
-        double pct = Math.Round((usedGB / totalGB) * 100.0, 1);
-        return string.Format(CultureInfo.InvariantCulture, "{0:F1} GB / {1:F1} GB (%{2:F1} Dolu)", usedGB, totalGB, pct);
     }
 
     /// <summary>

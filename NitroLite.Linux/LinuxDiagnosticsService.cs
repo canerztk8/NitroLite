@@ -46,6 +46,9 @@ public sealed class LinuxDiagnosticsService : IDiagnosticsService
 
     public string CreateBundle()
     {
+        // The log is buffered; flushing first puts the moment of the export in the archive (as the Windows bundle does).
+        AppLog.Flush();
+
         var directory = AppPaths.DataDirectory;
         Directory.CreateDirectory(directory);
 
@@ -67,8 +70,15 @@ public sealed class LinuxDiagnosticsService : IDiagnosticsService
         var log = ReadIfExists(AppLog.LogFilePath);
         if (log != null) Write(archive, LogFileName, Redaction.Scrub(log));
 
+        // The rotated log, as the Windows bundle carries it: a crash that filled the log just before the export is
+        // otherwise only in the half nobody sent.
+        var previousLog = ReadIfExists(AppLog.LogFilePath + ".old");
+        if (previousLog != null) Write(archive, LogFileName + ".old", Redaction.Scrub(previousLog));
+
+        // The settings carry the full path of every game the user added and a profile folder names its owner, so they
+        // are scrubbed like the log, as JSON so escaped names are matched too.
         var settings = ReadIfExists(AppPaths.GetDataFile("settings.json"));
-        if (settings != null) Write(archive, SettingsFileName, settings);
+        if (settings != null) Write(archive, SettingsFileName, Redaction.ScrubJson(settings));
 
         return path;
     }

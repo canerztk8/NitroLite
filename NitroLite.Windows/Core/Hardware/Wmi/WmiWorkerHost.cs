@@ -37,6 +37,7 @@ public sealed class ParentWatchdog : IDisposable
 
     private ParentWatchdog(int parentProcessId, Action onParentGone, TimeSpan interval, Func<int, bool>? isAlive)
     {
+
         // Handle mode: opened once, held for the watchdog's life. A handle that cannot be opened means the parent is
         // already gone, which the first tick reports.
         if (isAlive == null) _handle = TryOpenParentHandle(parentProcessId, out var handle) ? handle : null;
@@ -197,8 +198,11 @@ public static class WmiWorkerHost
     {
         if (mode == null || !mode.IsValidWorkerRequest)
         {
+            // The pipe name is only echoed when it passed the allow-list; otherwise just its length is logged, so a
+            // crafted argument cannot write arbitrary text into the log.
+            var pipeText = StartupMode.IsValidPipeName(mode?.PipeName) ? mode!.PipeName : $"<rejected, {mode?.PipeName?.Length ?? 0} chars>";
             AppLog.Warn("--wmi-worker rejected: missing or invalid argument",
-                $"pipe='{mode?.PipeName}' parent={mode?.ParentProcessId}");
+                $"pipe='{pipeText}' parent={mode?.ParentProcessId}");
             return ExitInvalidArguments;
         }
 
@@ -209,18 +213,35 @@ public static class WmiWorkerHost
         {
             Interlocked.Exchange(ref parentGone, 1);
             try { cts.Cancel(); } catch { }
+
+            // The worker is not in a kill-on-close job (it must outlive a killed window long enough to hand the fans
+            // back), so this watchdog is what ends it. Cancelling cannot interrupt a firmware call that hangs, so a
+            // deadline ends the process regardless: the hand-back has had its time by then.
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(OrphanExitDeadline).ConfigureAwait(false);
+                AppLog.Warn("--wmi-worker did not finish after the parent closed; exiting");
+                Environment.Exit(ExitParentGone);
+            });
         });
 
+        AcerWmiExecutor? executor = null;
+        WmiWorkerServer? server = null;
         try
         {
-            using var executor = new AcerWmiExecutor();
+            executor = new AcerWmiExecutor();
             // The parent id is the authentication gate: every connection is checked against it, so a process that
             // merely runs as the same user cannot take the helper over.
-            using var server = new WmiWorkerServer(mode.PipeName, executor, mode.ParentProcessId);
+            server = new WmiWorkerServer(mode.PipeName, executor, mode.ParentProcessId);
 
             AppLog.Info("--wmi-worker started", $"pipe='{mode.PipeName}' parent={mode.ParentProcessId}");
 
-            var served = server.RunAsync(AcceptTimeout, cts.Token).GetAwaiter().GetResult();
+            var (served, executorBusy) = ServeAndHandBackAsync(server, AcceptTimeout, cts.Token)
+                .GetAwaiter().GetResult();
+
+            // A hand-back that did not finish in time leaves the executor busy; it is then not disposed, because
+            // disposing would wait on the same lock forever.
+            if (executorBusy) executor = null;
 
             if (Volatile.Read(ref parentGone) == 1)
             {
@@ -236,5 +257,59 @@ public static class WmiWorkerHost
             AppLog.Error("--wmi-worker unexpected error", $"{ex.GetType().Name}: {ex.Message}");
             return ExitNoClient;
         }
+        finally
+        {
+            server?.Dispose();
+            executor?.Dispose();
+        }
+    }
+
+    /// <summary>How long the exit path waits for the "fans to Auto" call before leaving anyway.</summary>
+    public static readonly TimeSpan FanReleaseTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long a worker whose parent is gone may still run. Longer than the hand-back's own limit, so a normal exit
+    /// always comes first; this only ends a worker stuck in a firmware call.
+    /// </summary>
+    public static readonly TimeSpan OrphanExitDeadline = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Serves one client, then decides whether the fans go back to the firmware. Returns whether a client was served,
+    /// and whether the hand-back call was still running when its time ran out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The hand-back mirrors the Linux helper's "manual owner": a fixed speed is only safe while the window's curve is
+    /// watching the temperature, so when the window dies with one in place (killed, crashed, out of memory) the worker
+    /// writes Auto once, through the same call the window uses for Auto, before it leaves.
+    /// </para>
+    /// <para>
+    /// It runs whenever the pipe is lost, whatever the reason: Auto is always the thermally safe direction. It is
+    /// skipped only when the last fan write was not a fixed speed, or when the client declared with
+    /// <see cref="WmiWorkerCommand.SetFanHandBack"/> that the speed is to stay (the one-shot <c>--fan</c> command). A
+    /// window that dropped this worker on purpose (a timed-out call) re-sends its last manual fan command to the new
+    /// worker it connects to, so a late Auto from here does not decide where the fans end.
+    /// </para>
+    /// </remarks>
+    internal static async Task<(bool Served, bool ExecutorBusy)> ServeAndHandBackAsync(
+        WmiWorkerServer server,
+        TimeSpan acceptTimeout,
+        CancellationToken cancellationToken)
+    {
+        bool served = false;
+        bool busy = false;
+        try
+        {
+            served = await server.RunAsync(acceptTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (server.HoldsManualFans && server.HandBackOnDisconnect)
+            {
+                busy = !server.ReleaseManualFans(FanReleaseTimeout);
+            }
+        }
+
+        return (served, busy);
     }
 }

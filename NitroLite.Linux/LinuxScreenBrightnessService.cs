@@ -11,7 +11,8 @@ namespace NitroLite.Linux;
 /// <remarks>
 /// <para>
 /// The kernel exposes a raw level and the maximum that level can reach, not a percentage, so both directions are a
-/// conversion. The device is resolved once at construction: a laptop has one internal panel, and re-scanning the class
+/// conversion. The device is resolved once at construction (by <c>type</c>, see <see cref="Resolve"/>): a laptop has one
+/// internal panel, and re-scanning the class
 /// on every read would make the school-mode state machine do file-system work inside its undo record.
 /// </para>
 /// <para>
@@ -36,9 +37,9 @@ public sealed class LinuxScreenBrightnessService : IScreenBrightnessService
     private readonly string? _maxNode;
 
     /// <summary>
-    /// Resolves the first backlight device that exposes both a level and a maximum. <paramref name="runner"/> reaches
-    /// logind when the attribute is not writable; left null it is the real one on the real file system only, so a test
-    /// on a fixture tree never talks to the build machine's bus.
+    /// Resolves the backlight device to drive (see <see cref="Resolve"/>). <paramref name="runner"/> reaches logind when
+    /// the attribute is not writable; left null it is the real one on the real file system only, so a test on a fixture
+    /// tree never talks to the build machine's bus.
     /// </summary>
     public LinuxScreenBrightnessService(ISysfsFileSystem fs, string root = LinuxPaths.BacklightRoot,
         ICommandRunner? runner = null)
@@ -46,17 +47,90 @@ public sealed class LinuxScreenBrightnessService : IScreenBrightnessService
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _runner = runner ?? (ReferenceEquals(fs, RealSysfsFileSystem.Instance) ? ProcessCommandRunner.Instance : null);
 
-        foreach (var directory in fs.EnumerateDirectories(root))
+        if (Resolve(fs, root) is { } chosen)
         {
-            var brightness = LinuxPaths.Combine(directory, LinuxPaths.Brightness);
-            var max = LinuxPaths.Combine(directory, LinuxPaths.MaxBrightness);
-            if (!fs.FileExists(brightness) || !fs.FileExists(max)) continue;
-
-            _brightnessNode = brightness;
-            _maxNode = max;
-            break;
+            _brightnessNode = LinuxPaths.Combine(chosen, LinuxPaths.Brightness);
+            _maxNode = LinuxPaths.Combine(chosen, LinuxPaths.MaxBrightness);
         }
     }
+
+    /// <summary>
+    /// The backlight directory to drive, or null. Every device with both a level and a maximum is a candidate, and the
+    /// one whose <c>type</c> is <c>raw</c> wins over <c>platform</c>, which wins over <c>firmware</c>.
+    /// </summary>
+    /// <remarks>
+    /// A hybrid laptop on an older kernel or driver can register <c>acpi_video0</c> (firmware) next to
+    /// <c>nvidia_0</c> or <c>amdgpu_bl1</c> (raw), and only one of them is wired to the panel. The ACPI one is the one
+    /// that is usually dead on these machines: it accepts the write and reads it back, and nothing on the screen
+    /// changes. The kernel itself picks the native (raw) interface over ACPI video on firmware made for Windows 8 and
+    /// later, which every Nitro and Predator is, so the same order is used here. (The backlight ABI document states the
+    /// opposite order as a general rule, written for machines from before that change.) Ties keep the name order, so
+    /// the choice is stable from run to run. One exception goes first: <see cref="NvidiaWmiEcBacklight"/>.
+    /// </remarks>
+    public static string? Resolve(ISysfsFileSystem fs, string root = LinuxPaths.BacklightRoot)
+    {
+        ArgumentNullException.ThrowIfNull(fs);
+
+        string? best = null;
+        var bestRank = int.MaxValue;
+        foreach (var directory in fs.EnumerateDirectories(root).OrderBy(d => d, StringComparer.Ordinal))
+        {
+            if (!fs.FileExists(LinuxPaths.Combine(directory, LinuxPaths.Brightness)) ||
+                !fs.FileExists(LinuxPaths.Combine(directory, LinuxPaths.MaxBrightness)))
+            {
+                continue;
+            }
+
+            var rank = Path.GetFileName(directory) == NvidiaWmiEcBacklight
+                ? -1
+                : TypeRank(fs.ReadAllText(LinuxPaths.Combine(directory, "type")));
+            if (rank < bestRank)
+            {
+                best = directory;
+                bestRank = rank;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// One line for the hardware report: the device that was chosen and the ones that were passed over, each with its
+    /// type. Null when the machine has no backlight device.
+    /// </summary>
+    public static string? Describe(ISysfsFileSystem fs, string root = LinuxPaths.BacklightRoot)
+    {
+        ArgumentNullException.ThrowIfNull(fs);
+
+        var chosen = Resolve(fs, root);
+        if (chosen == null) return null;
+
+        string Entry(string directory) =>
+            $"{Path.GetFileName(directory)} ({fs.ReadAllText(LinuxPaths.Combine(directory, "type"))?.Trim() ?? "unknown type"})";
+
+        var others = fs.EnumerateDirectories(root)
+            .Where(d => d != chosen && fs.FileExists(LinuxPaths.Combine(d, LinuxPaths.Brightness)))
+            .OrderBy(d => d, StringComparer.Ordinal)
+            .Select(Entry)
+            .ToArray();
+
+        return others.Length == 0 ? Entry(chosen) : $"{Entry(chosen)}; not used: {string.Join(", ", others)}";
+    }
+
+    /// <summary>
+    /// The EC backlight of NVIDIA's Advanced Optimus (Predator and some Nitro boards). Its type is <c>firmware</c>, but on
+    /// those boards it is the only interface wired to the panel while the raw GPU devices beside it do nothing, so it
+    /// is taken ahead of every type. The kernel's own ACPI backlight selection treats it the same way.
+    /// </summary>
+    public const string NvidiaWmiEcBacklight = "nvidia_wmi_ec_backlight";
+
+    private static int TypeRank(string? type) => type?.Trim() switch
+    {
+        "raw" => 0,
+        "platform" => 1,
+        "firmware" => 2,
+        _ => 3
+    };
 
     /// <summary>True when a panel answered the probe. False means the machine has no dimmable backlight.</summary>
     public bool IsAvailable => _brightnessNode != null && _maxNode != null;

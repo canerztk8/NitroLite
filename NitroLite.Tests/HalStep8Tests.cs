@@ -41,7 +41,7 @@ public class HalStep8Tests
     [Fact]
     public void SupportedModes_UnknownBits_DoNotConjureAMode()
     {
-        // Bit 7 is outside KnownModeBits. A firmware that sets it must not make a sixth mode appear.
+        // Bit 7 is outside the five known mode bits. A firmware that sets it must not make a sixth mode appear.
         Assert.Empty(AcerWmiProtocol.DecodeSupportedModes(0x8000));
     }
 

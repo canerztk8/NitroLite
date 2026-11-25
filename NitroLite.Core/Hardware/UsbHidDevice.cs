@@ -93,17 +93,4 @@ public sealed record UsbHidDevice
         >= 0xFF00 and <= 0xFFFF => "vendor-defined (other page)",
         _ => "other"
     };
-
-    /// <summary>
-    /// A device name with anything that could carry a serial or a path removed: the driver stack appends
-    /// <c>#4&amp;1a2b3c&amp;0&amp;0000</c> style instance strings to friendly names on some machines.
-    /// </summary>
-    public static string SanitiseName(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "";
-        var text = name.Trim();
-        int cut = text.IndexOf('#');
-        if (cut > 0) text = text[..cut].Trim();
-        return text.Length <= 60 ? text : text[..60].Trim();
-    }
 }

@@ -44,9 +44,6 @@ public static class LinuxPaths
     /// <summary>Four-zone keyboard RGB. Absent on single-colour and per-key keyboards.</summary>
     public const string FourZoneKeyboard = "four_zoned_kb";
 
-    /// <summary>Read-only turbo hotkey state, on the models that toggle fans instead of profiles.</summary>
-    public const string TurboSense = "turbo_sense";
-
     /// <summary>Fan speed as <c>cpu,gpu</c> percentages. 0 means auto.</summary>
     public const string FanSpeed = "fan_speed";
 

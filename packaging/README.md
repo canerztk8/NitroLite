@@ -67,8 +67,10 @@ To submit a new version:
 The installer is declared as `zip` with a `portable` nested installer, so WinGet unpacks the package and links
 `NitroLite\NitroLite.exe` as `nitrolite` instead of running a setup program. There is no uninstall entry to
 register, which matches how NitroLite works: delete the folder, after running
-`NitroLite.exe --uninstall-cleanup --yes` (or `NitroLite.exe --cli uninstall-cleanup`) if you used **Windows &
-system optimisation**.
+`NitroLite.exe --uninstall-cleanup --yes` (or `NitroLite.exe --cli uninstall-cleanup`). It undoes what NitroLite
+changed outside its own folder: school mode, **Windows & system optimisation**, the Acer services it disabled, the
+NitroSense launcher block, both sign-in entries, and it hands the fans back to the firmware. Each step is reported
+on its own line, and a step with nothing to undo is skipped.
 
 ## Why this is not code signing
 

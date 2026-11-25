@@ -44,9 +44,6 @@ public sealed class LinuxBatteryHealthService : IBatteryHealthService
 
     public bool WatchdogEnabled { get; set; } = true;
 
-    /// <summary>The <c>BAT*</c> directory this service reads, or null when the machine has no battery node.</summary>
-    public string? BatteryDirectory => _batteryDirectory;
-
     public Task<BatteryHealthSnapshot> ReadAsync(CancellationToken cancellationToken = default)
     {
         if (_batteryDirectory == null) return Task.FromResult(BatteryHealthSnapshot.Empty);

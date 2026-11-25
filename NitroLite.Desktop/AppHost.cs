@@ -127,6 +127,8 @@ public sealed class AppHost : IDisposable
             AppLog.Warn("The battery watchdog could not be started", ex.Message);
         }
 
+        var platformSetup = CreatePlatformSetup(services.Platform);
+
         ViewModel = new MainViewModel(
             services.Settings,
             services.Hardware,
@@ -159,7 +161,44 @@ public sealed class AppHost : IDisposable
             services.NitroSense,
             urlOpener: OpenInDefaultBrowser,
             probeTask: services.ProbeTask,
-            platformSetup: CreatePlatformSetup(services.Platform));
+            platformSetup: platformSetup);
+
+#if !WINDOWS
+        // The Linux answers the platform-neutral interfaces do not carry, and the late capability change. The helper
+        // can answer after start-up (a slow polkit, a session that becomes active) and the controller then swaps in new
+        // capabilities on a pool thread; the window re-reads them on its own thread.
+        if (services.Hardware is LinuxSysfsHardwareController linuxController)
+        {
+            _linuxController = linuxController;
+
+            Func<bool>? predatorInstalled = null;
+            Func<Task<PlatformSetupResult>>? disablePredator = null;
+            if (platformSetup is LinuxPlatformSetup linuxSetup)
+            {
+                predatorInstalled = () => linuxSetup.PredatorV4OptionInstalled;
+                disablePredator = linuxSetup.DisablePredatorV4Async;
+            }
+
+            ViewModel.PlatformExtras = new PlatformExtras
+            {
+                PermissionDenial = () => linuxController.LastDenial switch
+                {
+                    LinuxWriteDenial.UdevRuleMissing => PermissionDenialReason.UdevRuleMissing,
+                    LinuxWriteDenial.HelperNotAuthorized => PermissionDenialReason.HelperNotAuthorized,
+                    LinuxWriteDenial.HelperUnreachable => PermissionDenialReason.HelperUnreachable,
+                    LinuxWriteDenial.NotInHelperList => PermissionDenialReason.NotInHelperList,
+                    _ => PermissionDenialReason.None
+                },
+                AccessGrantApplied = () => LinuxCapturePath == null && OperatingSystem.IsLinux() &&
+                                           File.Exists("/etc/udev/rules.d/" + UdevGuide.RuleFileName),
+                SupportsLightingEffects = () => linuxController.SupportsLightingEffects,
+                PredatorV4Installed = predatorInstalled,
+                DisablePredatorV4 = disablePredator
+            };
+
+            linuxController.CapabilitiesChanged += OnLinuxCapabilitiesChanged;
+        }
+#endif
 
         // A settings file that had to be discarded is the one startup failure the user has to be told about: the app
         // is running on the backup or on defaults, and the preferences they set may be gone. The message is handed
@@ -171,6 +210,28 @@ public sealed class AppHost : IDisposable
     }
 
     public MainViewModel ViewModel { get; }
+
+#if !WINDOWS
+    /// <summary>The Linux controller whose late capability changes the window follows; null elsewhere.</summary>
+    private LinuxSysfsHardwareController? _linuxController;
+
+    /// <summary>
+    /// Raised on a pool thread after the controller replaced its capabilities. The view model's controls belong to the
+    /// UI thread, so the refresh goes through its dispatcher.
+    /// </summary>
+    private void OnLinuxCapabilitiesChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            var viewModel = ViewModel;
+            viewModel.UiDispatch(() => _ = viewModel.OnBackendCapabilitiesChangedAsync());
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The new capabilities could not be handed to the window", ex.Message);
+        }
+    }
+#endif
 
     /// <summary>
     /// The capture file <c>--linux-capture</c> named, or null. Set by <c>Program.Main</c> before the host is built.
@@ -484,7 +545,9 @@ public sealed class AppHost : IDisposable
                 debloat = new LinuxDebloatService();
                 systemTools = new LinuxSystemToolsService();
                 updates = new LinuxUpdateService(fs);
-                diagnostics = new LinuxDiagnosticsService(() => linux.BuildHardwareReport());
+                // The controller's current capabilities, not the start-up ones: a rescan or a late helper answer
+                // replaces them, and a report built from the copy captured here would describe a machine that is gone.
+                diagnostics = new LinuxDiagnosticsService(() => controller.Capabilities.BuildHardwareReport());
                 // A replayed capture keeps its autostart entry in its own data folder: on Windows the real autostart
                 // folder would be the user's profile, and a test run must never leave a login entry behind.
                 runAtStartup = capture == null
@@ -516,6 +579,12 @@ public sealed class AppHost : IDisposable
     }
 
 #if WINDOWS
+    /// <summary>
+    /// How long the UI thread waits for the machine identity at launch. A healthy machine answers in well under a
+    /// second; a WMI repository that is still starting at sign-in can take tens of seconds, and the window must not.
+    /// </summary>
+    private static readonly TimeSpan IdentityStartupWait = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// Repairs an install folder an interrupted update left behind, then sweeps the leftovers of a completed one.
     /// </summary>
@@ -561,7 +630,67 @@ public sealed class AppHost : IDisposable
         Func<(bool OnAc, int? BatteryPercent)> PowerState,
         Task ProbeTask) CreateWindows(AppSettings settings)
     {
-        var identity = HardwareDetector.Current;
+        // The SMBIOS identity is four WMI queries with no timeout, and this runs on the UI thread before the window or
+        // the tray exist. It is read on the pool and waited for with a bound; the value captured here only names the
+        // machine in the platform snapshot and the log line. Everything that keeps the identity for the session asks
+        // HardwareDetector at call time instead (CurrentIdentity), so a read that was slow or empty at launch is not
+        // frozen into a closure: the detector caches the first non-empty answer and retries an empty one.
+        var identityTask = Task.Run(() => HardwareDetector.Current);
+        var identity = new DeviceIdentity();
+        try
+        {
+            if (identityTask.Wait(IdentityStartupWait)) identity = identityTask.Result;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The machine identity could not be read", ex.Message);
+        }
+
+        if (identity.IsEmpty)
+            AppLog.Warn("The machine identity was not read at launch", "it is read again when it is first needed");
+
+        // Never blocks, and never reads WMI on the caller's thread: these closures are reached from the telemetry tick
+        // and the mode read-back on the UI thread. The launch read's answer is used once it is in; an empty one is read
+        // again on the pool (the detector itself retries an empty answer at most every 30 s), and the first non-empty
+        // answer is kept for the session.
+        DeviceIdentity? knownIdentity = null;
+        int identityRefreshing = 0;
+        DeviceIdentity CurrentIdentity()
+        {
+            var known = Volatile.Read(ref knownIdentity);
+            if (known != null) return known;
+
+            if (!identityTask.IsCompletedSuccessfully) return new DeviceIdentity();
+
+            var first = identityTask.Result;
+            if (!first.IsEmpty)
+            {
+                Volatile.Write(ref knownIdentity, first);
+                return first;
+            }
+
+            if (Interlocked.CompareExchange(ref identityRefreshing, 1, 0) == 0)
+            {
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        var again = HardwareDetector.Current;
+                        if (!again.IsEmpty) Volatile.Write(ref knownIdentity, again);
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Warn("The machine identity could not be read", ex.Message);
+                    }
+                    finally
+                    {
+                        Volatile.Write(ref identityRefreshing, 0);
+                    }
+                });
+            }
+
+            return new DeviceIdentity();
+        }
 
         // The probe enumerates root\WMI and reads the registry. On a healthy machine that is tens of milliseconds, but
         // a machine with a damaged WMI repository answers in tens of seconds, and the old code ran it on whichever
@@ -579,8 +708,18 @@ public sealed class AppHost : IDisposable
                 // rescan after it lands has to see it without a restart. Parsing forty profiles is cheap next to the
                 // WMI walk this thread is already doing.
                 var catalog = ProfileCatalog.Load();
-                var result = CapabilityProbe.TryFromCache(settings, identity, catalog)
-                             ?? CapabilityProbe.Probe(identity, catalog);
+
+                // The probe's own identity, read here on the pool and waited for in full: this thread is allowed to
+                // wait, and a probe matched against an empty identity is a probe of an unknown machine.
+                var probeIdentity = identityTask.GetAwaiter().GetResult();
+
+                // An empty identity has the cache key "|", which every unidentified launch shares. Reading the cache
+                // with it would hand this machine a snapshot taken on a launch that could not tell which machine it
+                // was, and storing under it would do the same to the next one. Such a probe runs live and is not kept.
+                if (probeIdentity.IsEmpty) return CapabilityProbe.Probe(probeIdentity, catalog);
+
+                var result = CapabilityProbe.TryFromCache(settings, probeIdentity, catalog)
+                             ?? CapabilityProbe.Probe(probeIdentity, catalog);
                 CapabilityProbe.Store(settings, result);
                 return result;
             }
@@ -641,30 +780,48 @@ public sealed class AppHost : IDisposable
         // identity is read at the moment of the failure rather than here, because the probe runs in the background and
         // a report sent before it lands should say "no methods known" instead of the empty answer captured at launch.
         var diagnostics = new HardwareDiagnosticClient(
-            identity: () => new HardwareDiagnosticIdentity
+            identity: () =>
             {
-                Model = identity.ModelCode.Length > 0 ? identity.ModelCode : identity.Model,
-                Board = identity.BoardProduct,
-                BiosVersion = identity.BiosVersion,
-                AvailableWmiMethods = DiscoveredMethods()
+                var current = CurrentIdentity();
+                return new HardwareDiagnosticIdentity
+                {
+                    Model = current.ModelCode.Length > 0 ? current.ModelCode : current.Model,
+                    Board = current.BoardProduct,
+                    BiosVersion = current.BiosVersion,
+                    AvailableWmiMethods = DiscoveredMethods()
+                };
             });
 
         var readBack = new ReadBackPolicy(settings, diagnostics: diagnostics);
         var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe, diagnostics);
         var agent = new AgentHardwareController(new AcerAgentClient(), new CareCenterClient());
 
-        var modesThroughWindows = new Lazy<bool>(() =>
+        // Read once, on first use — but only once the machine is known. A Lazy remembered the answer computed against an
+        // empty identity for the whole session, which is the generic profile's answer, not this model's.
+        var modesGate = new object();
+        bool? modesThroughWindows = null;
+        bool RouteModesThroughWindows()
         {
-            try
+            lock (modesGate)
             {
-                return UnsupportedMethodGate.ModesThroughWindows(ProfileCatalog.Load().Match(identity));
+                if (modesThroughWindows is bool known) return known;
+
+                var current = CurrentIdentity();
+                if (current.IsEmpty) return false;
+
+                try
+                {
+                    modesThroughWindows = UnsupportedMethodGate.ModesThroughWindows(ProfileCatalog.Load().Match(current));
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warn("The profile table could not be read for the operating-mode route", ex.Message);
+                    modesThroughWindows = false;
+                }
+
+                return modesThroughWindows ?? false;
             }
-            catch (Exception ex)
-            {
-                AppLog.Warn("The profile table could not be read for the operating-mode route", ex.Message);
-                return false;
-            }
-        });
+        }
 
         // The service is the default path; direct WMI is the fallback the settings page can switch on, and it is the
         // only one that can raise an elevation prompt.
@@ -676,7 +833,11 @@ public sealed class AppHost : IDisposable
             // only when a WMI lighting write did not take, and it stays read-only until a documented frame exists.
             hidLighting: NitroLite.Windows.Core.Hardware.Lighting.HidLightingDevices.FindWriter,
             diagnostics: diagnostics,
-            legacyTelemetry: identity.IsAcer ? NitroLite.Windows.Core.Hardware.LegacySenseSensors.ReadTelemetryAsync : null)
+            // Decided per call rather than at construction, where the identity may not have been read yet. On the pool,
+            // because the caller is the telemetry tick and an empty identity is re-read by the detector (WMI).
+            legacyTelemetry: () => Task.Run(() => CurrentIdentity().IsAcer
+                ? NitroLite.Windows.Core.Hardware.LegacySenseSensors.ReadTelemetryAsync()
+                : Task.FromResult<MonitorData?>(null)))
         {
             // From the matched profile, never from a model name in code: the published table can then declare the
             // quirk for the next board without a release. Read without waiting, so a write during start-up never blocks
@@ -685,8 +846,12 @@ public sealed class AppHost : IDisposable
             // Only a profile that lists the firmware's mode setter as unsupported switches modes through Windows; every
             // other model keeps writing its mode to the laptop's firmware. Read once, on first use.
             WindowsPowerMode = new NitroLite.Windows.Core.Hardware.WindowsPowerModeService(),
-            UseAcerNativeProfiles = () => identity.ModelCode == "AN16-61" && identity.BiosVersion == "1.53",
-            ModesThroughWindows = () => modesThroughWindows.Value
+            UseAcerNativeProfiles = () =>
+            {
+                var current = CurrentIdentity();
+                return current.ModelCode == "AN16-61" && current.BiosVersion == "1.53";
+            },
+            ModesThroughWindows = RouteModesThroughWindows
         };
 
         // The Task Scheduler entry starts this process already elevated. Use that token to bring the direct-WMI
@@ -760,6 +925,10 @@ public sealed class AppHost : IDisposable
             },
             RestoreLightingAsync = async () =>
             {
+                // The user turned the keys off themselves while school mode held them dark: that wins over "put the
+                // light back", or switching school mode off lit a keyboard the page says is off.
+                if (settings.IsBacklightOff) return;
+
                 var last = settings.LastActiveLighting ?? settings.KeyboardLighting;
                 if (last == null) return;
 
@@ -828,6 +997,10 @@ public sealed class AppHost : IDisposable
             },
             RestoreLightingAsync = async () =>
             {
+                // The user turned the keys off themselves while school mode held them dark: that wins over "put the
+                // light back", or switching school mode off lit a keyboard the page says is off.
+                if (settings.IsBacklightOff) return;
+
                 var last = settings.LastActiveLighting ?? settings.KeyboardLighting;
                 if (last == null) return;
 
@@ -847,6 +1020,11 @@ public sealed class AppHost : IDisposable
 
     public void Dispose()
     {
+#if !WINDOWS
+        // Unsubscribed first: a reprobe finishing during teardown must not reach a disposed view model.
+        if (_linuxController != null) _linuxController.CapabilitiesChanged -= OnLinuxCapabilitiesChanged;
+#endif
+
         // The view model first: it holds the fan curve loop and the write gate, and a step in flight reaches the
         // hardware through the controller disposed below.
         ViewModel.Dispose();

@@ -353,7 +353,10 @@ public static class HardwareReport
         }
 
         sb.AppendLine("_No serial number, machine UUID, user name, file path or log content is included._");
-        return sb.ToString();
+
+        // The footer is a promise, so it is kept here as well: a model string or a probe rejection that happens to carry
+        // a path or a user name is scrubbed the same way the Linux report already is.
+        return Redaction.Scrub(sb.ToString());
     }
 
     /// <summary>
@@ -629,24 +632,6 @@ public static class HardwareReport
         WriteIndented = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-
-    /// <summary>
-    /// Writes both formats into <paramref name="directory"/> and returns the text file's path. Throws only when the
-    /// directory itself cannot be written, which the caller turns into a message.
-    /// </summary>
-    public static string WriteToDirectory(string directory, DeviceCapabilities? capabilities = null)
-    {
-        Directory.CreateDirectory(directory);
-        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        var textPath = Path.Combine(directory, $"hardware-report-{stamp}.txt");
-        var jsonPath = Path.Combine(directory, $"hardware-report-{stamp}.json");
-
-        File.WriteAllText(textPath, BuildText(capabilities), new UTF8Encoding(false));
-        try { File.WriteAllText(jsonPath, BuildJson(capabilities), new UTF8Encoding(false)); }
-        catch { /* the text file is the deliverable; JSON is a convenience */ }
-
-        return textPath;
-    }
 
     /// <summary>"10.0.26100 (X64)" — the build number is what actually distinguishes Windows versions in reports.</summary>
     public static string WindowsVersionText()

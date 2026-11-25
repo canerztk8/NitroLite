@@ -25,6 +25,86 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 - A game rule with a fixed Custom fan speed uses the fan sliders instead of the backend's default speed.
 - The crash-recovery record is written before the game's first setting, not after it.
 
+**Fans**
+- A temperature reading that stops updating for 30 seconds (telemetry stuck or failing) hands the fans back to the
+  firmware with a status line; a fixed speed used to follow the last good value indefinitely. A Custom mode that never
+  gets a reading is handed back after a short grace period.
+- The fan decision uses the hotter of CPU and GPU when the GPU reading is a real one (a sleeping GPU, sentinels and
+  values above 110 °C are ignored), so a GPU-heavy game reaches the 85/90/95 °C floor on both fans.
+- With the curve armed on a sensor layout that is not confirmed yet, the fixed-speed floor still runs.
+- After resume the fan speed is written again, keyboard lighting is re-applied and the mode is read again.
+- A fan speed the hardware refuses three times in a row moves the card to Auto with one status line instead of
+  logging every 1.5 s.
+- If the window is killed, crashes or runs out of memory with a fixed speed set, the elevated helper hands the fans
+  back to the firmware before it exits, also when NitroLite runs elevated from the sign-in task. The one-shot
+  `--fan <percent>` keeps its documented behaviour and leaves its speed in place.
+- Exit only hands back what NitroLite set: fans the user left on Max are left alone.
+- Linux: the helper hands back only fans it took out of automatic, also when it is stopped by systemd, and counts
+  full speed as manual. A rescan no longer returns Max fans to automatic.
+
+**Start-up, exit and recovery**
+- The fan loop and telemetry start before the slow battery/storage/service reads instead of after them, and the
+  heavy start-up reads no longer run on the UI thread before the window exists.
+- An interrupted game session is undone after the backend is connected; a part that could not be written is kept
+  and tried again in the same session and at the next start, instead of being reported as restored and dropped.
+- The mode card follows a mode changed outside the app (NitroSense, the mode key, the firmware on unplug).
+- A second NitroLite in another Windows session runs read-only instead of writing the same hardware; a second launch
+  beside an elevated instance brings the first window forward instead of starting a second copy.
+- After an update the previous build is kept until the new one has stayed up for ten seconds; a build that fails to
+  stay up twice is rolled back on the third start. A failed update check says so instead of "up to date".
+- Restoring a backup restores game profiles into the settings file that is actually read, reloads the RGB presets,
+  and blocks settings saves before the restore starts.
+
+**Lighting**
+- WAVE up and down play in that direction on service and WMI keyboards (they were clamped to left/right).
+- The hex box on the lighting page only takes a complete #RRGGBB; a half-typed colour is no longer written.
+- Automatic lighting writes (temperature colour, charging colour, school mode) can no longer raise a UAC prompt.
+- School mode keeps the keys dark across a restart and a restore from the tray; a blackout set during school mode
+  survives switching school mode off. A colour write in flight no longer undoes the blackout button.
+- A preset the keyboard refused is not stored or announced as applied.
+
+**Power and school mode**
+- School mode is saved the moment it is switched, restores into the power plan it changed, backs up the pre-game
+  state when switched on during a game, and reports an unreadable undo record instead of claiming success.
+- The refresh rate replaced on battery is saved, so a panel lowered to 60 Hz is put back after an exit or a crash;
+  a rate the user picked meanwhile is left alone; "no internal panel" is no longer retried every second.
+- Turbo and Performance are refused from the cards and the top bar as well as the tray when the battery rule
+  forbids them, and the top-bar mode menu is disabled on machines without mode control.
+- The CPU-boost picker no longer overwrites school mode's battery value.
+- The "battery power mode" picker is removed: nothing acted on it since the move from WPF.
+
+**Windows tools and command line**
+- The game library scan lists every game in a Steam/Epic library instead of one per library.
+- `--cli uninstall-cleanup` undoes PC Optimize, Debloat, the launcher block, school mode and the sign-in entries,
+  and works without the Acer backend; `--cli undo-repair` undoes the last service repair; `restore-mux` asks for
+  `--yes`; unknown commands and flags are reported; `--cli` tasks save the settings they change.
+- PC Optimize keeps the original graphics-scheduling state across repeated runs; Debloat restore skips services
+  that no longer exist; the NitroSense launcher can be blocked and unblocked again after Acer reinstalls it.
+- WinMemoryCleaner is launched from an administrator-only copy; the NitroSense dialog rule no longer closes
+  Explorer or file dialogs that mention NitroSense; storage queries have timeouts.
+- The release script signs the renamed executable and never removes a certificate that was already installed.
+
+**Privacy**
+- Profile names with non-ASCII letters (written as \uXXXX in JSON) are removed from the diagnostics archive, on
+  Windows and Linux; the compatibility report is scrubbed before it reaches the clipboard or the issue link.
+- Remote model profiles are fetched only when automatic update checks are on, without following redirects off
+  GitHub, and a cached table older than the running build is ignored.
+
+**Linux**
+- Rescan probes the hardware again, so a driver installed or access granted after start is picked up without a
+  restart; the permission card says whether the udev rule, the helper's authorisation or the helper itself is
+  missing; start-up waits at most two seconds for the helper.
+- The Nitro key is opened through a rule for that one device; the grant no longer adds the user to `input`.
+- `install.sh --system` refuses a prefix a user could replace; `uninstall.sh` cleans up without the app folder;
+  the `predator_v4` option can be switched back off.
+- Screen brightness picks the backlight device that drives the panel on hybrid machines; OpenRGB colours follow the
+  brightness level and effects are offered only where the path can play them.
+
+**Removed**
+- Code nothing reached: the WPF-era power automation, the reconciliation path, unused formatters and labels, and
+  878 translation keys per language that no screen used. Personal and machine-specific scripts under `tools/` and
+  unreferenced research probes under `scripts/` are gone from the repository.
+
 **Support**
 - The support card has a GitHub Sponsors button next to Ko-fi; the line that said the programme was pending is gone.
 

@@ -136,30 +136,6 @@ public static class GameLibraryRules
     }
 
     /// <summary>
-    /// True when <paramref name="processPath"/> may belong to <paramref name="profile"/>. When the profile has a known
-    /// install path that still exists, a same-named executable elsewhere (another program, a copy) does not match. An
-    /// unknown process path — access denied, a protected game — is accepted so detection keeps working.
-    /// </summary>
-    public static bool IsPathCompatible(GameProfile profile, string? processPath)
-    {
-        if (string.IsNullOrWhiteSpace(profile.InstallPath) || string.IsNullOrWhiteSpace(processPath)) return true;
-
-        try
-        {
-            // A game that was moved or updated falls back to the name: a stale path must not stop detection.
-            if (!File.Exists(profile.InstallPath)) return true;
-            return string.Equals(
-                Path.GetFullPath(profile.InstallPath),
-                Path.GetFullPath(processPath),
-                StringComparison.OrdinalIgnoreCase);
-        }
-        catch
-        {
-            return true;
-        }
-    }
-
-    /// <summary>
     /// Picks the one executable in a game folder that is the game, from the candidates that survived the junk filter.
     /// </summary>
     /// <remarks>

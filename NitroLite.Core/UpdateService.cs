@@ -31,6 +31,19 @@ public sealed record UpdateInfo(
 /// </summary>
 public sealed record StagedPackage(string Directory, IReadOnlyDictionary<string, string> Digests);
 
+/// <summary>What <see cref="UpdateService.RecordStartupAttempt()"/> found at a windowed start.</summary>
+public enum PendingUpdateState
+{
+    /// <summary>No update is waiting for a healthy start.</summary>
+    None,
+
+    /// <summary>An update is waiting, and this start was counted against it.</summary>
+    Pending,
+
+    /// <summary>The update kept failing to start; the previous executable is back and runs from the next launch.</summary>
+    RolledBack
+}
+
 /// <summary>
 /// What the startup recovery pass found: the files it put back from a backup, the leftovers it swept, and the
 /// files it could not repair.
@@ -255,6 +268,103 @@ public static class UpdateService
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         return ParseRelease(document.RootElement, CurrentVersion, assetSuffix);
+    }
+
+    /// <summary>
+    /// The latest release as one of three answers: current, found, or could not be checked — with the reason. Never
+    /// throws, except for a cancellation the caller asked for.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="CheckAsync(string, CancellationToken)"/> returns null both for "this build is the newest" and for "the
+    /// newest release has no package for this platform", and the adapters turned every network failure into the same
+    /// null, so an offline or rate-limited machine was told it was up to date.
+    /// </remarks>
+    public static async Task<UpdateCheckOutcome> CheckForUpdateAsync(
+        string assetSuffix, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(assetSuffix);
+
+        UpdateCheckOutcome outcome;
+        try
+        {
+            using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseContentRead, cancellationToken)
+                .ConfigureAwait(false);
+            var status = (int)response.StatusCode;
+            if (status is 403 or 429)
+            {
+                outcome = UpdateCheckOutcome.CouldNotCheck(UpdateCheckFailure.RateLimited, $"HTTP {status}");
+            }
+            else if (!response.IsSuccessStatusCode)
+            {
+                outcome = UpdateCheckOutcome.CouldNotCheck(
+                    status >= 500 ? UpdateCheckFailure.Network : UpdateCheckFailure.BadResponse, $"HTTP {status}");
+            }
+            else
+            {
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                outcome = ClassifyRelease(document.RootElement, CurrentVersion, assetSuffix);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            // TaskCanceledException without the caller's token is the client's own timeout.
+            outcome = UpdateCheckOutcome.CouldNotCheck(UpdateCheckFailure.Network, ex.Message);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or InvalidDataException
+                                       or ArgumentException or FormatException or NotSupportedException)
+        {
+            // InvalidOperationException is SendAsync refusing a redirect to a host that is not GitHub. The rest are an
+            // answer that could not be read as one; the check is documented not to throw, so they are a failed check.
+            outcome = UpdateCheckOutcome.CouldNotCheck(UpdateCheckFailure.BadResponse, ex.Message);
+        }
+
+        if (outcome.Status == UpdateCheckStatus.Failed)
+            AppLog.Warn("Update could not be checked", $"{outcome.Failure}: {outcome.Detail}");
+        return outcome;
+    }
+
+    /// <summary>
+    /// Reads a release payload into one of the three answers. A release that is newer but has no usable package for
+    /// <paramref name="assetSuffix"/> is a failure, not "current": the user is behind and has to be told so.
+    /// </summary>
+    public static UpdateCheckOutcome ClassifyRelease(JsonElement release, Version current, string assetSuffix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(assetSuffix);
+
+        if (release.ValueKind != JsonValueKind.Object
+            || !release.TryGetProperty("tag_name", out var tagElement)
+            || tagElement.ValueKind != JsonValueKind.String
+            || !TryParseTag(tagElement.GetString(), out var version))
+        {
+            return UpdateCheckOutcome.CouldNotCheck(UpdateCheckFailure.BadResponse, "The release has no readable tag.");
+        }
+
+        if (version <= Normalize(current)) return UpdateCheckOutcome.UpToDate();
+
+        var info = ParseRelease(release, current, assetSuffix);
+        return info == null
+            ? UpdateCheckOutcome.CouldNotCheck(UpdateCheckFailure.NoPackage,
+                $"{version} has no usable *{assetSuffix} package.")
+            : UpdateCheckOutcome.FoundRelease(ToCheckResult(info));
+    }
+
+    /// <summary>The platform-independent shape of a found release, as the update card reads it.</summary>
+    public static UpdateCheckResult ToCheckResult(UpdateInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return new UpdateCheckResult(
+            info.DisplayVersion,
+            ReleaseNotesUrl(info),
+            info.Sha256,
+            info.DownloadUrl,
+            info.AssetName,
+            info.SizeBytes);
     }
 
     /// <summary>Reads a release payload. Split out so the parsing can be tested without a network call.</summary>
@@ -576,7 +686,9 @@ public static class UpdateService
     /// <item>Commit: each destination is moved aside to <c>.old</c> and its <c>.new</c> takes its place. A failure
     /// rolls every completed swap back.</item>
     /// <item>Clean up: the <c>.old</c> files go, except the executable's, which this process is still running
-    /// from; <see cref="CleanUpPreviousVersion"/> deletes that one at the next start.</item>
+    /// from and the only build known to start here. It stays, under <see cref="PendingUpdateMarkerName"/>, until
+    /// <see cref="MarkStartupHealthy()"/> confirms the new build; <see cref="RecordStartupAttempt()"/> puts it back
+    /// when the new build keeps failing to get that far.</item>
     /// </list>
     /// </remarks>
     public static string InstallFromStaging(string staging, string installDirectory) =>
@@ -722,14 +834,170 @@ public static class UpdateService
             throw;
         }
 
-        // Phase 3 — clean up. The executable's backup stays until the next start.
+        // Phase 3 — clean up. The executable's backup stays until the new build has proven it can start.
         foreach (var (destination, backup) in committed)
         {
             if (string.Equals(destination, target, StringComparison.OrdinalIgnoreCase)) continue;
             TryDelete(backup);
         }
 
+        // The previous executable is now the only build known to start on this machine. The marker keeps it from
+        // being swept until the new one reports itself healthy; see RecordStartupAttempt.
+        if (IsUsable(target + ".old")) WritePendingAttempts(installDirectory, 0);
+
         return target;
+    }
+
+    /// <summary>
+    /// The file next to the executable that says an update was installed and the new build has not yet reported a
+    /// healthy start. It holds the number of starts that began without reaching <see cref="MarkStartupHealthy()"/>.
+    /// </summary>
+    public const string PendingUpdateMarkerName = "NitroLite.exe.update-pending";
+
+    /// <summary>
+    /// How many starts of a new build may end without reaching <see cref="MarkStartupHealthy()"/> before the previous
+    /// build is put back. Two, not one: a user who closes the window a moment after it opens, or a logon that is
+    /// followed straight away by a shutdown, must not lose an update that works.
+    /// </summary>
+    public const int MaxUnconfirmedStarts = 2;
+
+    private static string PendingMarkerPath(string installDirectory) =>
+        Path.Combine(installDirectory, PendingUpdateMarkerName);
+
+    /// <summary>True when an installed update is still waiting for its first healthy start.</summary>
+    public static bool IsUpdatePending(string installDirectory) => File.Exists(PendingMarkerPath(installDirectory));
+
+    /// <summary>Best effort: a folder the process cannot write to keeps the old behaviour, it never stops the app.</summary>
+    private static void WritePendingAttempts(string installDirectory, int attempts)
+    {
+        try
+        {
+            File.WriteAllText(PendingMarkerPath(installDirectory),
+                attempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Warn("The update marker could not be written", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// The recorded attempt count. An unreadable or garbled marker reads as zero, which errs toward keeping the new
+    /// build: a rollback is the one action here that must never happen by accident.
+    /// </summary>
+    private static int ReadPendingAttempts(string installDirectory)
+    {
+        try
+        {
+            var text = File.ReadAllText(PendingMarkerPath(installDirectory)).Trim();
+            return int.TryParse(text, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var attempts) ? attempts : 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Called once per windowed start, after the single-instance guard and before the window is built. Counts the
+    /// start against a pending update and, when the new build has already failed to reach
+    /// <see cref="MarkStartupHealthy()"/> <see cref="MaxUnconfirmedStarts"/> times in a row, puts the previous
+    /// executable back.
+    /// </summary>
+    /// <remarks>
+    /// The process that rolls back is still the new build: Windows lets a running image be renamed but not replaced,
+    /// so it is moved aside under a stale name (swept at the next start) and the previous build takes its place. The
+    /// next launch runs the build that worked. Nothing is deleted here, so the folder always keeps a working copy.
+    /// <para>
+    /// Not for the one-shot command-line paths: they never open a window, never reach the health mark, and would
+    /// otherwise count as failed starts.
+    /// </para>
+    /// </remarks>
+    public static PendingUpdateState RecordStartupAttempt() => RecordStartupAttempt(AppContext.BaseDirectory);
+
+    /// <inheritdoc cref="RecordStartupAttempt()"/>
+    public static PendingUpdateState RecordStartupAttempt(string installDirectory)
+    {
+        if (!IsUpdatePending(installDirectory)) return PendingUpdateState.None;
+
+        var exe = Path.Combine(installDirectory, "NitroLite.exe");
+        if (!IsUsable(exe + ".old"))
+        {
+            // Nothing to go back to, so there is nothing to wait for either.
+            TryDelete(PendingMarkerPath(installDirectory));
+            return PendingUpdateState.None;
+        }
+
+        var attempts = ReadPendingAttempts(installDirectory);
+        if (attempts >= MaxUnconfirmedStarts && TryRollBack(installDirectory))
+        {
+            TryDelete(PendingMarkerPath(installDirectory));
+            AppLog.Error("The update never started cleanly; the previous version was put back",
+                $"unconfirmed starts={attempts}");
+            return PendingUpdateState.RolledBack;
+        }
+
+        WritePendingAttempts(installDirectory, attempts + 1);
+        return PendingUpdateState.Pending;
+    }
+
+    /// <summary>
+    /// Called by the app once the window has been up for a few seconds: the new build works, so the previous one is no
+    /// longer needed and the leftovers of the update are swept. Never throws.
+    /// </summary>
+    public static void MarkStartupHealthy() => MarkStartupHealthy(AppContext.BaseDirectory);
+
+    /// <inheritdoc cref="MarkStartupHealthy()"/>
+    public static void MarkStartupHealthy(string installDirectory)
+    {
+        try
+        {
+            if (!IsUpdatePending(installDirectory)) return;
+
+            // The marker goes first: if the sweep below cannot delete a locked .old, the next start's ordinary sweep
+            // takes it instead of counting another attempt against a build that already proved itself.
+            if (!TryDelete(PendingMarkerPath(installDirectory))) return;
+            SweepLeftovers(installDirectory);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The update leftovers could not be swept", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Swaps <c>NitroLite.exe.old</c> back into place. The current executable is renamed, not deleted, and is moved
+    /// back if the second rename fails, so the folder is never left without an executable.
+    /// </summary>
+    private static bool TryRollBack(string installDirectory)
+    {
+        var exe = Path.Combine(installDirectory, "NitroLite.exe");
+        var backup = exe + ".old";
+        string? aside = null;
+        try
+        {
+            if (File.Exists(exe))
+            {
+                aside = StaleName(backup);
+                File.Move(exe, aside);
+            }
+            File.Move(backup, exe);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (aside != null && !File.Exists(exe))
+            {
+                try { File.Move(aside, exe); }
+                catch (Exception inner) when (inner is IOException or UnauthorizedAccessException)
+                {
+                    AppLog.Error("The update could not be put back", $"{aside}: {inner.Message}");
+                }
+            }
+            AppLog.Error("The previous version could not be restored", ex.Message);
+            return false;
+        }
     }
 
     /// <summary>
@@ -782,7 +1050,7 @@ public static class UpdateService
     /// Deletes the <c>.old</c> and <c>.new</c> files an update leaves behind. Called once at startup: by then the
     /// process that owned the executable has exited, so the delete succeeds and the install folder does not keep a
     /// stale copy. Only the package's own files are swept, so a user file that happens to end in <c>.old</c> is
-    /// never touched.
+    /// never touched. The previous executable is kept while an update is still waiting for its first healthy start.
     /// </summary>
     public static void CleanUpPreviousVersion() => SweepLeftovers(AppContext.BaseDirectory);
 
@@ -824,6 +1092,10 @@ public static class UpdateService
             if (IsUsable(backup) || IsUsable(pending)) failed.Add(path);
         }
 
+        // The executable came back from its backup: the install was undone, so there is no new build left to wait for.
+        var exePath = Path.Combine(installDirectory, "NitroLite.exe");
+        if (restored.Contains(exePath, StringComparer.OrdinalIgnoreCase)) TryDelete(PendingMarkerPath(installDirectory));
+
         // Sweeping after a failed restore would delete the copy this method exists to preserve.
         var removed = failed.Count == 0 ? SweepLeftovers(installDirectory) : new List<string>();
 
@@ -847,12 +1119,20 @@ public static class UpdateService
     private static List<string> SweepLeftovers(string installDirectory)
     {
         var removed = new List<string>();
+
+        // While an update waits for its first healthy start, the previous executable is the only build known to work
+        // here, and it is kept. MarkStartupHealthy lifts this; a rollback uses it.
+        var keepPreviousExecutable = IsUpdatePending(installDirectory);
+
         foreach (var relative in PackageFiles)
         {
             var path = Path.Combine(installDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
             foreach (var suffix in new[] { ".old", ".new" })
             {
                 var leftover = path + suffix;
+                if (keepPreviousExecutable && suffix == ".old"
+                    && string.Equals(relative, "NitroLite.exe", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (TryDelete(leftover)) removed.Add(leftover);
             }
 
@@ -891,17 +1171,6 @@ public static class UpdateService
             AppLog.Error("The update file could not be put back", $"{source}: {ex.Message}");
             return false;
         }
-    }
-
-    /// <summary>Starts the freshly installed executable. The caller shuts this process down afterwards.</summary>
-    public static void StartInstalled(string executablePath)
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = executablePath,
-            UseShellExecute = true,
-            WorkingDirectory = Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory
-        });
     }
 
     /// <summary>Removes a staging folder and a downloaded package, ignoring failures.</summary>

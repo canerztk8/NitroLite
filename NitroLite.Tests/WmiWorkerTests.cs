@@ -601,37 +601,7 @@ public class WmiWorkerTests
         Assert.True(session.Executor.LastSensorQuery!.TachometerConfirmed);
     }
 
-    // ---------------------------------------------------------------- job object and watchdog
-
-    [Fact]
-    public void JobObject_KillOnClose_TerminatesAnAssignedChild()
-    {
-        using var guard = JobObjectGuard.Create();
-        Assert.NotNull(guard);
-
-        using var child = Process.Start(new ProcessStartInfo("cmd.exe", "/c pause")
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        });
-
-        Assert.NotNull(child);
-
-        if (!guard!.Assign(child))
-        {
-            // A locked-down host can refuse the assignment. The worker's own parent watchdog is what covers the
-            // elevated case anyway, so a refusal here is not a test failure.
-            try { child.Kill(entireProcessTree: true); } catch { }
-            return;
-        }
-
-        guard.Dispose();
-
-        Assert.True(child.WaitForExit(10_000), "closing the job object should have terminated the child");
-    }
+    // ---------------------------------------------------------------- watchdog
 
     [Fact]
     public async Task ParentWatchdog_FiresWhenTheParentDisappears()

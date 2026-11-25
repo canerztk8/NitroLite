@@ -254,6 +254,9 @@ public partial class MainWindow : Window
 
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
+            // The walkthrough can already be up (a first run); its focus scope is applied here as well as on a change.
+            ApplyOnboardingFocusScope();
+
             // The page the user left the app on is built before the first draw, so the window never opens on an empty
             // grid. Every other page arrives the first time its rail button is pressed.
             EnsureCurrentPage();
@@ -266,15 +269,20 @@ public partial class MainWindow : Window
             _railColumn.PropertyChanged += OnRailColumnChanged;
 
             RestoreWindowPosition();
-            await _viewModel.InitializeAsync();
+
+            // Telemetry starts as soon as the controls and the fan loop are live, not when the whole first read is done:
+            // the battery, storage and service reads at the end of it can take seconds, and the fan loop has no
+            // temperature to act on until the first tick. Waiting on both covers an initialisation that returns early.
+            var initialize = _viewModel.InitializeAsync();
+            await Task.WhenAny(initialize, _viewModel.ControlsReady);
+            _timer.Start();
+            await initialize;
 
             // The overlay is a second window bound to the same view model, so the two can never disagree about a
             // reading. It is created here rather than in the XAML because it must not be a child of this window - and
             // only when it is actually asked for: see ApplyOsd.
             _viewModel.OsdChanged += OnOsdChanged;
             ApplyOsd();
-
-            _timer.Start();
         }
         catch (Exception ex)
         {
@@ -354,11 +362,31 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.PropertyName == nameof(MainViewModel.ShowOnboarding))
+        {
+            ApplyOnboardingFocusScope();
+            return;
+        }
+
         if (e.PropertyName != nameof(MainViewModel.Status)) return;
         if (_viewModel == null || !_viewModel.HasStatus) return;
         if (!IsVisible) return;
 
         ShowToast(_viewModel.Status, _viewModel.HasToastAction);
+    }
+
+    /// <summary>
+    /// While the walkthrough is open the shell underneath leaves the tab order, so Tab cycles inside the walkthrough
+    /// instead of walking through a page the user cannot see behind the scrim; the focus starts on its primary button.
+    /// The shell goes back in when the walkthrough closes.
+    /// </summary>
+    private void ApplyOnboardingFocusScope()
+    {
+        if (_viewModel == null || ShellRoot == null) return;
+
+        bool open = _viewModel.ShowOnboarding;
+        KeyboardNavigation.SetTabNavigation(ShellRoot, open ? KeyboardNavigationMode.None : KeyboardNavigationMode.Continue);
+        if (open) Dispatcher.UIThread.Post(() => Onboarding?.FocusPrimary(), DispatcherPriority.Loaded);
     }
 
     /// <summary>

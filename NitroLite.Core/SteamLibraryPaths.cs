@@ -26,6 +26,10 @@ public static class SteamLibraryPaths
         if (!Path.IsPathFullyQualified(text)) return false;
         if (!GameProfile.IsLocalPath(text)) return false;
 
+        // On Windows only a drive-letter path is a local library. The UNC check above does not catch the device forms
+        // (\\?\UNC\host\share, \??\UNC\…, \\.\…) and those reach a network share or a raw device all the same.
+        if (OperatingSystem.IsWindows() && !IsDriveLetterPath(text)) return false;
+
         try
         {
             normalized = Path.GetFullPath(text);
@@ -35,6 +39,19 @@ public static class SteamLibraryPaths
             return false;
         }
 
+        if (OperatingSystem.IsWindows() && !IsDriveLetterPath(normalized))
+        {
+            normalized = "";
+            return false;
+        }
+
         return normalized.Length > 0;
     }
+
+    /// <summary>True for <c>X:\…</c> or <c>X:/…</c>: a drive letter, a colon and a separator.</summary>
+    public static bool IsDriveLetterPath(string? path) =>
+        path is { Length: >= 3 } &&
+        char.IsAsciiLetter(path[0]) &&
+        path[1] == ':' &&
+        (path[2] == '\\' || path[2] == '/');
 }

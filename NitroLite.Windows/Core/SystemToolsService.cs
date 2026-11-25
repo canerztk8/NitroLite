@@ -18,30 +18,8 @@ public static class SystemToolsService
 {
     public static Func<string, Task<int>>? ElevatedRunnerSeam { get; set; }
 
-    /// <summary>
-    /// Finds the DriverStore folder containing Acer service executables (predatorservice.inf_amd64_*).
-    /// Dynamically selects the latest directory containing the required binaries.
-    /// </summary>
-    public static string? FindDriverStoreFolder(string[] requiredBinaries)
-    {
-        try
-        {
-            var repo = Path.Combine(Environment.SystemDirectory, "DriverStore", "FileRepository");
-            if (!Directory.Exists(repo)) return null;
-
-            var dirs = Directory.GetDirectories(repo, "predatorservice.inf_amd64_*")
-                .Select(d => new DirectoryInfo(d))
-                .OrderByDescending(d => d.LastWriteTimeUtc);
-
-            foreach (var d in dirs)
-            {
-                bool allFound = requiredBinaries.All(b => File.Exists(Path.Combine(d.FullName, b)));
-                if (allFound) return d.FullName;
-            }
-        }
-        catch { }
-        return null;
-    }
+    /// <summary>The line breaks an elevated script's error log is split on.</summary>
+    private static readonly char[] ErrorLineBreaks = { '\r', '\n' };
 
     /// <summary>
     /// Fixes keyboard RGB backlight service (AcerLightingService) registry path and startup type,
@@ -104,6 +82,7 @@ try {
 }
 exit 0
 ";
+        WriteRepairBackup("fix-lighting", LightingRepairServices, includeMux: false);
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_fix_lighting");
         return new ToolExecutionResult
         {
@@ -131,7 +110,28 @@ function Test-AcerSigned([string]$path) {
         return ($sig.SignerCertificate.Subject -match 'Acer')
     } catch { return $false }
 }
-$dirs = Get-ChildItem -Path $repo -Filter 'predatorservice.inf_amd64_*' -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+$dirs = @(Get-ChildItem -Path $repo -Filter 'predatorservice.inf_amd64_*' -Directory -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+# The package the services already run from comes first. The newest folder by date is only a guess — a driver store
+# can hold an older package that was touched last — and replacing a working image path with it is the repair that
+# breaks a machine that was fine.
+function Get-ImageFolder([string]$key) {
+    try {
+        $p = [Environment]::ExpandEnvironmentVariables([string](Get-ItemProperty -LiteralPath $key -Name 'ImagePath' -ErrorAction Stop).ImagePath).Trim()
+        if ($p.StartsWith('""')) { $end = $p.IndexOf('""', 1); if ($end -gt 1) { $p = $p.Substring(1, $end - 1) } else { return $null } }
+        elseif ($p -match '^(.+?\.exe)') { $p = $Matches[1] }
+        if ($p.StartsWith('\??\')) { $p = $p.Substring(4) }
+        return [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($p))
+    } catch { return $null }
+}
+$repoFull = [IO.Path]::GetFullPath($repo).TrimEnd('\')
+$preferred = @()
+foreach ($k in 'HKLM:\SYSTEM\CurrentControlSet\Services\AASSvc', 'HKLM:\SYSTEM\CurrentControlSet\Services\AcerLightingService') {
+    $folder = Get-ImageFolder $k
+    if (-not $folder) { continue }
+    $match = $dirs | Where-Object { $_.FullName.TrimEnd('\') -ieq $folder.TrimEnd('\') -and $_.Parent.FullName.TrimEnd('\') -ieq $repoFull }
+    if ($match -and -not ($preferred | Where-Object { $_.FullName -ieq $match[0].FullName })) { $preferred += $match[0] }
+}
+$dirs = @($preferred) + @($dirs | Where-Object { $d = $_; -not ($preferred | Where-Object { $_.FullName -ieq $d.FullName }) })
 $centralExe = $null
 $lightingExe = $null
 foreach ($d in $dirs) {
@@ -199,6 +199,7 @@ try {
 }
 exit 0
 ";
+        WriteRepairBackup("fix-services", RepairedServices, includeMux: false);
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_fix_services");
         return new ToolExecutionResult
         {
@@ -241,6 +242,7 @@ Start-Service -Name 'AcerQAAgentSvis' -ErrorAction SilentlyContinue
 Stop-Process -Name 'NitroSense' -Force -ErrorAction SilentlyContinue
 exit 0
 ";
+        WriteRepairBackup("restore-mux", Array.Empty<string>(), includeMux: true);
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_restore_mux");
         return new ToolExecutionResult
         {
@@ -250,6 +252,276 @@ exit 0
                 : Loc.T($"MUX ayarı onarılamadı: {err}")
         };
     }
+
+    /// <summary>
+    /// Where the values the last repair replaced are kept: the service image paths and start types
+    /// (<see cref="FixKeyboardLightingAsync"/>, <see cref="FixAcerServicesAsync"/>) and the MUX registry value
+    /// (<see cref="RestoreMuxSwitchAsync"/>). <see cref="UndoLastRepairAsync"/> puts them back.
+    /// </summary>
+    public static string RepairBackupPath => AppPaths.GetDataFile("repair_backup.json");
+
+    /// <summary>The services a repair rewrites, and the only ones the undo may touch.</summary>
+    internal static readonly string[] RepairedServices = { "AASSvc", "AcerLightingService" };
+
+    /// <summary>The one service <see cref="FixKeyboardLightingAsync"/> rewrites.</summary>
+    private static readonly string[] LightingRepairServices = { "AcerLightingService" };
+
+    private const string MuxRegistryKey = @"SOFTWARE\OEM\AcerAgentService\AdvanceSettings";
+    private const string MuxRegistryValue = "discrete_gpu_support";
+
+    /// <summary>Test seam for the registry read behind the repair record: service name to (raw ImagePath, Start).</summary>
+    internal static Func<string, (string? ImagePath, int? Start)>? RepairServiceStateSeam { get; set; }
+
+    /// <summary>Test seam for the MUX value read: (key exists, value or null when absent).</summary>
+    internal static Func<(bool KeyExists, int? Value)>? RepairMuxStateSeam { get; set; }
+
+    /// <summary>
+    /// Records, unelevated and before the prompt, what a repair is about to replace. Written through
+    /// <see cref="AtomicFile"/> by this process for the same reason as the optimization record: the elevated script must
+    /// not write into a folder the user can redirect. Best effort — a repair is what a broken machine needs, so a record
+    /// that cannot be written is logged and the repair still runs. The record is kept when the repair fails: the
+    /// script's own rollback leaves the machine in exactly the recorded state, and a script that outlived its timeout
+    /// may still finish.
+    /// </summary>
+    internal static void WriteRepairBackup(string repair, IEnumerable<string> services, bool includeMux)
+    {
+        try
+        {
+            var root = new JsonObject
+            {
+                ["repair"] = repair,
+                ["createdUtc"] = DateTime.UtcNow.ToString("o", System.Globalization.CultureInfo.InvariantCulture)
+            };
+
+            var serviceNodes = new JsonObject();
+            foreach (var name in services)
+            {
+                if (!RepairedServices.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                var (imagePath, start) = (RepairServiceStateSeam ?? ReadServiceState)(name);
+                if (string.IsNullOrWhiteSpace(imagePath) || start is not int startValue) continue;
+                serviceNodes[name] = new JsonObject { ["imagePath"] = imagePath, ["start"] = startValue };
+            }
+
+            if (serviceNodes.Count > 0) root["services"] = serviceNodes;
+
+            if (includeMux)
+            {
+                var (keyExists, value) = (RepairMuxStateSeam ?? ReadMuxState)();
+                if (keyExists)
+                {
+                    root["mux"] = value is int v
+                        ? new JsonObject { ["present"] = true, ["value"] = v }
+                        : new JsonObject { ["present"] = false };
+                }
+            }
+
+            if (root["services"] == null && root["mux"] == null) return;
+
+            var path = RepairBackupPath;
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            AtomicFile.WriteAllText(path, root.ToJsonString(JsonDefaults.Indented));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The repair undo record could not be written", ex.Message);
+        }
+    }
+
+    /// <summary>The raw (unexpanded) ImagePath and the Start value of a service, read without administrator rights.</summary>
+    private static (string? ImagePath, int? Start) ReadServiceState(string name)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name);
+            if (key == null) return (null, null);
+            var image = key.GetValue("ImagePath", null, Microsoft.Win32.RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            var start = key.GetValue("Start") is int s ? (int?)s : null;
+            return (image, start);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return (null, null);
+        }
+    }
+
+    private static (bool KeyExists, int? Value) ReadMuxState()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(MuxRegistryKey);
+            if (key == null) return (false, null);
+            return (true, key.GetValue(MuxRegistryValue) is int v ? (int?)v : null);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return (false, null);
+        }
+    }
+
+    /// <summary>
+    /// Reads a repair record and keeps only what the undo may act on: the two known services with a non-empty image
+    /// path and a start type of 2, 3 or 4, and a MUX value of 0 or 1 (or "absent"). Throws when the text is not a JSON
+    /// object. The elevated script checks every value again; this only keeps anything else out of its text.
+    /// </summary>
+    internal static JsonObject ParseRepairBackup(string json)
+    {
+        var root = JsonNode.Parse(json.TrimStart('﻿')) as JsonObject
+                   ?? throw new InvalidDataException("The repair backup is not a JSON object.");
+
+        var clean = new JsonObject();
+        if (root["services"] is JsonObject services)
+        {
+            var kept = new JsonObject();
+            foreach (var (name, node) in services)
+            {
+                if (!RepairedServices.Contains(name, StringComparer.Ordinal)) continue;
+                if (node is not JsonObject entry) continue;
+                var image = ReadString(entry["imagePath"]);
+                int? start = entry["start"] is JsonValue sv && sv.TryGetValue<int>(out var s) ? s : null;
+                if (string.IsNullOrWhiteSpace(image) || start is not (2 or 3 or 4)) continue;
+                kept[name] = new JsonObject { ["imagePath"] = image, ["start"] = start.Value };
+            }
+
+            if (kept.Count > 0) clean["services"] = kept;
+        }
+
+        if (root["mux"] is JsonObject mux && mux["present"] is JsonValue pv && pv.TryGetValue<bool>(out var present))
+        {
+            if (!present) clean["mux"] = new JsonObject { ["present"] = false };
+            else if (mux["value"] is JsonValue vv && vv.TryGetValue<int>(out var value) && value is 0 or 1)
+                clean["mux"] = new JsonObject { ["present"] = true, ["value"] = value };
+        }
+
+        return clean;
+    }
+
+    /// <summary>
+    /// Puts back what the last repair replaced, from <see cref="RepairBackupPath"/>. An image path is only written back
+    /// when it names an existing, Acer-signed executable under the driver store or Program Files — the same bar the
+    /// repair itself applies — because the record sits in a folder any same-user process can edit, and the value
+    /// becomes a SYSTEM service image.
+    /// </summary>
+    public static async Task<ToolExecutionResult> UndoLastRepairAsync()
+    {
+        string path = RepairBackupPath;
+        if (!File.Exists(path))
+        {
+            return new ToolExecutionResult { Success = false, Message = Loc.T($"Geri alınacak onarım kaydı yok: {path}") };
+        }
+
+        string data;
+        try
+        {
+            var clean = ParseRepairBackup(BoundedTextFile.ReadAllText(path));
+            if (clean.Count == 0)
+            {
+                return new ToolExecutionResult { Success = false, Message = Loc.T($"Geri alınacak onarım kaydı yok: {path}") };
+            }
+
+            data = clean.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The repair undo record could not be read", $"{path}: {ex.Message}");
+            string reason = ex.Message;
+            return new ToolExecutionResult { Success = false, Message = Loc.T($"Onarım geri alınamadı: {reason}") };
+        }
+
+        var (ok, err) = await RunElevatedScriptAsync(BuildUndoRepairScript(data), "nl_undo_repair");
+        if (ok)
+        {
+            try { File.Delete(path); } catch { }
+        }
+
+        return new ToolExecutionResult
+        {
+            Success = ok,
+            Message = ok
+                ? Loc.T("Onarım öncesi ayarlar geri yüklendi.")
+                : Loc.T($"Onarım geri alınamadı: {err}")
+        };
+    }
+
+    /// <summary>The elevated undo script. <paramref name="cleanJson"/> is the output of <see cref="ParseRepairBackup"/>.</summary>
+    internal static string BuildUndoRepairScript(string cleanJson) => @"
+$ErrorActionPreference = 'Stop'
+$errs = @()
+$backup = '" + Loc.PsQuote(cleanJson) + @"' | ConvertFrom-Json
+$knownServices = 'AASSvc', 'AcerLightingService'
+# The roots come from the known-folder API, not from $env: — a user's HKCU\Environment can redefine those variables
+# for an elevated process, and the roots are what keeps the record from naming any other executable.
+$trustedRoots = @((Join-Path ([Environment]::GetFolderPath('Windows')) 'System32\DriverStore\FileRepository'), [Environment]::GetFolderPath('ProgramFiles'), [Environment]::GetFolderPath('ProgramFilesX86')) | Where-Object { $_ }
+function Test-AcerSigned([string]$path) {
+    try {
+        $sig = Get-AuthenticodeSignature -LiteralPath $path -ErrorAction Stop
+        if ($sig.Status -ne 'Valid') { return $false }
+        if ($null -eq $sig.SignerCertificate) { return $false }
+        return ($sig.SignerCertificate.Subject -match 'Acer')
+    } catch { return $false }
+}
+# The record is a file in the user's data folder, so its image path is not trusted: only a plain path (no arguments)
+# to an existing, Acer-signed .exe under the driver store or Program Files is accepted.
+function Resolve-TrustedImage([string]$image) {
+    if ([string]::IsNullOrWhiteSpace($image)) { return $null }
+    $p = $image.Trim()
+    if ($p.StartsWith('""')) {
+        if ($p.Length -lt 3 -or -not $p.EndsWith('""')) { return $null }
+        $p = $p.Substring(1, $p.Length - 2)
+    }
+    if ($p.IndexOf('""') -ge 0) { return $null }
+    $p = [Environment]::ExpandEnvironmentVariables($p)
+    if (-not [IO.Path]::IsPathRooted($p)) { return $null }
+    $full = [IO.Path]::GetFullPath($p)
+    if (-not $full.EndsWith('.exe', [StringComparison]::OrdinalIgnoreCase)) { return $null }
+    $inside = $false
+    foreach ($r in $trustedRoots) {
+        $root = [IO.Path]::GetFullPath($r).TrimEnd('\') + '\'
+        if ($full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { $inside = $true }
+    }
+    if (-not $inside) { return $null }
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return $null }
+    if (-not (Test-AcerSigned $full)) { return $null }
+    return $full
+}
+
+if ($null -ne $backup.services) {
+    foreach ($prop in $backup.services.PSObject.Properties) {
+        $name = [string]$prop.Name
+        if ($knownServices -notcontains $name) { $errs += ($name + ': ' + 'unknown service'); continue }
+        try {
+            $full = Resolve-TrustedImage ([string]$prop.Value.imagePath)
+            if ($null -eq $full) { throw 'untrusted image path' }
+            $start = [int]$prop.Value.start
+            if (@(2, 3, 4) -notcontains $start) { throw 'unknown start type' }
+            $key = 'HKLM:\SYSTEM\CurrentControlSet\Services\' + $name
+            if (-not (Test-Path -LiteralPath $key)) { throw 'service not installed' }
+            Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+            # Quoted, so a path with spaces cannot be read as a shorter executable plus arguments.
+            Set-ItemProperty -LiteralPath $key -Name 'ImagePath' -Value ('""' + $full + '""') -Force
+            Set-ItemProperty -LiteralPath $key -Name 'Start' -Value $start -Type DWord -Force
+            if ($start -eq 2) { Start-Service -Name $name -ErrorAction SilentlyContinue }
+        } catch { $errs += ($name + ': ' + $_.Exception.Message) }
+    }
+}
+
+if ($null -ne $backup.mux) {
+    try {
+        $regPath = 'HKLM:\SOFTWARE\OEM\AcerAgentService\AdvanceSettings'
+        if (Test-Path -LiteralPath $regPath) {
+            if ($backup.mux.present -eq $true) {
+                $v = [int]$backup.mux.value
+                if (@(0, 1) -notcontains $v) { throw 'unknown value' }
+                Set-ItemProperty -LiteralPath $regPath -Name 'discrete_gpu_support' -Value $v -Type DWord -Force
+            } else {
+                Remove-ItemProperty -LiteralPath $regPath -Name 'discrete_gpu_support' -ErrorAction SilentlyContinue
+            }
+        }
+    } catch { $errs += ('MUX: ' + $_.Exception.Message) }
+}
+
+" + ElevatedErrorLog.WriteStatement + @"
+";
 
     /// <summary>Where the previous values of every setting OptimizePcAsync changes are stored.</summary>
     public static string OptimizeBackupPath => AppPaths.GetDataFile("optimize_backup.json");
@@ -267,16 +539,33 @@ exit 0
     /// The machine's state before an optimization: each service's start type (by name), the HwSchMode value (-1 when it
     /// does not exist) and each task's state ("Ready" or "Disabled").
     /// </summary>
+    /// <remarks>
+    /// <see cref="HagsKnown"/> separates "HwSchMode does not exist" (<c>Hags = -1</c>, known) from "it could not be
+    /// read" (unknown). Only a known value may become the undo record: recording an unreadable value as "absent" would
+    /// make the undo delete a setting the user had.
+    /// </remarks>
     internal sealed record OptimizeSnapshot(
         IReadOnlyDictionary<string, string> Services,
         int Hags,
-        IReadOnlyDictionary<string, string> Tasks);
+        IReadOnlyDictionary<string, string> Tasks,
+        bool HagsKnown = true);
 
     /// <summary>The undo record, in the shape <c>optimize_backup.json</c> has always had.</summary>
     internal sealed class OptimizeBackupRecord
     {
         public Dictionary<string, string> Services { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>HwSchMode before the first optimization; -1 when it did not exist. Meaningful only when <see cref="HagsRecorded"/>.</summary>
         public int Hags { get; set; } = -1;
+
+        /// <summary>
+        /// True once <see cref="Hags"/> holds the machine's real starting value. Kept apart from the value because -1
+        /// used to mean both "not recorded yet" and "did not exist": a second run then replaced the original "absent"
+        /// with the optimized 2, and the undo wrote 2 instead of deleting the value. In the file, the presence of the
+        /// <c>hags</c> field is this flag.
+        /// </summary>
+        public bool HagsRecorded { get; set; }
+
         public List<(string Name, string Path, string State)> Tasks { get; } = new();
     }
 
@@ -334,7 +623,7 @@ exit 0
         {
             AppLog.Warn("The state before the optimization could not be read", ex.Message);
             current = new OptimizeSnapshot(
-                new Dictionary<string, string>(), -1, new Dictionary<string, string>());
+                new Dictionary<string, string>(), -1, new Dictionary<string, string>(), HagsKnown: false);
         }
 
         MergeMissing(record, current);
@@ -356,7 +645,9 @@ exit 0
             };
         }
 
-        string script = BuildOptimizeScript(record.Tasks.Select(t => t.Name));
+        // HAGS is only switched on when its previous value is in the record: the tool never changes what it could not
+        // undo.
+        string script = BuildOptimizeScript(record.Tasks.Select(t => t.Name), setHags: record.HagsRecorded);
         var (ok, err) = await RunElevatedScriptAsync(script, "nl_optimize_pc");
         return new ToolExecutionResult
         {
@@ -371,7 +662,7 @@ exit 0
     /// The elevated optimization script. <paramref name="tasksToDisable"/> is filtered against
     /// <see cref="OptimizedTasks"/>, so nothing but those two constant names can reach the script text.
     /// </summary>
-    internal static string BuildOptimizeScript(IEnumerable<string> tasksToDisable)
+    internal static string BuildOptimizeScript(IEnumerable<string> tasksToDisable, bool setHags = true)
     {
         var wanted = new HashSet<string>(tasksToDisable, StringComparer.OrdinalIgnoreCase);
         var tasks = OptimizedTasks
@@ -396,8 +687,9 @@ try {
     Stop-Service -Name 'SysMain' -Force -ErrorAction Stop
 } catch { $errs += ('SysMain: ' + $_.Exception.Message) }
 
+$setHags = " + (setHags ? "$true" : "$false") + @"
 try {
-    if (Test-Path -LiteralPath $gfxPath) {
+    if ($setHags -and (Test-Path -LiteralPath $gfxPath)) {
         Set-ItemProperty -Path $gfxPath -Name 'HwSchMode' -Value 2 -Type DWord -Force -ErrorAction Stop
     }
 } catch { $errs += ('HAGS: ' + $_.Exception.Message) }
@@ -446,7 +738,12 @@ foreach ($s in $idleServices) {
             record.Services.TryAdd(name, startType);
         }
 
-        if (record.Hags == -1) record.Hags = current.Hags;
+        // Recorded once, from a value that was actually read, and never updated afterwards.
+        if (!record.HagsRecorded && current.HagsKnown)
+        {
+            record.Hags = current.Hags;
+            record.HagsRecorded = true;
+        }
 
         foreach (var (name, state) in current.Tasks)
         {
@@ -477,12 +774,14 @@ foreach ($s in $idleServices) {
             }
         }
 
+        // A record that carries the field has its value; -1 there is "did not exist", which is also what a file from
+        // an older version meant by it.
         if (root["hags"] is JsonValue hags)
         {
-            if (hags.TryGetValue<int>(out var number)) record.Hags = number;
+            if (hags.TryGetValue<int>(out var number)) { record.Hags = number; record.HagsRecorded = true; }
             else if (hags.TryGetValue<string>(out var text)
                      && int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
-                record.Hags = parsed;
+            { record.Hags = parsed; record.HagsRecorded = true; }
         }
 
         IEnumerable<JsonNode?> taskNodes = root["tasks"] switch
@@ -524,12 +823,11 @@ foreach ($s in $idleServices) {
             });
         }
 
-        var root = new JsonObject
-        {
-            ["services"] = services,
-            ["hags"] = record.Hags,
-            ["tasks"] = tasks
-        };
+        var root = new JsonObject { ["services"] = services };
+
+        // Without a recorded value the field is left out, so the restore script does not touch HwSchMode at all.
+        if (record.HagsRecorded) root["hags"] = record.Hags;
+        root["tasks"] = tasks;
         return indented ? root.ToJsonString(JsonDefaults.Indented) : root.ToJsonString();
     }
 
@@ -565,14 +863,18 @@ foreach ($s in $idleServices) {
         }
 
         int hags = -1;
+        bool hagsKnown = true;
         try
         {
             using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
                 @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers");
-            if (key?.GetValue("HwSchMode") is int value) hags = value;
+            object? raw = key?.GetValue("HwSchMode");
+            if (raw is int value) hags = value;
+            else if (raw != null) hagsKnown = false; // present but not a DWORD: not something the undo can put back
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
+            hagsKnown = false;
         }
 
         var tasks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -582,7 +884,7 @@ foreach ($s in $idleServices) {
             if (enabled.HasValue) tasks[name] = enabled.Value ? "Ready" : "Disabled";
         }
 
-        return new OptimizeSnapshot(services, hags, tasks);
+        return new OptimizeSnapshot(services, hags, tasks, hagsKnown);
     }
 
     /// <summary>
@@ -691,6 +993,9 @@ $ceipPath = '\Microsoft\Windows\Customer Experience Improvement Program\'
 if ($null -ne $backup.services) {
     foreach ($prop in $backup.services.PSObject.Properties) {
         if ($knownServices -notcontains $prop.Name) { $errs += ($prop.Name + ': ' + 'unknown service'); continue }
+        # A service that is gone (Office or Plastic uninstalled since) has nothing left to restore. Failing on it made
+        # the undo fail on every attempt for as long as the record existed.
+        if (-not (Get-Service -Name $prop.Name -ErrorAction SilentlyContinue)) { continue }
         try {
             $startType = [string]$prop.Value
             if ($startType) {
@@ -737,6 +1042,13 @@ if ($null -ne $backup.tasks) {
             // re-apply values that are no longer the current ones.
             try { File.Delete(backupPath); } catch { }
         }
+        else if (PruneOptimizeRecordToFailures(ParseOptimizeBackup(backupJson), err) is { } remaining)
+        {
+            // Only what still failed stays in the record, so the next attempt retries exactly that instead of failing
+            // again on values that were already put back.
+            try { AtomicFile.WriteAllText(backupPath, SerializeOptimizeBackup(remaining, indented: true)); }
+            catch (Exception ex) { AppLog.Warn("The optimization backup could not be narrowed", ex.Message); }
+        }
         return new ToolExecutionResult
         {
             Success = ok,
@@ -744,6 +1056,58 @@ if ($null -ne $backup.tasks) {
                 ? Loc.T("Optimizasyon öncesi ayarlar geri yüklendi.")
                 : Loc.T($"Ayarlar geri yüklenemedi: {err}")
         };
+    }
+
+    /// <summary>
+    /// The part of <paramref name="record"/> the restore script reported as failed, read from its error lines
+    /// (<c>"SysMain: …"</c>, <c>"HAGS: …"</c>, <c>"Consolidator: …"</c>). Entries the script refused as unknown are
+    /// dropped — they are never acted on, so keeping them would only fail every later attempt. Null when no line names
+    /// an entry (a refused prompt, a timeout): the record is then kept as it is.
+    /// </summary>
+    internal static OptimizeBackupRecord? PruneOptimizeRecordToFailures(OptimizeBackupRecord record, string? errorText)
+    {
+        if (string.IsNullOrWhiteSpace(errorText)) return null;
+
+        var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        bool identified = false;
+        foreach (var raw in errorText.Split(ErrorLineBreaks, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = raw.Trim();
+            int colon = line.IndexOf(": ", StringComparison.Ordinal);
+            if (colon <= 0) continue;
+
+            var name = line[..colon].Trim();
+            bool known = string.Equals(name, "HAGS", StringComparison.OrdinalIgnoreCase)
+                         || record.Services.ContainsKey(name)
+                         || record.Tasks.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (!known) continue;
+
+            identified = true;
+            var detail = line[(colon + 2)..].Trim();
+            if (detail.StartsWith("unknown ", StringComparison.Ordinal)) continue;
+            failed.Add(name);
+        }
+
+        if (!identified) return null;
+
+        var remaining = new OptimizeBackupRecord();
+        foreach (var (name, startType) in record.Services)
+        {
+            if (failed.Contains(name)) remaining.Services[name] = startType;
+        }
+
+        if (record.HagsRecorded && failed.Contains("HAGS"))
+        {
+            remaining.Hags = record.Hags;
+            remaining.HagsRecorded = true;
+        }
+
+        foreach (var task in record.Tasks)
+        {
+            if (failed.Contains(task.Name)) remaining.Tasks.Add(task);
+        }
+
+        return remaining;
     }
 
     /// <summary>

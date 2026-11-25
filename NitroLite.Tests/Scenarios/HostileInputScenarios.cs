@@ -352,18 +352,14 @@ public class HostileInputScenarios : IDisposable
 
         foreach (var value in values)
         {
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatCpuPower(value)));
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatGpuPower(value, false, true)));
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatGpuPower(value, true, false)));
+            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatCpuTemperature(value)));
+            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatGpuTemperature(value, false, true)));
+            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatUsagePercent(value)));
         }
 
         foreach (var value in ints)
         {
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatFanSpeedRpm(value)));
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatFanSpeedPercent(value)));
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatFanSpeedPercent(value, 0)));
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatFanSpeedPercent(value, -1)));
-            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatFanSpeed(value)));
+            Assert.Null(Record.Exception(() => TelemetryFormatter.FormatFanRpm(value)));
             Assert.Null(Record.Exception(() => TelemetryFormatter.CalculateFanPercent(value, 0)));
         }
     }

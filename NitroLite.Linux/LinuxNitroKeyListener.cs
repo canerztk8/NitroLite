@@ -13,7 +13,8 @@ namespace NitroLite.Linux;
 /// <c>struct input_event</c>, and the press is the one with <c>EV_KEY</c>, the right code and value 1.
 /// </para>
 /// <para>
-/// Reading <c>/dev/input</c> needs the user to be in the <c>input</c> group. That is a normal state on a stock
+/// Reading the device needs the udev rule, which hands this one node (and no other keyboard) to the user at the seat;
+/// installs from before it used the <c>input</c> group, which still works. Neither is there on a stock
 /// install, not a failure: the device list comes back empty, <see cref="IsSupported"/> is false, the settings row
 /// hides itself and the log carries the one-line hint. Nothing here throws into the caller.
 /// </para>
@@ -168,10 +169,10 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
             if (_devices.Count == 0)
             {
                 // Three different causes with three different fixes, so the log names the one that applies: no input
-                // device could be opened at all (the user is not in the 'input' group), the module that creates the
+                // device could be opened at all (the udev rule is not installed), the module that creates the
                 // key's device is absent, or the module is there and this model's key is not one of its events.
                 var reason = opened.Count == 0
-                    ? "no input device could be opened: the user is not in the 'input' group."
+                    ? "no input device could be opened: the udev rule that grants the Acer WMI hotkeys device is not installed."
                     : !Directory.Exists(LinuxPaths.AcerWmiModule)
                         ? "the acer-wmi module is not loaded."
                         : "acer-wmi is loaded but exposes no Nitro key event on this model.";

@@ -308,7 +308,11 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     {
         if (window.ProcessId <= 0) return NitroSenseWindowKind.None;
 
+        // The owner is checked as well as the text. "NitroSense" in a dialog's text alone also matches an Explorer
+        // property sheet, a file picker opened in C:\Program Files\NitroSense or an uninstall prompt — and this rule
+        // sends WM_CLOSE. Only a dialog that belongs to the Acer/NitroSense stack is the permission prompt.
         if (IsDialogClass(window.ClassName) &&
+            (processIsNitroSense || IsAcerStackProcessName(window.ProcessName)) &&
             (MentionsNitroSense(window.Title) || MentionsNitroSense(window.Content)))
         {
             return NitroSenseWindowKind.ErrorDialog;
@@ -331,6 +335,16 @@ public sealed class NitroSenseWatcher : INitroSenseWatcher
     public static bool IsNitroSenseProcessName(string? name) =>
         !string.IsNullOrEmpty(name) &&
         name.StartsWith(NitroSenseProcessPrefix, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when a process belongs to the Acer/NitroSense stack: one of <see cref="ProcessNames"/>, the NitroSense
+    /// prefix, or an Acer service executable (<c>AcerHardwareService</c>, <c>AcerAgentService</c>, ...), which is what
+    /// raises the permission prompt when it cannot reach its driver.
+    /// </summary>
+    public static bool IsAcerStackProcessName(string? name) =>
+        !string.IsNullOrEmpty(name) &&
+        (IsNitroSenseProcessName(name) || IsNitroSenseName(name) ||
+         name.StartsWith("Acer", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>True when the process is the host a packaged app's window belongs to.</summary>
     public static bool IsApplicationFrameHost(string? name) =>

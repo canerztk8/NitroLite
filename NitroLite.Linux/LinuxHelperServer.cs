@@ -155,8 +155,17 @@ public sealed class LinuxHelperServer : IDisposable
     /// </summary>
     public static readonly TimeSpan DefaultConnectionIdleTimeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// The shortest time between two re-probes of the policy. A <c>list</c> is what re-probes, and an authorised
+    /// client that sends nothing but <c>list</c> must not keep a root process enumerating <c>/sys</c> in a loop.
+    /// </summary>
+    public static readonly TimeSpan MinPolicyRefreshInterval = TimeSpan.FromSeconds(5);
+
     private readonly Socket _listener;
-    private readonly LinuxHelperPolicy _policy;
+    private volatile LinuxHelperPolicy _policy;
+    private readonly Func<LinuxHelperPolicy>? _refreshPolicy;
+    private readonly object _policyGate = new();
+    private long _policyAt = Environment.TickCount64;
     private readonly ISysfsFileSystem _fs;
     private readonly ICallerAuthorizer _authorizer;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -164,17 +173,35 @@ public sealed class LinuxHelperServer : IDisposable
     private int _active;
     private long _lastActivity = Environment.TickCount64;
 
-    /// <summary>Connections that have put a fan in manual mode, for the watchdog.</summary>
-    private readonly HashSet<int> _manualOwners = new();
+    /// <summary>
+    /// For the watchdog: each connection that has put a fan out of automatic, with the fan mode attributes it left
+    /// that way. A connection stays an owner until every one of them is back to automatic.
+    /// </summary>
+    private readonly Dictionary<int, HashSet<string>> _manualOwners = new();
+
+    /// <summary>
+    /// The fan mode attributes this helper process itself took out of automatic and nobody has put back since. Only
+    /// these are handed back: a fan the firmware or the turbo key put at full speed was never the helper's to reset.
+    /// Guarded by the <see cref="_manualOwners"/> lock.
+    /// </summary>
+    private readonly HashSet<string> _touchedFans = new(StringComparer.Ordinal);
     private int _nextConnection;
 
+    /// <param name="refreshPolicy">
+    /// Builds the policy again from a fresh probe, run as root exactly as at start-up. A <c>list</c> request runs it (at
+    /// most once per <see cref="MinPolicyRefreshInterval"/>), so an attribute that appeared after the helper started —
+    /// a module loaded, a driver that bound late — can be written without restarting the helper. Nothing the client
+    /// sends reaches it. Null keeps the start-up policy for the life of the process.
+    /// </param>
     public LinuxHelperServer(Socket listener, LinuxHelperPolicy policy, ISysfsFileSystem fs, ICallerAuthorizer authorizer,
-        TimeSpan? idleTimeout = null, TimeSpan? connectionIdleTimeout = null, TimeSpan? authorizationTimeout = null)
+        TimeSpan? idleTimeout = null, TimeSpan? connectionIdleTimeout = null, TimeSpan? authorizationTimeout = null,
+        Func<LinuxHelperPolicy>? refreshPolicy = null)
     {
         _listener = listener ?? throw new ArgumentNullException(nameof(listener));
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _authorizer = authorizer ?? throw new ArgumentNullException(nameof(authorizer));
+        _refreshPolicy = refreshPolicy;
         IdleTimeout = idleTimeout ?? DefaultIdleTimeout;
         ConnectionIdleTimeout = connectionIdleTimeout ?? DefaultConnectionIdleTimeout;
         AuthorizationTimeout = authorizationTimeout ?? DefaultAuthorizationTimeout;
@@ -185,6 +212,9 @@ public sealed class LinuxHelperServer : IDisposable
     public TimeSpan ConnectionIdleTimeout { get; }
 
     public TimeSpan AuthorizationTimeout { get; }
+
+    /// <summary>The shortest time between two policy re-probes; <see cref="MinPolicyRefreshInterval"/> outside the tests.</summary>
+    internal TimeSpan PolicyRefreshInterval { get; init; } = MinPolicyRefreshInterval;
 
     /// <summary>Serves until the idle timeout passes with no connection open, or <paramref name="cancel"/> fires.</summary>
     public async Task RunAsync(CancellationToken cancel = default)
@@ -343,7 +373,7 @@ public sealed class LinuxHelperServer : IDisposable
 
     private bool OwnsManual(int id)
     {
-        lock (_manualOwners) return _manualOwners.Contains(id);
+        lock (_manualOwners) return _manualOwners.ContainsKey(id);
     }
 
     /// <summary>True when the authorizer says yes within <see cref="AuthorizationTimeout"/>; a timeout or a throw is a no.</summary>
@@ -383,7 +413,10 @@ public sealed class LinuxHelperServer : IDisposable
         if (last) await HandBackFansAsync().ConfigureAwait(false);
     }
 
-    /// <summary>Writes "automatic" to every fan mode attribute that is currently manual.</summary>
+    /// <summary>
+    /// Writes "automatic" to every fan mode attribute this helper took out of automatic and that is still out of it.
+    /// A fan the helper never wrote is left as it is.
+    /// </summary>
     private async Task HandBackFansAsync()
     {
         await _writeGate.WaitAsync().ConfigureAwait(false);
@@ -391,6 +424,11 @@ public sealed class LinuxHelperServer : IDisposable
         {
             foreach (var (path, manual, automatic) in _policy.FanResets)
             {
+                lock (_manualOwners)
+                {
+                    if (!_touchedFans.Remove(path)) continue;
+                }
+
                 var current = _fs.ReadAllText(path)?.Trim();
                 if (current == null || current == automatic) continue;
                 if (manual != "*" && current != manual) continue;
@@ -459,7 +497,11 @@ public sealed class LinuxHelperServer : IDisposable
         }
     }
 
-    /// <summary>Records which connection last set a fan mode, so the watchdog knows whose departure to act on.</summary>
+    /// <summary>
+    /// Records which fan mode attributes a connection has taken out of automatic, so the watchdog knows whose departure
+    /// to act on. Tracked per attribute: putting one fan back to automatic while the other is still manual (or at full
+    /// speed) must not end the ownership, or the second fan would never be handed back.
+    /// </summary>
     private void TrackManual(int connection, string path, string value)
     {
         foreach (var (fanPath, manual, automatic) in _policy.FanResets)
@@ -469,8 +511,26 @@ public sealed class LinuxHelperServer : IDisposable
             var isManual = manual == "*" ? value != automatic : value == manual;
             lock (_manualOwners)
             {
-                if (isManual) _manualOwners.Add(connection);
-                else if (value == automatic) _manualOwners.Remove(connection);
+                if (isManual)
+                {
+                    if (!_manualOwners.TryGetValue(connection, out var owned))
+                    {
+                        owned = new HashSet<string>(StringComparer.Ordinal);
+                        _manualOwners[connection] = owned;
+                    }
+
+                    owned.Add(path);
+                    _touchedFans.Add(path);
+                }
+                else if (value == automatic)
+                {
+                    _touchedFans.Remove(path);
+                    if (_manualOwners.TryGetValue(connection, out var owned))
+                    {
+                        owned.Remove(path);
+                        if (owned.Count == 0) _manualOwners.Remove(connection);
+                    }
+                }
             }
         }
     }
@@ -478,8 +538,39 @@ public sealed class LinuxHelperServer : IDisposable
     private static string? Text(JsonElement root, string name) =>
         root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 
+    /// <summary>Re-probes the policy when a refresher was given and the last probe is old enough.</summary>
+    private void RefreshPolicy()
+    {
+        if (_refreshPolicy == null) return;
+
+        lock (_policyGate)
+        {
+            var now = Environment.TickCount64;
+            if (now - _policyAt < PolicyRefreshInterval.TotalMilliseconds) return;
+            _policyAt = now;
+
+            try
+            {
+                var fresh = _refreshPolicy();
+                if (!fresh.Paths.OrderBy(p => p, StringComparer.Ordinal)
+                        .SequenceEqual(_policy.Paths.OrderBy(p => p, StringComparer.Ordinal), StringComparer.Ordinal))
+                {
+                    AppLog.Info("The helper probed again", $"{fresh.Paths.Count} settings allowed");
+                }
+
+                _policy = fresh;
+            }
+            catch (Exception ex)
+            {
+                // The policy from before stays: a probe that failed is no reason to stop writing what was allowed.
+                AppLog.Warn("The helper could not probe again", ex.Message);
+            }
+        }
+    }
+
     private string List()
     {
+        RefreshPolicy();
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
         {

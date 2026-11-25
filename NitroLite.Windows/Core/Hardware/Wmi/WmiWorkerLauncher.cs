@@ -54,7 +54,6 @@ public sealed class WmiWorkerLauncher : IDisposable
     private readonly Func<string, string, int?, TimeSpan, CancellationToken, Task<WmiWorkerClient>> _connect;
     private readonly Func<bool> _isElevated;
     private readonly Func<string, bool> _isTrustedLocation;
-    private readonly JobObjectGuard? _job;
     private bool _disposed;
 
     /// <summary>
@@ -89,7 +88,6 @@ public sealed class WmiWorkerLauncher : IDisposable
         _connect = connect ?? ((pipe, nonce, pid, timeout, ct) => WmiWorkerClient.ConnectAsync(pipe, nonce, timeout, pid, ct));
         _isElevated = isElevated ?? MemoryCleanerService.IsRunningAsAdministrator;
         _isTrustedLocation = isTrustedLocation ?? IsTrustedHelperLocation;
-        _job = JobObjectGuard.Create();
     }
 
     /// <summary>
@@ -252,13 +250,14 @@ public sealed class WmiWorkerLauncher : IDisposable
             return null;
         }
 
-        // The handle is only needed to assign the job and to read the id; the process itself outlives it.
+        // The handle is only needed to read the id; the process itself outlives it.
+        //
+        // The worker is deliberately NOT placed in a kill-on-close job. An elevated window (the scheduled-task
+        // auto-start) could assign it, and then a window that is killed, fails fast or runs out of memory takes the
+        // worker down in the same instant — before it can hand a fixed fan speed back to the firmware. The worker's own
+        // parent watchdog ends it instead, after the hand-back, with a hard deadline for a worker stuck in a call.
         using (process)
         {
-            // Best effort: this fails with access denied for an elevated child, which is exactly the case the
-            // worker's own parent watchdog covers.
-            _job?.Assign(process);
-
             try
             {
                 var client = await _connect(pipeName, nonce, process.Id, ConnectTimeout, cancellationToken).ConfigureAwait(false);
@@ -283,6 +282,5 @@ public sealed class WmiWorkerLauncher : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _job?.Dispose();
     }
 }

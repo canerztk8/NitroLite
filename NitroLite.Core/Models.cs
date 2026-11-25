@@ -238,8 +238,6 @@ public class BatteryHealthDetails
     // True when FullChargeCapacityMWh is DesignCapacity × 0.923 because WMI reported no full-charge capacity
     // (WearLevelPercent / HealthPercent are then derived from an assumption, not a measurement).
     public bool IsFullChargeCapacityEstimated { get; set; }
-    // True when VoltageVolts is the 16.45 V nominal constant because WMI reported no voltage.
-    public bool IsVoltageEstimated { get; set; }
     // Win32_Battery.Chemistry as text ("Lityum-iyon", …); empty when unknown.
     public string Chemistry { get; set; } = "";
     // BatteryCycleCount; null when the firmware does not report it (reports 0).
@@ -501,11 +499,20 @@ public class AppSettings
     public GpuOperatingMode? RequestedGpuMode { get; set; }
     public DateTimeOffset? GpuModeRequestedAt { get; set; }
 
+    // Nothing acts on this any more; kept so settings files that carry "dc_power_mode" round-trip unchanged.
     [JsonPropertyName("dc_power_mode")]
     public DcPowerProfilePreference DcPowerMode { get; set; } = DcPowerProfilePreference.Eco;
 
     [JsonPropertyName("auto_refresh_rate_switching")]
     public bool AutoRefreshRateSwitching { get; set; } = true;
+
+    /// <summary>
+    /// The panel rate the battery automation replaced with 60 Hz, or null when it replaced nothing. On disk, not only in
+    /// memory: an exit or a crash on battery used to take the only copy with it, and the panel then stayed at 60 Hz on
+    /// the adapter for good. The next start restores it on AC and clears it.
+    /// </summary>
+    [JsonPropertyName("refresh_rate_before_battery")]
+    public int? RefreshRateBeforeBattery { get; set; }
 
     /// <summary>
     /// Drop to Eco when a fan stops reporting. Off by default: a tachometer that reads zero on a machine whose fans are
@@ -749,6 +756,7 @@ public class AppSettings
         if (!Enum.IsDefined(Theme)) Theme = AppTheme.System;
         if (LastOperatingMode.HasValue && !Enum.IsDefined(LastOperatingMode.Value)) LastOperatingMode = null;
         if (!Enum.IsDefined(DcPowerMode)) DcPowerMode = DcPowerProfilePreference.Eco;
+        if (RefreshRateBeforeBattery is <= 0) RefreshRateBeforeBattery = null;
 
         OsdCorner = ((OsdCorner % 4) + 4) % 4;
         if (OsdMonitor < 0) OsdMonitor = 0;
@@ -851,7 +859,6 @@ public class AppSettings
         {
             if (!Enum.IsDefined(recovery.SavedMode)) recovery.SavedMode = OperatingMode.Default;
             if (!Enum.IsDefined(recovery.SavedFan)) recovery.SavedFan = FanMode.Auto;
-            if (!Enum.IsDefined(recovery.SavedBoost)) recovery.SavedBoost = CpuBoostMode.Aggressive;
             // The boost values are the exact ones read from the power plan, and Windows documents PerfBoostMode as
             // 0..6: 3, 5 and 6 have no enum member but are real values an OEM plan can hold, and dropping them would
             // leave the game's value in place after a crash. The same range CpuPowerService accepts.
@@ -909,7 +916,6 @@ public class GameSessionRecoveryState
     public bool RestoreMode { get; set; } = true;
     public bool RestoreFan { get; set; } = true;
     public OperatingMode SavedMode { get; set; } = OperatingMode.Default;
-    public CpuBoostMode SavedBoost { get; set; } = CpuBoostMode.Aggressive;
     public CpuBoostMode? SavedAcBoost { get; set; }
     public CpuBoostMode? SavedDcBoost { get; set; }
     public FanMode SavedFan { get; set; } = FanMode.Auto;

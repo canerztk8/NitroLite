@@ -487,17 +487,22 @@ public class LinuxZeroInstallTests
     }
 
     [Fact]
-    public void Setup_InputGroupMembership_IsReadFromTheProcessGroups()
+    public void Setup_NitroKeyAccess_IsNeededOnlyWhenTheHotkeyDeviceExistsAndCannotBeRead()
     {
+        // The setup no longer adds anyone to the input group, so membership cannot be the question: the question is
+        // whether the one device the Nitro key needs is readable.
         var fs = new InMemorySysfsFileSystem();
-        fs.WithFile("/etc/group", "root:x:0:\ninput:x:104:\nnitrolite:x:998:cztrk\n");
-        fs.WithFile("/proc/self/status", "Name:\tNitroLite\nGroups:\t4 24 27 1000\n");
+        var readable = false;
         var setup = new LinuxPlatformSetup(Probe(StockUbuntuAn1641()), () => null,
-            new FakeRunner(new(), (_, _) => default), fs, user: "u");
+            new FakeRunner(new(), (_, _) => default), fs, user: "u", canReadDevice: _ => readable);
 
+        Assert.False(setup.NeedsInputGroup); // no hotkey device at all
+
+        fs.WithFile("/sys/class/input/event3/device/name", "AT Translated Set 2 keyboard\n");
+        fs.WithFile("/sys/class/input/event7/device/name", "Acer WMI hotkeys\n");
         Assert.True(setup.NeedsInputGroup);
 
-        fs.WithFile("/proc/self/status", "Groups:\t4 104 1000\n");
+        readable = true;
         Assert.False(setup.NeedsInputGroup);
     }
 

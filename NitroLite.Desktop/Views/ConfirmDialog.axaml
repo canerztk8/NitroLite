@@ -27,9 +27,11 @@
       <TextBlock x:Name="MessageText" FontSize="11.5" Margin="0,8,0,0"
                  Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" />
 
+      <!-- Escape cancels (IsCancel). Which button Enter presses is set in the code-behind: Cancel for a destructive
+           confirmation, so Enter alone never deletes anything, and the confirm button otherwise. -->
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
         <Button x:Name="CancelButton" Classes="primary" Padding="16,7" FontSize="11"
-                Margin="0,0,8,0" Click="OnCancelClick" />
+                Margin="0,0,8,0" Click="OnCancelClick" IsCancel="True" />
         <Button x:Name="ConfirmButton" Classes="primary" Padding="16,7" FontSize="11"
                 Foreground="{DynamicResource DangerBrush}" Click="OnConfirmClick" />
       </StackPanel>

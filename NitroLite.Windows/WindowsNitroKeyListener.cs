@@ -115,6 +115,16 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
 
     private readonly NitroKeyDebounceGuard _debounce;
     private readonly object _gate = new();
+
+    /// <summary>Held for the whole probe, so it runs once and a concurrent reader waits for its answer.</summary>
+    private readonly object _probeGate = new();
+
+    /// <summary>Serialises attaching the WMI watchers (probe thread) with removing them (Stop).</summary>
+    private readonly object _wmiGate = new();
+
+    /// <summary>Bumped by every Start and Stop, so a probe that finishes after a Stop does not attach anything.</summary>
+    private int _startGeneration;
+
     private readonly List<ManagementEventWatcher> _watchers = new();
     private readonly List<string> _eventClassNames = new();
 
@@ -174,33 +184,60 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         (machineModel.Contains("acer", StringComparison.OrdinalIgnoreCase) ||
          machineModel.Contains("predator", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The Acer event classes that answered, for the log and the hardware report.</summary>
-    public IReadOnlyList<string> EventClassNames
-    {
-        get
-        {
-            EnsureProbed();
-            return _eventClassNames;
-        }
-    }
-
     /// <summary>
     /// True when the machine identifies as Acer hardware, whether or not an event class was found. Set by the probe.
     /// </summary>
     public bool AcerHardwarePresent { get; private set; }
 
+    /// <summary>
+    /// Starts listening. Cheap on purpose: the shell calls it on the UI thread, and the probe enumerates every class in
+    /// <c>root\WMI</c>, which takes seconds on a slow WMI service. Raw input starts here; the probe and the WMI
+    /// subscription run on a background thread and attach when the probe completes.
+    /// </summary>
     public void Start()
     {
-        EnsureProbed();
-
+        int generation;
         lock (_gate)
         {
             if (_disposed || _started) return;
             _started = true;
+            generation = ++_startGeneration;
         }
 
-        StartWmi();
         StartRawInput();
+
+        var probe = new Thread(() => ProbeAndAttachWmi(generation))
+        {
+            IsBackground = true,
+            Name = "NitroLite Nitro key WMI probe"
+        };
+        probe.Start();
+    }
+
+    /// <summary>
+    /// The background half of <see cref="Start"/>. A Stop (or Dispose) that arrived while the probe was running wins:
+    /// the generation no longer matches and nothing is attached.
+    /// </summary>
+    private void ProbeAndAttachWmi(int generation)
+    {
+        try
+        {
+            EnsureProbed();
+
+            lock (_wmiGate)
+            {
+                lock (_gate)
+                {
+                    if (_disposed || !_started || generation != _startGeneration) return;
+                }
+
+                StartWmi();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The Nitro key WMI listener could not be started", ex.Message);
+        }
     }
 
     public void Stop()
@@ -209,8 +246,21 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         {
             if (!_started) return;
             _started = false;
+            _startGeneration++;
         }
 
+        // Waits for a subscription the probe thread may be making right now, so nothing is attached after this returns.
+        lock (_wmiGate)
+        {
+            StopWmiWatchers();
+        }
+
+        _rawInput?.Dispose();
+        _rawInput = null;
+    }
+
+    private void StopWmiWatchers()
+    {
         foreach (var watcher in _watchers)
         {
             try
@@ -232,9 +282,6 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         }
 
         _watchers.Clear();
-
-        _rawInput?.Dispose();
-        _rawInput = null;
     }
 
     // ------------------------------------------------------------------ the WMI route
@@ -250,7 +297,9 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     /// </remarks>
     private void EnsureProbed()
     {
-        lock (_gate)
+        // Its own lock, not _gate: the scan can take seconds, and Stop (UI thread) must not wait behind it. A caller of
+        // IsSupported during a running probe does wait, and then gets the complete answer.
+        lock (_probeGate)
         {
             if (_probed || _disposed) return;
             _probed = true;

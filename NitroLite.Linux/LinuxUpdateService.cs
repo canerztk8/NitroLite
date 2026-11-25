@@ -130,6 +130,13 @@ public sealed class LinuxUpdateService : IUpdateService
 
     public string ReleasePageUrl => UpdateService.ReleasePageUrl;
 
+    /// <summary>
+    /// The check that keeps "could not check" apart from "up to date": an offline or rate-limited machine is told the
+    /// check failed, not that it runs the newest version.
+    /// </summary>
+    public Task<UpdateCheckOutcome> CheckForUpdateAsync(CancellationToken cancellationToken = default) =>
+        UpdateService.CheckForUpdateAsync(AssetSuffix, cancellationToken);
+
     public async Task<UpdateCheckResult?> CheckAsync(CancellationToken cancellationToken = default)
     {
         try

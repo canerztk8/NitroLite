@@ -10,12 +10,6 @@ namespace NitroLite.Core;
 public sealed record UiFontChoice(string Id, string DisplayName, string Stack, string? Script = null)
 {
     public override string ToString() => DisplayName;
-
-    /// <summary>
-    /// True when the face was drawn for one script and is offered only to a reader of it. Rajdhani is the case: it
-    /// carries Devanagari, and a reader who does not have Hindi on screen gains nothing from a condensed HUD face.
-    /// </summary>
-    public bool IsScriptSpecific => Script != null;
 }
 
 /// <summary>

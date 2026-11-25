@@ -43,8 +43,4 @@ public sealed record HardwareReportContext
     /// <summary>A context that only carries the sensor session.</summary>
     public static HardwareReportContext ForSensors(RuntimeSensorVerification trust) =>
         new() { SensorTrust = trust };
-
-    /// <summary>A context that only carries the keyboard-lighting transports.</summary>
-    public static HardwareReportContext ForKeyboardLighting(IReadOnlyList<string> lines) =>
-        new() { KeyboardLighting = lines };
 }

@@ -5,24 +5,6 @@ using NitroLite.Core.Hardware.Verification;
 namespace NitroLite.Core.Hardware.Wmi;
 
 /// <summary>
-/// What NitroLite currently wants the hardware to be doing, and why. Supplied by the window, which is the only place
-/// that knows whether school mode holds the fans or a thermal floor is in force.
-/// </summary>
-public sealed record HardwareTarget(
-    OperatingMode? Mode,
-    FanMode? Fan,
-    string Reason,
-    int CpuPercent = -1,
-    int GpuPercent = -1);
-
-/// <summary>The outcome of one WMI-to-service handover.</summary>
-public sealed record ReconciliationResult(bool Switched, bool Reapplied, string? Detail)
-{
-    /// <summary>No handover happened, so there was nothing to reconcile.</summary>
-    public static readonly ReconciliationResult None = new(false, false, null);
-}
-
-/// <summary>
 /// Picks a backend per call: the Acer service when it is healthy, direct WMI when it is not.
 /// <para>
 /// The order is not arbitrary. The service is the vendor's own path — it knows the model, it owns the EC registers,
@@ -36,13 +18,6 @@ public sealed record ReconciliationResult(bool Switched, bool Reapplied, string?
 /// effects, speed, direction and brightness; the direct-WMI path writes a static colour per zone and nothing else.
 /// A single colour therefore stays on the service, which has the richer feature set, while four different colours
 /// go to WMI, which is the only path that can hold them — see <see cref="SetLightingAsync"/>.
-/// </para>
-/// <para>
-/// A handover in the other direction needs care. While the app was on WMI it wrote the EC directly; if the user then
-/// installs or starts Acer's software, the service comes up with its own idea of the fan mode and the power mode, and
-/// the two writers drift apart silently. <see cref="ReconcileAsync"/> closes that gap: on the first call that finds
-/// the service healthy again, it reads what the service sees and re-applies NitroLite's target over the socket when
-/// the two disagree.
 /// </para>
 /// </summary>
 public sealed class HybridHardwareController : IHardwareController, ILightingElevationControl
@@ -69,9 +44,6 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     private IHardwareController? _wmi;
     private bool _wmiCreated;
     private bool _disposed;
-
-    /// <summary>Set when a call moves the app off WMI, so the next <see cref="ReconcileAsync"/> knows to act.</summary>
-    private bool _pendingReconciliation;
 
     /// <summary>
     /// <paramref name="wmiFactory"/> returns the direct-WMI backend, or null when this build or this session must not
@@ -131,19 +103,10 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     private bool _activeIsWmi;
 
     /// <summary>
-    /// Supplies NitroLite's active target for <see cref="ReconcileAsync"/>. Null means "no opinion", and then the
-    /// handover only logs that it happened.
-    /// </summary>
-    public Func<HardwareTarget?>? TargetProvider { get; set; }
-
-    /// <summary>
     /// True when this process already holds an elevated token. Defaults to the real check; the tests replace it so no
     /// test can depend on how the test runner was started.
     /// </summary>
     public Func<bool> IsElevated { get; set; } = MemoryCleanerService.IsRunningAsAdministrator;
-
-    /// <summary>True when a handover from WMI to the service is waiting to be reconciled.</summary>
-    public bool ReconciliationPending => _pendingReconciliation;
 
     /// <summary>The service backend, always present.</summary>
     public IHardwareController Agent => _agent;
@@ -165,12 +128,9 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
 
     public bool IsAvailable => _agent.IsAvailable || (_wmi?.IsAvailable ?? false);
 
-    /// <summary>
-    /// Records which backend is active and notices the one transition that needs work: leaving WMI for the service.
-    /// </summary>
+    /// <summary>Records which backend is active.</summary>
     private void SetActive(bool isWmi)
     {
-        if (_activeIsWmi && !isWmi) _pendingReconciliation = true;
         _activeIsWmi = isWmi;
     }
 
@@ -201,62 +161,6 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
 
         SetActive(true);
         return wmi;
-    }
-
-    /// <summary>
-    /// Re-applies NitroLite's target over the socket after a handover from WMI. Returns
-    /// <see cref="ReconciliationResult.None"/> when no handover is pending, so it is safe to call on every poll.
-    /// <para>
-    /// The target is read, not guessed: school mode's lock and the thermal floors live in the window, and a
-    /// reconciliation that invented its own idea of the right fan mode would be a third writer rather than a fix.
-    /// A target that already matches what the service reports is left alone — writing it again would be a no-op that
-    /// still costs an EC round trip.
-    /// </para>
-    /// </summary>
-    public async Task<ReconciliationResult> ReconcileAsync()
-    {
-        // Resolving first is what notices the handover: the service may have come up since the last call.
-        await ResolveAsync().ConfigureAwait(false);
-        if (!_pendingReconciliation) return ReconciliationResult.None;
-        _pendingReconciliation = false;
-
-        var target = TargetProvider?.Invoke();
-        if (target == null)
-        {
-            AppLog.Info("The hardware path changed", "AASSvc is reusable; there is no target to reconcile.");
-            return new ReconciliationResult(true, false, null);
-        }
-
-        var applied = new List<string>();
-
-        if (target.Mode is { } mode)
-        {
-            var current = await _agent.GetOperatingModeAsync().ConfigureAwait(false);
-            if (current != mode)
-            {
-                bool ok = await _agent.SetOperatingModeAsync(mode).ConfigureAwait(false);
-                if (ok) applied.Add($"mod={mode}");
-                else AppLog.Warn("Reconciliation: the operating mode could not be written", $"{current} -> {mode}");
-            }
-        }
-
-        if (target.Fan is { } fan)
-        {
-            var current = await _agent.GetFanModeAsync().ConfigureAwait(false);
-            if (current != fan)
-            {
-                bool ok = await _agent.SetFanModeAsync(fan, target.CpuPercent, target.GpuPercent).ConfigureAwait(false);
-                if (ok) applied.Add($"fan={fan}");
-                else AppLog.Warn("Reconciliation: the fan mode could not be written", $"{current} -> {fan}");
-            }
-        }
-
-        string detail = applied.Count > 0
-            ? $"{target.Reason}: {string.Join(", ", applied)}"
-            : $"{target.Reason}: zaten uyumlu";
-
-        AppLog.Info("The hardware path changed", $"WMI -> AASSvc, {detail}");
-        return new ReconciliationResult(true, applied.Count > 0, detail);
     }
 
     /// <summary>

@@ -91,49 +91,4 @@ public class BatteryTelemetryTests
         double resultNeg = TelemetryFormatter.UpdateSmoothedRate(current, -500, ref initialized, 0.20);
         Assert.Equal(19800.0, resultNeg);
     }
-
-    [Fact]
-    public void FormatBatteryPowerFlow_DualUnit_WhenDischargingWithMilliwatts()
-    {
-        var status = new BatteryStatusInfo
-        {
-            IsDischarging = true,
-            DischargeRateWatts = 14.8,
-            DischargeRateMilliwatts = 14820,
-            IsPluggedIn = false,
-            IsCharging = false
-        };
-
-        string flow = TelemetryFormatter.FormatBatteryPowerFlow(status);
-        // No thousands separator: "14,820" reads as 14.82 to a Turkish reader.
-        Assert.Equal("14.8 W (14820 mW)", flow);
-    }
-
-    [Fact]
-    public void FormatBatteryPowerFlow_BackwardCompatibility_WhenMilliwattsZero()
-    {
-        var status = new BatteryStatusInfo
-        {
-            IsDischarging = true,
-            DischargeRateWatts = 18.5,
-            DischargeRateMilliwatts = 0,
-            IsPluggedIn = false,
-            IsCharging = false
-        };
-
-        string flow = TelemetryFormatter.FormatBatteryPowerFlow(status);
-        Assert.Equal("18.5 W (Deşarj Oluyor)", flow);
-    }
-
-    [Fact]
-    public void FormatRemainingTime_DynamicHoursAndMinutes_FormatsTurkishTime()
-    {
-        Assert.Equal("2 sa 30 dk", TelemetryFormatter.FormatRemainingTime(150, false, false));
-        Assert.Equal("1 sa 1 dk", TelemetryFormatter.FormatRemainingTime(61, false, false));
-        Assert.Equal("45 dk", TelemetryFormatter.FormatRemainingTime(45, false, false));
-        Assert.Equal("Adaptöre Bağlı", TelemetryFormatter.FormatRemainingTime(0, true, false));
-        Assert.Equal("Hesaplanıyor...", TelemetryFormatter.FormatRemainingTime(0, true, true));
-        Assert.Equal("Hesaplanıyor...", TelemetryFormatter.FormatRemainingTime(0, false, false));
-        Assert.Equal("Hesaplanıyor...", TelemetryFormatter.FormatRemainingTime(1441, false, false));
-    }
 }

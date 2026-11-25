@@ -30,39 +30,6 @@ public static class DirectoryTrust
     private const string InteractiveSid = "S-1-5-4";
 
     /// <summary>
-    /// True when <paramref name="directory"/> grants write access to a principal wider than the signed-in user, so a
-    /// different account could replace a file in it. False when the ACL cannot be read: an unreadable ACL is not
-    /// evidence of a hole, and refusing on it would break installs on machines with unusual inheritance.
-    /// </summary>
-    public static bool IsWorldWritable(string? directory)
-    {
-        if (string.IsNullOrWhiteSpace(directory)) return false;
-
-        try
-        {
-            var info = new DirectoryInfo(directory);
-            if (!info.Exists) return false;
-
-            var security = info.GetAccessControl(AccessControlSections.Access);
-            foreach (FileSystemAccessRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier)))
-            {
-                if (rule.AccessControlType != AccessControlType.Allow) continue;
-                if ((rule.FileSystemRights & FileSystemRights.WriteData) == 0) continue;
-                if (rule.IdentityReference is not SecurityIdentifier sid) continue;
-
-                if (sid.Value is UsersSid or EveryoneSid or AuthenticatedUsersSid or InteractiveSid) return true;
-            }
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PlatformNotSupportedException
-                                      or InvalidOperationException or ArgumentException)
-        {
-            return false;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Rights that let a principal change or replace an existing file: write, append, delete, or take ownership of
     /// it. <see cref="FileSystemRights.ReadAndExecute"/> and <see cref="FileSystemRights.Synchronize"/> are deliberately
     /// absent — every reader gets those, and they let nobody modify anything.
@@ -110,7 +77,7 @@ public static class DirectoryTrust
     /// True when the executable itself is safe to launch with an administrator token: no principal wider than the
     /// signed-in user may modify, delete or replace <em>this file</em>.
     /// <para>
-    /// This is deliberately a file-level check, not the directory-level <see cref="IsWorldWritable"/>: what decides
+    /// This is deliberately a file-level check, not a directory-level one: what decides
     /// the answer is the right a wider principal actually holds, and reading it from the file covers the ones the
     /// file inherits from its folder as well as the ones written on the folder itself. Reading only the folder used
     /// to refuse every portable install that was not under the profile or Program Files, which on those machines
@@ -281,7 +248,7 @@ public static class DirectoryTrust
     /// <summary>
     /// True when <paramref name="path"/> sits under a folder the signed-in user owns: the profile, its roaming and
     /// local halves, or the temp folder. Such a path is writable by the user and by nothing else, which is why it is
-    /// reported separately from <see cref="IsWorldWritable"/> rather than folded into it.
+    /// reported separately from the wider-principal checks rather than folded into them.
     /// </summary>
     public static bool IsUnderUserProfile(string? path, IEnumerable<string>? userRoots = null)
     {

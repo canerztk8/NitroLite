@@ -191,7 +191,7 @@
                           BorderBrush="{DynamicResource TextPrimaryBrush}" BorderThickness="1" />
                 </Button>
 
-                <TextBox Width="110" Text="{Binding ActiveColor}" Watermark="#00E5FF"
+                <TextBox Width="110" Text="{Binding ActiveColorText}" Watermark="#00E5FF"
                          AutomationProperties.AutomationId="ActiveColorHex" />
 
                 <Button Classes="primary" Content="{Binding Labels.ApplyToAllZones}" Padding="12,7" FontSize="11"

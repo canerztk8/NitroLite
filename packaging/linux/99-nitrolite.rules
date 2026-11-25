@@ -6,14 +6,14 @@
 # through power-profiles-daemon, and every other control says what is missing.
 #
 # Install (the Settings page's "Enable" button does all of this behind one password prompt):
-#   sudo groupadd -f nitrolite && sudo usermod -aG nitrolite,input "$USER"
+#   sudo groupadd -f nitrolite && sudo usermod -aG nitrolite "$USER"
 #   sudo install -m 644 99-nitrolite.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules && sudo udevadm trigger
 # Then log out and back in, so the session picks up the group.
 #
 # Why group ownership and not TAG+="uaccess": uaccess makes logind put an ACL on a device's /dev node. A sysfs attribute
-# has no /dev node, so the tag never reached the files NitroLite writes. It is still the right tool for the one real
-# device node here, the keyboard controller's /dev/hidrawN.
+# has no /dev node, so the tag never reached the files NitroLite writes. It is still the right tool for the two real
+# device nodes here, the keyboard controller's /dev/hidrawN and the Nitro key's /dev/input/eventN.
 #
 # Every change is 0664/g+w to the nitrolite group: readable by everyone as the kernel left it, writable by the group,
 # never by everyone. A node that lost its read bit could be written through the helper and never read back. If the group
@@ -23,6 +23,16 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # Global attributes, applied when the acer-wmi platform device appears at boot
 # ---------------------------------------------------------------------------------------------------------------------
+#
+# These rules match every event of the acer-wmi platform device, not only "add". That matters: the kernel announces the
+# device ("add") before the driver has probed it, and it is the probe that registers the platform profile. The "bind"
+# event that follows the probe runs the same rules again, by which time the attribute exists.
+#
+# Known limit: the processor boost switch belongs to the cpufreq driver, not to acer-wmi. Where that driver is a module
+# that loads after acer-wmi (acpi-cpufreq on some kernels), neither event finds the switch and it stays root-only until
+# the next "udevadm trigger" or reboot. A failed chgrp is silent here by design (the rule must not fail the event). The
+# NitroLite helper (installed by the .deb/.rpm and install.sh --system) is the primary write path for both attributes
+# and does not depend on this timing; these rules are the fallback for installs without it.
 
 # The ACPI platform profile (the operating mode). It lives under /sys/firmware/acpi/, which has no device of its own.
 SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null && chmod 0664 /sys/firmware/acpi/platform_profile; true'"
@@ -70,6 +80,13 @@ SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr
 # gone by then and the builtin would only log that it could not find it.
 ACTION!="remove", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0cf2", ATTRS{idProduct}=="5130", TAG+="uaccess", RUN{builtin}+="uaccess"
 ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="0018:0CF2:5130.*", TAG+="uaccess", RUN{builtin}+="uaccess"
+
+# The Nitro key. acer-wmi reports it on its own input device, "Acer WMI hotkeys", which carries the laptop's hotkeys and
+# nothing typed. Only that one event node is handed to the user at the seat, the same way as the keyboard controller
+# above. This replaces adding the user to the "input" group, which would let every program of that user read every
+# keyboard and mouse on the machine. Installs that already added the group keep it; "sudo gpasswd -d $USER input"
+# removes it once this rule is in place.
+ACTION!="remove", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Acer WMI hotkeys", TAG+="uaccess", RUN{builtin}+="uaccess"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # If the operating mode still says "permission denied"

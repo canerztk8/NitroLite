@@ -149,38 +149,4 @@ public class AdversarialChallengerTests
         string result = TelemetryFormatter.FormatGpuTemperature(temp, isSleeping);
         Assert.Equal(expected, result);
     }
-
-    [Theory]
-    [InlineData(0.0, false, "-- W")]
-    [InlineData(-5.0, false, "-- W")]
-    [InlineData(75.0, true, "0.0 W (D3cold)")]
-    [InlineData(85.3, false, "85.3 W")]
-    public void TelemetryFormatter_GpuPower_FormatsD3coldSleepStateCleanly(
-        double watts, bool isSleeping, string expected)
-    {
-        string result = TelemetryFormatter.FormatGpuPower(watts, isSleeping);
-        Assert.Equal(expected, result);
-    }
-
-    [Theory]
-    [InlineData(true, 15.5, false, false, "15.5 W (Deşarj Oluyor)")]
-    [InlineData(true, 0.0, false, false, "0.0 W (Pilde / Boşta)")]  // Crucial: 0W on battery is NOT "Adaptörde / Doygun"!
-    [InlineData(false, 0.0, true, true, "45.0 W (Şarj Oluyor)", 45.0)]
-    [InlineData(false, 0.0, true, false, "0.0 W (Adaptörde / Doygun)")]
-    [InlineData(false, 0.0, false, false, "0.0 W (Pilde / Boşta)")]
-    public void TelemetryFormatter_BatteryPowerFlow_CleanlyDistinguishesAllStates(
-        bool isDischarging, double dischargeWatts, bool isPluggedIn, bool isCharging, string expected, double chargeWatts = 0.0)
-    {
-        var status = new BatteryStatusInfo
-        {
-            IsDischarging = isDischarging,
-            DischargeRateWatts = dischargeWatts,
-            IsPluggedIn = isPluggedIn,
-            IsCharging = isCharging,
-            ChargeRateWatts = chargeWatts
-        };
-
-        string flow = TelemetryFormatter.FormatBatteryPowerFlow(status);
-        Assert.Equal(expected, flow);
-    }
 }

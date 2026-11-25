@@ -1,3 +1,6 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace NitroLite.Core;
@@ -43,16 +46,26 @@ public static partial class Redaction
     /// the text, which is how a quoted path such as <c>'C:\Users\name'</c> closes. Running a little too far on a bare
     /// profile path followed by prose is the accepted cost: the line loses a few words, the name never leaks.
     /// </para>
+    /// <para>
+    /// A JSON <c>\uXXXX</c> escape is part of the name too. The settings file is written with the default encoder,
+    /// which stores every non-ASCII letter that way: <c>C:\Users\Çağrı</c> is on disk as
+    /// <c>C:\\Users\\\u00C7a\u011Fr\u0131</c>, and stopping at the escape's backslash left the whole name in the
+    /// diagnostics archive (and half of <c>Güneş</c>).
+    /// </para>
     /// </summary>
-    [GeneratedRegex(@"(?<drive>[A-Za-z]:(?:\\{1,2}|/)Users(?:\\{1,2}|/))(?:[^\\/:*?""<>|\r\n']|'(?![\s,;:.)\]}]|$))+", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<drive>[A-Za-z]:(?:\\{1,2}|/)Users(?:\\{1,2}|/))(?:\\u[0-9A-Fa-f]{4}|[^\\/:*?""<>|\r\n']|'(?![\s,;:.)\]}]|$))+", RegexOptions.IgnoreCase)]
     private static partial Regex WindowsProfile();
 
-    /// <summary><c>/home/name</c>, keeping the <c>/home</c> segment.</summary>
-    [GeneratedRegex(@"(?<root>/home/)[^/\s""'<>]+")]
+    /// <summary>
+    /// <c>/home/name</c>, keeping the <c>/home</c> segment. A name with a space in it is taken whole only when a
+    /// <c>/</c> follows it, so <c>/home/John Smith/.config</c> loses the whole name while a bare <c>/home/name</c>
+    /// followed by prose keeps the prose.
+    /// </summary>
+    [GeneratedRegex(@"(?<root>/home/)(?:[^/\s""'<>]+(?: [^/\s""'<>]+)+(?=/)|[^/\s""'<>]+)")]
     private static partial Regex UnixProfile();
 
-    /// <summary><c>/Users/name</c> on macOS, which the Linux build can also be run from.</summary>
-    [GeneratedRegex(@"(?<root>/Users/)[^/\s""'<>]+")]
+    /// <summary><c>/Users/name</c> on macOS, which the Linux build can also be run from. Spaces as for /home.</summary>
+    [GeneratedRegex(@"(?<root>/Users/)(?:[^/\s""'<>]+(?: [^/\s""'<>]+)+(?=/)|[^/\s""'<>]+)")]
     private static partial Regex MacProfile();
 
     /// <summary>
@@ -72,6 +85,92 @@ public static partial class Redaction
         result = UnixProfile().Replace(result, "${root}" + UserPlaceholder);
         result = MacProfile().Replace(result, "${root}" + UserPlaceholder);
         return ScrubMachineName(result);
+    }
+
+    /// <summary>
+    /// A JSON document with every string in it — values and property names — scrubbed as <see cref="Scrub"/> scrubs
+    /// text, and written back out. Null and empty pass through.
+    /// </summary>
+    /// <remarks>
+    /// The text form of a JSON file is the wrong thing to match against: the default encoder stores a non-ASCII name
+    /// as <c>\uXXXX</c> escapes and every backslash doubled, and a machine name written that way never matches a plain
+    /// replace. Parsing first means each string is matched in its decoded form, and writing it back through the
+    /// serializer means the result is always valid JSON — a replacement can never cut an escape in half. Text that is
+    /// not JSON at all (a half-written file) falls back to <see cref="Scrub"/>, which also understands the escapes.
+    /// </remarks>
+    public static string ScrubJson(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return json ?? string.Empty;
+
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+        }
+        catch (JsonException)
+        {
+            return Scrub(json);
+        }
+
+        if (root == null) return Scrub(json);
+
+        try
+        {
+            return ScrubNode(root)?.ToJsonString(ScrubbedJsonOptions) ?? Scrub(json);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or JsonException or ArgumentException)
+        {
+            // ArgumentException is a hand-edited file with the same property twice: the text is still scrubbed, as text.
+            return Scrub(json);
+        }
+    }
+
+    /// <summary>
+    /// Indented, and with the relaxed encoder: the archive is read by a person, not embedded in a page, and the
+    /// default encoder would print every placeholder as <c><user></c>.
+    /// </summary>
+    private static readonly JsonSerializerOptions ScrubbedJsonOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    /// <summary>A scrubbed copy of <paramref name="node"/>; the original is left as it was.</summary>
+    private static JsonNode? ScrubNode(JsonNode? node)
+    {
+        switch (node)
+        {
+            case null:
+                return null;
+            case JsonObject obj:
+            {
+                var copy = new JsonObject();
+                foreach (var (name, value) in obj)
+                {
+                    var key = Scrub(name);
+                    // Two names that scrub to the same text (two game paths under two profiles) must both survive:
+                    // a duplicate key would throw, and dropping one would hide a setting from the person diagnosing.
+                    var unique = key;
+                    for (var i = 2; copy.ContainsKey(unique); i++) unique = $"{key} ({i})";
+                    copy[unique] = ScrubNode(value);
+                }
+                return copy;
+            }
+            case JsonArray array:
+            {
+                var copy = new JsonArray();
+                foreach (var item in array) copy.Add(ScrubNode(item));
+                return copy;
+            }
+            case JsonValue value when value.GetValueKind() == JsonValueKind.String:
+                return JsonValue.Create(Scrub(value.GetValue<string>()));
+            default:
+                return node.DeepClone();
+        }
     }
 
     /// <summary>

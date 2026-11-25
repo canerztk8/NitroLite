@@ -286,7 +286,8 @@
           <!-- A fan that stops turning while the die is hot is a hardware fault, not a tuning choice, so the guard is
                offered in every fan mode. -->
           <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,8,0,0">
-            <ToggleButton Classes="toggle" IsChecked="{Binding FanProtectionOn}" VerticalAlignment="Center" />
+            <ToggleButton Classes="toggle" IsChecked="{Binding FanProtectionOn}"
+                          AutomationProperties.Name="{Binding Labels.FanProtection}" VerticalAlignment="Center" />
             <TextBlock Classes="hint" Text="{Binding Labels.FanProtection}" Margin="8,0,0,0" />
           </StackPanel>
         </Grid>
@@ -383,6 +384,7 @@
               <TextBlock Classes="hint" Text="{Binding GameStatusText}" Margin="10,0,0,0" />
             </StackPanel>
             <ToggleButton Grid.Column="2" Classes="toggle" IsChecked="{Binding AutoGameModeOn}"
+                          AutomationProperties.Name="{Binding Labels.AutoGameDetect}"
                           VerticalAlignment="Center" Margin="0,0,8,0" />
             <TextBlock Grid.Column="3" Classes="hint" Text="{Binding Labels.AutoGameDetect}"
                        VerticalAlignment="Center" />
@@ -538,7 +540,8 @@
           <!-- The rule's own switch. Every control above writes as it changes, so there is nothing left to save. -->
           <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
                       IsVisible="{Binding SelectedGameProfile, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <ToggleButton Classes="toggle" IsChecked="{Binding GameAutoApply}" VerticalAlignment="Center"
+            <ToggleButton Classes="toggle" IsChecked="{Binding GameAutoApply}"
+                          AutomationProperties.Name="{Binding Labels.GameAutoApply}" VerticalAlignment="Center"
                           ToolTip.Tip="{Binding Labels.GameAutoApplyTooltip}" />
             <TextBlock Classes="hint" Text="{Binding Labels.GameAutoApply}" Margin="8,0,0,0"
                        VerticalAlignment="Center" />

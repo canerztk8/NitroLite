@@ -377,22 +377,23 @@ public class LeakAndIntegrityTests : IDisposable
         var settingsPath = Path_("settings.json");
         File.WriteAllText(settingsPath, "{\"Language\":\"de\"}");
 
-        var sourceProfiles = Path_("game_profiles.json");
-        File.WriteAllText(sourceProfiles, "[{\"exe_name\":\"game.exe\",\"display_name\":\"Game\"}]");
+        // The RGB presets are the part that is still a file of its own (the game rules travel inside the settings).
+        var sourcePresets = Path_("rgb_presets.json");
+        File.WriteAllText(sourcePresets, "[{\"Name\":\"Mine\",\"Effect\":\"STATIC\"}]");
 
         var backupPath = Path_("backup.json");
         var created = BackupService.Create(backupPath, new AppSettings { Language = "es" },
-            gameProfilesPath: sourceProfiles, rgbPresetsPath: null, appVersion: "test");
+            gameProfilesPath: null, rgbPresetsPath: sourcePresets, appVersion: "test");
         Assert.True(created.Success, created.Error);
-        Assert.Contains(created.Written, part => part.Contains("Oyun", StringComparison.Ordinal));
+        Assert.Contains(created.Written, part => part.Contains("RGB", StringComparison.Ordinal));
 
-        // A file where the game-profiles folder should be: the write cannot create the directory, so that part fails
+        // A file where the presets folder should be: the write cannot create the directory, so that part fails
         // while the settings part succeeds.
         var blocker = Path_("blocker");
         File.WriteAllText(blocker, "not a folder");
 
         var result = BackupService.Restore(backupPath, settingsPath,
-            gameProfilesPath: Path.Combine(blocker, "game_profiles.json"), rgbPresetsPath: null);
+            gameProfilesPath: null, rgbPresetsPath: Path.Combine(blocker, "rgb_presets.json"));
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.Failed);
@@ -479,7 +480,6 @@ public class LeakAndIntegrityTests : IDisposable
                 IsActive = true,
                 SavedMode = (OperatingMode)99,
                 SavedFan = (FanMode)42,
-                SavedBoost = (CpuBoostMode)(-7),
                 SavedAcBoost = (CpuBoostMode)77,
                 SavedDcBoost = (CpuBoostMode)88,
                 SavedMouseProfile = 9,
@@ -492,7 +492,6 @@ public class LeakAndIntegrityTests : IDisposable
         var recovery = settings.GameSessionRecovery!;
         Assert.Equal(OperatingMode.Default, recovery.SavedMode);
         Assert.Equal(FanMode.Auto, recovery.SavedFan);
-        Assert.Equal(CpuBoostMode.Aggressive, recovery.SavedBoost);
         Assert.Null(recovery.SavedAcBoost);
         Assert.Null(recovery.SavedDcBoost);
         Assert.Equal(0, recovery.SavedMouseProfile);

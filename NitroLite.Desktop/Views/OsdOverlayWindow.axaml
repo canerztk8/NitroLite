@@ -3,7 +3,7 @@
         xmlns:vm="using:NitroLite.Desktop.ViewModels"
         x:Class="NitroLite.Desktop.Views.OsdOverlayWindow"
         x:DataType="vm:MainViewModel"
-        Title="NitroLite OSD"
+        Title="{Binding Labels.OsdWindowTitle}"
         SystemDecorations="None"
         CanResize="False"
         CanMinimize="False"

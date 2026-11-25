@@ -6,8 +6,7 @@ namespace NitroLite.Tests.Scenarios;
 
 /// <summary>
 /// Category 1: a machine whose sensors lie, whose clock moves, and whose process dies without warning.
-/// Every test here drives the real <see cref="FanCurve"/>, <see cref="FanCurveEvaluator"/> and
-/// <see cref="CleanExitMarker"/>; nothing is mocked.
+/// Every test here drives the real <see cref="FanCurve"/> and <see cref="FanCurveEvaluator"/>; nothing is mocked.
 /// </summary>
 public class ThermalChaosScenarios
 {
@@ -246,73 +245,6 @@ public class ThermalChaosScenarios
         }
 
         Assert.True(writes <= 1, $"A forward clock jump produced {writes} writes in 30 s.");
-    }
-
-    #endregion
-
-    #region S1-05 A process that dies without warning
-
-    /// <summary>
-    /// The marker is the only thing that survives a kill. Finding it at startup is what tells the next run to hand
-    /// the fans back before it reads anything.
-    /// </summary>
-    [Fact]
-    public void AMarkerLeftBehindMeansThePreviousRunDidNotExitCleanly()
-    {
-        CleanExitMarker.MarkCleanExit();
-        Assert.False(CleanExitMarker.PreviousRunWasUnclean());
-
-        // A run that is killed never reaches MarkCleanExit, so the marker stays.
-        CleanExitMarker.MarkRunning();
-        Assert.True(File.Exists(CleanExitMarker.FilePath));
-        Assert.True(CleanExitMarker.PreviousRunWasUnclean());
-
-        // The next start reads it, restores the fans, and clears it.
-        CleanExitMarker.MarkCleanExit();
-        Assert.False(CleanExitMarker.PreviousRunWasUnclean());
-    }
-
-    /// <summary>
-    /// The full kill-and-restart cycle: a run leaves the marker, the next run sees it, and the marker is gone once
-    /// that run exits cleanly. A third start must not think anything crashed.
-    /// </summary>
-    [Fact]
-    public void KillThenRestartThenCleanExitLeavesNothingBehind()
-    {
-        CleanExitMarker.MarkCleanExit();
-
-        // Run 1: starts, is killed.
-        CleanExitMarker.MarkRunning();
-        Assert.True(CleanExitMarker.PreviousRunWasUnclean());
-
-        // Run 2: sees the marker, restores the fans, marks itself running, exits cleanly.
-        CleanExitMarker.MarkRunning();
-        CleanExitMarker.MarkCleanExit();
-
-        // Run 3: nothing to recover.
-        Assert.False(CleanExitMarker.PreviousRunWasUnclean());
-    }
-
-    /// <summary>
-    /// A read-only data folder must not turn the marker into a crash: losing it costs one unnecessary fan reset,
-    /// not the app.
-    /// </summary>
-    [Fact]
-    public void AnUnwritableMarkerIsNotFatal()
-    {
-        // The marker path is under the redirected test data folder; a directory in its place makes the write fail.
-        var path = CleanExitMarker.FilePath;
-        CleanExitMarker.MarkCleanExit();
-        Directory.CreateDirectory(path);
-        try
-        {
-            CleanExitMarker.MarkRunning();          // must not throw
-            CleanExitMarker.MarkCleanExit();        // must not throw
-        }
-        finally
-        {
-            try { Directory.Delete(path, recursive: true); } catch { }
-        }
     }
 
     #endregion

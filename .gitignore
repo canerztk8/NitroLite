@@ -44,7 +44,6 @@ battery_report.html
 battery*.html
 
 ## NitroLite crash-recovery state
-dc_eco_state.json
 active_game_session.json
 
 ## Local AI agent working notes (kept on disk, not versioned)

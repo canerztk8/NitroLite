@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using NitroLite.Core;
 using NitroLite.Desktop.ViewModels;
 
@@ -138,15 +139,6 @@ public sealed class TrayIconHost : IDisposable
     /// <summary>The menu, exposed so a test can walk it without a display.</summary>
     public NativeMenu Menu => _menu;
 
-    /// <summary>The quick-mode rows, in the order they appear.</summary>
-    public IReadOnlyDictionary<OperatingMode, NativeMenuItem> ModeItems => _modeItems;
-
-    /// <summary>The CPU-boost rows, in the order they appear.</summary>
-    public IReadOnlyDictionary<CpuBoostMode, NativeMenuItem> BoostItems => _boostItems;
-
-    /// <summary>The "try the desktop settings again" row.</summary>
-    public NativeMenuItem RetryItem => _retryItem;
-
     /// <summary>
     /// Marks the mode the machine is actually in, hides the modes the firmware does not advertise, and disables the
     /// ones the battery rule forbids. Called when the menu opens.
@@ -221,9 +213,34 @@ public sealed class TrayIconHost : IDisposable
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         // The whole label object is replaced when the language changes, so every header is rewritten at once.
-        if (e.PropertyName != nameof(MainViewModel.Labels)) return;
-        UpdateLabels();
+        if (e.PropertyName == nameof(MainViewModel.Labels))
+        {
+            UpdateLabels();
+            return;
+        }
+
+        // The tick and the battery rule's disabled rows also follow the state as it changes, not only when the menu
+        // opens: some Linux tray hosts never raise Opening, and their menu kept the rows of the moment it was built —
+        // Turbo enabled on battery, the tick on a mode the machine had left.
+        if (_disposed || !TrayStateProperties.Contains(e.PropertyName ?? "")) return;
+
+        // The menu is a UI object; a change raised on a pool thread is posted rather than applied in place.
+        if (Dispatcher.UIThread.CheckAccess()) SyncCheckedState();
+        else Dispatcher.UIThread.Post(() => { if (!_disposed) SyncCheckedState(); });
     }
+
+    /// <summary>The view-model properties the menu's ticks, visibility and enabled rows are read from.</summary>
+    private static readonly HashSet<string> TrayStateProperties = new(StringComparer.Ordinal)
+    {
+        nameof(MainViewModel.SelectedMode),
+        nameof(MainViewModel.OnAcPower),
+        nameof(MainViewModel.BatteryPercent),
+        nameof(MainViewModel.SelectedCpuBoost),
+        nameof(MainViewModel.CpuBoostAvailable),
+        nameof(MainViewModel.HasPendingDesktopRestore),
+        nameof(MainViewModel.GameActive),
+        nameof(MainViewModel.ModeControlAvailable)
+    };
 
     private void UpdateLabels()
     {

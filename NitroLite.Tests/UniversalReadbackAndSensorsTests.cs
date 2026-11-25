@@ -311,68 +311,6 @@ public class UniversalReadbackAndSensorsTests
     // ---------------------------------------------------------------- telemetry fallback
 
     [Fact]
-    public void Telemetry_TheFirstUsableSourceWins()
-    {
-        var chain = new TelemetryFallbackChain("cpu-temp", SensorPlausibility.MinTemperatureCelsius, 130)
-            .Add(TelemetrySource.Firmware, () => 0)
-            .Add(TelemetrySource.Pdh, () => 61.5)
-            .Add(TelemetrySource.Estimate, () => 40);
-
-        var reading = chain.Resolve();
-
-        Assert.True(reading.HasValue);
-        Assert.Equal(61.5, reading.Value);
-        Assert.Equal(TelemetrySource.Pdh, reading.Source);
-        Assert.Contains("Firmware rejected", string.Join(" ", reading.Tried), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Telemetry_ASentinelOrAnOutOfRangeValueIsNotAMeasurement()
-    {
-        // 6553.5 °C is what a firmware answers when it does not know the sensor id; 0 is what AASSvc answers for a
-        // field it never implemented.
-        Assert.False(TelemetryFallbackChain.IsUsable(6553.5, 1, 130));
-        Assert.False(TelemetryFallbackChain.IsUsable(0, 1, 130));
-        Assert.False(TelemetryFallbackChain.IsUsable(-1, 1, 130));
-        Assert.False(TelemetryFallbackChain.IsUsable(double.NaN, 1, 130));
-        Assert.False(TelemetryFallbackChain.IsUsable(double.PositiveInfinity, 1, 130));
-        Assert.True(TelemetryFallbackChain.IsUsable(1, 1, 130));
-        Assert.True(TelemetryFallbackChain.IsUsable(130, 1, 130));
-
-        // Zero is a real fan speed, so a fan chain that allows it keeps it; the temperature chain does not.
-        Assert.True(TelemetryFallbackChain.IsUsable(0, 0, 12000));
-    }
-
-    [Fact]
-    public void Telemetry_ASourceThatThrowsIsSkippedRatherThanFatal()
-    {
-        var chain = new TelemetryFallbackChain("cpu-clock", 1, 7000)
-            .Add(TelemetrySource.Firmware, () => throw new InvalidOperationException("driver went away"))
-            .Add(TelemetrySource.NtPower, () => 3450);
-
-        var reading = chain.Resolve();
-
-        Assert.Equal(3450, reading.Value);
-        Assert.Equal(TelemetrySource.NtPower, reading.Source);
-        Assert.Contains("Firmware failed", string.Join(" ", reading.Tried), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Telemetry_NoSourceAnswersMeansNoReadingRatherThanZero()
-    {
-        var chain = new TelemetryFallbackChain("gpu-power", 1, 400)
-            .Add(TelemetrySource.Firmware, () => 0)
-            .Add(TelemetrySource.Nvml, () => null);
-
-        var reading = chain.Resolve();
-
-        Assert.False(reading.HasValue);
-        Assert.Null(reading.Value);
-        Assert.Equal(TelemetrySource.None, reading.Source);
-        Assert.Equal("gpu-power: none", reading.Describe().Split(" [")[0]);
-    }
-
-    [Fact]
     public void Telemetry_TheMonitorRecordsWhereEveryReadingCameFrom()
     {
         using var monitor = new HardwareMonitorService();

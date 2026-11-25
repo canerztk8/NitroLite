@@ -9,12 +9,18 @@
 #   ./uninstall.sh --system      # remove the /opt install
 #   ./uninstall.sh --purge       # also remove ~/.local/share/NitroLite (settings, logs, profiles.user.json)
 #   ./uninstall.sh --keep-udev   # leave /etc/udev/rules.d/99-nitrolite.rules in place
+#
+# With --system, the system pieces (the helper service and its polkit policy, the predator_v4 option file the settings
+# page can write) are removed even when the application folder is already gone, so deleting the folder by hand first
+# does not leave a root service pointing at a missing binary. Without --system they are left alone: a .deb/.rpm install
+# on the same machine may still be using them. The udev rule is removed in both modes, as before (--keep-udev keeps it).
 
 set -euo pipefail
 
 DESKTOP_NAME="nitrolite.desktop"
 ICON_NAME="nitrolite.svg"
 RULE_NAME="99-nitrolite.rules"
+MODPROBE_CONF="/etc/modprobe.d/nitrolite-acer.conf"
 
 MODE="user"
 PURGE=0
@@ -72,21 +78,24 @@ case "$APP_DIR" in
         ;;
 esac
 
-if [ ! -x "$APP_DIR/NitroLite.Desktop" ]; then
-    echo "error: '$APP_DIR' does not look like a NitroLite install (no NitroLite.Desktop in it)." >&2
-    echo "       Nothing was removed. Pass the folder install.sh used, or delete it by hand." >&2
-    exit 2
-fi
+# The folder is only removed when it looks like a NitroLite install. When it does not (it was deleted by hand, or the
+# path is wrong) the folder is left alone, but everything else below is still cleaned up.
+if [ -x "$APP_DIR/NitroLite.Desktop" ]; then
+    # The symlink goes first: removing the directory it points at would leave a dangling command on PATH.
+    if [ -L "$BIN_DIR/nitrolite" ] || [ -f "$BIN_DIR/nitrolite" ]; then
+        $SUDO rm -f "$BIN_DIR/nitrolite"
+        echo "  removed      $BIN_DIR/nitrolite"
+    fi
 
-# The symlink goes first: removing the directory it points at would leave a dangling command on PATH.
-if [ -L "$BIN_DIR/nitrolite" ] || [ -f "$BIN_DIR/nitrolite" ]; then
-    $SUDO rm -f "$BIN_DIR/nitrolite"
-    echo "  removed      $BIN_DIR/nitrolite"
-fi
-
-if [ -d "$APP_DIR" ]; then
     $SUDO rm -rf "$APP_DIR"
     echo "  removed      $APP_DIR"
+else
+    echo "  warning: '$APP_DIR' does not look like a NitroLite install (no NitroLite.Desktop in it); it was left alone." >&2
+    # Only a link that no longer points anywhere is taken away; a working command is someone else's.
+    if [ -L "$BIN_DIR/nitrolite" ] && [ ! -e "$BIN_DIR/nitrolite" ]; then
+        $SUDO rm -f "$BIN_DIR/nitrolite"
+        echo "  removed      $BIN_DIR/nitrolite (dangling link)"
+    fi
 fi
 
 if [ -f "$DESKTOP_DIR/$DESKTOP_NAME" ]; then
@@ -102,11 +111,25 @@ fi
 command -v update-desktop-database >/dev/null 2>&1 && \
     $SUDO update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 
-if [ "$MODE" = "system" ] && [ -f /etc/systemd/system/nitrolite-helper.socket ]; then
+if [ "$MODE" = "system" ] && { [ -f /etc/systemd/system/nitrolite-helper.socket ] \
+        || [ -f /etc/systemd/system/nitrolite-helper.service ]; }; then
     echo "Removing the NitroLite helper service (needs root)..."
+    # Stopping the service is what makes the helper hand a manual fan back to the firmware before it goes.
     sudo systemctl disable --now nitrolite-helper.socket nitrolite-helper.service >/dev/null 2>&1 || true
-    sudo rm -f /etc/systemd/system/nitrolite-helper.socket /etc/systemd/system/nitrolite-helper.service         /usr/share/polkit-1/actions/io.github.canerztk8.nitrolite.policy
+    sudo rm -f /etc/systemd/system/nitrolite-helper.socket /etc/systemd/system/nitrolite-helper.service \
+        /usr/share/polkit-1/actions/io.github.canerztk8.nitrolite.policy
     sudo systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+# Written by the settings page's "Enable predator_v4" button. A system-wide file, so only --system removes it. The
+# running kernel keeps the option until the next boot.
+if [ "$MODE" = "system" ] && [ -f "$MODPROBE_CONF" ]; then
+    echo "Removing the acer_wmi predator_v4 option (needs root)..."
+    if sudo rm -f "$MODPROBE_CONF"; then
+        echo "  removed      $MODPROBE_CONF (takes effect at the next boot)"
+    else
+        echo "  warning: $MODPROBE_CONF is still there." >&2
+    fi
 fi
 
 if [ "$REMOVE_UDEV" -eq 1 ] && [ -f "/etc/udev/rules.d/$RULE_NAME" ]; then
@@ -128,6 +151,11 @@ if [ "$PURGE" -eq 1 ]; then
     fi
 else
     echo "  kept         $HOME/.local/share/NitroLite (settings and logs; use --purge to delete)"
+fi
+
+if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx input; then
+    echo "  note: an older NitroLite added you to the 'input' group, which can read every keyboard and mouse."
+    echo "        It is no longer needed; remove it with: sudo gpasswd -d \"\$USER\" input"
 fi
 
 echo

@@ -14,7 +14,7 @@ public class LifecycleRecoveryTests
         {
             IsActive = true,
             SavedMode = OperatingMode.Extreme,
-            SavedBoost = CpuBoostMode.Efficient,
+            SavedAcBoost = CpuBoostMode.Efficient,
             SavedFan = FanMode.Custom,
             SavedMouseProfile = 3,
             Timestamp = DateTime.UtcNow
@@ -26,7 +26,7 @@ public class LifecycleRecoveryTests
         Assert.NotNull(restored);
         Assert.True(restored.IsActive);
         Assert.Equal(OperatingMode.Extreme, restored.SavedMode);
-        Assert.Equal(CpuBoostMode.Efficient, restored.SavedBoost);
+        Assert.Equal(CpuBoostMode.Efficient, restored.SavedAcBoost);
         Assert.Equal(FanMode.Custom, restored.SavedFan);
         Assert.Equal(3, restored.SavedMouseProfile);
         Assert.Equal(original.Timestamp.ToString("s"), restored.Timestamp.ToString("s"));
@@ -42,7 +42,7 @@ public class LifecycleRecoveryTests
             {
                 IsActive = true,
                 SavedMode = OperatingMode.Turbo,
-                SavedBoost = CpuBoostMode.Disabled,
+                SavedAcBoost = CpuBoostMode.Disabled,
                 SavedFan = FanMode.Max,
                 SavedMouseProfile = 2,
                 Timestamp = DateTime.UtcNow
@@ -57,7 +57,7 @@ public class LifecycleRecoveryTests
             Assert.NotNull(loaded);
             Assert.True(loaded.IsActive);
             Assert.Equal(OperatingMode.Turbo, loaded.SavedMode);
-            Assert.Equal(CpuBoostMode.Disabled, loaded.SavedBoost);
+            Assert.Equal(CpuBoostMode.Disabled, loaded.SavedAcBoost);
             Assert.Equal(FanMode.Max, loaded.SavedFan);
             Assert.Equal(2, loaded.SavedMouseProfile);
         }

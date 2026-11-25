@@ -2,31 +2,6 @@ using NitroLite.Core;
 
 namespace NitroLite.Desktop;
 
-/// <summary>One row of the tray menu, in the order it is drawn.</summary>
-public enum TrayRowKind
-{
-    /// <summary>"Göster / Aç".</summary>
-    Show,
-
-    /// <summary>"Masaüstü ayarlarını yeniden dene", drawn only while a restore is pending.</summary>
-    Retry,
-
-    /// <summary>A hairline between groups.</summary>
-    Separator,
-
-    /// <summary>One of the five operating modes, as a top-level row.</summary>
-    Mode,
-
-    /// <summary>The "CPU Boost" submenu.</summary>
-    Boost,
-
-    /// <summary>"Temiz Çıkış".</summary>
-    Exit
-}
-
-/// <summary>One row of the tray menu: what it is, and — for a mode row — which mode it applies.</summary>
-public readonly record struct TrayRow(TrayRowKind Kind, OperatingMode Mode = default);
-
 /// <summary>
 /// The rules the tray menu follows, kept out of <see cref="TrayIconHost"/> so they can be asserted without a display.
 /// </summary>
@@ -59,35 +34,6 @@ public static class TrayMenuPolicy
     /// event per press and Avalonia's tray icon has no double-click event, so the host derives it from the interval.
     /// </summary>
     public static readonly TimeSpan DoubleClickWindow = TimeSpan.FromMilliseconds(500);
-
-    /// <summary>
-    /// The menu, top to bottom: show, retry, rule, the five modes, rule, boost, rule, exit.
-    /// </summary>
-    /// <remarks>
-    /// The retry row is always in the list and hidden by <see cref="ShowRetry"/> rather than added and removed: a
-    /// <c>NativeMenu</c> that is rebuilt while it is open loses the pointer, and the row's visibility is already the
-    /// thing the sync pass sets.
-    /// </remarks>
-    public static IReadOnlyList<TrayRow> BuildRows(IReadOnlyList<OperatingMode> modes)
-    {
-        ArgumentNullException.ThrowIfNull(modes);
-
-        var rows = new List<TrayRow>(modes.Count + 7)
-        {
-            new(TrayRowKind.Show),
-            new(TrayRowKind.Retry),
-            new(TrayRowKind.Separator)
-        };
-
-        foreach (var mode in modes) rows.Add(new TrayRow(TrayRowKind.Mode, mode));
-
-        rows.Add(new TrayRow(TrayRowKind.Separator));
-        rows.Add(new TrayRow(TrayRowKind.Boost));
-        rows.Add(new TrayRow(TrayRowKind.Separator));
-        rows.Add(new TrayRow(TrayRowKind.Exit));
-
-        return rows;
-    }
 
     /// <summary>
     /// Whether a quick-mode row is drawn at all. A mode the firmware does not advertise is hidden, unless the machine

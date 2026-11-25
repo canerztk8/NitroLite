@@ -597,7 +597,14 @@ public class GameProfileAppliedSettingsTests
 
         Assert.Equal(CpuBoostMode.Aggressive, boost.Ac);
         Assert.Equal(CpuBoostMode.Efficient, boost.Dc);
-        Assert.Null(settings.GameSessionRecovery);
+
+        // The mode write threw, so the record is kept for the next launch with only the mode still owed: the boost that
+        // did land is struck off, and is not replayed.
+        var kept = settings.GameSessionRecovery;
+        Assert.NotNull(kept);
+        Assert.True(kept!.RestoreMode);
+        Assert.Null(kept.SavedAcBoost);
+        Assert.Null(kept.SavedDcBoost);
     }
 
     // ---------------------------------------------------------------- review round 1: OEM boost values in the record

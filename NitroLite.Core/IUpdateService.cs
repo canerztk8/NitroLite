@@ -18,6 +18,60 @@ public sealed record UpdateCheckResult(
     string? AssetName = null,
     long SizeBytes = 0);
 
+/// <summary>The three answers a release check can give.</summary>
+public enum UpdateCheckStatus
+{
+    /// <summary>GitHub answered and this build is the newest release.</summary>
+    Current,
+
+    /// <summary>A newer release with a package for this platform.</summary>
+    Found,
+
+    /// <summary>The question could not be answered; "up to date" would be a guess.</summary>
+    Failed
+}
+
+/// <summary>Why a release check could not be answered.</summary>
+public enum UpdateCheckFailure
+{
+    None,
+
+    /// <summary>No connection, a timeout, or a server error.</summary>
+    Network,
+
+    /// <summary>GitHub refused the request (403 or 429), which is almost always its anonymous rate limit.</summary>
+    RateLimited,
+
+    /// <summary>A newer release exists but carries no package this build can install from.</summary>
+    NoPackage,
+
+    /// <summary>The answer could not be read, or pointed somewhere the updater will not go.</summary>
+    BadResponse
+}
+
+/// <summary>
+/// A release check that tells "already current" apart from "could not ask". <see cref="IUpdateService.CheckAsync"/>
+/// folds both into null, and the card then said "up to date" to a machine that was offline or rate-limited.
+/// </summary>
+/// <param name="Detail">The technical reason, for the log. Not localised and not meant for the card.</param>
+public sealed record UpdateCheckOutcome(
+    UpdateCheckStatus Status,
+    UpdateCheckResult? Update = null,
+    UpdateCheckFailure Failure = UpdateCheckFailure.None,
+    string? Detail = null)
+{
+    public static UpdateCheckOutcome UpToDate() => new(UpdateCheckStatus.Current);
+
+    public static UpdateCheckOutcome FoundRelease(UpdateCheckResult update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        return new(UpdateCheckStatus.Found, update);
+    }
+
+    public static UpdateCheckOutcome CouldNotCheck(UpdateCheckFailure failure, string? detail = null) =>
+        new(UpdateCheckStatus.Failed, null, failure, detail);
+}
+
 /// <summary>What an install attempt did, in the words the card will show.</summary>
 public sealed record UpdateInstallResult(bool Success, string? ExecutablePath, string? Error)
 {
@@ -57,6 +111,21 @@ public interface IUpdateService
 
     /// <summary>Asks GitHub. Null means "already current", which is a normal answer rather than a failure.</summary>
     Task<UpdateCheckResult?> CheckAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks GitHub and says which of the three answers it got. Never throws, except for a cancellation the caller
+    /// asked for.
+    /// </summary>
+    /// <remarks>
+    /// The default maps <see cref="CheckAsync"/> and so cannot see a failure; a platform overrides it with
+    /// <see cref="UpdateService.CheckForUpdateAsync(string, CancellationToken)"/>. It is a default rather than an
+    /// abstract member so an implementation written before it existed keeps compiling.
+    /// </remarks>
+    async Task<UpdateCheckOutcome> CheckForUpdateAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await CheckAsync(cancellationToken).ConfigureAwait(false);
+        return result == null ? UpdateCheckOutcome.UpToDate() : UpdateCheckOutcome.FoundRelease(result);
+    }
 
     /// <summary>
     /// Downloads the pending release, verifies it against the digest GitHub published, and swaps the running

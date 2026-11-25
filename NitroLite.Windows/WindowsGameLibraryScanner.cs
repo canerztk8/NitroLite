@@ -22,19 +22,22 @@ namespace NitroLite.Windows;
 /// </remarks>
 public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
 {
-    /// <summary>Folder names under a Steam <c>common</c> directory that are not games.</summary>
+    /// <summary>Folder names under a library root that are not games.</summary>
     private static readonly string[] NotAGameFolders =
     [
-        "Steamworks Shared", "Steam Controller Configs", "DirectX"
+        "Steamworks Shared", "Steam Controller Configs", "DirectX", "Riot Client", "Launcher"
     ];
 
     /// <summary>Every game this machine has installed, one entry per game folder.</summary>
-    public IReadOnlyList<ScannedGame> ScanInstalledGames()
+    public IReadOnlyList<ScannedGame> ScanInstalledGames() => ScanGameFolders(CollectGameDirectories());
+
+    /// <summary>One entry per folder in <paramref name="gameDirectories"/>; each folder is one game.</summary>
+    internal static IReadOnlyList<ScannedGame> ScanGameFolders(IEnumerable<string> gameDirectories)
     {
         var found = new List<ScannedGame>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var dir in CollectGameDirectories())
+        foreach (var dir in gameDirectories)
         {
             var dirName = Path.GetFileName(dir);
             if (string.IsNullOrWhiteSpace(dirName)) continue;
@@ -84,10 +87,62 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
         GameLibraryRules.DetermineOptimalCpuBoost(exeName);
 
     /// <summary>
-    /// Every directory that may hold one game: Steam library <c>common</c> folders, Epic install locations and the
-    /// usual per-drive game folders.
+    /// Every directory that holds one game: each subfolder of a library root (<see cref="CollectLibraryRoots"/>) and
+    /// every Epic install location, which the manifest already names per game.
     /// </summary>
+    /// <remarks>
+    /// The roots themselves used to be returned here, and the scan picks one executable per folder — so a whole Steam
+    /// library became a single "game" named after its <c>common</c> folder, and every other title in it was lost.
+    /// </remarks>
     public static List<string> CollectGameDirectories()
+    {
+        var dirs = ExpandLibraryRoots(CollectLibraryRoots());
+        dirs.AddRange(GetEpicInstallLocations());
+        return dirs.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>The game folders inside each library root: its direct subfolders, minus the ones that are not games.</summary>
+    internal static List<string> ExpandLibraryRoots(IEnumerable<string> roots)
+    {
+        var games = new List<string>();
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = false,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+        };
+
+        // A root nested in another root (X:\Games\SteamLibrary\...) is a library of its own, not a game of the outer one.
+        var rootList = roots.ToList();
+        var rootSet = new HashSet<string>(rootList.Select(r => r.TrimEnd('\\', '/')), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in rootList)
+        {
+            try
+            {
+                foreach (var dir in Directory.EnumerateDirectories(root, "*", options))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    if (rootSet.Contains(dir.TrimEnd('\\', '/'))) continue;
+                    if (NotAGameFolders.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase))) continue;
+                    games.Add(dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The game library could not be read", $"{root}: {ex.Message}");
+            }
+        }
+
+        return games.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// The folders that hold many games, one per subfolder: Steam library <c>common</c> folders and the usual per-drive
+    /// game folders.
+    /// </summary>
+    public static List<string> CollectLibraryRoots()
     {
         var dirs = new List<string>();
 
@@ -98,7 +153,6 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
         }
 
         dirs.AddRange(GetSteamLibraryCommonFolders());
-        dirs.AddRange(GetEpicInstallLocations());
 
         foreach (var drive in GetFixedDriveRoots())
         {
@@ -123,10 +177,12 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
     {
         var roots = new List<string>();
 
+        // The registry values are writable by the user (HKCU) and are probed as directories, so they get the same
+        // check as a library path out of libraryfolders.vdf: a drive-letter local path, nothing else.
         void Add(string? path)
         {
-            if (string.IsNullOrWhiteSpace(path)) return;
-            if (Directory.Exists(path)) roots.Add(path);
+            if (!SteamLibraryPaths.TryNormalize(path, out var normalized)) return;
+            if (Directory.Exists(normalized)) roots.Add(normalized);
         }
 
         try
@@ -214,7 +270,9 @@ public sealed class WindowsGameLibraryScanner : IGameLibraryScanner
                 {
                     using var document = System.Text.Json.JsonDocument.Parse(BoundedTextFile.ReadAllText(file));
                     if (document.RootElement.TryGetProperty("InstallLocation", out var location) &&
-                        location.GetString() is { Length: > 0 } path &&
+                        // The manifest is a file other programs write; a UNC or device path would open a network
+                        // session on the probe, so only a local drive path is followed.
+                        SteamLibraryPaths.TryNormalize(location.GetString(), out var path) &&
                         Directory.Exists(path))
                     {
                         locations.Add(path);

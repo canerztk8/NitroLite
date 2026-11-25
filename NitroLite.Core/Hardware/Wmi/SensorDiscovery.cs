@@ -59,12 +59,6 @@ public static class SensorDiscovery
         return candidate with { Supported = true, Verified = false };
     }
 
-    /// <summary>
-    /// The layout to read with when nothing better is known: the firmware-wide sensor enum, marked unverified so the
-    /// plausibility window still applies to every reading it produces.
-    /// </summary>
-    public static SensorLayout CandidateLayout => new() { Supported = true, Verified = false };
-
     private static bool TryGet(IReadOnlyDictionary<string, int?> answered, string key, out int value)
     {
         value = 0;

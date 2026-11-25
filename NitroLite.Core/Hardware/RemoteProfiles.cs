@@ -71,27 +71,52 @@ public static class RemoteProfiles
     /// </summary>
     public static async Task<RemoteProfileResult> RefreshAsync(CancellationToken cancellationToken = default)
     {
+        // One deadline for the whole fetch, body included. HttpClient.Timeout stops at the headers when the response
+        // is read with ResponseHeadersRead, so a server that trickles the body would otherwise hold this forever.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(RequestTimeout);
+        var token = deadline.Token;
+
         try
         {
             if (!Uri.TryCreate(Source, UriKind.Absolute, out var uri) || !IsTrustedSource(uri))
                 return RemoteProfileResult.Skipped("the profile source is not the trusted host");
 
-            using var response = await Client
-                .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+            // Redirects are followed by hand so the host is checked at every hop: the default handler would follow
+            // one to any host at all, after IsTrustedSource had only seen the first address.
+            HttpResponseMessage response;
+            for (var hop = 0; ; hop++)
+            {
+                if (!IsTrustedSource(uri))
+                    return RemoteProfileResult.Skipped("the profile source redirected away from the trusted host");
 
-            if (!response.IsSuccessStatusCode)
-                return RemoteProfileResult.Skipped($"the profile source answered {(int)response.StatusCode}");
+                response = await Client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, token)
+                    .ConfigureAwait(false);
+                if ((int)response.StatusCode is not (301 or 302 or 303 or 307 or 308)) break;
 
-            var declared = response.Content.Headers.ContentLength;
-            if (declared is > MaximumBytes)
-                return RemoteProfileResult.Skipped($"the profile source offered {declared} bytes");
+                var location = response.Headers.Location;
+                response.Dispose();
+                if (location == null || hop >= MaxRedirects)
+                    return RemoteProfileResult.Skipped("the profile source redirected without an acceptable target");
+                uri = location.IsAbsoluteUri ? location : new Uri(uri, location);
+            }
 
-            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            if (text.Length > MaximumBytes)
-                return RemoteProfileResult.Skipped($"the profile source returned {text.Length} characters");
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                    return RemoteProfileResult.Skipped($"the profile source answered {(int)response.StatusCode}");
 
-            return Install(text);
+                var declared = response.Content.Headers.ContentLength;
+                if (declared is > MaximumBytes)
+                    return RemoteProfileResult.Skipped($"the profile source offered {declared} bytes");
+
+                await using var body = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+                var text = await ReadBoundedAsync(body, MaximumBytes, token).ConfigureAwait(false);
+                if (text == null)
+                    return RemoteProfileResult.Skipped($"the profile source returned more than {MaximumBytes} bytes");
+
+                return Install(text);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -101,6 +126,32 @@ public static class RemoteProfiles
         {
             return RemoteProfileResult.Skipped($"{ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    /// <summary>How many redirects one refresh may follow.</summary>
+    private const int MaxRedirects = 3;
+
+    /// <summary>
+    /// Reads at most <paramref name="maximumBytes"/> from <paramref name="source"/> as UTF-8 text, or returns null as
+    /// soon as the stream holds more. Nothing past the cap is buffered: a server that ignores Content-Length cannot
+    /// make this allocate more than the cap.
+    /// </summary>
+    internal static async Task<string?> ReadBoundedAsync(Stream source, int maximumBytes, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        int read;
+        while ((read = await source.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (buffer.Length + read > maximumBytes) return null;
+            buffer.Write(chunk, 0, read);
+        }
+
+        buffer.Position = 0;
+        using var reader = new StreamReader(buffer, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -120,7 +171,13 @@ public static class RemoteProfiles
 
         try
         {
-            AtomicFile.WriteAllText(string.IsNullOrWhiteSpace(destination) ? CachePath : destination, json);
+            var path = string.IsNullOrWhiteSpace(destination) ? CachePath : destination;
+            AtomicFile.WriteAllText(path, json);
+
+            // The version of the app that accepted the table, so a later build can tell a cache that predates its own
+            // embedded table from one fetched since. Written after the table: a crash between the two leaves an older
+            // or missing stamp, which only makes the catalogue ignore the cache until the next refresh.
+            AtomicFile.WriteAllText(ProfileCatalog.RemoteStampPathFor(path), ProfileCatalog.CurrentAppVersionText);
             return new RemoteProfileResult(true, $"{count} profiles kept", count);
         }
         catch (Exception ex)
@@ -136,7 +193,11 @@ public static class RemoteProfiles
         {
             lock (Gate)
             {
-                return _client ??= new HttpClient { Timeout = RequestTimeout };
+                // AllowAutoRedirect off: RefreshAsync follows redirects itself, checking the host at every hop.
+                return _client ??= new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+                {
+                    Timeout = RequestTimeout
+                };
             }
         }
     }

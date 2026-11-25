@@ -95,32 +95,44 @@ public partial class App : Application, IDisposable
             // view model stays free of process handling and a test can assert the request without spawning one.
             _host.ViewModel.RestartRequest = () => RestartAsync(desktop);
 
-            // The laptop's own Nitro key. Started before the window is built so the settings row's support check is
-            // already answered when the binding first reads it, and subscribed before Start so a press during startup
-            // is not lost. The gate reads the setting at press time, which is what makes turning the switch off take
-            // effect without a restart.
+            // A copy started in a second user session (fast user switching) shares the fans and the EC with the copy in
+            // the first session, which owns the machine-wide slot. This one shows the machine but does not write to it.
+            // Set before the window exists, so the first read already knows.
+            if (SingleInstance is { OwnsMachineWide: false }) _host.ViewModel.HardwareWritesAllowed = false;
+
+            // The laptop's own Nitro key. Subscribed before Start so a press during startup is not lost. The gate reads
+            // the setting at press time, which is what makes turning the switch off take effect without a restart.
+            //
+            // Started on the thread pool, not here: on Windows the listener's first step enumerates every class in
+            // root\WMI to find the Acer event class, and this method runs on the UI thread before the window or the
+            // tray exist. A machine whose WMI repository is slow kept the whole app invisible for that long. A switch
+            // that is off does not start it at all; turning it on starts it then (OnViewModelPropertyChanged).
             _nitroKey = _host.NitroKey;
             if (_nitroKey != null)
             {
                 _nitroGate = new NitroKeyActivationGate(() => _host?.ViewModel.NitroKeyEnabled == true, ShowWindow);
                 _nitroKey.NitroKeyPressed += OnNitroKeyPressed;
-                _nitroKey.Start();
+                if (_host.ViewModel.NitroKeyEnabled) StartNitroKeyInBackground();
             }
 
             // On a model whose button the Acer service stack owns, NitroSense coming to the front is the only signal
             // the key produces. The watcher reports it; the decision to close NitroSense and come forward is made
             // below, where the setting and the window are.
             _nitroSense = _host.NitroSense;
-            if (_nitroSense != null && _nitroSense.IsSupported)
-            {
-                _nitroSense.NitroSenseActivated += OnNitroSenseActivated;
+            bool watchNitroSense = _nitroSense != null && _nitroSense.IsSupported;
+            if (watchNitroSense) _nitroSense!.NitroSenseActivated += OnNitroSenseActivated;
 
-                // The watcher is a 400 ms foreground poll whose only action is the redirect, so it runs only while
-                // the two switches that ask for that redirect are on. The subscription is what makes turning a
-                // switch on take effect without a restart.
-                _host.ViewModel.PropertyChanged += OnViewModelPropertyChanged;
-                SyncNitroSenseWatcher();
-            }
+            // The watcher is a 400 ms foreground poll whose only action is the redirect, so it runs only while the two
+            // switches that ask for that redirect are on, and the key listener starts when its switch is turned on. The
+            // subscription is what makes either switch take effect without a restart.
+            if (watchNitroSense || _nitroKey != null) _host.ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+            if (watchNitroSense) SyncNitroSenseWatcher();
+
+            // The firmware may reset the Custom fan speed and the keyboard lighting while the machine sleeps, and the
+            // fan loop only writes when its target changes. The view model writes both again on resume. A static event,
+            // so it is removed in DisposeHost or it would pin this App for the life of the process. Linux has no resume
+            // seam yet; the loop's own gap detection still keeps a stale reading from handing the fans back there.
+            SubscribeToResume();
 
             _window = new MainWindow { DataContext = _host.ViewModel };
 
@@ -143,6 +155,16 @@ public partial class App : Application, IDisposable
             {
                 desktop.MainWindow = _window;
             }
+
+#if WINDOWS
+            // A windowed start that is still alive ten seconds later confirms an installed update, so the previous build
+            // (.old) may be swept. Both start paths reach this line, the tray start included; the CLI never does.
+            if (OperatingSystem.IsWindows())
+            {
+                _ = Task.Delay(TimeSpan.FromSeconds(10))
+                    .ContinueWith(_ => UpdateService.MarkStartupHealthy(), TaskScheduler.Default);
+            }
+#endif
 
             // Hiding the window must not end the process: the telemetry timer and the fan curve keep running while
             // the app sits in the tray. Only the clean exit below shuts it down.
@@ -426,7 +448,93 @@ public partial class App : Application, IDisposable
     {
         if (e.PropertyName is nameof(MainViewModel.NitroKeyEnabled) or nameof(MainViewModel.RedirectNitroSenseEnabled))
             SyncNitroSenseWatcher();
+
+        if (e.PropertyName == nameof(MainViewModel.NitroKeyEnabled) && _host?.ViewModel.NitroKeyEnabled == true)
+            StartNitroKeyInBackground();
     }
+
+    /// <summary>True once the key listener has been asked to start, so a switch flipped twice does not start it twice.</summary>
+    private bool _nitroKeyStartRequested;
+
+    /// <summary>
+    /// Starts the Nitro-key listener on the thread pool. Its probe is a WMI walk with no timeout of its own, and the
+    /// caller is the UI thread; a failure is logged rather than thrown into a fire-and-forget task.
+    /// </summary>
+    private void StartNitroKeyInBackground()
+    {
+        if (_nitroKey is not { } listener || _nitroKeyStartRequested) return;
+        _nitroKeyStartRequested = true;
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                listener.Start();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The Nitro key listener could not be started", ex.Message);
+            }
+        });
+    }
+
+#if WINDOWS
+    /// <summary>True while this App is subscribed to the operating system's power events.</summary>
+    private bool _resumeSubscribed;
+#endif
+
+    private void SubscribeToResume()
+    {
+#if WINDOWS
+        if (!OperatingSystem.IsWindows() || _resumeSubscribed) return;
+
+        try
+        {
+            Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            _resumeSubscribed = true;
+        }
+        catch (Exception ex)
+        {
+            // Without the event the app still works as before: the lighting comes back when the window does.
+            AppLog.Warn("The resume event could not be subscribed to", ex.Message);
+        }
+#endif
+    }
+
+    private void UnsubscribeFromResume()
+    {
+#if WINDOWS
+        if (!OperatingSystem.IsWindows() || !_resumeSubscribed) return;
+
+        try
+        {
+            Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The resume event could not be unsubscribed from", ex.Message);
+        }
+
+        _resumeSubscribed = false;
+#endif
+    }
+
+#if WINDOWS
+    /// <summary>
+    /// Raised on the system-events thread. Only a resume matters here; the hop to the UI thread is explicit because
+    /// the view model's controls belong to it.
+    /// </summary>
+    private void OnPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != Microsoft.Win32.PowerModes.Resume) return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            var viewModel = _host?.ViewModel;
+            if (viewModel != null) _ = viewModel.OnSystemResumedAsync();
+        });
+    }
+#endif
 
     /// <summary>
     /// The framework's own teardown hook. <see cref="ExitAsync"/> and the session-ending handler both dispose the
@@ -451,6 +559,9 @@ public partial class App : Application, IDisposable
         // armed after the host is gone, it would also swallow a UI exception raised during shutdown and count it
         // against a limit nobody is watching any more.
         Dispatcher.UIThread.UnhandledException -= OnUiException;
+
+        // The power event is process-wide too, and a resume after the host is gone would reach a disposed view model.
+        UnsubscribeFromResume();
 
         // Unsubscribed before the host is disposed: a switch flipped during teardown would otherwise reach a view
         // model that is already gone.

@@ -44,7 +44,19 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         "(bir kez yönetici şifresi sorar), sonra oturumu kapatıp açın.";
 
     private readonly ISysfsFileSystem _fs;
-    private readonly LinuxCapabilities _caps;
+
+    /// <summary>
+    /// The probe's answer. Replaced whole by <see cref="Reprobe"/>, never mutated, so a reader that took the reference
+    /// sees one consistent probe.
+    /// </summary>
+    private volatile LinuxCapabilities _caps;
+
+    /// <summary>Runs the probe again, with the same inputs <see cref="Create"/> used. Null: this instance cannot re-probe.</summary>
+    private readonly Func<LinuxCapabilities>? _probe;
+
+    /// <summary>Serialises re-probes: the rescan button and the helper's background retry can both ask for one.</summary>
+    private readonly object _probeGate = new();
+
     private readonly ReadBackPolicy _readBack;
     private readonly OpenRgbClient? _openRgb;
     private readonly bool _ownsOpenRgb;
@@ -74,6 +86,9 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// <summary>What the OpenRGB probe found. Only meaningful once <see cref="_openRgbProbed"/> is set.</summary>
     private bool _openRgbAvailable;
 
+    /// <summary>1 once the "no effects over OpenRGB" line has been logged this session.</summary>
+    private int _openRgbEffectLogged;
+
     /// <summary>
     /// <paramref name="openRgb"/> is the fallback for a keyboard whose sysfs attributes are missing or ignored. It is
     /// optional: without it the backend simply has no lighting path on such a machine, which is the truth.
@@ -83,13 +98,19 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         LinuxCapabilities capabilities,
         ReadBackPolicy readBack,
         OpenRgbClient? openRgb = null,
-        bool ownsOpenRgb = false)
+        bool ownsOpenRgb = false,
+        Func<LinuxCapabilities>? probe = null)
     {
         _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _caps = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
         _readBack = readBack ?? throw new ArgumentNullException(nameof(readBack));
         _openRgb = openRgb;
         _ownsOpenRgb = ownsOpenRgb && openRgb != null;
+        _probe = probe;
+
+        // A helper whose first answer was late (polkit still starting, an autologin session not active yet) answers
+        // again in the background; the probe has to be run again for that answer to reach the controls.
+        if (_probe != null && _fs is HelperBackedFileSystem helperFs) helperFs.Helper.StateChanged += OnHelperStateChanged;
     }
 
     /// <summary>
@@ -110,10 +131,12 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         // build machine's system bus.
         var fileSystem = fs ?? RealSysfsFileSystem.Instance;
         var power = powerProfiles ?? (fs == null ? new PowerProfilesDaemon() : NoPowerProfiles.Instance);
-        var capabilities = new LinuxCapabilityProbe(fileSystem, catalog, power, readBytes).Probe();
+        var probe = new LinuxCapabilityProbe(fileSystem, catalog, power, readBytes);
+        var capabilities = probe.Probe();
         var client = openRgb ?? new OpenRgbClient();
         return new LinuxSysfsHardwareController(
-            fileSystem, capabilities, new ReadBackPolicy(settings), client, ownsOpenRgb: openRgb == null);
+            fileSystem, capabilities, new ReadBackPolicy(settings), client, ownsOpenRgb: openRgb == null,
+            probe: probe.Probe);
     }
 
     public string BackendName => "sysfs";
@@ -135,11 +158,96 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// <summary>The udev hint, or null when no write has been refused for lack of permission.</summary>
     public string? PermissionHint => PermissionHintRaised ? UdevHint : null;
 
+    /// <summary>
+    /// Why the last refused write was refused. Only <see cref="LinuxWriteDenial.UdevRuleMissing"/> is fixed by the udev
+    /// rule; the helper cases are fixed by the session becoming active, by the helper starting, or by a rescan once the
+    /// helper's probe can see the attribute. <see cref="LinuxWriteDenial.None"/> until a write is refused.
+    /// </summary>
+    public LinuxWriteDenial LastDenial { get; private set; }
+
+    /// <summary>
+    /// True when the lighting path in use can show an animated effect: <c>four_zone_mode</c> or the ENE controller.
+    /// <c>per_zone_mode</c> and the OpenRGB bridge carry fixed colours only, so the lighting page should offer no
+    /// effect on them rather than name one the keyboard will not run.
+    /// </summary>
+    public bool SupportsLightingEffects
+    {
+        get
+        {
+            var nodes = _caps.Nodes;
+            return nodes.FourZoneMode != null || (nodes.PerZoneMode == null && nodes.HidrawKeyboard != null);
+        }
+    }
+
+    /// <summary>
+    /// Raised after <see cref="Reprobe"/> replaced the capabilities, on the thread that ran it (a pool thread when the
+    /// helper's background retry triggered it). The window should re-read <see cref="Capabilities"/> on its own thread.
+    /// </summary>
+    public event EventHandler? CapabilitiesChanged;
+
     /// <summary>The probe result in the platform-neutral shape the shared window binds to.</summary>
     IPlatformSnapshot IRescannableBackend.Snapshot => _caps;
 
-    /// <summary>Clears the read-back counters, so a rescan retries a capability that was switched off.</summary>
-    void IRescannableBackend.ResetReadBackCounters() => _readBack.ResetAll();
+    /// <summary>
+    /// Clears the read-back counters and probes the machine again, so a rescan retries a capability that was switched
+    /// off and finds the attributes that appeared since start-up: a module installed, "Grant access" run, the helper
+    /// started or the session become active.
+    /// </summary>
+    void IRescannableBackend.ResetReadBackCounters()
+    {
+        _readBack.ResetAll();
+        Reprobe(resetHelper: true);
+    }
+
+    /// <summary>
+    /// Runs the capability probe again and replaces <see cref="Capabilities"/>. With <paramref name="resetHelper"/> the
+    /// helper's cached answer is dropped first, so the probe asks it again. Returns false when this instance has no
+    /// probe to run (it was built from a fixed capability set) or is disposed.
+    /// </summary>
+    public bool Reprobe(bool resetHelper = true)
+    {
+        if (_probe == null || _disposed) return false;
+
+        lock (_probeGate)
+        {
+            if (resetHelper && _fs is HelperBackedFileSystem helperFs) helperFs.Helper.Reset();
+
+            LinuxCapabilities fresh;
+            try
+            {
+                fresh = _probe();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The Linux capability probe could not be run again", ex.Message);
+                return false;
+            }
+
+            _caps = fresh;
+
+            // The new probe decides whether a permission problem remains; a refusal from before it is history.
+            PermissionHintRaised = false;
+            LastDenial = LinuxWriteDenial.None;
+            _openRgbProbed = false;
+            lock (_logged) _logged.Clear();
+
+            AppLog.Info("The Linux capabilities were probed again",
+                $"{fresh.Tier} · udev={(fresh.NeedsUdevRule ? "required" : "ok")} · modeViaDaemon={fresh.ModeViaPowerProfiles}");
+        }
+
+        try
+        {
+            CapabilitiesChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("A capability subscriber threw", ex.Message);
+        }
+
+        return true;
+    }
+
+    private void OnHelperStateChanged(object? sender, EventArgs e) => Reprobe(resetHelper: false);
 
     public Task<bool> EnsureConnectedAsync() => Task.FromResult(IsAvailable);
 
@@ -440,10 +548,10 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             {
                 if (enable != "2")
                 {
-                    var hint = (PermissionHintRaised, _lastWriteDenied, LastError);
+                    var hint = (PermissionHintRaised, _lastWriteDenied, LastError, LastDenial);
                     foreach (var path in written) await WriteNodeAsync(path, "2").ConfigureAwait(false);
                     // The failure that caused the rollback is the one to report, not the rollback's own result.
-                    (PermissionHintRaised, _lastWriteDenied, LastError) = hint;
+                    (PermissionHintRaised, _lastWriteDenied, LastError, LastDenial) = hint;
                 }
 
                 return false;
@@ -632,7 +740,19 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
                 .ConfigureAwait(false);
         }
 
-        return await WriteOpenRgbAsync(primaryColor, zoneColors, isOff).ConfigureAwait(false);
+        var applied = await WriteOpenRgbAsync(primaryColor, zoneColors, isOff, level).ConfigureAwait(false);
+
+        // The bridge sets fixed colours only: an animated effect is written as its colours. That is reported as applied,
+        // because the colours did reach the keys and a "failed" answer would stop the page saving the lighting at all.
+        // SupportsLightingEffects is false on this path, which is what the page uses to stop offering effects; the log
+        // says it once per session.
+        if (applied && wantsEffect && Interlocked.Exchange(ref _openRgbEffectLogged, 1) == 0)
+        {
+            AppLog.Info("Lighting effects are not available over OpenRGB",
+                $"{requested} was written as fixed colours; the SDK path carries colours only");
+        }
+
+        return applied;
     }
 
     /// <summary>
@@ -661,6 +781,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             if (error != null && error.StartsWith("permission denied", StringComparison.Ordinal))
             {
                 PermissionHintRaised = true;
+                LastDenial = LinuxWriteDenial.UdevRuleMissing;
                 LastError = UdevHint;
             }
             else
@@ -756,8 +877,12 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// The OpenRGB bridge, for a keyboard whose sysfs attributes are missing or ignored. The four zone colours are
     /// spread across however many LEDs the device reports, so a 4-LED and a 100-LED keyboard both get the picture the
     /// user picked rather than the first four LEDs and nothing else.
+    /// <para>
+    /// The SDK has no brightness of its own, so the level is applied to the colours: level 2 of 9 sends each channel at
+    /// the same share of its value that the sysfs and HID paths send as a brightness percentage.
+    /// </para>
     /// </summary>
-    private async Task<bool> WriteOpenRgbAsync(string primaryColor, string[]? zoneColors, bool isOff)
+    private async Task<bool> WriteOpenRgbAsync(string primaryColor, string[]? zoneColors, bool isOff, int level)
     {
         if (_openRgb == null) return false;
 
@@ -780,7 +905,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
 
             var zone = Math.Min(i * LinuxKeyboardProtocol.ZoneCount / ledCount, LinuxKeyboardProtocol.ZoneCount - 1);
             var source = zoneColors != null && zone < zoneColors.Length ? zoneColors[zone] : primaryColor;
-            colors[i] = RgbColor.Parse(source);
+            colors[i] = ScaleColor(RgbColor.Parse(source), level);
         }
 
         await _openRgb.SetCustomModeAsync(0).ConfigureAwait(false);
@@ -790,6 +915,21 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         _openRgbProbed = true;
         _openRgbAvailable = result.Outcome != OpenRgbWriteOutcome.NotSupported;
         return result.Applied;
+    }
+
+    /// <summary>
+    /// A colour at brightness <paramref name="level"/> (0..9): each channel times the level's percentage, rounded.
+    /// The top level leaves the colour as picked; level 0 is black.
+    /// </summary>
+    public static RgbColor ScaleColor(RgbColor color, int level)
+    {
+        var percent = LinuxKeyboardProtocol.BrightnessLevelToPercent(level);
+        if (percent >= LinuxKeyboardProtocol.MaxBrightnessPercent) return color;
+
+        static byte Scale(byte channel, int percent) =>
+            (byte)Math.Round(channel * percent / (double)LinuxKeyboardProtocol.MaxBrightnessPercent, MidpointRounding.AwayFromZero);
+
+        return new RgbColor(Scale(color.R, percent), Scale(color.G, percent), Scale(color.B, percent));
     }
 
     // ---------------------------------------------------------------- backlight timeout
@@ -986,7 +1126,10 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             PermissionHintRaised = true;
             _lastWriteDenied = true;
             LastError = UdevHint;
-            LogOnce("denied:" + path, "The sysfs write was refused due to permissions", $"{path}: a udev rule is required");
+            LastDenial = _fs is HelperBackedFileSystem helperFs && helperFs.LastDenial != LinuxWriteDenial.None
+                ? helperFs.LastDenial
+                : LinuxWriteDenial.UdevRuleMissing;
+            LogOnce("denied:" + path, "The sysfs write was refused due to permissions", $"{path}: {LastDenial}");
             return Task.FromResult(false);
         }
 
@@ -1026,6 +1169,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         if (_disposed) return;
         _disposed = true;
 
+        if (_fs is HelperBackedFileSystem helperFs) helperFs.Helper.StateChanged -= OnHelperStateChanged;
         _writeGate.Dispose();
         if (_ownsOpenRgb) _openRgb?.Dispose();
     }

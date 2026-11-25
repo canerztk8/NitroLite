@@ -22,11 +22,6 @@ public sealed record HidLightingController(
     /// <summary>True when this entry matches a device. A zero product id matches every product of that vendor.</summary>
     public bool Matches(int vendorId, int productId) =>
         VendorId == vendorId && (ProductId == 0 || ProductId == productId);
-
-    /// <summary>The ids as a report row: <c>0x0CF2:0x5130</c>, or <c>0x048D:*</c> for a vendor-wide entry.</summary>
-    public string Ids => ProductId == 0
-        ? $"0x{VendorId:X4}:*"
-        : $"0x{VendorId:X4}:0x{ProductId:X4}";
 }
 
 /// <summary>

@@ -102,16 +102,7 @@ public static class AcerWmiProtocol
     /// <summary>Mode bit for Eco.</summary>
     public const int ModeBitEco = 0x40;
 
-    /// <summary>
-    /// Every bit this build knows how to name. Bits outside it are ignored rather than guessed at: a firmware that
-    /// sets an unknown bit is not evidence of a mode the app can offer.
-    /// </summary>
-    public const int KnownModeBits = ModeBitQuiet | ModeBitBalanced | ModeBitPerformance | ModeBitTurbo | ModeBitEco;
-
     // ---------------------------------------------------------------- APGeAction (CoolBoost, backlight timeout)
-
-    /// <summary>GUID of the <c>APGeAction</c> class, which carries CoolBoost and the backlight timeout.</summary>
-    public const string ApgeActionGuid = "61EF69EA-865C-4BC3-A502-A0DEBA0CB531";
 
     /// <summary>Selector for the CoolBoost getter in <c>APGeAction.GetFunction</c>.</summary>
     public const uint ApgeCoolBoostGet = 0x207;
@@ -638,8 +629,8 @@ public static class AcerWmiProtocol
     /// The operating modes a <c>GetGamingMiscSetting(0x0A)</c> answer advertises, in the order the UI shows them.
     /// <para>
     /// An empty list means the firmware did not answer or answered zero, which is not evidence that no mode works:
-    /// the caller keeps its existing set rather than hiding every mode button. Bits outside
-    /// <see cref="KnownModeBits"/> are ignored, so a firmware that sets an unknown bit cannot conjure a mode.
+    /// the caller keeps its existing set rather than hiding every mode button. Bits outside the five named mode bits
+    /// are ignored, so a firmware that sets an unknown bit cannot conjure a mode.
     /// </para>
     /// </summary>
     public static IReadOnlyList<OperatingMode> DecodeSupportedModes(ulong answer)
@@ -737,15 +728,6 @@ public static class AcerWmiProtocol
     /// </summary>
     public static ulong EncodeWinKeyLock(bool enabled) =>
         GamingProfileWinKeyLock | (enabled ? GamingProfileWinKeyLockBit : 0UL);
-
-    // ---------------------------------------------------------------- byte arrays
-
-    /// <summary>
-    /// Reads one byte out of a byte-array answer. <c>GetGamingKBBacklight</c> is the only getter that answers an
-    /// array rather than an integer, and its fields are addressed by offset.
-    /// </summary>
-    public static byte? ByteAt(IReadOnlyList<byte>? bytes, int offset) =>
-        bytes == null || offset < 0 || offset >= bytes.Count ? null : bytes[offset];
 }
 
 /// <summary>

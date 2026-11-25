@@ -509,15 +509,14 @@ public class FanSafetyTests
         vm.CurveEnabled = true;
         vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
 
-        // The mode change writes the slider's 50 %. Nothing may follow it: the curve has a 70 °C reading it is not
-        // allowed to act on, so it proposes nothing. 42 % is what the default curve asks for at 70 °C, and it is
-        // below the slider, so a curve that ran would be visible as a second, slower write.
+        // The mode change writes the slider's 50 %. The curve has a 70 °C reading it is not allowed to act on, so the
+        // loop falls back to the slider and its thermal floor (still 50 % at 70 °C). 42 % is what the default curve
+        // asks for at 70 °C, and it is below the slider, so a curve that ran would be visible as a slower write.
         await WaitUntilAsync(() => hardware.FanWrites.Count > 0);
-        int writes = hardware.FanWrites.Count;
         await Task.Delay(2500);
 
-        Assert.Equal(writes, hardware.FanWrites.Count);
         Assert.DoesNotContain(hardware.FanWrites, w => w.Cpu == 42);
+        Assert.All(hardware.FanWrites.FindAll(w => w.Mode == FanMode.Custom), w => Assert.Equal(50, w.Cpu));
     }
 
     [Fact]

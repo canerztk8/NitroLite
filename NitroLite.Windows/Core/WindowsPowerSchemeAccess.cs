@@ -12,4 +12,11 @@ public sealed class WindowsPowerSchemeAccess : IPowerSchemeAccess
 
     public bool TryWriteDc(Guid subGroup, Guid setting, uint value) =>
         CpuPowerService.TryWriteDcValue(subGroup, setting, value);
+
+    public Guid? ActiveScheme => CpuPowerService.TryGetActiveScheme(out var scheme) ? scheme : null;
+
+    public bool SchemeExists(Guid scheme) => CpuPowerService.SchemeExists(scheme);
+
+    public bool TryWriteDc(Guid scheme, Guid subGroup, Guid setting, uint value) =>
+        CpuPowerService.TryWriteDcValue(scheme, subGroup, setting, value);
 }

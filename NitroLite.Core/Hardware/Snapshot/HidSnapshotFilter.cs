@@ -20,9 +20,6 @@ namespace NitroLite.Core.Hardware.Snapshot;
 /// </remarks>
 public static class HidSnapshotFilter
 {
-    /// <summary>The controller vendors an Acer keyboard backlight is built from.</summary>
-    public static IReadOnlyList<int> KnownVendors { get; } = new[] { 0x048D, 0x0C45, 0x04F2 };
-
     /// <summary>Usage page of a keyboard collection: <c>Generic Desktop</c>, usage <c>Keyboard</c>.</summary>
     public const int GenericDesktopPage = 0x01;
 

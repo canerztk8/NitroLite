@@ -3,14 +3,6 @@ using Xunit;
 namespace NitroLite.Tests;
 public class RepairRegressionTests
 {
- [Fact] public async Task QueuedReconnectIsNotDropped()
- {
-  using var a=new MockAcerAgentClient(); var c=new CpuPowerService(false,true); using var gate=new SemaphoreSlim(1,1);
-  using var p=new PowerAutomationService(a,c,new TestDisplayRefreshRateServiceStub(),new AppSettings(),false,gate);
-  await p.ProcessPowerTransitionAsync(true); await gate.WaitAsync();
-  var dc=p.ProcessPowerTransitionAsync(false); var ac=p.ProcessPowerTransitionAsync(true);
-  gate.Release(); await Task.WhenAll(dc,ac); Assert.True(p.LastAcStatus);
- }
  [Fact] public void ExactBoostPreservesEnabledValue()
  {
   // Real powercfg output always carries the setting GUID; the parser is GUID-scoped so it does not depend on the

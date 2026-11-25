@@ -327,6 +327,56 @@ public class MemoryCleanerService
         // being launched elevated.
     }
 
+    /// <summary>Exit code of the launch script when the copy in the protected folder did not match a known digest.</summary>
+    public const int ExitCopyUntrusted = 0x4E4C;
+
+    /// <summary>
+    /// The elevated launch: copy <paramref name="verifiedTool"/> alone into a new folder under <c>%SystemRoot%\Temp</c>
+    /// whose DACL grants only Administrators and SYSTEM (inheritance off), re-check the copy's SHA-256 against
+    /// <see cref="KnownGoodSha256"/>, run it from there with <see cref="CleanArguments"/>, and delete the folder.
+    /// The script exits with the tool's exit code, or <see cref="ExitCopyUntrusted"/> when the copy does not match.
+    /// </summary>
+    /// <remarks>
+    /// <c>%SystemRoot%\Temp</c> lets users create entries but not delete or rename other users' entries, so the folder
+    /// cannot be swapped once it exists, and its name is a fresh GUID. Nothing in it can be written by the user, so no
+    /// <c>.config</c> or DLL can be placed beside the exe; the working directory is the same folder.
+    /// </remarks>
+    internal static string BuildIsolatedLaunchScript(string verifiedTool)
+    {
+        var known = string.Join(", ", KnownGoodSha256.Select(h => "'" + Loc.PsQuote(h.ToLowerInvariant()) + "'"));
+        return @"
+$ErrorActionPreference = 'Stop'
+$src = '" + Loc.PsQuote(verifiedTool) + @"'
+$known = @(" + known + @")
+$dir = Join-Path (Join-Path $env:SystemRoot 'Temp') ('nitrolite-wmc-' + [guid]::NewGuid().ToString('N'))
+$code = 1
+try {
+    $acl = New-Object System.Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in 'S-1-5-32-544', 'S-1-5-18') {
+        $id = New-Object System.Security.Principal.SecurityIdentifier($sid)
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($id, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+    }
+    if (Test-Path -LiteralPath $dir) { throw 'the folder already exists' }
+    [void][System.IO.Directory]::CreateDirectory($dir, $acl)
+    $dst = Join-Path $dir '" + ToolFileName + @"'
+    [System.IO.File]::Copy($src, $dst, $false)
+    $hash = (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($known -notcontains $hash) {
+        $code = " + ExitCopyUntrusted + @"
+    } else {
+        $p = Start-Process -FilePath $dst -ArgumentList '" + CleanArguments + @"' -WorkingDirectory $dir -WindowStyle Hidden -PassThru -Wait
+        $code = $p.ExitCode
+    }
+} catch {
+    $code = 1
+} finally {
+    Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+}
+exit $code
+";
+    }
+
     /// <summary>
     /// Runs WinMemoryCleaner with <see cref="CleanArguments"/> and reports how much the standby list shrank.
     /// Asks for elevation when NitroLite itself is not elevated.
@@ -373,10 +423,16 @@ public class MemoryCleanerService
 
         try
         {
-            var startInfo = new ProcessStartInfo(tool)
+            // The verified exe is not started where it lies. The digest pins the exe, not its folder: a
+            // WinMemoryCleaner.exe.config (appDomainManager) or a side-loaded DLL planted next to it in a folder the user
+            // can write to — the data folder, the winget links, a portable or scoop install — would run inside the
+            // elevated process. An elevated helper copies the exe alone into a fresh folder only administrators can
+            // write to, checks the copy's digest again there, runs it from that folder and deletes it.
+            var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(BuildIsolatedLaunchScript(tool)));
+            var startInfo = new ProcessStartInfo(WindowsPaths.WindowsPowerShell)
             {
                 UseShellExecute = true,
-                Arguments = CleanArguments,
+                Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + encoded,
                 WindowStyle = ProcessWindowStyle.Hidden,
             };
             if (!IsRunningAsAdministrator()) startInfo.Verb = "runas";
@@ -392,13 +448,21 @@ public class MemoryCleanerService
             // wait is best-effort: the standby drop below is what decides the outcome either way.
             try
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                // 45 rather than 30 seconds: the copy and the PowerShell start-up now sit in front of the tool.
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
                 await process.WaitForExitAsync(timeout.Token);
                 result.ExitCode = process.ExitCode;
+                if (result.ExitCode == ExitCopyUntrusted)
+                {
+                    result.ToolUntrusted = true;
+                    result.Error = "the copied WinMemoryCleaner did not match a build NitroLite recognises";
+                    AppLog.Warn("The memory cleaner was not run", "the isolated copy failed the digest check");
+                    return result;
+                }
             }
             catch (OperationCanceledException)
             {
-                result.Error = "WinMemoryCleaner did not finish within 30 seconds.";
+                result.Error = "WinMemoryCleaner did not finish within 45 seconds.";
             }
             catch
             {

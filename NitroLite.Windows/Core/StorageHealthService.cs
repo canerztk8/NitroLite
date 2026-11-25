@@ -42,6 +42,17 @@ public class StorageHealthService
     /// <summary>Physical drive numbers above this are not probed: the number came from somewhere it should not have.</summary>
     internal const int MaxProbedDiskNumber = 63;
 
+    /// <summary>
+    /// How long one WMI enumeration step may wait. The storage provider answers by asking each device, and a bad USB
+    /// bridge or a wedged NVMe can keep that call open indefinitely; with this limit the enumeration throws, the
+    /// surrounding catch keeps every drive already read, and the page shows those instead of hanging.
+    /// </summary>
+    internal static readonly TimeSpan WmiQueryTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>Options for every query in this class: semisynchronous, each step bounded by <see cref="WmiQueryTimeout"/>.</summary>
+    private static System.Management.EnumerationOptions QueryOptions() =>
+        new() { ReturnImmediately = true, Timeout = WmiQueryTimeout };
+
     private readonly Func<int, int?> _temperatureProbe;
 
     public StorageHealthService()
@@ -122,7 +133,7 @@ public class StorageHealthService
             {
                 using var partSearcher = new ManagementObjectSearcher(
                     @"root\Microsoft\Windows\Storage",
-                    "SELECT DiskNumber, DriveLetter FROM MSFT_Partition WHERE DriveLetter IS NOT NULL");
+                    "SELECT DiskNumber, DriveLetter FROM MSFT_Partition WHERE DriveLetter IS NOT NULL", QueryOptions());
                 using var partResults = partSearcher.Get();
                 foreach (ManagementObject part in partResults)
                 {
@@ -171,7 +182,7 @@ public class StorageHealthService
                 {
                     using var cimSearcher = new ManagementObjectSearcher(
                         @"root\cimv2",
-                        "SELECT Antecedent, Dependent FROM Win32_LogicalDiskToPartition");
+                        "SELECT Antecedent, Dependent FROM Win32_LogicalDiskToPartition", QueryOptions());
                     using var cimResults = cimSearcher.Get();
                     foreach (ManagementObject rel in cimResults)
                     {
@@ -210,7 +221,7 @@ public class StorageHealthService
             {
                 using var relSearcher = new ManagementObjectSearcher(
                     @"root\Microsoft\Windows\Storage",
-                    "SELECT DeviceId, Wear, Temperature FROM MSFT_StorageReliabilityCounter");
+                    "SELECT DeviceId, Wear, Temperature FROM MSFT_StorageReliabilityCounter", QueryOptions());
                 using var relResults = relSearcher.Get();
                 foreach (ManagementObject rel in relResults)
                 {
@@ -244,7 +255,7 @@ public class StorageHealthService
             // 3. Query physical disks via MSFT_PhysicalDisk
             using var diskSearcher = new ManagementObjectSearcher(
                 @"root\Microsoft\Windows\Storage",
-                "SELECT * FROM MSFT_PhysicalDisk");
+                "SELECT * FROM MSFT_PhysicalDisk", QueryOptions());
             using var diskResults = diskSearcher.Get();
             foreach (ManagementObject disk in diskResults)
             {
@@ -381,7 +392,7 @@ public class StorageHealthService
                             try
                             {
                                 using var counters = disk.GetRelated("MSFT_StorageReliabilityCounter",
-                                    "MSFT_PhysicalDiskToStorageReliabilityCounter", null, null, null, null, false, null);
+                                    "MSFT_PhysicalDiskToStorageReliabilityCounter", null, null, null, null, false, QueryOptions());
                                 foreach (ManagementObject counter in counters)
                                 {
                                     using (counter)
@@ -429,7 +440,7 @@ public class StorageHealthService
             {
                 using var win32Searcher = new ManagementObjectSearcher(
                     @"root\cimv2",
-                    "SELECT Index, Model, InterfaceType, Size FROM Win32_DiskDrive");
+                    "SELECT Index, Model, InterfaceType, Size FROM Win32_DiskDrive", QueryOptions());
                 using var win32Results = win32Searcher.Get();
                 foreach (ManagementObject disk in win32Results)
                 {
@@ -459,7 +470,7 @@ public class StorageHealthService
                             {
                                 using var partSearcher = new ManagementObjectSearcher(
                                     @"root\cimv2",
-                                    $"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='\\\\.\\\\PHYSICALDRIVE{index}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition");
+                                    $"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='\\\\.\\\\PHYSICALDRIVE{index}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition", QueryOptions());
                                 using var partitions = partSearcher.Get();
                                 foreach (ManagementObject part in partitions)
                                 {
@@ -470,7 +481,7 @@ public class StorageHealthService
                                         {
                                             using var logSearcher = new ManagementObjectSearcher(
                                                 @"root\cimv2",
-                                                $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partId}'}} WHERE AssocClass = Win32_LogicalDiskToPartition");
+                                                $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partId}'}} WHERE AssocClass = Win32_LogicalDiskToPartition", QueryOptions());
                                             using var logDisks = logSearcher.Get();
                                             foreach (ManagementObject logDisk in logDisks)
                                             {

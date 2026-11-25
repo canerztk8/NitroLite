@@ -258,12 +258,6 @@ public sealed class GameProfileService
         return done.Task;
     }
 
-    /// <summary>Raised after a game's profile has been applied.</summary>
-    public event Action<GameProfile>? GameStarted;
-
-    /// <summary>Raised after the user's own settings have been put back.</summary>
-    public event Action<GameProfile>? GameEnded;
-
     /// <summary>
     /// One detection pass. Starts a session when a configured game appears, ends it when the game exits, and does
     /// nothing in between. Never throws: a scanner that fails is a pass with no processes.
@@ -574,7 +568,6 @@ public sealed class GameProfileService
         }
 
         var applied = await ApplyAsync(profile, snapshot).ConfigureAwait(false);
-        GameStarted?.Invoke(profile);
         return new GameDetectionResult(GameDetectionChange.Started, profile, null, snapshot, applied);
     }
 
@@ -589,7 +582,6 @@ public sealed class GameProfileService
         }
 
         if (snapshot != null) await RestoreAsync(snapshot, profile).ConfigureAwait(false);
-        GameEnded?.Invoke(profile);
         return new GameDetectionResult(GameDetectionChange.Ended, null, profile, snapshot);
     }
 

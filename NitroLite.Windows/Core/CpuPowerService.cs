@@ -53,7 +53,6 @@ public class CpuPowerService : ICpuBoostAccess, IDisposable
     private static extern IntPtr LocalFree(IntPtr hMem);
 
     public CpuBoostMode CurrentMode { get; internal set; } = CpuBoostMode.Aggressive;
-    internal void SetCurrentModeForTesting(CpuBoostMode mode) => CurrentMode = mode;
     public bool IsModeVerified { get; private set; }
     public CpuBoostMode? VerifiedCurrentMode => IsModeVerified ? CurrentMode : null;
     internal bool BypassNativePowerCalls { get; set; } = false;
@@ -115,6 +114,43 @@ public class CpuPowerService : ICpuBoostAccess, IDisposable
         if (PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref subGroup, ref setting, value) != 0) return false;
         return PowerSetActiveScheme(IntPtr.Zero, ref scheme) == 0;
     }
+
+    /// <summary>
+    /// Writes the battery (DC) value into a named scheme. The scheme is re-activated only when it is the active one —
+    /// that is what makes Windows apply the new value now. A scheme that is not active is left inactive: activating it
+    /// would switch the user's power plan, which is a change of its own.
+    /// </summary>
+    internal static bool TryWriteDcValue(Guid scheme, Guid subGroup, Guid setting, uint value)
+    {
+        if (scheme == Guid.Empty || !SchemeExists(scheme)) return false;
+        if (PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref subGroup, ref setting, value) != 0) return false;
+
+        if (!TryGetActiveScheme(out var active) || active != scheme) return true;
+        return PowerSetActiveScheme(IntPtr.Zero, ref scheme) == 0;
+    }
+
+    /// <summary>
+    /// True when the scheme is still on the machine. Asked through its friendly name: with no buffer the call only
+    /// reports the size it would need, and it answers an error for a scheme that has been deleted.
+    /// </summary>
+    internal static bool SchemeExists(Guid scheme)
+    {
+        if (scheme == Guid.Empty) return false;
+        try
+        {
+            uint size = 0;
+            return PowerReadFriendlyName(IntPtr.Zero, ref scheme, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, ref size) == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    [DllImport("powrprof.dll")]
+    private static extern uint PowerReadFriendlyName(
+        IntPtr RootPowerKey, ref Guid SchemeGuid, IntPtr SubGroupOfPowerSettingsGuid, IntPtr PowerSettingGuid,
+        IntPtr Buffer, ref uint BufferSize);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);

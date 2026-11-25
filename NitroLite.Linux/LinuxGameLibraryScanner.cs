@@ -47,7 +47,7 @@ public sealed class LinuxGameLibraryScanner : IGameLibraryScanner
         var found = new List<ScannedGame>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var dir in CollectGameDirectories())
+        foreach (var dir in ExpandLibraryRoots(CollectGameDirectories()))
         {
             var dirName = Path.GetFileName(dir);
             if (string.IsNullOrWhiteSpace(dirName)) continue;
@@ -112,8 +112,51 @@ public sealed class LinuxGameLibraryScanner : IGameLibraryScanner
         GameLibraryRules.DetermineOptimalCpuBoost(exeName);
 
     /// <summary>
-    /// Every directory that may hold one game: the Steam roots under the home directory, the <c>common</c> folder of
-    /// every library recorded in <c>libraryfolders.vdf</c>, and the usual per-drive game folders.
+    /// The game folders inside each library root: its direct subfolders, minus the ones that are not games and the
+    /// ones that are roots of their own (<c>~/Games/Steam</c> inside <c>~/Games</c>).
+    /// </summary>
+    /// <remarks>
+    /// The scan picks one executable per folder, so handing it a whole Steam <c>common</c> folder made the library a
+    /// single "game" named "common" and lost every other title in it.
+    /// </remarks>
+    internal static List<string> ExpandLibraryRoots(IEnumerable<string> roots)
+    {
+        var games = new List<string>();
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = false,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+        };
+
+        var rootList = roots.ToList();
+        var rootSet = new HashSet<string>(rootList.Select(r => Path.TrimEndingDirectorySeparator(r)), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in rootList)
+        {
+            try
+            {
+                foreach (var dir in Directory.EnumerateDirectories(root, "*", options))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    if (rootSet.Contains(Path.TrimEndingDirectorySeparator(dir))) continue;
+                    if (NotAGameFolders.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase))) continue;
+                    games.Add(dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The game library could not be read", $"{root}: {ex.Message}");
+            }
+        }
+
+        return games.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// The library roots, each holding one game per subfolder: the Steam roots under the home directory, the
+    /// <c>common</c> folder of every library recorded in <c>libraryfolders.vdf</c>, and the usual game folders.
     /// </summary>
     public List<string> CollectGameDirectories()
     {

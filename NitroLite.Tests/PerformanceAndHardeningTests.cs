@@ -507,8 +507,10 @@ public class PerformanceAndHardeningTests
         var display = new FlakyDisplay();
         var automation = new RefreshRateAutomation(display, new AppSettings { AutoRefreshRateSwitching = true });
 
+        // A read of 0 is "no internal panel right now", which is not a failure (clean-up round 3, P2) — but it is
+        // still looked at again, and the first retry is immediate.
         var first = automation.Apply(onAc: false);
-        Assert.Equal(RefreshRateAction.Failed, first.Action);
+        Assert.Equal(RefreshRateAction.None, first.Action);
 
         // The power state has not changed, and the old early return would have swallowed the retry for the rest of
         // the session. The panel is lowered on the second tick instead.

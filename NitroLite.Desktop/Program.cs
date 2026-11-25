@@ -82,9 +82,17 @@ internal static class Program
         }
 #endif
 
+        // A flag nothing reads is a typo or a flag from another build. Ignoring it silently opened the window when a
+        // command was meant, so it is named on stderr (and in the log, for a launch without a console).
+        foreach (var unknown in CliTaskRunner.FindUnknownFlags(args))
+        {
+            Console.Error.WriteLine(Loc.T($"Bilinmeyen seçenek yok sayıldı: {unknown}"));
+            AppLog.Warn("Unknown command-line option ignored", unknown);
+        }
+
         // The one-shot commands. Each of these talks to the hardware and exits without a window, so a script or a
         // shortcut can repair a machine without a user in front of it. Both spellings arrive here: --cli <command>
-        // and the legacy --fix-lighting / --optimize-pc flags the shipped .bat files still use.
+        // and the legacy --fix-lighting / --optimize-pc flags that older shortcuts and scripts still use.
         if (CliTaskRunner.IsCliTask(args))
         {
             return RunCliTask(CliTaskRunner.ParseCommand(args), args);
@@ -143,6 +151,13 @@ internal static class Program
         guard.Listen();
         App.SingleInstance = guard;
 
+#if WINDOWS
+        // Counts this windowed start against a freshly installed update; App marks the start healthy once the window is
+        // up. A build that keeps failing before that point is put back, and the next start runs the previous version.
+        if (UpdateService.RecordStartupAttempt() == PendingUpdateState.RolledBack)
+            AppLog.Warn("The update was rolled back", "the previous version runs from the next start");
+#endif
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         return 0;
     }
@@ -164,7 +179,9 @@ internal static class Program
     /// </remarks>
     private static int RunCliTask(string command, string[] args)
     {
-        if (string.IsNullOrWhiteSpace(command))
+        // An unknown name is refused before anything is built: the composition root probes the hardware and starts
+        // the elevated helper, which is a lot of work (and possibly a UAC prompt) for a typo.
+        if (!CliTaskRunner.IsKnownCommand(command))
         {
             Console.Error.WriteLine($"--cli: {string.Join(", ", CliTaskRunner.Commands)}");
             return 2;
@@ -173,22 +190,115 @@ internal static class Program
         if (CliTaskRunner.RequiresConfirmation(args) && !CliTaskRunner.IsConfirmed(args))
         {
             var flag = CliTaskRunner.ParseLegacyFlag(args);
+            if (flag.Length == 0) flag = "--cli " + command;
             Console.Error.WriteLine(Loc.T("Bu komut sistem ayarlarını değiştirir. Onaylamak için --yes ekleyin:"));
             Console.Error.WriteLine($"  NitroLite.exe {flag} --yes");
             return 3;
         }
 
+        // The settings file is last-writer-wins between a running window and this process, and the window owns the
+        // hardware: the same notice the hardware one-shots print.
+        if (SingleInstanceGuard.IsAnotherInstanceRunning())
+        {
+            Console.Error.WriteLine(Loc.T("NitroLite açık; çalışan pencere bu ayarı bir sonraki döngüsünde değiştirebilir."));
+        }
+
+        if (string.Equals(command, "undo-repair", StringComparison.OrdinalIgnoreCase))
+        {
+            return RunUndoRepair();
+        }
+
         try
         {
             var services = AppHost.CreateServices();
-            return CliTaskRunner.RunAsync(command, services.Hardware, services.Settings, services.AutoStart)
+            var steps = string.Equals(command, "uninstall-cleanup", StringComparison.OrdinalIgnoreCase)
+                ? BuildUninstallCleanupSteps(services)
+                : null;
+
+            int code = CliTaskRunner.RunAsync(command, services.Hardware, services.Settings, services.AutoStart,
+                    steps, Console.Out)
                 .GetAwaiter().GetResult();
+
+            // The tasks change settings (optimize records the mode restore-optimize goes back to; uninstall-cleanup
+            // turns the fan curve and school mode off). Each --cli run is its own process, so a change that is not
+            // written here is gone before the next command reads it.
+            try
+            {
+                SettingsManager.SaveSettingsAtomic(services.SettingsPath, services.Settings);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The settings could not be saved after the CLI command", $"{command}: {ex.Message}");
+            }
+
+            return code;
         }
         catch (Exception ex)
         {
             AppLog.Error("The CLI command could not be run", $"{command}: {ex}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// The undo actions of <c>--cli uninstall-cleanup</c>. The order and the conditions live in
+    /// <see cref="CliTaskRunner.BuildUninstallCleanupSteps"/>; this only supplies the two Windows steps.
+    /// </summary>
+    private static List<CliCleanupStep> BuildUninstallCleanupSteps(PlatformServices services)
+    {
+        CliCleanupStep? systemCleanup = null;
+        CliCleanupStep? elevatedTask = null;
+
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+        {
+            // PC Optimize's undo record, and the HKCU Run value removed outright. The elevated-task adapter's
+            // DisableAsync is not used for the sign-in entry: it repairs the Run value instead of removing it. Only the
+            // optimize restore asks for elevation.
+            systemCleanup = new CliCleanupStep(Loc.T("Optimizasyonu Geri Al"), async _ =>
+            {
+                var result = await SystemToolsService.UninstallCleanupAsync().ConfigureAwait(false);
+                return (result.Success, result.Message);
+            }, Elevates: File.Exists(SystemToolsService.OptimizeBackupPath));
+
+            elevatedTask = new CliCleanupStep(Loc.T("Yönetici yetkisiyle otomatik başlat (Görev Zamanlayıcı)"), async ct =>
+            {
+                var task = new ElevatedStartupService();
+                if (!await task.IsEnabledAsync(ct).ConfigureAwait(false)) return (true, null);
+                var result = await task.DisableAsync(ct).ConfigureAwait(false);
+                return (result.Applied, result.Applied ? null : task.LastError);
+            }, Elevates: !MemoryCleanerService.IsRunningAsAdministrator());
+        }
+#endif
+
+        return CliTaskRunner.BuildUninstallCleanupSteps(
+            services.Settings, services.SchoolMode, services.Debloat, systemCleanup, elevatedTask);
+    }
+
+    /// <summary>
+    /// <c>--cli undo-repair</c>: puts back what the last service or MUX repair replaced, from the record the repair
+    /// wrote before it ran. Needs no hardware backend.
+    /// </summary>
+    private static int RunUndoRepair()
+    {
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var result = SystemToolsService.UndoLastRepairAsync().GetAwaiter().GetResult();
+                (result.Success ? Console.Out : Console.Error).WriteLine(result.Message);
+                return result.Success ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("The repair could not be undone", ex.ToString());
+                return 1;
+            }
+        }
+#endif
+        AppLog.Warn("The CLI command is not available on this platform", "undo-repair");
+        return 1;
     }
 
     /// <summary>
@@ -268,6 +378,20 @@ internal static class Program
         {
             Console.Error.WriteLine(error);
             return 2;
+        }
+
+#if WINDOWS
+        // A fixed speed written here is meant to stay after this process exits. The elevated helper hands manual fans
+        // back to the firmware when its client disappears (that protects a crashed window), so this client says it is
+        // a one-shot before the backend is built.
+        WmiHardwareController.LeaveFansOnDisconnect = true;
+#endif
+
+        // A running window owns the fans and the mode: its next tick (fan curve, game profile, school mode) can put
+        // its own value back over this one. The command still runs, but the user is told why it may not stick.
+        if (SingleInstanceGuard.IsAnotherInstanceRunning())
+        {
+            Console.Error.WriteLine(Loc.T("NitroLite açık; çalışan pencere bu ayarı bir sonraki döngüsünde değiştirebilir."));
         }
 
         try

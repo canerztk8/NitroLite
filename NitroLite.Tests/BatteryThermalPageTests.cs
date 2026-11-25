@@ -186,60 +186,6 @@ public class BatteryThermalPageTests
     }
 
     [Fact]
-    public async Task DcProfile_Persists()
-    {
-        var path = Phase3Fakes.TempSettingsPath();
-        try
-        {
-            using var vm = Create(path: path);
-            await vm.InitializeAsync();
-
-            // The picker offers both profiles and starts on the one the settings file names, which is Eco by default.
-            Assert.Equal(2, vm.DcProfileChoices.Count);
-            Assert.Equal(DcPowerProfilePreference.Eco, vm.SelectedDcProfile!.Value);
-
-            var balanced = vm.DcProfileChoices.First(c => c.Value == DcPowerProfilePreference.Balanced);
-            vm.SelectedDcProfile = balanced;
-
-            var reloaded = SettingsManager.LoadSettingsWithFallback(path);
-            Assert.Equal(DcPowerProfilePreference.Balanced, reloaded.DcPowerMode);
-        }
-        finally
-        {
-            try { if (File.Exists(path)) File.Delete(path); } catch { }
-        }
-    }
-
-    [Fact]
-    public async Task DcProfile_ExplainsWhatTheChoiceChanges()
-    {
-        var path = Phase3Fakes.TempSettingsPath();
-        try
-        {
-            using var vm = Create(path: path);
-
-            // The view binds the description before InitializeAsync runs, so the first read has to announce it. Without
-            // the notification the card under the picker stays blank for the whole session.
-            var announced = new List<string?>();
-            vm.PropertyChanged += (_, e) => announced.Add(e.PropertyName);
-
-            await vm.InitializeAsync();
-
-            Assert.Contains(nameof(vm.SelectedDcProfileDescription), announced);
-            Assert.False(string.IsNullOrWhiteSpace(vm.SelectedDcProfileDescription));
-
-            var eco = vm.SelectedDcProfileDescription;
-            vm.SelectedDcProfile = vm.DcProfileChoices.First(c => c.Value == DcPowerProfilePreference.Balanced);
-            Assert.NotEqual(eco, vm.SelectedDcProfileDescription);
-            Assert.False(string.IsNullOrWhiteSpace(vm.SelectedDcProfileDescription));
-        }
-        finally
-        {
-            try { if (File.Exists(path)) File.Delete(path); } catch { }
-        }
-    }
-
-    [Fact]
     public async Task Watchdog_Toggles()
     {
         var path = Phase3Fakes.TempSettingsPath();

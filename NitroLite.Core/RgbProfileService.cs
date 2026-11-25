@@ -144,6 +144,20 @@ public class RgbProfileService
         }
     }
 
+    /// <summary>
+    /// Reads the presets file again, replacing the list held in memory. A backup restore rewrites the file under a
+    /// running service; without this the next preset save or delete wrote the old in-memory list straight back over
+    /// the restored presets.
+    /// </summary>
+    public void Reload()
+    {
+        lock (_presetsLock)
+        {
+            LoadError = null;
+            LoadPresets();
+        }
+    }
+
     private void LoadPresets()
     {
         lock (_presetsLock)

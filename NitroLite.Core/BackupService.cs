@@ -73,9 +73,6 @@ public static class BackupService
     public const string AppMarker = "NitroLite";
     public const int SchemaVersion = 1;
 
-    /// <summary>Extension offered in the save dialog, so a backup is recognisable in a downloads folder.</summary>
-    public const string FileExtension = ".json";
-
     /// <summary>
     /// A backup is a few hundred kilobytes at most. The restore dialog offers "all files", so a user can pick a
     /// video by mistake; reading it whole would allocate its size in memory before the marker check could reject
@@ -140,6 +137,10 @@ public static class BackupService
     /// Reads <paramref name="sourcePath"/> and writes its parts over the live files. The caller restarts the app
     /// afterwards: settings are read once at startup.
     /// </summary>
+    /// <param name="gameProfilesPath">
+    /// Not written any more: the game rules are restored inside the settings file, which is where the app reads them.
+    /// Kept so existing callers compile.
+    /// </param>
     public static BackupResult Restore(
         string sourcePath,
         string settingsPath,
@@ -194,6 +195,37 @@ public static class BackupService
         if (restored == null)
             return BackupResult.Fail(Loc.T("Yedekteki ayarlar okunamadı."));
 
+        // The game rules the app reads live in the settings file's game_profiles field; nothing reads a separate
+        // game_profiles.json. A backup made by this app carries them inside its settings block, so they come back with
+        // the settings. An older backup may carry them only in its own game_profiles section (the format of the old
+        // Windows file), and those are moved into the settings document here — before Normalize, so they are repaired
+        // and migrated like any other rules. Writing that section to game_profiles.json instead, as this used to,
+        // reported the rules as restored while nothing would ever read them.
+        PartOutcome gameProfiles;
+        if (settingsElement.TryGetProperty("game_profiles", out var embeddedProfiles)
+            && embeddedProfiles.ValueKind == JsonValueKind.Array)
+        {
+            gameProfiles = PartOutcome.Restored;
+        }
+        else if (document.GameProfiles is JsonElement legacyProfiles && legacyProfiles.ValueKind == JsonValueKind.Array)
+        {
+            try
+            {
+                restored.GameProfiles = legacyProfiles.Deserialize<List<GameProfile>>(LegacyGameProfileOptions)
+                    ?? new List<GameProfile>();
+                gameProfiles = PartOutcome.Restored;
+            }
+            catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidOperationException)
+            {
+                AppLog.Warn("Could not read Game profiles from backup", ex.Message);
+                gameProfiles = PartOutcome.Failed;
+            }
+        }
+        else
+        {
+            gameProfiles = PartOutcome.Skipped;
+        }
+
         restored.Normalize();
 
         // The window rectangle belongs to the screen it was saved on; restoring it on a smaller display would put
@@ -210,6 +242,13 @@ public static class BackupService
         restored.SchoolModeEnabled = false;
 
         var result = new BackupResult { Success = true };
+        var gameProfilesLabel = Loc.T("Oyun profilleri");
+        switch (gameProfiles)
+        {
+            case PartOutcome.Restored: result.Written.Add(gameProfilesLabel); break;
+            case PartOutcome.Failed: result.Failed.Add(gameProfilesLabel); break;
+            default: result.Skipped.Add(gameProfilesLabel); break;
+        }
 
         // The live settings are copied aside before anything is written. A restore replaces the file the app reads at
         // startup, so a user who picked the wrong backup would otherwise have no way back. A failure here is logged
@@ -224,10 +263,8 @@ public static class BackupService
         SetAside(settingsPath, stamp, "The safety backup before the restore could not be written");
         SetAside(rgbPresetsPath, stamp, "The RGB presets could not be set aside before the restore");
 
-        // The game profiles are overwritten below exactly like the presets, and they are the part a user spends the
-        // most time on: every per-game fan, power and RGB rule. Without this copy a wrong backup replaced them with no
-        // way back.
-        SetAside(gameProfilesPath, stamp, "The game profiles could not be set aside before the restore");
+        // The game profiles travel inside the settings file, so the settings copy above is their safety copy too.
+        // gameProfilesPath is no longer written, so there is nothing of it to set aside.
 
         try
         {
@@ -242,7 +279,6 @@ public static class BackupService
 
         if (schoolModeDropped) result.Skipped.Add(Loc.T("Okul modu kapalı olarak geri yüklendi"));
 
-        WriteJsonFile(document.GameProfiles, gameProfilesPath, JsonValueKind.Array, Loc.T("Oyun profilleri"), result);
         WriteJsonFile(document.RgbPresets, rgbPresetsPath, JsonValueKind.Array, Loc.T("RGB profilleri"), result);
 
         // A part that was in the backup and could not be written is a partial restore, and reporting it as a success
@@ -264,6 +300,14 @@ public static class BackupService
 
         return result;
     }
+
+    private enum PartOutcome { Skipped, Restored, Failed }
+
+    /// <summary>
+    /// The old Windows game_profiles.json was written with the default serializer, so its names are the C# property
+    /// names. Case-insensitive so a hand-edited copy is not silently read as empty.
+    /// </summary>
+    private static readonly JsonSerializerOptions LegacyGameProfileOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>Reads a JSON file into the document, or records why it was left out.</summary>
     private static JsonElement? ReadJsonFile(string? path, JsonValueKind expected, string label, BackupResult result)

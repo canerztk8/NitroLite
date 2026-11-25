@@ -141,6 +141,12 @@ public sealed record LinuxCapabilities : IPlatformSnapshot
     /// <summary>The <c>predator_v4</c> parameter as the kernel prints it (<c>Y</c>/<c>N</c>), or null when absent.</summary>
     public string? PredatorV4 { get; init; }
 
+    /// <summary>
+    /// The panel backlight the brightness service drives and the ones it passed over, with their types, for the report.
+    /// Null when the machine has none.
+    /// </summary>
+    public string? Backlight { get; init; }
+
     /// <summary>What <c>platform_profile_choices</c> contained at probe time, for the report.</summary>
     public string? PlatformProfileChoicesText { get; init; }
 

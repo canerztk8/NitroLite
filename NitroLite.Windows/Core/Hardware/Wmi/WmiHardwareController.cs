@@ -122,6 +122,13 @@ public sealed class WmiHardwareController : IHardwareController
     public SensorLayout? DiscoveredSensors => _discoveredSensors;
 
     /// <summary>
+    /// Process-wide: set only by the one-shot hardware commands (<c>--fan</c>, <c>--mode</c>, <c>--profile</c>) before
+    /// the backend is built. Every helper this process connects to is then told to leave a fixed fan speed in place
+    /// when the process exits. The window never sets it, so a window that dies hands the fans back.
+    /// </summary>
+    public static bool LeaveFansOnDisconnect { get; set; }
+
+    /// <summary>
     /// Connects on first use. A worker that died is dropped by <see cref="SendAsync"/>, so the next request after a
     /// crash starts a fresh one instead of failing forever.
     /// </summary>
@@ -144,6 +151,46 @@ public sealed class WmiHardwareController : IHardwareController
             }
 
             if (_client != null) _readReconnectBlocked = false;
+
+            // The one-shot --fan command exits right after its write, and leaving the speed in place is what it is
+            // documented to do. Without this the worker would see its client go and write Auto over it. Best effort: a
+            // worker that does not answer keeps its default, which is the safe one.
+            if (_client != null && LeaveFansOnDisconnect)
+            {
+                try
+                {
+                    await _client.SendAsync(WmiWorkerCommand.SetFanHandBack, new JsonObject { ["handBack"] = false })
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException
+                                              or OperationCanceledException or TimeoutException)
+                {
+                    AppLog.Warn("The helper could not be told to leave the fans in place", ex.Message);
+                }
+            }
+
+            // A worker that was dropped hands its manual fans back to the firmware when its pipe closes, and that can
+            // land after this new worker exists (a hung call returning late). The last accepted manual fan command is
+            // therefore sent once more to the new worker, so the fans end where this window last put them.
+            if (_client != null && _droppedSinceConnect)
+            {
+                _droppedSinceConnect = false;
+                var last = _lastManualFan;
+                if (last is { } command && !_disposed)
+                {
+                    try
+                    {
+                        await _client.SendAsync(command.Command, command.Args.DeepClone().AsObject()).ConfigureAwait(false);
+                        AppLog.Info("The last fan setting was sent again to the new helper", command.Command.ToString());
+                    }
+                    catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException
+                                                  or OperationCanceledException or TimeoutException)
+                    {
+                        AppLog.Warn("The last fan setting could not be sent again to the new helper", ex.Message);
+                    }
+                }
+            }
+
             return _client != null;
         }
         finally
@@ -1156,6 +1203,11 @@ public sealed class WmiHardwareController : IHardwareController
         // the explicit start path reconnects, and a successful connection lifts this again.
         if (_readReconnectBlocked && _client == null && IsReadOnly(command)) return null;
 
+        // A request to give the fans back forgets the remembered speed before anything else, whether or not it lands
+        // and even when no worker can be started for it: the user asked for Auto, and a later reconnect must not put
+        // the old fixed speed back over that choice.
+        TrackFanCommand(command, args, accepted: false);
+
         if (!await EnsureConnectedAsync().ConfigureAwait(false)) return null;
 
         var client = _client;
@@ -1163,7 +1215,9 @@ public sealed class WmiHardwareController : IHardwareController
 
         try
         {
-            return await client.SendAsync(command, args).ConfigureAwait(false);
+            var response = await client.SendAsync(command, args).ConfigureAwait(false);
+            if (response.Ok) TrackFanCommand(command, args, accepted: true);
+            return response;
         }
         catch (TimeoutException ex)
         {
@@ -1203,7 +1257,49 @@ public sealed class WmiHardwareController : IHardwareController
     private void DropClient()
     {
         var client = Interlocked.Exchange(ref _client, null);
+        if (client != null) _droppedSinceConnect = true;
         try { client?.Dispose(); } catch { }
+    }
+
+    /// <summary>Set when a connected worker was dropped; the next connection re-sends <see cref="_lastManualFan"/>.</summary>
+    private volatile bool _droppedSinceConnect;
+
+    /// <summary>The last fan command a worker accepted when it left the fans on a manual speed; null after Auto/Max.</summary>
+    private volatile FanCommand? _lastManualFan;
+
+    /// <summary>One accepted fan command; a class so it is swapped as a single reference.</summary>
+    private sealed record FanCommand(WmiWorkerCommand Command, JsonObject Args);
+
+    /// <summary>Remembers a fan command the worker accepted, so it can be re-sent after a reconnect.</summary>
+    /// <remarks>
+    /// A manual command is remembered only once it was accepted; a release is honoured as soon as it is asked for.
+    /// </remarks>
+    private void TrackFanCommand(WmiWorkerCommand command, JsonObject? args, bool accepted)
+    {
+        if (args == null) return;
+
+        bool? manual = command switch
+        {
+            WmiWorkerCommand.SetFanSpeed => ReadArg(args, "cpuPercent") is int cpu && ReadArg(args, "gpuPercent") is int gpu
+                ? AcerWmiExecutor.RouteFanSpeed(cpu, gpu) switch
+                {
+                    FanSpeedRoute.FixedSpeed => true,
+                    FanSpeedRoute.ReleaseToFirmware => false,
+                    _ => null
+                }
+                : null,
+            WmiWorkerCommand.SetFanBehavior => ReadArg(args, "cpu") == (int)FanMode.Custom || ReadArg(args, "gpu") == (int)FanMode.Custom,
+            _ => null
+        };
+
+        if (manual == true && accepted) _lastManualFan = new FanCommand(command, args.DeepClone().AsObject());
+        else if (manual == false) _lastManualFan = null;
+    }
+
+    private static int? ReadArg(JsonObject args, string name)
+    {
+        try { return args[name]?.GetValue<int>(); }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException) { return null; }
     }
 
     private static T? ParseEnum<T>(JsonObject? data, string key) where T : struct, Enum

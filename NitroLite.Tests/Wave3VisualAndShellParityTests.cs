@@ -385,30 +385,6 @@ public class Wave3VisualAndShellParityTests
     };
 
     [Fact]
-    public void TrayMenu_ListsTheModesFlatInTheWpfOrder()
-    {
-        var rows = TrayMenuPolicy.BuildRows(FiveModes);
-
-        // Show, retry, rule, five modes, rule, boost, rule, exit.
-        Assert.Equal(TrayRowKind.Show, rows[0].Kind);
-        Assert.Equal(TrayRowKind.Retry, rows[1].Kind);
-        Assert.Equal(TrayRowKind.Separator, rows[2].Kind);
-
-        var modes = rows.Where(r => r.Kind == TrayRowKind.Mode).Select(r => r.Mode).ToArray();
-        Assert.Equal(FiveModes, modes);
-
-        // The modes are top-level rows, not a submenu: a submenu cost a hover and a second click for the one thing the
-        // tray exists for, and hid the tick until it opened.
-        Assert.Equal(3, rows.Count(r => r.Kind == TrayRowKind.Separator));
-        Assert.Equal(TrayRowKind.Boost, rows[^3].Kind);
-        Assert.Equal(TrayRowKind.Separator, rows[^2].Kind);
-        Assert.Equal(TrayRowKind.Exit, rows[^1].Kind);
-
-        // No row is a container for another row: every mode is at the top level.
-        Assert.Equal(rows.Count, rows.Select(r => r.Kind).Count());
-    }
-
-    [Fact]
     public void TrayMenu_TicksOnlyTheActiveMode()
     {
         // One tick, on the mode the machine is actually in. A menu with no marked row would leave the user guessing.
