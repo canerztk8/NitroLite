@@ -93,6 +93,39 @@ public class CapabilityProbeTests
         Assert.True(UnsupportedMethodGate.ModesThroughWindows(profile));
     }
 
+    [Theory]
+    [InlineData("AN14-41", "nitro-14-an14-41")]
+    [InlineData("AN16-51", "nitro-16-an16-51")]
+    [InlineData("AN16-71", "nitro-16-an16-71")]
+    [InlineData("AN16-72", "nitro-16-an16-72")]
+    [InlineData("AN16-73", "nitro-16-an16-73")]
+    [InlineData("AN17-41", "nitro-17-an17-41")]
+    [InlineData("AN17-71", "nitro-17-an17-71")]
+    [InlineData("AN17-72", "nitro-17-an17-72")]
+    [InlineData("AN517-55", "nitro-5-an517-55")]
+    [InlineData("ANV14-61", "nitro-v-14-anv14-61")]
+    [InlineData("PH16-71", "predator-helios-16-ph16-71")]
+    [InlineData("PH315-55", "predator-helios-300-ph315-55")]
+    [InlineData("PH315-55S", "predator-helios-300-ph315-55")]
+    [InlineData("PH3D15-71", "predator-helios-3d-ph3d15-71")]
+    [InlineData("PT14-51", "predator-triton-pt14-51")]
+    [InlineData("PT16-51", "predator-triton-pt16-51")]
+    public void TheModelsNitroSenseListed_HaveTheirOwnUnverifiedProfile(string code, string id)
+    {
+        // From the NitroSense 5.0.1327.0 inventory (docs/NitroSense-inventory-2026-11-25.md). Each profile names the
+        // model and nothing more: unverified sensors, no MUX or keyboard claim, no method switched off.
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        var profile = catalog.Match(new DeviceIdentity { Manufacturer = "Acer", Model = code, ModelCode = code, IsAcer = true });
+
+        Assert.Equal(id, profile.Id);
+        Assert.False(profile.Sensors.Verified);
+        Assert.Null(profile.MuxSwitch);
+        Assert.Null(profile.FourZoneKeyboard);
+        Assert.False(profile.NitroHidKeyboard);
+        Assert.Empty(profile.UnsupportedMethods);
+        Assert.Contains("unverified", profile.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void OnlyTheNitroLite_MovesItsModesToWindows()
     {

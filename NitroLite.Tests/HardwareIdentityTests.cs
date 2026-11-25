@@ -37,6 +37,8 @@ public class HardwareIdentityTests
     [InlineData("Nitro ANV16-41", "ANV16-41")]
     [InlineData("Predator PH16-71", "PH16-71")]
     [InlineData("Nitro AN17-51", "AN17-51")]
+    [InlineData("Predator PH3D15-71", "PH3D15-71")]
+    [InlineData("Predator PH315-55s", "PH315-55S")]
     public void ExtractModelCode_FindsTheCode(string model, string expected) =>
         Assert.Equal(expected, DeviceIdentity.ExtractModelCode(model));
 

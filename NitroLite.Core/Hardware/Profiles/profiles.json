@@ -911,6 +911,352 @@
       "notes": "Acer Nitro Lite 16 NL16-71G (Intel, 2024). From an owner's report (issue 11) on v1.3.0 with the elevated worker running: the firmware refused every fan-behaviour, fan-speed and keyboard-colour write three times in a row and refused all 557 GetGamingSysInfo sensor reads, so those controls are off and temperatures come from the Windows thermal zone and NVML. The keyboard is a two-level white backlight with no RGB, and GetGamingMiscSetting(0x02) answers 0x0001, which is not a MUX mode. Operating-mode writes were refused as well, so the operating mode is switched through the Windows power mode instead (Quiet, Balanced, Performance); Acer ships no NitroSense or AcerSense for the Nitro Lite line, and its power limits are fixed in firmware. Fan ceilings are the generic default: no tachometer answered."
     },
     {
+      "id": "nitro-14-an14-41",
+      "match": {
+        "modelCodes": [
+          "AN14-41"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 14 AN14-41. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-16-an16-51",
+      "match": {
+        "modelCodes": [
+          "AN16-51"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 16 AN16-51. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-16-an16-71",
+      "match": {
+        "modelCodes": [
+          "AN16-71"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 16 AN16-71. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-16-an16-72",
+      "match": {
+        "modelCodes": [
+          "AN16-72"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 16 AN16-72. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-16-an16-73",
+      "match": {
+        "modelCodes": [
+          "AN16-73"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 16 AN16-73. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-17-an17-41",
+      "match": {
+        "modelCodes": [
+          "AN17-41"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 17 AN17-41. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-17-an17-71",
+      "match": {
+        "modelCodes": [
+          "AN17-71"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 17 AN17-71. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-17-an17-72",
+      "match": {
+        "modelCodes": [
+          "AN17-72"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6200,
+        "gpu": 6000
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 17 AN17-72. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-5-an517-55",
+      "match": {
+        "modelCodes": [
+          "AN517-55"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 5 AN517-55. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-v-14-anv14-61",
+      "match": {
+        "modelCodes": [
+          "ANV14-61"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5600,
+        "gpu": 5400
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro V 14 ANV14-61. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "predator-helios-16-ph16-71",
+      "match": {
+        "modelCodes": [
+          "PH16-71"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Predator Helios 16 PH16-71. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "predator-helios-300-ph315-55",
+      "match": {
+        "modelCodes": [
+          "PH315-55",
+          "PH315-55S"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6400,
+        "gpu": 6200
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Predator Helios 300 PH315-55 / PH315-55S. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "predator-helios-3d-ph3d15-71",
+      "match": {
+        "modelCodes": [
+          "PH3D15-71"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6400,
+        "gpu": 6200
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Predator Helios 3D PH3D15-71. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "predator-triton-pt14-51",
+      "match": {
+        "modelCodes": [
+          "PT14-51"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6600,
+        "gpu": 6400
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Predator Triton PT14-51. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "predator-triton-pt16-51",
+      "match": {
+        "modelCodes": [
+          "PT16-51"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6600,
+        "gpu": 6400
+      },
+      "unsupportedMethods": [],
+      "notes": "Acer Predator Triton PT16-51. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
       "id": "acer-gaming-default",
       "match": {
         "anyAcer": true

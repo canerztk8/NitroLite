@@ -85,9 +85,10 @@ public sealed record DeviceIdentity
 
     // "AN16-41", "AN515-58", "ANV15-51", "PH16-71", and the longer "AN515-58-79QL" shape. Two or three leading
     // letters, two or three digits, then dash-separated suffixes. A single leading letter ("N50-620") is a desktop
-    // and is not matched, which is what we want: NitroLite targets laptops.
+    // and is not matched, which is what we want: NitroLite targets laptops. "PH3D15-71" (Predator Helios 3D) carries
+    // a "3D" between the series letters and the size; that one infix is allowed there and nothing else.
     private static readonly Regex ModelCodePattern = new(
-        @"\b([A-Z]{2,4}\d{2,3}[A-Z]?(?:-[A-Z0-9]{2,4})*)\b",
+        @"\b([A-Z]{2,4}(?:3D)?\d{2,3}[A-Z]?(?:-[A-Z0-9]{2,4})*)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>

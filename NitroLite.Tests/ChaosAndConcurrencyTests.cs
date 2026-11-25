@@ -612,12 +612,12 @@ public class ChaosAndConcurrencyTests
     [Fact]
     public void EveryShippedProfileIsWellFormed()
     {
-        // Thirty-three profiles, each one a claim about a machine nobody here owns. The schema is the only thing that
+        // Forty-eight profiles, each one a claim about a machine nobody here owns. The schema is the only thing that
         // can be checked without the laptop, so it is checked for all of them rather than for the one in the matrix.
         var catalog = Catalog();
         var profiles = catalog.Profiles;
 
-        Assert.Equal(33, profiles.Count);
+        Assert.Equal(48, profiles.Count);
         Assert.Empty(catalog.Rejections);
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
