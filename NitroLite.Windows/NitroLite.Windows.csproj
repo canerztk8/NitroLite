@@ -9,7 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NitroLite.Windows</RootNamespace>
     <AssemblyName>NitroLite.Windows</AssemblyName>
-    <Version>1.3.4</Version>
+    <Version>1.3.5</Version>
     <Authors>NitroLite Team</Authors>
 
     <!-- The Linux CI restores NitroLite.Desktop, which multi-targets and therefore pulls this project in. Without this
