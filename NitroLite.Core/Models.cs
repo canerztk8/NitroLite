@@ -543,6 +543,17 @@ public class AppSettings
     [JsonPropertyName("game_profiles")]
     public List<GameProfile> GameProfiles { get; set; } = GameProfileDefaults.Create();
 
+    /// <summary>
+    /// True once <see cref="MigrateGameBoostDefaults"/> has run on this file. False (absent) in every file written
+    /// before 1.3.6; a fresh install is marked as migrated by the loader, because its defaults were chosen on purpose.
+    /// </summary>
+    [JsonPropertyName("game_boost_defaults_migrated")]
+    public bool GameBoostDefaultsMigrated { get; set; }
+
+    /// <summary>How many rules the migration changed in this process; the loader writes the file back when it is not zero.</summary>
+    [JsonIgnore]
+    internal int GameBoostMigrationChanges { get; private set; }
+
     [JsonPropertyName("battery_watchdog_enabled")]
     public bool BatteryWatchdogEnabled { get; set; } = true;
 
@@ -775,6 +786,8 @@ public class AppSettings
             if (profile.TargetFanCurvePoints != null) profile.TargetFanCurvePoints = FanCurve.Sanitize(profile.TargetFanCurvePoints);
         }
 
+        MigrateGameBoostDefaults();
+
         // The lighting block is the one part of the file that is not a number or an enum: it carries strings and a
         // list. A null Effect or a null LEDs list used to reach cfg.Effect.Equals(...) and cfg.LEDs.ToArray() in the
         // startup refresh, and the exception aborted every step after it, leaving the window half-built on every
@@ -839,11 +852,47 @@ public class AppSettings
             if (!Enum.IsDefined(recovery.SavedMode)) recovery.SavedMode = OperatingMode.Default;
             if (!Enum.IsDefined(recovery.SavedFan)) recovery.SavedFan = FanMode.Auto;
             if (!Enum.IsDefined(recovery.SavedBoost)) recovery.SavedBoost = CpuBoostMode.Aggressive;
-            if (recovery.SavedAcBoost is { } ac && !Enum.IsDefined(ac)) recovery.SavedAcBoost = null;
-            if (recovery.SavedDcBoost is { } dc && !Enum.IsDefined(dc)) recovery.SavedDcBoost = null;
+            // The boost values are the exact ones read from the power plan, and Windows documents PerfBoostMode as
+            // 0..6: 3, 5 and 6 have no enum member but are real values an OEM plan can hold, and dropping them would
+            // leave the game's value in place after a crash. The same range CpuPowerService accepts.
+            if (recovery.SavedAcBoost is { } ac && !IsStoredBoostValue(ac)) recovery.SavedAcBoost = null;
+            if (recovery.SavedDcBoost is { } dc && !IsStoredBoostValue(dc)) recovery.SavedDcBoost = null;
             if (recovery.SavedMouseProfile is < 0 or > 4) recovery.SavedMouseProfile = 0;
             if (recovery.Timestamp == default) recovery.Timestamp = DateTime.UtcNow;
         }
+    }
+
+    /// <summary>A PerfBoostMode value as Windows documents it (0..6), named by the enum or not.</summary>
+    private static bool IsStoredBoostValue(CpuBoostMode mode) => (int)mode is >= 0 and <= 6;
+
+    /// <summary>
+    /// One-time repair of game rules whose boost nobody chose. Before 1.3.6 the hand-add path saved every new rule
+    /// with the model's default of Disabled, and no build applied a rule's boost at all, so no user has ever seen that
+    /// value take effect. Now that it is applied, starting such a game would switch boost off. Each stored rule that
+    /// says Disabled where the library recommends something else gets the library's value; a rule for which the
+    /// library itself says Disabled (Balatro) keeps it. Runs once per file: a Disabled the user sets afterwards stays.
+    /// </summary>
+    /// <returns>How many rules were changed. Zero when the migration had already run.</returns>
+    public int MigrateGameBoostDefaults()
+    {
+        if (GameBoostDefaultsMigrated) return 0;
+
+        int changed = 0;
+        foreach (var profile in GameProfiles ?? new List<GameProfile>())
+        {
+            if (profile == null || profile.TargetCpuBoost != CpuBoostMode.Disabled) continue;
+
+            var recommended = GameLibraryRules.DetermineOptimalCpuBoost(profile.ExeName);
+            if (recommended == CpuBoostMode.Disabled) continue;
+
+            profile.TargetCpuBoost = recommended;
+            changed++;
+        }
+
+        GameBoostDefaultsMigrated = true;
+        GameBoostMigrationChanges = changed;
+        AppLog.Info("Game rule boost defaults migrated", $"{changed} rule(s) moved from an unchosen Disabled to the recommended boost");
+        return changed;
     }
 
     /// <summary>

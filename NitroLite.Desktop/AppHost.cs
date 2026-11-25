@@ -368,6 +368,10 @@ public sealed class AppHost : IDisposable
                 // so a powercfg that hangs on one path does not block the other. Both read the same power scheme.
                 cpuBoost = new CpuPowerService();
 
+                // A game's boost target goes through this same object, the one the dashboard's picker reads, so the
+                // picker and the game session never hold two views of one setting.
+                if (gameProfiles != null) gameProfiles.CpuBoost = cpuBoost;
+
                 // The library scan reads the Steam registry and the Epic manifests; the mouse is a USB HID device.
                 gameLibrary = new WindowsGameLibraryScanner();
                 mouseProfiles = new AtkMouseProfileService();
@@ -448,6 +452,9 @@ public sealed class AppHost : IDisposable
                 // have to be remembered when a Wayland or XRandR backend is added.
                 refreshRate = new RefreshRateAutomation(new LinuxDisplayRefreshRateService(), settings);
                 cpuBoost = new LinuxCpuBoostAccess(writeFs);
+
+                // The same object the dashboard's picker reads, so a game's boost target and the picker agree.
+                gameProfiles.CpuBoost = cpuBoost;
                 powerState = () =>
                 {
                     var (onAc, percent) = LinuxPowerSupply.Read(fs);
@@ -778,6 +785,10 @@ public sealed class AppHost : IDisposable
     {
         var service = new GameProfileService(new LinuxProcessScanner(fs), settings, hardware)
         {
+            // cpufreq/boost is one switch with no adapter and battery halves: a restore is one write, and while school
+            // mode holds the switch off a game writes no boost at all.
+            CpuBoostPerPowerSource = false,
+
             // No adapter node means "unknown", and unknown must not downgrade a profile: assuming AC keeps the target
             // the user configured, which is the same answer the Windows build gives when the power state is missing.
             PowerState = () =>

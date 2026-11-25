@@ -8,6 +8,23 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
+## [Unreleased]
+
+**Game profiles**
+- A game's CPU boost setting is applied when the game starts and when it is edited during play, and the previous
+  boost is put back when the game closes or after a crash. The setting was stored and shown, and nothing applied it.
+  School mode's battery value is left alone, and turning school mode on during a game hands the battery value back
+  first.
+- Game rules that still carry the unchosen "boost off" default from the old hand-add path are set once to the
+  recommendation for that game. Rules where the recommendation is "off" are unchanged; any rule can be set to off
+  again afterwards and stays that way.
+- Games added by hand get the same recommended CPU boost as scanned games.
+- On battery the mode card shows the mode that was actually applied (Balanced instead of Turbo, for example), and
+  the status line says when a game profile was only partly applied.
+- Editing a game's fan curve, or copying the desktop curve into it, takes effect at once while that game is running.
+- A game rule with a fixed Custom fan speed uses the fan sliders instead of the backend's default speed.
+- The crash-recovery record is written before the game's first setting, not after it.
+
 ## [1.3.5] - 2026-11-25
 
 A full audit of the code base, and the reports in #3 and #13.

@@ -1292,6 +1292,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _settingsPath = settingsPath;
         RestoreSnapshotBaseline();
         _gameProfiles = gameProfiles;
+
+        // The crash record is written before the game's first write, not after the whole apply (see StartAsync).
+        if (gameProfiles != null) gameProfiles.BeforeApply = OnGameAboutToApply;
         _schoolMode = schoolMode;
         _rgbProfiles = rgbProfiles ?? new RgbProfileService();
         _themeApplier = themeApplier;
@@ -5660,6 +5663,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ExeName = exe,
             DisplayName = string.IsNullOrWhiteSpace(NewGameName) ? exe : NewGameName.Trim(),
             TargetMode = NewGameMode?.Mode ?? OperatingMode.Default,
+            // The same per-game choice the scan and the file picker make. Left out, a hand-added game got the model's
+            // default of Disabled, so the processor lost its boost for exactly the games the user cared enough to add.
+            // The shared rules answer when this platform has no library scanner.
+            TargetCpuBoost = _gameLibrary?.DetermineOptimalCpuBoost(exe) ?? GameLibraryRules.DetermineOptimalCpuBoost(exe),
             TargetFanMode = NewGameFanMode?.Mode ?? FanMode.Auto,
             AutoApply = true
         };
@@ -5921,6 +5928,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             profile.TargetCpuBoost = value.Mode;
             SaveSettings();
+
+            // Like the mode and the fan: a change made while the game runs reaches the machine now, not at the next
+            // launch.
+            ApplyEditToRunningGame(profile);
         }
     }
 
@@ -6002,13 +6013,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!await _gameProfiles.ReapplyActiveAsync(active.ExeName).ConfigureAwait(true)) return;
 
-            // The cards follow, exactly as they do when the game starts.
+            // The cards follow, exactly as they do when the game starts: the mode that was written, which on battery is
+            // the clamped one, not the rule's target.
+            var applied = _gameProfiles.LastApply;
+            var mode = AppliedGameMode(active, applied, _gameProfiles.Snapshot);
             var fan = active.TargetFanCurveEnabled ? FanMode.Custom : active.TargetFanMode;
             SyncControls(() =>
             {
-                SelectedMode = Modes.FirstOrDefault(m => m.Mode == active.TargetMode) ?? SelectedMode;
+                SelectedMode = Modes.FirstOrDefault(m => m.Mode == mode) ?? SelectedMode;
                 SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
             });
+            RecordGameSessionBoost(_gameProfiles.Snapshot);
+            if (applied is { IsPartial: true }) Status = GamePartiallyApplied(active.DisplayName);
 
             // An edit from a curve to Auto or Max: a curve step already inside the write gate could otherwise land its
             // fixed speed after the service's write. The same re-write the end of a session does.
@@ -6019,7 +6035,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _curveEvaluator.Reset();
             _manualFanFloor.Reset();
 
-            AppLog.Info("Game profile applied to the running game", $"{active.DisplayName}: {active.TargetMode} · {fan}");
+            // Last, so the read cannot delay the fan re-write above; the pills follow the boost the edit wrote.
+            await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
+
+            AppLog.Info("Game profile applied to the running game",
+                $"{active.DisplayName}: {mode} · {active.TargetCpuBoost} · {fan}");
         }
         catch (Exception ex)
         {
@@ -6139,6 +6159,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
         BuildGameProfileRows();
         GameProfileStatus = Labels.GameCurveCopied(row.DisplayName);
+
+        // A copy onto the game that is running is followed now, like every other edit of that game.
+        ApplyEditToRunningGame(profile);
     }
 
     /// <summary>
@@ -6206,8 +6229,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             .Select(a => new FanCurvePoint(a.TemperatureC, a.Percent))
             .ToList();
 
+        FollowRunningGameCurve(profile);
+
         // The rule is the state, so it is written as it is dragged; only the file write waits for the drag to stop.
         _curveDebounce.Run(() => SaveSettings());
+    }
+
+    /// <summary>
+    /// Points the fan loop at the running game's edited curve. The loop's curve was built once when the game started,
+    /// so a drag of the game's sliders mid-game changed the saved rule and nothing the fans did until the next launch.
+    /// Nothing is written here: the loop's next step uses the new shape. Only the game in session is followed, and only
+    /// while its rule is a curve.
+    /// </summary>
+    private void FollowRunningGameCurve(GameProfile profile)
+    {
+        if (_gameProfiles?.ActiveProfile is not GameProfile active) return;
+        if (!active.ExeName.Equals(profile.ExeName, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (!ReferenceEquals(active, profile)) active.TargetFanCurvePoints = profile.TargetFanCurvePoints;
+
+        if (_gameProfiles.ActiveCurvePoints is not { } points) return;
+        _curveEvaluator = new FanCurveEvaluator(new FanCurve(points));
+        _curveEvaluator.Reset();
     }
 
     /// <summary>The rule behind a row, matched on the executable name the row carries.</summary>
@@ -6588,21 +6631,58 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Puts back the state a crashed game session overrode.
     /// </summary>
     /// <remarks>
-    /// The record is written before the game's profile is applied and cleared when the session ends, so a record that
-    /// is still there on the next launch is the only evidence that the process died mid-session. Restoring it is what
-    /// stops a machine from booting into Turbo with no game running and no explanation.
+    /// The record is written before the service's first write (<see cref="OnGameAboutToApply"/>) and cleared when the
+    /// session ends, so a record that is still there on the next launch is the only evidence that the process died
+    /// mid-session. Restoring it is what stops a machine from booting into Turbo with no game running and no
+    /// explanation.
     /// </remarks>
     private async Task RecoverGameSessionAsync()
     {
         var recovery = _settings.GameSessionRecovery;
         if (recovery is not { IsActive: true }) return;
 
+        // The boost first, and on its own: it lives in the power plan and survives a reboot, so it is the one value
+        // that stays wrong for good if it is skipped. A mode or fan write that throws at boot used to take it down
+        // with it, and the record was deleted all the same. Each source on its own, nothing that was not written, and
+        // never the battery value while school mode owns it — the same rule the end of a session uses.
+        if (recovery.SavedAcBoost != null || recovery.SavedDcBoost != null)
+        {
+            try
+            {
+                await GameProfileService.RestoreBoostAsync(
+                    _cpuBoost,
+                    recovery.SavedAcBoost,
+                    recovery.SavedDcBoost,
+                    _gameProfiles?.CpuBoostPerPowerSource ?? true,
+                    _settings.SchoolModeEnabled).ConfigureAwait(true);
+                await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("The CPU boost of the interrupted game session could not be restored", ex.Message);
+            }
+        }
+
         try
         {
             if (_hardware != null)
             {
                 if (recovery.RestoreMode) await _hardware.SetOperatingModeAsync(recovery.SavedMode).ConfigureAwait(true);
-                if (recovery.RestoreFan) await _hardware.SetFanModeAsync(recovery.SavedFan).ConfigureAwait(true);
+
+                // A pre-game Custom gets the user's slider speed back, which the settings file still holds: written
+                // without the percentages it got the backend's default speed.
+                if (recovery.RestoreFan)
+                {
+                    if (recovery.SavedFan == FanMode.Custom)
+                    {
+                        await _hardware.SetFanModeAsync(
+                            FanMode.Custom, _settings.CustomFanCpuPercent, _settings.CustomFanGpuPercent).ConfigureAwait(true);
+                    }
+                    else
+                    {
+                        await _hardware.SetFanModeAsync(recovery.SavedFan).ConfigureAwait(true);
+                    }
+                }
             }
 
             if (recovery.RestoreMode) _settings.LastOperatingMode = recovery.SavedMode;
@@ -6613,7 +6693,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
 
             Status = Labels.GameSessionRecovered;
-            AppLog.Info("The interrupted game session was rolled back", $"{recovery.SavedMode} · {recovery.SavedFan}");
+            AppLog.Info("The interrupted game session was rolled back",
+                $"{recovery.SavedMode} · {recovery.SavedFan} · boost AC={recovery.SavedAcBoost?.ToString() ?? "-"} " +
+                $"DC={recovery.SavedDcBoost?.ToString() ?? "-"}");
         }
         catch (Exception ex)
         {
@@ -6627,9 +6709,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// The service's <see cref="GameProfileService.BeforeApply"/>: the game has been detected and nothing has been
+    /// written yet. Runs on the thread <see cref="PollGameAsync"/> was awaited on, like every other settings save.
+    /// </summary>
+    private void OnGameAboutToApply(GameProfile profile, GameSessionSnapshot snapshot)
+    {
+        if (_disposed) return;
+        BeginGameSessionRecovery(profile, snapshot);
+    }
+
+    /// <summary>
     /// Records the state a game session is about to override, so a crash mid-session can be undone on the next launch.
     /// </summary>
-    private void BeginGameSessionRecovery(GameProfile profile)
+    /// <remarks>
+    /// The boost values come from the service's snapshot, and only the ones the session writes: a value the game leaves
+    /// alone (the battery's, while school mode owns it) must not be replayed over whatever owns it after a crash.
+    /// </remarks>
+    private void BeginGameSessionRecovery(GameProfile profile, GameSessionSnapshot? snapshot)
     {
         _settings.GameSessionRecovery = new GameSessionRecoveryState
         {
@@ -6638,6 +6734,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             RestoreFan = true,
             SavedMode = _settings.LastOperatingMode ?? OperatingMode.Default,
             SavedFan = SelectedFanMode?.Mode ?? FanMode.Auto,
+            SavedAcBoost = snapshot?.RestorableAcBoost,
+            SavedDcBoost = snapshot?.RestorableDcBoost,
             SavedMouseProfile = MouseProfileAfterGame(),
             Timestamp = DateTime.UtcNow
         };
@@ -6658,6 +6756,66 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _settings.GameSessionRecovery = null;
         SaveSettings();
+    }
+
+    /// <summary>
+    /// Brings the recovery record's boost values up to date after an edit during the game. An edit can write a value
+    /// the start did not (school mode switched off mid-game hands the battery value back to the game), and a crash
+    /// after that must still put it back.
+    /// </summary>
+    private void RecordGameSessionBoost(GameSessionSnapshot? snapshot)
+    {
+        if (snapshot == null || _settings.GameSessionRecovery is not { IsActive: true } recovery) return;
+
+        var ac = snapshot.RestorableAcBoost;
+        var dc = snapshot.RestorableDcBoost;
+        if (recovery.SavedAcBoost == ac && recovery.SavedDcBoost == dc) return;
+
+        recovery.SavedAcBoost = ac;
+        recovery.SavedDcBoost = dc;
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// The mode the card should show for a game that was just applied: the one that was written (clamped on battery),
+    /// or, when the write was refused, the one the machine is still in.
+    /// </summary>
+    private static OperatingMode AppliedGameMode(GameProfile game, GameApplyOutcome? applied, GameSessionSnapshot? snapshot) =>
+        applied switch
+        {
+            null => game.TargetMode,
+            { ModeWritten: true } => applied.Mode,
+            _ => snapshot?.Mode ?? applied.Mode
+        };
+
+    /// <summary>The status line for a game whose profile reached the machine only in part; the log names what failed.</summary>
+    private static string GamePartiallyApplied(string game) => Loc.T($"Oyun profili kısmen uygulandı: {game}");
+
+    /// <summary>
+    /// Re-reads the boost value into the dashboard's pills without writing it. A game session writes the boost behind
+    /// the pills' back, at its start and at its end, and the pills would otherwise keep showing the old value.
+    /// </summary>
+    /// <remarks>
+    /// The read runs off the calling thread: on a scheme whose boost setting is hidden it starts powercfg, which can take
+    /// seconds, and this runs at every game start and end. The pills are updated back on the calling thread. The field
+    /// is set directly: the pills' setter writes the boost, and it does not look at the write suppression
+    /// <see cref="SyncControls"/> sets.
+    /// </remarks>
+    private async Task RefreshCpuBoostChoiceAsync()
+    {
+        if (!CpuBoostAvailable || CpuBoostChoices.Count == 0) return;
+
+        var current = await Task.Run(ReadCpuBoost).ConfigureAwait(true);
+        if (_disposed || CpuBoostChoices.Count == 0) return;
+
+        // The same fallback the pills are built with: a value no pill names (Linux reads back "Enabled") is boost on.
+        var match = CpuBoostChoices.FirstOrDefault(c => c.Mode == current) ?? CpuBoostChoices[0];
+        if (ReferenceEquals(match, _selectedCpuBoost)) return;
+
+        _selectedCpuBoost = match;
+        foreach (var choice in CpuBoostChoices) choice.IsSelected = ReferenceEquals(choice, match);
+        Raise(nameof(SelectedCpuBoost));
+        Raise(nameof(SystemBoostText));
     }
 
     // ---------------------------------------------------------------- hardware report
@@ -8517,6 +8675,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await _writeGate.WaitAsync().ConfigureAwait(true);
         try
         {
+            // A game that is running gives the battery's boost value back first, so school mode backs up the user's
+            // value and not the game's: otherwise switching school mode off after the game would leave the game's boost
+            // in the power plan for good.
+            if (enable && _gameProfiles is { IsGameActive: true } games)
+            {
+                await games.ReleaseBatteryBoostAsync().ConfigureAwait(true);
+                RecordGameSessionBoost(games.Snapshot);
+            }
+
             var outcome = enable
                 ? await _schoolMode.EnableAsync().ConfigureAwait(true)
                 : await _schoolMode.DisableAsync().ConfigureAwait(true);
@@ -8804,21 +8971,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (result.Change == GameDetectionChange.Started && result.Profile is GameProfile started)
         {
             GameActive = true;
-            _gameStatus = Labels.GameStarted(started.DisplayName);
+
+            // A refused write used to be silent, so the status line said "applied" over a machine that was not in the
+            // game's profile. The log names the setting; the status line says it was partial.
+            _gameStatus = result.Applied is { IsPartial: true }
+                ? GamePartiallyApplied(started.DisplayName)
+                : Labels.GameStarted(started.DisplayName);
             _activeGameName = started.DisplayName;
             Raise(nameof(SystemGameText));
             Raise(nameof(ShowSystemGameRow));
 
-            // The record is written before the controls follow, so a crash between here and the game's exit still
-            // leaves enough behind to undo the override on the next launch.
-            BeginGameSessionRecovery(started);
+            // The record was written before the service's first write (OnGameAboutToApply). It is brought up to date
+            // with what the apply actually wrote; it is written here only if that early write did not happen.
+            if (_settings.GameSessionRecovery is { IsActive: true }) RecordGameSessionBoost(result.Snapshot);
+            else BeginGameSessionRecovery(started, result.Snapshot);
 
-            // The service already wrote the mode and the fan; the controls follow so the window does not show the
-            // user's old selection while the machine is in the game's.
+            // The service already wrote the mode, the boost and the fan; the controls follow so the window does not show
+            // the user's old selection while the machine is in the game's. The mode card shows the mode that was
+            // written: on battery a Turbo rule is clamped, and the card used to say Turbo over a Balanced machine.
             bool cardWasCustom = SelectedFanMode?.Mode == FanMode.Custom;
+            var startedMode = AppliedGameMode(started, result.Applied, result.Snapshot);
             SyncControls(() =>
             {
-                SelectedMode = Modes.FirstOrDefault(m => m.Mode == started.TargetMode) ?? SelectedMode;
+                SelectedMode = Modes.FirstOrDefault(m => m.Mode == startedMode) ?? SelectedMode;
                 var fan = started.TargetFanCurveEnabled ? FanMode.Custom : started.TargetFanMode;
                 SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
             });
@@ -8926,6 +9101,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Raise(nameof(CurrentMouseProfile));
             }
         }
+
+        // The service wrote the game's boost, or put the pre-game one back; the dashboard's pills read it again so they
+        // do not keep showing the old value. Last, so the read cannot delay any of the fan writes above.
+        await RefreshCpuBoostChoiceAsync().ConfigureAwait(true);
 
         Raise(nameof(GameStatusText));
         Status = _gameStatus;
@@ -9878,6 +10057,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+
+        // A game detected a moment before the window went away must not go on to write its mode, boost and fan into
+        // a machine nobody is watching any more: the crash record that would undo them is no longer written either.
+        _gameProfiles?.StopWriting();
 
         // The loop is stopped before anything else is torn down: a step in flight is holding the write gate, and
         // tearing the gate down underneath that step would throw on a background thread nobody is watching.

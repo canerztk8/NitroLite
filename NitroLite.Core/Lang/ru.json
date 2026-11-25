@@ -941,6 +941,7 @@
   "Oyun kitaplığı taranamadı.": "Не удалось просканировать библиотеку игр.",
   "Oyun modu": "Игровой режим",
   "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Не меняется во время игровой сессии. Будет применено после закрытия игры.",
+  "Oyun profili kısmen uygulandı: {0}": "Игровой профиль применён частично: {0}",
   "Oyun profili uygulandı: {0}": "Игровой профиль применён: {0}",
   "Oyun profilleri": "Игровые профили",
   "Oyun profilleri okunamadı: {0}": "Не удалось прочитать игровые профили: {0}",

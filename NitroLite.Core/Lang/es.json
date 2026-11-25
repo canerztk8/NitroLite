@@ -941,6 +941,7 @@
   "Oyun kitaplığı taranamadı.": "No se pudo escanear la biblioteca de juegos.",
   "Oyun modu": "Modo de juego",
   "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "No se cambia durante una sesión de juego. Se aplicará al cerrar el juego.",
+  "Oyun profili kısmen uygulandı: {0}": "Perfil de juego aplicado parcialmente: {0}",
   "Oyun profili uygulandı: {0}": "Perfil de juego aplicado: {0}",
   "Oyun profilleri": "Perfiles de juego",
   "Oyun profilleri okunamadı: {0}": "No se pudieron leer los perfiles de juego: {0}",

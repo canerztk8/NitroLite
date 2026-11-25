@@ -941,6 +941,7 @@
   "Oyun kitaplığı taranamadı.": "The game library could not be scanned.",
   "Oyun modu": "Game mode",
   "Oyun oturumu sırasında değiştirilmez. Oyun kapanınca uygulanacak.": "Not changed during a game session. It will be applied when the game closes.",
+  "Oyun profili kısmen uygulandı: {0}": "Game profile partially applied: {0}",
   "Oyun profili uygulandı: {0}": "Game profile applied: {0}",
   "Oyun profilleri": "Game profiles",
   "Oyun profilleri okunamadı: {0}": "Game profiles could not be read: {0}",

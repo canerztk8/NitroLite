@@ -45,9 +45,15 @@ public static class SettingsManager
         // 1. Try Primary settings file
         if (File.Exists(primaryPath))
         {
-            var (settings, error) = TryRead(primaryPath);
+            var (settings, error, migrated) = TryRead(primaryPath);
             if (settings != null)
+            {
+                // A one-time migration is written back at once, so it is never repeated over a choice the user makes
+                // later, whichever front end (window or CLI) happened to load the file first. Only the primary file is
+                // rewritten here: a load from the backup or the legacy file is persisted by the next ordinary save.
+                if (migrated) PersistMigration(primaryPath, settings);
                 return new SettingsLoadResult { Settings = settings, Source = SettingsLoadSource.Primary };
+            }
 
             primaryCorrupt = true;
             primaryError = error;
@@ -57,7 +63,7 @@ public static class SettingsManager
         // 2. Try Backup settings file (.bak)
         if (!string.IsNullOrEmpty(backupPath) && File.Exists(backupPath))
         {
-            var (settings, _) = TryRead(backupPath);
+            var (settings, _, _) = TryRead(backupPath);
             if (settings != null)
                 return new SettingsLoadResult
                 {
@@ -71,7 +77,7 @@ public static class SettingsManager
         // 3. Try Legacy settings file (e.g. config.json)
         if (!string.IsNullOrEmpty(legacyPath) && File.Exists(legacyPath))
         {
-            var (settings, _) = TryRead(legacyPath);
+            var (settings, _, _) = TryRead(legacyPath);
             if (settings != null)
                 return new SettingsLoadResult
                 {
@@ -82,33 +88,57 @@ public static class SettingsManager
                 };
         }
 
-        // 4. Default settings
+        // 4. Default settings. Their game rules were chosen on purpose, so the one-time boost migration has nothing to
+        // repair in them and must not run over them later.
         return new SettingsLoadResult
         {
-            Settings = new AppSettings(),
+            Settings = new AppSettings { GameBoostDefaultsMigrated = true },
             Source = SettingsLoadSource.Defaults,
             PrimaryCorrupt = primaryCorrupt,
             PrimaryError = primaryError
         };
     }
 
-    /// <summary>Reads one settings file; returns null settings plus the reason when it cannot be used.</summary>
-    private static (AppSettings? Settings, string? Error) TryRead(string path)
+    /// <summary>
+    /// Reads one settings file; returns null settings plus the reason when it cannot be used. Migrated is true when
+    /// a one-time migration ran during the read and the file on disk is now behind the settings in memory.
+    /// </summary>
+    private static (AppSettings? Settings, string? Error, bool Migrated) TryRead(string path)
     {
         try
         {
             var json = BoundedTextFile.ReadAllText(path);
-            if (string.IsNullOrWhiteSpace(json)) return (null, Loc.T("dosya boş"));
+            if (string.IsNullOrWhiteSpace(json)) return (null, Loc.T("dosya boş"), false);
             var parsed = JsonSerializer.Deserialize<AppSettings>(json);
-            if (parsed == null) return (null, Loc.T("içerik okunamadı"));
+            if (parsed == null) return (null, Loc.T("içerik okunamadı"), false);
             // A number that is a valid JSON value is a valid enum value to System.Text.Json even when the enum has
-            // no such member, so the range check has to happen here rather than at every use.
+            // no such member, so the range check has to happen here rather than at every use. It also runs the
+            // one-time boost migration (AppSettings.MigrateGameBoostDefaults).
             parsed.Normalize();
-            return (parsed, null);
+
+            // Written back only when a rule actually changed. A migration that changed nothing leaves the file as it
+            // is: the flag reaches the disk with the next ordinary save, and until then re-running it changes nothing.
+            return (parsed, null, parsed.GameBoostMigrationChanges > 0);
         }
         catch (Exception ex)
         {
-            return (null, ex.Message);
+            return (null, ex.Message, false);
+        }
+    }
+
+    /// <summary>
+    /// Writes a migrated file back. A failure is logged and otherwise ignored: the migration is idempotent until it has
+    /// been saved, and the next ordinary save persists it.
+    /// </summary>
+    private static void PersistMigration(string path, AppSettings settings)
+    {
+        try
+        {
+            SaveSettingsAtomic(path, settings);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The migrated settings file could not be written", ex.Message);
         }
     }
 
