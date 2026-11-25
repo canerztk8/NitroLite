@@ -588,7 +588,7 @@
   "Geçişli": "Blended",
   "Geçişten sonra oturumu kapatıp açmanız gerekebilir.": "You may need to sign out and back in after switching.",
   "Geçmişi sil": "Delete history",
-  "GitHub Sponsors onay sürecinde.": "GitHub Sponsors is pending approval.",
+  "GitHub'da sponsor ol": "Sponsor on GitHub",
   "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Copies a Markdown hardware report to the clipboard, ready to paste into a GitHub issue. It contains no serial number, user name or file path.",
   "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Opens a GitHub issue with the version, Windows build and laptop model filled in. Your user name and file paths are not included.",
   "GitHub'da yıldızla": "Star on GitHub",

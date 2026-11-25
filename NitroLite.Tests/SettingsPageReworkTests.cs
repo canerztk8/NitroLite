@@ -276,6 +276,7 @@ public class SettingsPageReworkTests
         Assert.Contains("Labels.Support", markup, StringComparison.Ordinal);
         Assert.Contains("Labels.SupportBody", markup, StringComparison.Ordinal);
         Assert.Contains("SupportKofiCommand", markup, StringComparison.Ordinal);
+        Assert.Contains("SupportSponsorsCommand", markup, StringComparison.Ordinal);
         Assert.Contains("SupportGitHubCommand", markup, StringComparison.Ordinal);
 
         // The notes block is gone: it printed the probe's own diagnostics, which is a developer's note in a user's
@@ -303,18 +304,22 @@ public class SettingsPageReworkTests
 
         Assert.Contains(UpdateService.Owner, SupportLinks.Repository, StringComparison.Ordinal);
         Assert.Contains(UpdateService.Repository, SupportLinks.Repository, StringComparison.Ordinal);
+
+        // The sponsors page belongs to the same account the update check trusts.
+        Assert.Equal($"https://github.com/sponsors/{UpdateService.Owner}", SupportLinks.Sponsors);
     }
 
     [Fact]
-    public void TheSupportButtons_OpenTheTwoAddresses()
+    public void TheSupportButtons_OpenTheirAddresses()
     {
         var opened = new System.Collections.Generic.List<string>();
         using var vm = Create(urlOpener: opened.Add);
 
         vm.SupportKofiCommand.Execute(null);
+        vm.SupportSponsorsCommand.Execute(null);
         vm.SupportGitHubCommand.Execute(null);
 
-        Assert.Equal(new[] { SupportLinks.Kofi, SupportLinks.Repository }, opened);
+        Assert.Equal(new[] { SupportLinks.Kofi, SupportLinks.Sponsors, SupportLinks.Repository }, opened);
     }
 
     // =============================================================================================================

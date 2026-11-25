@@ -25,6 +25,9 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 - A game rule with a fixed Custom fan speed uses the fan sliders instead of the backend's default speed.
 - The crash-recovery record is written before the game's first setting, not after it.
 
+**Support**
+- The support card has a GitHub Sponsors button next to Ko-fi; the line that said the programme was pending is gone.
+
 ## [1.3.5] - 2026-11-25
 
 A full audit of the code base, and the reports in #3 and #13.

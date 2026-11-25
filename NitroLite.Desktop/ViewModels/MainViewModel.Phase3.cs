@@ -1074,8 +1074,10 @@ public sealed partial class MainViewModel
     public AsyncCommand UpdateNowCommand { get; private set; } = null!;
     public RelayCommand ReleaseNotesCommand { get; private set; } = null!;
 
-    /// <summary>The two buttons on the support card. Both are plain links, so neither needs a busy state.</summary>
+    /// <summary>The three buttons on the support card. All are plain links, so none needs a busy state.</summary>
     public RelayCommand SupportKofiCommand { get; private set; } = null!;
+
+    public RelayCommand SupportSponsorsCommand { get; private set; } = null!;
 
     public RelayCommand SupportGitHubCommand { get; private set; } = null!;
     public RelayCommand ReportBugCommand { get; private set; } = null!;
@@ -1118,6 +1120,7 @@ public sealed partial class MainViewModel
         UpdateNowCommand = new AsyncCommand(UpdateNowAsync);
         ReleaseNotesCommand = new RelayCommand(OpenReleaseNotes);
         SupportKofiCommand = new RelayCommand(() => OpenUrl(SupportLinks.Kofi));
+        SupportSponsorsCommand = new RelayCommand(() => OpenUrl(SupportLinks.Sponsors));
         SupportGitHubCommand = new RelayCommand(() => OpenUrl(SupportLinks.Repository));
         ReportBugCommand = new RelayCommand(ReportBug);
         OpenLogsCommand = new RelayCommand(OpenLogsFolder);

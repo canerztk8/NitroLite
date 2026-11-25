@@ -549,8 +549,7 @@
 
       <!-- The last card. It replaced a "Notes" block that printed the probe's own diagnostics, which was a developer's
            note in a user's window. This one says who wrote the app and what it cost, which is the only thing that
-           belongs at the bottom of a settings page. GitHub Sponsors is named but not linked: the account is not
-           enrolled yet, and a button that opens a 404 is worse than a line that says so. -->
+           belongs at the bottom of a settings page. -->
       <Border Classes="card">
         <StackPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -578,11 +577,23 @@
                 <TextBlock Text="{Binding Labels.SupportKofi}" Foreground="#FFFFFF" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
+            <!-- GitHub Sponsors: the heart in the programme's own pink, drawn as a Path for the same reason the cup
+                 is. The button itself keeps the theme's colours, so it reads as the second way to give, not a second
+                 brand block next to the Ko-fi one. -->
+            <Button Margin="0,0,6,6" Padding="12,7" Command="{Binding SupportSponsorsCommand}"
+                    ToolTip.Tip="{Binding Labels.SupportSponsors}"
+                    AutomationProperties.Name="{Binding Labels.SupportSponsors}">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <Canvas Width="14" Height="14" VerticalAlignment="Center">
+                  <Path Fill="#DB61A2"
+                        Data="M7,12.6 C7,12.6 1.2,9.1 1.2,5.1 A3,3 0 0 1 7,3.9 A3,3 0 0 1 12.8,5.1 C12.8,9.1 7,12.6 7,12.6 Z" />
+                </Canvas>
+                <TextBlock Text="{Binding Labels.SupportSponsors}" FontSize="11" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
             <Button Classes="primary" Content="{Binding Labels.SupportGitHub}" Margin="0,0,6,6" Padding="12,7"
                     FontSize="11" Command="{Binding SupportGitHubCommand}" />
           </WrapPanel>
-
-          <TextBlock Classes="hint" Text="{Binding Labels.SupportSponsors}" Margin="0,2,0,0" />
         </StackPanel>
       </Border>
     </StackPanel>

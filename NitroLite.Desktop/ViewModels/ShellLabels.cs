@@ -926,7 +926,7 @@ public sealed class ShellLabels
     public string SupportBody => Loc.T("NitroLite tek bir öğrencinin projesi: 100 doların üzerinde cepten harcama, yüzlerce saat emek ve her sürüm kendi dizüstü bilgisayarımda denendi. Her hâlükârda ücretsiz ve MIT lisanslı kalacak. Zamanınızdan bir şey kurtardıysa bir kahve güzel bir teşekkür olur; bir yıldız ya da hata bildirimi de en az onun kadar değerli.");
     public string SupportKofi => Loc.T("Ko-fi'de bana destek ol");
     public string SupportGitHub => Loc.T("GitHub'da yıldızla");
-    public string SupportSponsors => Loc.T("GitHub Sponsors onay sürecinde.");
+    public string SupportSponsors => Loc.T("GitHub'da sponsor ol");
 
     // ---------------------------------------------------------------- the first-run walkthrough
 

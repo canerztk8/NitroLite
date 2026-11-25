@@ -588,7 +588,7 @@
   "Geçişli": "Градиент",
   "Geçişten sonra oturumu kapatıp açmanız gerekebilir.": "После переключения может потребоваться выйти из сеанса и войти снова.",
   "Geçmişi sil": "Удалить историю",
-  "GitHub Sponsors onay sürecinde.": "GitHub Sponsors ожидает одобрения.",
+  "GitHub'da sponsor ol": "Спонсировать на GitHub",
   "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Копирует отчёт об оборудовании в формате Markdown в буфер обмена — готов к вставке в задачу GitHub. Не содержит серийного номера, имени пользователя и пути к файлу.",
   "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Открывает задачу на GitHub с уже заполненными версией, сборкой Windows и моделью ноутбука. Имя пользователя и пути к файлам не добавляются.",
   "GitHub'da yıldızla": "Поставить звезду на GitHub",

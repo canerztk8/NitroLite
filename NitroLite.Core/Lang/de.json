@@ -588,7 +588,7 @@
   "Geçişli": "Verlaufend",
   "Geçişten sonra oturumu kapatıp açmanız gerekebilir.": "Nach dem Wechsel ist möglicherweise eine erneute Anmeldung erforderlich.",
   "Geçmişi sil": "Verlauf löschen",
-  "GitHub Sponsors onay sürecinde.": "GitHub Sponsors ist noch nicht freigeschaltet.",
+  "GitHub'da sponsor ol": "Auf GitHub sponsern",
   "GitHub sorununa yapıştırmaya hazır Markdown donanım raporunu panoya kopyalar. Seri numarası, kullanıcı adı ve dosya yolu içermez.": "Kopiert einen Markdown-Hardwarebericht in die Zwischenablage, fertig zum Einfügen in ein GitHub-Issue. Er enthält keine Seriennummer, keinen Benutzernamen und keinen Dateipfad.",
   "GitHub'da bir hata kaydı açar; sürüm, Windows sürümü ve laptop modeli önceden doldurulur. Kullanıcı adınız veya dosya yolunuz eklenmez.": "Öffnet ein GitHub-Issue mit Version, Windows-Build und Laptop-Modell. Benutzername und Dateipfade werden nicht mitgesendet.",
   "GitHub'da yıldızla": "Auf GitHub markieren",

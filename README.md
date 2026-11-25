@@ -122,6 +122,8 @@ NitroLite is made by one student in his free time: over $100 out of pocket and h
 stays free. If it saved you from NitroSense, you can put something back:
 
 <p align="center">
+  <a href="https://github.com/sponsors/canerztk8"><img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" height="36"></a>
+  &nbsp;
   <a href="https://ko-fi.com/cztrk"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Support me on Ko-fi" height="36"></a>
 </p>
 
