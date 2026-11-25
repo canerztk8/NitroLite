@@ -172,6 +172,8 @@ public sealed class WmiHardwareController : IHardwareController
             return new HardwareCapabilities { Backend = BackendName, ServiceAvailable = false };
         }
 
+        NoteBacklightTimeoutProbe(data);
+
         return new HardwareCapabilities
         {
             Backend = BackendName,
@@ -189,6 +191,42 @@ public sealed class WmiHardwareController : IHardwareController
             SupportedOperatingModes = ReadModes(data),
             SupportedModeMask = ReadMask(data)
         };
+    }
+
+    /// <summary>
+    /// What the firmware answered when the worker asked for the backlight timeout and could not decode it, or null when
+    /// it was readable, the class is missing, or the worker has not been asked.
+    /// </summary>
+    /// <remarks>
+    /// The AN16-61 report had the timeout row unknown on a session where the helper was running and CoolBoost — on the
+    /// same <c>APGeAction</c> class — answered. The worker had the two raw answers and dropped them, so nothing said
+    /// which selector that board uses. They are kept here and written to the log once per distinct answer, which is
+    /// what the next report needs to settle it without another firmware sweep.
+    /// </remarks>
+    public string? BacklightTimeoutProbe { get; private set; }
+
+    private void NoteBacklightTimeoutProbe(JsonObject data)
+    {
+        var detail = ReadBacklightTimeoutDetail(data);
+        var previous = BacklightTimeoutProbe;
+        BacklightTimeoutProbe = detail;
+        if (detail == null || string.Equals(detail, previous, StringComparison.Ordinal)) return;
+
+        AppLog.Info("The backlight timeout selector did not answer in a known form", detail);
+    }
+
+    /// <summary>The worker's <c>backlightTimeoutDetail</c>, or null when it is absent or empty.</summary>
+    internal static string? ReadBacklightTimeoutDetail(JsonObject data)
+    {
+        try
+        {
+            var text = data["backlightTimeoutDetail"]?.GetValue<string>();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>The raw <c>0x0A</c> answer, or null when the worker did not read one.</summary>

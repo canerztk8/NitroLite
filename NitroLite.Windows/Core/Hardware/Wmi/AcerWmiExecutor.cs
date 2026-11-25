@@ -141,6 +141,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
             }
 
             var apge = EnsureApge();
+            var timeout = apge != null ? GetBacklightTimeout() : null;
 
             return WmiOperationResult.Success(new JsonObject
             {
@@ -163,7 +164,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 // APGeAction is present but GetFunction(0x80001) returns a status this build does not recognise, so a
                 // switch built on the class alone showed "off" over a firmware timeout that was still on — and could
                 // neither read nor write it. Asking the selector is what makes the capability mean something.
-                ["backlightTimeout"] = apge != null && GetBacklightTimeout().Ok,
+                ["backlightTimeout"] = timeout?.Ok == true,
+                // Why it is not readable, in the firmware's own words: the raw answer of each selector, or the error
+                // the call threw. Null when the class is missing (that is already "apgeClass": false) or the read
+                // worked. The controller logs it, because it is the one fact that says which selector a board uses.
+                ["backlightTimeoutDetail"] = timeout is { Ok: false } ? timeout.Error : null,
                 ["lcdOverdrive"] = registry.LcdOverdriveSupport is > 0,
                 ["winKeyLock"] = gaming != null,
                 ["supportedModes"] = supportedModes,
@@ -898,23 +903,63 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
     internal sealed record TimeoutReading(int Selector, int Brightness, bool Enabled, ulong Raw);
 
-    internal static TimeoutReading? ReadTimeout(Func<ulong, ulong?> get)
+    internal static TimeoutReading? ReadTimeout(Func<ulong, ulong?> get) => ReadTimeout(get, answers: null);
+
+    /// <summary>
+    /// The same read, with every answer the firmware gave written into <paramref name="answers"/>.
+    /// </summary>
+    /// <remarks>
+    /// An AN16-61 on BIOS 1.53 had <c>APGeAction</c> registered and CoolBoost answering, and the timeout row still came
+    /// out unknown: neither selector gave a reply this build decodes. What they did answer was thrown away, so neither
+    /// the log nor the report could say which selector that board uses. The answers are kept for that one purpose;
+    /// no extra firmware call is made to collect them.
+    /// </remarks>
+    internal static TimeoutReading? ReadTimeout(Func<ulong, ulong?> get, List<string>? answers)
     {
         // Linuwu-Sense uses hotkey 0x84 for the dedicated timeout switch. Only its two
         // documented replies identify that interface. Other boards use selector 0.
+        var dedicated = AcerWmiProtocol.EncodeBacklightTimeoutGet(0x84);
         ulong? raw;
-        try { raw = get(AcerWmiProtocol.EncodeBacklightTimeoutGet(0x84)); }
-        catch (ManagementException) { raw = null; }
-        catch (System.Runtime.InteropServices.COMException) { raw = null; }
+        string dedicatedAnswer;
+        try
+        {
+            raw = get(dedicated);
+            dedicatedAnswer = DescribeAnswer(dedicated, raw);
+        }
+        catch (ManagementException ex)
+        {
+            raw = null;
+            dedicatedAnswer = $"GetFunction(0x{dedicated:X}) threw {Describe(ex)}";
+        }
+        catch (System.Runtime.InteropServices.COMException ex)
+        {
+            raw = null;
+            dedicatedAnswer = $"GetFunction(0x{dedicated:X}) threw {Describe(ex)}";
+        }
         if (raw is 0x80000UL or 0x1E0000080000UL)
             return new TimeoutReading(0x84, 0, raw == 0x1E0000080000UL, raw.Value);
+        answers?.Add(dedicatedAnswer);
 
-        raw = get(AcerWmiProtocol.EncodeBacklightTimeoutGet(0));
+        var combined = AcerWmiProtocol.EncodeBacklightTimeoutGet(0);
+        try { raw = get(combined); }
+        catch (Exception ex) when (answers != null)
+        {
+            // Not swallowed: the caller's own handler still decides whether the provider is wedged.
+            answers.Add($"GetFunction(0x{combined:X}) threw {Describe(ex)}");
+            throw;
+        }
+
         if (raw is not ulong answer || AcerWmiProtocol.DecodeBacklightTimeout(answer) is not { } state)
+        {
+            answers?.Add(DescribeAnswer(combined, raw));
             return null;
+        }
 
         return new TimeoutReading(0, state.BrightnessPercent, state.Enabled, answer);
     }
+
+    private static string DescribeAnswer(ulong input, ulong? raw) =>
+        raw is ulong value ? $"GetFunction(0x{input:X}) -> 0x{value:X}" : $"GetFunction(0x{input:X}) -> no answer";
 
     /// <summary>Reads the 30-second keyboard backlight timeout from <c>APGeAction.GetFunction</c>.</summary>
     public WmiOperationResult GetBacklightTimeout()
@@ -926,8 +971,11 @@ public sealed class AcerWmiExecutor : IWmiExecutor
 
             try
             {
-                var state = ReadTimeout(input => InvokeApgeGetter(apge, "GetFunction", input));
-                if (state == null) return WmiOperationResult.NotSupported("No readable backlight timeout selector");
+                var answers = new List<string>(2);
+                var state = ReadTimeout(input => InvokeApgeGetter(apge, "GetFunction", input), answers);
+                if (state == null)
+                    return WmiOperationResult.NotSupported(
+                        $"No readable backlight timeout selector: {string.Join("; ", answers)}");
 
                 return WmiOperationResult.Success(new JsonObject
                 {

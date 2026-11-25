@@ -239,6 +239,8 @@
   "Bilinmiyor": "Unbekannt",
   "Bilinmiyor (Sağlık verisi okunamadı)": "Unbekannt (Zustandsdaten konnten nicht gelesen werden)",
   "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)": "Unbekannt (der Datenträger meldet keinen Zustand)",
+  "Bilinmiyor (aygıt yazılımı yanıt vermedi)": "Unbekannt (die Firmware hat nicht geantwortet)",
+  "Bilinmiyor (donanıma bağlanılamadı)": "Unbekannt (keine Verbindung zur Hardware)",
   "Bir fan 88 °C üzerinde 10 saniye boyunca 400 RPM altında kalırsa uyarır ve makineyi Eco moduna alır.": "Warnt und schaltet das Gerät in den Eco-Modus, wenn ein Lüfter über 88 °C zehn Sekunden lang unter 400 U/min bleibt.",
   "Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.": "Lege hier fest, in welchen Modus und welche Lüftereinstellung ein Spiel beim Start wechselt.",
   "Bitir": "Fertig",

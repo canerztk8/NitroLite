@@ -432,6 +432,12 @@ public class BatteryWatchdogService : IDisposable
             }
             catch { }
 
+            // Pack temperature: root\WMI BatteryTemperature is the only documented source, and most laptops leave it
+            // blank. It is served by the battery class driver from the miniport's BatteryTemperature query
+            // (BATTERY_WMI_TEMPERATURE, shared\batclass.h:484-488), which is exactly what IOCTL_BATTERY_QUERY_INFORMATION
+            // with BatteryTemperature (shared\poclass.h:92-95, 414-415) would ask — so that IOCTL cannot succeed where
+            // this query fails, and it is not added. When the firmware has no pack sensor the cell stays "--"; the EC
+            // is never read for it.
             try
             {
                 using var query = new ManagementObjectSearcher(@"root\WMI", "SELECT Temperature FROM BatteryTemperature WHERE Active = TRUE");
@@ -449,6 +455,9 @@ public class BatteryWatchdogService : IDisposable
             }
             catch (ManagementException) { }
             catch (UnauthorizedAccessException) { }
+            // A COM failure here (provider not registered, RPC fault) used to escape the task and throw away every
+            // value read above with it; the temperature is optional, the rest of the details are not.
+            catch (COMException) { }
 
             // No full-charge capacity from Windows: leave it unknown. (The old "design × 0.923" guess happened to
             // match this AN16-41 but would be shown as a measurement anywhere else.)

@@ -295,6 +295,130 @@ public class AuditG1Tests
         Assert.False(hardware.HasFanWrite(w => w.Mode == FanMode.Custom && w.Cpu < 42));
     }
 
+    // ---------------------------------------------------------------- second audit: Custom picked again, unconfirmed floor
+
+    [Fact]
+    public async Task CustomPickedAgainAfterAHandBackIsHandedBackAgain()
+    {
+        // A machine that only ever answers the thermal zone. The first Custom is handed back and the card goes to Auto.
+        // Picking Custom again writes the slider speed once more; with the hand-back still remembered as done, nothing
+        // would ever take the fans back, and they would sit at that speed with no floor.
+        var sample = new MonitorData
+        {
+            CpuTemperature = 28,
+            GpuTemperature = 60,
+            CpuFanSpeed = 2400,
+            GpuFanSpeed = 2400,
+            IsFanRpmMeasured = true,
+            IsTemperatureMeasured = false
+        };
+        sample.Provenance["cpu-temp"] = "PDH thermal zone";
+        var hardware = new RecordingHardware { Sample = sample };
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+        await WaitUntilAsync(() => hardware.CountFanWrites(w => w.Mode == FanMode.Auto) >= 1, 8000);
+        await WaitUntilAsync(() => vm.SelectedFanMode?.Mode == FanMode.Auto, 5000);
+
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+        await WaitUntilAsync(() => hardware.CountFanWrites(w => w.Mode == FanMode.Auto) >= 2, 5000);
+        await WaitUntilAsync(() => vm.SelectedFanMode?.Mode == FanMode.Auto, 5000);
+        Assert.Equal(FanMode.Auto, hardware.LastCompletedFanMode);
+    }
+
+    [Fact]
+    public async Task TheFixedSpeedFloorRunsOnAnUnconfirmedReading()
+    {
+        // The sensor layout is a guess (not confirmed, not yet verified by the live readings). The curve is held back
+        // for that; the fixed-speed floor is not, because it can only raise the speed.
+        var cool = Hot(60);
+        cool.IsTemperatureMeasured = false;
+        var hardware = new RecordingHardware { Sample = cool };
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+
+        vm.CurveEnabled = false;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+        await WaitUntilAsync(() => hardware.HasFanWrite(w => w.Mode == FanMode.Custom), 4000);
+
+        var hot = Hot(95);
+        hot.IsTemperatureMeasured = false;
+        hardware.Sample = hot;
+        await vm.RefreshTelemetryAsync();
+
+        await WaitUntilAsync(() => hardware.HasFanWrite(w => w.Mode == FanMode.Custom && w.Cpu == 100 && w.Gpu == 100), 5000);
+    }
+
+    [Fact]
+    public async Task TheFixedSpeedLoopKeepsEachFansOwnSlider()
+    {
+        // CPU 40, GPU 80, a cool machine. The loop's first step after Custom is picked always writes; it used to write
+        // the CPU figure to both fans, which pulled the GPU fan from 80 down to 40.
+        var cool = Hot(55);
+        cool.IsTemperatureMeasured = false;
+        var hardware = new RecordingHardware { Sample = cool };
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+
+        vm.CurveEnabled = false;
+        vm.CustomCpuPercent = 40;
+        vm.CustomGpuPercent = 80;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+
+        // The card's own write, then at least one from the loop.
+        await WaitUntilAsync(() => hardware.CountFanWrites(w => w.Mode == FanMode.Custom) >= 2, 8000);
+
+        Assert.False(hardware.HasFanWrite(w => w.Mode == FanMode.Custom && w.Gpu < 80));
+        Assert.True(hardware.HasFanWrite(w => w.Mode == FanMode.Custom && w.Cpu == 40 && w.Gpu == 80));
+    }
+
+    [Theory]
+    [InlineData(100, 30, 95, 100)]
+    [InlineData(70, 30, 86, 60)]
+    public async Task TheFloorReachesTheGpuFanEvenWhenTheCpuSliderAlreadySitsAboveIt(
+        int cpuSlider, int gpuSlider, int hotC, int gpuAtLeast)
+    {
+        // The CPU slider is already at or above the floor, so the CPU figure does not move as the die heats up. The
+        // write used to be decided on that figure alone, and the GPU fan stayed at its low slider at 95 °C.
+        var hardware = new RecordingHardware { Sample = Hot(55) };
+        using var vm = await ReadyAsync(hardware);
+        await vm.RefreshTelemetryAsync();
+
+        vm.CurveEnabled = false;
+        vm.CustomCpuPercent = cpuSlider;
+        vm.CustomGpuPercent = gpuSlider;
+        vm.SelectedFanMode = vm.FanModes.First(f => f.Mode == FanMode.Custom);
+        await WaitUntilAsync(() => hardware.HasFanWrite(w => w.Mode == FanMode.Custom && w.Gpu == gpuSlider), 8000);
+
+        hardware.Sample = Hot(hotC);
+        await vm.RefreshTelemetryAsync();
+
+        await WaitUntilAsync(
+            () => hardware.HasFanWrite(w => w.Mode == FanMode.Custom && w.Cpu == cpuSlider && w.Gpu >= gpuAtLeast), 8000);
+    }
+
+    [Fact]
+    public void TheFloorDecidesOnBothFans()
+    {
+        var floor = new ManualFanFloor();
+
+        Assert.Equal((100, 30), floor.EvaluatePair(100, 30, 55));
+        floor.Commit(100, 30, 55);
+        Assert.Null(floor.EvaluatePair(100, 30, 60));
+
+        // The CPU figure is unchanged at 95 °C; the GPU's is not, and that alone is a write.
+        Assert.Equal((100, 100), floor.EvaluatePair(100, 30, 95));
+
+        // A commit that only knows one figure forgets the other, so the pair is proposed again.
+        floor.Commit(100, 55);
+        Assert.Equal((100, 30), floor.EvaluatePair(100, 30, 55));
+
+        // No reading, no write.
+        Assert.Null(floor.EvaluatePair(40, 80, 0));
+        Assert.Null(floor.EvaluatePair(40, 80, double.NaN));
+    }
+
     // ---------------------------------------------------------------- review round: races and the fallback
 
     [Fact]

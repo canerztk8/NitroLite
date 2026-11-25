@@ -23,6 +23,7 @@ namespace NitroLite.Core;
 public sealed class ManualFanFloor
 {
     private int? _appliedPercent;
+    private int? _appliedGpuPercent;
     private int _appliedFloor;
 
     /// <summary>The speed last handed to the fans, or null before the first write.</summary>
@@ -32,6 +33,7 @@ public sealed class ManualFanFloor
     public void Reset()
     {
         _appliedPercent = null;
+        _appliedGpuPercent = null;
         _appliedFloor = 0;
     }
 
@@ -65,9 +67,39 @@ public sealed class ManualFanFloor
     }
 
     /// <summary>Records a speed the hardware accepted. Call this only after the write returned true.</summary>
+    /// <remarks>
+    /// Only the one figure is known here, so the second fan's is forgotten: the next <see cref="EvaluatePair"/>
+    /// proposes a write rather than assume the second fan is where its own target and the floor put it.
+    /// </remarks>
     public void Commit(int percent, double temperatureC)
     {
         _appliedPercent = percent;
+        _appliedGpuPercent = null;
+        _appliedFloor = FloorAt(temperatureC);
+    }
+
+    /// <summary>
+    /// The pair to write now, each fan's own target raised to the floor, or null when both fans are already there.
+    /// </summary>
+    /// <remarks>
+    /// Both figures decide whether there is anything to write. Deciding on the first alone leaves the second fan at
+    /// its slider when the first one's target already sits above the floor: 100 % / 30 % at 95 °C would never write,
+    /// and the second fan would stay at 30 %.
+    /// </remarks>
+    public (int Cpu, int Gpu)? EvaluatePair(int cpuTargetPercent, int gpuTargetPercent, double temperatureC)
+    {
+        if (double.IsNaN(temperatureC) || double.IsInfinity(temperatureC) || temperatureC <= 0) return null;
+
+        int cpu = EffectivePercent(cpuTargetPercent, temperatureC);
+        int gpu = EffectivePercent(gpuTargetPercent, temperatureC);
+        return cpu == _appliedPercent && gpu == _appliedGpuPercent ? null : (cpu, gpu);
+    }
+
+    /// <summary>Records the pair the hardware accepted. Call this only after the write returned true.</summary>
+    public void Commit(int cpuPercent, int gpuPercent, double temperatureC)
+    {
+        _appliedPercent = cpuPercent;
+        _appliedGpuPercent = gpuPercent;
         _appliedFloor = FloorAt(temperatureC);
     }
 

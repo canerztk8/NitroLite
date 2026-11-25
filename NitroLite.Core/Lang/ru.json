@@ -239,6 +239,8 @@
   "Bilinmiyor": "Неизвестно",
   "Bilinmiyor (Sağlık verisi okunamadı)": "Неизвестно (данные о состоянии прочитать не удалось)",
   "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)": "Неизвестно (накопитель не сообщает о состоянии)",
+  "Bilinmiyor (aygıt yazılımı yanıt vermedi)": "Неизвестно (прошивка не ответила)",
+  "Bilinmiyor (donanıma bağlanılamadı)": "Неизвестно (не удалось подключиться к оборудованию)",
   "Bir fan 88 °C üzerinde 10 saniye boyunca 400 RPM altında kalırsa uyarır ve makineyi Eco moduna alır.": "Предупреждает и переводит компьютер в режим Eco, если вентилятор держится ниже 400 об/мин более 10 секунд при температуре выше 88 °C.",
   "Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.": "Задайте здесь, в какой режим и настройку вентиляторов переключаться при запуске игры.",
   "Bitir": "Готово",

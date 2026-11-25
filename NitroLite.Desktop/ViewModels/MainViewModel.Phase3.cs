@@ -1602,6 +1602,11 @@ public sealed partial class MainViewModel
             var started = await _directWmi.StartAsync().ConfigureAwait(true);
             Raise(nameof(DirectWmiStatus));
             RefreshHelperFolderWarning();
+
+            // What the machine can do was asked before the helper existed, so every row that needed it still says
+            // "could not connect". The capabilities are read again now that there is something to ask.
+            if (started) await RescanAsync().ConfigureAwait(true);
+
             Status = started ? Labels.DirectWmiStarted : Labels.DirectWmiDeclined;
         }
         catch (Exception ex)

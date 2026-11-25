@@ -239,6 +239,8 @@
   "Bilinmiyor": "Unknown",
   "Bilinmiyor (Sağlık verisi okunamadı)": "Unknown (health data could not be read)",
   "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)": "Unknown (the drive does not report health status)",
+  "Bilinmiyor (aygıt yazılımı yanıt vermedi)": "Unknown (the firmware did not answer)",
+  "Bilinmiyor (donanıma bağlanılamadı)": "Unknown (could not connect to the hardware)",
   "Bir fan 88 °C üzerinde 10 saniye boyunca 400 RPM altında kalırsa uyarır ve makineyi Eco moduna alır.": "Warns and drops the machine to Eco mode when a fan stays below 400 RPM for 10 seconds above 88 °C.",
   "Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.": "Define here which mode and fan setting a game switches to when it starts.",
   "Bitir": "Finish",

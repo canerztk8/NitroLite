@@ -148,6 +148,16 @@ public class HardwareMonitorService : IDisposable
 
     /// <summary>Test seam: replaces the PDH thermal-zone read. Null in production.</summary>
     internal Func<double?>? ThermalZoneProvider { get; set; }
+
+    /// <summary>Test seam: replaces the PDH GPU-engine read. Null in production.</summary>
+    internal Func<GpuEngineReading?>? GpuEngineProvider { get; set; }
+
+    /// <summary>
+    /// The persistent <c>GPU Engine</c> query. Created on the first sample, not in the constructor: the window must
+    /// open before PDH has enumerated a few hundred engine instances.
+    /// </summary>
+    private WindowsTelemetryFallbacks.GpuEngineSampler? _gpuEngineSampler;
+    private volatile bool _disposed;
     private TimeSpan _lastNvmlRetryAt = TimeSpan.MinValue;
     private int _nvmlFailureCount;
 
@@ -355,18 +365,60 @@ public class HardwareMonitorService : IDisposable
         };
 
         ApplyNativeRamFallback(data);
-        EnrichMonitorData(data, gpuAsleepPerService: !allowNvml);
+
+        // A dGPU the engine counters show running a game is awake whatever the power source says, and asking NVML
+        // about it costs nothing it is not already spending.
+        var engines = SampleGpuEngines();
+        EnrichMonitorData(data, GpuAsleep(!allowNvml, engines), engines);
         return data;
+    }
+
+    /// <summary>
+    /// Whether the dGPU should be treated as asleep (and NVML left alone) for this sample.
+    /// <para>
+    /// The caller's own guess — a GPU temperature of 0, or "on battery and nobody said otherwise" — is overruled only
+    /// by positive evidence: the engine counters showing the discrete adapter busy. On the AN16-61 without AASSvc the
+    /// GPU temperature comes from an unverified firmware sensor id, and when that reads 0 the old rule kept NVML shut
+    /// while a game ran, so usage, temperature, VRAM and watts all stayed blank. The reverse never happens: no
+    /// reading, or an idle dGPU, leaves the guess standing, so a sleeping dGPU on battery stays asleep.
+    /// </para>
+    /// </summary>
+    internal static bool GpuAsleep(bool callerSaysAsleep, GpuEngineReading? engines) =>
+        callerSaysAsleep && engines?.DiscreteBusy != true;
+
+    /// <summary>
+    /// One collect of the <c>GPU Engine</c> counters, or null when there is no reading. Call once per telemetry tick:
+    /// the counter is a rate, and a second collect straight after the first measures a few microseconds.
+    /// </summary>
+    internal GpuEngineReading? SampleGpuEngines()
+    {
+        if (GpuEngineProvider != null) return GpuEngineProvider();
+        if (_disposed) return null;
+
+        var sampler = LazyInitializer.EnsureInitialized(
+            ref _gpuEngineSampler, () => new WindowsTelemetryFallbacks.GpuEngineSampler());
+        return sampler.Sample();
     }
 
     /// <param name="gpuAsleepPerService">
     /// True when AASSvc reported the dGPU as powered down (GPU1_TEMPERATURE 0 = RTD3/D3cold on Optimus).
     /// NVML queries (power, memory, clocks) can wake a sleeping dGPU and keep it out of D3cold, costing
-    /// battery; in that state NVML is not touched at all and the GPU values stay at 0.
+    /// battery; in that state NVML is not touched at all and the GPU values stay at 0. The GPU usage can still
+    /// come from the engine counters, which do not wake the card.
     /// </param>
-    public void EnrichMonitorData(MonitorData data, bool gpuAsleepPerService = false)
+    public void EnrichMonitorData(MonitorData data, bool gpuAsleepPerService = false) =>
+        EnrichMonitorData(data, gpuAsleepPerService, SampleGpuEngines());
+
+    /// <param name="data">The sample to fill in.</param>
+    /// <param name="gpuAsleepPerService">See the public overload. Taken as given: this overload does not overrule it.</param>
+    /// <param name="engines">This tick's engine-counter reading, already sampled by the caller, or null.</param>
+    internal void EnrichMonitorData(MonitorData data, bool gpuAsleepPerService, GpuEngineReading? engines)
     {
         bool mayQueryNvml = !gpuAsleepPerService;
+        bool gpuTemperatureFromNvml = false;
+
+        // A usage the service already reported (GPU1_USAGE) is the primary source and is kept.
+        string gpuUsageSource = data.GpuUsage > 0 ? "firmware" : "unavailable";
 
         // 1. Retry NVML initialization when dGPU wakes from RTD3 deep sleep
         if (mayQueryNvml && _allowNvml && (!_nvmlInitialized || _gpuDevice == IntPtr.Zero))
@@ -419,7 +471,10 @@ public class HardwareMonitorService : IDisposable
 
                     if (data.GpuUsage <= 0 && NvmlDeviceGetUtilizationRates(_gpuDevice, out var utilization) == 0
                         && utilization.Gpu <= 100)
+                    {
                         data.GpuUsage = utilization.Gpu;
+                        if (utilization.Gpu > 0) gpuUsageSource = "NVML";
+                    }
 
                     // Query GPU Graphics Clock (Type 0 = Graphics)
                     if (NvmlDeviceGetClockInfo(_gpuDevice, 0, out uint clockMhz) == 0)
@@ -433,6 +488,7 @@ public class HardwareMonitorService : IDisposable
                         if (NvmlDeviceGetTemperature(_gpuDevice, 0, out uint tempC) == 0)
                         {
                             data.GpuTemperature = (int)tempC;
+                            gpuTemperatureFromNvml = tempC > 0;
                         }
                     }
                 }
@@ -452,6 +508,16 @@ public class HardwareMonitorService : IDisposable
             data.GpuPowerWatts = 0.0;
             data.GpuMetricsAvailable = false;
         }
+
+        // 2b. GPU usage from the engine counters when neither the service nor NVML gave one. This is the reading
+        // Task Manager shows, and it is available even while NVML is held back to let the dGPU sleep.
+        if (data.GpuUsage <= 0 && engines?.Usage is { } engineUsage && engineUsage > 0)
+        {
+            data.GpuUsage = Math.Round(Math.Clamp(engineUsage, 0.0, 100.0), 1);
+            gpuUsageSource = "PDH GPU Engine";
+        }
+
+        data.Provenance["gpu-usage"] = gpuUsageSource;
 
         // 3. Fallbacks for missing RAM and CPU metrics
         if (data.RamTotalMB <= 0 || data.RamUsage <= 0)
@@ -507,9 +573,12 @@ public class HardwareMonitorService : IDisposable
             }
         }
 
-        data.Provenance["gpu-temp"] = SensorPlausibility.IsPlausibleTemperature(data.GpuTemperature)
-            ? (data.GpuMetricsAvailable ? "firmware + NVML" : "firmware")
-            : "unavailable";
+        // A temperature NVML filled in is NVML's, not the firmware's; the report must not credit the sensor that read 0.
+        data.Provenance["gpu-temp"] = !SensorPlausibility.IsPlausibleTemperature(data.GpuTemperature)
+            ? "unavailable"
+            : gpuTemperatureFromNvml
+                ? "NVML"
+                : (data.GpuMetricsAvailable ? "firmware + NVML" : "firmware");
         data.Provenance["vram"] = data.VramTotalMB > 0 ? "NVML" : "unavailable";
         data.Provenance["gpu-power"] = data.GpuMetricsAvailable ? "NVML" : "unavailable";
         data.Provenance["cpu-power"] = "estimate";
@@ -570,6 +639,11 @@ public class HardwareMonitorService : IDisposable
         // No finalizer here, but a derived type that adds one would otherwise have to re-implement
         // IDisposable just to suppress it.
         GC.SuppressFinalize(this);
+        _disposed = true;
+
+        // The PDH query is a handle in this process; closing it is all the cleanup it needs.
+        Interlocked.Exchange(ref _gpuEngineSampler, null)?.Dispose();
+
         if (_ownsNvml)
         {
             _ownsNvml = false;

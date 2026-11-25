@@ -112,8 +112,13 @@ public sealed class WindowsHardwareMonitor : IHardwareMonitor, IDisposable
             // keeps the number honest on a machine that is not this one.
             if (info.CpuMaxClockMhz > 0) monitor.CpuReferenceFrequencyMHz = info.CpuMaxClockMhz;
 
-            // GPU1_TEMPERATURE 0 from the service means the dGPU is powered down; do not wake it through NVML.
-            monitor.EnrichMonitorData(data, gpuAsleepPerService: data.GpuTemperature <= 0);
+            // A GPU temperature of 0 is taken to mean the dGPU is powered down, so NVML is left alone to let it sleep.
+            // That was written for the service's GPU1_TEMPERATURE; on the direct-WMI path the number comes from an
+            // unverified firmware sensor id and can read 0 while a game runs. The engine counters — which do not wake
+            // the card — are the tie-breaker: a busy discrete adapter is awake, and NVML may be asked about it.
+            var engines = monitor.SampleGpuEngines();
+            monitor.EnrichMonitorData(
+                data, HardwareMonitorService.GpuAsleep(data.GpuTemperature <= 0, engines), engines);
 
             if (data.CpuCores <= 0 && info.CpuThreads > 0) data.CpuCores = info.CpuThreads;
             if (data.RamTotalMB <= 0 && info.RamTotalMb > 0) data.RamTotalMB = info.RamTotalMb;

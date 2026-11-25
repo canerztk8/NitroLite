@@ -239,6 +239,8 @@
   "Bilinmiyor": "Tidak diketahui",
   "Bilinmiyor (Sağlık verisi okunamadı)": "Tidak diketahui (data kesehatan tidak dapat dibaca)",
   "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)": "Tidak diketahui (drive tidak melaporkan status kesehatan)",
+  "Bilinmiyor (aygıt yazılımı yanıt vermedi)": "Tidak diketahui (firmware tidak menjawab)",
+  "Bilinmiyor (donanıma bağlanılamadı)": "Tidak diketahui (tidak dapat terhubung ke perangkat keras)",
   "Bir fan 88 °C üzerinde 10 saniye boyunca 400 RPM altında kalırsa uyarır ve makineyi Eco moduna alır.": "Memperingatkan dan mengalihkan mesin ke mode Eco jika kipas tetap di bawah 400 RPM selama 10 detik pada suhu di atas 88 °C.",
   "Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.": "Tentukan di sini mode dan pengaturan kipas yang dituju saat game dimulai.",
   "Bitir": "Selesai",

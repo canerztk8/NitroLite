@@ -1,4 +1,4 @@
-﻿# NitroLite — Linux permissions
+# NitroLite — Linux permissions
 #
 # The Acer hardware settings are sysfs attributes owned by root and created 0644, so a normal user can read them but
 # not write them. This rule hands exactly those attributes to the "nitrolite" group, which NitroLite's Settings page
@@ -15,19 +15,21 @@
 # has no /dev node, so the tag never reached the files NitroLite writes. It is still the right tool for the one real
 # device node here, the keyboard controller's /dev/hidrawN.
 #
-# Every change is 0660/g+w to the nitrolite group, never world-writable. If the group does not exist the chgrp fails
-# and the attribute stays root-only, which is the safe direction to fail in.
+# Every change is 0664/g+w to the nitrolite group: readable by everyone as the kernel left it, writable by the group,
+# never by everyone. A node that lost its read bit could be written through the helper and never read back. If the group
+# does not exist the chgrp fails and the attribute keeps the mode the kernel gave it, which is the safe direction to
+# fail in.
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Global attributes, applied when the acer-wmi platform device appears at boot
 # ---------------------------------------------------------------------------------------------------------------------
 
 # The ACPI platform profile (the operating mode). It lives under /sys/firmware/acpi/, which has no device of its own.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null && chmod 0660 /sys/firmware/acpi/platform_profile; true'"
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; chgrp nitrolite /sys/firmware/acpi/platform_profile 2>/dev/null && chmod 0664 /sys/firmware/acpi/platform_profile; true'"
 
 # The processor boost switch school mode turns off: cpufreq/boost on AMD and most Intel, intel_pstate/no_turbo on Intel
 # in active mode. Only the node the kernel actually has is touched.
-SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; for f in /sys/devices/system/cpu/cpufreq/boost /sys/devices/system/cpu/intel_pstate/no_turbo; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0660 $$f; done; true'"
+SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr/bin:/sbin:/bin; for f in /sys/devices/system/cpu/cpufreq/boost /sys/devices/system/cpu/intel_pstate/no_turbo; do [ -e $$f ] && chgrp nitrolite $$f 2>/dev/null && chmod 0664 $$f; done; true'"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # The in-kernel acer-wmi driver
@@ -57,7 +59,17 @@ SUBSYSTEM=="platform", KERNEL=="acer-wmi", RUN+="/bin/sh -c 'PATH=/usr/sbin:/usr
 # The ENE KB5130 keyboard controller on the 2024-and-later Nitro V, Nitro 16S and Helios Neo boards. The colour is an
 # HID feature report written to /dev/hidrawN; uaccess gives the user at the seat that one node. No other HID device is
 # matched.
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0cf2", ATTRS{idProduct}=="5130", TAG+="uaccess"
+#
+# Two rules because the controller sits on two buses. On USB the parent chain carries idVendor/idProduct. On I2C-HID
+# (Nitro V 16 ANV16-I31) it carries neither, so that one is matched on the HID device's own kernel name,
+# <bus>:<vendor>:<product>.<instance> with bus 0018 = I2C.
+#
+# The uaccess builtin is run here as well as the tag being set: systemd applies the tag from 73-seat-late.rules, which
+# has already been read by the time this file is, so the tag alone only takes effect at the next session change. The
+# tag is still needed: it is what logind uses to move the ACL when the seat's user changes. Not on remove: the node is
+# gone by then and the builtin would only log that it could not find it.
+ACTION!="remove", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0cf2", ATTRS{idProduct}=="5130", TAG+="uaccess", RUN{builtin}+="uaccess"
+ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="0018:0CF2:5130.*", TAG+="uaccess", RUN{builtin}+="uaccess"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # If the operating mode still says "permission denied"

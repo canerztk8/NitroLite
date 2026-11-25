@@ -79,7 +79,9 @@ public static class TelemetryMetrics
             GpuWatt => gpuAwake ? data.GpuPowerWatts : null,
             CpuGhz => data.CpuFrequencyMHz > 0 ? data.CpuFrequencyMHz / 1000.0 : null,
             CpuUsage => data.CpuUsage,
-            GpuUsage => gpuAwake ? data.GpuUsage : null,
+            // A usage reading needs no temperature to be real: the engine counters report it while the firmware's GPU
+            // sensor still reads 0. A sleeping GPU has neither, and stays a gap rather than a fake 0 %.
+            GpuUsage => gpuAwake || data.GpuUsage > 0 ? data.GpuUsage : null,
             RamUsage => data.RamTotalMB > 0 ? data.RamUsage : null,
             VramGb => gpuAwake && data.VramTotalMB > 0 ? data.VramUsedMB / 1024.0 : null,
             _ => data.CpuTemperature > 0 ? data.CpuTemperature : null

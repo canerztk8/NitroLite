@@ -58,7 +58,7 @@ public sealed class LinuxCaptureWriter
     {
         _fs = fs ?? RealSysfsFileSystem.Instance;
         _runner = runner ?? ProcessCommandRunner.Instance;
-        _readBytes = readBytes ?? ReadBytes;
+        _readBytes = readBytes ?? DefaultReadBytes;
     }
 
     /// <summary>Records this machine and returns the capture text.</summary>
@@ -341,15 +341,7 @@ public sealed class LinuxCaptureWriter
     private static string AppVersion() =>
         typeof(LinuxCaptureWriter).Assembly.GetName().Version?.ToString(3) ?? "?";
 
-    private static byte[]? ReadBytes(string path)
-    {
-        try
-        {
-            return System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    // Read to the real end: sysfs advertises a page for a binary attribute whatever it holds, and File.ReadAllBytes
+    // throws when the stream ends before the advertised length.
+    internal static readonly Func<string, byte[]?> DefaultReadBytes = Sysfs.SysfsBinary.Read;
 }

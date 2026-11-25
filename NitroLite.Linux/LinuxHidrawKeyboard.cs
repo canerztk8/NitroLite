@@ -10,10 +10,14 @@ namespace NitroLite.Linux;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The 2024-and-later Nitro V, Nitro 16S and Helios Neo boards drive the keyboard colour from a separate USB controller
+/// The 2024-and-later Nitro V, Nitro 16S and Helios Neo boards drive the keyboard colour from a separate controller
 /// (<c>0x0CF2:0x5130</c>) that takes an eleven-byte HID feature report. The kernel already exposes every HID interface
 /// as <c>/dev/hidrawN</c>, so this path needs no out-of-tree driver at all: only write access to that one node, which
 /// the udev rule grants to the seat user.
+/// </para>
+/// <para>
+/// The controller sits on USB on some boards (<c>HID_ID=0003:…</c>) and on I2C-HID on others (<c>HID_ID=0018:…</c>,
+/// the Nitro V 16 ANV16-I31). The bus is not part of the match: vendor, product and the report descriptor decide.
 /// </para>
 /// <para>
 /// A controller has several interfaces and only one carries the vendor report. The right one is the interface whose
@@ -32,7 +36,7 @@ public static class LinuxHidrawLocator
     public static string? FindEneKb5130(ISysfsFileSystem fs, Func<string, byte[]?>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(fs);
-        readBytes ??= ReadBytes;
+        readBytes ??= DefaultReadBytes;
 
         foreach (var directory in fs.EnumerateDirectories(HidrawClassRoot))
         {
@@ -119,17 +123,9 @@ public static class LinuxHidrawLocator
         return vendorPage && reportId;
     }
 
-    private static byte[]? ReadBytes(string path)
-    {
-        try
-        {
-            return File.Exists(path) ? File.ReadAllBytes(path) : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    // Not File.ReadAllBytes: sysfs advertises 4096 bytes for a descriptor that holds a few hundred, and ReadAllBytes
+    // throws when the stream ends before the advertised length, which hid the controller on I2C-HID boards.
+    internal static readonly Func<string, byte[]?> DefaultReadBytes = SysfsBinary.Read;
 }
 
 /// <summary>

@@ -239,6 +239,8 @@
   "Bilinmiyor": "Desconocido",
   "Bilinmiyor (Sağlık verisi okunamadı)": "Desconocido (no se pudieron leer los datos de estado)",
   "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)": "Desconocido (la unidad no informa del estado de salud)",
+  "Bilinmiyor (aygıt yazılımı yanıt vermedi)": "Desconocido (el firmware no respondió)",
+  "Bilinmiyor (donanıma bağlanılamadı)": "Desconocido (no se pudo conectar con el hardware)",
   "Bir fan 88 °C üzerinde 10 saniye boyunca 400 RPM altında kalırsa uyarır ve makineyi Eco moduna alır.": "Avisa y pasa el equipo a modo Eco si un ventilador permanece por debajo de 400 RPM durante 10 segundos por encima de 88 °C.",
   "Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.": "Define aquí a qué modo y ajuste de ventilador cambia un juego al iniciarse.",
   "Bitir": "Finalizar",

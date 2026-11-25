@@ -21,10 +21,95 @@ public class StorageDriveInfo
     public string HealthDesc { get; set; } = Loc.T("Sağlıklı (Nominal)");
     public int EstHealthPercent { get; set; } = 100;
     public int? Temperature { get; set; }
+    public StorageTemperatureSource TemperatureSource { get; set; }
+}
+
+/// <summary>Where <see cref="StorageDriveInfo.Temperature"/> came from.</summary>
+public enum StorageTemperatureSource
+{
+    None,
+    /// <summary><c>MSFT_StorageReliabilityCounter.Temperature</c>.</summary>
+    Wmi,
+    /// <summary><c>IOCTL_STORAGE_QUERY_PROPERTY</c> device/adapter temperature on <c>\\.\PhysicalDriveN</c>.</summary>
+    Ioctl,
 }
 
 public class StorageHealthService
 {
+    /// <summary>At most this many drives are probed with the IOCTL per read, so a machine with a disk shelf stays quick.</summary>
+    internal const int MaxTemperatureProbes = 16;
+
+    /// <summary>Physical drive numbers above this are not probed: the number came from somewhere it should not have.</summary>
+    internal const int MaxProbedDiskNumber = 63;
+
+    private readonly Func<int, int?> _temperatureProbe;
+
+    public StorageHealthService()
+        : this(StorageTemperatureIoctl.QueryCelsius)
+    {
+    }
+
+    /// <summary>The seam for tests: <paramref name="temperatureProbe"/> maps a physical disk number to °C or null.</summary>
+    internal StorageHealthService(Func<int, int?> temperatureProbe)
+    {
+        _temperatureProbe = temperatureProbe;
+    }
+
+    /// <summary>
+    /// The WMI reading when it is a real temperature, otherwise the IOCTL reading; null when neither is.
+    /// </summary>
+    /// <remarks>
+    /// <c>MSFT_StorageReliabilityCounter.Temperature</c> is 0 when the storage driver does not fill it in (common on
+    /// NVMe behind vendor and RST/VMD drivers), so 0 means "absent", not "0 °C". The probe is only called when the WMI
+    /// value is unusable.
+    /// </remarks>
+    internal static (int? Celsius, StorageTemperatureSource Source) PreferTemperature(int? wmiCelsius, Func<int?> ioctlProbe)
+    {
+        if (wmiCelsius is int wmi && IsPlausibleWmiTemperature(wmi))
+        {
+            return (wmi, StorageTemperatureSource.Wmi);
+        }
+
+        int? probed;
+        try
+        {
+            probed = ioctlProbe();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            probed = null;
+        }
+
+        return probed is int celsius && StorageTemperatureIoctl.IsPlausible(celsius) && celsius != 0
+            ? (celsius, StorageTemperatureSource.Ioctl)
+            : (null, StorageTemperatureSource.None);
+    }
+
+    private static bool IsPlausibleWmiTemperature(int celsius) => celsius is > 0 and < 120;
+
+    /// <summary>
+    /// Fills in the drives whose WMI temperature is missing from the IOCTL, keyed by the physical disk number the WMI
+    /// read already identified the drive by (MSFT_PhysicalDisk.DeviceId / Win32_DiskDrive.Index = PhysicalDriveN).
+    /// </summary>
+    internal void ApplyTemperatureFallback(IEnumerable<StorageDriveInfo> drives)
+    {
+        int probes = 0;
+        foreach (var drive in drives)
+        {
+            int number = drive.DiskNumber;
+            bool mayProbe = probes < MaxTemperatureProbes && number is >= 0 and <= MaxProbedDiskNumber;
+            var (celsius, source) = PreferTemperature(drive.Temperature, () =>
+            {
+                if (!mayProbe) return null;
+                probes++;
+                return _temperatureProbe(number);
+            });
+            drive.Temperature = celsius;
+            drive.TemperatureSource = source;
+        }
+    }
+
     public List<StorageDriveInfo> GetDrives()
     {
         var list = new List<StorageDriveInfo>();
@@ -444,6 +529,11 @@ public class StorageHealthService
             }
             catch { }
         }
+
+        // Every entry so far carries a real physical disk number, so the IOCTL can fill in what WMI left blank. This runs
+        // before the drive-letter fallback below on purpose: that one numbers volumes 0, 1, 2…, which are not
+        // PhysicalDriveN, and probing them would put one disk's temperature on another.
+        ApplyTemperatureFallback(list);
 
         // Final fallback if WMI fails completely: query local fixed drives
         if (list.Count == 0)

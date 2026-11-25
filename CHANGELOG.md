@@ -8,7 +8,9 @@ Every notable change to NitroLite is recorded here, newest first. The format fol
 GitHub release, so this file *is* the release notes. A tag with no section here falls back to the commit log.
 Releases before 1.2.6 are described on the [Releases](https://github.com/canerztk8/NitroLite/releases) page.
 
-## [Unreleased]
+## [1.3.5] - 2026-11-25
+
+A full audit of the code base, and the reports in #3 and #13.
 
 **Fixes**
 - The blackout button now puts the page, the backlight-off flag and both automatic colours down *before* the "off"
@@ -29,6 +31,10 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
   available.
 - Restarting the curve quickly can no longer run two fan updates at once; a clean exit no longer waits indefinitely
   for a closing game session, and that session can no longer write after the exit hand-back.
+- Picking Custom again after the fans were handed back for a lost temperature reading hands them back again. The
+  first hand-back used to be remembered as done, so the second Custom stayed at a fixed speed with no floor.
+- The fixed-speed safety floor (85/90/95 °C) runs on a sensor layout that is not confirmed yet. Only the curve waits
+  for confirmation; the floor can only raise the speed.
 - The custom fan curve can be enabled while the dedicated GPU sleeps in iGPU/hybrid mode (its 0 °C reading no longer
   blocks sensor verification).
 
@@ -48,6 +54,19 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
   handful of unrelated UI errors spread over days; the colour picker's hex box no longer rewrites itself while typing;
   a restored backup is no longer overwritten when the window closes.
 
+**Reported on the AN16-61 ([#3](https://github.com/canerztk8/NitroLite/issues/3))**
+- GPU usage shows on machines without the Acer service. It is read from the Windows GPU engine counters Task Manager
+  uses, and it is on the overlay's GPU line as well. A busy dedicated GPU now counts as awake, so its temperature,
+  VRAM and power come back too; one that is asleep is still left asleep.
+- The overlay no longer hangs off the right or bottom edge of the screen (seen at 2560x1600, 150 %): it is placed
+  again as soon as its frame changes size, and never outside the display's working area.
+- Drive temperatures are read straight from the disk (a read-only query that needs no administrator rights) when
+  Windows' reliability counter reports nothing, as many NVMe drivers leave it. Battery temperature stays blank where
+  the firmware does not publish it: Windows offers no other documented source.
+- The capability list says why a row is unknown (no connection to the hardware, or the firmware gave no answer), and
+  reads the capabilities again once direct WMI has started. Where the backlight timeout cannot be read, its raw
+  answers go to the log so the selector this board uses can be identified; the switch is not offered on a guess.
+
 **Security**
 - The elevated helper and autostart refuse an install when any folder above it can be renamed, deleted or
   re-permissioned by another local account, and the log names the folder.
@@ -63,12 +82,19 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 **Linux**
 - The one-click access setup installs the udev rule only after root verifies it against the digest of the rule built
   into NitroLite.
+- The udev rule and the access setup leave the operating-mode and CPU-boost nodes readable (0664, not 0660). A user
+  outside the nitrolite group could write through the helper and not read the result back, which disabled the
+  control after a few "failed" writes.
 - The privileged helper authorises off its accept loop and drops idle connections; the client retries instead of
   staying "absent" for the session.
 - A failed kernel fan write returns the fan to automatic; Custom 100 %/100 % no longer disables fan control; battery
   time-to-empty is correct (the kernel reports seconds); the self-test no longer writes the MUX node; CPU boost no
   longer switches the amd_pstate driver mode; the Nitro key listener stops cleanly.
 - OpenRGB lighting speaks the documented SDK protocol and no longer times out waiting for replies OpenRGB never sends.
+- The ENE KB5130 keyboard controller is found when it sits on I2C-HID instead of USB (Nitro V 16 ANV16-I31): its
+  report descriptor is read to its real end rather than to the 4096 bytes sysfs advertises, and the udev rule matches
+  the I2C device as well as the USB one. The rule now also applies the seat ACL at once instead of at the next session
+  change. ([#13](https://github.com/canerztk8/NitroLite/issues/13))
 
 **Tests**
 - The test suite no longer writes to, or deletes, the real battery wear history in AppData.

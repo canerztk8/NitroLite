@@ -285,17 +285,30 @@ public sealed class ColorSwatch : ObservableObject
 /// not: every row the backend could not reach was drawn with a cross and the words "Desteklenmiyor", which is how an
 /// Acer Nitro AN16-61 came to be told it had no battery charge limit and no backlight timeout while NitroSense
 /// controlled both.
+/// <para>
+/// A bare "Bilinmiyor" was the next report from the same machine: the backlight timeout row was unknown on a session
+/// where the helper was running and CoolBoost, on the same firmware class, answered. "Could not ask" and "asked, and
+/// the firmware gave nothing this build reads" are different things to the user and to whoever reads the report, so
+/// an unknown row carries the reason when there is one.
+/// </para>
 /// </remarks>
-public sealed record CapabilityRow(string Label, bool Supported, bool Unknown = false)
+public sealed record CapabilityRow(string Label, bool Supported, bool Unknown = false,
+    CapabilityUnknownReason Reason = CapabilityUnknownReason.None)
 {
     /// <summary>The tick, cross or question mark the row is drawn with.</summary>
     public string Glyph => Unknown ? "?" : Supported ? "✓" : "✕";
 
     /// <summary>
-    /// "Destekleniyor" / "Desteklenmiyor" / "Bilinmiyor", so the row says it in words as well as in a symbol.
+    /// "Destekleniyor" / "Desteklenmiyor" / "Bilinmiyor", so the row says it in words as well as in a symbol. An
+    /// unknown row says why when the reason is known.
     /// </summary>
     public string StateText => Unknown
-        ? Loc.T("Bilinmiyor")
+        ? Reason switch
+        {
+            CapabilityUnknownReason.NotConnected => Loc.T("Bilinmiyor (donanıma bağlanılamadı)"),
+            CapabilityUnknownReason.FirmwareDidNotAnswer => Loc.T("Bilinmiyor (aygıt yazılımı yanıt vermedi)"),
+            _ => Loc.T("Bilinmiyor")
+        }
         : Supported ? Loc.T("Destekleniyor") : Loc.T("Desteklenmiyor");
 
     /// <summary>True only for a confirmed yes, so the tick is not drawn for an answer nobody gave.</summary>
@@ -303,6 +316,19 @@ public sealed record CapabilityRow(string Label, bool Supported, bool Unknown = 
 
     /// <summary>True only for a confirmed no. An unknown row must not borrow the colour of a missing feature.</summary>
     public bool No => !Supported && !Unknown;
+}
+
+/// <summary>Why a capability row is unknown, when the backend's answer says so.</summary>
+public enum CapabilityUnknownReason
+{
+    /// <summary>No more is known than that the answer was not a yes.</summary>
+    None,
+
+    /// <summary>The backend never reached the hardware, so nothing was asked.</summary>
+    NotConnected,
+
+    /// <summary>The backend reached the firmware class and the selector gave no answer this build decodes.</summary>
+    FirmwareDidNotAnswer
 }
 
 /// <summary>One configured game rule, as the Game Profiles page lists it.</summary>
@@ -2910,7 +2936,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (SelectedFanMode?.Mode != FanMode.Custom) return;
 
         int temperature = CpuTemperature;
-        int effective = _manualFanFloor.EffectivePercent(CustomCpuPercent, temperature);
 
         // Each fan gets its own slider. This used to pass the processor's percentage twice, so the graphics fan
         // followed the processor slider and the graphics slider did nothing at all — the bug the report described as
@@ -2922,9 +2947,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Labels.FanMode).ConfigureAwait(true);
 
         // The loop must not immediately rewrite what this call just wrote, and a refused write must not be recorded
-        // as applied, so the tracker is updated only on success. The floor is tracked on the processor's speed, which
-        // is the sensor it reads; the graphics fan has no separate floor because the two sensors share a die.
-        if (ok) _manualFanFloor.Commit(effective, temperature);
+        // as applied, so the tracker is updated only on success, with the pair that was written.
+        if (ok) _manualFanFloor.Commit(cpuPercent, gpuPercent, temperature);
     }
 
     /// <summary>
@@ -4967,7 +4991,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         $"{Labels.Cpu}: {CpuTemperatureText} | {CpuPowerText} | {CpuFrequencyText} | {CpuUsageText}";
 
     public string OsdGpuLine =>
-        $"{Labels.Gpu}: {GpuTemperatureText} | {GpuPowerText} | {GpuFrequencyText} | {VramText}";
+        $"{Labels.Gpu}: {GpuTemperatureText} | {GpuPowerText} | {GpuFrequencyText} | {GpuUsageText} | {VramText}";
 
     public string OsdRamLine =>
         $"{Labels.SystemMemory}: {RamDetailText} | {Labels.FanRpm}: {CpuFanRpmText}";
@@ -7063,15 +7087,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CapabilityRows.Add(CapabilityRowFor(Labels.CapMux, _capabilities.MuxSwitch));
         CapabilityRows.Add(CapabilityRowFor(Labels.CapBatteryLimit, _capabilities.BatteryChargeLimit));
         CapabilityRows.Add(CapabilityRowFor(Labels.CapKeyboard, _capabilities.KeyboardLighting));
-        CapabilityRows.Add(CapabilityRowFor(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout));
+        CapabilityRows.Add(CapabilityRowFor(Labels.CapBacklightTimeout, _capabilities.BacklightTimeout,
+            BacklightTimeoutUnknownReason()));
     }
 
     /// <summary>
     /// One row, with "could not ask" kept apart from "not there". A no is only drawn as a no on a platform whose
-    /// negatives are conclusive; everywhere else it is the third state the platform contract already asks for.
+    /// negatives are conclusive; everywhere else it is the third state the platform contract already asks for, with
+    /// the reason when the backend's answer carries one: a backend that never reached the hardware asked nothing.
     /// </summary>
-    private CapabilityRow CapabilityRowFor(string label, bool supported)
-        => new(label, supported, Unknown: !supported && !NegativeAnswersAreConclusive);
+    private CapabilityRow CapabilityRowFor(string label, bool supported,
+        CapabilityUnknownReason reason = CapabilityUnknownReason.None)
+    {
+        bool unknown = !supported && !NegativeAnswersAreConclusive;
+        if (!unknown) return new(label, supported);
+        if (!_capabilities.ServiceAvailable) reason = CapabilityUnknownReason.NotConnected;
+        return new(label, supported, Unknown: true, Reason: reason);
+    }
+
+    /// <summary>
+    /// Why the backlight timeout is unknown on a backend that did connect. CoolBoost answering means the
+    /// <c>APGeAction</c> class that also carries the timeout selector is there and was asked, so a false timeout is the
+    /// selector itself giving nothing this build decodes — the AN16-61 on BIOS 1.53 — and not a missing class. The
+    /// switch stays hidden: which selector that board uses is not known, and a write is not offered on a guess.
+    /// </summary>
+    private CapabilityUnknownReason BacklightTimeoutUnknownReason() => _capabilities.CoolBoost
+        ? CapabilityUnknownReason.FirmwareDidNotAnswer
+        : CapabilityUnknownReason.None;
 
     // ---------------------------------------------------------------- commands
 
@@ -7565,7 +7607,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // out of the mode the user picked before the first tick arrived. A thermal-zone sample is not "not yet":
             // it is the backend reporting that the firmware's value is unusable, and a machine that answers that way
             // from the first sample on would otherwise sit at a fixed speed with no floor for the whole session.
-            if (_hadTemperatureReading || fromFallback) await HandBackOnLostTemperatureAsync().ConfigureAwait(false);
+            if (_hadTemperatureReading || fromFallback)
+            {
+                // This step only runs while the card says Custom, and a hand-back moves the card to Auto. So a
+                // hand-back that is already recorded, with the card on Custom again, means Custom was entered once
+                // more since: the user picked it again, or a game or school mode restored it. The fans are at a fixed
+                // speed with nothing to raise it, and "already handed back" no longer describes them.
+                _handedBackOnLostTemperature = false;
+                await HandBackOnLostTemperatureAsync().ConfigureAwait(false);
+            }
+
             return;
         }
 
@@ -7580,7 +7631,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         // curve never sees 95 °C. The page still shows the reading; the curve leaves the fans alone.
         // Either the ids were confirmed statically, or this session has watched the machine answer like a machine for
         // long enough. Both are the same permission; neither relaxes the floors below, which read the live value.
-        if (!_temperatureConfirmed && !_sensorTrust.RuntimeVerified)
+        //
+        // Only the curve is held back. The fixed-speed floor still runs on an unconfirmed reading: it can only raise
+        // the speed, so a wrong sensor costs noise, never cooling.
+        if (followCurve && !_temperatureConfirmed && !_sensorTrust.RuntimeVerified)
         {
             WarnTemperatureUnconfirmedOnce();
             return;
@@ -7595,15 +7649,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var evaluator = _curveEvaluator;
             if (evaluator.Evaluate(temperature, now) is not int percent) return;
 
-            await WriteFanPercentAsync(percent, () => evaluator.Commit(percent, temperature, now),
+            await WriteFanPercentAsync(percent, percent, () => evaluator.Commit(percent, temperature, now),
                 () => FanStepStillWanted(gameStep, followCurve: true)).ConfigureAwait(false);
             return;
         }
 
+        // Each fan keeps its own slider, raised to the same floor, and both figures decide whether there is anything
+        // to write. Writing the CPU figure to both pulled a GPU fan set higher down to it; deciding on the CPU figure
+        // alone left a GPU fan set lower at its slider when the CPU's target already sat above the floor.
         var floor = _manualFanFloor;
-        if (floor.Evaluate(CustomCpuPercent, temperature) is not int manual) return;
+        if (floor.EvaluatePair(CustomCpuPercent, CustomGpuPercent, temperature) is not var (manual, manualGpu)) return;
 
-        await WriteFanPercentAsync(manual, () => floor.Commit(manual, temperature),
+        await WriteFanPercentAsync(manual, manualGpu, () => floor.Commit(manual, manualGpu, temperature),
             () => FanStepStillWanted(gameStep, followCurve: false)).ConfigureAwait(false);
     }
 
@@ -7764,10 +7821,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _warnedTemperatureUnconfirmed;
 
     /// <summary>
-    /// Writes one fixed speed to both fans and records it only when the firmware accepted it. The commit is a
+    /// Writes a fixed speed to each fan and records it only when the firmware accepted it. The commit is a
     /// callback rather than a value because the two callers track different state.
     /// </summary>
-    private async Task WriteFanPercentAsync(int percent, Action commit, Func<bool> stillWanted)
+    private async Task WriteFanPercentAsync(int cpuPercent, int gpuPercent, Action commit, Func<bool> stillWanted)
     {
         await _writeGate.WaitAsync().ConfigureAwait(false);
         try
@@ -7782,7 +7839,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // started under a user step (FanStepStillWanted).
             if (!stillWanted()) return;
 
-            bool ok = await _hardware!.SetFanModeAsync(FanMode.Custom, percent, percent).ConfigureAwait(false);
+            bool ok = await _hardware!.SetFanModeAsync(FanMode.Custom, cpuPercent, gpuPercent).ConfigureAwait(false);
             if (ok)
             {
                 commit();
@@ -7791,7 +7848,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             // Not committed: the next step proposes the same speed again, which is what makes a transient refusal
             // recover instead of leaving the fans at the previous value until the temperature happens to move.
-            AppLog.Warn("The fan speed was not applied", $"%{percent}");
+            AppLog.Warn("The fan speed was not applied", $"%{cpuPercent} / %{gpuPercent}");
         }
         catch (Exception ex)
         {

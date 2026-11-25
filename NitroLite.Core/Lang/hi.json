@@ -239,6 +239,8 @@
   "Bilinmiyor": "अज्ञात",
   "Bilinmiyor (Sağlık verisi okunamadı)": "अज्ञात (स्वास्थ्य डेटा पढ़ा नहीं जा सका)",
   "Bilinmiyor (Sürücü sağlık durumu bildirmiyor)": "अज्ञात (ड्राइव स्वास्थ्य स्थिति नहीं बताती)",
+  "Bilinmiyor (aygıt yazılımı yanıt vermedi)": "अज्ञात (फ़र्मवेयर ने उत्तर नहीं दिया)",
+  "Bilinmiyor (donanıma bağlanılamadı)": "अज्ञात (हार्डवेयर से कनेक्ट नहीं हो सका)",
   "Bir fan 88 °C üzerinde 10 saniye boyunca 400 RPM altında kalırsa uyarır ve makineyi Eco moduna alır.": "यदि 88 °C से ऊपर कोई फैन 10 सेकंड तक 400 RPM से नीचे रहे तो चेतावनी देता है और मशीन को इको मोड में ले जाता है।",
   "Bir oyun açıldığında hangi moda ve fan ayarına geçileceğini buradan tanımla.": "यहाँ तय करें कि गेम शुरू होने पर किस मोड और फ़ैन सेटिंग पर जाना है।",
   "Bitir": "समाप्त",

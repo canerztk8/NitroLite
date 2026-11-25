@@ -72,25 +72,83 @@ public partial class OsdOverlayWindow : Window
 
         if (double.IsNaN(width) || double.IsNaN(height) || width <= 0 || height <= 0) return;
 
-        double margin = EdgeMargin * scale;
-        double left = viewModel.OsdCorner is 1 or 3
-            ? area.Right - width * scale - margin
-            : area.X + margin;
-        double top = viewModel.OsdCorner is 2 or 3
-            ? area.Bottom - height * scale - margin
-            : area.Y + margin;
+        Place(area, scale, new Size(width, height), viewModel.OsdCorner);
 
+        if (!IsVisible) Show();
+    }
+
+    /// <summary>
+    /// The frame's size is only known after layout, and Apply runs in the same tick that changed the text, before
+    /// that layout: the size it read was the previous tick's. A line that grew made the window grow to the right of a
+    /// position computed for the narrower frame, and the right-hand corners stayed clipped until the next tick. The
+    /// platform reports the real size once the layout has happened, and the frame is placed again from that.
+    /// </summary>
+    protected override void OnResized(WindowResizedEventArgs e)
+    {
+        base.OnResized(e);
+
+        if (!IsVisible || DataContext is not MainViewModel viewModel || !viewModel.OsdEnabled) return;
+
+        // The left and top corners do not depend on the size, so for them this ends at the unchanged-position check
+        // below and nothing moves.
+        var all = Screens?.All;
+        if (all == null || all.Count == 0) return;
+
+        var screen = all[Math.Clamp(viewModel.OsdMonitor, 0, all.Count - 1)];
+        var scale = screen.Scaling <= 0 ? 1.0 : screen.Scaling;
+        var size = e.ClientSize;
+        if (double.IsNaN(size.Width) || double.IsNaN(size.Height) || size.Width <= 0 || size.Height <= 0) return;
+
+        Place(screen.WorkingArea, scale, size, viewModel.OsdCorner);
+    }
+
+    private void Place(PixelRect area, double scale, Size frame, int corner)
+    {
         // Placed before it is shown, never after. Moving a window that is already on screen makes the Windows backend
         // rebuild its composition target, and the overlay then stays invisible: the window is there, topmost and the
         // right size, and nothing is drawn into it. That is the bug this ordering exists for.
         //
         // Assigned only when the corner actually changed. The overlay is re-placed on every telemetry tick, and a
         // write of the same coordinates is still a move as far as the window manager is concerned: it rebuilt the
-        // composition target once a second for a window that had not gone anywhere.
-        var target = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+        // composition target once a second for a window that had not gone anywhere. The same check is what ends the
+        // size-changed, move, size-changed chain: a move does not change the size, so the second pass finds the
+        // position already right and writes nothing.
+        var target = ComputePosition(area, scale, frame, corner, EdgeMargin);
         if (Position != target) Position = target;
+    }
 
-        if (!IsVisible) Show();
+    /// <summary>
+    /// Where the frame's top-left corner goes, in physical pixels: the requested corner of the working area, inset by
+    /// the margin, and never outside it.
+    /// </summary>
+    /// <param name="workingArea">The display's working area in physical pixels (the taskbar is already excluded).</param>
+    /// <param name="scaling">The display's scale factor; converts the frame and the margin from DIPs to pixels.</param>
+    /// <param name="frame">The frame's size in device-independent pixels.</param>
+    /// <param name="corner">0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right.</param>
+    /// <param name="margin">The gap to the edge in device-independent pixels.</param>
+    /// <remarks>
+    /// The clamp is the last word: a frame that has grown past its margin, or is wider than the display, starts at the
+    /// working area's left or top edge rather than hanging off it, so the part that is cut off is the tail of a line
+    /// and not its start. The right and bottom edges win over the margin, the left and top edges win over both.
+    /// </remarks>
+    public static PixelPoint ComputePosition(PixelRect workingArea, double scaling, Size frame, int corner, double margin)
+    {
+        var scale = scaling <= 0 ? 1.0 : scaling;
+        double widthPx = Math.Ceiling(frame.Width * scale);
+        double heightPx = Math.Ceiling(frame.Height * scale);
+        double marginPx = margin * scale;
+
+        double left = corner is 1 or 3
+            ? workingArea.Right - widthPx - marginPx
+            : workingArea.X + marginPx;
+        double top = corner is 2 or 3
+            ? workingArea.Bottom - heightPx - marginPx
+            : workingArea.Y + marginPx;
+
+        left = Math.Max(workingArea.X, Math.Min(left, workingArea.Right - widthPx));
+        top = Math.Max(workingArea.Y, Math.Min(top, workingArea.Bottom - heightPx));
+
+        return new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
     }
 
     /// <summary>
