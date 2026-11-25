@@ -67,7 +67,7 @@ public class AgentCapabilityDumpTests
     }
 
     /// <summary>A service that answers each request by its Function name, and records the packet ids.</summary>
-    private sealed class EchoService : IDisposable
+    internal sealed class EchoService : IDisposable
     {
         private readonly TcpListener _listener;
         private readonly Func<string, string?> _answer;

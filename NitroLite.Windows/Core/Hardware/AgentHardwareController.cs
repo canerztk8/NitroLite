@@ -26,6 +26,9 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
 
     private bool _disposed;
 
+    /// <summary>1 once the "empty fan list, fans not on Auto" disagreement has been logged, so a poll does not repeat it.</summary>
+    private int _loggedEmptyFanList;
+
     /// <summary>
     /// Wraps the two clients. The controller takes ownership of <paramref name="agent"/> and disposes it; the
     /// Care Center client holds no connection of its own and is left alone.
@@ -74,18 +77,48 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
         var backlight = await ProbeAsync(() => _agent.GetBacklightTimeoutAsync()).ConfigureAwait(false);
         var keyboard = await ProbeKeyboardAsync().ConfigureAwait(false);
 
-        return new HardwareCapabilities
+        // What the service itself says the machine has (the SUPPORT_* answers NitroSense relies on). Null is "no
+        // answer", and every consumer below keeps its old behaviour for that.
+        var fans = await ProbeReferenceAsync(() => _agent.GetFanListAsync()).ConfigureAwait(false);
+        var modes = await ProbeReferenceAsync(() => _agent.GetOperatingModesAsync()).ConfigureAwait(false);
+
+        // The service says there are no fans to control yet the fan mode reads back as something other than Auto: the
+        // two answers disagree. The empty list is followed (no control is shown), but the disagreement is worth one
+        // line in the log, because it is the first thing to look at if a model reports a missing fan page.
+        if (fans is { Count: 0 } && fanMode.HasValue && fanMode.Value != FanMode.Auto &&
+            Interlocked.Exchange(ref _loggedEmptyFanList, 1) == 0)
+        {
+            AppLog.Warn("The service reported no fans", $"SUPPORT_FAN_CONTROL is empty but the fan mode reads {fanMode.Value}");
+        }
+
+        var capabilities = new HardwareCapabilities
         {
             Backend = BackendName,
             ServiceAvailable = true,
-            FanControl = fanMode.HasValue,
+            // A list the service sent is the answer; only without one does a readable fan mode stand in for it.
+            FanControl = fans != null ? fans.Count > 0 : fanMode.HasValue,
             OperatingModeControl = mode.HasValue,
-            MuxSwitch = mux.HasValue,
+            // The capability is a bitmask of the GPU modes the firmware has; an answer of 0 means there is no switch
+            // even though the service replied.
+            MuxSwitch = mux is int bits && bits > 0,
             BatteryChargeLimit = chargeMode.HasValue,
             KeyboardLighting = keyboard?.ZoneCount > 0,
             WinKeyLock = (await ProbeAsync(() => _agent.GetWinKeyEnabledAsync()).ConfigureAwait(false)).HasValue,
             BacklightTimeout = backlight.HasValue
         };
+
+        // An empty or missing list means "unknown", which the mode policy reads as "show every mode"; only a real
+        // list narrows the cards.
+        return modes is { Count: > 0 }
+            ? capabilities with { SupportedOperatingModes = modes }
+            : capabilities;
+    }
+
+    /// <summary>The reference-type twin of <see cref="ProbeAsync{T}"/>: any failure is "no answer".</summary>
+    private static async Task<T?> ProbeReferenceAsync<T>(Func<Task<T?>> read) where T : class
+    {
+        try { return await read().ConfigureAwait(false); }
+        catch { return null; }
     }
 
     /// <summary>

@@ -41,6 +41,11 @@ public class Wave5GpuModeHonestyTests
     /// <summary>An agent that answers from memory and records what it was asked to write.</summary>
     private sealed class FakeAgent : AcerAgentClient
     {
+        public FakeAgent()
+            : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget)
+        {
+        }
+
         public int? Capability { get; set; }
 
         public List<GpuOperatingMode> Writes { get; } = new();

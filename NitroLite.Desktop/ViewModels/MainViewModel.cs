@@ -1817,13 +1817,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// Re-filters the mode cards without writing the mode back. The machine is already in the mode it is in, and a
     /// rebuild that applied it would fight the firmware every time the charger was plugged in.
     /// </summary>
-    private void RefreshModeVisibility()
+    private void RefreshModeVisibility(OperatingMode? running = null)
     {
         bool previous = _suppressWrite;
         _suppressWrite = true;
         try
         {
-            BuildModeChoices();
+            BuildModeChoices(running);
         }
         finally
         {
@@ -8699,7 +8699,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             if (mode is OperatingMode current)
-                SelectedMode = Modes.FirstOrDefault(m => m.Mode == current) ?? SelectedMode;
+                SelectedMode = CardForRunningMode(current) ?? SelectedMode;
 
             if (fanMode is FanMode fan)
                 SelectedFanMode = FanModes.FirstOrDefault(f => f.Mode == fan) ?? SelectedFanMode;
@@ -9035,7 +9035,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (await _hardware.GetOperatingModeAsync().ConfigureAwait(true) is not OperatingMode observed) return;
             if (observed == SelectedMode?.Mode) return;
 
-            SyncControls(() => SelectedMode = Modes.FirstOrDefault(m => m.Mode == observed) ?? SelectedMode);
+            var observedCard = CardForRunningMode(observed);
+            SyncControls(() => SelectedMode = observedCard ?? SelectedMode);
         }
         catch (Exception ex)
         {
@@ -10362,7 +10363,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (GameActive || _gameProfiles?.ActiveProfile != null) return;
             if (observed == SelectedMode?.Mode) return;
 
-            var card = Modes.FirstOrDefault(m => m.Mode == observed);
+            var card = CardForRunningMode(observed);
             if (card == null) return;
 
             // Shown, not stored: LastOperatingMode is the mode the user chose (the CLI's optimize/restore pair, the game
@@ -10890,7 +10891,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// The mode list, filtered to what the firmware advertises. An empty list means the firmware did not answer,
     /// which is not evidence that no mode works, so the full set is kept in that case.
     /// </summary>
-    private void BuildModeChoices()
+    /// <param name="running">
+    /// A mode the machine was just seen running. It counts as the active mode for this build, so its card is kept
+    /// even when the firmware list omits it or its group is hidden for the current power source.
+    /// </param>
+    private void BuildModeChoices(OperatingMode? running = null)
     {
         var supported = _capabilities.SupportedOperatingModes;
         var wanted = supported.Count > 0
@@ -10903,10 +10908,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         //
         // The rule only applies when the platform can say which source is in use. An unknown source is not evidence
         // that Eco is unavailable, and hiding a working card is worse than showing one that turns out to be a no-op.
-        var active = SelectedMode?.Mode ?? _settings.LastOperatingMode ?? OperatingMode.Default;
+        var active = running ?? SelectedMode?.Mode ?? _settings.LastOperatingMode ?? OperatingMode.Default;
         var (showHighPower, showEco) = OnAcPower is bool onAc
             ? ModePolicy.VisibleModeGroups(onAc, active)
             : (true, true);
+
+        // The active mode stays a card even when the list the service sent does not name it (Turbo on a model whose
+        // list is [0,1,4,6]): the same rule as the group exceptions below, for the same reason. It goes where the full
+        // set would put it, so the cards keep their usual order.
+        if (!wanted.Contains(active))
+        {
+            var order = new[] { OperatingMode.Quiet, OperatingMode.Default, OperatingMode.Extreme, OperatingMode.Turbo, OperatingMode.Eco };
+            var withActive = wanted.ToList();
+            int at = withActive.FindIndex(m => Array.IndexOf(order, m) > Array.IndexOf(order, active));
+            withActive.Insert(at < 0 ? withActive.Count : at, active);
+            wanted = withActive;
+        }
 
         var previous = SelectedMode?.Mode;
         Modes.Clear();
@@ -10937,10 +10954,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             GameModeChoices.Add(new ModeChoice(card.Mode, card.Label, card.Description, card.Icon));
         }
 
+        // A target the user already picked stays selectable when the rebuilt list no longer names it, for the same
+        // reason as the active card: a rescan must not silently retarget the game.
+        if (NewGameMode != null && GameModeChoices.All(m => m.Mode != previousTarget))
+        {
+            GameModeChoices.Add(new ModeChoice(previousTarget, ModeLabel(previousTarget), ModeHint(previousTarget), ModeIcon(previousTarget)));
+        }
+
         NewGameMode = GameModeChoices.FirstOrDefault(m => m.Mode == previousTarget) ?? GameModeChoices.FirstOrDefault();
 
         // Same reason as the boost list: the game form's target must be re-resolved against the rebuilt instances.
         SyncGameTargets();
+    }
+
+    /// <summary>
+    /// The card for a mode the machine was just seen running. The firmware list can omit it (a model whose service
+    /// answers [0,1,4,6] but sits in Turbo), and with no card the read-back found nothing to select, so the page kept
+    /// showing a mode the machine was not in. The card is added by rebuilding the list; null only if it still has none.
+    /// </summary>
+    private ModeChoice? CardForRunningMode(OperatingMode mode)
+    {
+        var card = Modes.FirstOrDefault(m => m.Mode == mode);
+        if (card != null) return card;
+
+        // The build treats the observed mode as the active one, so the card survives the firmware list and the
+        // power-source filter alike, and a later rebuild without it (the user moved on) drops it again by itself.
+        RefreshModeVisibility(mode);
+        return Modes.FirstOrDefault(m => m.Mode == mode);
     }
 
     /// <summary>True when the firmware advertises <paramref name="mode"/>. An empty list means "not known", not "no".</summary>

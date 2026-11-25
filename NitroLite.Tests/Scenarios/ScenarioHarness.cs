@@ -10,6 +10,11 @@ namespace NitroLite.Tests.Scenarios;
 /// </summary>
 internal sealed class ScenarioAgentClient : AcerAgentClient
 {
+    public ScenarioAgentClient()
+        : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget)
+    {
+    }
+
     public OperatingMode CurrentMode { get; set; } = OperatingMode.Default;
     public FanMode CurrentFanMode { get; set; } = FanMode.Auto;
     public int CustomCpuPercent { get; private set; }

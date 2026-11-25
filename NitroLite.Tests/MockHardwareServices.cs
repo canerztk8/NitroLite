@@ -4,6 +4,11 @@ namespace NitroLite.Tests;
 
 public class MockAcerAgentClient : AcerAgentClient
 {
+    public MockAcerAgentClient()
+        : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget)
+    {
+    }
+
     public OperatingMode CurrentMode { get; set; } = OperatingMode.Default;
     public FanMode CurrentFanMode { get; set; } = FanMode.Auto;
     public List<OperatingMode> ModeChangeHistory { get; } = new();

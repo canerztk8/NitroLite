@@ -9,6 +9,12 @@ using NitroLite.Core.Hardware;
 namespace NitroLite.Core;
 
 /// <summary>
+/// One fan as SUPPORT_FAN_CONTROL describes it. The speeds are the service's own custom-speed range; NitroLite's own
+/// lower bound (<see cref="AppSettings.MinCustomFanPercent"/>) is a safety rule and does not read them.
+/// </summary>
+public sealed record AgentFan(int Index, string Name, int MinSpeed, int MaxSpeed);
+
+/// <summary>
 /// Client for the Acer Agent Service (AASSvc / AcerAgentService.exe) loopback protocol on 127.0.0.1:46933.
 ///
 /// Protocol (verified against NitroSense 5.0.1327 PSSdkAdapter and live AASSvc 1.2.2108.1):
@@ -952,6 +958,56 @@ public class AcerAgentClient : IDisposable
             if (!modes.Contains(mode)) modes.Add(mode);
         }
         return modes;
+    }
+
+    /// <summary>
+    /// The fans this machine has, from SUPPORT_FAN_CONTROL. Null when the service did not answer, which callers must
+    /// read as "unknown": a failed query is not evidence that the machine has no fan control. An empty list is an
+    /// answer: the service said there is nothing to control.
+    /// </summary>
+    public virtual async Task<IReadOnlyList<AgentFan>?> GetFanListAsync()
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!await EnsureConnectedInternalAsync()) return null;
+
+            var resp = await SendFunctionAsync(PacketInitialization, "SUPPORT_FAN_CONTROL");
+            var data = GetSuccessData(resp);
+            return data == null ? null : ParseFanList(data);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reads the SUPPORT_FAN_CONTROL array. NitroSense runs parseInt over these fields, so a number may arrive as a
+    /// JSON number or as a string; both are read. Anything that is not an object is skipped.
+    /// </summary>
+    internal static IReadOnlyList<AgentFan> ParseFanList(JsonNode? data)
+    {
+        var fans = new List<AgentFan>();
+        if (data is not JsonArray array) return fans;
+
+        foreach (var item in array)
+        {
+            if (item is not JsonObject obj) continue;
+            string name = obj["fan_name"] is JsonValue nameValue && nameValue.TryGetValue<string>(out var text)
+                ? text
+                : "";
+            fans.Add(new AgentFan(
+                (int)ReadDouble(obj, "fan_index"),
+                name,
+                (int)ReadDouble(obj, "fan_custom_min_speed"),
+                (int)ReadDouble(obj, "fan_custom_max_speed")));
+        }
+        return fans;
     }
 
     /// <summary>

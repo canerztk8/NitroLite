@@ -223,6 +223,29 @@ public class DesktopViewModelTests
     }
 
     [Fact]
+    public async Task Modes_TheSavedActiveModeStaysACard_EvenWhenTheFirmwareListOmitsIt()
+    {
+        // The fixture's list has no Eco, yet the machine is running low-power and the user last chose Eco. The card for
+        // the running mode must exist, or the read-back finds nothing to select and the selection stays on Quiet.
+        var fs = Nitro16();
+        fs.WithFile(LinuxPaths.PlatformProfile, "low-power\n");
+        var settings = new AppSettings { LastOperatingMode = OperatingMode.Eco };
+        var (vm, controller) = Create(fs, settings);
+        using var _ = vm;
+        using var __ = controller;
+
+        await vm.InitializeAsync();
+
+        Assert.True(vm.Modes.Any(m => m.Mode == OperatingMode.Eco),
+            $"selected={vm.SelectedMode?.Mode} last={settings.LastOperatingMode} ac={vm.OnAcPower} observed={await controller.GetOperatingModeAsync()}");
+        Assert.Equal(OperatingMode.Eco, vm.SelectedMode?.Mode);
+        // The cards the firmware did list are still there, in their usual order.
+        Assert.Equal(
+            new[] { OperatingMode.Quiet, OperatingMode.Default, OperatingMode.Extreme, OperatingMode.Turbo, OperatingMode.Eco },
+            vm.Modes.Select(m => m.Mode).ToArray());
+    }
+
+    [Fact]
     public async Task Modes_FallBackToTheFullSetWhenTheFirmwareDoesNotAnswer()
     {
         var fs = Nitro16();

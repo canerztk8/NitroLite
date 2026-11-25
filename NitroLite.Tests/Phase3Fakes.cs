@@ -418,7 +418,10 @@ internal static class Phase3Fakes
 
         public Task<MonitorData?> GetMonitorDataAsync() => Task.FromResult<MonitorData?>(Sample);
 
-        public Task<OperatingMode?> GetOperatingModeAsync() => Task.FromResult<OperatingMode?>(OperatingMode.Default);
+        /// <summary>The mode the backend says the machine is in. Null models a read that did not answer.</summary>
+        public OperatingMode? ReportedMode { get; set; } = OperatingMode.Default;
+
+        public Task<OperatingMode?> GetOperatingModeAsync() => Task.FromResult(ReportedMode);
 
         public Task<bool> SetOperatingModeAsync(OperatingMode mode)
         {

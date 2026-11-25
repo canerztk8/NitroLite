@@ -258,6 +258,7 @@ public class HardwareAbstractionTests
         var agent = new RecordingAgentClient { Mode = OperatingMode.Default, Fan = FanMode.Auto, GpuCapability = null };
         using var controller = new AgentHardwareController(agent, new RecordingCareCenterClient { Mode = null });
 
+        int connectionsBefore = DeadEndService.Connections;
         var capabilities = await controller.GetCapabilitiesAsync();
 
         Assert.True(capabilities.ServiceAvailable);
@@ -265,6 +266,9 @@ public class HardwareAbstractionTests
         Assert.True(capabilities.OperatingModeControl);
         Assert.False(capabilities.MuxSwitch);          // the machine has no switch
         Assert.False(capabilities.BatteryChargeLimit); // Care Center did not answer
+
+        // Sentinel: every read the snapshot makes is answered by the fake, none fell through to a real client.
+        Assert.Equal(connectionsBefore, DeadEndService.Connections);
     }
 
     // ---------------------------------------------------------------- UseDirectWmiBackend
@@ -376,6 +380,26 @@ public class HardwareAbstractionTests
     {
         private int _activeWrites;
         private int _maxConcurrentWrites;
+
+        public RecordingAgentClient()
+            : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget)
+        {
+        }
+
+        /// <summary>What SUPPORT_FAN_CONTROL answers. Null is "no answer".</summary>
+        public IReadOnlyList<AgentFan>? Fans { get; set; }
+
+        /// <summary>What SUPPORT_OPERATING_MODE_CAPABILITY answers. Null is "no answer".</summary>
+        public IReadOnlyList<OperatingMode>? Modes { get; set; }
+
+        public override Task<IReadOnlyList<AgentFan>?> GetFanListAsync() => Task.FromResult(Fans);
+
+        public override Task<IReadOnlyList<OperatingMode>?> GetOperatingModesAsync() => Task.FromResult(Modes);
+
+        public override Task<KeyboardCapability?> GetKeyboardCapabilityAsync() =>
+            Task.FromResult<KeyboardCapability?>(null);
+
+        public override Task<bool?> GetWinKeyEnabledAsync() => Task.FromResult<bool?>(null);
 
         public bool Connected { get; set; } = true;
         public OperatingMode? Mode { get; set; } = OperatingMode.Default;
