@@ -77,15 +77,28 @@ public class ModeCapabilityTests
     }
 
     [Fact]
-    public async Task GetOperatingModes_ReturnsKnownModesOrNull()
+    public async Task GetOperatingModes_OverTheWire_ReturnsKnownModes_AndNoAnswerIsNull()
     {
-        // Read-only, so it is safe to run anywhere; a machine without AASSvc simply answers null.
-        using var client = new AcerAgentClient();
-        var modes = await client.GetOperatingModesAsync();
-        if (modes == null) return;
+        // A local fake service answers; the real AASSvc is never contacted. 99 is not a mode and 4 repeats.
+        using (var service = new AgentCapabilityDumpTests.EchoService(function => function == "SUPPORT_OPERATING_MODE_CAPABILITY"
+            ? "{\"request\":\"SUPPORT_OPERATING_MODE_CAPABILITY\",\"result\":\"0\",\"data\":[0,1,4,4,99]}"
+            : null))
+        using (var client = new AcerAgentClient("127.0.0.1", service.Port,
+            TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500)))
+        {
+            var modes = await client.GetOperatingModesAsync();
+            Assert.NotNull(modes);
+            Assert.NotEmpty(modes!);
+            Assert.All(modes!, m => Assert.True(Enum.IsDefined<OperatingMode>(m)));
+            Assert.Equal(modes!.Distinct().Count(), modes.Count);
+            Assert.Equal(3, modes.Count);
+        }
 
-        Assert.NotEmpty(modes);
-        Assert.All(modes, m => Assert.True(Enum.IsDefined<OperatingMode>(m)));
-        Assert.Equal(modes.Distinct().Count(), modes.Count);
+        using (var silent = new AgentCapabilityDumpTests.EchoService(_ => null))
+        using (var client = new AcerAgentClient("127.0.0.1", silent.Port,
+            TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500)))
+        {
+            Assert.Null(await client.GetOperatingModesAsync());
+        }
     }
 }

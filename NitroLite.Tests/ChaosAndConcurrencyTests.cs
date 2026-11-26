@@ -617,7 +617,7 @@ public class ChaosAndConcurrencyTests
         var catalog = Catalog();
         var profiles = catalog.Profiles;
 
-        Assert.Equal(56, profiles.Count);
+        Assert.Equal(59, profiles.Count);
         Assert.Empty(catalog.Rejections);
 
         var ids = new HashSet<string>(StringComparer.Ordinal);

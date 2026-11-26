@@ -86,7 +86,7 @@
       },
       "muxSwitch": false,
       "unsupportedMethods": [],
-      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. The five codes disagree, so fourZoneKeyboard is deliberately absent rather than false: acer-wmi-linuwu reports four-zone RGB working on AN515-55 and AN515-58, not working on AN515-57, and says nothing about AN515-54 or AN515-56. Sensor ids are the firmware-wide enum and are not measured on this model. unverified: no community report has confirmed this record yet."
+      "notes": "Single-zone or four-zone RGB depending on the SKU; the keyboard capability answer decides, not this file. The five codes disagree, so fourZoneKeyboard is deliberately absent rather than false: acer-wmi-linuwu reports four-zone RGB working on AN515-55, AN515-57 and AN515-58 (the 55 and 58 need a different lighting protocol), none on AN515-54, and says nothing about AN515-56. Sensor ids are the firmware-wide enum and are not measured on this model. unverified: no community report has confirmed this record yet."
     },
     {
       "id": "nitro-v-15-anv15-51",
@@ -114,7 +114,7 @@
       "muxSwitch": false,
       "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Aspire-derived board. WMI fan and mode control is present; the MUX switch is not. Sensor ids are the firmware-wide enum and are not measured on this model."
+      "notes": "Aspire-derived board. WMI fan and mode control is present; the MUX switch is not. Sensor ids are the firmware-wide enum and are not measured on this model. Firmware rejects the performance profile with an I/O error on Linux (linuwu README; upstream patch https://patchwork.kernel.org/project/platform-driver-x86/patch/20260920053918.1888-1-justinyvar@gmail.com/)."
     },
     {
       "id": "nitro-v-16-anv16-41",
@@ -338,9 +338,8 @@
         "gpu": 5400
       },
       "muxSwitch": false,
-      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Nine-byte GetGamingKBBacklight answer, unlike the fifteen-byte one on the AN16-41; the decoder reads the common eight-byte prefix either way. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
+      "notes": "Nine-byte GetGamingKBBacklight answer, unlike the fifteen-byte one on the AN16-41; the decoder reads the common eight-byte prefix either way. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. Four-zone reported working but needs a different lighting protocol (linuwu README notes); untested on Windows, so fourZoneKeyboard is left unset."
     },
     {
       "id": "nitro-5-an515-45",
@@ -732,9 +731,9 @@
         "gpu": 6600
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": false,
+      "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Predator Helios Neo 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
+      "notes": "Predator Helios Neo 16. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu's supported-models table reports four-zone RGB working on this model (keyboard: LS#103), so fourZoneKeyboard is true; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-neo-16-phn16s-71",
@@ -816,9 +815,9 @@
         "gpu": 6400
       },
       "muxSwitch": true,
-      "fourZoneKeyboard": true,
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Predator Triton. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime."
+      "notes": "Predator Triton. Sensor ids are the firmware-wide enum and are not measured on this model; a sensor that answers a non-zero status is discarded at runtime. acer-wmi-linuwu lists PHN16S-71 (also reported as PHIN16S-71) with four-zone RGB not working: the keyboard lighting does not respond to the WMI methods (LS#101), so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime."
     },
     {
       "id": "predator-helios-neo-14-phn14-51",
@@ -1045,8 +1044,9 @@
         "cpu": 6200,
         "gpu": 6000
       },
+      "fourZoneKeyboard": true,
       "unsupportedMethods": [],
-      "notes": "Acer Nitro 17 AN17-41. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+      "notes": "Acer Nitro 17 AN17-41. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet. acer-wmi-linuwu's supported-models table reports four-zone RGB working on this model, so fourZoneKeyboard is true; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "nitro-17-an17-71",
@@ -1160,8 +1160,9 @@
         "cpu": 6800,
         "gpu": 6600
       },
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Acer Predator Helios 16 PH16-71. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+      "notes": "Acer Predator Helios 16 PH16-71. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-helios-300-ph315-55",
@@ -1230,8 +1231,9 @@
         "cpu": 6600,
         "gpu": 6400
       },
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Acer Predator Triton PT14-51. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+      "notes": "Acer Predator Triton PT14-51. Listed by Acer's NitroSense 5.0.1327.0 (SupportedModel.txt or a per-model file in the 2023 Acer service package), read on the reference AN16-41 on 2026-11-25. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "predator-triton-pt16-51",
@@ -1299,8 +1301,9 @@
         "cpu": 6000,
         "gpu": 5800
       },
+      "fourZoneKeyboard": false,
       "unsupportedMethods": [],
-      "notes": "Acer Nitro V 16 ANV16-42. In Acer's current service package (predatorservice 1.2.108.3, 2025-08-13: a per-model .ini), read on the reference AN16-41 on 2026-11-26. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+      "notes": "Acer Nitro V 16 ANV16-42. In Acer's current service package (predatorservice 1.2.108.3, 2025-08-13: a per-model .ini), read on the reference AN16-41 on 2026-11-26. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet. acer-wmi-linuwu's supported-models table reports four-zone RGB not working on this model, so fourZoneKeyboard is false; the keyboard capability answer still decides at runtime, this field only breaks a tie in the report."
     },
     {
       "id": "nitro-v-16-anv16-61",
@@ -1439,6 +1442,78 @@
       },
       "unsupportedMethods": [],
       "notes": "Acer Predator Triton Neo 16 PTN16-51. In Acer's current service package (predatorservice 1.2.108.3, 2025-08-13: a per-model .ini), read on the reference AN16-41 on 2026-11-26. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX and four-zone keyboard are left unset until an owner reports them. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-5-an515-46",
+      "match": {
+        "modelCodes": [
+          "AN515-46"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
+      "fourZoneKeyboard": true,
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 5 AN515-46. Listed in acer-wmi-linuwu README (supported models), unverified by NitroLite. Four-zone RGB reported working (DLS#4). fourZoneKeyboard only breaks a tie; the keyboard capability answer decides at runtime. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX is left unset until an owner reports it. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "nitro-5-an515-47",
+      "match": {
+        "modelCodes": [
+          "AN515-47"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 5800,
+        "gpu": 5600
+      },
+      "fourZoneKeyboard": false,
+      "unsupportedMethods": [],
+      "notes": "Acer Nitro 5 AN515-47. Listed in acer-wmi-linuwu README (supported models), unverified by NitroLite. Four-zone RGB reported not working (DAMX#44). fourZoneKeyboard only breaks a tie; the keyboard capability answer decides at runtime. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX is left unset until an owner reports it. unverified: no read-back on this model yet."
+    },
+    {
+      "id": "predator-helios-neo-18-phn18-72",
+      "match": {
+        "modelCodes": [
+          "PHN18-72"
+        ]
+      },
+      "sensors": {
+        "supported": true,
+        "verified": false,
+        "cpuTempSensor": 1,
+        "cpuFanRpmSensor": 2,
+        "sys1TempSensor": 3,
+        "gpuFanRpmSensor": 6,
+        "gpuTempSensor": 10
+      },
+      "maxFanRpm": {
+        "cpu": 6800,
+        "gpu": 6600
+      },
+      "fourZoneKeyboard": false,
+      "unsupportedMethods": [],
+      "notes": "Acer Predator Helios Neo 18 PHN18-72. Listed in acer-wmi-linuwu README (supported models), unverified by NitroLite. Keyboard lighting does not respond to WMI (DAMX#123). fourZoneKeyboard only breaks a tie; the keyboard capability answer decides at runtime. The sensor ids are the firmware-wide enum and the fan ceilings are carried over from the closest family; nothing here was measured on this model. MUX is left unset until an owner reports it. unverified: no read-back on this model yet."
     },
     {
       "id": "acer-gaming-default",

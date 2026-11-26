@@ -65,6 +65,15 @@ public sealed record CapabilitySnapshot
     public const string GpuOverclock = "gpu.overclock";
     public const string ProfileMatch = "profile.match";
 
+    /// <summary>
+    /// Every name this build produces. A cached row with any other name belongs to a feature that was removed (LCD
+    /// overdrive was the first) and is dropped on restore, so the report never lists something the app cannot do.
+    /// </summary>
+    public static readonly IReadOnlySet<string> KnownCapabilities = new HashSet<string>(StringComparer.Ordinal)
+    {
+        WmiGamingFunction, WmiBatteryChargeLimit, MuxSwitch, KeyboardZones, GpuOverclock, ProfileMatch
+    };
+
     /// <summary>"ModelCode|BiosVersion". A BIOS update changes it, which invalidates the cache.</summary>
     public string CacheKey { get; init; } = "";
 
@@ -265,7 +274,8 @@ public static class CapabilityProbe
 
         var profile = catalog.Match(identity);
         var capabilities = cache.Capabilities
-            .Where(c => !string.IsNullOrWhiteSpace(c.Capability))
+            .Where(c => !string.IsNullOrWhiteSpace(c.Capability) &&
+                        CapabilitySnapshot.KnownCapabilities.Contains(c.Capability))
             .Select(c => new HardwareProbeResult
             {
                 Capability = c.Capability,

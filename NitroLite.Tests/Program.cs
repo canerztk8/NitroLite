@@ -16,7 +16,9 @@ sealed class Program
         Console.WriteLine("\n[TEST 0] Testing AcerAgentClient Live Telemetry...");
         try
         {
-            using var client = new AcerAgentClient();
+            // Points at the loopback dead end, not the real service: this harness must not touch live hardware.
+            using var client = new AcerAgentClient("127.0.0.1", DeadEndService.Port,
+                DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget);
             var monData = client.GetMonitorDataAsync().GetAwaiter().GetResult();
             if (monData != null)
             {

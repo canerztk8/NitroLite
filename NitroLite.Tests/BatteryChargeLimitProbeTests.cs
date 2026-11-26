@@ -205,6 +205,29 @@ public class BatteryChargeLimitProbeTests
         Assert.Null(CapabilityProbe.TryFromCache(settings, Identity(), Catalog()));
     }
 
+    [Fact]
+    public void Cache_DropsRowsForCapabilitiesThisBuildNoLongerHas()
+    {
+        // LCD overdrive was removed. A cache written before that still holds a "panel.overdrive: Supported" row, and the
+        // diagnostics report printed it until the user rescanned. Rows this build does not know are dropped on restore.
+        var settings = new AppSettings();
+        CapabilityProbe.Store(settings, CapabilityProbe.Probe(Identity(), Catalog(), Schema()));
+        var known = settings.HardwareCapabilityCache!.Capabilities.Count;
+        settings.HardwareCapabilityCache.Capabilities.Add(new CachedCapability
+        {
+            Capability = "panel.overdrive",
+            Outcome = nameof(HardwareProbeOutcome.Supported),
+            Detail = "LCD_Overdrive_support = 1"
+        });
+
+        var restored = CapabilityProbe.TryFromCache(settings, Identity(), Catalog());
+
+        Assert.NotNull(restored);
+        Assert.Null(restored!.Find("panel.overdrive"));
+        Assert.Equal(known, restored.Capabilities.Count);
+        Assert.NotNull(restored.Find(CapabilitySnapshot.MuxSwitch));
+    }
+
     // ---------------------------------------------------------------- the live service check
 
     [Fact]

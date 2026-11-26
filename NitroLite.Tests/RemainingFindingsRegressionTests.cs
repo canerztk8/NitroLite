@@ -142,7 +142,8 @@ public class RemainingFindingsRegressionTests
     [Fact]
     public async Task Finding3_EnsureConnectedAsync_ConcurrentCalls_SerializeCleanly()
     {
-        using var client = new AcerAgentClient();
+        using var client = new AcerAgentClient("127.0.0.1", DeadEndService.Port,
+            DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget);
 
         // Launch multiple concurrent EnsureConnectedAsync tasks
         var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(async () =>

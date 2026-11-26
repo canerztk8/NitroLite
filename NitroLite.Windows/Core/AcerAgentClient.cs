@@ -12,7 +12,14 @@ namespace NitroLite.Core;
 /// One fan as SUPPORT_FAN_CONTROL describes it. The speeds are the service's own custom-speed range; NitroLite's own
 /// lower bound (<see cref="AppSettings.MinCustomFanPercent"/>) is a safety rule and does not read them.
 /// </summary>
-public sealed record AgentFan(int Index, string Name, int MinSpeed, int MaxSpeed);
+public sealed record AgentFan(int Index, string Name, int MinSpeed, int MaxSpeed)
+{
+    /// <summary>
+    /// True when the service gave a usable percent range: inside 0-100, a positive maximum, and no maximum below the
+    /// minimum. Absent fields parse as 0-0, which is "not stated", not "this fan may only run at 0".
+    /// </summary>
+    public bool HasRange => MinSpeed >= 0 && MaxSpeed is > 0 and <= 100 && MaxSpeed >= MinSpeed;
+}
 
 /// <summary>
 /// Client for the Acer Agent Service (AASSvc / AcerAgentService.exe) loopback protocol on 127.0.0.1:46933.

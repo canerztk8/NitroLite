@@ -278,17 +278,17 @@ there is no official source to prefer.
 | AN16-42 | Nitro 16 | ✅ | ✅ | ✅ | — | — | S1 (LS#85) | profile, sensors unverified |
 | AN16-43 | Nitro 16 | ✅ | ✅ | ✅ | ✅ | — | S1 (LS#17), S2 (#59) | profile, sensors unverified |
 | AN16-61 | Nitro 16 | — | — | — | — | BIOS V1.53, Win 10.0.26300 | **physical** (§1.5) | profile, **partly verified** — fans, modes and sensors work; zone RGB now has an HID path (§1.7, physical confirmation pending); clock, MUX read/write and Win-key lock open (§3.2) |
-| AN17-41 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#99) | **no profile** — see §4 |
+| AN17-41 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#99) | profile, unverified (linuwu README) |
 | AN17-42 | Nitro 17 | ✅ | ✅ | ✅ | — | — | S1 (DAMX#64) | profile, sensors unverified |
 | AN17-51 | Nitro 17 | — | — | — | — | — | none | profile, **test pending** |
-| AN515-44 | Nitro 5 | ❌ | ✅ | ✅ | ✅ | — | S1 (DAMX list), S2 (#77) | profile, RGB corrected |
+| AN515-44 | Nitro 5 | ✅ | ✅ | ✅ | ✅ | — | S1 (DAMX list, LS#146), S2 (#77) | profile; four-zone needs a different lighting protocol (linuwu README), so the table leaves it unset |
 | AN515-45 | Nitro 5 | ✅ | ✅ | ✅ | — | — | S1 (LS#92, DLS#12) | profile, RGB confirmed |
-| AN515-46 | Nitro 5 | ✅ | ✅ | ✅ | — | — | S1 (DLS#4) | **no profile** — see §4 |
-| AN515-47 | Nitro 5 | ❌ | ✅ | ✅ | ❌ | — | S1 (DAMX#44), S2 (#94) | **no profile** — see §4 |
+| AN515-46 | Nitro 5 | ✅ | ✅ | ✅ | — | — | S1 (DLS#4) | profile, unverified (linuwu README) |
+| AN515-47 | Nitro 5 | ❌ | ✅ | ✅ | ❌ | — | S1 (DAMX#44), S2 (#94) | profile, unverified (linuwu README) |
 | AN515-54 | Nitro 5 | — | — | — | — | — | none | profile, **test pending** |
 | AN515-55 | Nitro 5 | ✅ | ✅ | ✅ | — | — | S1 (LS#40) | profile, RGB corrected |
 | AN515-56 | Nitro 5 | — | — | — | — | — | none | profile, **test pending** |
-| AN515-57 | Nitro 5 | ❌ | ✅ | ✅ | ✅ | BIOS V1.14 (S1 author's own) | S1, S2 (#88) | profile, RGB corrected |
+| AN515-57 | Nitro 5 | ✅ (linuwu README) | ✅ | ✅ | ✅ | BIOS V1.14 (S1 author's own) | S1, S2 (#88) | profile, RGB corrected |
 | AN515-58 | Nitro 5 | ✅ | ✅ | ✅ | ✅ (no effect on BIOS V2.19) | BIOS V2.19 | S1, S2 (#57) | profile, RGB corrected |
 | AN517-41 | Nitro 5 | — | — | — | — | — | none | profile, **test pending** |
 | AN517-54 | Nitro 5 | ✅ | ✅ | ✅ | ✅ | — | S1 (DLS#5), S2 (#59) | profile, RGB confirmed |
@@ -296,10 +296,10 @@ there is no official source to prefer.
 | ANV15-51 | Nitro V 15 | ❌ | ✅ | ✅ | ✅ | BIOS V1.60 needs a quirk (S6) | S1, S2 (#71), S6 | profile, RGB confirmed |
 | ANV15-52 | Nitro V 15 | ❌ | ✅ | ✅ | — | — | S1 (LS#117, DLS#14) | profile, RGB confirmed |
 | ANV16-41 | Nitro V 16 | ❌ | ✅ | ✅ | — | — | S1 (LS#37) | profile, RGB confirmed |
-| ANV16-42 | Nitro V 16 | ❌ | ✅ | ✅ | ✅ | — | S1 (DAMX#174), S2 (#111) | **no profile** — see §4 |
+| ANV16-42 | Nitro V 16 | ❌ | ✅ | ✅ | ✅ | — | S1 (DAMX#174), S2 (#111) | profile, unverified |
 | ANV16-71 | Nitro V 16 | ❌ | ✅ | ✅ | — | — | S1 (LS#64, DAMX#128) | profile, RGB corrected |
 | ANV16S-41 | Nitro V 16 S | ❌ | ✅ | ✅ | — | — | S1 (LS#61) | profile, RGB **kept** — see §5 |
-| PH16-71 | Predator Helios 16 | ❌ | ✅ | ✅ | — | — | S1 | **no profile** — see §4 |
+| PH16-71 | Predator Helios 16 | ❌ | ✅ | ✅ | — | — | S1 | profile, unverified |
 | PH16-72 | Predator Helios 16 | ❌ | ❌ | ✅ | — | — | S1 | profile, RGB corrected, fan caveat |
 | PH18-71 | Predator Helios 18 | ❌ | ✅ | ✅ | — | — | S1 | profile, RGB corrected |
 | PH18-73 | Predator Helios 18 | ❌ | ✅ | ✅ | — | — | S1 (LS#123) | profile, RGB corrected |
@@ -309,12 +309,12 @@ there is no official source to prefer.
 | PHN14-51 | Predator Helios Neo 14 | — | — | — | — | — | none | profile, **test pending** |
 | PHN16-71 | Predator Helios Neo 16 | ✅ | ✅ | ✅ | ✅ | — | S1, S2 (#59) | profile, RGB confirmed |
 | PHN16-72 | Predator Helios Neo 16 | ✅ | ✅ | ✅ | — | — | S1 | profile, RGB confirmed |
-| PHN16-73 | Predator Helios Neo 16 | ❌ | ✅ | ✅ | — | — | S1 (LS#126) | profile, RGB corrected |
+| PHN16-73 | Predator Helios Neo 16 | ✅ | ✅ | ✅ | — | — | S1 (LS#126, keyboard LS#103) | profile, RGB corrected (linuwu README now reports it working) |
 | PHN16S-71 | Predator Helios Neo 16 S | ❌ | ❌ | ✅ | — | — | S1 (LS#101, DAMX#270) | profile, RGB corrected, fan caveat |
-| PHN18-72 | Predator Helios Neo 18 | ❌ | ✅ | ✅ | — | — | S1 (DAMX#123) | **no profile** — see §4 |
+| PHN18-72 | Predator Helios Neo 18 | ❌ | ✅ | ✅ | — | — | S1 (DAMX#123) | profile, unverified (linuwu README) |
 | PHIN16-71 | Predator Triton (?) | — | — | — | — | — | none | profile, **code unconfirmed** — see §5 |
-| PHIN16S-71 | Predator Triton (?) | — | — | — | — | — | none | profile, **code unconfirmed** — see §5 |
-| PT14-51 | Predator Triton 14 | ❌ | ❌ | ✅ | — | — | S1 | **no profile** — see §4 |
+| PHIN16S-71 | Predator Triton (?) | ❌ | — | — | — | — | linuwu README (PHN16S-71, "also reported as PHIN16S-71") | profile, four-zone false; **code unconfirmed** — see §5 |
+| PT14-51 | Predator Triton 14 | ❌ | ❌ | ✅ | — | — | S1 | profile, unverified |
 | PT316-51s | Predator Triton 316 | ✅ | ✅ | ✅ | — | — | S1 (DLS#17) | **no profile** — see §4 |
 | PTX17-71 | Predator Triton 17 X | ❌ | ✅ | ✅ | — | — | S1 (LS#83) | profile, RGB corrected |
 
@@ -362,21 +362,26 @@ Win-key lock has no read-back to tell the difference. Both need one run on an AN
 
 Only changes that a cited source supports, and only fields that cannot cause a hardware write on a
 machine that has not been verified. `fourZoneKeyboard` is a **report tie-breaker only**: on Windows
-nothing reads it (`grep -rn "\.FourZoneKeyboard"` finds one consumer, `LinuxCapabilityProbe.cs:85`,
+nothing reads it (`grep -rn "\.FourZoneKeyboard"` finds one consumer, `LinuxCapabilityProbe.cs:113`,
 which uses it to warn when the sysfs node is missing). It cannot enable or disable a control, so
 correcting it cannot change what is written to any machine.
 
 | Profile | Field | Before | After | Evidence |
 | --- | --- | --- | --- | --- |
-| `nitro-5-an515` | `fourZoneKeyboard` | `false` | *omitted* (null = "the table does not say") | the five codes disagree: -55 ✅, -58 ✅, -57 ❌, -54/-56 unknown. A blanket `false` was a false claim about -55 and -58; the note now names each code |
-| `nitro-5-an515-44` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
+| `nitro-5-an515` | `fourZoneKeyboard` | `false` | *omitted* (null = "the table does not say") | the five codes disagree: -55 ✅, -57 ✅, -58 ✅, -54 ❌, -56 unknown (linuwu README). A blanket `false` was a false claim about -55 and -58; the note now names each code |
+| `nitro-5-an515-44` | `fourZoneKeyboard` | `true` | *omitted* | linuwu README: ✅, but the keyboard needs a different lighting protocol (known-issues note) that is untested; neither `true` nor `false` is supported |
 | `nitro-v-16-anv16-71` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
 | `predator-helios-16-ph16-72` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
 | `predator-helios-18-ph18-71` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
 | `predator-helios-18-ph18-73` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
-| `predator-helios-neo-16-phn16-73` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
+| `predator-helios-neo-16-phn16-73` | `fourZoneKeyboard` | `false` | `true` | S1: ❌ is overruled by linuwu README: ✅ (LS#126, keyboard LS#103) |
 | `predator-helios-neo-16-phn16s-71` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
 | `predator-triton-ptx17-71` | `fourZoneKeyboard` | `true` | `false` | S1: ❌ |
+| `nitro-17-an17-41` | `fourZoneKeyboard` | *(new profile)* | `true` | linuwu README: ✅ (DAMX#99) |
+| `nitro-v-16-anv16-42` | `fourZoneKeyboard` | *(new profile)* | `false` | linuwu README: ❌ (DAMX#174) |
+| `predator-helios-16-ph16-71` | `fourZoneKeyboard` | *(new profile)* | `false` | linuwu README: ❌ (upstream) |
+| `predator-triton-pt14-51` | `fourZoneKeyboard` | *(new profile)* | `false` | linuwu README: ❌ (upstream) |
+| `predator-triton-phin16s-71` | `fourZoneKeyboard` | *(new profile)* | `false` | linuwu README: ❌ (PHN16S-71, also reported as PHIN16S-71; LS#101, DAMX#270) |
 
 Confirmed correct and left alone: `nitro-16-an16-41` (✅, physical), `nitro-16-an16-42` (✅),
 `nitro-16-an16-43` (✅), `nitro-17-an17-42` (✅), `nitro-5-an515-45` (✅), `nitro-5-an517-54` (✅),
@@ -392,7 +397,8 @@ through to `acer-gaming-default`. Adding a profile for them would give the machi
 code in the report and the correct feature flags — but every one of them would ship with
 `verified: false` sensors, which is the same sensor behaviour they get today from the fallback.
 
-They are **not added in this pass**. A profile is a claim about a machine, and the only thing that
+Update: all of them except PT316-51s now have an unverified profile (PT316-51s is skipped only because there is no SMBIOS
+sample for it yet; the lowercase `s` is not the reason, since `DeviceIdentity` uppercases and `PT316-51S` matches). The paragraph below predates that. A profile is a claim about a machine, and the only thing that
 would make these claims better than the fallback is a physical check on each model, which this audit
 cannot do. Recording them here is the honest state: the codes are known, the profiles are pending.
 
@@ -577,9 +583,10 @@ The provider therefore publishes its own interface map on every machine, and tha
 - **A write that returns success and changes nothing.** `SetGamingRgbKb` answers `0` on the `AN16-61` and the colour
   stays put; the battery limiter is accepted and ignored on `AN515-58` BIOS V2.19 (S2 #57). These are per-firmware facts. No community table records them, because the table is built from
   "it worked on mine", and "it returned success" reads the same as "it worked" until someone measures.
-- **The kernel driver as a model database.** The mainline `acer-wmi.c` carries **27** DMI quirk entries and **none**
-  of them is a Nitro or Predator model string (parsed from the file fetched while writing this section). The
-  per-model knowledge for these machines lives in owner reports and issues (S1, S2, S4), not in the driver.
+- **The kernel driver as a model database.** The mainline `acer-wmi.c` carries **27** DMI quirk entries when
+  first parsed; current master has **10** Nitro/Predator ones (AN16-41, AN515-58, ANV15-51, PH315-53, PHN16-71,
+  PH16-71, PH16-72, PHN16-72, PH18-71, PT14-51), parsed from the file fetched on 2026-11-26. Most per-model
+  knowledge for these machines lives in owner reports and issues (S1, S2, S4), not in the driver.
 - **Which selector a NitroSense switch drives.** Acer does not document it and the binary does not say it out loud.
   An A/B capture does (§8), which is why the snapshot tool exists.
 

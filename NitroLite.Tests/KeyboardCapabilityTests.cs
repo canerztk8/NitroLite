@@ -138,16 +138,29 @@ public class KeyboardCapabilityTests
     }
 
     [Fact]
-    public async Task GetKeyboardCapability_ReturnsACapabilityOrNull()
+    public async Task GetKeyboardCapability_OverTheWire_ReturnsTheCapability_AndNoAnswerIsNull()
     {
-        // Read-only; a machine without AASSvc simply answers null.
-        using var client = new AcerAgentClient();
-        var cap = await client.GetKeyboardCapabilityAsync();
-        if (cap == null) return;
+        // A local fake service answers; the real AASSvc is never contacted.
+        var answer = "{\"request\":\"GET_CONNECTED_DEVICE\",\"result\":\"0\",\"data\":" + JsonNode.Parse(FourZone)!["data"]!.ToJsonString() + "}";
+        using (var service = new AgentCapabilityDumpTests.EchoService(function => function == "GET_CONNECTED_DEVICE" ? answer : null))
+        using (var client = NewClient(service.Port))
+        {
+            var cap = await client.GetKeyboardCapabilityAsync();
+            Assert.NotNull(cap);
+            Assert.Equal(4, cap!.ZoneCount);
+            Assert.All(cap.Effects, e => Assert.False(string.IsNullOrWhiteSpace(e.Name)));
+        }
 
-        Assert.True(cap.ZoneCount >= 0);
-        Assert.All(cap.Effects, e => Assert.False(string.IsNullOrWhiteSpace(e.Name)));
+        using (var silent = new AgentCapabilityDumpTests.EchoService(_ => null))
+        using (var client = NewClient(silent.Port))
+        {
+            Assert.Null(await client.GetKeyboardCapabilityAsync());
+        }
     }
+
+    private static AcerAgentClient NewClient(int port) =>
+        new("127.0.0.1", port, TimeSpan.FromSeconds(2), TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+
     [Fact]
     public void OfferedEffects_KeepsWhatTheDeviceReportsAndPutsOffLast()
     {

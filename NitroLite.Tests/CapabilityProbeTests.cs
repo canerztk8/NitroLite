@@ -99,19 +99,15 @@ public class CapabilityProbeTests
     [InlineData("AN16-71", "nitro-16-an16-71")]
     [InlineData("AN16-72", "nitro-16-an16-72")]
     [InlineData("AN16-73", "nitro-16-an16-73")]
-    [InlineData("AN17-41", "nitro-17-an17-41")]
     [InlineData("AN17-71", "nitro-17-an17-71")]
     [InlineData("AN17-72", "nitro-17-an17-72")]
     [InlineData("AN517-55", "nitro-5-an517-55")]
     [InlineData("ANV14-61", "nitro-v-14-anv14-61")]
-    [InlineData("PH16-71", "predator-helios-16-ph16-71")]
     [InlineData("PH315-55", "predator-helios-300-ph315-55")]
     [InlineData("PH315-55S", "predator-helios-300-ph315-55")]
     [InlineData("PH3D15-71", "predator-helios-3d-ph3d15-71")]
-    [InlineData("PT14-51", "predator-triton-pt14-51")]
     [InlineData("PT16-51", "predator-triton-pt16-51")]
     [InlineData("ANV15-42", "nitro-v-15-anv15-42")]
-    [InlineData("ANV16-42", "nitro-v-16-anv16-42")]
     [InlineData("ANV16-61", "nitro-v-16-anv16-61")]
     [InlineData("ANV17-41", "nitro-v-17-anv17-41")]
     [InlineData("ANV17-61", "nitro-v-17-anv17-61")]
@@ -132,6 +128,29 @@ public class CapabilityProbeTests
         Assert.False(profile.NitroHidKeyboard);
         Assert.Empty(profile.UnsupportedMethods);
         Assert.Contains("unverified", profile.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("AN17-41", "nitro-17-an17-41", true)]
+    [InlineData("ANV16-42", "nitro-v-16-anv16-42", false)]
+    [InlineData("PH16-71", "predator-helios-16-ph16-71", false)]
+    [InlineData("PT14-51", "predator-triton-pt14-51", false)]
+    [InlineData("AN515-46", "nitro-5-an515-46", true)]
+    [InlineData("AN515-47", "nitro-5-an515-47", false)]
+    [InlineData("PHN18-72", "predator-helios-neo-18-phn18-72", false)]
+    [InlineData("PHN16-73", "predator-helios-neo-16-phn16-73", true)]
+    [InlineData("PHIN16S-71", "predator-triton-phin16s-71", false)]
+    [InlineData("AN515-44", "nitro-5-an515-44", null)]
+    public void PublicSourceFourZoneHints_AreInTheTable(string code, string id, bool? fourZone)
+    {
+        // acer-wmi-linuwu README (supported models table). The field is only a tie-breaker; null means the table does not say.
+        var catalog = ProfileCatalog.FromJson(ProfileCatalog.ReadEmbeddedJson(), null, out _);
+        var profile = catalog.Match(new DeviceIdentity { Manufacturer = "Acer", Model = code, ModelCode = code, IsAcer = true });
+
+        Assert.Equal(id, profile.Id);
+        Assert.Equal(fourZone, profile.FourZoneKeyboard);
+        Assert.False(profile.Sensors.Verified);
+        Assert.Empty(profile.UnsupportedMethods);
     }
 
     [Fact]

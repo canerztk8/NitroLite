@@ -54,6 +54,59 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
     /// <inheritdoc />
     public bool ForgetPinnedCertificate() => _careCenter.ForgetPinnedCertificate();
 
+    // What the service said the machine has. These answers describe the hardware, which does not change while the
+    // service runs, so they are read once per session. Only an answer is stored: a read that came back empty-handed
+    // (null) is retried on the next call, because "the service did not answer" is not "the machine has nothing".
+    private IReadOnlyList<AgentFan>? _cachedFans;
+    private IReadOnlyList<OperatingMode>? _cachedModes;
+    // Boxed so one reference carries the whole answer: an int? is two fields and could be read half-written by a
+    // concurrent poll while another thread stores it.
+    private volatile object? _cachedMux;
+
+    /// <summary>1 once the "service maximum is below the safety floor" disagreement has been logged.</summary>
+    private int _loggedMaxBelowFloor;
+
+    /// <summary>
+    /// Forgets the cached service answers so the next <see cref="GetCapabilitiesAsync"/> asks again. The client has no
+    /// reconnect event, so the controller calls this itself when it finds the service unreachable (a restart passes
+    /// through that state); callers that know better (a driver or firmware change) can call it directly.
+    /// </summary>
+    public void InvalidateCapabilityCache()
+    {
+        _cachedFans = null;
+        _cachedModes = null;
+        _cachedMux = null;
+    }
+
+    private async Task<IReadOnlyList<AgentFan>?> GetFansCachedAsync()
+    {
+        var cached = _cachedFans;
+        if (cached != null) return cached;
+
+        var fans = await ProbeReferenceAsync(() => _agent.GetFanListAsync()).ConfigureAwait(false);
+        if (fans != null) _cachedFans = fans;
+        return fans;
+    }
+
+    private async Task<IReadOnlyList<OperatingMode>?> GetModesCachedAsync()
+    {
+        var cached = _cachedModes;
+        if (cached != null) return cached;
+
+        var modes = await ProbeReferenceAsync(() => _agent.GetOperatingModesAsync()).ConfigureAwait(false);
+        if (modes != null) _cachedModes = modes;
+        return modes;
+    }
+
+    private async Task<int?> GetMuxCachedAsync()
+    {
+        if (_cachedMux is int cached) return cached;
+
+        var mux = await ProbeAsync(() => _agent.GetGpuModeCapabilityAsync()).ConfigureAwait(false);
+        if (mux.HasValue) _cachedMux = mux.Value;
+        return mux;
+    }
+
     public bool IsAvailable => _agent.IsConnected;
 
     public Task<bool> EnsureConnectedAsync() => _agent.EnsureConnectedAsync();
@@ -67,20 +120,22 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
         bool connected = await EnsureConnectedAsync().ConfigureAwait(false);
         if (!connected)
         {
+            // The service is gone (stopped, restarting, updating): whatever it said before may not hold when it returns.
+            InvalidateCapabilityCache();
             return new HardwareCapabilities { Backend = BackendName, ServiceAvailable = false };
         }
 
         var fanMode = await ProbeAsync(() => _agent.GetFanModeAsync()).ConfigureAwait(false);
         var mode = await ProbeAsync(() => _agent.TryGetOperatingModeAsync()).ConfigureAwait(false);
-        var mux = await ProbeAsync(() => _agent.GetGpuModeCapabilityAsync()).ConfigureAwait(false);
+        var mux = await GetMuxCachedAsync().ConfigureAwait(false);
         var chargeMode = await ProbeAsync(() => _careCenter.GetBatteryChargeModeAsync()).ConfigureAwait(false);
         var backlight = await ProbeAsync(() => _agent.GetBacklightTimeoutAsync()).ConfigureAwait(false);
         var keyboard = await ProbeKeyboardAsync().ConfigureAwait(false);
 
         // What the service itself says the machine has (the SUPPORT_* answers NitroSense relies on). Null is "no
         // answer", and every consumer below keeps its old behaviour for that.
-        var fans = await ProbeReferenceAsync(() => _agent.GetFanListAsync()).ConfigureAwait(false);
-        var modes = await ProbeReferenceAsync(() => _agent.GetOperatingModesAsync()).ConfigureAwait(false);
+        var fans = await GetFansCachedAsync().ConfigureAwait(false);
+        var modes = await GetModesCachedAsync().ConfigureAwait(false);
 
         // The service says there are no fans to control yet the fan mode reads back as something other than Auto: the
         // two answers disagree. The empty list is followed (no control is shown), but the disagreement is worth one
@@ -181,8 +236,57 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
 
     public Task<FanMode?> GetFanModeAsync() => _agent.GetFanModeAsync();
 
-    public Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1) =>
-        WriteAsync(() => _agent.SetFanModeAsync(mode, cpuPercent, gpuPercent));
+    /// <summary>
+    /// Writes the fan mode. A custom speed is first pulled into the range the service reports for that fan
+    /// (fan_custom_min_speed / fan_custom_max_speed), so the service is never asked for a speed it does not offer.
+    /// Without a usable range, or in any mode other than Custom, the values go through exactly as given.
+    /// </summary>
+    public async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
+    {
+        if (mode == FanMode.Custom && !_disposed)
+        {
+            var fans = await GetFansCachedAsync().ConfigureAwait(false);
+            if (fans is { Count: > 0 })
+            {
+                // A negative value means "the client's stored speed"; resolve it here so the stored speed is clamped too.
+                if (cpuPercent < 0) cpuPercent = _agent.CustomFanCpuPercent;
+                if (gpuPercent < 0) gpuPercent = _agent.CustomFanGpuPercent;
+                cpuPercent = ClampToFan(fans, "CPU", 0, cpuPercent);
+                gpuPercent = ClampToFan(fans, "GPU", 1, gpuPercent);
+            }
+        }
+
+        return await WriteAsync(() => _agent.SetFanModeAsync(mode, cpuPercent, gpuPercent)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The fan is found by name. Only the unnamed fans in the list are matched by position, and only when its
+    /// indices are distinct: two nameless fans sharing an index cannot be told apart, so the speed is left alone
+    /// rather than clamped into the range of whichever fan happens to come first. A fan with no usable range also
+    /// leaves the speed alone.
+    /// </summary>
+    private int ClampToFan(IReadOnlyList<AgentFan> fans, string name, int position, int percent)
+    {
+        var fan = fans.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (fan == null)
+        {
+            var unnamed = fans.Where(f => string.IsNullOrEmpty(f.Name)).ToList();
+            if (unnamed.Select(f => f.Index).Distinct().Count() == unnamed.Count)
+                fan = unnamed.FirstOrDefault(f => f.Index == position);
+        }
+
+        if (fan is not { HasRange: true }) return percent;
+
+        // The safety floor (AppSettings.MinCustomFanPercent) still wins downstream, so a service maximum below it is
+        // not honoured; say so once, because the user sees a fan that runs faster than the service's own limit.
+        if (fan.MaxSpeed < AppSettings.MinCustomFanPercent && Interlocked.Exchange(ref _loggedMaxBelowFloor, 1) == 0)
+        {
+            AppLog.Warn("The service's fan maximum is below the safety floor",
+                $"{fan.Name} max {fan.MaxSpeed}% < {AppSettings.MinCustomFanPercent}%; the floor is kept");
+        }
+
+        return Math.Clamp(percent, fan.MinSpeed, fan.MaxSpeed);
+    }
 
     public Task<LightingConfig?> GetLightingConfigAsync() => _agent.GetLightingConfigAsync();
 

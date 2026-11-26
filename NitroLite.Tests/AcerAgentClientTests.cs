@@ -8,6 +8,10 @@ namespace NitroLite.Tests;
 
 public class AcerAgentClientTests
 {
+    /// <summary>A client that can only reach the loopback dead end, never the real service on 46933.</summary>
+    private static AcerAgentClient DeadEndClient() =>
+        new("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget);
+
     [Fact]
     public void TryFindJsonObject_SplitsBackToBackMessagesAndSkipsNoise()
     {
@@ -37,7 +41,7 @@ public class AcerAgentClientTests
     [Fact]
     public void IsResponseFor_MatchesByRequestAndPublishesEventsSeparately()
     {
-        using var client = new AcerAgentClient();
+        using var client = DeadEndClient();
         var received = new System.Threading.ManualResetEventSlim(false);
         string? eventName = null;
         client.ServiceEventReceived += (fn, _) => { eventName = fn; received.Set(); };
@@ -53,7 +57,7 @@ public class AcerAgentClientTests
     [Fact]
     public void IsResponseFor_TreatsNullRequestReplyAsResponseNotEvent()
     {
-        using var client = new AcerAgentClient();
+        using var client = DeadEndClient();
         bool eventRaised = false;
         client.ServiceEventReceived += (_, _) => eventRaised = true;
 
