@@ -99,8 +99,10 @@ public class AcerAgentClient : IDisposable
 
     /// <summary>The one constructor, with the transport and its budgets injectable for the tests.</summary>
     internal AcerAgentClient(string host, int port, TimeSpan? connectTimeout = null,
-        TimeSpan? handshakeTimeout = null, TimeSpan? requestTimeout = null)
+        TimeSpan? handshakeTimeout = null, TimeSpan? requestTimeout = null,
+        Func<NitroLite.Core.Hardware.AcerRegistrySnapshot>? registry = null)
     {
+        _registry = registry ?? NitroLite.Core.Hardware.AcerRegistrySnapshot.Read;
         _host = host;
         _port = port;
         if (connectTimeout is { } connect) _connectTimeout = connect;
@@ -118,6 +120,39 @@ public class AcerAgentClient : IDisposable
     public event Action<string, JsonNode?>? ServiceEventReceived;
 
     public virtual bool IsConnected => _client?.Connected ?? false;
+
+    private readonly Func<NitroLite.Core.Hardware.AcerRegistrySnapshot> _registry;
+    private int _encryptedState; // 0 unread, 1 plaintext, 2 encrypted
+
+    /// <summary>
+    /// True when Acer's agent encrypts its channel (<c>SupportAES</c> is not zero). The framing here is plaintext
+    /// only and decryption is not implemented, so such a channel is treated as unavailable: no socket is opened and
+    /// no request waits for a timeout, which lets the hybrid controller route to WMI at once. Read once per client.
+    /// </summary>
+    public virtual bool ChannelEncrypted
+    {
+        get
+        {
+            int state = Volatile.Read(ref _encryptedState);
+            if (state == 0)
+            {
+                bool encrypted;
+                try { encrypted = _registry().ChannelEncrypted; }
+                catch { encrypted = false; }
+
+                state = encrypted ? 2 : 1;
+                if (Interlocked.CompareExchange(ref _encryptedState, state, 0) == 0 && encrypted)
+                {
+                    AppLog.Info("Acer service channel is encrypted (SupportAES); using WMI",
+                        "SupportAES is set in the AcerAgentService registry key; the service socket is not used");
+                }
+
+                state = Volatile.Read(ref _encryptedState);
+            }
+
+            return state == 2;
+        }
+    }
 
     private void Disconnect()
     {
@@ -146,6 +181,9 @@ public class AcerAgentClient : IDisposable
     private async Task<bool> EnsureConnectedInternalAsync()
     {
         if (IsDisposed) return false;
+
+        // An encrypted channel cannot be spoken to; answering "not connected" here keeps every caller off the timeouts.
+        if (ChannelEncrypted) return false;
 
         if (_client != null && _client.Connected && _stream != null)
             return true;
@@ -279,8 +317,9 @@ public class AcerAgentClient : IDisposable
     /// the connection and then says nothing into a "first failure" on every attempt — one warning per second in the
     /// AN16-61 report, and a backoff that never grew past one second, because the streak was reset before it could.
     /// </para>
+    /// <para>A rescan uses it too, since it asks the service again on purpose.</para>
     /// </summary>
-    private void AllowImmediateReconnect() => _nextConnectAttemptAt = TimeSpan.MinValue;
+    internal void AllowImmediateReconnect() => _nextConnectAttemptAt = TimeSpan.MinValue;
 
     /// <summary>Grows the delay between connect attempts: 1, 2, 4, 8, 16, then 30 seconds.</summary>
     private void RegisterConnectFailure()

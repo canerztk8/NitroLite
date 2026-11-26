@@ -84,6 +84,16 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
         _cachedMux = null;
     }
 
+    /// <summary>
+    /// A rescan: drop the cached answers and let the next request reach the service now, even if a failed connect
+    /// had put the client into its backoff wait.
+    /// </summary>
+    public void InvalidateForRescan()
+    {
+        InvalidateCapabilityCache();
+        Agent.AllowImmediateReconnect();
+    }
+
     private async Task<IReadOnlyList<AgentFan>?> GetFansCachedAsync()
     {
         var cached = _cachedFans;

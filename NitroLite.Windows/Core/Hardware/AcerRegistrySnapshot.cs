@@ -36,6 +36,15 @@ public sealed record AcerRegistrySnapshot
     /// <summary>1 when the GPU can be overclocked through the agent.</summary>
     public int? GpuOverclockSupport { get; init; }
 
+    /// <summary>
+    /// The agent's <c>SupportAES</c> DWORD. When it is not zero the agent encrypts its TCP channel with the key in
+    /// <c>AESkey</c>, which this app cannot speak. Null when the value is absent, which is the normal case.
+    /// </summary>
+    public int? SupportAes { get; init; }
+
+    /// <summary>True when the agent's channel is encrypted (<see cref="SupportAes"/> is set and not zero).</summary>
+    public bool ChannelEncrypted => SupportAes is int value && value != 0;
+
     /// <summary>Nothing was readable: no key, or no rights to it.</summary>
     public static AcerRegistrySnapshot Empty { get; } = new();
 
@@ -85,12 +94,32 @@ public sealed record AcerRegistrySnapshot
                 DgpuModeCapability = ReadDword(key, @"AdvanceSettings", "dgpu_mode_capability"),
                 DiscreteGpuSupport = ReadDword(key, @"AdvanceSettings", "discrete_gpu_support"),
                 KeyboardArea = ReadDword(key, @"LightSetting", "KeyBoardArea"),
-                GpuOverclockSupport = ReadDword(key, @"Overclock", "GPU_OC_Support")
+                GpuOverclockSupport = ReadDword(key, @"Overclock", "GPU_OC_Support"),
+                // Only the switch is read. The AESkey value next to it is never opened: nothing here needs it.
+                SupportAes = ReadRootDword(key, "SupportAES")
             };
         }
         catch
         {
             return Empty;
+        }
+    }
+
+    private static int? ReadRootDword(RegistryKey key, string valueName)
+    {
+        try
+        {
+            return key.GetValue(valueName) switch
+            {
+                int number => number,
+                long number => (int)number,
+                string text when int.TryParse(text, out var parsed) => parsed,
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
         }
     }
 

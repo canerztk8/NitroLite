@@ -700,7 +700,8 @@ public sealed class AppHost : IDisposable
         // first, so the guarantee "the probe never runs on the UI thread" would have rested on the pool thread winning
         // a race it is not obliged to win. A Task is started here, before the window exists, and every caller waits
         // for that one run instead of being able to start one of its own.
-        var probeTask = Task.Run<CapabilitySnapshot?>(() =>
+        // A local function so a rescan can start the same probe again (see onRescan below).
+        Task<CapabilitySnapshot?> StartProbe() => Task.Run<CapabilitySnapshot?>(() =>
         {
             try
             {
@@ -729,6 +730,8 @@ public sealed class AppHost : IDisposable
                 return null;
             }
         });
+
+        var probeTask = StartProbe();
 
         // A caller that needs the answer blocks until the pool thread has it. The factory catches everything, so the
         // task cannot fault in practice; the catch is here because a hardware read is not the place to discover that
@@ -875,7 +878,16 @@ public sealed class AppHost : IDisposable
 
         var platform = new WindowsPlatformSnapshot(
             identity, Probe, () => hybrid.ActiveBackendName, readBack, () => wmi,
-            backendDetail: () => hybrid.DescribeBackend());
+            backendDetail: () => hybrid.DescribeBackend(),
+            // The rescan button: drop the saved capability cache and the Acer service answers, then probe again. The
+            // new probe finds no cache, so it reads WMI and the registry and stores the fresh answer, and the
+            // next capability read waits for it and asks the service again.
+            onRescan: () =>
+            {
+                CapabilityRescan.Reset(settings, agent);
+                probeTask = StartProbe();
+            },
+            channelEncrypted: () => agent.Agent.ChannelEncrypted);
 
         // Game detection over the Windows process table. The power state is supplied so a Turbo profile is clamped to
         // Balanced on battery instead of being written and silently refused by the firmware.

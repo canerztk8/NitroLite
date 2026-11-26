@@ -325,6 +325,28 @@ public class AgentServiceCapabilityTests
     }
 
     [Fact]
+    public async Task Rescan_ClearsTheSettingsCache_AndTheServiceIsAskedAgain()
+    {
+        var agent = new FakeAgent { GpuCapability = 7, Modes = new[] { OperatingMode.Quiet }, Fans = new[] { new AgentFan(0, "CPU", 0, 100) } };
+        using var controller = new AgentHardwareController(agent, new FakeCareCenter());
+        var settings = new AppSettings { HardwareCapabilityCache = new HardwareCapabilityCache { Key = "A|1" } };
+
+        await controller.GetCapabilitiesAsync();
+        await controller.GetCapabilitiesAsync();
+        Assert.Equal(1, agent.FanListCalls);
+
+        CapabilityRescan.Reset(settings, controller);
+        agent.GpuCapability = 0;
+        var again = await controller.GetCapabilitiesAsync();
+
+        Assert.Null(settings.HardwareCapabilityCache);
+        Assert.Equal(2, agent.FanListCalls);
+        Assert.Equal(2, agent.ModeListCalls);
+        Assert.Equal(2, agent.MuxCalls);
+        Assert.False(again.MuxSwitch);
+    }
+
+    [Fact]
     public async Task Capabilities_ServiceGoingAway_DropsTheCache()
     {
         var agent = new FakeAgent { GpuCapability = 7 };
@@ -355,7 +377,8 @@ public class AgentServiceCapabilityTests
     private sealed class FakeAgent : AcerAgentClient
     {
         public FakeAgent()
-            : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget)
+            : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget,
+                registry: () => AcerRegistrySnapshot.Empty)
         {
         }
 

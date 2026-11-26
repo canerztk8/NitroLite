@@ -26,6 +26,14 @@ public static class AgentCapabilityDump
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(output);
 
+        if (client.ChannelEncrypted)
+        {
+            await output.WriteLineAsync(
+                "AcerAgentService channel is encrypted (SupportAES is set); nothing was asked. NitroLite uses WMI on this machine.")
+                .ConfigureAwait(false);
+            return 1;
+        }
+
         var answers = await client.QueryCapabilityAnswersAsync().ConfigureAwait(false);
         if (answers == null)
         {

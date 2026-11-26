@@ -258,6 +258,19 @@ public static class HardwareReport
         AppendRow(sb, "GPU_OC_Support", Format(probe.Registry.GpuOverclockSupport));
         sb.AppendLine();
 
+        // The key value is never reported, only whether the channel it would protect is encrypted. A cached snapshot
+        // carries no registry reading, so without the live answer the row says so instead of claiming "plaintext".
+        var channelEncrypted = context?.AcerChannelEncrypted ?? (probe.FromCache ? null : probe.Registry.ChannelEncrypted);
+        sb.AppendLine("| Acer service | State |");
+        sb.AppendLine("| --- | --- |");
+        AppendRow(sb, "Acer service channel", channelEncrypted switch
+        {
+            true => "encrypted (SupportAES set); NitroLite uses WMI",
+            false => "plaintext",
+            null => "not read (cached snapshot)"
+        });
+        sb.AppendLine();
+
         sb.AppendLine("| Live selector | Answer |");
         sb.AppendLine("| --- | --- |");
         AppendRow(sb, "GetGamingMiscSetting(0x09) MUX", MuxSelectorText(capabilities, probe));

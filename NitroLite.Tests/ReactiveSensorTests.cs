@@ -342,6 +342,42 @@ public class ReactiveSensorTests
         // identical write is eight more WMI calls for a keyboard that cannot look any different.
         await Task.Delay(600);
 
+        // A task that is still being replaced is a write that has not finished; the last one is awaited too.
+        await vm.ReactiveLightingTask;
+
+        var write = Assert.Single(hardware.LightingWrites,
+            w => w.Contains(ReactiveLighting.ColorFor(78), StringComparison.OrdinalIgnoreCase));
+        Assert.StartsWith("STATIC|3|", write, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALevelStillOnItsWayToTheKeys_IsNotWrittenAgainByTheDelayedRepaint()
+    {
+        var hardware = new Phase3Fakes.StubHardware();
+        hardware.Sample.CpuTemperature = 78;
+
+        using var vm = Create(hardware);
+        await vm.InitializeAsync();
+
+        // The mode's own write takes far longer than the slider's 180 ms pause, which is what a slow machine does to
+        // it: the repaint fires while the write is still in flight and nothing has landed on the keys yet. The repaint
+        // must go by what was asked for, not by what has finished, or the same level is sent twice.
+        hardware.LightingWriteDelay = TimeSpan.FromMilliseconds(500);
+
+        vm.ReactiveBrightness = 3;
+        vm.ReactiveLightingEnabled = true;
+        await vm.RefreshTelemetryAsync();
+
+        // The write is awaited, and so is whatever replaced it: the repaint (fired at 180 ms, mid-write) would have
+        // queued its own, so awaiting until the task stops changing observes it without a sleep.
+        Task seen;
+        do
+        {
+            seen = vm.ReactiveLightingTask;
+            await seen;
+        }
+        while (!ReferenceEquals(seen, vm.ReactiveLightingTask));
+
         var write = Assert.Single(hardware.LightingWrites,
             w => w.Contains(ReactiveLighting.ColorFor(78), StringComparison.OrdinalIgnoreCase));
         Assert.StartsWith("STATIC|3|", write, StringComparison.Ordinal);

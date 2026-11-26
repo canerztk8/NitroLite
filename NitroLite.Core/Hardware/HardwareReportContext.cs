@@ -30,6 +30,12 @@ public sealed record HardwareReportContext
     /// </summary>
     public ulong? MuxWord { get; init; }
 
+    /// <summary>
+    /// Whether Acer's service encrypts its channel (<c>SupportAES</c>), as the live client knows it. Null when the
+    /// caller does not know; the report then falls back to the probe's own registry reading.
+    /// </summary>
+    public bool? AcerChannelEncrypted { get; init; }
+
     /// <summary>True when the context carries nothing to add.</summary>
     public bool IsEmpty => BackendCapabilities == null && SensorTrust == null && UsbHid.Count == 0 && KeyboardLighting.Count == 0;
 

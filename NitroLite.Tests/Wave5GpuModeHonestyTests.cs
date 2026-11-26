@@ -42,7 +42,8 @@ public class Wave5GpuModeHonestyTests
     private sealed class FakeAgent : AcerAgentClient
     {
         public FakeAgent()
-            : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget)
+            : base("127.0.0.1", DeadEndService.Port, DeadEndService.Budget, DeadEndService.Budget, DeadEndService.Budget,
+                registry: () => NitroLite.Core.Hardware.AcerRegistrySnapshot.Empty)
         {
         }
 

@@ -3688,6 +3688,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var speed = SpeedLevel;
         var direction = SelectedDirection?.Direction ?? 1;
 
+        // The level is recorded as soon as it is asked for, not when the write lands: the slider's delayed repaint
+        // compares against it, and a repaint that fires while this write is still waiting for the gate or for the
+        // keyboard (a slow machine, a slow WMI call) would otherwise see "nothing painted yet" and send the same
+        // level a second time.
+        _reactiveBrightnessPainted = brightness;
+
         // Two blocks by default, or a gradient across the deck when the user asked for one. Four entries in zone order
         // either way, built in one place, so a half can never bleed into the other.
         var zones = ReactiveLighting.ZonesFor(left, right, _settings.ReactiveLightingBlend);
@@ -3701,6 +3707,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (!_reactiveLightingEnabled || _lightingBlackedOut || _settings.IsBacklightOff || BrightnessLevel <= 0
                 || SchoolModeKeepsKeysDark)
             {
+                // Nothing was sent, so the level is not on the keys after all.
+                if (_reactiveBrightnessPainted == brightness) _reactiveBrightnessPainted = -1;
                 return;
             }
 
@@ -3716,12 +3724,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 // A refusal is logged once per colour, not once per tick: the throttle has already recorded the write,
                 // so a keyboard that cannot take the colour does not fill the log with the same line.
                 AppLog.Warn("The temperature colour could not be written", $"{left} / {right}");
+                if (_reactiveBrightnessPainted == brightness) _reactiveBrightnessPainted = -1;
                 return;
             }
-
-            // The level the keys are now at, read from the same local the write carried: a slider moved during the
-            // write must not be mistaken for one that was already painted.
-            _reactiveBrightnessPainted = brightness;
 
             _reactiveLightingColor = left;
             _reactiveLightingColorRight = right;
@@ -3731,6 +3736,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             AppLog.Warn("The temperature colour could not be written", ex.Message);
+            if (_reactiveBrightnessPainted == brightness) _reactiveBrightnessPainted = -1;
         }
         finally
         {
@@ -10860,6 +10866,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var rescan = _rescan;
         if (OperatingSystem.IsWindows()) rescan.ResetReadBackCounters();
         else await Task.Run(rescan.ResetReadBackCounters).ConfigureAwait(true);
+
+        // The reset also dropped the saved capability cache (Windows); write that down now, on this thread, so a
+        // restart does not bring the stale answer back.
+        SaveSettings();
 
         await RefreshCapabilitiesAsync().ConfigureAwait(true);
     }

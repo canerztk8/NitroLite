@@ -36,6 +36,12 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
     private readonly Func<WmiHardwareController?>? _wmi;
     private readonly Func<string>? _backendDetail;
 
+    /// <summary>Run on rescan, after the read-back reset: drops the capability caches and starts a fresh probe.</summary>
+    private readonly Action? _onRescan;
+
+    /// <summary>Whether the Acer service channel is encrypted, as the live client knows it.</summary>
+    private readonly Func<bool?>? _channelEncrypted;
+
     /// <summary>
     /// <paramref name="probe"/> supplies the capability snapshot and <paramref name="backendName"/> the name of the
     /// backend that is actually in use — which is what the tier line reports, because a machine can have both the
@@ -47,8 +53,12 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
         Func<string> backendName,
         ReadBackPolicy readBack,
         Func<WmiHardwareController?>? wmi = null,
-        Func<string>? backendDetail = null)
+        Func<string>? backendDetail = null,
+        Action? onRescan = null,
+        Func<bool?>? channelEncrypted = null)
     {
+        _onRescan = onRescan;
+        _channelEncrypted = channelEncrypted;
         Identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
         _backendName = backendName ?? throw new ArgumentNullException(nameof(backendName));
@@ -119,7 +129,8 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
             KeyboardLighting = extras.KeyboardLighting.Count > 0
                 ? extras.KeyboardLighting
                 : DescribeKeyboardLighting(),
-            MuxWord = extras.MuxWord ?? wmi?.LastMuxWord
+            MuxWord = extras.MuxWord ?? wmi?.LastMuxWord,
+            AcerChannelEncrypted = extras.AcerChannelEncrypted ?? _channelEncrypted?.Invoke()
         };
 
         return HardwareReport.BuildMarkdown(
@@ -166,6 +177,9 @@ public sealed class WindowsPlatformSnapshot : IPlatformSnapshot, IRescannableBac
         // reinstall is found again.
         HidLightingDevices.ResetCache();
         KeyboardLightingRuntime.Router.Reset();
+
+        // The capability caches go last, and the probe that follows reads the machine instead of the cache.
+        _onRescan?.Invoke();
     }
 
     IPlatformSnapshot IRescannableBackend.Snapshot => this;
