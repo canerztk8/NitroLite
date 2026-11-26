@@ -168,20 +168,26 @@ public class BatteryThermalPageTests
             Details = battery.Snapshot.Details
         };
 
+        var clock = new CleanupA1Tests.FakeClock();
         using var vm = Create(battery: battery);
+        vm.FanClock = clock.Now;
         await vm.InitializeAsync();
 
         Assert.True(vm.ShowOverchargeBanner);
         Assert.Contains("84", vm.OverchargeMessage);
 
         // Below the threshold the banner is gone: the watchdog only speaks when the pack is above 80 %. The battery is
-        // read once a minute rather than on every tick, so the test runs the ticks that reach the next read.
+        // read every five minutes of clock time, so the test advances the fake clock past the next read.
         battery.Snapshot = new BatteryHealthSnapshot
         {
             Status = new BatteryStatusInfo { BatteryPercent = 79, IsPluggedIn = true, IsOvercharged = false },
             Details = battery.Snapshot.Details
         };
-        for (int i = 0; i < 30; i++) await vm.RefreshTelemetryAsync();
+        for (int i = 0; i < 30; i++)
+        {
+            clock.Advance(60_000);
+            await vm.RefreshTelemetryAsync();
+        }
         Assert.False(vm.ShowOverchargeBanner);
     }
 

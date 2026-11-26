@@ -1069,14 +1069,29 @@ public class AcerAgentClient : IDisposable
     public int CustomFanGpuPercent { get; set; } = 50;
 
     /// <summary>
+    /// Where the saved custom speeds come from in production (the user's settings). When set it wins over the two
+    /// properties above, which stay as the fallback for a client built without it. Without this, a negative speed on
+    /// the Acer-service path always became 50 %, because nothing assigned the properties.
+    /// </summary>
+    public Func<(int Cpu, int Gpu)>? CustomFanDefaults { get; set; }
+
+    /// <summary>The speeds a negative request means: the saved settings when wired, else the client's own values.</summary>
+    public (int Cpu, int Gpu) SavedCustomFanPercents() =>
+        CustomFanDefaults?.Invoke() ?? (CustomFanCpuPercent, CustomFanGpuPercent);
+
+    /// <summary>
     /// Sets fan mode. For <see cref="FanMode.Custom"/> the speeds are percentages (0-100); a negative value means
     /// "use <see cref="CustomFanCpuPercent"/> / <see cref="CustomFanGpuPercent"/>". AASSvc ignores the speeds in
     /// Auto and Max (verified on the AN16-41: 60 % custom ≈ 4300 RPM on both fans).
     /// </summary>
     public virtual async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
     {
-        if (cpuPercent < 0) cpuPercent = CustomFanCpuPercent;
-        if (gpuPercent < 0) gpuPercent = CustomFanGpuPercent;
+        if (cpuPercent < 0 || gpuPercent < 0)
+        {
+            var saved = SavedCustomFanPercents();
+            if (cpuPercent < 0) cpuPercent = saved.Cpu;
+            if (gpuPercent < 0) gpuPercent = saved.Gpu;
+        }
         await _lock.WaitAsync();
         try
         {

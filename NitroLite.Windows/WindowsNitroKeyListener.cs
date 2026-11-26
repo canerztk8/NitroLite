@@ -95,6 +95,15 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
     public static readonly IReadOnlyList<string> PreferredEventClassNames =
         new[] { "AcerGamingEvent", "AcerWmiEvent", "AcerGenericEvent", "AcerEvent" };
 
+    private static int _rawInputClassCounter;
+
+    /// <summary>
+    /// A window class name no other raw-input window in this process has used: the base name plus a counter. See
+    /// <c>RawInputWindow._className</c> for why a shared name is unsafe on restart.
+    /// </summary>
+    internal static string NextRawInputClassName() =>
+        "NitroLiteRawInput." + Interlocked.Increment(ref _rawInputClassCounter).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>
     /// Name fragments that mark a <c>root\WMI</c> class as Acer's, used by the namespace scan.
     /// </summary>
@@ -739,15 +748,15 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
         private const uint RidevInputSink = 0x00000100;
         private const uint RidiDeviceInfo = 0x2000000B;
 
-        /// <summary><c>ERROR_CLASS_ALREADY_EXISTS</c>: the window class is still registered from an earlier run.</summary>
-        private const int ErrorClassAlreadyExists = 1410;
-
         /// <summary>
-        /// The window class name. Registered per process, so a second <see cref="Start"/> after a
-        /// <see cref="Stop"/> would fail with <c>ERROR_CLASS_ALREADY_EXISTS</c> unless the class is unregistered
-        /// when the message loop ends.
+        /// The window class name, unique per instance (see <see cref="NextRawInputClassName"/>). Window classes are
+        /// registered per process and a class stores the window procedure pointer of whoever registered it. A restart
+        /// whose predecessor thread had not exited yet (the stop only waits one second) would otherwise find the old
+        /// class and reuse it, with a procedure pointing at the OLD instance's delegate: the Nitro key would be dead
+        /// and, once that delegate was collected, the process would crash. Each instance unregisters its own class
+        /// when its message loop ends.
         /// </summary>
-        private const string ClassName = "NitroLiteRawInput";
+        private readonly string _className = NextRawInputClassName();
 
         private static readonly IntPtr HwndMessage = new(-3);
 
@@ -804,25 +813,20 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                     cbSize = (uint)Marshal.SizeOf<WndClassEx>(),
                     lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProc),
                     hInstance = instance,
-                    lpszClassName = ClassName
+                    lpszClassName = _className
                 };
 
                 if (RegisterClassEx(ref windowClass) == 0)
                 {
-                    // A class left behind by a previous run is usable as it is: the name, the instance and the
-                    // window procedure are the same ones this call would have registered. Refusing here is what made
-                    // a restart of the listener fail with ERROR_CLASS_ALREADY_EXISTS.
-                    int error = Marshal.GetLastWin32Error();
-                    if (error != ErrorClassAlreadyExists)
-                    {
-                        _error = $"RegisterClassEx failed ({error})";
-                        return;
-                    }
+                    // The name is unique to this instance, so an existing class is not ours and its window procedure
+                    // belongs to someone else's delegate: never reuse it.
+                    _error = $"RegisterClassEx failed ({Marshal.GetLastWin32Error()})";
+                    return;
                 }
 
                 registered = true;
 
-                _hwnd = CreateWindowEx(0, ClassName, "", 0, 0, 0, 0, 0, HwndMessage, IntPtr.Zero, instance, IntPtr.Zero);
+                _hwnd = CreateWindowEx(0, _className, "", 0, 0, 0, 0, 0, HwndMessage, IntPtr.Zero, instance, IntPtr.Zero);
                 if (_hwnd == IntPtr.Zero)
                 {
                     _error = $"CreateWindowEx failed ({Marshal.GetLastWin32Error()})";
@@ -858,7 +862,7 @@ public sealed class WindowsNitroKeyListener : INitroKeyListener
                 // Dispose: by the time the loop has ended the window is destroyed and the unregister succeeds.
                 if (registered)
                 {
-                    try { UnregisterClass(ClassName, instance); }
+                    try { UnregisterClass(_className, instance); }
                     catch { /* the class is already gone */ }
                 }
 

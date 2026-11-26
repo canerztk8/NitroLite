@@ -118,7 +118,7 @@ public static class AppLog
             var path = LogFile;
             if (!File.Exists(path)) return null;
 
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream, Encoding.UTF8);
             return reader.ReadToEnd();
         }
@@ -178,6 +178,16 @@ public static class AppLog
         try
         {
             var info = new FileInfo(path);
+
+            // The handle is opened with FileShare.Delete, so another process may have rotated the log from under it.
+            // A missing file, or one shorter than this writer's position, is no longer the file this handle writes to:
+            // reopen, or every later line goes into the moved-aside copy.
+            if (_writer != null && (!info.Exists || info.Length < WriterPosition()))
+            {
+                CloseWriter();
+                return false;
+            }
+
             if (!info.Exists || info.Length <= MaxLogBytes) return false;
 
             // The handle has to be closed before the file can be moved on Windows.
@@ -195,6 +205,12 @@ public static class AppLog
         }
     }
 
+    private static long WriterPosition()
+    {
+        try { return _writer?.BaseStream.Position ?? 0; }
+        catch { return 0; }
+    }
+
     private static StreamWriter? OpenWriter(string path)
     {
         try
@@ -203,7 +219,7 @@ public static class AppLog
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
             var stream = new FileStream(
-                path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite, bufferSize: 4096, FileOptions.None);
+                path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete, bufferSize: 4096, FileOptions.None);
 
             // The log carries the machine name and the paths the app touched, so on Linux it is owner-only. The
             // umask would otherwise leave it at 0644.

@@ -71,20 +71,21 @@ public static partial class Redaction
     /// <summary>
     /// The text with every user profile folder and the machine name replaced. Null and empty pass through.
     /// </summary>
-    public static string Scrub(string? text)
+    public static string Scrub(string? text) => Scrub(text, CurrentUserName());
+
+    internal static string Scrub(string? text, string? userName)
     {
         if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
 
         // Every path pattern is anchored on a separator: "C:\Users\", "/home/", "/Users/". A line with neither
-        // character in it cannot contain a path at all, so the three regex passes are skipped for the lines that make
-        // up most of the log. The machine name is still replaced — it needs no separator, and that check is a plain
-        // scan.
-        if (!text.Contains('\\') && !text.Contains('/')) return ScrubMachineName(text);
+        // character in it cannot contain a path, so the three regex passes are skipped for it. The machine and
+        // account names need no separator ("account 'jdoe' rejected"), so they are always scrubbed.
+        if (!text.Contains('\\') && !text.Contains('/')) return ScrubUserName(ScrubMachineName(text), userName);
 
         var result = WindowsProfile().Replace(text, "${drive}" + UserPlaceholder);
         result = UnixProfile().Replace(result, "${root}" + UserPlaceholder);
         result = MacProfile().Replace(result, "${root}" + UserPlaceholder);
-        return ScrubMachineName(result);
+        return ScrubUserName(ScrubMachineName(result), userName);
     }
 
     /// <summary>
@@ -195,5 +196,48 @@ public static partial class Redaction
         if (machine.Length < MinimumMachineNameLength) return text;
 
         return text.Replace(machine, MachinePlaceholder, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Shortest account name that is replaced: a one- or two-letter name would mangle ordinary words.</summary>
+    private const int MinimumUserNameLength = 3;
+
+    /// <summary>
+    /// Account names that are ordinary words or brand names. Replacing them would mangle paths and model names
+    /// ("Windows", "Predator") for no privacy gain.
+    /// </summary>
+    private static readonly HashSet<string> CommonUserNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "user", "admin", "administrator", "owner", "guest", "public", "default",
+        "acer", "nitro", "predator", "windows", "system"
+    };
+
+    /// <summary>
+    /// The text with the signed-in account name replaced by <see cref="UserPlaceholder"/>, wherever it stands alone:
+    /// <c>DOMAIN\name</c>, <c>name@domain</c> and a bare name (for example in a quoted account). Whole word,
+    /// case-insensitive. The path scrub only covers the profile folder, so a name in a message survived it.
+    /// </summary>
+    public static string ScrubUserName(string? text) => ScrubUserName(text, CurrentUserName());
+
+    internal static string ScrubUserName(string? text, string? userName)
+    {
+        if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+        if (userName == null || userName.Trim().Length < MinimumUserNameLength) return text;
+        if (CommonUserNames.Contains(userName.Trim())) return text;
+
+        // Not inside a word, and not inside an existing placeholder.
+        var pattern = @"(?<![\p{L}\p{N}_<])" + Regex.Escape(userName.Trim()) + @"(?![\p{L}\p{N}_>])";
+        return Regex.Replace(text, pattern, UserPlaceholder, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static string? CurrentUserName()
+    {
+        try
+        {
+            return Environment.UserName;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

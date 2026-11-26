@@ -112,7 +112,9 @@ public partial class App : Application, IDisposable
             {
                 _nitroGate = new NitroKeyActivationGate(() => _host?.ViewModel.NitroKeyEnabled == true, ShowWindow);
                 _nitroKey.NitroKeyPressed += OnNitroKeyPressed;
-                if (_host.ViewModel.NitroKeyEnabled) StartNitroKeyInBackground();
+                // Windows can stop and start the listener again; the Linux one closes its devices on Stop.
+                _nitroKeySwitch = new NitroKeyListenerSwitch(_nitroKey, canRestart: OperatingSystem.IsWindows());
+                _nitroKeySwitch.Apply(_host.ViewModel.NitroKeyEnabled);
             }
 
             // On a model whose button the Acer service stack owns, NitroSense coming to the front is the only signal
@@ -449,34 +451,12 @@ public partial class App : Application, IDisposable
         if (e.PropertyName is nameof(MainViewModel.NitroKeyEnabled) or nameof(MainViewModel.RedirectNitroSenseEnabled))
             SyncNitroSenseWatcher();
 
-        if (e.PropertyName == nameof(MainViewModel.NitroKeyEnabled) && _host?.ViewModel.NitroKeyEnabled == true)
-            StartNitroKeyInBackground();
+        if (e.PropertyName == nameof(MainViewModel.NitroKeyEnabled) && _host != null)
+            _nitroKeySwitch?.Apply(_host.ViewModel.NitroKeyEnabled);
     }
 
-    /// <summary>True once the key listener has been asked to start, so a switch flipped twice does not start it twice.</summary>
-    private bool _nitroKeyStartRequested;
-
-    /// <summary>
-    /// Starts the Nitro-key listener on the thread pool. Its probe is a WMI walk with no timeout of its own, and the
-    /// caller is the UI thread; a failure is logged rather than thrown into a fire-and-forget task.
-    /// </summary>
-    private void StartNitroKeyInBackground()
-    {
-        if (_nitroKey is not { } listener || _nitroKeyStartRequested) return;
-        _nitroKeyStartRequested = true;
-
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                listener.Start();
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warn("The Nitro key listener could not be started", ex.Message);
-            }
-        });
-    }
+    /// <summary>Starts and stops the key listener with its setting; created with the listener.</summary>
+    private NitroKeyListenerSwitch? _nitroKeySwitch;
 
 #if WINDOWS
     /// <summary>True while this App is subscribed to the operating system's power events.</summary>

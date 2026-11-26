@@ -418,7 +418,8 @@ public class CapabilityProbeTests
 
         var profile = catalog.Match(Identity("AN16-41"));
         Assert.Equal("an16-41-tuned", profile.Id);
-        Assert.True(profile.Sensors.Verified);
+        // A user file cannot vouch for its own sensors; only the embedded table may.
+        Assert.False(profile.Sensors.Verified);
         Assert.Equal(new[] { "GetGamingFanTable" }, profile.UnsupportedMethods);
     }
 

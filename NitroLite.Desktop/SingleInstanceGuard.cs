@@ -637,7 +637,7 @@ public sealed class SingleInstanceGuard : IDisposable
     {
         try
         {
-            File.WriteAllText(WakeFilePath, DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture));
+            AtomicFile.WriteAllText(WakeFilePath, DateTime.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture));
             return true;
         }
         catch (Exception ex)

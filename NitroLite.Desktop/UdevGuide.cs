@@ -45,7 +45,7 @@ public static class UdevGuide
             var rule = reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal);
 
             var path = AppPaths.GetDataFile(RuleFileName);
-            if (!File.Exists(path) || File.ReadAllText(path) != rule) File.WriteAllText(path, rule);
+            if (!File.Exists(path) || File.ReadAllText(path) != rule) AtomicFile.WriteAllText(path, rule);
             return path;
         }
         catch (Exception ex)

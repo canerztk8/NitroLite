@@ -286,17 +286,24 @@ public sealed class ReadBackPolicy
     /// writes a percentage or a colour already puts the value in its own log line; the note uses it to say what was
     /// asked for when the answer disagreed.
     /// </param>
+    /// <param name="mismatchCounts">
+    /// Optional. Called with a read-back that did not match; false means this disagreement is reported and the capability
+    /// is switched off for the session, but it is not counted toward the permanent disable. Used for a leg of a write
+    /// whose read-back has never been measured on real hardware (the GPU fan). Null means every mismatch counts.
+    /// </param>
     public async Task<ReadBackResult> ApplyAsync<T>(
         string capability,
         Func<Task<bool>> write,
         Func<Task<T?>> readBack,
         Func<T, bool> matches,
-        string requested = "") where T : struct
+        string requested = "",
+        Func<T, bool>? mismatchCounts = null) where T : struct
     {
         if (IsDisabled(capability)) return ReadBackResult.AlreadyDisabled();
 
         var lastError = "";
         var lastObserved = "";
+        var lastCounts = true;
         for (int attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             try
@@ -304,6 +311,7 @@ public sealed class ReadBackPolicy
                 if (!await write().ConfigureAwait(false))
                 {
                     lastError = "the write was refused";
+                    lastCounts = true;
                 }
                 else
                 {
@@ -328,6 +336,7 @@ public sealed class ReadBackPolicy
                     }
 
                     lastObserved = observed.HasValue ? Show(observed.Value) : "";
+                    lastCounts = !observed.HasValue || mismatchCounts is null || mismatchCounts(observed.Value);
                     lastError = observed.HasValue
                         ? $"read-back returned {Show(observed.Value)}, which is not the value that was written"
                         : "read-back returned nothing";
@@ -353,10 +362,11 @@ public sealed class ReadBackPolicy
             catch (Exception ex)
             {
                 lastError = $"{ex.GetType().Name}: {ex.Message}";
+                lastCounts = true;
             }
         }
 
-        return Fail(capability, lastError, lastObserved, requested);
+        return Fail(capability, lastError, lastObserved, requested, lastCounts);
     }
 
     /// <summary>
@@ -473,7 +483,7 @@ public sealed class ReadBackPolicy
     /// <summary>
     /// Records a failed session and decides whether the capability is now off for the session or for good.
     /// </summary>
-    private ReadBackResult Fail(string capability, string error, string observed = "", string requested = "")
+    private ReadBackResult Fail(string capability, string error, string observed = "", string requested = "", bool countsTowardDisable = true)
     {
         if (_confirmedThisSession.Contains(capability))
         {
@@ -510,8 +520,9 @@ public sealed class ReadBackPolicy
         // and cannot fail in a way the write path would see.
         _diagnostics?.ReadBackMismatch(capability);
 
-        // One increment per session, however many writes failed inside it.
-        if (_countedThisSession.Add(capability))
+        // One increment per session, however many writes failed inside it. A mismatch the caller marked as
+        // not counting is reported and disables the session, but never moves the permanent-disable counter.
+        if (countsTowardDisable && _countedThisSession.Add(capability))
         {
             var count = ConsecutiveSessionFailures(capability) + 1;
             _settings.CapabilitySessionFailures[capability] = count;

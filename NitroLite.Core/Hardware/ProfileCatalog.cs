@@ -268,10 +268,14 @@ public sealed class ProfileCatalog
 
         // The user file is parsed first so its profiles win a tie: someone who wrote one is trying to correct the
         // shipped table for their own machine.
+        var embedded = new List<ModelProfile>();
+        if (!string.IsNullOrWhiteSpace(embeddedJson))
+            embedded = ParseDocument(embeddedJson!, "profiles.json", EmbeddedOrigin, rejections, ref defaultSensors);
+
         if (!string.IsNullOrWhiteSpace(userJson))
         {
             var parsed = ParseDocument(userJson!, "profiles.user.json", UserOrigin, rejections, ref defaultSensors);
-            profiles.AddRange(parsed);
+            profiles.AddRange(parsed.Select(p => DowngradeUnconfirmed(p, embedded)));
         }
 
         // The downloaded table is newer than the embedded one but older than anything the user wrote.
@@ -279,17 +283,33 @@ public sealed class ProfileCatalog
         {
             var parsed = ParseDocument(
                 remoteJson!, "profiles.remote.json", RemoteOrigin, rejections, ref defaultSensors);
-            profiles.AddRange(parsed);
+            profiles.AddRange(parsed.Select(p => DowngradeUnconfirmed(p, embedded)));
         }
 
-        if (!string.IsNullOrWhiteSpace(embeddedJson))
-        {
-            var parsed = ParseDocument(embeddedJson!, "profiles.json", EmbeddedOrigin, rejections, ref defaultSensors);
-            profiles.AddRange(parsed);
-        }
+        profiles.AddRange(embedded);
 
         return new ProfileCatalog(profiles, rejections, defaultSensors);
     }
+
+    /// <summary>
+    /// "verified" skips the live sensor probe, so a non-embedded profile keeps the claim only when the embedded table
+    /// has a verified profile with the same id and exactly the same sensor ids. Anything else (unknown id, changed
+    /// ids) is data an attacker or a bad edit can change, and loses the flag.
+    /// </summary>
+    private static ModelProfile DowngradeUnconfirmed(ModelProfile profile, List<ModelProfile> embedded)
+    {
+        if (!profile.Sensors.Verified) return profile;
+
+        var reference = embedded.FirstOrDefault(e => e.Id == profile.Id && e.Sensors.Verified);
+        if (reference != null && SameSensorIds(reference.Sensors, profile.Sensors)) return profile;
+
+        return profile with { Sensors = profile.Sensors with { Verified = false } };
+    }
+
+    private static bool SameSensorIds(SensorLayout a, SensorLayout b) =>
+        a.CpuTempSensor == b.CpuTempSensor && a.GpuTempSensor == b.GpuTempSensor &&
+        a.Sys1TempSensor == b.Sys1TempSensor && a.CpuFanRpmSensor == b.CpuFanRpmSensor &&
+        a.GpuFanRpmSensor == b.GpuFanRpmSensor;
 
     private static List<ModelProfile> ParseDocument(
         string json, string fileName, string origin, List<string> rejections, ref SensorLayout defaultSensors)
@@ -331,7 +351,7 @@ public sealed class ProfileCatalog
 
         if (rootObject["defaultSensorLayout"] is JsonObject layoutNode)
         {
-            var layout = ParseSensors(layoutNode, fileName, rejections);
+            var layout = ParseSensors(layoutNode, fileName, origin, rejections);
             if (layout != null) defaultSensors = layout;
         }
 
@@ -424,7 +444,7 @@ public sealed class ProfileCatalog
         var sensors = defaultSensors;
         if (node["sensors"] is JsonObject sensorNode)
         {
-            var parsed = ParseSensors(sensorNode, fileName, rejections);
+            var parsed = ParseSensors(sensorNode, fileName, origin, rejections, keepVerifiedClaim: true);
             if (parsed == null)
             {
                 rejections.Add($"{fileName}: {label} sensör düzeni geçersiz");
@@ -482,7 +502,8 @@ public sealed class ProfileCatalog
         };
     }
 
-    private static SensorLayout? ParseSensors(JsonObject node, string fileName, List<string> rejections)
+    private static SensorLayout? ParseSensors(
+        JsonObject node, string fileName, string origin, List<string> rejections, bool keepVerifiedClaim = false)
     {
         var unknown = node.Select(p => p.Key)
             .Where(k => k is not ("cpuTempSensor" or "cpuFanRpmSensor" or "sys1TempSensor" or "gpuFanRpmSensor"
@@ -501,7 +522,9 @@ public sealed class ProfileCatalog
             Sys1TempSensor = ReadInt(node, "sys1TempSensor") ?? AcerSensorIds.SystemTemperature,
             GpuFanRpmSensor = ReadInt(node, "gpuFanRpmSensor") ?? AcerSensorIds.GpuFanSpeed,
             GpuTempSensor = ReadInt(node, "gpuTempSensor") ?? AcerSensorIds.GpuTemperature,
-            Verified = ReadBool(node, "verified") ?? false,
+            // "verified" skips the live sensor probe. Only the embedded table may claim it outright; a profile from
+            // another source carries the claim to Build, which keeps it only if it matches the embedded record.
+            Verified = (origin == EmbeddedOrigin || keepVerifiedClaim) && (ReadBool(node, "verified") ?? false),
             Supported = ReadBool(node, "supported") ?? true
         };
 

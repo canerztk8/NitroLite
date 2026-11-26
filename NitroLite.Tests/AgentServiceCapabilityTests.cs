@@ -250,6 +250,18 @@ public class AgentServiceCapabilityTests
         Assert.Equal((FanMode.Custom, 30, 80), agent.LastFanWrite);
     }
 
+    [Fact]
+    public async Task FanWrite_MinusOne_UsesTheSavedSpeedsHandedToTheController()
+    {
+        var agent = new FakeAgent { Fans = new[] { new AgentFan(0, "CPU", 0, 100), new AgentFan(1, "GPU", 0, 100) } };
+        using var controller = new AgentHardwareController(agent, new FakeCareCenter(), customFanDefaults: () => (70, 65));
+
+        await controller.SetFanModeAsync(FanMode.Custom);
+
+        Assert.Equal((FanMode.Custom, 70, 65), agent.LastFanWrite);
+        Assert.Equal((70, 65), agent.SavedCustomFanPercents());
+    }
+
     // ---------------------------------------------------------------- per-session capability cache
 
     [Fact]

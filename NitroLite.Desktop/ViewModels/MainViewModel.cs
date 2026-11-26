@@ -1132,8 +1132,38 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>True once the promotion has been logged, so the log carries it once per session rather than per tick.</summary>
     private bool _sensorTrustLogged;
 
-    /// <summary>Telemetry ticks since the window opened. Game detection runs on every other one.</summary>
+    /// <summary>
+    /// Telemetry ticks since the window opened. Only for the schedules that are deliberately per tick (mouse figure,
+    /// mode read-back, crash-record retry). Anything with a real period uses <see cref="PeriodElapsed"/>, because the
+    /// tick is 0.5 s with the overlay, 1 s on screen and 5 s in the tray.
+    /// </summary>
     private int _tick;
+
+    private const long Unscheduled = long.MinValue;
+
+    /// <summary>Game detection runs every <see cref="GamePollPeriodMs"/> of <see cref="FanClock"/> time, whatever the tick is.</summary>
+    private const long GamePollPeriodMs = 5_000;
+
+    private long _lastGamePollMs = Unscheduled;
+
+    /// <summary>
+    /// True when <paramref name="periodMs"/> has passed since the last time this returned true for
+    /// <paramref name="last"/>; the first call only starts the clock, like the tick counter it replaces. A quarter
+    /// second of slack lets a 1 s tick that arrives a few milliseconds early still count as the fifth one.
+    /// </summary>
+    private bool PeriodElapsed(ref long last, long periodMs)
+    {
+        long now = FanClock();
+        if (last == Unscheduled)
+        {
+            last = now;
+            return false;
+        }
+
+        if (now - last < periodMs - 250) return false;
+        last = now;
+        return true;
+    }
 
     private ShellLabels _labels = new();
     private string _status = "";
@@ -8071,11 +8101,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(ReactiveLightingNow));
             TickReactiveLighting(data);
 
-            // Game detection runs on the same tick as telemetry, every five seconds. It was every other second,
+            // Game detection runs on the telemetry tick but is paced by elapsed time (PeriodElapsed), so the window being
+            // in the tray (5 s tick) does not stretch it to 25 s. It was every other second,
             // which on a desktop with a few hundred processes is the most expensive periodic thing in the app: the
             // scan builds one Process per process and opens a handle on each, and a measured session paid ~1.5 % of
             // a core for it. Five seconds still notices a game before its first loading screen is over.
-            if (++_tick % 5 == 0) await PollGameAsync().ConfigureAwait(true);
+            _tick++;
+            if (PeriodElapsed(ref _lastGamePollMs, GamePollPeriodMs)) await PollGameAsync().ConfigureAwait(true);
 
             // The rail's mouse figure is asked of the mouse itself now and then, so a config changed from ATK Hub or a
             // switch the app made through another path cannot leave it showing an old number.

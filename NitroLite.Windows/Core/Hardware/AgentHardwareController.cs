@@ -33,10 +33,16 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
     /// Wraps the two clients. The controller takes ownership of <paramref name="agent"/> and disposes it; the
     /// Care Center client holds no connection of its own and is left alone.
     /// </summary>
-    public AgentHardwareController(AcerAgentClient agent, CareCenterClient careCenter)
+    public AgentHardwareController(
+        AcerAgentClient agent,
+        CareCenterClient careCenter,
+        Func<(int Cpu, int Gpu)>? customFanDefaults = null)
     {
         _agent = agent ?? throw new ArgumentNullException(nameof(agent));
         _careCenter = careCenter ?? throw new ArgumentNullException(nameof(careCenter));
+
+        // The saved custom speeds a -1 request means, the same source the WMI controller reads.
+        if (customFanDefaults != null) _agent.CustomFanDefaults = customFanDefaults;
     }
 
     /// <summary>The client behind this backend, for the call sites that still need its events.</summary>
@@ -249,8 +255,12 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
             if (fans is { Count: > 0 })
             {
                 // A negative value means "the client's stored speed"; resolve it here so the stored speed is clamped too.
-                if (cpuPercent < 0) cpuPercent = _agent.CustomFanCpuPercent;
-                if (gpuPercent < 0) gpuPercent = _agent.CustomFanGpuPercent;
+                if (cpuPercent < 0 || gpuPercent < 0)
+                {
+                    var saved = _agent.SavedCustomFanPercents();
+                    if (cpuPercent < 0) cpuPercent = saved.Cpu;
+                    if (gpuPercent < 0) gpuPercent = saved.Gpu;
+                }
                 cpuPercent = ClampToFan(fans, "CPU", 0, cpuPercent);
                 gpuPercent = ClampToFan(fans, "GPU", 1, gpuPercent);
             }

@@ -19,6 +19,8 @@ public class SchoolModeServiceTests
         public List<(Guid SubGroup, Guid Setting, uint Value)> Writes { get; } = new();
         public bool FailWrites { get; set; }
         public bool FailReads { get; set; }
+        public (Guid SubGroup, Guid Setting)? FailOnly { get; set; }
+        public Guid? ActiveScheme { get; set; }
 
         public bool TryReadDc(Guid subGroup, Guid setting, out uint value)
         {
@@ -32,7 +34,7 @@ public class SchoolModeServiceTests
 
         public bool TryWriteDc(Guid subGroup, Guid setting, uint value)
         {
-            if (FailWrites) return false;
+            if (FailWrites || FailOnly == (subGroup, setting)) return false;
             Values[(subGroup, setting)] = value;
             Writes.Add((subGroup, setting, value));
             return true;
@@ -232,6 +234,54 @@ public class SchoolModeServiceTests
         await h.Service.DisableAsync();
 
         Assert.False(h.BackupExists);
+    }
+
+    [Fact]
+    public async Task DisableAsync_WhenARestoreStepFails_KeepsTheUndoRecordSoItCanBeRetried()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        await h.Service.EnableAsync();
+        h.Scheme.FailWrites = true;
+
+        var outcome = await h.Service.DisableAsync();
+
+        Assert.False(outcome.Success);
+        Assert.False(h.Settings.SchoolModeEnabled);
+        Assert.True(h.BackupExists, "a failed restore must not throw the undo record away");
+
+        // The next start finds the record while school mode is off and finishes the job.
+        h.Scheme.FailWrites = false;
+        Assert.True(await h.Service.RecoverOrphanedBackupAsync());
+        Assert.All(SchoolModeService.PowerSettings, s => Assert.Equal(55u, h.Scheme.Values[(s.SubGroup, s.Setting)]));
+        Assert.False(h.BackupExists);
+    }
+
+    [Fact]
+    public async Task RecoverOrphanedBackupAsync_WhenARestoreStepFails_KeepsTheRecord()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        await h.Service.EnableAsync();
+        h.Settings.SchoolModeEnabled = false; // a run that died before saving the setting
+        h.Scheme.FailWrites = true;
+
+        await h.Service.RecoverOrphanedBackupAsync();
+
+        Assert.True(h.BackupExists);
+    }
+
+    [Fact]
+    public async Task EnableAsync_AfterAFailedSwitchOff_KeepsTheOriginalValuesInTheRecord()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        await h.Service.EnableAsync();
+        h.Scheme.FailWrites = true;
+        await h.Service.DisableAsync();
+        h.Scheme.FailWrites = false;
+
+        // The machine still holds school-mode values; recording them as "previous" would lose the real ones.
+        await h.Service.EnableAsync();
+
+        Assert.All(h.ReadBackup()!.PowerSettings, saved => Assert.Equal(55u, saved.PreviousDc));
     }
 
     [Fact]
@@ -592,5 +642,139 @@ public class SchoolModeServiceTests
             Assert.True(scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint after));
             Assert.Equal(before, after);
         }
+    }
+
+    // ---------------------------------------------------------------- recovery that can never fully succeed
+
+    private static (Guid SubGroup, Guid Setting) FirstSetting() =>
+        (SchoolModeService.PowerSettings[0].SubGroup, SchoolModeService.PowerSettings[0].Setting);
+
+    [Fact]
+    public async Task RecoverOrphanedBackupAsync_AStepThatAlwaysFails_IsGivenUpAfterThreeStartsAndDoneStepsAreNotRewritten()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        await h.Service.EnableAsync();
+        h.Settings.SchoolModeEnabled = false; // a run that died before saving the setting
+        h.Scheme.FailOnly = FirstSetting();
+        int modeWrites = h.Agent.Attempts.Count;
+
+        Assert.True(await h.Service.RecoverOrphanedBackupAsync()); // start 1
+        int brightnessAfterFirst = h.Brightness.SetCalls;
+        int powerWritesAfterFirst = h.Scheme.Writes.Count;
+        var kept = h.ReadBackup();
+        Assert.NotNull(kept);
+        Assert.Single(kept!.PowerSettings);
+        Assert.Equal(1, kept.RecoveryAttempts);
+        Assert.NotNull(kept.FirstFailureUtc);
+        Assert.Equal(modeWrites + 1, h.Agent.Attempts.Count);
+
+        await h.Service.RecoverOrphanedBackupAsync(); // start 2
+        Assert.True(h.BackupExists);
+        Assert.Equal(2, h.ReadBackup()!.RecoveryAttempts);
+
+        await h.Service.RecoverOrphanedBackupAsync(); // start 3: limit reached
+        Assert.False(h.BackupExists);
+
+        Assert.Equal(brightnessAfterFirst, h.Brightness.SetCalls);
+        Assert.Equal(powerWritesAfterFirst, h.Scheme.Writes.Count);
+        Assert.Equal(modeWrites + 1, h.Agent.Attempts.Count);
+    }
+
+    [Fact]
+    public async Task DisableAsync_WhenThePowerPlanIsGone_DropsThatStepAtOnceAndDeletesTheRecord()
+    {
+        var planA = Guid.NewGuid();
+        var h = new Harness().WithPreviousValues(previous: 55);
+        h.Scheme.ActiveScheme = planA;
+        await h.Service.EnableAsync();
+        h.Scheme.ActiveScheme = Guid.NewGuid(); // plan A was deleted
+        int writes = h.Scheme.Writes.Count;
+
+        var outcome = await h.Service.DisableAsync();
+
+        Assert.False(outcome.Success);
+        Assert.Equal(writes, h.Scheme.Writes.Count);
+        Assert.False(h.BackupExists, "a deleted plan can never be restored; the step must not be kept");
+    }
+
+    [Fact]
+    public async Task RecoverOrphanedBackupAsync_WhenThePowerPlanIsGone_NeverRetriesIt()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        h.Scheme.ActiveScheme = Guid.NewGuid();
+        await h.Service.EnableAsync();
+        h.Settings.SchoolModeEnabled = false;
+        h.Scheme.ActiveScheme = Guid.NewGuid();
+        h.Brightness.Current = 20;
+
+        Assert.True(await h.Service.RecoverOrphanedBackupAsync());
+
+        Assert.False(h.BackupExists);
+        Assert.False(await h.Service.RecoverOrphanedBackupAsync());
+    }
+
+    [Fact]
+    public async Task RecoverOrphanedBackupAsync_SevenDaysAfterTheFirstFailure_DeletesTheRecordWithoutWriting()
+    {
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var h = new Harness().WithPreviousValues(previous: 55);
+        h.Service.UtcNow = () => now;
+        await h.Service.EnableAsync();
+        h.Settings.SchoolModeEnabled = false;
+        h.Scheme.FailOnly = FirstSetting();
+        await h.Service.RecoverOrphanedBackupAsync();
+        Assert.True(h.BackupExists);
+        int brightness = h.Brightness.SetCalls;
+        int modes = h.Agent.Attempts.Count;
+
+        now = now.AddDays(7).AddMinutes(1);
+        bool recovered = await h.Service.RecoverOrphanedBackupAsync();
+
+        Assert.False(recovered);
+        Assert.False(h.BackupExists);
+        Assert.Equal(brightness, h.Brightness.SetCalls);
+        Assert.Equal(modes, h.Agent.Attempts.Count);
+    }
+
+    [Fact]
+    public async Task RecoverOrphanedBackupAsync_AnOldRecordWithoutTheCounterFields_StillLoadsAndCountsFromZero()
+    {
+        var h = new Harness();
+        var setting = SchoolModeService.PowerSettings[0];
+        h.Scheme.FailOnly = FirstSetting();
+        File.WriteAllText(h.Service.BackupPath!, "{\"PowerSettings\":[{\"SubGroup\":\"" + setting.SubGroup + "\",\"Setting\":\""
+            + setting.Setting + "\",\"PreviousDc\":55}],\"Mode\":0,\"Fan\":0,\"LightingWasOn\":false,"
+            + "\"EnabledUtc\":\"2020-01-01T00:00:00Z\"}");
+
+        Assert.True(await h.Service.RecoverOrphanedBackupAsync());
+
+        var kept = h.ReadBackup();
+        Assert.NotNull(kept);
+        Assert.Equal(1, kept!.RecoveryAttempts);
+        Assert.Single(kept.PowerSettings);
+    }
+
+    [Fact]
+    public async Task EnableAsync_WithAKeptRecord_TakesOnlyThePendingFieldsFromIt()
+    {
+        var h = new Harness().WithPreviousValues(previous: 55);
+        await h.Service.EnableAsync();
+        h.Scheme.FailOnly = FirstSetting();
+        await h.Service.DisableAsync(); // restores everything but the first power setting
+        h.Scheme.FailOnly = null;
+
+        // The user has moved on since: new brightness, new mode. The one pending power value is still the old one.
+        h.Brightness.Current = 33;
+        h.Service.GetCurrentOperatingMode = () => OperatingMode.Quiet;
+
+        await h.Service.EnableAsync();
+
+        var record = h.ReadBackup()!;
+        Assert.Equal(33, record.Brightness);
+        Assert.Equal(OperatingMode.Quiet, record.Mode);
+        Assert.False(record.ModeRestored);
+        Assert.Equal(0, record.RecoveryAttempts);
+        Assert.All(record.PowerSettings, saved => Assert.Equal(55u, saved.PreviousDc));
+        Assert.Equal(SchoolModeService.PowerSettings.Count, record.PowerSettings.Count);
     }
 }

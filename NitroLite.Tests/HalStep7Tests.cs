@@ -886,7 +886,7 @@ public class HalStep7Tests
         Assert.Empty(rejections);
         var profile = catalog.Profiles.Single(p => p.Id == "my-nitro");
         Assert.True(profile.Sensors.Supported);
-        Assert.True(profile.Sensors.Verified);
+        Assert.False(profile.Sensors.Verified); // a user file cannot vouch for its sensors
         Assert.Equal(11, profile.Sensors.CpuTempSensor);
         Assert.Equal(12, profile.Sensors.GpuTempSensor);
         Assert.Equal(13, profile.Sensors.Sys1TempSensor);

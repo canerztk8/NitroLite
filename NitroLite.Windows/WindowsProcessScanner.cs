@@ -152,6 +152,9 @@ public sealed class WindowsProcessScanner : IProcessScanner
             return entries;
         }
 
+        int unreadable = 0;
+        string? sample = null;
+
         foreach (var process in processes)
         {
             using (process)
@@ -167,12 +170,45 @@ public sealed class WindowsProcessScanner : IProcessScanner
                 catch (Exception ex)
                 {
                     // A process that vanished mid-enumeration is normal, not an error worth a log line per process.
-                    AppLog.Warn("Process could not be read", ex.Message);
+                    unreadable++;
+                    sample ??= ex.Message;
                 }
             }
         }
 
+        ReportUnreadable(unreadable, sample);
         return entries;
+    }
+
+    private int _lastUnreadable;
+    private DateTime? _lastUnreadableWarning;
+
+    /// <summary>The summary line is written at most this often, whatever the count does in between.</summary>
+    internal static readonly TimeSpan UnreadableWarningInterval = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// One summary line per scan at most, only when the count changed since the last scan, and at most one line per
+    /// <see cref="UnreadableWarningInterval"/>: the game poll scans every few seconds, and a count that wobbles between
+    /// scans used to write a line each time. The first line is written immediately; a change inside the interval is
+    /// picked up by the first scan after it. Returns true when a line was written.
+    /// </summary>
+    internal bool ReportUnreadable(int count, string? sample) => ReportUnreadable(count, sample, DateTime.UtcNow);
+
+    internal bool ReportUnreadable(int count, string? sample, DateTime nowUtc)
+    {
+        if (count == _lastUnreadable) return false;
+        if (count == 0)
+        {
+            _lastUnreadable = 0;
+            return false;
+        }
+
+        if (_lastUnreadableWarning is { } last && nowUtc - last < UnreadableWarningInterval) return false;
+
+        _lastUnreadable = count;
+        _lastUnreadableWarning = nowUtc;
+        AppLog.Warn("Some processes could not be read", $"{count} unreadable (first error: {sample})");
+        return true;
     }
 
     /// <summary>

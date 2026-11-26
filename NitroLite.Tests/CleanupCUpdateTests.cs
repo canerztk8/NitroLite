@@ -125,13 +125,32 @@ public class CleanupCUpdateTests : IDisposable
     }
 
     [Fact]
-    public void AGarbledMarker_CountsAsZero_AndNeverTriggersARollback()
+    public void AGarbledMarker_GetsOneMoreTry_ThenTheRollbackHappens()
     {
+        // A torn write leaves a marker that does not parse. Reading it as zero would restart the count forever on a
+        // build that never starts; it counts as one short of the limit instead, so a build that works gets one more
+        // start and one that does not is still rolled back.
         InstallAnUpdate();
         File.WriteAllText(Marker, "not a number");
 
         Assert.Equal(PendingUpdateState.Pending, UpdateService.RecordStartupAttempt(Install));
         Assert.Equal("new exe", File.ReadAllText(Exe));
+        Assert.Equal("2", File.ReadAllText(Marker).Trim());
+
+        Assert.Equal(PendingUpdateState.RolledBack, UpdateService.RecordStartupAttempt(Install));
+        Assert.Equal("old exe", File.ReadAllText(Exe));
+    }
+
+    [Fact]
+    public void ThePendingMarker_IsWrittenThroughAtomicFile()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "NitroLite.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var source = File.ReadAllText(Path.Combine(dir!.FullName, "NitroLite.Core", "UpdateService.cs"));
+
+        Assert.Matches(new System.Text.RegularExpressions.Regex(
+            @"AtomicFile\.WriteAllText\(PendingMarkerPath\(installDirectory\)"), source);
     }
 
     [Fact]

@@ -245,6 +245,48 @@ public static class UpdateService
         throw new HttpRequestException($"The server redirected more than {MaxRedirects} times.");
     }
 
+    /// <summary>Largest release-metadata answer the updater will read. The real one is a few tens of kilobytes.</summary>
+    internal const int MaxMetadataBytes = 1024 * 1024;
+
+    /// <summary>
+    /// Reads a release-metadata answer with a byte cap, so a hostile or broken server cannot make the check buffer
+    /// without limit. Throws <see cref="InvalidDataException"/> past the cap.
+    /// </summary>
+    internal static Task<JsonDocument> ReadMetadataAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        => ReadMetadataAsync(response, MetadataReadTimeout, cancellationToken);
+
+    /// <summary>
+    /// How long the body of a metadata answer may take. <see cref="HttpClient.Timeout"/> only covers the headers
+    /// when the response is read with <see cref="HttpCompletionOption.ResponseHeadersRead"/>, so the body gets its
+    /// own deadline. (The client is shared with the package download, which must not be capped at 30 s.)
+    /// </summary>
+    internal static readonly TimeSpan MetadataReadTimeout = TimeSpan.FromSeconds(30);
+
+    internal static async Task<JsonDocument> ReadMetadataAsync(
+        HttpResponseMessage response, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        if (response.Content.Headers.ContentLength is > MaxMetadataBytes)
+            throw new InvalidDataException($"The release answer is larger than {MaxMetadataBytes} bytes.");
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        string? text;
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+            text = await NitroLite.Core.Hardware.RemoteProfiles.ReadBoundedAsync(stream, MaxMetadataBytes, deadline.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && deadline.IsCancellationRequested)
+        {
+            throw new TaskCanceledException($"The release answer did not arrive within {timeout.TotalSeconds:0} s.");
+        }
+
+        if (text == null)
+            throw new InvalidDataException($"The release answer is larger than {MaxMetadataBytes} bytes.");
+        return JsonDocument.Parse(text);
+    }
+
     /// <summary>
     /// Asks GitHub for the newest release. Returns null when this build is already current, when the release has no
     /// package for this platform, or when the answer cannot be understood. Network failures throw, so the caller can
@@ -262,11 +304,10 @@ public static class UpdateService
     /// </summary>
     public static async Task<UpdateInfo?> CheckAsync(string assetSuffix, CancellationToken cancellationToken = default)
     {
-        using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseContentRead, cancellationToken)
+        using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var document = await ReadMetadataAsync(response, cancellationToken).ConfigureAwait(false);
         return ParseRelease(document.RootElement, CurrentVersion, assetSuffix);
     }
 
@@ -287,7 +328,7 @@ public static class UpdateService
         UpdateCheckOutcome outcome;
         try
         {
-            using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseContentRead, cancellationToken)
+            using var response = await SendAsync(LatestReleaseApi, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false);
             var status = (int)response.StatusCode;
             if (status is 403 or 429)
@@ -301,9 +342,7 @@ public static class UpdateService
             }
             else
             {
-                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
+                using var document = await ReadMetadataAsync(response, cancellationToken).ConfigureAwait(false);
                 outcome = ClassifyRelease(document.RootElement, CurrentVersion, assetSuffix);
             }
         }
@@ -872,7 +911,7 @@ public static class UpdateService
     {
         try
         {
-            File.WriteAllText(PendingMarkerPath(installDirectory),
+            AtomicFile.WriteAllText(PendingMarkerPath(installDirectory),
                 attempts.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -882,8 +921,9 @@ public static class UpdateService
     }
 
     /// <summary>
-    /// The recorded attempt count. An unreadable or garbled marker reads as zero, which errs toward keeping the new
-    /// build: a rollback is the one action here that must never happen by accident.
+    /// The recorded attempt count. A garbled marker (a torn write) counts as one start short of
+    /// <see cref="MaxUnconfirmedStarts"/>: one more try, then the rollback still happens; an unreadable one (locked, no access) reads as zero, which errs toward keeping the new
+    /// build: a rollback must never happen by accident.
     /// </summary>
     private static int ReadPendingAttempts(string installDirectory)
     {
@@ -891,7 +931,7 @@ public static class UpdateService
         {
             var text = File.ReadAllText(PendingMarkerPath(installDirectory)).Trim();
             return int.TryParse(text, System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out var attempts) ? attempts : 0;
+                System.Globalization.CultureInfo.InvariantCulture, out var attempts) ? attempts : MaxUnconfirmedStarts - 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

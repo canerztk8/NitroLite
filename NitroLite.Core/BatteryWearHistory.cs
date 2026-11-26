@@ -265,9 +265,27 @@ public sealed class BatteryWearHistory
         catch (Exception ex)
         {
             AppLog.Warn("The battery wear history could not be read", $"{path}: {ex.Message}");
+            // An unparseable file would be overwritten by the next Append; the bytes are the user's only record of
+            // the battery's past, so they are set aside first. A file that is merely locked is left alone.
+            if (ex is JsonException or InvalidDataException) QuarantineUnreadableFile(path);
             _samples = new List<BatteryWearSample>();
         }
         return _samples;
+    }
+
+    /// <summary>Renames an unreadable history to a stamped <c>.bad-&lt;utc&gt;</c>, never replacing an earlier copy.</summary>
+    private static void QuarantineUnreadableFile(string path)
+    {
+        try
+        {
+            var quarantined = $"{path}.bad-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}";
+            File.Move(path, quarantined, overwrite: false);
+            AppLog.Warn("The battery wear history was set aside", quarantined);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The battery wear history could not be set aside", $"{path}: {ex.Message}");
+        }
     }
 
     /// <summary>

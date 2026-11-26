@@ -67,6 +67,14 @@ public sealed class WmiHardwareController : IHardwareController
     private readonly IHardwareDiagnosticSink? _diagnostics;
 
     /// <summary>
+    /// The user's saved custom fan speeds, used when a caller passes -1 ("did not care"). Same meaning the agent path
+    /// gives it. Null falls back to <see cref="DefaultCustomPercent"/>.
+    /// </summary>
+    private readonly Func<(int Cpu, int Gpu)>? _customFanDefaults;
+
+    private const int DefaultCustomPercent = 50;
+
+    /// <summary>
     /// <paramref name="capabilities"/> supplies the probe result. It is a delegate rather than a value because the
     /// user can rescan from the settings page at any time, and a controller holding the snapshot from launch would
     /// keep using sensor offsets the rescan just replaced. It is optional: without it the controller still works,
@@ -77,8 +85,10 @@ public sealed class WmiHardwareController : IHardwareController
         WmiWorkerLauncher launcher,
         ReadBackPolicy readBack,
         Func<CapabilitySnapshot?>? capabilities = null,
-        IHardwareDiagnosticSink? diagnostics = null)
+        IHardwareDiagnosticSink? diagnostics = null,
+        Func<(int Cpu, int Gpu)>? customFanDefaults = null)
     {
+        _customFanDefaults = customFanDefaults;
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _readBack = readBack ?? throw new ArgumentNullException(nameof(readBack));
         _capabilities = capabilities ?? (() => null);
@@ -681,12 +691,24 @@ public sealed class WmiHardwareController : IHardwareController
         return ReadNullableInt(state, "cpuFanPercent");
     }
 
+    /// <summary>What the EC holds for both fans. Gpu is null when the firmware did not report it.</summary>
+    private readonly record struct FanPercents(int Cpu, int? Gpu);
+
+    private async Task<FanPercents?> GetFanPercentsAsync()
+    {
+        var state = await ReadDeviceStateAsync().ConfigureAwait(false);
+        var cpu = ReadNullableInt(state, "cpuFanPercent");
+        if (!cpu.HasValue) return null;
+        return new FanPercents(cpu.Value, ReadNullableInt(state, "gpuFanPercent"));
+    }
+
     public async Task<bool> SetFanModeAsync(FanMode mode, int cpuPercent = -1, int gpuPercent = -1)
     {
         if (mode == FanMode.Custom)
         {
-            var cpu = NormalisePercent(cpuPercent);
-            var gpu = NormalisePercent(gpuPercent);
+            var saved = _customFanDefaults?.Invoke() ?? (DefaultCustomPercent, DefaultCustomPercent);
+            var cpu = NormalisePercent(cpuPercent, saved.Cpu);
+            var gpu = NormalisePercent(gpuPercent, saved.Gpu);
 
             var speed = await ApplyAsync(
                 ReadBackPolicy.FanSpeed,
@@ -698,8 +720,16 @@ public sealed class WmiHardwareController : IHardwareController
 
                 // The percentage, not the mode byte. See GetFanPercentAsync for why the mode byte is the wrong
                 // question, and why answering it wrongly is a thermal problem rather than a cosmetic one.
-                readBack: GetFanPercentAsync,
-                matches: observed => Math.Abs(observed - cpu) <= FanPercentReadBackTolerance).ConfigureAwait(false);
+                // Both fans: a GPU fan the EC left at 40 % while the CPU fan reads 90 % is a refused write. A GPU value
+                // the firmware does not report is unverifiable, not a mismatch, so only the CPU leg decides then.
+                readBack: GetFanPercentsAsync,
+                matches: observed => Math.Abs(observed.Cpu - cpu) <= FanPercentReadBackTolerance
+                    && (!observed.Gpu.HasValue || Math.Abs(observed.Gpu.Value - gpu) <= FanPercentReadBackTolerance),
+                // HW-16: the GPU fan's read-back after a custom write has never been measured on real hardware. A
+                // mismatch on that leg alone is reported and hands the fans back to Auto for the session, but it must
+                // not count toward the permanent disable of the CPU-proven fan control.
+                mismatchCounts: observed => Math.Abs(observed.Cpu - cpu) > FanPercentReadBackTolerance)
+                .ConfigureAwait(false);
 
             // A capability that has just been switched off will refuse every later write, so the fans stay at
             // whatever the last accepted write left them at — for the rest of the session, and after three sessions
@@ -742,9 +772,8 @@ public sealed class WmiHardwareController : IHardwareController
     /// Keeps a custom speed inside the range the firmware accepts. A negative value means "the caller did not care",
     /// which for this backend becomes the application's own default rather than an error.
     /// </summary>
-    public static int NormalisePercent(int percent) => percent < 0
-        ? 50
-        : Math.Clamp(percent, AcerWmiProtocol.MinFanPercent, AcerWmiProtocol.MaxFanPercent);
+    public static int NormalisePercent(int percent, int savedPercent = DefaultCustomPercent) =>
+        Math.Clamp(percent < 0 ? savedPercent : percent, AcerWmiProtocol.MinFanPercent, AcerWmiProtocol.MaxFanPercent);
 
     // ---------------------------------------------------------------- keyboard lighting
 
@@ -1098,7 +1127,8 @@ public sealed class WmiHardwareController : IHardwareController
         Func<Task<bool>> write,
         Func<Task<T?>> readBack,
         Func<T, bool> matches,
-        string requested = "") where T : struct
+        string requested = "",
+        Func<T, bool>? mismatchCounts = null) where T : struct
     {
         // A disposed controller writes nothing. Not counted against the capability: nothing reached the hardware.
         if (_disposed) return ReadBackResult.NoTransport("the WMI backend has been disposed");
@@ -1112,7 +1142,7 @@ public sealed class WmiHardwareController : IHardwareController
             if (!await EnsureConnectedAsync().ConfigureAwait(false))
                 return ReadBackResult.NoTransport();
 
-            return await _readBack.ApplyAsync(capability, write, readBack, matches, requested).ConfigureAwait(false);
+            return await _readBack.ApplyAsync(capability, write, readBack, matches, requested, mismatchCounts).ConfigureAwait(false);
         }
         finally
         {

@@ -793,8 +793,11 @@ public sealed class AppHost : IDisposable
             });
 
         var readBack = new ReadBackPolicy(settings, diagnostics: diagnostics);
-        var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe, diagnostics);
-        var agent = new AgentHardwareController(new AcerAgentClient(), new CareCenterClient());
+        Func<(int Cpu, int Gpu)> savedCustomFan = () => (settings.CustomFanCpuPercent, settings.CustomFanGpuPercent);
+        var wmi = new WmiHardwareController(new WmiWorkerLauncher(), readBack, Probe, diagnostics,
+            customFanDefaults: savedCustomFan);
+        var agent = new AgentHardwareController(new AcerAgentClient(), new CareCenterClient(),
+            customFanDefaults: savedCustomFan);
 
         // Read once, on first use — but only once the machine is known. A Lazy remembered the answer computed against an
         // empty identity for the whole session, which is the generic profile's answer, not this model's.

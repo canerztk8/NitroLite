@@ -20,6 +20,7 @@ namespace NitroLite.Tests;
 /// runner, the elevation check, the executable path and the COM registrar are all injected.
 /// </para>
 /// </summary>
+[Collection("RealAppLog")]
 public class SecurityHardeningTests
 {
     private const string UserSid = "S-1-5-21-1111111111-2222222222-3333333333-1001";

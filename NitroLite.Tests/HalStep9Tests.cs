@@ -279,10 +279,10 @@ public class HalStep9Tests
     }
 
     [Fact]
-    public void Probe_UserProfile_OverridesTheCatchAllAndSkipsLiveDiscovery()
+    public void Probe_UserProfile_OverridesTheCatchAllButStillRunsLiveDiscovery()
     {
-        // A user who measured their own machine must win over both the shipped table and the live probe: the probe
-        // only runs for a layout nobody has verified, so a verified user record is the final word.
+        // A user profile still wins the match over the catch-all, but "verified" (which skips live sensor discovery)
+        // is honoured only for an id the embedded table verifies with identical sensor ids (SEC-07). This id is new.
         const string user = """
         {
           "schemaVersion": 1,
@@ -322,7 +322,7 @@ public class HalStep9Tests
 
         Assert.Equal("anv15-99-user", snapshot.ProfileId);
         Assert.Equal("user", snapshot.ProfileSource);
-        Assert.True(snapshot.Sensors.Verified);
+        Assert.False(snapshot.Sensors.Verified);
         Assert.Equal(5400, snapshot.MaxCpuFanRpm);
     }
 

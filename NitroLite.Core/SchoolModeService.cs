@@ -66,6 +66,22 @@ public sealed class SchoolModeBackup
     public int? Brightness { get; set; }
     public bool LightingWasOn { get; set; }
     public DateTime EnabledUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// True once the operating mode was put back. A restore that only partly worked keeps the record with just the
+    /// steps still owed: a step that is done is never written again, so a retry cannot overwrite what the user
+    /// changed since. False in a record written before the field existed, which means "still owed".
+    /// </summary>
+    public bool ModeRestored { get; set; }
+
+    /// <inheritdoc cref="ModeRestored"/>
+    public bool FanRestored { get; set; }
+
+    /// <summary>Start-up recoveries that left steps undone. Missing in an older record: 0.</summary>
+    public int RecoveryAttempts { get; set; }
+
+    /// <summary>When a restore first left steps undone. Null until then; the seven-day limit counts from here.</summary>
+    public DateTime? FirstFailureUtc { get; set; }
 }
 
 /// <summary>What school mode managed to change, and what it could not.</summary>
@@ -200,6 +216,15 @@ public sealed class SchoolModeService : IDisposable
     /// <summary>Where the undo record lives. Null disables persistence (unit tests).</summary>
     public string? BackupPath { get; set; } = AppPaths.GetDataFile("school_mode_backup.json");
 
+    /// <summary>A recovery that keeps failing is abandoned after this many start-ups.</summary>
+    public const int MaxRecoveryAttempts = 3;
+
+    /// <summary>... or this long after the first failure, whichever comes first.</summary>
+    public static readonly TimeSpan MaxRecoveryAge = TimeSpan.FromDays(7);
+
+    /// <summary>The clock the recovery limits use. Replaceable so tests can move time.</summary>
+    public Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+
     public Func<OperatingMode>? GetCurrentOperatingMode { get; set; }
     public Func<FanMode>? GetCurrentFanMode { get; set; }
 
@@ -242,39 +267,12 @@ public sealed class SchoolModeService : IDisposable
         // Reading the current state launches nine powercfg processes and a WMI call, which is up to a second of
         // work. It runs off the UI thread so flipping the switch does not freeze the window; none of it touches a
         // control.
-        var backup = await Task.Run(() =>
-        {
-            var state = new SchoolModeBackup
-            {
-                Mode = baselineMode ?? GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
-                Fan = baselineFan ?? GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
-                DcBoost = _cpuBoost.IsSupported ? TryQueryDcBoost() : null,
-                RefreshRate = _displayService.IsSupported ? PreBatteryRefreshRate() : null,
-                Brightness = _brightnessService.GetBrightness()
-            };
-
-            // A platform with no power schemes has nothing to record here, and recording nothing is what makes the
-            // undo record honest: switching school mode off will not try to write settings that were never read.
-            if (_scheme.IsSupported)
-            {
-                state.Scheme = _scheme.ActiveScheme?.ToString();
-
-                foreach (var setting in PowerSettings)
-                {
-                    if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
-                    {
-                        state.PowerSettings.Add(new SchoolModePowerBackup
-                        {
-                            SubGroup = setting.SubGroup.ToString(),
-                            Setting = setting.Setting.ToString(),
-                            PreviousDc = previous
-                        });
-                    }
-                }
-            }
-
-            return state;
-        });
+        // A record still on disk while school mode is off is one a failed switch-off kept: the machine may still hold
+        // school-mode values, so re-reading "current" state would record those as the user's own. Keep the original.
+        // Only the steps the kept record still owes are taken from it; everything else is read fresh, so a setting
+        // already put back is not recorded (and later restored) with its old value.
+        var kept = ReadBackup(out _);
+        var backup = await Task.Run(() => BuildBackup(kept, baselineMode, baselineFan));
 
         // The undo record goes to disk before the first change, so a crash or a forced exit still leaves a way back.
         // If it cannot be written, nothing is changed: a mode the user cannot turn off is worse than no mode, and
@@ -295,7 +293,8 @@ public sealed class SchoolModeService : IDisposable
             // the undo record is on disk, so the failure is reported as one step, not as a broken school mode.
             try
             {
-                backup.LightingWasOn = await TurnLightingOffAsync();
+                // |= : a kept record may already say the light was on, and "already off now" must not erase that.
+                backup.LightingWasOn |= await TurnLightingOffAsync();
                 if (!WriteBackup(backup))
                 {
                     // The one change made after the record was written could not be added to it, so it is undone
@@ -314,11 +313,69 @@ public sealed class SchoolModeService : IDisposable
         return outcome;
     }
 
+    private SchoolModeBackup BuildBackup(SchoolModeBackup? kept, OperatingMode? baselineMode, FanMode? baselineFan)
+    {
+        var state = new SchoolModeBackup
+        {
+            EnabledUtc = UtcNow(),
+            Mode = kept != null && !kept.ModeRestored
+                ? kept.Mode
+                : baselineMode ?? GetCurrentOperatingMode?.Invoke() ?? OperatingMode.Default,
+            Fan = kept != null && !kept.FanRestored
+                ? kept.Fan
+                : baselineFan ?? GetCurrentFanMode?.Invoke() ?? FanMode.Auto,
+            DcBoost = kept?.DcBoost ?? (_cpuBoost.IsSupported ? TryQueryDcBoost() : null),
+            RefreshRate = kept?.RefreshRate is > 0 ? kept.RefreshRate : _displayService.IsSupported ? PreBatteryRefreshRate() : null,
+            Brightness = kept?.Brightness ?? _brightnessService.GetBrightness(),
+            LightingWasOn = kept?.LightingWasOn ?? false
+        };
+
+        // A platform with no power schemes has nothing to record here, and recording nothing is what makes the
+        // undo record honest: switching school mode off will not try to write settings that were never read.
+        if (!_scheme.IsSupported) return state;
+
+        bool keptPower = kept != null && kept.PowerSettings.Count > 0;
+        var keptScheme = kept == null ? null : RecordedScheme(kept);
+        state.Scheme = keptPower ? kept!.Scheme : _scheme.ActiveScheme?.ToString();
+        if (keptPower) state.PowerSettings.AddRange(kept!.PowerSettings);
+
+        // Fresh reads go into the scheme the record names; if the user moved to another plan since, those settings
+        // are left out rather than mixed into a record for a different plan.
+        bool freshReadsAllowed = !keptPower || keptScheme == null || _scheme.ActiveScheme == keptScheme;
+        if (!freshReadsAllowed) return state;
+
+        var have = BackedUpSettings(state);
+        foreach (var setting in PowerSettings)
+        {
+            if (have.Contains((setting.SubGroup, setting.Setting))) continue;
+            if (_scheme.TryReadDc(setting.SubGroup, setting.Setting, out uint previous))
+            {
+                state.PowerSettings.Add(new SchoolModePowerBackup
+                {
+                    SubGroup = setting.SubGroup.ToString(),
+                    Setting = setting.Setting.ToString(),
+                    PreviousDc = previous
+                });
+            }
+        }
+        return state;
+    }
+
+    /// <summary>True while the record still owes at least one restore step.</summary>
+    private static bool HasPending(SchoolModeBackup backup) =>
+        backup.PowerSettings.Count > 0 || backup.DcBoost.HasValue || !backup.ModeRestored || !backup.FanRestored
+        || backup.RefreshRate is > 0 || backup.Brightness.HasValue || backup.LightingWasOn;
+
     /// <summary>
     /// A backup file with school mode switched off means a run died between writing the undo record and saving the
     /// setting. The machine is still in school-mode values — 60 % processor, dim screen, 60 Hz — with nothing in the
     /// UI to say so, so the record is applied in reverse and removed. Returns true when an orphan was undone.
     /// </summary>
+    /// <remarks>
+    /// A restore that leaves steps undone keeps only those steps. After <see cref="MaxRecoveryAttempts"/> failed
+    /// start-ups, or <see cref="MaxRecoveryAge"/> after the first failure, the record is deleted: a step that can never
+    /// succeed here must not rewrite the user's current settings on every start.
+    /// </remarks>
     public async Task<bool> RecoverOrphanedBackupAsync()
     {
         if (_settings.SchoolModeEnabled) return false;
@@ -326,9 +383,34 @@ public sealed class SchoolModeService : IDisposable
         var backup = ReadBackup(out _);
         if (backup == null) return false;
 
+        var now = UtcNow();
+        if (backup.FirstFailureUtc is DateTime first && now - first > MaxRecoveryAge)
+        {
+            AppLog.Warn("School mode: the undo record expired and was deleted", $"first failure {first:O}");
+            DeleteBackup();
+            return false;
+        }
+
         AppLog.Warn("An orphaned school mode backup was found", "Rolling back an unfinished school-mode change.");
-        await RestoreFromBackupAsync(backup);
-        DeleteBackup();
+        var outcome = await RestoreFromBackupAsync(backup);
+        if (!HasPending(backup))
+        {
+            DeleteBackup();
+            return true;
+        }
+
+        backup.RecoveryAttempts++;
+        backup.FirstFailureUtc ??= now;
+        if (backup.RecoveryAttempts >= MaxRecoveryAttempts)
+        {
+            AppLog.Warn("School mode: the undo record was given up after repeated failures", string.Join(", ", outcome.Failed));
+            DeleteBackup();
+        }
+        else
+        {
+            AppLog.Warn("School mode: the orphaned undo record was kept with the open steps", string.Join(", ", outcome.Failed));
+            WriteBackup(backup);
+        }
         return true;
     }
 
@@ -341,7 +423,18 @@ public sealed class SchoolModeService : IDisposable
         // delete — or unreadable, and deleting an unreadable record throws away the only copy of the values the
         // machine was in before school mode, which is the one thing that could still be repaired by hand.
         var outcome = backup == null ? new SchoolModeOutcome() : await RestoreFromBackupAsync(backup);
-        if (backup != null) DeleteBackup();
+        // Steps that failed stay in the record (and only those) for the next switch-off or start-up recovery;
+        // deleting it would strand the machine on school-mode values with no way back.
+        if (backup != null)
+        {
+            if (!HasPending(backup)) DeleteBackup();
+            else
+            {
+                backup.FirstFailureUtc ??= UtcNow();
+                WriteBackup(backup);
+                AppLog.Warn("School mode: the undo record was kept with the open steps", string.Join(", ", outcome.Failed));
+            }
+        }
 
         // An unreadable record restored nothing. Reporting that as a clean switch-off left the machine on school mode's
         // battery limits under a status line that said everything was put back.
@@ -351,81 +444,129 @@ public sealed class SchoolModeService : IDisposable
         return outcome;
     }
 
-    /// <summary>Applies the undo record. Shared by the normal switch-off and the orphaned-record recovery.</summary>
+    /// <summary>
+    /// Applies the undo record. Shared by the normal switch-off and the orphaned-record recovery. Steps that worked
+    /// (or can never work) are removed from <paramref name="backup"/> in place, so what is left is exactly what is
+    /// still owed and a retry never writes a finished step again.
+    /// </summary>
     private async Task<SchoolModeOutcome> RestoreFromBackupAsync(SchoolModeBackup backup)
     {
         var outcome = new SchoolModeOutcome();
 
-        if (backup != null)
-        {
-            // The scheme the record names, when it names one. A scheme that has since been deleted is reported rather
-            // than written around: its values cannot go anywhere else without changing a plan school mode never touched.
-            var scheme = RecordedScheme(backup);
-            bool schemeGone = scheme is Guid recorded && backup.PowerSettings.Count > 0 && !_scheme.SchemeExists(recorded);
+        // The scheme the record names, when it names one. A scheme that has since been deleted is reported rather
+        // than written around: its values cannot go anywhere else without changing a plan school mode never touched.
+        var scheme = RecordedScheme(backup);
+        bool schemeGone = scheme is Guid recorded && backup.PowerSettings.Count > 0 && !_scheme.SchemeExists(recorded);
 
+        if (schemeGone)
+        {
+            // Final: the plan is deleted, so a retry can never succeed. The step is dropped, not kept.
+            AppLog.Warn("School mode: the power plan it changed no longer exists",
+                $"{backup.Scheme}: {backup.PowerSettings.Count} battery values were not written anywhere else and are dropped");
+            outcome.Failed.Add(Loc.T("Güç planı ayarları (okul modunun değiştirdiği plan artık yok)"));
+            backup.PowerSettings.Clear();
+        }
+        else
+        {
             // One powercfg process per recorded setting: off the UI thread, like the forward pass.
-            var (restored, restoreFailed) = schemeGone ? (new List<string>(), new List<string>()) : await Task.Run(() =>
+            var pending = backup.PowerSettings.ToList();
+            var (restored, restoreFailed, stillOwed) = await Task.Run(() =>
             {
                 var ok = new List<string>();
                 var bad = new List<string>();
-                foreach (var saved in backup.PowerSettings)
+                var owed = new List<SchoolModePowerBackup>();
+                foreach (var saved in pending)
                 {
                     if (!Guid.TryParse(saved.SubGroup, out var subGroup) || !Guid.TryParse(saved.Setting, out var setting))
-                        continue;
+                        continue; // unusable entry: dropped, as before it was skipped
                     string label = PowerSettings.FirstOrDefault(s => s.SubGroup == subGroup && s.Setting == setting)?.Label
                                    ?? Loc.T("Güç planı ayarı");
                     if (WriteDc(scheme, subGroup, setting, saved.PreviousDc)) ok.Add(label);
-                    else bad.Add(label);
+                    else
+                    {
+                        bad.Add(label);
+                        owed.Add(saved);
+                    }
                 }
-                return (ok, bad);
+                return (ok, bad, owed);
             });
             outcome.Applied.AddRange(restored);
             outcome.Failed.AddRange(restoreFailed);
+            backup.PowerSettings = stillOwed;
+        }
 
-            if (schemeGone)
+        if (backup.DcBoost.HasValue)
+        {
+            if (!_cpuBoost.IsSupported) backup.DcBoost = null; // nothing to restore here
+            else if (await _cpuBoost.SetBoostModeAsync(backup.DcBoost.Value, targetAc: false, targetDc: true))
             {
-                AppLog.Warn("School mode: the power plan it changed no longer exists",
-                    $"{backup.Scheme}: {backup.PowerSettings.Count} battery values were not written anywhere else");
-                outcome.Failed.Add(Loc.T("Güç planı ayarları (okul modunun değiştirdiği plan artık yok)"));
+                outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
+                backup.DcBoost = null;
             }
+            else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
+        }
 
-            if (backup.DcBoost.HasValue && _cpuBoost.IsSupported)
+        if (!backup.ModeRestored)
+        {
+            if (await _hardware.SetOperatingModeAsync(backup.Mode))
             {
-                if (await _cpuBoost.SetBoostModeAsync(backup.DcBoost.Value, targetAc: false, targetDc: true))
-                    outcome.Applied.Add(Loc.T("CPU Boost (pil)"));
-                else outcome.Failed.Add(Loc.T("CPU Boost (pil)"));
+                outcome.Applied.Add(Loc.T("Çalışma modu"));
+                backup.ModeRestored = true;
             }
-
-            if (await _hardware.SetOperatingModeAsync(backup.Mode)) outcome.Applied.Add(Loc.T("Çalışma modu"));
             else outcome.Failed.Add(Loc.T("Çalışma modu"));
+        }
 
-            if (await _hardware.SetFanModeAsync(backup.Fan)) outcome.Applied.Add(Loc.T("Fan"));
+        if (!backup.FanRestored)
+        {
+            if (await _hardware.SetFanModeAsync(backup.Fan))
+            {
+                outcome.Applied.Add(Loc.T("Fan"));
+                backup.FanRestored = true;
+            }
             else outcome.Failed.Add(Loc.T("Fan"));
+        }
 
-            outcome.RestoredMode = backup.Mode;
-            outcome.RestoredFan = backup.Fan;
+        outcome.RestoredMode = backup.Mode;
+        outcome.RestoredFan = backup.Fan;
 
-            // While the battery automation still owes a rate (it lowered the panel and holds what it replaced), the
-            // machine is on battery with the panel at 60 Hz on purpose: that rate is the automation's to put back on
-            // the adapter. Writing it here raised the panel on battery, and the automation — still holding its saved
-            // rate — never lowered it again until the next plug-in.
-            bool automationOwesRate = _settings.AutoRefreshRateSwitching && _settings.RefreshRateBeforeBattery is > 0;
+        // While the battery automation still owes a rate (it lowered the panel and holds what it replaced), the
+        // machine is on battery with the panel at 60 Hz on purpose: that rate is the automation's to put back on
+        // the adapter. Writing it here raised the panel on battery, and the automation — still holding its saved
+        // rate — never lowered it again until the next plug-in.
+        bool automationOwesRate = _settings.AutoRefreshRateSwitching && _settings.RefreshRateBeforeBattery is > 0;
 
-            if (backup.RefreshRate is int rate && rate > 0 && _displayService.IsSupported && !automationOwesRate)
+        if (backup.RefreshRate is int rate && rate > 0)
+        {
+            if (!_displayService.IsSupported || automationOwesRate) backup.RefreshRate = null; // deliberately not written
+            else if (_displayService.SetRefreshRate(rate))
             {
-                if (_displayService.SetRefreshRate(rate)) outcome.Applied.Add(Loc.T("Ekran tazeleme hızı"));
-                else outcome.Failed.Add(Loc.T("Ekran tazeleme hızı"));
+                outcome.Applied.Add(Loc.T("Ekran tazeleme hızı"));
+                backup.RefreshRate = null;
             }
+            else outcome.Failed.Add(Loc.T("Ekran tazeleme hızı"));
+        }
 
-            if (backup.Brightness is int brightness)
+        if (backup.Brightness is int brightness)
+        {
+            if (_brightnessService.SetBrightness(brightness))
             {
-                if (_brightnessService.SetBrightness(brightness)) outcome.Applied.Add(Loc.T("Ekran parlaklığı"));
-                else outcome.Failed.Add(Loc.T("Ekran parlaklığı"));
+                outcome.Applied.Add(Loc.T("Ekran parlaklığı"));
+                backup.Brightness = null;
             }
+            else outcome.Failed.Add(Loc.T("Ekran parlaklığı"));
+        }
 
-            if (backup.LightingWasOn && RestoreLightingAsync != null)
+        if (backup.LightingWasOn)
+        {
+            if (RestoreLightingAsync == null) backup.LightingWasOn = false;
+            else
             {
-                try { await RestoreLightingAsync(); outcome.Applied.Add(Loc.T("Klavye ışığı")); }
+                try
+                {
+                    await RestoreLightingAsync();
+                    outcome.Applied.Add(Loc.T("Klavye ışığı"));
+                    backup.LightingWasOn = false;
+                }
                 catch { outcome.Failed.Add(Loc.T("Klavye ışığı")); }
             }
         }

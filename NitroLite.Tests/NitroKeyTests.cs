@@ -24,6 +24,7 @@ namespace NitroLite.Tests;
 /// nobody runs, and it would still be flaky on a loaded machine.
 /// </para>
 /// </remarks>
+[Collection("RealAppLog")]
 public class NitroKeyTests
 {
     // =============================================================================================================
@@ -609,5 +610,17 @@ public class NitroKeyTests
         listener.Raise("wmi");
 
         Assert.Equal(2, presses);
+    }
+}
+
+public class RawInputClassNameTests
+{
+    [Fact]
+    public void NextRawInputClassName_IsUniquePerCall_SoARestartNeverReusesAnOldWindowProcedure()
+    {
+        var names = Enumerable.Range(0, 50).Select(_ => NitroLite.Windows.WindowsNitroKeyListener.NextRawInputClassName()).ToList();
+
+        Assert.Equal(names.Count, names.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(names, n => Assert.StartsWith("NitroLiteRawInput", n));
     }
 }

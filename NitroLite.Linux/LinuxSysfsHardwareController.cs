@@ -941,8 +941,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         var node = _caps.Nodes.BacklightTimeout;
         if (node == null) return false;
 
-        if (!await WriteNodeAsync(node, enable30s ? "1" : "0").ConfigureAwait(false)) return false;
-        return ReadFlag(node) == enable30s;
+        return await WriteFlagGatedAsync(node, enable30s).ConfigureAwait(false);
     }
 
     // ---------------------------------------------------------------- battery charge limit
@@ -1025,8 +1024,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         var node = _caps.Nodes.CoolBoost;
         if (node == null) return false;
 
-        if (!await WriteNodeAsync(node, on ? "1" : "0").ConfigureAwait(false)) return false;
-        return ReadFlag(node) == on;
+        return await WriteFlagGatedAsync(node, on).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1039,11 +1037,31 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         var node = _caps.Nodes.WinKeyLock;
         if (node == null) return false;
 
-        if (!await WriteNodeAsync(node, enabled ? "1" : "0").ConfigureAwait(false)) return false;
-        return ReadFlag(node) == enabled;
+        return await WriteFlagGatedAsync(node, enabled).ConfigureAwait(false);
     }
 
     // ---------------------------------------------------------------- plumbing
+
+    /// <summary>
+    /// Writes a 0/1 attribute and reads it back, behind the same write gate as every other write. WriteNodeAsync moves
+    /// the write onto the thread pool, so without the gate two quick toggles could reach the file in either order.
+    /// </summary>
+    private async Task<bool> WriteFlagGatedAsync(string node, bool value)
+    {
+        if (_disposed) return false;
+
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed) return false;
+            if (!await WriteNodeAsync(node, value ? "1" : "0").ConfigureAwait(false)) return false;
+            return ReadFlag(node) == value;
+        }
+        finally
+        {
+            _writeGate.Release();
+        }
+    }
 
     /// <summary>
     /// Runs one write and its read-back behind the write gate.
@@ -1101,13 +1119,19 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
     /// Writes one sysfs attribute. The value is newline-terminated because that is what <c>echo</c> sends and what the
     /// module's parsers expect; a permission failure is recorded as the udev hint rather than as a hardware fault.
     /// </summary>
-    private Task<bool> WriteNodeAsync(string path, string value)
+    private Task<bool> WriteNodeAsync(string path, string value) =>
+        // The helper-backed write holds a lock and can wait up to 15 s for the root helper; on the caller's (UI)
+        // context that is a frozen window. Every caller holds _writeGate (ApplyAsync, WriteHidrawAsync and
+        // WriteFlagGatedAsync), so two writes never overlap and their order is the order of the calls.
+        Task.Run(() => WriteNode(path, value));
+
+    private bool WriteNode(string path, string value)
     {
         var result = _fs.WriteAllText(path, value + "\n");
         if (result.Ok)
         {
             LastError = null;
-            return Task.FromResult(true);
+            return true;
         }
 
         if (result.NeedsUdevRule)
@@ -1119,7 +1143,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
                 ? helperFs.LastDenial
                 : LinuxWriteDenial.UdevRuleMissing;
             LogOnce("denied:" + path, "The sysfs write was refused due to permissions", $"{path}: {LastDenial}");
-            return Task.FromResult(false);
+            return false;
         }
 
         LastError = result.Status == SysfsWriteStatus.Missing
@@ -1127,7 +1151,7 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
             : $"{path} yazılamadı: {result.Detail}";
 
         AppLog.Warn("The sysfs write failed", $"{path}: {result.Status} {result.Detail}");
-        return Task.FromResult(false);
+        return false;
     }
 
     /// <summary>A 0/1 attribute as a bool, or null when it is absent or holds something else.</summary>
@@ -1159,7 +1183,8 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         _disposed = true;
 
         if (_fs is HelperBackedFileSystem helperFs) helperFs.Helper.StateChanged -= OnHelperStateChanged;
-        _writeGate.Dispose();
+        // _writeGate is deliberately not disposed: a write in flight still releases it, and a SemaphoreSlim that
+        // never touched AvailableWaitHandle holds nothing to free. _disposed already refuses new writes.
         if (_ownsOpenRgb) _openRgb?.Dispose();
     }
 

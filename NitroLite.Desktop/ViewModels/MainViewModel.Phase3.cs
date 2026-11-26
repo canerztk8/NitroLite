@@ -178,7 +178,7 @@ public sealed partial class MainViewModel
     private bool _onboardingAutoStartOn;
 
     /// <summary>
-    /// How often the slow battery read runs, in telemetry ticks. The level and the flow come from the fast reader the
+    /// How often the slow battery read runs, in elapsed milliseconds of FanClock time (not ticks: the tick is 5 s in the tray). The level and the flow come from the fast reader the
     /// header already uses; the capacities come from WMI, which costs tens of milliseconds and does not change between
     /// one minute and the next.
     /// </summary>
@@ -188,7 +188,9 @@ public sealed partial class MainViewModel
     /// a WMI connection (and, through it, the battery driver) awake for the whole session. Opening the battery page
     /// still reads on the spot, which is when the user can actually see the difference.
     /// </remarks>
-    private const int BatteryHealthTickInterval = 300;
+    private const long BatteryHealthPeriodMs = 300_000;
+
+    private long _lastBatteryHealthMs = Unscheduled;
 
     // ================================================================================================================
     // Battery and thermal page
@@ -1121,7 +1123,7 @@ public sealed partial class MainViewModel
             return;
         }
 
-        if (_tick % BatteryHealthTickInterval == 0) await RefreshBatteryHealthAsync().ConfigureAwait(true);
+        if (PeriodElapsed(ref _lastBatteryHealthMs, BatteryHealthPeriodMs)) await RefreshBatteryHealthAsync().ConfigureAwait(true);
     }
 
     private async Task RefreshBatteryHealthAsync()
