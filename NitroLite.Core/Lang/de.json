@@ -863,7 +863,7 @@
   "Uygulama çalışma modu, klavye ve Nitro tuşu gibi ayarları değiştirebilmek için bir kez izin istiyor. Düğme yönetici şifrenizi sorar; ardından oturumu kapatıp yeniden açın.": "Die App bittet einmalig um die Berechtigung, Einstellungen wie Betriebsmodus, Tastatur und Nitro-Taste zu ändern. Die Schaltfläche fragt nach Ihrem Administratorpasswort; melden Sie sich danach ab und wieder an.",
   "Etkinleştir": "Aktivieren",
   "Fan devri ve Acer modları (deneysel)": "Lüfterdrehzahl und Acer-Modi (experimentell)",
-  "Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Yeniden başlatma gerekir; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.": "Der Kernel kennt dieses Modell noch nicht. Die Option predator_v4 des Moduls acer-wmi kann Lüfterdrehzahl und die Acer-Betriebsmodi freischalten. Ein Neustart ist nötig; bei Problemen genügt es, /etc/modprobe.d/nitrolite-acer.conf zu löschen.",
+  "Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Seçenek genelde hemen uygulanır, yeniden başlatma gerekmez; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.": "Der Kernel kennt dieses Modell noch nicht. Die Option predator_v4 des Moduls acer-wmi kann Lüfterdrehzahl und die Acer-Betriebsmodi freischalten. Sie greift meist sofort, ein Neustart ist nicht nötig; bei Problemen genügt es, /etc/modprobe.d/nitrolite-acer.conf zu löschen.",
   "predator_v4'ü aç": "predator_v4 einschalten",
   "Fan hızı, klavye RGB ve şarj sınırı": "Lüftergeschwindigkeit, Tastatur-RGB und Ladegrenze",
   "Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.": "Unter Linux lassen sich diese Einstellungen nur mit dem Kernelmodul Linuwu-Sense ändern. Sobald das Modul installiert ist, findet die App es selbst.",
@@ -871,6 +871,9 @@
   "udev kuralı dosyası hazırlanamadı.": "Die udev-Regeldatei konnte nicht vorbereitet werden.",
   "İzinler verildi. Değişikliklerin tamamen geçerli olması için oturumu kapatıp yeniden açın.": "Berechtigungen erteilt. Melden Sie sich ab und wieder an, damit alle Änderungen wirksam werden.",
   "predator_v4 açıldı. Etkili olması için bilgisayarı yeniden başlatın.": "predator_v4 ist eingeschaltet. Starten Sie den Computer neu, damit es wirksam wird.",
+  "predator_v4 açıldı ve hemen uygulandı; yeniden başlatma gerekmez.": "predator_v4 ist eingeschaltet und sofort wirksam; kein Neustart nötig.",
+  "predator_v4 açılamadı: acer-wmi modülü yeniden yüklenemedi, her şey eski haline döndürüldü.": "predator_v4 konnte nicht eingeschaltet werden: Das Modul acer-wmi ließ sich nicht neu laden, alles wurde zurückgesetzt.",
+  "acer-wmi sürücüsü yeniden yüklenemedi; bilgisayarı yeniden başlatın.": "Der Treiber acer-wmi ließ sich nicht erneut laden; starten Sie den Computer neu.",
   "pkexec bulunamadı; aşağıdaki komutu terminalde çalıştırın.": "pkexec wurde nicht gefunden; führen Sie den Befehl unten in einem Terminal aus.",
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "Das Passwortfenster wurde geschlossen; nichts wurde geändert.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "Keine Berechtigung erteilt oder das Passwortfenster ließ sich nicht öffnen; führen Sie den Befehl unten in einem Terminal aus.",
@@ -906,5 +909,6 @@
   "Onarım geri alınamadı: {0}": "Die Reparatur konnte nicht rückgängig gemacht werden: {0}",
   "Onarım öncesi ayarlar geri yüklendi.": "Die Einstellungen von vor der Reparatur wurden wiederhergestellt.",
   "predator_v4 kapatıldı. Etkili olması için bilgisayarı yeniden başlatın.": "predator_v4 ist ausgeschaltet. Starten Sie den Computer neu, damit es wirksam wird.",
+  "predator_v4 kapatıldı ve hemen uygulandı; yeniden başlatma gerekmez.": "predator_v4 ist ausgeschaltet und sofort wirksam; kein Neustart nötig.",
   "Bu işlem en fazla {0} kez yönetici izni (UAC) isteyebilir.": "Dieser Vorgang kann bis zu {0}-mal nach Administratorrechten (UAC) fragen."
 }

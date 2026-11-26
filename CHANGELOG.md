@@ -10,6 +10,16 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+**Linux**
+- The `predator_v4` button (and its undo) now applies at once: `acer_wmi` is reloaded with the option, so fan RPM and
+  the Acer modes appear without a restart. If the module is in use, the file waits for the next boot as before; if the
+  reload fails, the option file is removed and the driver is loaded back as it was. The page rescans afterwards.
+- The system temperature falls back to the ACPI thermal zone (`acpitz`) when the `acer` hwmon device is missing.
+- The .deb/.rpm post-install also triggers the `input` subsystem, so the Nitro key's udev rule applies without a
+  reboot.
+- `install.sh` warns when the package is already installed and asks before adding a per-user copy.
+- The release notes now point Linux users at the .deb/.rpm first, with the tar.gz as the fallback.
+
 ## [1.3.6] - 2026-11-26
 
 NitroLite now asks Acer's own service what the machine has, the way NitroSense does, so models the table does not

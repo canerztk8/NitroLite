@@ -182,10 +182,27 @@ jobs:
 
           ## Linux (experimental)
 
-          ${tick}NitroLite-v$version-linux-x64.tar.gz${tick} is built on ubuntu-latest from the same tag. It needs the
-          in-kernel ${tick}acer-wmi${tick} module, and ${tick}Linuwu-Sense${tick} for the keyboard lighting and the extra
-          switches. Extract it and run ${tick}./install.sh${tick}; the installer offers to add the udev rule that lets
-          the app write to the Acer attributes without root.
+          Use the package for your distribution. There is no install step: the helper service that lets the app
+          change hardware settings without a password prompt comes with it.
+
+          - Ubuntu, Debian, Linux Mint, Pop!_OS: ${tick}NitroLite-v$version-amd64.deb${tick}. Double-click it, or run
+
+          $fence
+          sudo apt install ./NitroLite-v$version-amd64.deb
+          $fence
+
+          - Fedora, openSUSE: ${tick}NitroLite-v$version-x86_64.rpm${tick}.
+
+          $fence
+          sudo dnf install ./NitroLite-v$version-x86_64.rpm
+          $fence
+
+          The kernel needs the in-kernel ${tick}acer-wmi${tick} module, and ${tick}Linuwu-Sense${tick} for the keyboard
+          lighting and the extra switches.
+
+          Only for distributions that cannot use either package: ${tick}NitroLite-v$version-linux-x64.tar.gz${tick} is
+          built on ubuntu-latest from the same tag. Extract it and run ${tick}./install.sh${tick}. Do not install it on a
+          machine that already has the package: the two copies would shadow each other.
 
           $fence
           tar -xzf NitroLite-v$version-linux-x64.tar.gz

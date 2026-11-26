@@ -20,7 +20,9 @@ public enum KernelSetupHint
 }
 
 /// <summary>How one setup step ended, with the sentence the settings page shows.</summary>
-public sealed record PlatformSetupResult(bool Ok, string Message);
+/// <param name="Live">True when the step took effect in the running system (a kernel module was reloaded), so anything
+/// holding a device of the old module must reopen it.</param>
+public sealed record PlatformSetupResult(bool Ok, string Message, bool Live = false);
 
 /// <summary>
 /// The one-time steps that give an unprivileged desktop app access to the hardware, run with a single password prompt.
@@ -51,7 +53,7 @@ public interface IPlatformSetup
     /// </summary>
     Task<PlatformSetupResult> GrantAccessAsync();
 
-    /// <summary>Writes <c>options acer_wmi predator_v4=1</c> to modprobe.d. Takes effect after a restart.</summary>
+    /// <summary>Writes <c>options acer_wmi predator_v4=1</c> to modprobe.d. Applied at once by reloading the module when possible, otherwise after a restart.</summary>
     Task<PlatformSetupResult> EnablePredatorV4Async();
 
     /// <summary>

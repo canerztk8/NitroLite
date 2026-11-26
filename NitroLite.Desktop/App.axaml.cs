@@ -112,8 +112,9 @@ public partial class App : Application, IDisposable
             {
                 _nitroGate = new NitroKeyActivationGate(() => _host?.ViewModel.NitroKeyEnabled == true, ShowWindow);
                 _nitroKey.NitroKeyPressed += OnNitroKeyPressed;
-                // Windows can stop and start the listener again; the Linux one closes its devices on Stop.
-                _nitroKeySwitch = new NitroKeyListenerSwitch(_nitroKey, canRestart: OperatingSystem.IsWindows());
+                // Stop is not final on either platform: the Linux listener closes its devices on Stop and probes them again on the
+                // next Start, so the switch can turn it off and on, and the predator_v4 step can restart it after reloading acer_wmi.
+                _nitroKeySwitch = new NitroKeyListenerSwitch(_nitroKey);
                 _nitroKeySwitch.Apply(_host.ViewModel.NitroKeyEnabled);
             }
 

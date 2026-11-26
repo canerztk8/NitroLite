@@ -863,7 +863,7 @@
   "Uygulama çalışma modu, klavye ve Nitro tuşu gibi ayarları değiştirebilmek için bir kez izin istiyor. Düğme yönetici şifrenizi sorar; ardından oturumu kapatıp yeniden açın.": "ऐप ऑपरेटिंग मोड, कीबोर्ड और Nitro कुंजी जैसी सेटिंग्स बदलने के लिए एक बार अनुमति माँगता है। बटन आपका एडमिनिस्ट्रेटर पासवर्ड माँगेगा; इसके बाद लॉग आउट करके फिर से लॉग इन करें।",
   "Etkinleştir": "सक्षम करें",
   "Fan devri ve Acer modları (deneysel)": "फ़ैन RPM और Acer मोड (प्रायोगिक)",
-  "Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Yeniden başlatma gerekir; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.": "कर्नेल अभी इस मॉडल को नहीं पहचानता। acer-wmi मॉड्यूल का predator_v4 विकल्प चालू करने से फ़ैन RPM और Acer के ऑपरेटिंग मोड मिल सकते हैं। रीस्टार्ट ज़रूरी है; कोई समस्या हो तो /etc/modprobe.d/nitrolite-acer.conf फ़ाइल हटाना काफ़ी है।",
+  "Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Seçenek genelde hemen uygulanır, yeniden başlatma gerekmez; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.": "कर्नेल अभी इस मॉडल को नहीं पहचानता। acer-wmi मॉड्यूल का predator_v4 विकल्प चालू करने से फ़ैन RPM और Acer के ऑपरेटिंग मोड मिल सकते हैं। यह आमतौर पर तुरंत लागू हो जाता है, रीस्टार्ट ज़रूरी नहीं; कोई समस्या हो तो /etc/modprobe.d/nitrolite-acer.conf फ़ाइल हटाना काफ़ी है।",
   "predator_v4'ü aç": "predator_v4 चालू करें",
   "Fan hızı, klavye RGB ve şarj sınırı": "फ़ैन स्पीड, कीबोर्ड RGB और चार्ज सीमा",
   "Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.": "Linux पर ये सेटिंग्स केवल Linuwu-Sense कर्नेल मॉड्यूल से बदली जा सकती हैं। मॉड्यूल इंस्टॉल होते ही ऐप उसे अपने आप ढूँढ लेगा।",
@@ -871,6 +871,9 @@
   "udev kuralı dosyası hazırlanamadı.": "udev नियम फ़ाइल तैयार नहीं हो सकी।",
   "İzinler verildi. Değişikliklerin tamamen geçerli olması için oturumu kapatıp yeniden açın.": "अनुमतियाँ दे दी गईं। सभी बदलाव लागू करने के लिए लॉग आउट करके फिर से लॉग इन करें।",
   "predator_v4 açıldı. Etkili olması için bilgisayarı yeniden başlatın.": "predator_v4 चालू है। इसे लागू करने के लिए कंप्यूटर रीस्टार्ट करें।",
+  "predator_v4 açıldı ve hemen uygulandı; yeniden başlatma gerekmez.": "predator_v4 चालू है और तुरंत लागू हो गया; रीस्टार्ट की ज़रूरत नहीं।",
+  "predator_v4 açılamadı: acer-wmi modülü yeniden yüklenemedi, her şey eski haline döndürüldü.": "predator_v4 चालू नहीं हो सका: acer-wmi मॉड्यूल दोबारा लोड नहीं हुआ, सब कुछ पहले जैसा कर दिया गया।",
+  "acer-wmi sürücüsü yeniden yüklenemedi; bilgisayarı yeniden başlatın.": "acer-wmi ड्राइवर दोबारा लोड नहीं हो सका; कंप्यूटर रीस्टार्ट करें।",
   "pkexec bulunamadı; aşağıdaki komutu terminalde çalıştırın.": "pkexec नहीं मिला; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "पासवर्ड विंडो बंद कर दी गई; कुछ नहीं बदला।",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "अनुमति नहीं मिली या पासवर्ड विंडो नहीं खुल सकी; नीचे दी गई कमांड टर्मिनल में चलाएँ।",
@@ -906,5 +909,6 @@
   "Onarım geri alınamadı: {0}": "मरम्मत वापस नहीं ली जा सकी: {0}",
   "Onarım öncesi ayarlar geri yüklendi.": "मरम्मत से पहले की सेटिंग्स बहाल कर दी गईं।",
   "predator_v4 kapatıldı. Etkili olması için bilgisayarı yeniden başlatın.": "predator_v4 बंद है। इसे लागू करने के लिए कंप्यूटर पुनः आरंभ करें।",
+  "predator_v4 kapatıldı ve hemen uygulandı; yeniden başlatma gerekmez.": "predator_v4 बंद है और तुरंत लागू हो गया; रीस्टार्ट की ज़रूरत नहीं।",
   "Bu işlem en fazla {0} kez yönetici izni (UAC) isteyebilir.": "यह प्रक्रिया अधिकतम {0} बार व्यवस्थापक अनुमति (UAC) माँग सकती है।"
 }

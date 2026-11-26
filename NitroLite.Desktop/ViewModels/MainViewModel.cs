@@ -7615,6 +7615,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var result = await _platformSetup.EnablePredatorV4Async().ConfigureAwait(true);
             LinuxSetupStatus = result.Message;
+
+            // acer_wmi may have been reloaded with the option, so the fan RPM and the modes can appear right now.
+            // Live also on a failed step: the module was reloaded or is gone, so the key and the sensors changed.
+            if (result.Live) await RestartNitroKeyAsync().ConfigureAwait(true);
+            if (result.Ok || result.Live) await RescanAsync().ConfigureAwait(true);
         }
         finally
         {

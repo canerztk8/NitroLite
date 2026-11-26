@@ -317,6 +317,37 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// A reloaded <c>acer_wmi</c> registers a new "Acer WMI hotkeys" input device; the one the listener holds is gone
+    /// and its reader has already ended. Stop closes it and forgets it, Start probes again, so the key works without
+    /// restarting the app. Stop waits up to a second for the readers, hence the thread pool. Started only when the
+    /// setting is on; when it is off the listener stays stopped (and re-probes), and the switch starts it when the setting
+    /// goes on, because Stop is not final.
+    /// </summary>
+    private async Task RestartNitroKeyAsync()
+    {
+        if (_nitroKey is not { } listener) return;
+
+        var start = NitroKeyEnabled;
+        try
+        {
+            await Task.Run(() =>
+            {
+                listener.Stop();
+                if (start) listener.Start();
+            }).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("The Nitro key listener could not be restarted", ex.Message);
+        }
+
+        // The probe may now find a device it did not (or lose one), which shows or hides the key row and its card.
+        Raise(nameof(NitroKeyAvailable));
+        Raise(nameof(AcerHardwareAvailable));
+        Raise(nameof(NitroSenseLauncherStateText));
+    }
+
     private async Task DisablePredatorV4Async()
     {
         if (_platformExtras?.DisablePredatorV4 is not { } disable || !LinuxSetupIdle) return;
@@ -326,6 +357,10 @@ public sealed partial class MainViewModel
         {
             var result = await disable().ConfigureAwait(true);
             LinuxSetupStatus = result.Message;
+
+            // The module may have come back without the option; the sensors and modes follow it.
+            if (result.Live) await RestartNitroKeyAsync().ConfigureAwait(true);
+            if (result.Ok || result.Live) await RescanAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {

@@ -60,14 +60,49 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
     /// <summary>The modprobe option file the predator_v4 step writes.</summary>
     public const string PredatorV4ConfPath = "/etc/modprobe.d/nitrolite-acer.conf";
 
+    /// <summary>What the predator_v4 scripts print when they reloaded <c>acer_wmi</c> and it came back.</summary>
+    public const string LiveMarker = "nitrolite:live";
+
+    /// <summary>Exit code of <see cref="PredatorV4Script"/> when the reload failed and the machine was put back as it was.</summary>
+    public const int ReloadFailedExitCode = 10;
+
+    /// <summary>Exit code when even loading <c>acer_wmi</c> back failed: the machine has no driver until it restarts.</summary>
+    public const int DriverMissingExitCode = 11;
+
+    private const string PinnedPath = "PATH=/usr/sbin:/usr/bin:/sbin:/bin\nexport PATH\n";
+
+    /// <summary>
+    /// Writes the option file, then tries to apply it at once by reloading <c>acer_wmi</c>. A module in use stays as it
+    /// is (the file waits for the next boot). If the reload itself fails, the file is deleted and the module is loaded
+    /// again without it. If even that fails the script says so (11) rather than claiming a restore. No arguments.
+    /// </summary>
     public const string PredatorV4Script =
         "set -e\n" +
-        "printf 'options acer_wmi predator_v4=1\\n' > " + PredatorV4ConfPath + "\n";
+        PinnedPath +
+        "printf 'options acer_wmi predator_v4=1\\n' > " + PredatorV4ConfPath + "\n" +
+        "[ -d /sys/module/acer_wmi ] || exit 0\n" +
+        "modprobe -r acer_wmi || exit 0\n" +
+        "if modprobe acer_wmi; then udevadm settle --timeout=5 2>/dev/null || true; echo " + LiveMarker + "; exit 0; fi\n" +
+        "rm -f -- " + PredatorV4ConfPath + "\n" +
+        "modprobe acer_wmi || exit 11\n" + // = DriverMissingExitCode
+        "udevadm settle --timeout=5 2>/dev/null || true; echo " + LiveMarker + "\n" +
+        "exit 10\n"; // = ReloadFailedExitCode
 
-    /// <summary>The undo of <see cref="PredatorV4Script"/>: removes the option file, nothing else.</summary>
+    /// <summary>
+    /// The undo of <see cref="PredatorV4Script"/>: removes the option file, then reloads <c>acer_wmi</c> without it when it
+    /// can. A reload that fails is retried once; if the driver still will not load the script exits 11.
+    /// </summary>
     public const string DisablePredatorV4Script =
         "set -e\n" +
-        "rm -f -- " + PredatorV4ConfPath + "\n";
+        PinnedPath +
+        "rm -f -- " + PredatorV4ConfPath + "\n" +
+        "[ -d /sys/module/acer_wmi ] || exit 0\n" +
+        "modprobe -r acer_wmi || exit 0\n" +
+        "if modprobe acer_wmi; then udevadm settle --timeout=5 2>/dev/null || true; echo " + LiveMarker + "; exit 0; fi\n" +
+        "modprobe acer_wmi || exit 11\n" + // = DriverMissingExitCode
+        "udevadm settle --timeout=5 2>/dev/null || true; echo " + LiveMarker + "\n";
+
+    private const string PredatorV4ParameterPath = "/sys/module/acer_wmi/parameters/predator_v4";
 
     private static readonly TimeSpan PromptTimeout = TimeSpan.FromMinutes(3);
 
@@ -214,18 +249,65 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
     }
 
     public Task<PlatformSetupResult> EnablePredatorV4Async() => Task.Run(() =>
-        Run(PredatorV4Script, Array.Empty<string>(),
-            Loc.T("predator_v4 açıldı. Etkili olması için bilgisayarı yeniden başlatın.")));
+        RunPredatorV4(PredatorV4Script, expectOn: true,
+            Loc.T("predator_v4 açıldı ve hemen uygulandı; yeniden başlatma gerekmez."),
+            Loc.T("predator_v4 açıldı. Etkili olması için bilgisayarı yeniden başlatın."),
+            new Dictionary<int, string>
+            {
+                [ReloadFailedExitCode] = Loc.T("predator_v4 açılamadı: acer-wmi modülü yeniden yüklenemedi, her şey eski haline döndürüldü."),
+                [DriverMissingExitCode] = Loc.T("acer-wmi sürücüsü yeniden yüklenemedi; bilgisayarı yeniden başlatın.")
+            }));
 
     /// <summary>
-    /// Takes the <c>predator_v4</c> option back out: removes <see cref="PredatorV4ConfPath"/>, behind the same password
-    /// prompt. The running kernel keeps the option until the next boot, as it did when it was turned on.
+    /// Takes the <c>predator_v4</c> option back out: removes <see cref="PredatorV4ConfPath"/> and reloads the module
+    /// without it when it can, behind the same password prompt.
     /// </summary>
     public Task<PlatformSetupResult> DisablePredatorV4Async() => Task.Run(() =>
-        Run(DisablePredatorV4Script, Array.Empty<string>(),
-            Loc.T("predator_v4 kapatıldı. Etkili olması için bilgisayarı yeniden başlatın.")));
+        RunPredatorV4(DisablePredatorV4Script, expectOn: false,
+            Loc.T("predator_v4 kapatıldı ve hemen uygulandı; yeniden başlatma gerekmez."),
+            Loc.T("predator_v4 kapatıldı. Etkili olması için bilgisayarı yeniden başlatın."),
+            new Dictionary<int, string>
+            {
+                [DriverMissingExitCode] = Loc.T("acer-wmi sürücüsü yeniden yüklenemedi; bilgisayarı yeniden başlatın.")
+            }));
 
-    private PlatformSetupResult Run(string script, IReadOnlyList<string> arguments, string success)
+    /// <summary>
+    /// Runs one of the two predator_v4 scripts. <see cref="PlatformSetupResult.Live"/> says the module was touched in
+    /// the running system: the script printed its marker after a reload (also on the exit-10 path, where the module came
+    /// back without the option) or it ended with the driver gone (11). Either way the old input device is replaced or
+    /// missing, so the caller restarts the Nitro key listener and rescans, whether the step counts as a success or not.
+    /// The "no restart needed" sentence is stricter: it also needs the module's own parameter to read as intended.
+    /// </summary>
+    private PlatformSetupResult RunPredatorV4(string script, bool expectOn, string appliedMessage, string restartMessage,
+        IReadOnlyDictionary<int, string> exitMessages)
+    {
+        var moduleTouched = false;
+        var result = Run(script, Array.Empty<string>(),
+            output => Applied(output, expectOn) ? appliedMessage : restartMessage,
+            exitMessages,
+            output => moduleTouched = output.Output.Contains(LiveMarker, StringComparison.Ordinal)
+                                      || output.ExitCode == DriverMissingExitCode);
+        return result with { Live = moduleTouched };
+    }
+
+    /// <summary>
+    /// True when the script said it reloaded the module. For the enable step the module's own parameter must also read
+    /// on, so a driver that came back without the option is never reported as applied.
+    /// </summary>
+    private bool Applied(CommandResult result, bool expectOn)
+    {
+        if (!result.Output.Contains(LiveMarker, StringComparison.Ordinal)) return false;
+
+        var value = _fs.ReadAllText(PredatorV4ParameterPath)?.Trim();
+        var on = value is "Y" or "y" or "1";
+        return on == expectOn;
+    }
+
+    private PlatformSetupResult Run(string script, IReadOnlyList<string> arguments, string success) =>
+        Run(script, arguments, _ => success);
+
+    private PlatformSetupResult Run(string script, IReadOnlyList<string> arguments, Func<CommandResult, string> success,
+        IReadOnlyDictionary<int, string>? exitMessages = null, Action<CommandResult>? observe = null)
     {
         if (!CanElevate)
         {
@@ -237,15 +319,21 @@ public sealed class LinuxPlatformSetup : IPlatformSetup
         args.AddRange(arguments);
 
         var result = _runner.Run(_pkexec!, args, PromptTimeout);
+        observe?.Invoke(result);
         if (result.Ok)
         {
             AppLog.Info("The Linux setup step completed",
                 script == GrantScript ? "access" : script == DisablePredatorV4Script ? "predator_v4 off" : "predator_v4");
-            return new PlatformSetupResult(true, success);
+            return new PlatformSetupResult(true, success(result));
         }
 
         AppLog.Warn("The Linux setup step failed",
             $"exit {result.ExitCode.ToString(CultureInfo.InvariantCulture)}: {result.Error}");
+
+        if (exitMessages != null && exitMessages.TryGetValue(result.ExitCode, out var specific))
+        {
+            return new PlatformSetupResult(false, specific);
+        }
 
         return new PlatformSetupResult(false, result.ExitCode switch
         {

@@ -96,7 +96,9 @@ public static class LinuxHwmon
         var cpuTemp = First(cpuDie) ?? First(acer);
         var gpuTemp = First(gpu);
         // The board sensor is only a separate reading when the CPU temperature came from somewhere else.
-        var sysTemp = cpuDie != null ? First(acer) : null;
+        // Without an acer temperature (no driver for a model the kernel does not know, or a driver that exposes only
+        // the fans) the ACPI thermal zone is the board's reading.
+        var sysTemp = cpuDie == null ? null : First(acer) ?? First(Find(devices, "acpitz"));
 
         return new LinuxSensorSample(
             PlausibleTemperature(cpuTemp),

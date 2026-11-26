@@ -124,6 +124,23 @@ else
     SUDO=""
 fi
 
+# A .deb or .rpm puts the app in /opt/nitrolite. A per-user copy installed next to it wins in the menu and on PATH, so
+# the user would run one build while the packaged helper serves another; say so and ask before going on.
+if [ "$MODE" = "user" ] && [ -e "/opt/nitrolite/$BIN_NAME" ]; then
+    echo "warning: the NitroLite package is already installed (/opt/nitrolite/$BIN_NAME)." >&2
+    echo "         This per-user install would shadow it in the application menu. Use one or the other." >&2
+    if [ ! -t 0 ]; then
+        echo "         Not continuing without a terminal to ask on." >&2
+        exit 1
+    fi
+    printf 'Install the per-user copy anyway? [y/N] ' >&2
+    read -r answer || answer=""
+    case "$answer" in
+        y|Y|yes|YES) ;;
+        *) echo "Nothing was installed." >&2; exit 1 ;;
+    esac
+fi
+
 echo "Installing $APP_NAME"
 echo "  application  $APP_DIR"
 echo "  command      $BIN_DIR/nitrolite"

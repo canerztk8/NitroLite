@@ -9,21 +9,20 @@ namespace NitroLite.Desktop;
 /// </summary>
 /// <remarks>
 /// Off means off: the Windows listener otherwise keeps a one-second WMI poll and a raw-input window alive for a key
-/// the user has disabled. <paramref name="canRestart"/> is false where Stop is final (the Linux listener closes its
-/// devices on Stop), so there the switch only ever starts the listener and the exit hook stops it.
+/// the user has disabled. Stop is never final on either platform: the Linux listener closes its devices on Stop and
+/// probes them again on the next Start, which is also what lets the predator_v4 step (it reloads acer_wmi and so
+/// replaces the input device) restart it without the switch losing track.
 /// </remarks>
 public sealed class NitroKeyListenerSwitch
 {
     private readonly INitroKeyListener _listener;
-    private readonly bool _canRestart;
     private readonly object _gate = new();
     private Task _queue = Task.CompletedTask;
     private bool _running;
 
-    public NitroKeyListenerSwitch(INitroKeyListener listener, bool canRestart)
+    public NitroKeyListenerSwitch(INitroKeyListener listener)
     {
         _listener = listener ?? throw new ArgumentNullException(nameof(listener));
-        _canRestart = canRestart;
     }
 
     /// <summary>Completes when every queued start or stop has finished.</summary>
@@ -38,7 +37,6 @@ public sealed class NitroKeyListenerSwitch
         lock (_gate)
         {
             if (enabled == _running) return;
-            if (!enabled && !_canRestart) return;
             _running = enabled;
             _queue = _queue.ContinueWith(_ => Run(enabled), TaskScheduler.Default);
         }

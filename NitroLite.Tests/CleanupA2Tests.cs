@@ -461,6 +461,47 @@ public class CleanupA2Tests
         public string BuildHardwareReport(HardwareReportContext? context = null) => "";
     }
 
+    private sealed class StopStartKey : INitroKeyListener
+    {
+        private readonly List<string> _calls = new();
+
+        public string[] Calls { get { lock (_calls) return _calls.ToArray(); } }
+
+        public bool IsSupported => true;
+
+        public event EventHandler? NitroKeyPressed { add { } remove { } }
+
+        public void Start() { lock (_calls) _calls.Add("start"); }
+
+        public void Stop() { lock (_calls) _calls.Add("stop"); }
+
+        public void Dispose() { }
+    }
+
+    [Theory]
+    [InlineData(false, true, true)]   // a step that failed after the module was reloaded (exit 10 / 11)
+    [InlineData(true, true, true)]    // a clean live step
+    [InlineData(true, false, true)]   // a clean step that needs a restart still rescans
+    [InlineData(false, false, false)] // a plain failure (password dialog closed): nothing changed
+    public async Task APredatorV4StepRestartsTheKeyAndRescansAccordingToWhatItDid(bool ok, bool live, bool expectRescan)
+    {
+        var hardware = new A1Hardware();
+        var rescan = new FakeRescan(() => { });
+        var key = new StopStartKey();
+        var setup = new FakeSetup { EnableResult = new PlatformSetupResult(ok, "x", live) };
+        using var vm = new MainViewModel(new AppSettings { NitroKeyEnabled = true }, hardware, null, TempSettingsPath(),
+            rescan: rescan, nitroKey: key, platformSetup: setup);
+        await vm.InitializeAsync();
+        await Task.Delay(500); // let start-up finish its own rescans first
+        var before = rescan.Resets;
+
+        vm.EnablePredatorV4Command.Execute(null);
+        await Task.Delay(500);
+
+        Assert.Equal(live ? new[] { "stop", "start" } : Array.Empty<string>(), key.Calls);
+        Assert.Equal(expectRescan ? 1 : 0, rescan.Resets - before);
+    }
+
     private sealed class FakeRescan : IRescannableBackend
     {
         private readonly Action _onReset;
@@ -494,7 +535,9 @@ public class CleanupA2Tests
 
         public Task<PlatformSetupResult> GrantAccessAsync() => Task.FromResult(new PlatformSetupResult(true, "ok"));
 
-        public Task<PlatformSetupResult> EnablePredatorV4Async() => Task.FromResult(new PlatformSetupResult(true, "ok"));
+        public PlatformSetupResult EnableResult { get; init; } = new(true, "ok");
+
+        public Task<PlatformSetupResult> EnablePredatorV4Async() => Task.FromResult(EnableResult);
 
         public Task<string?> WriteCaptureAsync(string directory) => Task.FromResult<string?>(null);
     }

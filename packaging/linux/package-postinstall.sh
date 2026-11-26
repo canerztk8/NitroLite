@@ -17,8 +17,10 @@ command -v groupadd >/dev/null 2>&1 && groupadd -f -r nitrolite || true
 
 if command -v udevadm >/dev/null 2>&1; then
     udevadm control --reload-rules || true
+    # input is included so the rule that hands the "Acer WMI hotkeys" device (the Nitro key) to the user at the seat
+    # applies to the device that already exists, not only after the next boot.
     udevadm trigger --subsystem-match=hidraw --subsystem-match=hwmon --subsystem-match=power_supply \
-        --subsystem-match=platform || true
+        --subsystem-match=platform --subsystem-match=input || true
 fi
 
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true

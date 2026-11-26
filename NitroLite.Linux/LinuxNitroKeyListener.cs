@@ -37,6 +37,13 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
     private readonly IEvdevSource _source;
     private readonly NitroKeyDebounceGuard _debounce;
     private readonly object _gate = new();
+
+    /// <summary>
+    /// Serialises whole Start and Stop calls. Stop gives up <c>_gate</c> while it waits for the readers, so without this a
+    /// Start arriving in that window found <c>_probed</c> still true and opened readers on devices that were closing.
+    /// Always taken before <c>_gate</c>, never the other way round.
+    /// </summary>
+    private readonly object _lifecycle = new();
     private readonly List<IEvdevDevice> _devices = new();
 
     private CancellationTokenSource? _stop;
@@ -78,6 +85,11 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
 
     public void Start()
     {
+        lock (_lifecycle) StartCore();
+    }
+
+    private void StartCore()
+    {
         EnsureProbed();
 
         lock (_gate)
@@ -97,12 +109,31 @@ public sealed class LinuxNitroKeyListener : INitroKeyListener
 
     public void Stop()
     {
+        lock (_lifecycle) StopCore();
+    }
+
+    private void StopCore()
+    {
         CancellationTokenSource? stop;
         Task? loop;
 
         lock (_gate)
         {
-            if (!_started) return;
+            if (!_started)
+            {
+                // Never started (or already stopped): there are no readers, but a probe may still hold open devices, or
+                // may have found none. Either way the next probe has to start from scratch, for example after acer_wmi
+                // was reloaded and its input device was replaced.
+                foreach (var device in _devices)
+                {
+                    try { device.Dispose(); } catch { /* the device is already gone */ }
+                }
+
+                _devices.Clear();
+                _probed = false;
+                return;
+            }
+
             _started = false;
             stop = _stop;
             loop = _loop;

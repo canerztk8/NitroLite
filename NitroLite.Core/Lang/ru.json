@@ -863,7 +863,7 @@
   "Uygulama çalışma modu, klavye ve Nitro tuşu gibi ayarları değiştirebilmek için bir kez izin istiyor. Düğme yönetici şifrenizi sorar; ardından oturumu kapatıp yeniden açın.": "Приложение один раз запрашивает разрешение менять такие настройки, как режим работы, клавиатура и клавиша Nitro. Кнопка запросит пароль администратора; после этого выйдите из сеанса и войдите снова.",
   "Etkinleştir": "Включить",
   "Fan devri ve Acer modları (deneysel)": "Обороты вентиляторов и режимы Acer (экспериментально)",
-  "Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Yeniden başlatma gerekir; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.": "Ядро пока не знает эту модель. Параметр predator_v4 модуля acer-wmi может открыть обороты вентиляторов и режимы работы Acer. Нужна перезагрузка; если что-то пойдёт не так, достаточно удалить /etc/modprobe.d/nitrolite-acer.conf.",
+  "Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Seçenek genelde hemen uygulanır, yeniden başlatma gerekmez; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.": "Ядро пока не знает эту модель. Параметр predator_v4 модуля acer-wmi может открыть обороты вентиляторов и режимы работы Acer. Обычно он применяется сразу, перезагрузка не нужна; если что-то пойдёт не так, достаточно удалить /etc/modprobe.d/nitrolite-acer.conf.",
   "predator_v4'ü aç": "Включить predator_v4",
   "Fan hızı, klavye RGB ve şarj sınırı": "Скорость вентиляторов, RGB клавиатуры и предел заряда",
   "Bu ayarlar Linux'ta yalnızca Linuwu-Sense çekirdek modülüyle değiştirilebilir. Modül kurulduğunda uygulama onu kendiliğinden bulur.": "В Linux эти настройки можно менять только с модулем ядра Linuwu-Sense. Когда модуль будет установлен, приложение найдёт его само.",
@@ -871,6 +871,9 @@
   "udev kuralı dosyası hazırlanamadı.": "Не удалось подготовить файл правила udev.",
   "İzinler verildi. Değişikliklerin tamamen geçerli olması için oturumu kapatıp yeniden açın.": "Разрешения выданы. Выйдите из сеанса и войдите снова, чтобы все изменения вступили в силу.",
   "predator_v4 açıldı. Etkili olması için bilgisayarı yeniden başlatın.": "predator_v4 включён. Перезагрузите компьютер, чтобы он вступил в силу.",
+  "predator_v4 açıldı ve hemen uygulandı; yeniden başlatma gerekmez.": "predator_v4 включён и применён сразу; перезагрузка не нужна.",
+  "predator_v4 açılamadı: acer-wmi modülü yeniden yüklenemedi, her şey eski haline döndürüldü.": "Не удалось включить predator_v4: модуль acer-wmi не перезагрузился, всё возвращено как было.",
+  "acer-wmi sürücüsü yeniden yüklenemedi; bilgisayarı yeniden başlatın.": "Не удалось снова загрузить драйвер acer-wmi; перезагрузите компьютер.",
   "pkexec bulunamadı; aşağıdaki komutu terminalde çalıştırın.": "pkexec не найден; выполните команду ниже в терминале.",
   "Şifre penceresi kapatıldı; hiçbir şey değişmedi.": "Окно ввода пароля закрыто; ничего не изменено.",
   "Yetki verilmedi ya da şifre penceresi açılamadı; aşağıdaki komutu terminalde çalıştırın.": "Разрешение не выдано или окно ввода пароля не открылось; выполните команду ниже в терминале.",
@@ -906,5 +909,6 @@
   "Onarım geri alınamadı: {0}": "Не удалось отменить восстановление: {0}",
   "Onarım öncesi ayarlar geri yüklendi.": "Параметры до восстановления возвращены.",
   "predator_v4 kapatıldı. Etkili olması için bilgisayarı yeniden başlatın.": "predator_v4 выключен. Перезагрузите компьютер, чтобы изменение вступило в силу.",
+  "predator_v4 kapatıldı ve hemen uygulandı; yeniden başlatma gerekmez.": "predator_v4 выключен и применён сразу; перезагрузка не нужна.",
   "Bu işlem en fazla {0} kez yönetici izni (UAC) isteyebilir.": "Эта операция может запросить права администратора (UAC) до {0} раз."
 }

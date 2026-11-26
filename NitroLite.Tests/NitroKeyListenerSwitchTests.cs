@@ -22,7 +22,7 @@ public class NitroKeyListenerSwitchTests
     public async Task TurningTheSettingOff_StopsTheListener_AndOnStartsItAgain()
     {
         var listener = new CountingListener();
-        var sw = new NitroKeyListenerSwitch(listener, canRestart: true);
+        var sw = new NitroKeyListenerSwitch(listener);
 
         sw.Apply(true);
         await sw.Idle;
@@ -43,7 +43,7 @@ public class NitroKeyListenerSwitchTests
     public async Task RepeatingTheSameValue_DoesNotStartOrStopTwice()
     {
         var listener = new CountingListener();
-        var sw = new NitroKeyListenerSwitch(listener, canRestart: true);
+        var sw = new NitroKeyListenerSwitch(listener);
 
         sw.Apply(true);
         sw.Apply(true);
@@ -59,7 +59,7 @@ public class NitroKeyListenerSwitchTests
     public async Task OffFromTheStart_NeverStartsTheListener()
     {
         var listener = new CountingListener();
-        var sw = new NitroKeyListenerSwitch(listener, canRestart: true);
+        var sw = new NitroKeyListenerSwitch(listener);
 
         sw.Apply(false);
         await sw.Idle;
@@ -69,16 +69,22 @@ public class NitroKeyListenerSwitchTests
     }
 
     [Fact]
-    public async Task WhereStopIsFinal_TheSwitchNeverStopsTheListener()
+    public async Task OnOffThenALiveReloadStop_ThenOn_StartsTheListenerAgain()
     {
+        // The listener is on, the user turns the setting off, predator_v4 is applied live (it only stops the listener,
+        // the setting being off), and the setting goes on again: the switch must still start it.
         var listener = new CountingListener();
-        var sw = new NitroKeyListenerSwitch(listener, canRestart: false);
+        var sw = new NitroKeyListenerSwitch(listener);
 
         sw.Apply(true);
         sw.Apply(false);
         await sw.Idle;
+        listener.Stop();
 
-        Assert.Equal(1, listener.Starts);
-        Assert.Equal(0, listener.Stops);
+        sw.Apply(true);
+        await sw.Idle;
+
+        Assert.True(listener.Running);
+        Assert.Equal(2, listener.Starts);
     }
 }

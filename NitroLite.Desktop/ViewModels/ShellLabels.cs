@@ -86,7 +86,7 @@ public sealed class ShellLabels
     public string LinuxGrantHint => Loc.T("Uygulama çalışma modu, klavye ve Nitro tuşu gibi ayarları değiştirebilmek için bir kez izin istiyor. Düğme yönetici şifrenizi sorar; ardından oturumu kapatıp yeniden açın.");
     public string LinuxGrantButton => Loc.T("Etkinleştir");
     public string LinuxPredatorV4Title => Loc.T("Fan devri ve Acer modları (deneysel)");
-    public string LinuxPredatorV4Hint => Loc.T("Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Yeniden başlatma gerekir; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.");
+    public string LinuxPredatorV4Hint => Loc.T("Çekirdek bu modeli henüz tanımıyor. acer-wmi modülünün predator_v4 seçeneğini açmak fan devrini ve Acer'in çalışma modlarını getirebilir. Seçenek genelde hemen uygulanır, yeniden başlatma gerekmez; sorun çıkarsa /etc/modprobe.d/nitrolite-acer.conf dosyasını silmek yeterli.");
     public string LinuxPredatorV4Button => Loc.T("predator_v4'ü aç");
 
     /// <summary>The undo for the button above, shown while NitroLite's option file is in place.</summary>
