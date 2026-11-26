@@ -400,7 +400,9 @@ public class CleanupA1Tests
         return vm;
     }
 
-    internal static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 3000)
+    // 10 s rather than 3 s: a shared CI runner under the full parallel suite has missed 3 s on a condition that holds
+    // in under a second locally. The wait returns as soon as the condition holds, so only a real failure pays for it.
+    internal static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 10000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)
