@@ -60,6 +60,10 @@ public class HidLightingFilterTests
     [InlineData(0x048D, 0x8295)] // ITE
     [InlineData(0x0C45, 0x8006)] // Sonix
     [InlineData(0x04F2, 0x0132)] // Chicony
+    [InlineData(0x05AF, 0x766A)] // Sunrex, from Acer's RGBDevice.ini (FF02)
+    [InlineData(0x05AF, 0x867E)] // Sunrex, another PID family
+    [InlineData(0x0D62, 0xBA51)] // Darfon, from Acer's RGBDevice.ini (FF01)
+    [InlineData(0x0D62, 0xA21A)] // Darfon
     public void RecognisedButUndocumentedControllersAreNamedAndRefused(int vendorId, int productId)
     {
         var decision = HidLightingControllers.Decide(vendorId, productId, 0xFF00, 0x01);

@@ -85,7 +85,26 @@ public static class HidLightingControllers
             Protocol: "none",
             Writable: false,
             Source: "NT411 reverse engineering (fixed 7-colour palette, no arbitrary RGB)",
-            Refusal: "the documented Chicony controller has a fixed palette, not per-zone RGB")
+            Refusal: "the documented Chicony controller has a fixed palette, not per-zone RGB"),
+        // Listed in Acer's own RGBDevice.ini (service package 1.2.108.3): Sunrex 666x/667x/766x/866x/867x on usage
+        // page FF02 and Darfon BA51/A00A/A01A/A20A/A21A on FF01, each driven by its own Acer DLL. Recognised so the
+        // report names them, never written: no frame for either is documented.
+        new HidLightingController(
+            VendorId: 0x05AF,
+            ProductId: 0,
+            Name: "Sunrex",
+            Protocol: "none",
+            Writable: false,
+            Source: "Acer RGBDevice.ini (SunrexUSBKeyboard.dll), vendor id only",
+            Refusal: "no documented lighting frame for Sunrex keyboards"),
+        new HidLightingController(
+            VendorId: 0x0D62,
+            ProductId: 0,
+            Name: "Darfon",
+            Protocol: "none",
+            Writable: false,
+            Source: "Acer RGBDevice.ini (DarfonUSBController.dll), vendor id only",
+            Refusal: "no documented lighting frame for Darfon keyboards")
     };
 
     /// <summary>The entry for a device, or null when nobody has described it.</summary>

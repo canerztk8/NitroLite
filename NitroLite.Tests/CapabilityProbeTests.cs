@@ -110,6 +110,14 @@ public class CapabilityProbeTests
     [InlineData("PH3D15-71", "predator-helios-3d-ph3d15-71")]
     [InlineData("PT14-51", "predator-triton-pt14-51")]
     [InlineData("PT16-51", "predator-triton-pt16-51")]
+    [InlineData("ANV15-42", "nitro-v-15-anv15-42")]
+    [InlineData("ANV16-42", "nitro-v-16-anv16-42")]
+    [InlineData("ANV16-61", "nitro-v-16-anv16-61")]
+    [InlineData("ANV17-41", "nitro-v-17-anv17-41")]
+    [InlineData("ANV17-61", "nitro-v-17-anv17-61")]
+    [InlineData("PH18-72", "predator-helios-18-ph18-72")]
+    [InlineData("PHN18-71", "predator-helios-neo-18-phn18-71")]
+    [InlineData("PTN16-51", "predator-triton-neo-16-ptn16-51")]
     public void TheModelsNitroSenseListed_HaveTheirOwnUnverifiedProfile(string code, string id)
     {
         // From the NitroSense 5.0.1327.0 inventory (docs/NitroSense-inventory-2026-11-25.md). Each profile names the

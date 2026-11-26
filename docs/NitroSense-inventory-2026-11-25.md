@@ -5,6 +5,15 @@ executed, modified or copied into NitroLite. Configuration files are quoted as f
 reproduced. Every finding below is **evidence of what Acer's software expects**, not proof of what a given model's
 firmware does: a model still needs its owner's report before NitroLite changes behaviour for it.
 
+> **Correction (2026-11-26).** The service package this section and "Models" below describe,
+> `predatorservice.inf_amd64_269fd3cb3a95f72c` (2023-07-21, 18 model files), is **stale**. The running services
+> (`sc qc AASSvc`, `AcerLightingService`) start from `predatorservice.inf_amd64_c634eb8e856fb962` (DriverVer
+> 2025-08-13, 1.2.108.3): **42 model `.ini` files** and an `RGBDevice.ini` with **40** controllers, including Darfon
+> `0D62` (usage page FF01) and five Sunrex `05AF` PID families. Verified on the machine; see
+> `NitroSense-5.0.1327-reverse-engineering.md` §1 and §3.3.1 for the full tables. Models in the current package that
+> NitroLite still lacks: ANV15-42, ANV16-42, ANV16-61, ANV17-41, ANV17-61, PH18-72, PHN18-71, PTN16-51 (and `T7001`,
+> not a retail model code).
+
 ## Where the pieces are
 
 | Component | Location | What it is |
