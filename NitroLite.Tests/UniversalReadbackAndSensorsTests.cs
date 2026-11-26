@@ -183,7 +183,7 @@ public class UniversalReadbackAndSensorsTests
         var policy = new ReadBackPolicy(settings, NoDelay, verification);
 
         // The Windows-key lock on every Acer firmware we have seen: SetGamingProfile accepts it, and no getter answers
-        // the state. Reading the overdrive word's bit 24 as "the lock is on" would be inventing a measurement.
+        // the state. Reading the GetGamingProfile(0) word's bit 24 as "the lock is on" would be inventing a measurement.
         var result = await policy.ApplyUnverifiableAsync(
             ReadBackPolicy.WinKeyLock,
             requested: "enabled",

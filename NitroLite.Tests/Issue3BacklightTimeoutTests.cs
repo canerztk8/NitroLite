@@ -128,7 +128,6 @@ public class Issue3BacklightTimeoutTests
         OperatingModeControl = true,
         KeyboardLighting = true,
         CoolBoost = true,
-        LcdOverdrive = true,
         WinKeyLock = true,
         BacklightTimeout = false
     };
@@ -282,8 +281,6 @@ public class Issue3BacklightTimeoutTests
         public Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode) => Task.FromResult(false);
         public Task<bool?> GetCoolBoostAsync() => Task.FromResult<bool?>(null);
         public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(false);
-        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(null);
-        public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
         public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
         public void Dispose() { }
     }

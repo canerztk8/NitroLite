@@ -44,9 +44,6 @@ public sealed record LinuxNodes
     /// <summary>The Windows-key lock, from acer-wmi-linuwu.</summary>
     public string? WinKeyLock { get; init; }
 
-    /// <summary>LCD overdrive.</summary>
-    public string? LcdOverride { get; init; }
-
     /// <summary>CoolBoost, when the module exposes it.</summary>
     public string? CoolBoost { get; init; }
 

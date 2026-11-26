@@ -102,7 +102,6 @@ public class LinuxChargeTypesAndAwlTests
         var keyboard = LinuxPaths.Combine(LinuxPaths.AcpiPlatformRoot, LinuxPaths.FourZoneKeyboard);
         fs.WithDirectory(sense);
         fs.WithFile(LinuxPaths.Combine(sense, "battery_limiter"), "0\n");
-        fs.WithFile(LinuxPaths.Combine(sense, "lcd_overdrive"), "0\n");
         fs.WithFile(LinuxPaths.Combine(sense, "cool_boost"), "0\n");
         fs.WithFile(LinuxPaths.Combine(sense, "win_key_lock"), "0\n");
         fs.WithDirectory(keyboard);
@@ -113,10 +112,8 @@ public class LinuxChargeTypesAndAwlTests
 
         Assert.Equal(sense, caps.Nodes.SenseRoot);
         Assert.True(caps.Hardware.WinKeyLock);
-        Assert.True(caps.Hardware.LcdOverdrive);
         Assert.True(caps.Hardware.CoolBoost);
         Assert.True(caps.Hardware.KeyboardLighting);
-        Assert.EndsWith("lcd_overdrive", caps.Nodes.LcdOverride, StringComparison.Ordinal);
         Assert.Equal(LinuxPaths.Combine(keyboard, "per_zone_mode"), caps.Nodes.PerZoneMode);
 
         using var controller = Controller(fs, caps);

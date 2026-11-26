@@ -586,10 +586,6 @@ public class HalStep6Tests
 
         public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(false);
 
-        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(null);
-
-        public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
-
         public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
         public void Dispose() { }
     }

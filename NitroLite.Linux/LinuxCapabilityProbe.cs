@@ -15,7 +15,7 @@ namespace NitroLite.Linux;
 /// </para>
 /// <para>
 /// Tier 2 is the out-of-tree Linuwu-Sense module, which adds the attributes the kernel does not have: custom fan
-/// speed, four-zone keyboard RGB, CoolBoost, LCD overdrive, the backlight timeout and the battery limiter. It is
+/// speed, four-zone keyboard RGB, CoolBoost, the backlight timeout and the battery limiter. It is
 /// optional. A machine with only tier 1 gets a working, smaller feature set rather than a broken app.
 /// </para>
 /// <para>
@@ -86,7 +86,6 @@ public sealed class LinuxCapabilityProbe
             KeyboardLighting = hasKeyboardNodes || nodes.HidrawKeyboard != null,
             BacklightTimeout = nodes.BacklightTimeout != null,
             CoolBoost = nodes.CoolBoost != null,
-            LcdOverdrive = nodes.LcdOverride != null,
             // Only acer-wmi-linuwu has the Windows-key lock; neither the kernel driver nor Linuwu-Sense does.
             WinKeyLock = nodes.WinKeyLock != null,
             SupportedOperatingModes = supportedModes,
@@ -196,7 +195,6 @@ public sealed class LinuxCapabilityProbe
                      nodes.PerZoneMode,
                      nodes.FourZoneMode,
                      nodes.CoolBoost,
-                     nodes.LcdOverride,
                      nodes.BacklightTimeout,
                      nodes.BatteryLimiter,
                      nodes.ChargeThreshold,
@@ -252,8 +250,6 @@ public sealed class LinuxCapabilityProbe
             ChargeThreshold = ResolveChargeThreshold(),
             ChargeTypes = ResolveChargeTypes(),
             WinKeyLock = Sense(LinuxPaths.WinKeyLock) ?? Acpi(LinuxPaths.WinKeyLock),
-            LcdOverride = Sense(LinuxPaths.LcdOverdrive) ?? Sense(LinuxPaths.LcdOverride) ??
-                          Acpi(LinuxPaths.LcdOverdrive) ?? Acpi(LinuxPaths.LcdOverride),
             CoolBoost = Sense(LinuxPaths.CoolBoost) ?? Acpi(LinuxPaths.CoolBoost),
             DgpuMode = Sense(LinuxPaths.DgpuMode) ?? Acpi(LinuxPaths.DgpuMode),
             PerZoneMode = keyboard == null ? null : Existing(LinuxPaths.Combine(keyboard, LinuxPaths.PerZoneMode)),

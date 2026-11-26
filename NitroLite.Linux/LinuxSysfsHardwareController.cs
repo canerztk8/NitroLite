@@ -16,7 +16,7 @@ namespace NitroLite.Linux;
 /// Two tiers feed it. The in-kernel <c>acer-wmi</c> module registers the ACPI platform profile and <c>hwmon</c>
 /// supplies temperatures and fan tachometers, which is enough for mode switching, real fan RPM and the battery charge
 /// limit on a stock distribution. The out-of-tree Linuwu-Sense module adds the attributes the kernel does not have:
-/// custom fan speed, four-zone keyboard RGB, CoolBoost, LCD overdrive and the backlight timeout. Whichever answered is
+/// custom fan speed, four-zone keyboard RGB, CoolBoost and the backlight timeout. Whichever answered is
 /// what this class uses, and a machine with only the first tier gets a smaller feature set rather than a broken app.
 /// </para>
 /// <para>
@@ -1016,24 +1016,13 @@ public sealed class LinuxSysfsHardwareController : IHardwareController, IRescann
         return result.Applied;
     }
 
-    // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
+    // ---------------------------------------------------------------- CoolBoost, WinKey lock
 
     public Task<bool?> GetCoolBoostAsync() => Task.FromResult(ReadFlag(_caps.Nodes.CoolBoost));
 
     public async Task<bool> SetCoolBoostAsync(bool on)
     {
         var node = _caps.Nodes.CoolBoost;
-        if (node == null) return false;
-
-        if (!await WriteNodeAsync(node, on ? "1" : "0").ConfigureAwait(false)) return false;
-        return ReadFlag(node) == on;
-    }
-
-    public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult(ReadFlag(_caps.Nodes.LcdOverride));
-
-    public async Task<bool> SetLcdOverdriveAsync(bool on)
-    {
-        var node = _caps.Nodes.LcdOverride;
         if (node == null) return false;
 
         if (!await WriteNodeAsync(node, on ? "1" : "0").ConfigureAwait(false)) return false;

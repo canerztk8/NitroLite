@@ -370,7 +370,6 @@ public class HalStep9Tests
             KeyPresent = true,
             DgpuModeCapability = 7,
             KeyboardArea = 4,
-            LcdOverdriveSupport = 1,
             GpuOverclockSupport = 1
         }
     };
@@ -425,7 +424,6 @@ public class HalStep9Tests
             ServiceAvailable = true,
             CoolBoost = true,
             BacklightTimeout = true,
-            LcdOverdrive = true,
             WinKeyLock = true,
             SupportedModeMask = 0x7300,
             SupportedOperatingModes = new[]

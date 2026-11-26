@@ -49,7 +49,6 @@ public class LinuxFunctionalParityTests
         fs.WithFile(Sense("fan_speed"), "0,0\n");
         fs.WithFile(Sense("backlight_timeout"), "0\n");
         fs.WithFile(Sense("battery_limiter"), "0\n");
-        fs.WithFile(Sense("lcd_override"), "0\n");
         fs.WithFile(Sense("cool_boost"), "0\n");
         fs.WithFile(Sense("dgpu_mode"), "0\n");
 

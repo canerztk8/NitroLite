@@ -104,7 +104,6 @@ public sealed class LinuxHelperPolicy
         policy.Add(nodes.ChargeTypes, v => v is LinuxPaths.ChargeTypeStandard or LinuxPaths.ChargeTypeLongLife);
         policy.Add(nodes.WinKeyLock, IsFlag);
         policy.Add(nodes.CoolBoost, IsFlag);
-        policy.Add(nodes.LcdOverride, IsFlag);
         policy.Add(nodes.BacklightTimeout, IsFlag);
         policy.Add(nodes.DgpuMode, IsFlag);
 

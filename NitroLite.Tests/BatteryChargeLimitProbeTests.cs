@@ -52,8 +52,7 @@ public class BatteryChargeLimitProbeTests
                 KeyPresent = true,
                 DgpuModeCapability = 7,
                 KeyboardArea = 4,
-                GpuOverclockSupport = 1,
-                LcdOverdriveSupport = 1
+                GpuOverclockSupport = 1
             },
             CareCenterAvailable = careCenter,
             CareCenterDetail = careCenterDetail

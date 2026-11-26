@@ -855,10 +855,6 @@ public class ChaosAndConcurrencyTests
 
         public Task<bool> SetCoolBoostAsync(bool on) => _inner.SetCoolBoostAsync(on);
 
-        public Task<bool?> GetLcdOverdriveAsync() => _inner.GetLcdOverdriveAsync();
-
-        public Task<bool> SetLcdOverdriveAsync(bool on) => _inner.SetLcdOverdriveAsync(on);
-
         public Task<bool> SetWinKeyLockAsync(bool enabled) => _inner.SetWinKeyLockAsync(enabled);
 
         public void Dispose()

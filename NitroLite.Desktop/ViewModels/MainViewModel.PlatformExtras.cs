@@ -176,7 +176,6 @@ public sealed partial class MainViewModel
                 Raise(nameof(LightingUnsupported));
                 Raise(nameof(LightingControlsEnabled));
                 Raise(nameof(CoolBoostAvailable));
-                Raise(nameof(LcdOverdriveAvailable));
                 Raise(nameof(BacklightTimeoutAvailable));
                 Raise(nameof(WinKeyLockAvailable));
                 Raise(nameof(HasAnyExtra));

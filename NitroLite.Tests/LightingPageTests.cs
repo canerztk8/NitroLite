@@ -330,7 +330,6 @@ public class LightingPageTests
             KeyboardLighting = true,
             BacklightTimeout = true,
             CoolBoost = true,
-            LcdOverdrive = true,
             WinKeyLock = true
         };
 
@@ -347,8 +346,6 @@ public class LightingPageTests
         public bool? BacklightTimeout { get; set; } = false;
 
         public bool? CoolBoost { get; set; } = false;
-
-        public bool? LcdOverdrive { get; set; } = false;
 
         public bool WinKeyLock { get; private set; }
 
@@ -414,14 +411,6 @@ public class LightingPageTests
         public Task<bool> SetCoolBoostAsync(bool on)
         {
             CoolBoost = on;
-            return Task.FromResult(true);
-        }
-
-        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult(LcdOverdrive);
-
-        public Task<bool> SetLcdOverdriveAsync(bool on)
-        {
-            LcdOverdrive = on;
             return Task.FromResult(true);
         }
 
@@ -656,7 +645,7 @@ public class LightingPageTests
         Assert.True(full.HasAnyExtra);
         Assert.False(full.NoExtrasAvailable);
 
-        // A machine with no CoolBoost, no overdrive and no backlight timeout says so once instead of drawing three
+        // A machine with no CoolBoost and no backlight timeout says so once instead of drawing empty switches
         // empty grey boxes.
         var bare = new StubHardware
         {

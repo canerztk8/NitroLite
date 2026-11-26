@@ -4,7 +4,7 @@ namespace NitroLite.Windows.Core;
 
 /// <summary>
 /// <c>--agent-capabilities</c>: asks Acer's service (AASSvc) the questions NitroSense asks at start-up to learn what a
-/// machine has — fan list and limits, operating modes, GPU modes, overdrive, keyboard — and prints the raw answers.
+/// machine has — fan list and limits, operating modes, GPU modes, keyboard — and prints the raw answers.
 /// </summary>
 /// <remarks>
 /// Read-only by construction: the question list holds no SET_DEVICE_DATA packet, and a test pins that. The output is

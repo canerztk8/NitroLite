@@ -1,7 +1,7 @@
 # NitroLite hardware helper — the service.
 #
 # Runs as root so it can write the Acer sysfs attributes, and does nothing else: it writes only the attributes its own
-# probe found (operating mode, fans, keyboard, charge limit, CoolBoost, overdrive, backlight timeout, GPU mode, CPU
+# probe found (operating mode, fans, keyboard, charge limit, CoolBoost, backlight timeout, GPU mode, CPU
 # boost), only values each of them accepts, and only for callers polkit allows. Started by nitrolite-helper.socket.
 #
 # @APP_DIR@ is replaced at install time with the folder that holds NitroLite.Desktop (/opt/nitrolite for the packages).

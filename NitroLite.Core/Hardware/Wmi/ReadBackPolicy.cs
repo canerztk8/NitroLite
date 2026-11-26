@@ -184,9 +184,6 @@ public sealed class ReadBackPolicy
     /// </summary>
     public const string WinKeyLock = "wmi.winKeyLock";
 
-    /// <summary>LCD overdrive, which does have a getter through <c>GetGamingProfile(0)</c>.</summary>
-    public const string LcdOverdrive = "wmi.lcdOverdrive";
-
     /// <summary>CoolBoost, which does have a getter through <c>APGeAction.GetFunction(0x207)</c>.</summary>
     public const string CoolBoost = "wmi.coolBoost";
 
@@ -367,7 +364,7 @@ public sealed class ReadBackPolicy
     /// <para>
     /// The Windows-key lock is the reason this exists. <c>SetGamingProfile</c> accepts it and answers status zero, and
     /// the firmware has no getter: <c>GetGamingProfile</c> with the lock's selector echoes the selector back, and
-    /// <c>GetGamingProfile(0)</c> answers the LCD-overdrive word whose bit 24 means "overdrive is supported". Reading
+    /// <c>GetGamingProfile(0)</c> answers a different word whose bit 24 is not the lock. Reading
     /// either as the lock state would be inventing a measurement. So a missing answer is
     /// <see cref="ControlVerdict.Unverifiable"/> — the write is not called applied, the capability is not counted as
     /// broken, and the UI gets a hint instead of a false "Applied" or a false failure.

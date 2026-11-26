@@ -210,12 +210,6 @@ public sealed class AgentHardwareController : IHardwareController, ICareCenterTr
     /// <summary>No CoolBoost command exists on the service socket.</summary>
     public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(false);
 
-    /// <summary>No LCD overdrive command exists on the service socket.</summary>
-    public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(null);
-
-    /// <summary>No LCD overdrive command exists on the service socket.</summary>
-    public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
-
     /// <summary>The Acer service stores whether the Windows key is enabled.</summary>
     public Task<bool> SetWinKeyLockAsync(bool enabled) => WriteAsync(() => _agent.SetWinKeyEnabledAsync(!enabled));
 

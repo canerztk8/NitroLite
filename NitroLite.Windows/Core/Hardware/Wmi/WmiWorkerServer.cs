@@ -407,17 +407,6 @@ public sealed class WmiWorkerServer : IDisposable
                     return WmiWorkerResponse.FromResult(_executor.SetCoolBoost(on));
                 }
 
-                case WmiWorkerCommand.GetLcdOverdrive:
-                    return WmiWorkerResponse.FromResult(_executor.GetLcdOverdrive());
-
-                case WmiWorkerCommand.SetLcdOverdrive:
-                {
-                    if (!TryReadBool(request.Args, "on", out var on))
-                        return Invalid("on is missing or not a boolean");
-
-                    return WmiWorkerResponse.FromResult(_executor.SetLcdOverdrive(on));
-                }
-
                 case WmiWorkerCommand.SetWinKeyLock:
                 {
                     if (!TryReadBool(request.Args, "enabled", out var enabled))

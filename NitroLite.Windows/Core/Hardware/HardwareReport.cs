@@ -255,7 +255,6 @@ public static class HardwareReport
         AppendRow(sb, "Key present", probe.Registry.KeyPresent ? "yes" : "no");
         AppendRow(sb, "dgpu_mode_capability", Format(probe.Registry.DgpuModeCapability));
         AppendRow(sb, "KeyBoardArea", Format(probe.Registry.KeyboardArea));
-        AppendRow(sb, "LCD_Overdrive_support", Format(probe.Registry.LcdOverdriveSupport));
         AppendRow(sb, "GPU_OC_Support", Format(probe.Registry.GpuOverclockSupport));
         sb.AppendLine();
 
@@ -269,9 +268,6 @@ public static class HardwareReport
         AppendRow(sb, "APGeAction", capabilities == null
             ? "not read (needs elevation)"
             : capabilities.CoolBoost || capabilities.BacklightTimeout ? "present" : "absent");
-        AppendRow(sb, "GetGamingProfile(0) overdrive", capabilities == null
-            ? "not read (needs elevation)"
-            : capabilities.LcdOverdrive ? "supported" : "not supported");
         AppendRow(sb, "Windows-key lock", capabilities == null
             ? "not read (needs elevation)"
             : capabilities.WinKeyLock ? "writable" : "not writable");

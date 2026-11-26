@@ -421,8 +421,7 @@ public class CapabilityProbeTests
                 KeyPresent = true,
                 DgpuModeCapability = 7,
                 KeyboardArea = 4,
-                GpuOverclockSupport = 1,
-                LcdOverdriveSupport = 1
+                GpuOverclockSupport = 1
             }
         };
 
@@ -444,7 +443,6 @@ public class CapabilityProbeTests
         Assert.True(snapshot.IsSupported(CapabilitySnapshot.MuxSwitch));
         Assert.True(snapshot.IsSupported(CapabilitySnapshot.KeyboardZones));
         Assert.True(snapshot.IsSupported(CapabilitySnapshot.GpuOverclock));
-        Assert.True(snapshot.IsSupported(CapabilitySnapshot.PanelOverdrive));
     }
 
     [Fact]

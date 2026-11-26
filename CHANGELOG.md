@@ -106,6 +106,7 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 - Code nothing reached: the WPF-era power automation, the reconciliation path, unused formatters and labels, and
   878 translation keys per language that no screen used. Personal and machine-specific scripts under `tools/` and
   unreferenced research probes under `scripts/` are gone from the repository.
+- LCD overdrive control (Windows and Linux).
 
 **Support**
 - The support card has a GitHub Sponsors button next to Ko-fi; the line that said the programme was pending is gone.

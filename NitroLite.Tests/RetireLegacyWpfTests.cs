@@ -53,8 +53,6 @@ public class RetireLegacyWpfTests
         public Task<bool> SetBatteryChargeModeAsync(BatteryChargeMode mode) => Task.FromResult(false);
         public Task<bool?> GetCoolBoostAsync() => Task.FromResult<bool?>(null);
         public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(false);
-        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(null);
-        public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(false);
         public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(false);
         public void Dispose() { }
     }
@@ -196,8 +194,8 @@ public class RetireLegacyWpfTests
     [Fact]
     public async Task Extras_OnWindowsWithNoAnswer_ShowNeitherTheBadgeNorAnEmptyCard()
     {
-        // The second live-hardware bug: the service socket has no CoolBoost or overdrive command, so both read as
-        // false on a Nitro 16 that has them. Claiming "not on this device" from that is a lie about the hardware.
+        // The second live-hardware bug: the service socket has no CoolBoost command, so it reads as
+        // false on a Nitro 16 that has it. Claiming "not on this device" from that is a lie about the hardware.
         var hardware = new FakeController
         {
             IsAvailable = true,

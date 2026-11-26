@@ -36,9 +36,6 @@ public sealed record AcerRegistrySnapshot
     /// <summary>1 when the GPU can be overclocked through the agent.</summary>
     public int? GpuOverclockSupport { get; init; }
 
-    /// <summary>1 when the panel supports LCD overdrive.</summary>
-    public int? LcdOverdriveSupport { get; init; }
-
     /// <summary>Nothing was readable: no key, or no rights to it.</summary>
     public static AcerRegistrySnapshot Empty { get; } = new();
 
@@ -87,7 +84,6 @@ public sealed record AcerRegistrySnapshot
                 KeyPresent = true,
                 DgpuModeCapability = ReadDword(key, @"AdvanceSettings", "dgpu_mode_capability"),
                 DiscreteGpuSupport = ReadDword(key, @"AdvanceSettings", "discrete_gpu_support"),
-                LcdOverdriveSupport = ReadDword(key, @"AdvanceSettings", "LCD_Overdrive_support"),
                 KeyboardArea = ReadDword(key, @"LightSetting", "KeyBoardArea"),
                 GpuOverclockSupport = ReadDword(key, @"Overclock", "GPU_OC_Support")
             };

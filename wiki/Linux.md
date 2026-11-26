@@ -76,7 +76,7 @@ graphics card and battery health need no permission at all.
 | Fan RPM and Acer's own modes | Depends on the model | the kernel knowing your model; see **[Linux model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)**, or `predator_v4` |
 | Fan speed and fan curve | On the models the kernel lists for fan control | the helper (the packages, or `install.sh --system`) and a new enough kernel ([model support](https://github.com/canerztk8/NitroLite/wiki/Linux-Model-Support)), or an out-of-tree module |
 | 80 % charge limit | On the models the kernel lists, from Linux 7.3 | the kernel's `acer-wmi-battery` driver (Nitro ANV15-51, AN515-57, AN515-58, AN517-54 and some Aspire models), or an out-of-tree module |
-| 4-zone keyboard colour (firmware-driven boards), LCD overdrive, backlight timeout | No | an out-of-tree module: [acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu) or [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) |
+| 4-zone keyboard colour (firmware-driven boards), backlight timeout | No | an out-of-tree module: [acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu) or [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense) |
 | CoolBoost, Windows key lock | No | [acer-wmi-linuwu](https://github.com/adityaruplaha/acer-wmi-linuwu), on the models it lists (AN515-57) |
 | GPU mode (MUX) | No | no Linux driver exposes it; switch it in the firmware setup (BIOS) instead |
 | Keyboard colour through OpenRGB | If OpenRGB is running | the OpenRGB SDK server on `127.0.0.1:6742` |

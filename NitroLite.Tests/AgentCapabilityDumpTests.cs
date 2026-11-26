@@ -31,7 +31,7 @@ public class AgentCapabilityDumpTests
     {
         using var service = new EchoService(function => function == "SUPPORT_FAN_CONTROL"
             ? "{\"request\":\"SUPPORT_FAN_CONTROL\",\"result\":\"0\",\"data\":[{\"fan_index\":\"0\",\"fan_custom_min_speed\":\"20\",\"fan_custom_max_speed\":\"100\"}]}"
-            : function == "SUPPORT_LCD_OVERDRIVE"
+            : function == "SUPPORT_KEYBOARD_INFO"
                 ? null
                 : $"{{\"request\":\"{function}\",\"result\":\"0\",\"data\":1}}");
         using var client = new AcerAgentClient("127.0.0.1", service.Port,
@@ -42,7 +42,7 @@ public class AgentCapabilityDumpTests
 
         var text = output.ToString();
         Assert.Contains("fan_custom_min_speed", text, StringComparison.Ordinal);
-        Assert.Contains("SUPPORT_LCD_OVERDRIVE: (no answer)", text, StringComparison.Ordinal);
+        Assert.Contains("SUPPORT_KEYBOARD_INFO: (no answer)", text, StringComparison.Ordinal);
         foreach (var (_, function) in AcerAgentClient.CapabilityQuestions)
             Assert.Contains(function + ":", text, StringComparison.Ordinal);
 

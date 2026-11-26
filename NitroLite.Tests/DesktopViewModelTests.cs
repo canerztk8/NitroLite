@@ -57,7 +57,6 @@ public class DesktopViewModelTests
         fs.WithFile(Sense("fan_speed"), "60,50\n");
         fs.WithFile(Sense("backlight_timeout"), "0\n");
         fs.WithFile(Sense("battery_limiter"), "0\n");
-        fs.WithFile(Sense("lcd_override"), "0\n");
         fs.WithFile(Sense("cool_boost"), "0\n");
 
         fs.WithDirectory(KeyboardRoot());
@@ -382,7 +381,6 @@ public class DesktopViewModelTests
         Assert.False(vm.ModeControlAvailable);
         Assert.False(vm.LightingAvailable);
         Assert.False(vm.CoolBoostAvailable);
-        Assert.False(vm.LcdOverdriveAvailable);
         Assert.False(vm.BacklightTimeoutAvailable);
         Assert.False(vm.BatteryLimitAvailable);
     }
@@ -881,7 +879,7 @@ public class DesktopViewModelTests
     }
 
     [Fact]
-    public async Task CapabilityList_DoesNotAdvertiseCoolBoostOrLcdOverdrive()
+    public async Task CapabilityList_DoesNotAdvertiseCoolBoost()
     {
         var (vm, controller) = Create(Nitro16());
         using var _ = vm;
@@ -889,9 +887,8 @@ public class DesktopViewModelTests
 
         await vm.InitializeAsync();
 
-        // Neither feature is part of the app, so the first-run walkthrough must not claim to check for them.
+        // CoolBoost is not part of the app, so the first-run walkthrough must not claim to check for it.
         Assert.DoesNotContain(vm.CapabilityRows, row => row.Label == Loc.T("CoolBoost"));
-        Assert.DoesNotContain(vm.CapabilityRows, row => row.Label == Loc.T("LCD overdrive"));
     }
 
     [Fact]

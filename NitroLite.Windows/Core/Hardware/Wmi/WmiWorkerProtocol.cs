@@ -62,11 +62,8 @@ public enum WmiWorkerCommand
     /// <summary>CoolBoost on or off, through <c>APGeAction.SetFunction</c>.</summary>
     SetCoolBoost = 12,
 
-    /// <summary>LCD overdrive state, from <c>GetGamingProfile(0)</c>.</summary>
-    GetLcdOverdrive = 13,
-
-    /// <summary>LCD overdrive on or off, through <c>SetGamingProfile</c>.</summary>
-    SetLcdOverdrive = 14,
+    // 13 and 14 were the LCD overdrive get/set commands. They are retired: never reuse these numbers, and do not
+    // renumber the commands below, because the app and the elevated worker may be different builds.
 
     /// <summary>Windows-key lock, through <c>SetGamingProfile</c>. Write-only: the firmware has no getter.</summary>
     SetWinKeyLock = 15,

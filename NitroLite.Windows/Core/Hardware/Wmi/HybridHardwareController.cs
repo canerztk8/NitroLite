@@ -686,18 +686,6 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
         return reached ? applied : await _agent.SetCoolBoostAsync(on).ConfigureAwait(false);
     }
 
-    public async Task<bool?> GetLcdOverdriveAsync()
-    {
-        var (reached, value) = await TryWmiAsync(w => w.GetLcdOverdriveAsync(), mayStart: false).ConfigureAwait(false);
-        return reached ? value : await _agent.GetLcdOverdriveAsync().ConfigureAwait(false);
-    }
-
-    public async Task<bool> SetLcdOverdriveAsync(bool on)
-    {
-        var (reached, applied) = await TryWmiAsync(w => w.SetLcdOverdriveAsync(on), mayStart: true).ConfigureAwait(false);
-        return reached ? applied : await _agent.SetLcdOverdriveAsync(on).ConfigureAwait(false);
-    }
-
     public async Task<bool> SetWinKeyLockAsync(bool enabled)
     {
         var backend = await ResolveAsync().ConfigureAwait(false);
@@ -715,7 +703,7 @@ public sealed class HybridHardwareController : IHardwareController, ILightingEle
     /// helper is already connected: it may look the backend object up (creating it starts nothing), but it never calls
     /// <see cref="IHardwareController.EnsureConnectedAsync"/> on one that is not, whatever
     /// <see cref="AllowElevationForLighting"/> says — that flag defaults to true, and the boot-time state read
-    /// (CoolBoost, overdrive, backlight timeout) runs before the user has asked for anything.
+    /// (CoolBoost, backlight timeout) runs before the user has asked for anything.
     /// </para>
     /// </summary>
     private async Task<(bool Reached, T Value)> TryWmiAsync<T>(Func<IHardwareController, Task<T>> call, bool mayStart)

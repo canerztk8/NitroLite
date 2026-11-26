@@ -822,10 +822,6 @@ public class WmiWorkerTests
 
         public WmiOperationResult SetCoolBoost(bool on) => WmiOperationResult.NotSupported("APGeAction is not registered");
 
-        public WmiOperationResult GetLcdOverdrive() => WmiOperationResult.NotSupported("panel has no overdrive");
-
-        public WmiOperationResult SetLcdOverdrive(bool on) => WmiOperationResult.NotSupported("panel has no overdrive");
-
         public WmiOperationResult SetWinKeyLock(bool enabled) => WmiOperationResult.Success();
 
         public WmiOperationResult GetBacklightTimeout() => WmiOperationResult.NotSupported("APGeAction is not registered");

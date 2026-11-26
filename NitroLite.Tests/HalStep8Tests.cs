@@ -9,7 +9,7 @@ namespace NitroLite.Tests;
 /// <summary>
 /// Pins the third package of the hardware-layer work: the operating-mode bitmask, the WMI MUX signal, the model
 /// quirks that switch a write off, and the four extra switches that only some firmwares register
-/// (<c>APGeAction</c> CoolBoost and backlight timeout, <c>GetGamingProfile</c> LCD overdrive and Windows-key lock).
+/// (<c>APGeAction</c> CoolBoost and backlight timeout, <c>GetGamingProfile</c> Windows-key lock).
 /// <para>
 /// Every expected value here came from a read-only run on an AN16-41 (BIOS V1.27): <c>GetGamingMiscSetting(0x0A)</c>
 /// answered <c>0x7300</c>, <c>(0x09)</c> answered <c>0x0700</c>, <c>GetGamingProfile(0)</c> answered
@@ -215,26 +215,6 @@ public class HalStep8Tests
         Assert.Null(AcerWmiProtocol.DecodeBacklightTimeout((30UL << 40) | (50UL << 32) | 1UL));
     }
 
-    // ---------------------------------------------------------------- LCD overdrive
-
-    [Fact]
-    public void LcdOverdrive_Decode_KnowsExactlyTwoValues()
-    {
-        Assert.True(AcerWmiProtocol.DecodeLcdOverdrive(0x1000001000000UL));
-        Assert.False(AcerWmiProtocol.DecodeLcdOverdrive(0x1000000UL));
-
-        // Anything else is "this panel has no overdrive", not a guess at which bit means on.
-        Assert.Null(AcerWmiProtocol.DecodeLcdOverdrive(0));
-        Assert.Null(AcerWmiProtocol.DecodeLcdOverdrive(0x02));
-    }
-
-    [Fact]
-    public void LcdOverdrive_Encode_UsesSelectorSixteenAndBit48()
-    {
-        Assert.Equal(0x10UL, AcerWmiProtocol.EncodeLcdOverdrive(false));
-        Assert.Equal(0x10UL | (1UL << 48), AcerWmiProtocol.EncodeLcdOverdrive(true));
-    }
-
     // ---------------------------------------------------------------- Windows-key lock
 
     [Fact]
@@ -242,15 +222,6 @@ public class HalStep8Tests
     {
         Assert.Equal(2UL, AcerWmiProtocol.EncodeWinKeyLock(false));
         Assert.Equal(2UL | (1UL << 24), AcerWmiProtocol.EncodeWinKeyLock(true));
-    }
-
-    [Fact]
-    public void WinKeyLock_DoesNotCollideWithTheOverdriveWord()
-    {
-        // GetGamingProfile(0) answers the overdrive word, whose bit 24 means "overdrive is supported". If the lock
-        // ever shared that bit the two switches would fight each other.
-        Assert.Equal(0UL, AcerWmiProtocol.EncodeWinKeyLock(true) & AcerWmiProtocol.GamingProfileOverdriveBit);
-        Assert.Equal(0UL, AcerWmiProtocol.EncodeLcdOverdrive(true) & AcerWmiProtocol.GamingProfileWinKeyLockBit);
     }
 
     // ---------------------------------------------------------------- model quirks
@@ -441,22 +412,21 @@ public class HalStep8Tests
     }
 
     [Fact]
-    public void Dispatch_LcdOverdrive_ReadsAndWrites()
+    public void Dispatch_RetiredCommands13And14_AreAnsweredAsUnknown()
     {
+        // 13 and 14 were the LCD overdrive get/set commands. A worker from an older build may still be sent them (or an
+        // old client may send them to this one); both must get the ordinary unknown-command refusal, not a crash.
         var executor = new FakeExtraExecutor();
         using var server = ServerWith(executor);
 
-        Assert.True(server.Dispatch(new WmiWorkerRequest { Command = WmiWorkerCommand.GetLcdOverdrive }).Ok);
-        Assert.Equal(1, executor.GetLcdOverdriveCalls);
-
-        var write = server.Dispatch(new WmiWorkerRequest
+        foreach (var retired in new[] { 13, 14 })
         {
-            Command = WmiWorkerCommand.SetLcdOverdrive,
-            Args = new JsonObject { ["on"] = false }
-        });
+            var response = server.Dispatch(new WmiWorkerRequest { Command = (WmiWorkerCommand)retired });
 
-        Assert.True(write.Ok);
-        Assert.False(executor.LastLcdOverdrive);
+            Assert.False(response.Ok);
+            Assert.Equal(WmiOperationResult.CodeInvalidArgument, response.ErrorCode);
+            Assert.Contains($"unknown command {retired}", response.Error, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -572,12 +542,10 @@ public class HalStep8Tests
 
         public int GetCoolBoostCalls { get; private set; }
         public int SetCoolBoostCalls { get; private set; }
-        public int GetLcdOverdriveCalls { get; private set; }
         public int SetWinKeyLockCalls { get; private set; }
         public int GetBacklightTimeoutCalls { get; private set; }
 
         public bool LastCoolBoost { get; private set; }
-        public bool LastLcdOverdrive { get; private set; }
         public bool LastWinKeyLock { get; private set; }
         public bool LastBacklightTimeout { get; private set; }
 
@@ -620,18 +588,6 @@ public class HalStep8Tests
             return CoolBoostSupported
                 ? WmiOperationResult.Success()
                 : WmiOperationResult.NotSupported("APGeAction is not registered");
-        }
-
-        public WmiOperationResult GetLcdOverdrive()
-        {
-            GetLcdOverdriveCalls++;
-            return WmiOperationResult.Success(new JsonObject { ["on"] = false });
-        }
-
-        public WmiOperationResult SetLcdOverdrive(bool on)
-        {
-            LastLcdOverdrive = on;
-            return WmiOperationResult.Success();
         }
 
         public WmiOperationResult SetWinKeyLock(bool enabled)

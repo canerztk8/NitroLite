@@ -55,7 +55,6 @@ public class LinuxSysfsBackendTests
         fs.WithFile(Sense("fan_speed"), "0,0\n");
         fs.WithFile(Sense("backlight_timeout"), "0\n");
         fs.WithFile(Sense("battery_limiter"), "0\n");
-        fs.WithFile(Sense("lcd_override"), "0\n");
         fs.WithFile(Sense("cool_boost"), "0\n");
 
         fs.WithDirectory(KeyboardRoot());
@@ -72,7 +71,6 @@ public class LinuxSysfsBackendTests
         fs.WithoutFile(Sense("fan_speed"));
         fs.WithoutFile(Sense("backlight_timeout"));
         fs.WithoutFile(Sense("battery_limiter"));
-        fs.WithoutFile(Sense("lcd_override"));
         fs.WithoutFile(Sense("cool_boost"));
         fs.WithoutFile(Keyboard("per_zone_mode"));
         fs.WithoutFile(Keyboard("four_zone_mode"));
@@ -195,7 +193,6 @@ public class LinuxSysfsBackendTests
         Assert.True(caps.Hardware.FanControl);
         Assert.True(caps.Hardware.KeyboardLighting);
         Assert.True(caps.Hardware.CoolBoost);
-        Assert.True(caps.Hardware.LcdOverdrive);
         Assert.True(caps.Hardware.BacklightTimeout);
         Assert.True(caps.Hardware.BatteryChargeLimit);
         Assert.False(caps.Hardware.WinKeyLock);
@@ -456,17 +453,6 @@ public class LinuxSysfsBackendTests
         Assert.True(await controller.SetCoolBoostAsync(true));
         Assert.Equal("1", fs.Peek(Sense("cool_boost"))?.Trim());
         Assert.True(await controller.GetCoolBoostAsync());
-    }
-
-    [Fact]
-    public async Task Tier2_LcdOverdrive_RoundTrips()
-    {
-        var fs = Nitro16();
-        using var controller = Controller(fs);
-
-        Assert.True(await controller.SetLcdOverdriveAsync(true));
-        Assert.Equal("1", fs.Peek(Sense("lcd_override"))?.Trim());
-        Assert.True(await controller.GetLcdOverdriveAsync());
     }
 
     [Fact]

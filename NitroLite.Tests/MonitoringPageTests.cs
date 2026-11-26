@@ -155,7 +155,6 @@ public class MonitoringPageTests
                 KeyboardLighting = true,
                 BacklightTimeout = true,
                 CoolBoost = true,
-                LcdOverdrive = true,
                 WinKeyLock = true,
                 BatteryChargeLimit = true
             });
@@ -194,10 +193,6 @@ public class MonitoringPageTests
         public Task<bool?> GetCoolBoostAsync() => Task.FromResult<bool?>(false);
 
         public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(true);
-
-        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(false);
-
-        public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(true);
 
         public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(true);
 

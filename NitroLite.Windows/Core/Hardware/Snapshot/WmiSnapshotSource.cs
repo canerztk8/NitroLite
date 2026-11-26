@@ -11,8 +11,7 @@ namespace NitroLite.Windows.Core.Hardware.Snapshot;
 /// <remarks>
 /// <para>
 /// Each entry is named after the selector it came from, not after the label the window shows, because the diff is read
-/// by someone comparing it with a NitroSense capture and a WMI trace: <c>misc0x0B</c> and <c>gamingProfile.overdrive</c>
-/// are the words in the documentation, "Balanced" is not.
+/// by someone comparing it with a NitroSense capture and a WMI trace: <c>misc0x0B</c> is the word in the documentation, "Balanced" is not.
 /// </para>
 /// <para>
 /// The raw worker state is captured first and flattened, so a firmware word that this build does not decode still shows
@@ -75,9 +74,6 @@ internal sealed class WmiSnapshotSource : IHardwareSnapshotSource
 
         await AddAsync(entries, "gamingProfile.operatingMode", async () =>
             (await _wmi.GetOperatingModeAsync().ConfigureAwait(false))?.ToString()).ConfigureAwait(false);
-
-        await AddAsync(entries, "gamingProfile.lcdOverdrive", async () =>
-            (await _wmi.GetLcdOverdriveAsync().ConfigureAwait(false))?.ToString()).ConfigureAwait(false);
 
         await AddAsync(entries, "gamingProfile.backlightTimeout", async () =>
             (await _wmi.GetBacklightTimeoutAsync().ConfigureAwait(false))?.ToString()).ConfigureAwait(false);

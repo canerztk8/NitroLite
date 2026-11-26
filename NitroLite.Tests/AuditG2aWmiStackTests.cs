@@ -34,7 +34,6 @@ public class AuditG2aWmiStackTests
         Assert.True(hybrid.AllowElevationForLighting);
 
         await hybrid.GetCoolBoostAsync();
-        await hybrid.GetLcdOverdriveAsync();
         await hybrid.GetBacklightTimeoutAsync();
 
         Assert.Equal(0, wmi.ConnectCount);
@@ -60,7 +59,6 @@ public class AuditG2aWmiStackTests
             serviceHealthy: () => Task.FromResult(false));
 
         await hybrid.GetCoolBoostAsync();
-        await hybrid.GetLcdOverdriveAsync();
         await hybrid.GetBacklightTimeoutAsync();
 
         Assert.Equal(0, starts);
@@ -318,8 +316,6 @@ public class AuditG2aWmiStackTests
         public WmiOperationResult SetKeyboardLighting(KeyboardLightingRequest request) => Ok();
         public WmiOperationResult GetCoolBoost() => Ok();
         public WmiOperationResult SetCoolBoost(bool on) => Ok();
-        public WmiOperationResult GetLcdOverdrive() => Ok();
-        public WmiOperationResult SetLcdOverdrive(bool on) => Ok();
         public WmiOperationResult SetWinKeyLock(bool enabled) => Ok();
         public WmiOperationResult GetBacklightTimeout() => Ok();
         public WmiOperationResult SetBacklightTimeout(bool enabled) => Ok();

@@ -62,7 +62,6 @@ public class WpfParityUiTests
         fs.WithFile(LinuxPaths.Combine(sense, "fan_speed"), "60,50\n");
         fs.WithFile(LinuxPaths.Combine(sense, "backlight_timeout"), "0\n");
         fs.WithFile(LinuxPaths.Combine(sense, "battery_limiter"), "0\n");
-        fs.WithFile(LinuxPaths.Combine(sense, "lcd_override"), "0\n");
         fs.WithFile(LinuxPaths.Combine(sense, "cool_boost"), "0\n");
 
         var keyboard = LinuxPaths.Combine(sense, LinuxPaths.FourZoneKeyboard);

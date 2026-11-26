@@ -100,8 +100,6 @@ public sealed class CleanupBTests : IDisposable
         public WmiOperationResult SetKeyboardLighting(KeyboardLightingRequest request) => WmiOperationResult.Success();
         public WmiOperationResult GetCoolBoost() => WmiOperationResult.Success();
         public WmiOperationResult SetCoolBoost(bool on) => WmiOperationResult.Success();
-        public WmiOperationResult GetLcdOverdrive() => WmiOperationResult.Success();
-        public WmiOperationResult SetLcdOverdrive(bool on) => WmiOperationResult.Success();
         public WmiOperationResult SetWinKeyLock(bool enabled) => WmiOperationResult.Success();
         public WmiOperationResult GetBacklightTimeout() => WmiOperationResult.Success();
         public WmiOperationResult SetBacklightTimeout(bool enabled) => WmiOperationResult.Success();

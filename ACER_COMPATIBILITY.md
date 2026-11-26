@@ -36,7 +36,6 @@ change. This is the only machine in this document whose behaviour was observed r
 | `mux.switch` | Supported | |
 | `keyboard.zones` | Supported, **4 zones** | |
 | `gpu.overclock` | Supported | |
-| `panel.overdrive` | Supported | |
 | direct WMI | not started | the elevated worker is only started on demand |
 
 ### 1.2 Sensor ids, measured
@@ -325,8 +324,6 @@ These are recorded because they are the difference between "the method returned 
 hardware changed":
 
 - **AN515-58, BIOS V2.19** — the battery limiter is accepted and has no effect (S2 #57).
-- **AN515-57** — `lcd_override` writes are accepted and ignored (S1, the package author's own machine).
-- **AN515-47** — LCD overdrive has no effect (S1).
 - **PH16-72, PT14-51** — the Sense settings directory is not offered at all; fan control exists only
   through the upstream hwmon `pwm` interface, which is a different mechanism from the Sense
   `fan_speed` method NitroLite drives (S1).
@@ -499,8 +496,8 @@ as what it is.
 | Keyboard colour | `GetGamingKBBacklight`, or the HID frame's own answer | **physical** — AN16-41; ENE frame confirmed by S7 on `PHN16S-71` / `ANV16S-41` | falls back to HID, then reverts |
 | MUX switch | `GetGamingMiscSetting(0x02)`, high byte `1..3` | **physical** — AN16-41 (hybrid, discrete). AN16-61: the *write* was reported as not applying, so this path is **test pending** there | reverts, clears the reboot badge, records why |
 | Battery charge limit | `WMID_GUID5` read-back, then Acer Care Center's `GET` after 320 ms | **physical** — AN16-41 for the WMI path; Care Center path **test pending** (no AN16-61 here) | switch moves to the mode the machine reports |
-| Windows-key lock | **none exists** — `SetGamingProfile` has no matching getter | **source + measurement** — `GetGamingProfile(0)` answers `0x1000000` (overdrive off) / `0x1000001000000` (on); bit 24 is the overdrive flag, so it cannot be the lock state | stays where the user put it, recorded *unverified*, hint offered |
-| LCD overdrive, CoolBoost, backlight timeout | `GetGamingProfile(0)`, `APGeAction.GetFunction(0x207)`, `GetFunction(backlight)` | **physical** — AN16-41 | unchanged by this round |
+| Windows-key lock | **none exists** — `SetGamingProfile` has no matching getter | **source + measurement** — `GetGamingProfile(0)` answers `0x1000000` / `0x1000001000000`, an unrelated word whose bit 24 cannot be the lock state | stays where the user put it, recorded *unverified*, hint offered |
+| CoolBoost, backlight timeout | `APGeAction.GetFunction(0x207)`, `GetFunction(backlight)` | **physical** — AN16-41 | unchanged by this round |
 
 ### 7.2 Telemetry layers, per metric
 
@@ -578,8 +575,7 @@ The provider therefore publishes its own interface map on every machine, and tha
 ### 9.2 What no amount of scraping answers
 
 - **A write that returns success and changes nothing.** `SetGamingRgbKb` answers `0` on the `AN16-61` and the colour
-  stays put; the battery limiter is accepted and ignored on `AN515-58` BIOS V2.19 (S2 #57); `lcd_override` is ignored
-  on `AN515-57` (S1). These are per-firmware facts. No community table records them, because the table is built from
+  stays put; the battery limiter is accepted and ignored on `AN515-58` BIOS V2.19 (S2 #57). These are per-firmware facts. No community table records them, because the table is built from
   "it worked on mine", and "it returned success" reads the same as "it worked" until someone measures.
 - **The kernel driver as a model database.** The mainline `acer-wmi.c` carries **27** DMI quirk entries and **none**
   of them is a Nitro or Predator model string (parsed from the file fetched while writing this section). The

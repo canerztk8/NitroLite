@@ -63,7 +63,6 @@ public sealed record CapabilitySnapshot
     public const string MuxSwitch = "mux.switch";
     public const string KeyboardZones = "keyboard.zones";
     public const string GpuOverclock = "gpu.overclock";
-    public const string PanelOverdrive = "panel.overdrive";
     public const string ProfileMatch = "profile.match";
 
     /// <summary>"ModelCode|BiosVersion". A BIOS update changes it, which invalidates the cache.</summary>
@@ -212,7 +211,6 @@ public static class CapabilityProbe
             DescribeMuxSwitch(schema.Registry, wmiMuxSignal),
             DescribeKeyboardZones(schema.Registry),
             DescribeFlag(CapabilitySnapshot.GpuOverclock, schema.Registry.GpuOverclockSupport, "GPU_OC_Support"),
-            DescribeFlag(CapabilitySnapshot.PanelOverdrive, schema.Registry.LcdOverdriveSupport, "LCD_Overdrive_support"),
             HardwareProbeResult.Supported(CapabilitySnapshot.ProfileMatch, $"{profile.Id} ({profile.Source})")
         };
 

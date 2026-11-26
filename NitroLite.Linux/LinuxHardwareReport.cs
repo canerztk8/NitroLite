@@ -123,7 +123,6 @@ public static class LinuxHardwareReport
         AppendNode(text, "charge_control_end_threshold", nodes.ChargeThreshold);
         AppendNode(text, "charge_types", nodes.ChargeTypes);
         AppendNode(text, "win_key_lock", nodes.WinKeyLock);
-        AppendNode(text, "lcd_override", nodes.LcdOverride);
         AppendNode(text, "cool_boost", nodes.CoolBoost);
         AppendNode(text, "dgpu_mode", nodes.DgpuMode);
         AppendNode(text, "per_zone_mode", nodes.PerZoneMode);
@@ -145,7 +144,6 @@ public static class LinuxHardwareReport
         AppendCapability(text, "keyboard lighting", hardware.KeyboardLighting);
         AppendCapability(text, "backlight timeout", hardware.BacklightTimeout);
         AppendCapability(text, "CoolBoost", hardware.CoolBoost);
-        AppendCapability(text, "LCD overdrive", hardware.LcdOverdrive);
         AppendCapability(text, "WinKey lock", hardware.WinKeyLock);
         text.AppendLine();
 

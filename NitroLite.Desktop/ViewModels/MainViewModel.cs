@@ -1163,7 +1163,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _zone4 = "#00E5FF";
 
     private bool _coolBoostOn;
-    private bool _lcdOverdriveOn;
     private bool _backlightTimeoutOn;
     private bool _batteryLimitOn;
     private bool _autoRefreshRateOnBattery;
@@ -5177,18 +5176,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool LcdOverdriveAvailable => _capabilities.LcdOverdrive;
-
-    public bool LcdOverdriveOn
-    {
-        get => _lcdOverdriveOn;
-        set
-        {
-            if (!Set(ref _lcdOverdriveOn, value)) return;
-            if (!_suppressWrite) _ = RunWriteAsync(() => _hardware!.SetLcdOverdriveAsync(value), Labels.LcdOverdrive);
-        }
-    }
-
     public bool BacklightTimeoutAvailable => _capabilities.BacklightTimeout;
 
     public bool BacklightTimeoutOn
@@ -5341,7 +5328,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>True when the backend reports at least one of the optional switches this page carries.</summary>
     public bool HasAnyExtra =>
-        CoolBoostAvailable || LcdOverdriveAvailable || WinKeyLockAvailable || BacklightTimeoutAvailable;
+        CoolBoostAvailable || WinKeyLockAvailable || BacklightTimeoutAvailable;
 
     /// <summary>
     /// True when the probe found none of the optional nodes this page carries, so the page can say so once. The battery
@@ -5349,7 +5336,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     /// <remarks>
     /// A negative answer is only allowed to become a claim when the platform can actually answer. The Windows service
-    /// socket has no CoolBoost or overdrive command, so both read as false on a machine that has them; saying "not on
+    /// socket has no CoolBoost command, so it reads as false on a machine that has it; saying "not on
     /// this device" from that would be a lie about the user's hardware.
     /// </remarks>
     public bool NoExtrasAvailable => NegativeAnswersAreConclusive && !HasAnyExtra;
@@ -7832,7 +7819,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Raise(nameof(LightingUnsupported));
             Raise(nameof(LightingControlsEnabled));
             Raise(nameof(CoolBoostAvailable));
-            Raise(nameof(LcdOverdriveAvailable));
             Raise(nameof(BacklightTimeoutAvailable));
             Raise(nameof(WinKeyLockAvailable));
             Raise(nameof(HasAnyExtra));
@@ -8685,7 +8671,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var fanMode = await hardware.GetFanModeAsync().ConfigureAwait(true);
         var lighting = await hardware.GetLightingConfigAsync().ConfigureAwait(true);
         var coolBoost = await hardware.GetCoolBoostAsync().ConfigureAwait(true);
-        var overdrive = await hardware.GetLcdOverdriveAsync().ConfigureAwait(true);
         var timeout = await hardware.GetBacklightTimeoutAsync().ConfigureAwait(true);
         var charge = await hardware.GetBatteryChargeModeAsync().ConfigureAwait(true);
         // Only a machine with a MUX is asked for its mode. Asking the others put a "MUX mode was not recognised" line
@@ -8711,7 +8696,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (_settings.IsBacklightOff) ApplyLightingState(OffLightingConfig());
 
             if (coolBoost is bool cool) CoolBoostOn = cool;
-            if (overdrive is bool lcd) LcdOverdriveOn = lcd;
             if (timeout is bool backlight) BacklightTimeoutOn = backlight;
             if (charge is BatteryChargeMode battery) BatteryLimitOn = battery == BatteryChargeMode.Optimized80;
 

@@ -233,7 +233,6 @@ public sealed class WmiHardwareController : IHardwareController
             KeyboardLighting = ReadBool(data, "keyboardLighting"),
             BacklightTimeout = ReadBool(data, "backlightTimeout"),
             CoolBoost = ReadBool(data, "coolBoost"),
-            LcdOverdrive = ReadBool(data, "lcdOverdrive"),
             WinKeyLock = ReadBool(data, "winKeyLock"),
             SupportedOperatingModes = ReadModes(data),
             SupportedModeMask = ReadMask(data)
@@ -992,7 +991,7 @@ public sealed class WmiHardwareController : IHardwareController
         return false;
     }
 
-    // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
+    // ---------------------------------------------------------------- CoolBoost, WinKey lock
 
     public async Task<bool?> GetCoolBoostAsync()
     {
@@ -1009,23 +1008,6 @@ public sealed class WmiHardwareController : IHardwareController
 
         // CoolBoost has a getter, so the write is confirmed rather than assumed.
         var observed = await GetCoolBoostAsync().ConfigureAwait(false);
-        return observed == on;
-    }
-
-    public async Task<bool?> GetLcdOverdriveAsync()
-    {
-        var response = await SendAsync(WmiWorkerCommand.GetLcdOverdrive).ConfigureAwait(false);
-        if (response is not { Ok: true } || response.Data is not JsonObject data) return null;
-        return ReadNullableBool(data, "lcdOverdrive");
-    }
-
-    public async Task<bool> SetLcdOverdriveAsync(bool on)
-    {
-        var response = await SendAsync(WmiWorkerCommand.SetLcdOverdrive, new JsonObject { ["on"] = on })
-            .ConfigureAwait(false);
-        if (response is not { Ok: true }) return false;
-
-        var observed = await GetLcdOverdriveAsync().ConfigureAwait(false);
         return observed == on;
     }
 
@@ -1251,7 +1233,6 @@ public sealed class WmiHardwareController : IHardwareController
         WmiWorkerCommand.ReadDeviceState or
         WmiWorkerCommand.GetKeyboardBacklight or
         WmiWorkerCommand.GetCoolBoost or
-        WmiWorkerCommand.GetLcdOverdrive or
         WmiWorkerCommand.GetBacklightTimeout;
 
     private void DropClient()

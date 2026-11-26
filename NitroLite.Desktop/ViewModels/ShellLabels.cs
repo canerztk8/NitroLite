@@ -63,7 +63,6 @@ public sealed class ShellLabels
     public string PrimaryColor => Loc.T("Ana renk");
     public string Extras => Loc.T("Ekstralar");
     public string CoolBoost => Loc.T("CoolBoost");
-    public string LcdOverdrive => Loc.T("LCD Overdrive");
     public string BacklightTimeout => Loc.T("Arka ışık zaman aşımı (30 sn)");
     public string BatteryLimit => Loc.T("Pil şarj sınırı (%80)");
     public string BatteryLimitHint => Loc.T("Pil %80'e ulaştığında şarj durur; pil ömrünü uzatır.");

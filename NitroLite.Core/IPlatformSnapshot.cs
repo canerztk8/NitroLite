@@ -50,8 +50,8 @@ public interface IPlatformSnapshot
     /// Linux enumerates its sysfs nodes once at startup, so a false <see cref="IHardwareController.IsAvailable"/> there
     /// means the kernel has no Acer module and the machine genuinely has nothing to talk to. Windows opens its
     /// transport on demand — the Acer service may not be up yet and the WMI worker is only started when the user
-    /// elevates — so a false answer there means "nothing is open yet". The service socket also has no CoolBoost or
-    /// overdrive command, so those two capabilities read as false on a machine that has both.
+    /// elevates — so a false answer there means "nothing is open yet". The service socket also has no CoolBoost
+    /// command, so that capability reads as false on a machine that has it.
     /// </para>
     /// <para>
     /// The window uses this to decide whether it may claim an absence. When it is false, an unsupported capability is

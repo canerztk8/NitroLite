@@ -169,7 +169,6 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                 // the call threw. Null when the class is missing (that is already "apgeClass": false) or the read
                 // worked. The controller logs it, because it is the one fact that says which selector a board uses.
                 ["backlightTimeoutDetail"] = timeout is { Ok: false } ? timeout.Error : null,
-                ["lcdOverdrive"] = registry.LcdOverdriveSupport is > 0,
                 ["winKeyLock"] = gaming != null,
                 ["supportedModes"] = supportedModes,
                 ["supportedModeMask"] = supportedModeMask.HasValue ? supportedModeMask.Value : null,
@@ -751,7 +750,7 @@ public sealed class AcerWmiExecutor : IWmiExecutor
         return null;
     }
 
-    // ---------------------------------------------------------------- CoolBoost, overdrive, WinKey lock
+    // ---------------------------------------------------------------- CoolBoost, WinKey lock
 
     /// <summary>
     /// Reads CoolBoost from <c>APGeAction.GetFunction(0x207)</c>.
@@ -807,61 +806,6 @@ public sealed class AcerWmiExecutor : IWmiExecutor
                     return WmiOperationResult.StatusError($"SetFunction status 0x{status.Value:X2}");
 
                 return WmiOperationResult.Success(new JsonObject { ["coolBoost"] = on });
-            }
-            catch (Exception ex)
-            {
-                return Failed(ex);
-            }
-        }
-    }
-
-    /// <summary>Reads the LCD overdrive state from <c>GetGamingProfile(0)</c>.</summary>
-    public WmiOperationResult GetLcdOverdrive()
-    {
-        lock (_gate)
-        {
-            var gaming = EnsureGaming();
-            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
-
-            try
-            {
-                var answer = InvokeGetter(gaming, "GetGamingProfile", 0);
-                if (!answer.HasValue) return WmiOperationResult.WmiFailed("GetGamingProfile returned no value");
-
-                var on = AcerWmiProtocol.DecodeLcdOverdrive(answer.Value);
-                if (on == null)
-                    return WmiOperationResult.NotSupported(
-                        $"panel does not report overdrive (GetGamingProfile(0) = 0x{answer.Value:X16})");
-
-                return WmiOperationResult.Success(new JsonObject
-                {
-                    ["lcdOverdrive"] = on.Value,
-                    ["raw"] = answer.Value
-                });
-            }
-            catch (Exception ex)
-            {
-                return Failed(ex);
-            }
-        }
-    }
-
-    /// <summary>Writes LCD overdrive through <c>SetGamingProfile</c>.</summary>
-    public WmiOperationResult SetLcdOverdrive(bool on)
-    {
-        lock (_gate)
-        {
-            var gaming = EnsureGaming();
-            if (gaming == null) return WmiOperationResult.Unavailable("AcerGamingFunction is not registered");
-
-            try
-            {
-                var status = InvokeSetter(gaming, "SetGamingProfile", AcerWmiProtocol.EncodeLcdOverdrive(on));
-                if (!status.HasValue) return WmiOperationResult.WmiFailed("SetGamingProfile returned no status");
-                if (status.Value != AcerWmiProtocol.StatusOk)
-                    return WmiOperationResult.StatusError($"SetGamingProfile status 0x{status.Value:X2}");
-
-                return WmiOperationResult.Success(new JsonObject { ["lcdOverdrive"] = on });
             }
             catch (Exception ex)
             {

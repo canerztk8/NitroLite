@@ -553,10 +553,6 @@ internal static class Phase3Fakes
 
         public Task<bool> SetCoolBoostAsync(bool on) => Task.FromResult(true);
 
-        public Task<bool?> GetLcdOverdriveAsync() => Task.FromResult<bool?>(false);
-
-        public Task<bool> SetLcdOverdriveAsync(bool on) => Task.FromResult(true);
-
         public Task<bool> SetWinKeyLockAsync(bool enabled) => Task.FromResult(true);
 
         public void Dispose() { }

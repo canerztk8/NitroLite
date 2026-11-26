@@ -138,7 +138,6 @@ public sealed class LinuxSelfTest
         yield return ("charge limit", n.BatteryLimiter ?? n.ChargeTypes ?? n.ChargeThreshold, true);
         yield return ("Windows key lock", n.WinKeyLock, true);
         yield return ("CoolBoost", n.CoolBoost, true);
-        yield return ("LCD overdrive", n.LcdOverride, true);
         yield return ("backlight timeout", n.BacklightTimeout, true);
         // Never written back: a MUX write schedules a GPU switch that takes effect on the next boot.
         yield return ("GPU mode (MUX)", n.DgpuMode, false);

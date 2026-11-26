@@ -633,7 +633,6 @@ public class AcerAgentClient : IDisposable
         (PacketInitialization, "SUPPORT_GPU_MODE"),
         (PacketInitialization, "SUPPORT_GPU_MODE_CAPABILITY"),
         (PacketInitialization, "SUPPORT_FAN_CONTROL"),
-        (PacketInitialization, "SUPPORT_LCD_OVERDRIVE"),
         (PacketInitialization, "SUPPORT_KEYBOARD_INFO"),
         (PacketInitialization, "SUPPORT_CPU_INFO"),
         (PacketInitialization, "SUPPORT_GPU_INFO"),

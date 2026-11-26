@@ -112,7 +112,6 @@ public sealed class SessionVerification
         "wmi.batteryLimit" => "Battery charge limit",
         "wmi.keyboardLighting" => "Keyboard lighting",
         "wmi.winKeyLock" => "Windows-key lock",
-        "wmi.lcdOverdrive" => "LCD overdrive",
         "wmi.coolBoost" => "CoolBoost",
         "wmi.backlightTimeout" => "Backlight timeout",
         _ => control

@@ -124,26 +124,11 @@ public static class AcerWmiProtocol
 
     // ---------------------------------------------------------------- gaming profile (methods 1 / 3)
 
-    /// <summary>
-    /// <c>GetGamingProfile(0)</c> answer when LCD overdrive is off but the panel supports it. Measured on an
-    /// AN16-41: <c>0x0000000001000000</c>.
-    /// </summary>
-    public const ulong GamingProfileOverdriveOff = 0x1000000UL;
-
-    /// <summary>The same answer with overdrive on: <c>0x1000000</c> plus bit 48.</summary>
-    public const ulong GamingProfileOverdriveOn = 0x1000001000000UL;
-
     /// <summary>Selector for the Windows-key lock in <c>SetGamingProfile</c>.</summary>
     public const ulong GamingProfileWinKeyLock = 0x02UL;
 
     /// <summary>Bit that carries the Windows-key lock state in the <c>SetGamingProfile</c> input.</summary>
     public const ulong GamingProfileWinKeyLockBit = 1UL << 24;
-
-    /// <summary>Selector for LCD overdrive in <c>SetGamingProfile</c>.</summary>
-    public const ulong GamingProfileOverdrive = 0x10UL;
-
-    /// <summary>Bit that carries the LCD overdrive state in the <c>SetGamingProfile</c> input.</summary>
-    public const ulong GamingProfileOverdriveBit = 1UL << 48;
 
     // ---------------------------------------------------------------- keyboard RGB (Get / SetGamingRgbKb)
 
@@ -702,27 +687,11 @@ public static class AcerWmiProtocol
     // ---------------------------------------------------------------- gaming profile
 
     /// <summary>
-    /// The LCD overdrive state in a <c>GetGamingProfile(0)</c> answer: true when on, false when off, null when the
-    /// panel does not support it. The firmware answers exactly two values for a supported panel, so anything else is
-    /// "no overdrive here" rather than a guess.
-    /// </summary>
-    public static bool? DecodeLcdOverdrive(ulong answer) => answer switch
-    {
-        GamingProfileOverdriveOn => true,
-        GamingProfileOverdriveOff => false,
-        _ => null
-    };
-
-    /// <summary><c>SetGamingProfile</c> input for LCD overdrive: <c>0x10 | (on ? 1 &lt;&lt; 48 : 0)</c>.</summary>
-    public static ulong EncodeLcdOverdrive(bool on) =>
-        GamingProfileOverdrive | (on ? GamingProfileOverdriveBit : 0UL);
-
-    /// <summary>
     /// <c>SetGamingProfile</c> input for the Windows-key lock: <c>2 | (enabled ? 1 &lt;&lt; 24 : 0)</c>.
     /// <para>
     /// There is no getter for this one. <c>GetGamingProfile</c> with a non-zero selector echoes the selector back
-    /// rather than the state, and <c>GetGamingProfile(0)</c> answers the LCD-overdrive word, whose bit 24 means
-    /// "overdrive is supported" — not "the Windows key is locked". The write is therefore reported as unverified
+    /// rather than the state, and <c>GetGamingProfile(0)</c> answers an unrelated word, whose bit 24 is
+    /// not "the Windows key is locked". The write is therefore reported as unverified
     /// rather than read back.
     /// </para>
     /// </summary>

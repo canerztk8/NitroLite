@@ -53,9 +53,6 @@ public sealed record HardwareCapabilities
     /// </summary>
     public bool CoolBoost { get; init; }
 
-    /// <summary>The panel supports LCD overdrive and the firmware reports its state.</summary>
-    public bool LcdOverdrive { get; init; }
-
     /// <summary>The Windows-key lock can be written. There is no getter, so the state is never read back.</summary>
     public bool WinKeyLock { get; init; }
 
@@ -178,12 +175,6 @@ public interface IHardwareController : IDisposable
 
     /// <summary>Writes CoolBoost. False when the machine has no CoolBoost or the firmware refused.</summary>
     Task<bool> SetCoolBoostAsync(bool on);
-
-    /// <summary>LCD overdrive state, or null when the panel does not support it.</summary>
-    Task<bool?> GetLcdOverdriveAsync();
-
-    /// <summary>Writes LCD overdrive. False when the panel does not support it or the firmware refused.</summary>
-    Task<bool> SetLcdOverdriveAsync(bool on);
 
     /// <summary>
     /// Writes the Windows-key lock. There is no getter, so a true answer means the firmware accepted the write, not

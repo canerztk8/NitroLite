@@ -188,9 +188,8 @@ public class HardwareMatrixAndChaosTests
         Assert.Equal(6800, controller.Capabilities.Profile.MaxCpuFanRpm);
         Assert.Equal(6600, controller.Capabilities.Profile.MaxGpuFanRpm);
 
-        // The narrower WMI surface: no CoolBoost, no overdrive, no backlight timeout, and one keyboard attribute.
+        // The narrower WMI surface: no CoolBoost, no backlight timeout, and one keyboard attribute.
         Assert.False(controller.Capabilities.Hardware.CoolBoost);
-        Assert.False(controller.Capabilities.Hardware.LcdOverdrive);
         Assert.False(controller.Capabilities.Hardware.BacklightTimeout);
         Assert.True(controller.Capabilities.Hardware.KeyboardLighting);
     }
@@ -243,7 +242,6 @@ public class HardwareMatrixAndChaosTests
                 fs.WithFile(Sense(LinuxPaths.NitroSense, LinuxPaths.FanSpeed), "60,50\n");
                 fs.WithFile(Sense(LinuxPaths.NitroSense, LinuxPaths.BacklightTimeout), "0\n");
                 fs.WithFile(Sense(LinuxPaths.NitroSense, LinuxPaths.BatteryLimiter), "0\n");
-                fs.WithFile(Sense(LinuxPaths.NitroSense, LinuxPaths.LcdOverride), "0\n");
                 fs.WithFile(Sense(LinuxPaths.NitroSense, LinuxPaths.CoolBoost), "0\n");
                 fs.WithFile(Sense(LinuxPaths.NitroSense, LinuxPaths.DgpuMode), "0\n");
                 fs.WithFile(Keyboard(LinuxPaths.NitroSense, LinuxPaths.PerZoneMode), "00E5FF,00E5FF,00E5FF,00E5FF,55\n");
@@ -270,7 +268,7 @@ public class HardwareMatrixAndChaosTests
                 Hwmon(fs, "hwmon2", "amdgpu", 69_000);
                 fs.WithFile("/sys/class/power_supply/BAT1/charge_control_end_threshold", "100\n");
                 // Predator registers predator_sense, and this chassis registers a narrower WMI surface: no CoolBoost,
-                // no overdrive and no backlight timeout. One keyboard attribute, so the lighting page has a static
+                // no backlight timeout. One keyboard attribute, so the lighting page has a static
                 // path and no effect path.
                 SenseTree(fs, LinuxPaths.PredatorSense);
                 fs.WithFile(Sense(LinuxPaths.PredatorSense, LinuxPaths.FanSpeed), "80,80\n");
@@ -875,10 +873,6 @@ public class HardwareMatrixAndChaosTests
         public Task<bool?> GetCoolBoostAsync() => _inner.GetCoolBoostAsync();
 
         public Task<bool> SetCoolBoostAsync(bool on) => RefuseOrRun(() => _inner.SetCoolBoostAsync(on));
-
-        public Task<bool?> GetLcdOverdriveAsync() => _inner.GetLcdOverdriveAsync();
-
-        public Task<bool> SetLcdOverdriveAsync(bool on) => RefuseOrRun(() => _inner.SetLcdOverdriveAsync(on));
 
         public Task<bool> SetWinKeyLockAsync(bool enabled) => RefuseOrRun(() => _inner.SetWinKeyLockAsync(enabled));
 

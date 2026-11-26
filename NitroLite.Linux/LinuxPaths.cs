@@ -53,12 +53,6 @@ public static class LinuxPaths
     /// <summary>0 or 1: stop charging at 80 %.</summary>
     public const string BatteryLimiter = "battery_limiter";
 
-    /// <summary>0 or 1: reduce panel latency at the cost of some contrast. Linuwu-Sense's name for it.</summary>
-    public const string LcdOverride = "lcd_override";
-
-    /// <summary>The same switch under acer-wmi-linuwu's name; that module keeps <c>lcd_override</c> as an alias.</summary>
-    public const string LcdOverdrive = "lcd_overdrive";
-
     /// <summary>0 or 1: disable the Windows and menu keys. Only acer-wmi-linuwu exposes it.</summary>
     public const string WinKeyLock = "win_key_lock";
 
