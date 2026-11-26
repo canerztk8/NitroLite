@@ -10,6 +10,55 @@ Releases before 1.2.6 are described on the [Releases](https://github.com/canerzt
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-11-26
+
+NitroLite now asks Acer's own service what the machine has, the way NitroSense does, so models the table does not
+know are handled from the machine's answer. 27 more models, and the verified findings of a third-party security
+audit.
+
+**Compatibility**
+- On machines with Acer's service (AASSvc), the MUX switch, the operating modes and the fan controls follow the
+  service's own capability answers (the questions NitroSense asks at start-up). Models without the service keep the
+  WMI path.
+- 27 more Nitro and Predator models have their own profile, from the list NitroSense ships, Acer's current service
+  package and the acer-wmi-linuwu supported-models table (59 profiles in all). Four-zone keyboard hints follow that
+  table; the PH3D15-71 model code is read correctly.
+- Sunrex and Darfon keyboard controllers (from Acer's RGBDevice.ini) are named in the hardware report; nothing is
+  written to them.
+- `--agent-capabilities` prints what the Acer service says the machine has, for bug reports.
+- The settings page's rescan now really rescans: the saved capability scan and the service answers are dropped and
+  the machine is asked again.
+- When Acer's service encrypts its channel (SupportAES), NitroLite says so in the report and uses WMI at once
+  instead of waiting for answers it cannot read.
+
+**Fans**
+- A custom fan speed sent through Acer's service stays inside the range the service reports for that fan.
+- The WMI fan write also reads back the GPU fan. A GPU-only mismatch is reported and the fans go back to Auto, but
+  it never switches fan control off for good.
+- "Keep the saved speed" uses the saved custom speeds on both the WMI and the service path (it used 50 %).
+- A sensor layout marked verified in a downloaded or user profile counts only when it matches a verified built-in
+  profile.
+
+**School mode**
+- If a step fails when school mode is switched off, only the steps still owed are kept and retried at the next
+  start; a deleted power plan is not retried; retries stop after three starts or seven days; settings changed in
+  the meantime are never overwritten.
+
+**Background work**
+- Game detection runs every five seconds also while the window is in the tray (it was every 25 s), and the battery
+  health read keeps its five-minute period.
+- Switching the Nitro key off stops its listener; switching it on starts it again.
+- The temperature-reactive lighting no longer writes the same colour twice when the mode is switched on while the
+  slider is still settling.
+
+**Reliability and privacy**
+- The update check reads at most 1 MB of metadata and gives up after 30 s; the update marker, the wake file and
+  the udev rule are written atomically.
+- The log keeps working when the elevated helper holds it open across a rotation; a corrupt battery-wear history is
+  set aside instead of overwritten; the Windows account name is removed from logs.
+- Linux: hardware writes no longer block the window and keep their order; shutting down during a write no longer
+  throws.
+
 **Game profiles**
 - A game's CPU boost setting is applied when the game starts and when it is edited during play, and the previous
   boost is put back when the game closes or after a crash. The setting was stored and shown, and nothing applied it.
